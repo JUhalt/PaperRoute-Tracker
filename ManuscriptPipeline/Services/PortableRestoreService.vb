@@ -988,6 +988,87 @@ Namespace Services
 
                 Next
 
+                If manuscript.Versions Is Nothing Then
+                    manuscript.Versions = New List(Of ManuscriptVersion)()
+                End If
+
+                Dim versionIds As New HashSet(Of Guid)()
+
+                For Each version As ManuscriptVersion In manuscript.Versions
+
+                    If version Is Nothing Then
+                        Throw New InvalidDataException(
+                            "The backup contains an invalid null manuscript-version record."
+                        )
+                    End If
+
+                    If version.Id = Guid.Empty OrElse
+                       Not versionIds.Add(version.Id) Then
+
+                        Throw New InvalidDataException(
+                            "The backup contains invalid or duplicate manuscript-version identifiers."
+                        )
+
+                    End If
+
+                    version.Label =
+                        If(
+                            version.Label,
+                            String.Empty
+                        )
+
+                    version.Notes =
+                        If(
+                            version.Notes,
+                            String.Empty
+                        )
+
+                    version.LocalFilePath =
+                        If(
+                            version.LocalFilePath,
+                            String.Empty
+                        )
+
+                    If version.SubmissionId.HasValue AndAlso
+                       version.SubmissionId.Value = Guid.Empty Then
+
+                        Throw New InvalidDataException(
+                            "The backup contains a manuscript version with an invalid submission reference."
+                        )
+
+                    End If
+
+                    If version.DecisionId.HasValue AndAlso
+                       version.DecisionId.Value = Guid.Empty Then
+
+                        Throw New InvalidDataException(
+                            "The backup contains a manuscript version with an invalid decision reference."
+                        )
+
+                    End If
+
+                    If version.RevisionRoundNumber.HasValue AndAlso
+                       version.RevisionRoundNumber.Value <= 0 Then
+
+                        Throw New InvalidDataException(
+                            "The backup contains a manuscript version with an invalid revision-round number."
+                        )
+
+                    End If
+
+                Next
+
+                If manuscript.CurrentVersionId.HasValue AndAlso
+                   Not versionIds.Contains(
+                       manuscript.CurrentVersionId.Value
+                   ) Then
+
+                    Throw New InvalidDataException(
+                        "The backup identifies a current manuscript version that is not present in version history."
+                    )
+
+                End If
+
                 If manuscript.Authors Is Nothing Then
                     manuscript.Authors = New List(Of ManuscriptAuthor)()
                 End If
@@ -1069,6 +1150,45 @@ Namespace Services
 
             For Each manuscript As Manuscript In manuscripts
 
+                For Each version As ManuscriptVersion In manuscript.Versions
+
+                    If Not version.IsManagedCopy Then
+                        Continue For
+                    End If
+
+                    If String.IsNullOrWhiteSpace(version.LocalFilePath) Then
+
+                        Throw New InvalidDataException(
+                            "A managed manuscript-version record does not contain a file path."
+                        )
+
+                    End If
+
+                    Dim versionFileName As String =
+                        Path.GetFileName(
+                            version.LocalFilePath
+                        )
+
+                    Dim expectedVersionFile As String =
+                        Path.Combine(
+                            extractedFilesRoot,
+                            manuscript.Id.ToString("N"),
+                            "versions",
+                            version.Id.ToString("N"),
+                            versionFileName
+                        )
+
+                    If Not File.Exists(expectedVersionFile) Then
+
+                        Throw New InvalidDataException(
+                            "The backup is missing a managed manuscript version: " &
+                            versionFileName
+                        )
+
+                    End If
+
+                Next
+
                 For Each submission As JournalSubmission In manuscript.Submissions
 
                     For Each item As CorrespondenceItem In submission.Correspondence
@@ -1124,6 +1244,28 @@ Namespace Services
 
             For Each manuscript As Manuscript In manuscripts
 
+                For Each version As ManuscriptVersion In manuscript.Versions
+
+                    If Not version.IsManagedCopy Then
+                        Continue For
+                    End If
+
+                    Dim versionFileName As String =
+                        Path.GetFileName(
+                            version.LocalFilePath
+                        )
+
+                    version.LocalFilePath =
+                        Path.Combine(
+                            managedRoot,
+                            manuscript.Id.ToString("N"),
+                            "versions",
+                            version.Id.ToString("N"),
+                            versionFileName
+                        )
+
+                Next
+
                 For Each submission As JournalSubmission In manuscript.Submissions
 
                     For Each item As CorrespondenceItem In submission.Correspondence
@@ -1169,6 +1311,14 @@ Namespace Services
                 manuscripts.Count
 
             For Each manuscript As Manuscript In manuscripts
+
+                For Each version As ManuscriptVersion In manuscript.Versions
+
+                    If version.IsManagedCopy Then
+                        result.ManagedFileCount += 1
+                    End If
+
+                Next
 
                 result.SubmissionCount +=
                     manuscript.Submissions.Count

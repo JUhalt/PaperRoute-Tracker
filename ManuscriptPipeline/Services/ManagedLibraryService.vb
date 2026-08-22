@@ -1,4 +1,4 @@
-Imports System
+﻿Imports System
 Imports System.Collections.Generic
 Imports System.IO
 Imports ManuscriptPipeline.Models
@@ -103,6 +103,67 @@ Namespace Services
 
             For Each manuscript As Manuscript In manuscripts
 
+                If manuscript.Versions IsNot Nothing Then
+
+                    For Each version As ManuscriptVersion In manuscript.Versions
+
+                        If version Is Nothing OrElse
+                           Not version.IsManagedCopy Then
+                            Continue For
+                        End If
+
+                        If String.IsNullOrWhiteSpace(version.LocalFilePath) Then
+                            Continue For
+                        End If
+
+                        If IsManagedPath(version.LocalFilePath) Then
+                            Continue For
+                        End If
+
+                        If version.Id = Guid.Empty Then
+
+                            Throw New InvalidDataException(
+                                "A manuscript version marked for the PaperRoute Library does not have a valid identifier."
+                            )
+
+                        End If
+
+                        If Not File.Exists(version.LocalFilePath) Then
+
+                            Throw New FileNotFoundException(
+                                "A manuscript version marked for the PaperRoute Library could not be found.",
+                                version.LocalFilePath
+                            )
+
+                        End If
+
+                        Dim destinationDirectory As String =
+                            Path.Combine(
+                                _rootDirectory,
+                                manuscript.Id.ToString("N"),
+                                "versions",
+                                version.Id.ToString("N")
+                            )
+
+                        Dim destinationPath As String =
+                            CreateUniqueDestinationPath(
+                                destinationDirectory,
+                                version.LocalFilePath
+                            )
+
+                        operations.Add(
+                            New CopyOperation(
+                                version,
+                                version.LocalFilePath,
+                                destinationDirectory,
+                                destinationPath
+                            )
+                        )
+
+                    Next
+
+                End If
+
                 For Each submission As JournalSubmission In manuscript.Submissions
 
                     For Each item As CorrespondenceItem In submission.Correspondence
@@ -136,33 +197,10 @@ Namespace Services
                                 item.Id.ToString("N")
                             )
 
-                        Dim sourceName As String =
-                            Path.GetFileNameWithoutExtension(
-                                item.LocalFilePath
-                            )
-
-                        Dim extension As String =
-                            Path.GetExtension(
-                                item.LocalFilePath
-                            )
-
-                        If String.IsNullOrWhiteSpace(sourceName) Then
-                            sourceName = "document"
-                        End If
-
-                        Dim uniqueSuffix As String =
-                            Guid.NewGuid().ToString("N").Substring(0, 8)
-
-                        Dim destinationFileName As String =
-                            sourceName &
-                            "_" &
-                            uniqueSuffix &
-                            extension
-
                         Dim destinationPath As String =
-                            Path.Combine(
+                            CreateUniqueDestinationPath(
                                 destinationDirectory,
-                                destinationFileName
+                                item.LocalFilePath
                             )
 
                         operations.Add(
@@ -227,21 +265,53 @@ Namespace Services
             End Try
 
             For Each operation As CopyOperation In operations
-
-                operation.Item.LocalFilePath =
-                    operation.DestinationPath
-
-                operation.Item.IsManagedCopy =
-                    True
-
+                operation.CommitReference()
             Next
 
         End Sub
 
 
+        Private Function CreateUniqueDestinationPath(
+            destinationDirectory As String,
+            sourcePath As String
+        ) As String
+
+            Dim sourceName As String =
+                Path.GetFileNameWithoutExtension(
+                    sourcePath
+                )
+
+            Dim extension As String =
+                Path.GetExtension(
+                    sourcePath
+                )
+
+            If String.IsNullOrWhiteSpace(sourceName) Then
+                sourceName = "document"
+            End If
+
+            Dim uniqueSuffix As String =
+                Guid.NewGuid().ToString("N").Substring(0, 8)
+
+            Dim destinationFileName As String =
+                sourceName &
+                "_" &
+                uniqueSuffix &
+                extension
+
+            Return Path.Combine(
+                destinationDirectory,
+                destinationFileName
+            )
+
+        End Function
+
+
         Private Class CopyOperation
 
-            Public ReadOnly Property Item As CorrespondenceItem
+            Private ReadOnly _correspondenceItem As CorrespondenceItem
+            Private ReadOnly _version As ManuscriptVersion
+
             Public ReadOnly Property SourcePath As String
             Public ReadOnly Property DestinationDirectory As String
             Public ReadOnly Property DestinationPath As String
@@ -254,10 +324,58 @@ Namespace Services
                 destinationPath As String
             )
 
-                Me.Item = item
+                Me._correspondenceItem = item
                 Me.SourcePath = sourcePath
                 Me.DestinationDirectory = destinationDirectory
                 Me.DestinationPath = destinationPath
+
+            End Sub
+
+
+            Public Sub New(
+                version As ManuscriptVersion,
+                sourcePath As String,
+                destinationDirectory As String,
+                destinationPath As String
+            )
+
+                Me._version = version
+                Me.SourcePath = sourcePath
+                Me.DestinationDirectory = destinationDirectory
+                Me.DestinationPath = destinationPath
+
+            End Sub
+
+
+            Public Sub CommitReference()
+
+                If _correspondenceItem IsNot Nothing Then
+
+                    _correspondenceItem.LocalFilePath =
+                        DestinationPath
+
+                    _correspondenceItem.IsManagedCopy =
+                        True
+
+                    Return
+
+                End If
+
+                If _version IsNot Nothing Then
+
+                    _version.LocalFilePath =
+                        DestinationPath
+
+                    _version.IsManagedCopy =
+                        True
+
+                    Return
+
+                End If
+
+                Throw New InvalidOperationException(
+                    "A managed-library copy operation does not have a target record."
+                )
 
             End Sub
 
