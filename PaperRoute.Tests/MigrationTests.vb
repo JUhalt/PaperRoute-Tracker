@@ -275,7 +275,7 @@ Public Class MigrationTests
 
 
     <TestMethod>
-    Public Sub Schema1_MigratesToSchema2WithoutRewritingManuscripts()
+    Public Sub Schema1_MigratesToCurrentSchemaWithoutRewritingManuscripts()
 
         Dim dataDirectory As String =
             Path.Combine(
@@ -325,7 +325,7 @@ Public Class MigrationTests
         )
 
         Assert.AreEqual(
-            2,
+            StorageMigrationService.CurrentSchemaVersion,
             StorageMigrationService.ReadSchemaVersion(
                 schemaPath
             )
@@ -477,7 +477,7 @@ Public Class MigrationTests
             CreateCurrentSchemaDirectory()
 
         Const original As String =
-            "{""SchemaVersion"":2,""UpdatedAtUtc"":""2000-01-01T00:00:00.0000000Z""}"
+            "{""SchemaVersion"":3,""UpdatedAtUtc"":""2000-01-01T00:00:00.0000000Z""}"
 
         File.WriteAllText(
             schemaPath,

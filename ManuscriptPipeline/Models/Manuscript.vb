@@ -1,4 +1,4 @@
-Imports System
+﻿Imports System
 Imports System.Collections.Generic
 
 Namespace Models
@@ -28,6 +28,11 @@ Namespace Models
 
         Public Property Reminders As List(Of ManuscriptReminder) =
             New List(Of ManuscriptReminder)()
+
+        Public Property Versions As List(Of ManuscriptVersion) =
+            New List(Of ManuscriptVersion)()
+
+        Public Property CurrentVersionId As Guid? = Nothing
 
         Public Property CurrentStage As PaperStage = PaperStage.Idea
 

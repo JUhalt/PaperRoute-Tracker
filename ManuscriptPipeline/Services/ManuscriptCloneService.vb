@@ -1,4 +1,4 @@
-Imports System
+﻿Imports System
 Imports System.Collections.Generic
 Imports ManuscriptPipeline.Models
 
@@ -26,6 +26,7 @@ Namespace Services
                 .TargetJournalId = source.TargetJournalId,
                 .ManuscriptUrl = source.ManuscriptUrl,
                 .Metadata = CloneMetadata(source.Metadata),
+                .CurrentVersionId = source.CurrentVersionId,
                 .CurrentStage = source.CurrentStage,
                 .Location = source.Location,
                 .StageEnteredDate = source.StageEnteredDate,
@@ -59,6 +60,20 @@ Namespace Services
 
                     clone.Reminders.Add(
                         CloneReminder(reminder)
+                    )
+
+                Next
+            End If
+
+            If source.Versions IsNot Nothing Then
+                For Each version As ManuscriptVersion In source.Versions
+
+                    If version Is Nothing Then
+                        Continue For
+                    End If
+
+                    clone.Versions.Add(
+                        CloneVersion(version)
                     )
 
                 Next
@@ -192,6 +207,29 @@ Namespace Services
                 .Notes = source.Notes,
                 .IsCompleted = source.IsCompleted,
                 .CompletedDate = source.CompletedDate
+            }
+
+        End Function
+
+
+        Public Shared Function CloneVersion(
+            source As ManuscriptVersion
+        ) As ManuscriptVersion
+
+            If source Is Nothing Then
+                Throw New ArgumentNullException(NameOf(source))
+            End If
+
+            Return New ManuscriptVersion With {
+                .Id = source.Id,
+                .CreatedDate = source.CreatedDate,
+                .Label = source.Label,
+                .Notes = source.Notes,
+                .LocalFilePath = source.LocalFilePath,
+                .IsManagedCopy = source.IsManagedCopy,
+                .SubmissionId = source.SubmissionId,
+                .DecisionId = source.DecisionId,
+                .RevisionRoundNumber = source.RevisionRoundNumber
             }
 
         End Function

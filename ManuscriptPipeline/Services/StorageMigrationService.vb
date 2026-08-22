@@ -10,7 +10,7 @@ Namespace Services
 
     Public NotInheritable Class StorageMigrationService
 
-        Public Const CurrentSchemaVersion As Integer = 2
+        Public Const CurrentSchemaVersion As Integer = 3
 
         Private Const MinimumMigratableSchemaVersion As Integer = 1
 
@@ -345,6 +345,13 @@ Namespace Services
                             schemaPath
                         )
 
+                    Case 2
+
+                        MigrateSchema2To3(
+                            currentRoot,
+                            schemaPath
+                        )
+
                     Case Else
 
                         Throw New InvalidOperationException(
@@ -385,6 +392,30 @@ Namespace Services
             WriteSchemaVersionReplacingExisting(
                 schemaPath,
                 2,
+                backupPath
+            )
+
+        End Sub
+
+
+        Private Shared Sub MigrateSchema2To3(
+            currentRoot As String,
+            schemaPath As String
+        )
+
+            ValidateCurrentManuscriptDataForSchema3(
+                currentRoot
+            )
+
+            Dim backupPath As String =
+                Path.Combine(
+                    Path.GetDirectoryName(schemaPath),
+                    "schema.v2.bak"
+                )
+
+            WriteSchemaVersionReplacingExisting(
+                schemaPath,
+                3,
                 backupPath
             )
 
@@ -456,6 +487,80 @@ Namespace Services
 
                 Throw New InvalidDataException(
                     "PaperRoute cannot migrate storage schema 1 because the manuscript data contains invalid JSON. " &
+                    "The existing schema and manuscript data were left unchanged.",
+                    ex
+                )
+
+            End Try
+
+        End Sub
+
+
+        Private Shared Sub ValidateCurrentManuscriptDataForSchema3(
+            currentRoot As String
+        )
+
+            Dim dataPath As String =
+                Path.Combine(
+                    currentRoot,
+                    "data",
+                    "manuscripts.json"
+                )
+
+            If Not File.Exists(dataPath) Then
+                Return
+            End If
+
+            Dim json As String =
+                File.ReadAllText(
+                    dataPath
+                )
+
+            If String.IsNullOrWhiteSpace(json) Then
+
+                Throw New InvalidDataException(
+                    "PaperRoute cannot migrate storage schema 2 because the manuscript data file is empty. " &
+                    "The existing schema and manuscript data were left unchanged."
+                )
+
+            End If
+
+            Try
+
+                Dim manuscripts As List(Of Manuscript) =
+                    JsonSerializer.Deserialize(
+                        Of List(Of Manuscript)
+                    )(
+                        json,
+                        CreateManuscriptJsonOptions()
+                    )
+
+                If manuscripts Is Nothing Then
+
+                    Throw New InvalidDataException(
+                        "PaperRoute cannot migrate storage schema 2 because the manuscript data could not be read. " &
+                        "The existing schema and manuscript data were left unchanged."
+                    )
+
+                End If
+
+                For Each manuscript As Manuscript In manuscripts
+
+                    If manuscript Is Nothing Then
+
+                        Throw New InvalidDataException(
+                            "PaperRoute cannot migrate storage schema 2 because the manuscript library contains a null record. " &
+                            "The existing schema and manuscript data were left unchanged."
+                        )
+
+                    End If
+
+                Next
+
+            Catch ex As JsonException
+
+                Throw New InvalidDataException(
+                    "PaperRoute cannot migrate storage schema 2 because the manuscript data contains invalid JSON. " &
                     "The existing schema and manuscript data were left unchanged.",
                     ex
                 )
