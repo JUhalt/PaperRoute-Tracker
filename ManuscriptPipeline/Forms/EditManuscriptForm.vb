@@ -1,4 +1,4 @@
-Imports System
+﻿Imports System
 Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.Linq
@@ -21,7 +21,6 @@ Namespace Forms
         Private _deleteRequested As Boolean = False
 
         Private ReadOnly txtTitle As New TextBox()
-        Private ReadOnly txtCoAuthors As New TextBox()
         Private ReadOnly txtTargetJournal As New TextBox()
         Private ReadOnly cmbStage As New ComboBox()
         Private ReadOnly btnMetadata As New Button()
@@ -148,7 +147,7 @@ Namespace Forms
                 .Padding = New Padding(20, 20, 20, 12)
             }
 
-            root.RowStyles.Add(New RowStyle(SizeType.Absolute, 370))
+            root.RowStyles.Add(New RowStyle(SizeType.Absolute, 330))
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 260))
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 250))
@@ -166,7 +165,7 @@ Namespace Forms
             Dim details As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .ColumnCount = 2,
-                .RowCount = 7
+                .RowCount = 6
             }
 
             details.ColumnStyles.Add(
@@ -177,14 +176,13 @@ Namespace Forms
                 New ColumnStyle(SizeType.Percent, 100)
             )
 
-            For i As Integer = 0 To 6
+            For i As Integer = 0 To 5
                 details.RowStyles.Add(
-                    New RowStyle(SizeType.Percent, 14.2857F)
+                    New RowStyle(SizeType.Percent, 16.6667F)
                 )
             Next
 
             txtTitle.Dock = DockStyle.Fill
-            txtCoAuthors.Dock = DockStyle.Fill
             txtTargetJournal.Dock = DockStyle.Fill
 
             cmbStage.Dock = DockStyle.Fill
@@ -200,14 +198,11 @@ Namespace Forms
             details.Controls.Add(CreateFieldLabel("Title"), 0, 0)
             details.Controls.Add(txtTitle, 1, 0)
 
-            details.Controls.Add(CreateFieldLabel("Legacy co-authors"), 0, 1)
-            details.Controls.Add(txtCoAuthors, 1, 1)
+            details.Controls.Add(CreateFieldLabel("Target journal"), 0, 1)
+            details.Controls.Add(txtTargetJournal, 1, 1)
 
-            details.Controls.Add(CreateFieldLabel("Target journal"), 0, 2)
-            details.Controls.Add(txtTargetJournal, 1, 2)
-
-            details.Controls.Add(CreateFieldLabel("Current stage"), 0, 3)
-            details.Controls.Add(cmbStage, 1, 3)
+            details.Controls.Add(CreateFieldLabel("Current stage"), 0, 2)
+            details.Controls.Add(cmbStage, 1, 2)
 
             AddHandler cmbStage.SelectedIndexChanged,
                 Sub(sender, e)
@@ -246,13 +241,13 @@ Namespace Forms
             details.Controls.Add(
                 CreateFieldLabel("Revision deadline"),
                 0,
-                4
+                3
             )
 
             details.Controls.Add(
                 revisionDeadlinePanel,
                 1,
-                4
+                3
             )
 
             btnMetadata.Text =
@@ -270,8 +265,8 @@ Namespace Forms
             AddHandler btnMetadata.Click,
                 AddressOf OpenCrossrefMetadata
 
-            details.Controls.Add(CreateFieldLabel("Metadata"), 0, 5)
-            details.Controls.Add(btnMetadata, 1, 5)
+            details.Controls.Add(CreateFieldLabel("Metadata"), 0, 4)
+            details.Controls.Add(btnMetadata, 1, 4)
 
             btnJournalLinks.Text =
                 "Journal, Preprint && Links..."
@@ -288,8 +283,8 @@ Namespace Forms
             AddHandler btnJournalLinks.Click,
                 AddressOf OpenJournalLinks
 
-            details.Controls.Add(CreateFieldLabel("Links"), 0, 6)
-            details.Controls.Add(btnJournalLinks, 1, 6)
+            details.Controls.Add(CreateFieldLabel("Links"), 0, 5)
+            details.Controls.Add(btnJournalLinks, 1, 5)
 
             detailsGroup.Controls.Add(details)
 
@@ -729,11 +724,13 @@ Namespace Forms
 
         Private Sub LoadManuscript()
 
+            ManuscriptLifecycleService.
+                ReconcileFromLatestWorkflow(
+                    _workingManuscript
+                )
+
             txtTitle.Text =
                 _workingManuscript.Title
-
-            txtCoAuthors.Text =
-                _workingManuscript.CoAuthors
 
             txtTargetJournal.Text =
                 _workingManuscript.TargetJournal
@@ -770,6 +767,19 @@ Namespace Forms
 
         End Sub
 
+
+
+        Private Sub RefreshLifecycleControls()
+
+            txtTargetJournal.Text =
+                _workingManuscript.TargetJournal
+
+            cmbStage.SelectedItem =
+                _workingManuscript.CurrentStage
+
+            RefreshRevisionDeadlineDisplay()
+
+        End Sub
 
 
         ' =====================================================
@@ -930,8 +940,11 @@ Namespace Forms
                         dialog.CreatedDecision
                     )
 
-                    _workingManuscript.RevisionDeadline =
-                        dialog.CreatedDecision.RevisionDeadline
+                    ManuscriptLifecycleService.ApplyDecision(
+                        _workingManuscript,
+                        latestSubmission,
+                        dialog.CreatedDecision
+                    )
 
                 End Using
 
@@ -966,13 +979,17 @@ Namespace Forms
 
                     Next
 
-                    _workingManuscript.RevisionDeadline =
-                        updated.RevisionDeadline
+                    ManuscriptLifecycleService.ApplyDecision(
+                        _workingManuscript,
+                        latestSubmission,
+                        updated
+                    )
 
                 End Using
 
             End If
 
+            RefreshLifecycleControls()
             RefreshSubmissionList()
             RefreshRevisionDeadlineDisplay()
 
@@ -1049,7 +1066,7 @@ Namespace Forms
             If _workingManuscript.Authors.Count = 0 Then
 
                 lblAuthorInfo.Text =
-                    "No structured authors yet. Legacy co-author text is preserved above."
+                    "No authors assigned yet. Use Add Author to build the manuscript author list."
 
             Else
 
@@ -1722,6 +1739,13 @@ Namespace Forms
 
             End Using
 
+            ManuscriptLifecycleService.
+                ReconcileFromLatestWorkflow(
+                    _workingManuscript,
+                    allowSameDay:=True
+                )
+
+            RefreshLifecycleControls()
             RefreshSubmissionList()
 
         End Sub
@@ -1746,6 +1770,12 @@ Namespace Forms
                         dialog.CreatedSubmission
                     )
 
+                    ManuscriptLifecycleService.ApplySubmission(
+                        _workingManuscript,
+                        dialog.CreatedSubmission
+                    )
+
+                    RefreshLifecycleControls()
                     RefreshSubmissionList()
 
                     lstSubmissions.SelectedIndex =
@@ -1801,6 +1831,13 @@ Namespace Forms
 
                 Next
 
+                ManuscriptLifecycleService.
+                    ReconcileFromLatestWorkflow(
+                        _workingManuscript,
+                        allowSameDay:=True
+                    )
+
+                RefreshLifecycleControls()
                 RefreshSubmissionList()
 
                 For i As Integer = 0 To _displayedSubmissions.Count - 1
@@ -2003,9 +2040,6 @@ Namespace Forms
 
             _workingManuscript.Title =
                 txtTitle.Text.Trim()
-
-            _workingManuscript.CoAuthors =
-                txtCoAuthors.Text.Trim()
 
             Dim oldTargetJournalText As String =
                 If(
@@ -2267,6 +2301,12 @@ Namespace Forms
 
             _originalManuscript.Reminders =
                 committed.Reminders
+
+            _originalManuscript.Versions =
+                committed.Versions
+
+            _originalManuscript.CurrentVersionId =
+                committed.CurrentVersionId
 
             _originalManuscript.CurrentStage =
                 committed.CurrentStage

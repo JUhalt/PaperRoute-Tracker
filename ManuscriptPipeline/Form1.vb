@@ -3193,6 +3193,47 @@ Public Class Form1
 
 
         ' =================================================
+        ' Route link
+        ' =================================================
+
+        Dim routeLinkText As String =
+            "View route →"
+
+        Dim routeLinkWidth As Integer =
+            TextRenderer.MeasureText(
+                routeLinkText,
+                Me.Font
+            ).Width + 4
+
+        Dim lblRoute As New Label With {
+            .Text = routeLinkText,
+            .AutoSize = False,
+            .Width = routeLinkWidth,
+            .Height = bodyTextHeight + 4,
+            .Top = statsTop,
+            .Left =
+                card.ClientSize.Width -
+                routeLinkWidth -
+                18,
+            .Anchor =
+                AnchorStyles.Top Or
+                AnchorStyles.Right,
+            .TextAlign = ContentAlignment.MiddleRight,
+            .ForeColor = UiTheme.AccentColor(),
+            .Cursor = Cursors.Hand,
+            .Font = New Font(
+                Me.Font,
+                FontStyle.Underline
+            )
+        }
+
+        AddHandler lblRoute.Click,
+            Sub(sender, e)
+                OpenRouteView(manuscript)
+            End Sub
+
+
+        ' =================================================
         ' Responsive text width
         ' =================================================
 
@@ -3232,6 +3273,7 @@ Public Class Form1
         card.Controls.Add(stageBadge)
         card.Controls.Add(lblJournal)
         card.Controls.Add(lblStats)
+        card.Controls.Add(lblRoute)
         card.Controls.Add(btnOpen)
         card.Controls.Add(btnDelete)
 
@@ -3388,6 +3430,23 @@ Public Class Form1
                 RenderManuscripts()
 
             End If
+
+        End Using
+
+    End Sub
+
+
+    Private Sub OpenRouteView(
+        manuscript As Manuscript
+    )
+
+        Using dialog As New ManuscriptRouteViewForm(
+            manuscript
+        )
+
+            dialog.ShowDialog(
+                Me
+            )
 
         End Using
 

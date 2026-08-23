@@ -75,12 +75,6 @@ Public Class RcSafetyTests
                 "Complex Route Study"
             )
 
-            SetText(
-                manuscripts,
-                2,
-                "CoAuthors",
-                "A. Researcher; B. Scholar"
-            )
 
             SetText(
                 manuscripts,

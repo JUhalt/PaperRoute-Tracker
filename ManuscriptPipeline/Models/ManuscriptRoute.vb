@@ -1,4 +1,4 @@
-Imports System
+﻿Imports System
 Imports System.Collections.Generic
 
 Namespace Models
@@ -49,6 +49,8 @@ Namespace Models
 
         Public Property RelatedVersionIds As List(Of Guid) =
             New List(Of Guid)()
+
+        Friend Property ProjectionOrder As Integer = 0
 
     End Class
 

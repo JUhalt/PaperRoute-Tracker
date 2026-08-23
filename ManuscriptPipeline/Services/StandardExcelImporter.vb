@@ -213,13 +213,6 @@ Namespace Services
 
                 End If
 
-                Dim coAuthors As String = ReadOptionalText(
-                    worksheet,
-                    rowNumber,
-                    headers,
-                    "COAUTHORS"
-                )
-
                 Dim targetJournal As String = ReadOptionalText(
                     worksheet,
                     rowNumber,
@@ -251,7 +244,6 @@ Namespace Services
                 Dim manuscript As New Manuscript With {
                     .Id = Guid.NewGuid(),
                     .Title = title,
-                    .CoAuthors = coAuthors,
                     .TargetJournal = targetJournal,
                     .CurrentStage = stage,
                     .Location = location,

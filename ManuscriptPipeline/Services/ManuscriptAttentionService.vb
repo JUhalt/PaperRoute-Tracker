@@ -301,9 +301,12 @@ Namespace Services
                 End If
 
                 If latest Is Nothing OrElse
-                   submission.SubmittedDate >
-                   latest.SubmittedDate Then
+                   submission.SubmittedDate.Date >=
+                   latest.SubmittedDate.Date Then
 
+                    ' Submission dates are calendar dates. If two entries
+                    ' share a date, the later stored entry represents the
+                    ' later workflow event.
                     latest =
                         submission
 
@@ -338,9 +341,11 @@ Namespace Services
                 End If
 
                 If latest Is Nothing OrElse
-                   decision.DecisionDate >
-                   latest.DecisionDate Then
+                   decision.DecisionDate.Date >=
+                   latest.DecisionDate.Date Then
 
+                    ' Decision dates are calendar dates. If two decisions
+                    ' share a date, the later stored decision wins.
                     latest =
                         decision
 

@@ -1,4 +1,4 @@
-Imports System
+﻿Imports System
 Imports System.Collections.Generic
 Imports ManuscriptPipeline.Models
 
@@ -125,7 +125,8 @@ Namespace Services
                         .Note = If(
                             historyEvent.Note,
                             String.Empty
-                        )
+                        ),
+                        .ProjectionOrder = route.Waypoints.Count
                     }
                 )
 
@@ -164,7 +165,8 @@ Namespace Services
                     .Note = If(
                         submission.Notes,
                         String.Empty
-                    )
+                    ),
+                    .ProjectionOrder = route.Waypoints.Count
                 }
 
                 route.Waypoints.Add(
@@ -208,7 +210,8 @@ Namespace Services
                         .Note = If(
                             decisionEvent.Notes,
                             String.Empty
-                        )
+                        ),
+                        .ProjectionOrder = route.Waypoints.Count
                     }
 
                     route.Waypoints.Add(
@@ -328,7 +331,8 @@ Namespace Services
                             manuscript.CurrentVersionId.Value = version.Id,
                         .HasUnresolvedLink =
                             version.SubmissionId.HasValue OrElse
-                            version.DecisionId.HasValue
+                            version.DecisionId.HasValue,
+                        .ProjectionOrder = route.Waypoints.Count
                     }
                 )
 
@@ -392,7 +396,8 @@ Namespace Services
                     .Note = If(
                         manuscript.FileDrawerReason,
                         String.Empty
-                    )
+                    ),
+                    .ProjectionOrder = route.Waypoints.Count
                 }
             )
 
@@ -455,7 +460,8 @@ Namespace Services
                     .EventDate = manuscript.StageEnteredDate,
                     .Stage = manuscript.CurrentStage,
                     .Location = manuscript.Location,
-                    .IsCurrent = True
+                    .IsCurrent = True,
+                    .ProjectionOrder = route.Waypoints.Count
                 }
             )
 
@@ -483,8 +489,10 @@ Namespace Services
 
                     If candidate.Kind =
                        ManuscriptRouteWaypointKind.Submission AndAlso
-                       candidate.EventDate >
-                       waypoint.EventDate Then
+                       IsLaterWaypoint(
+                           candidate,
+                           waypoint
+                       ) Then
 
                         waypoint.IsRerouteSource =
                             True
@@ -498,6 +506,31 @@ Namespace Services
             Next
 
         End Sub
+
+
+        Private Shared Function IsLaterWaypoint(
+            candidate As ManuscriptRouteWaypoint,
+            reference As ManuscriptRouteWaypoint
+        ) As Boolean
+
+            Dim dateComparison As Integer =
+                DateTime.Compare(
+                    candidate.EventDate.Date,
+                    reference.EventDate.Date
+                )
+
+            If dateComparison > 0 Then
+                Return True
+            End If
+
+            If dateComparison < 0 Then
+                Return False
+            End If
+
+            Return candidate.ProjectionOrder >
+                reference.ProjectionOrder
+
+        End Function
 
 
         Private Shared Function IsRejection(
@@ -550,21 +583,21 @@ Namespace Services
 
             Dim dateComparison As Integer =
                 DateTime.Compare(
-                    left.EventDate,
-                    right.EventDate
+                    left.EventDate.Date,
+                    right.EventDate.Date
                 )
 
             If dateComparison <> 0 Then
                 Return dateComparison
             End If
 
-            Dim kindComparison As Integer =
-                CInt(left.Kind).CompareTo(
-                    CInt(right.Kind)
+            Dim projectionOrderComparison As Integer =
+                left.ProjectionOrder.CompareTo(
+                    right.ProjectionOrder
                 )
 
-            If kindComparison <> 0 Then
-                Return kindComparison
+            If projectionOrderComparison <> 0 Then
+                Return projectionOrderComparison
             End If
 
             Return CompareStableKeys(

@@ -1,4 +1,4 @@
-Imports System
+﻿Imports System
 Imports System.Collections.Generic
 Imports System.Diagnostics
 Imports System.Drawing
@@ -58,8 +58,8 @@ Namespace Forms
 
             Me.Text = "Submission Details"
             Me.StartPosition = FormStartPosition.CenterParent
-            Me.Size = New Size(860, 760)
-            Me.MinimumSize = New Size(760, 660)
+            Me.Size = New Size(900, 840)
+            Me.MinimumSize = New Size(780, 700)
             Me.Font = New Font("Segoe UI", 10.0F)
             Me.AutoScaleMode = AutoScaleMode.Dpi
 
@@ -70,8 +70,8 @@ Namespace Forms
                 .Padding = New Padding(20)
             }
 
-            root.RowStyles.Add(New RowStyle(SizeType.Absolute, 264))
-            root.RowStyles.Add(New RowStyle(SizeType.Absolute, 140))
+            root.RowStyles.Add(New RowStyle(SizeType.Absolute, 238))
+            root.RowStyles.Add(New RowStyle(SizeType.Absolute, 110))
             root.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 58))
 
@@ -321,9 +321,9 @@ Namespace Forms
                 .Padding = New Padding(10)
             }
 
-            root.RowStyles.Add(New RowStyle(SizeType.Absolute, 60))
-            root.RowStyles.Add(New RowStyle(SizeType.Percent, 55))
-            root.RowStyles.Add(New RowStyle(SizeType.Percent, 45))
+            root.RowStyles.Add(New RowStyle(SizeType.Absolute, 56))
+            root.RowStyles.Add(New RowStyle(SizeType.Percent, 42))
+            root.RowStyles.Add(New RowStyle(SizeType.Percent, 58))
 
             Dim toolbar As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
@@ -376,6 +376,7 @@ Namespace Forms
 
             lstDecisions.Dock = DockStyle.Fill
             lstDecisions.IntegralHeight = False
+            lstDecisions.MinimumSize = New Size(0, 110)
 
             AddHandler lstDecisions.SelectedIndexChanged, AddressOf DecisionSelectionChanged
             AddHandler lstDecisions.DoubleClick, AddressOf EditSelectedDecision
@@ -385,6 +386,7 @@ Namespace Forms
             txtDecisionDetails.ReadOnly = True
             txtDecisionDetails.ScrollBars = ScrollBars.Vertical
             txtDecisionDetails.BackColor = SystemColors.Window
+            txtDecisionDetails.MinimumSize = New Size(0, 130)
 
             root.Controls.Add(toolbar, 0, 0)
             root.Controls.Add(lstDecisions, 0, 1)

@@ -72,7 +72,8 @@ Namespace Services
             worksheet.Cell("A4").Value =
                 "Keep the worksheet names and column headers unchanged. " &
                 "Enter one manuscript per row on the Manuscripts sheet. " &
-                "A manuscript may have multiple submissions, and each submission may have multiple decisions and correspondence records."
+                "A manuscript may have multiple submissions, and each submission may have multiple decisions and correspondence records. " &
+                "Authors and affiliations are managed as structured records inside PaperRoute; BibTeX/RIS import can bring structured author names into the library."
 
             worksheet.Range("A4:F6").Merge()
 
@@ -187,7 +188,6 @@ Namespace Services
             Dim headers As String() = {
                 "ManuscriptID*",
                 "Title*",
-                "CoAuthors",
                 "CurrentStage*",
                 "Location*",
                 "TargetJournal",
@@ -205,15 +205,14 @@ Namespace Services
 
             worksheet.Column("A").Width = 16
             worksheet.Column("B").Width = 38
-            worksheet.Column("C").Width = 30
-            worksheet.Column("D").Width = 18
-            worksheet.Column("E").Width = 16
-            worksheet.Column("F").Width = 34
+            worksheet.Column("C").Width = 18
+            worksheet.Column("D").Width = 16
+            worksheet.Column("E").Width = 34
+            worksheet.Column("F").Width = 18
             worksheet.Column("G").Width = 18
-            worksheet.Column("H").Width = 18
-            worksheet.Column("I").Width = 42
+            worksheet.Column("H").Width = 42
 
-            worksheet.Range("G2:H500").Style.NumberFormat.Format =
+            worksheet.Range("F2:G500").Style.NumberFormat.Format =
                 "yyyy-mm-dd"
 
         End Sub
@@ -464,11 +463,11 @@ Namespace Services
             correspondence As IXLWorksheet
         )
 
-            manuscripts.Range("D2:D500").CreateDataValidation().List(
+            manuscripts.Range("C2:C500").CreateDataValidation().List(
                 "=StageList"
             )
 
-            manuscripts.Range("E2:E500").CreateDataValidation().List(
+            manuscripts.Range("D2:D500").CreateDataValidation().List(
                 "=LocationList"
             )
 
