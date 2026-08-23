@@ -1733,7 +1733,10 @@ Namespace Forms
                 Return
             End If
 
-            Using dialog As New SubmissionDetailsForm(submission)
+            Using dialog As New SubmissionDetailsForm(
+                _workingManuscript,
+                submission
+            )
 
                 dialog.ShowDialog(Me)
 
@@ -1911,6 +1914,13 @@ Namespace Forms
                 selected
             )
 
+            ManuscriptLifecycleService.
+                ReconcileAfterSubmissionRemoval(
+                    _workingManuscript,
+                    selected
+                )
+
+            RefreshLifecycleControls()
             RefreshSubmissionList()
 
         End Sub
@@ -1985,6 +1995,247 @@ Namespace Forms
         End Sub
 
 
+        Private Function RecordRequiredSubmission() As Boolean
+
+            Using dialog As New AddSubmissionForm(
+                txtTargetJournal.Text.Trim()
+            )
+
+                If dialog.ShowDialog(Me) <>
+                   DialogResult.OK OrElse
+                   dialog.CreatedSubmission Is Nothing Then
+
+                    Return False
+
+                End If
+
+                _workingManuscript.Submissions.Add(
+                    dialog.CreatedSubmission
+                )
+
+                ManuscriptLifecycleService.ApplySubmission(
+                    _workingManuscript,
+                    dialog.CreatedSubmission
+                )
+
+            End Using
+
+            RefreshLifecycleControls()
+            RefreshSubmissionList()
+
+            If lstSubmissions.Items.Count > 0 Then
+
+                lstSubmissions.SelectedIndex =
+                    lstSubmissions.Items.Count - 1
+
+            End If
+
+            Return True
+
+        End Function
+
+
+        Private Function EnsureWorkflowForRequestedStage(
+            requestedStage As PaperStage
+        ) As Boolean
+
+            If ManuscriptStagePolicyService.IsStageSupported(
+                _workingManuscript,
+                requestedStage
+            ) Then
+
+                Return True
+
+            End If
+
+            Dim requirement As ManuscriptStageWorkflowRequirement =
+                ManuscriptStagePolicyService.GetRequirement(
+                    requestedStage
+                )
+
+            Select Case requirement
+
+                Case ManuscriptStageWorkflowRequirement.ActiveSubmission
+
+                    Dim recordSubmission As DialogResult =
+                        MessageBox.Show(
+                            Me,
+                            "PaperRoute ties " &
+                            FormatStageForPrompt(requestedStage) &
+                            " to an active Journal Submission record." &
+                            Environment.NewLine &
+                            Environment.NewLine &
+                            "Record the submission details now?",
+                            "Submission Details Required",
+                            MessageBoxButtons.YesNo,
+                            MessageBoxIcon.Information
+                        )
+
+                    If recordSubmission <>
+                       DialogResult.Yes Then
+
+                        Return False
+
+                    End If
+
+                    If Not RecordRequiredSubmission() Then
+                        Return False
+                    End If
+
+                Case ManuscriptStageWorkflowRequirement.RevisionDecision,
+                     ManuscriptStageWorkflowRequirement.AcceptanceDecision
+
+                    Dim latestSubmission As JournalSubmission =
+                        ManuscriptAttentionService.
+                            GetLatestSubmission(
+                                _workingManuscript
+                            )
+
+                    If latestSubmission Is Nothing Then
+
+                        Dim recordSubmission As DialogResult =
+                            MessageBox.Show(
+                                Me,
+                                "This stage requires an editorial decision " &
+                                "attached to a Journal Submission." &
+                                Environment.NewLine &
+                                Environment.NewLine &
+                                "Record the submission first?",
+                                "Submission Required",
+                                MessageBoxButtons.YesNo,
+                                MessageBoxIcon.Information
+                            )
+
+                        If recordSubmission <>
+                           DialogResult.Yes OrElse
+                           Not RecordRequiredSubmission() Then
+
+                            Return False
+
+                        End If
+
+                        latestSubmission =
+                            ManuscriptAttentionService.
+                                GetLatestSubmission(
+                                    _workingManuscript
+                                )
+
+                    End If
+
+                    If latestSubmission Is Nothing Then
+                        Return False
+                    End If
+
+                    Dim decisionPrompt As String
+
+                    If requirement =
+                       ManuscriptStageWorkflowRequirement.RevisionDecision Then
+
+                        decisionPrompt =
+                            "Revision is driven by a Major Revision, " &
+                            "Minor Revision, or Revise & Resubmit decision."
+
+                    Else
+
+                        decisionPrompt =
+                            FormatStageForPrompt(requestedStage) &
+                            " requires an Accepted editorial decision."
+
+                    End If
+
+                    Dim openSubmission As DialogResult =
+                        MessageBox.Show(
+                            Me,
+                            decisionPrompt &
+                            Environment.NewLine &
+                            Environment.NewLine &
+                            "Open the latest submission to record or edit " &
+                            "the editorial decision now?",
+                            "Editorial Decision Required",
+                            MessageBoxButtons.YesNo,
+                            MessageBoxIcon.Information
+                        )
+
+                    If openSubmission <>
+                       DialogResult.Yes Then
+
+                        Return False
+
+                    End If
+
+                    Using dialog As New SubmissionDetailsForm(
+                        _workingManuscript,
+                        latestSubmission
+                    )
+
+                        dialog.ShowDialog(
+                            Me
+                        )
+
+                    End Using
+
+                    ManuscriptLifecycleService.
+                        ReconcileFromLatestWorkflow(
+                            _workingManuscript,
+                            allowSameDay:=True
+                        )
+
+                    ManuscriptLifecycleService.
+                        ReconcileAfterWorkflowMutation(
+                            _workingManuscript
+                        )
+
+                    RefreshLifecycleControls()
+                    RefreshSubmissionList()
+
+            End Select
+
+            If ManuscriptStagePolicyService.IsStageSupported(
+                _workingManuscript,
+                requestedStage
+            ) Then
+
+                Return True
+
+            End If
+
+            MessageBox.Show(
+                Me,
+                "PaperRoute did not find " &
+                ManuscriptStagePolicyService.RequirementDescription(
+                    requirement
+                ) &
+                ", so the current stage was not changed.",
+                "Stage Not Changed",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information
+            )
+
+            Return False
+
+        End Function
+
+
+        Private Function FormatStageForPrompt(
+            stage As PaperStage
+        ) As String
+
+            Select Case stage
+
+                Case PaperStage.UnderReview
+                    Return "Under Review"
+
+                Case PaperStage.InPress
+                    Return "In Press"
+
+                Case Else
+                    Return stage.ToString()
+
+            End Select
+
+        End Function
+
+
         ' =====================================================
         ' Save working copy
         ' =====================================================
@@ -2024,6 +2275,26 @@ Namespace Forms
                     cmbStage.SelectedItem,
                     PaperStage
                 )
+
+            If oldStage <> newStage Then
+
+                If Not EnsureWorkflowForRequestedStage(
+                    newStage
+                ) Then
+
+                    cmbStage.SelectedItem =
+                        _workingManuscript.CurrentStage
+
+                    RefreshRevisionDeadlineDisplay()
+
+                    Return
+
+                End If
+
+                oldStage =
+                    _workingManuscript.CurrentStage
+
+            End If
 
             If newStage = PaperStage.Published Then
 

@@ -11,6 +11,7 @@ Namespace Services
             Decision
         End Enum
 
+
         Private Class WorkflowEvent
 
             Public Property Kind As WorkflowEventKind
@@ -30,19 +31,25 @@ Namespace Services
             submission As JournalSubmission
         ) As Boolean
 
-            ValidateManuscript(manuscript)
+            ValidateManuscript(
+                manuscript
+            )
 
             If submission Is Nothing Then
                 Throw New ArgumentNullException(NameOf(submission))
             End If
 
             Dim latest As WorkflowEvent =
-                FindLatestWorkflowEvent(manuscript)
+                FindLatestWorkflowEvent(
+                    manuscript
+                )
 
             If latest Is Nothing OrElse
-               latest.Kind <> WorkflowEventKind.Submission OrElse
+               latest.Kind <>
+               WorkflowEventKind.Submission OrElse
                latest.Submission Is Nothing OrElse
-               latest.Submission.Id <> submission.Id Then
+               latest.Submission.Id <>
+               submission.Id Then
 
                 Return False
 
@@ -74,7 +81,9 @@ Namespace Services
             decision As EditorialDecisionEvent
         ) As Boolean
 
-            ValidateManuscript(manuscript)
+            ValidateManuscript(
+                manuscript
+            )
 
             If submission Is Nothing Then
                 Throw New ArgumentNullException(NameOf(submission))
@@ -85,12 +94,16 @@ Namespace Services
             End If
 
             Dim latest As WorkflowEvent =
-                FindLatestWorkflowEvent(manuscript)
+                FindLatestWorkflowEvent(
+                    manuscript
+                )
 
             If latest Is Nothing OrElse
-               latest.Kind <> WorkflowEventKind.Decision OrElse
+               latest.Kind <>
+               WorkflowEventKind.Decision OrElse
                latest.Decision Is Nothing OrElse
-               latest.Decision.Id <> decision.Id Then
+               latest.Decision.Id <>
+               decision.Id Then
 
                 Return False
 
@@ -120,10 +133,14 @@ Namespace Services
             Optional allowSameDay As Boolean = False
         ) As Boolean
 
-            ValidateManuscript(manuscript)
+            ValidateManuscript(
+                manuscript
+            )
 
             Dim latest As WorkflowEvent =
-                FindLatestWorkflowEvent(manuscript)
+                FindLatestWorkflowEvent(
+                    manuscript
+                )
 
             If latest Is Nothing Then
                 Return False
@@ -162,6 +179,233 @@ Namespace Services
                     Return False
 
             End Select
+
+        End Function
+
+
+        Public Shared Function ReconcileAfterDecisionRemoval(
+            manuscript As Manuscript,
+            removedDecision As EditorialDecisionEvent
+        ) As Boolean
+
+            ValidateManuscript(
+                manuscript
+            )
+
+            If removedDecision Is Nothing Then
+                Throw New ArgumentNullException(NameOf(removedDecision))
+            End If
+
+            If CurrentStageMatchesRemovedDecision(
+                manuscript,
+                removedDecision
+            ) Then
+
+                Return ApplyLatestWorkflowState(
+                    manuscript
+                )
+
+            End If
+
+            Return ReconcileAfterWorkflowMutation(
+                manuscript
+            )
+
+        End Function
+
+
+        Public Shared Function ReconcileAfterSubmissionRemoval(
+            manuscript As Manuscript,
+            removedSubmission As JournalSubmission
+        ) As Boolean
+
+            ValidateManuscript(
+                manuscript
+            )
+
+            If removedSubmission Is Nothing Then
+                Throw New ArgumentNullException(NameOf(removedSubmission))
+            End If
+
+            Dim removedLatestDecision As EditorialDecisionEvent =
+                ManuscriptAttentionService.
+                    GetLatestDecision(
+                        removedSubmission
+                    )
+
+            If removedLatestDecision IsNot Nothing AndAlso
+               CurrentStageMatchesRemovedDecision(
+                   manuscript,
+                   removedLatestDecision
+               ) Then
+
+                Return ApplyLatestWorkflowState(
+                    manuscript
+                )
+
+            End If
+
+            If (
+                manuscript.CurrentStage =
+                    PaperStage.Submitted OrElse
+                manuscript.CurrentStage =
+                    PaperStage.UnderReview
+            ) AndAlso
+               manuscript.StageEnteredDate.Date =
+               removedSubmission.SubmittedDate.Date Then
+
+                Return ApplyLatestWorkflowState(
+                    manuscript
+                )
+
+            End If
+
+            Return ReconcileAfterWorkflowMutation(
+                manuscript
+            )
+
+        End Function
+
+
+        Public Shared Function ReconcileAfterWorkflowMutation(
+            manuscript As Manuscript
+        ) As Boolean
+
+            ValidateManuscript(
+                manuscript
+            )
+
+            If ManuscriptStagePolicyService.IsStageSupported(
+                manuscript,
+                manuscript.CurrentStage
+            ) Then
+
+                Return False
+
+            End If
+
+            Dim requirement As ManuscriptStageWorkflowRequirement =
+                ManuscriptStagePolicyService.GetRequirement(
+                    manuscript.CurrentStage
+                )
+
+            If requirement =
+               ManuscriptStageWorkflowRequirement.None Then
+
+                Return False
+
+            End If
+
+            Return ApplyLatestWorkflowState(
+                manuscript
+            )
+
+        End Function
+
+
+        Private Shared Function CurrentStageMatchesRemovedDecision(
+            manuscript As Manuscript,
+            decision As EditorialDecisionEvent
+        ) As Boolean
+
+            If manuscript.StageEnteredDate.Date <>
+               decision.DecisionDate.Date Then
+
+                Return False
+
+            End If
+
+            Select Case decision.Decision
+
+                Case EditorialDecision.MajorRevision,
+                     EditorialDecision.MinorRevision,
+                     EditorialDecision.ReviseAndResubmit
+
+                    Return manuscript.CurrentStage =
+                        PaperStage.Revision
+
+                Case EditorialDecision.Accepted
+
+                    Return manuscript.CurrentStage =
+                        PaperStage.Accepted
+
+                Case EditorialDecision.Rejected,
+                     EditorialDecision.DeskRejected,
+                     EditorialDecision.RejectedAfterReview,
+                     EditorialDecision.Withdrawn
+
+                    Return manuscript.CurrentStage =
+                        PaperStage.Draft
+
+                Case Else
+
+                    Return False
+
+            End Select
+
+        End Function
+
+
+        Private Shared Function ApplyLatestWorkflowState(
+            manuscript As Manuscript
+        ) As Boolean
+
+            Dim originalLocation As ManuscriptLocation =
+                manuscript.Location
+
+            Dim latestSubmission As JournalSubmission =
+                ManuscriptAttentionService.
+                    GetLatestSubmission(
+                        manuscript
+                    )
+
+            If latestSubmission Is Nothing Then
+
+                ApplyFallbackDraftState(
+                    manuscript
+                )
+
+            Else
+
+                Dim latestDecision As EditorialDecisionEvent =
+                    ManuscriptAttentionService.
+                        GetLatestDecision(
+                            latestSubmission
+                        )
+
+                If latestDecision Is Nothing OrElse
+                   latestDecision.Decision =
+                   EditorialDecision.None Then
+
+                    ApplySubmissionState(
+                        manuscript,
+                        latestSubmission
+                    )
+
+                ElseIf Not ApplyDecisionState(
+                    manuscript,
+                    latestSubmission,
+                    latestDecision
+                ) Then
+
+                    ApplySubmissionState(
+                        manuscript,
+                        latestSubmission
+                    )
+
+                End If
+
+            End If
+
+            If originalLocation =
+               ManuscriptLocation.FileDrawer Then
+
+                manuscript.Location =
+                    ManuscriptLocation.FileDrawer
+
+            End If
+
+            Return True
 
         End Function
 
@@ -223,14 +467,10 @@ Namespace Services
             manuscript.Location =
                 ManuscriptLocation.Pipeline
 
-            manuscript.TargetJournal =
-                If(
-                    submission.JournalName,
-                    String.Empty
-                ).Trim()
-
-            manuscript.TargetJournalId =
-                submission.JournalId
+            SetCurrentTarget(
+                manuscript,
+                submission
+            )
 
         End Sub
 
@@ -242,7 +482,8 @@ Namespace Services
         ) As Boolean
 
             If decision Is Nothing OrElse
-               decision.Decision = EditorialDecision.None Then
+               decision.Decision =
+               EditorialDecision.None Then
 
                 Return False
 
@@ -308,6 +549,36 @@ Namespace Services
             Return True
 
         End Function
+
+
+        Private Shared Sub ApplyFallbackDraftState(
+            manuscript As Manuscript
+        )
+
+            manuscript.CurrentStage =
+                PaperStage.Draft
+
+            manuscript.StageEnteredDate =
+                DateTime.Now
+
+            manuscript.RevisionDeadline =
+                Nothing
+
+            manuscript.TargetJournal =
+                String.Empty
+
+            manuscript.TargetJournalId =
+                Nothing
+
+            If manuscript.Location <>
+               ManuscriptLocation.FileDrawer Then
+
+                manuscript.Location =
+                    ManuscriptLocation.Pipeline
+
+            End If
+
+        End Sub
 
 
         Private Shared Sub SetCurrentTarget(
@@ -388,9 +659,12 @@ Namespace Services
                 ConsiderCandidate(
                     latest,
                     New WorkflowEvent With {
-                        .Kind = WorkflowEventKind.Submission,
-                        .EventDate = submission.SubmittedDate.Date,
-                        .Submission = submission
+                        .Kind =
+                            WorkflowEventKind.Submission,
+                        .EventDate =
+                            submission.SubmittedDate.Date,
+                        .Submission =
+                            submission
                     }
                 )
 
@@ -408,10 +682,14 @@ Namespace Services
                     ConsiderCandidate(
                         latest,
                         New WorkflowEvent With {
-                            .Kind = WorkflowEventKind.Decision,
-                            .EventDate = decision.DecisionDate.Date,
-                            .Submission = submission,
-                            .Decision = decision
+                            .Kind =
+                                WorkflowEventKind.Decision,
+                            .EventDate =
+                                decision.DecisionDate.Date,
+                            .Submission =
+                                submission,
+                            .Decision =
+                                decision
                         }
                     )
 
@@ -470,8 +748,6 @@ Namespace Services
             If candidate.Kind =
                latest.Kind Then
 
-                ' Lists preserve workflow entry order. When two events share
-                ' a calendar date, the later stored event is the later event.
                 latest =
                     candidate
 

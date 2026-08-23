@@ -1,4 +1,4 @@
-Imports System
+﻿Imports System
 Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.Linq
@@ -39,6 +39,21 @@ Namespace Forms
 
             BuildInterface()
             UiPolish.ApplyDialog(Me)
+
+        End Sub
+
+
+        Public Sub New(
+            initialJournalName As String
+        )
+
+            Me.New()
+
+            txtJournal.Text =
+                If(
+                    initialJournalName,
+                    String.Empty
+                ).Trim()
 
         End Sub
 

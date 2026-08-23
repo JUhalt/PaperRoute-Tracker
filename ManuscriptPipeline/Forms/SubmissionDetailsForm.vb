@@ -12,6 +12,7 @@ Namespace Forms
     Public Class SubmissionDetailsForm
         Inherits Form
 
+        Private ReadOnly _manuscript As Manuscript
         Private ReadOnly _submission As JournalSubmission
 
         ' Editorial decisions
@@ -38,9 +39,28 @@ Namespace Forms
         Private ReadOnly _displayedCorrespondence As New List(Of CorrespondenceItem)()
 
 
-        Public Sub New(submission As JournalSubmission)
+        Public Sub New(
+            submission As JournalSubmission
+        )
 
-            _submission = submission
+            Me.New(
+                Nothing,
+                submission
+            )
+
+        End Sub
+
+
+        Public Sub New(
+            manuscript As Manuscript,
+            submission As JournalSubmission
+        )
+
+            _manuscript =
+                manuscript
+
+            _submission =
+                submission
 
             BuildInterface()
             UiPolish.ApplyDialog(Me)
@@ -515,6 +535,16 @@ Namespace Forms
 
                     _submission.Decisions.Add(dialog.CreatedDecision)
 
+                    If _manuscript IsNot Nothing Then
+
+                        ManuscriptLifecycleService.ApplyDecision(
+                            _manuscript,
+                            _submission,
+                            dialog.CreatedDecision
+                        )
+
+                    End If
+
                     RefreshDecisionList()
 
                     lstDecisions.SelectedIndex = lstDecisions.Items.Count - 1
@@ -550,6 +580,23 @@ Namespace Forms
                     End If
 
                 Next
+
+                If _manuscript IsNot Nothing Then
+
+                    If Not ManuscriptLifecycleService.ApplyDecision(
+                        _manuscript,
+                        _submission,
+                        updated
+                    ) Then
+
+                        ManuscriptLifecycleService.
+                            ReconcileAfterWorkflowMutation(
+                                _manuscript
+                            )
+
+                    End If
+
+                End If
 
                 RefreshDecisionList()
 
@@ -597,6 +644,16 @@ Namespace Forms
             End If
 
             _submission.Decisions.Remove(selected)
+
+            If _manuscript IsNot Nothing Then
+
+                ManuscriptLifecycleService.
+                    ReconcileAfterDecisionRemoval(
+                        _manuscript,
+                        selected
+                    )
+
+            End If
 
             RefreshDecisionList()
 

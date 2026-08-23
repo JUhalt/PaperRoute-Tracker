@@ -1,4 +1,4 @@
-Imports System
+﻿Imports System
 Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.Linq
@@ -51,6 +51,28 @@ Public Class Form1
 
     Private uiInitialized As Boolean = False
     Private suppressBoardFilterEvents As Boolean = False
+
+    Private ReadOnly boardSearchDebounceTimer As New Timer With {
+        .Interval = 200
+    }
+
+    Private authorSearchIndex As New AuthorLibrarySearchIndex(
+        Nothing
+    )
+
+    Private currentAttentionSnapshots As New Dictionary(
+        Of Guid,
+        ManuscriptAttentionSnapshot
+    )()
+
+    Private cardTitleFont As Font = Nothing
+    Private cardBadgeFont As Font = Nothing
+    Private cardInsightFont As Font = Nothing
+    Private routeLinkFont As Font = Nothing
+    Private attentionTitleFont As Font = Nothing
+    Private attentionRegularFont As Font = Nothing
+    Private attentionActiveFont As Font = Nothing
+    Private sectionHeaderFont As Font = Nothing
 
 
     Private NotInheritable Class StageFilterOption
@@ -178,6 +200,8 @@ Public Class Form1
         Me.AutoScaleMode = AutoScaleMode.Dpi
         Me.BackColor = UiTheme.BoardBackground()
         Me.DoubleBuffered = True
+
+        ResetSharedDashboardFonts()
 
         Dim root As New TableLayoutPanel With {
             .Dock = DockStyle.Fill,
@@ -617,11 +641,7 @@ Public Class Form1
     True
 
         lblAttentionTitle.Font =
-    New Font(
-        Me.Font.FontFamily,
-        9.0F,
-        FontStyle.Bold
-    )
+            attentionTitleFont
 
         lblAttentionTitle.ForeColor =
     UiTheme.PrimaryText()
@@ -702,7 +722,7 @@ Public Class Form1
 
 
         txtBoardSearch.PlaceholderText =
-            "Search title, journal, or co-authors..."
+            "Search title, journal, or authors..."
 
         txtBoardSearch.Width =
             Math.Max(
@@ -785,8 +805,11 @@ Public Class Form1
         )
 
 
+        AddHandler boardSearchDebounceTimer.Tick,
+            AddressOf BoardSearchDebounceElapsed
+
         AddHandler txtBoardSearch.TextChanged,
-            AddressOf BoardFilterChanged
+            AddressOf BoardSearchTextChanged
 
         AddHandler cboStageFilter.SelectedIndexChanged,
             AddressOf BoardFilterChanged
@@ -1114,45 +1137,40 @@ Public Class Form1
 
         For Each manuscript As Manuscript In manuscripts
 
-            If HasOverdueRevision(
-            manuscript
-        ) Then
+            Dim snapshot As ManuscriptAttentionSnapshot =
+                GetAttentionSnapshot(
+                    manuscript
+                )
+
+            If snapshot.HasOverdueRevision Then
 
                 overdueCount += 1
 
             End If
 
 
-            If IsRevisionDueSoon(
-            manuscript
-        ) Then
+            If snapshot.IsRevisionDueSoon Then
 
                 dueSoonCount += 1
 
             End If
 
 
-            If IsLongWaitingManuscript(
-            manuscript
-        ) Then
+            If snapshot.IsLongWaitingManuscript Then
 
                 longReviewCount += 1
 
             End If
 
 
-            If HasMissingTargetJournal(
-            manuscript
-        ) Then
+            If snapshot.HasMissingTargetJournal Then
 
                 missingJournalCount += 1
 
             End If
 
 
-            If WasRecentlyRejected(
-            manuscript
-        ) Then
+            If snapshot.WasRecentlyRejected Then
 
                 recentRejectionCount += 1
 
@@ -1274,22 +1292,15 @@ Public Class Form1
 
 
         If activeAttentionFilter =
-        filter Then
+           filter Then
 
             label.Font =
-            New Font(
-                label.Font,
-                FontStyle.Bold Or
-                FontStyle.Underline
-            )
+                attentionActiveFont
 
         Else
 
             label.Font =
-            New Font(
-                label.Font,
-                FontStyle.Regular
-            )
+                attentionRegularFont
 
         End If
 
@@ -1303,42 +1314,26 @@ Public Class Form1
         insightColor =
         UiTheme.SecondaryText()
 
+        Dim snapshot As ManuscriptAttentionSnapshot =
+            GetAttentionSnapshot(
+                manuscript
+            )
+
 
         ' =================================================
         ' Overdue revision
         ' =================================================
 
-        If HasOverdueRevision(
-        manuscript
-    ) Then
+        If snapshot.HasOverdueRevision AndAlso
+           snapshot.OverdueDays.HasValue Then
 
-            Dim latestSubmission As JournalSubmission =
-            GetLatestSubmission(
-                manuscript
-            )
+            Dim overdueDays As Integer =
+                snapshot.OverdueDays.Value
 
-            Dim latestDecision As EditorialDecisionEvent =
-            GetLatestDecision(
-                latestSubmission
-            )
-
-            If latestDecision IsNot Nothing AndAlso
-           latestDecision.RevisionDeadline.HasValue Then
-
-                Dim overdueDays As Integer =
-                CInt(
-                    Math.Floor(
-                        (
-                            DateTime.Today -
-                            latestDecision.RevisionDeadline.Value.Date
-                        ).TotalDays
-                    )
-                )
-
-                insightColor =
+            insightColor =
                 UiTheme.DangerColor()
 
-                Return "Revision overdue by " &
+            Return "Revision overdue by " &
                 overdueDays.ToString() &
                 " day" &
                 If(
@@ -1347,8 +1342,6 @@ Public Class Form1
                     "s"
                 )
 
-            End If
-
         End If
 
 
@@ -1356,41 +1349,20 @@ Public Class Form1
         ' Revision due soon
         ' =================================================
 
-        If IsRevisionDueSoon(
-        manuscript
-    ) Then
+        If snapshot.IsRevisionDueSoon AndAlso
+           snapshot.RevisionDaysRemaining.HasValue Then
 
-            Dim latestSubmission As JournalSubmission =
-            GetLatestSubmission(
-                manuscript
-            )
+            Dim remainingDays As Integer =
+                snapshot.RevisionDaysRemaining.Value
 
-            Dim latestDecision As EditorialDecisionEvent =
-            GetLatestDecision(
-                latestSubmission
-            )
-
-            If latestDecision IsNot Nothing AndAlso
-           latestDecision.RevisionDeadline.HasValue Then
-
-                Dim remainingDays As Integer =
-                CInt(
-                    Math.Floor(
-                        (
-                            latestDecision.RevisionDeadline.Value.Date -
-                            DateTime.Today
-                        ).TotalDays
-                    )
-                )
-
-                insightColor =
+            insightColor =
                 UiTheme.WarningColor()
 
-                If remainingDays = 0 Then
-                    Return "Revision due today"
-                End If
+            If remainingDays = 0 Then
+                Return "Revision due today"
+            End If
 
-                Return "Revision due in " &
+            Return "Revision due in " &
                 remainingDays.ToString() &
                 " day" &
                 If(
@@ -1399,8 +1371,6 @@ Public Class Form1
                     "s"
                 )
 
-            End If
-
         End If
 
 
@@ -1408,35 +1378,15 @@ Public Class Form1
         ' Long review
         ' =================================================
 
-        If IsLongWaitingManuscript(
-        manuscript
-    ) Then
+        If snapshot.IsLongWaitingManuscript AndAlso
+           snapshot.WaitingDays.HasValue Then
 
-            Dim submission As JournalSubmission =
-            GetLatestSubmission(
-                manuscript
-            )
-
-            If submission IsNot Nothing Then
-
-                Dim waitingDays As Integer =
-                CInt(
-                    Math.Floor(
-                        (
-                            DateTime.Today -
-                            submission.SubmittedDate.Date
-                        ).TotalDays
-                    )
-                )
-
-                insightColor =
+            insightColor =
                 UiTheme.WarningColor()
 
-                Return "Waiting " &
-                waitingDays.ToString() &
+            Return "Waiting " &
+                snapshot.WaitingDays.Value.ToString() &
                 " days for a decision"
-
-            End If
 
         End If
 
@@ -1445,36 +1395,16 @@ Public Class Form1
         ' Recent rejection
         ' =================================================
 
-        If WasRecentlyRejected(
-        manuscript
-    ) Then
+        If snapshot.WasRecentlyRejected AndAlso
+           snapshot.RejectionDaysAgo.HasValue Then
 
-            Dim latestSubmission As JournalSubmission =
-            GetLatestSubmission(
-                manuscript
-            )
+            Dim daysAgo As Integer =
+                snapshot.RejectionDaysAgo.Value
 
-            Dim latestDecision As EditorialDecisionEvent =
-            GetLatestDecision(
-                latestSubmission
-            )
-
-            If latestDecision IsNot Nothing Then
-
-                Dim daysAgo As Integer =
-                CInt(
-                    Math.Floor(
-                        (
-                            DateTime.Today -
-                            latestDecision.DecisionDate.Date
-                        ).TotalDays
-                    )
-                )
-
-                insightColor =
+            insightColor =
                 UiTheme.DangerColor()
 
-                Return "Rejected " &
+            Return "Rejected " &
                 daysAgo.ToString() &
                 " day" &
                 If(
@@ -1484,8 +1414,6 @@ Public Class Form1
                 ) &
                 " ago • choose the next target"
 
-            End If
-
         End If
 
 
@@ -1493,9 +1421,7 @@ Public Class Form1
         ' Missing target
         ' =================================================
 
-        If HasMissingTargetJournal(
-        manuscript
-    ) Then
+        If snapshot.HasMissingTargetJournal Then
 
             insightColor =
             UiTheme.WarningColor()
@@ -1511,14 +1437,14 @@ Public Class Form1
 
         If manuscript.Location =
             ManuscriptLocation.Pipeline AndAlso
-       manuscript.RejectionCount >=
+       snapshot.RejectionCount >=
             appSettings.FileDrawerSuggestionThreshold Then
 
             insightColor =
             UiTheme.WarningColor()
 
             Return "Consider filing after " &
-            manuscript.RejectionCount.ToString() &
+            snapshot.RejectionCount.ToString() &
             " rejections"
 
         End If
@@ -1538,11 +1464,7 @@ Public Class Form1
         label.Anchor = AnchorStyles.Left
 
         label.Font =
-        New Font(
-            Me.Font.FontFamily,
-            10.0F,
-            FontStyle.Bold
-        )
+            sectionHeaderFont
 
         label.ForeColor =
         UiTheme.PrimaryText()
@@ -1657,6 +1579,11 @@ Public Class Form1
 
             authorLibrary =
                 authorRepository.Load()
+
+            authorSearchIndex =
+                New AuthorLibrarySearchIndex(
+                    authorLibrary
+                )
 
             If authorRepository.LastLoadRecoveredFromBackup Then
 
@@ -2009,10 +1936,27 @@ Public Class Form1
     End Sub
 
 
-    Private Sub BoardFilterChanged(
+    Private Sub BoardSearchTextChanged(
         sender As Object,
         e As EventArgs
     )
+
+        If suppressBoardFilterEvents Then
+            Return
+        End If
+
+        boardSearchDebounceTimer.Stop()
+        boardSearchDebounceTimer.Start()
+
+    End Sub
+
+
+    Private Sub BoardSearchDebounceElapsed(
+        sender As Object,
+        e As EventArgs
+    )
+
+        boardSearchDebounceTimer.Stop()
 
         If suppressBoardFilterEvents Then
             Return
@@ -2023,22 +1967,48 @@ Public Class Form1
     End Sub
 
 
+    Private Sub BoardFilterChanged(
+        sender As Object,
+        e As EventArgs
+    )
+
+        If suppressBoardFilterEvents Then
+            Return
+        End If
+
+        boardSearchDebounceTimer.Stop()
+        RenderManuscripts()
+
+    End Sub
+
+
     Private Sub ClearBoardFilters(
         sender As Object,
         e As EventArgs
     )
 
-        txtBoardSearch.Text =
-            String.Empty
+        boardSearchDebounceTimer.Stop()
+        suppressBoardFilterEvents = True
 
-        cboStageFilter.SelectedIndex =
-            0
+        Try
 
-        cboBoardSort.SelectedIndex =
-            0
+            txtBoardSearch.Text =
+                String.Empty
 
-        activeAttentionFilter =
-    AttentionFilter.None
+            cboStageFilter.SelectedIndex =
+                0
+
+            cboBoardSort.SelectedIndex =
+                0
+
+            activeAttentionFilter =
+                AttentionFilter.None
+
+        Finally
+
+            suppressBoardFilterEvents = False
+
+        End Try
 
         RenderManuscripts()
 
@@ -2106,81 +2076,8 @@ Public Class Form1
         manuscript As Manuscript
     ) As String
 
-        If manuscript Is Nothing OrElse
-           manuscript.Authors Is Nothing OrElse
-           manuscript.Authors.Count = 0 Then
-
-            Return String.Empty
-
-        End If
-
-        Dim names As New List(Of String)()
-
-        For Each authorLink As ManuscriptAuthor In
-            manuscript.Authors
-
-            If authorLink Is Nothing Then
-                Continue For
-            End If
-
-            Dim author As AuthorRecord =
-                authorLibrary.Authors.
-                    FirstOrDefault(
-                        Function(item)
-                            Return item.Id =
-                                authorLink.AuthorId
-                        End Function
-                    )
-
-            If author IsNot Nothing Then
-
-                names.Add(
-                    author.DisplayName
-                )
-
-                If Not String.IsNullOrWhiteSpace(
-                    author.Orcid
-                ) Then
-
-                    names.Add(
-                        author.Orcid
-                    )
-
-                End If
-
-            End If
-
-            If authorLink.AffiliationIds IsNot Nothing Then
-
-                For Each affiliationId As Guid In
-                    authorLink.AffiliationIds
-
-                    Dim affiliation As AffiliationRecord =
-                        authorLibrary.Affiliations.
-                            FirstOrDefault(
-                                Function(item)
-                                    Return item.Id =
-                                        affiliationId
-                                End Function
-                            )
-
-                    If affiliation IsNot Nothing Then
-
-                        names.Add(
-                            affiliation.DisplayName
-                        )
-
-                    End If
-
-                Next
-
-            End If
-
-        Next
-
-        Return String.Join(
-            " ",
-            names
+        Return authorSearchIndex.BuildSearchText(
+            manuscript
         )
 
     End Function
@@ -2192,6 +2089,11 @@ Public Class Form1
 
         Dim query As String =
         txtBoardSearch.Text.Trim()
+
+        Dim snapshot As ManuscriptAttentionSnapshot =
+            GetAttentionSnapshot(
+                manuscript
+            )
 
 
         If Not String.IsNullOrWhiteSpace(
@@ -2205,10 +2107,6 @@ Public Class Form1
             ) OrElse
             ContainsSearchText(
                 manuscript.TargetJournal,
-                query
-            ) OrElse
-            ContainsSearchText(
-                manuscript.CoAuthors,
                 query
             ) OrElse
             ContainsSearchText(
@@ -2244,9 +2142,7 @@ Public Class Form1
 
             Case AttentionFilter.OverdueRevision
 
-                If Not HasOverdueRevision(
-                manuscript
-            ) Then
+                If Not snapshot.HasOverdueRevision Then
 
                     Return False
 
@@ -2255,9 +2151,7 @@ Public Class Form1
 
             Case AttentionFilter.RevisionDueSoon
 
-                If Not IsRevisionDueSoon(
-                manuscript
-            ) Then
+                If Not snapshot.IsRevisionDueSoon Then
 
                     Return False
 
@@ -2266,9 +2160,7 @@ Public Class Form1
 
             Case AttentionFilter.LongReview
 
-                If Not IsLongWaitingManuscript(
-                manuscript
-            ) Then
+                If Not snapshot.IsLongWaitingManuscript Then
 
                     Return False
 
@@ -2277,9 +2169,7 @@ Public Class Form1
 
             Case AttentionFilter.MissingTargetJournal
 
-                If Not HasMissingTargetJournal(
-                manuscript
-            ) Then
+                If Not snapshot.HasMissingTargetJournal Then
 
                     Return False
 
@@ -2288,9 +2178,7 @@ Public Class Form1
 
             Case AttentionFilter.RecentRejection
 
-                If Not WasRecentlyRejected(
-                manuscript
-            ) Then
+                If Not snapshot.WasRecentlyRejected Then
 
                     Return False
 
@@ -2300,19 +2188,6 @@ Public Class Form1
 
 
         Return True
-
-    End Function
-
-    Private Function IsRevisionDueSoon(
-    manuscript As Manuscript
-) As Boolean
-
-        Return ManuscriptAttentionService.
-        IsRevisionDueSoon(
-            manuscript,
-            DateTime.Today,
-            appSettings.RevisionWarningDays
-        )
 
     End Function
 
@@ -2412,8 +2287,12 @@ Public Class Form1
         second As Manuscript
     ) As Integer
 
-        Return second.RejectionCount.CompareTo(
-            first.RejectionCount
+        Return GetAttentionSnapshot(
+            second
+        ).RejectionCount.CompareTo(
+            GetAttentionSnapshot(
+                first
+            ).RejectionCount
         )
 
     End Function
@@ -2424,8 +2303,12 @@ Public Class Form1
         second As Manuscript
     ) As Integer
 
-        Return first.RejectionCount.CompareTo(
-            second.RejectionCount
+        Return GetAttentionSnapshot(
+            first
+        ).RejectionCount.CompareTo(
+            GetAttentionSnapshot(
+                second
+            ).RejectionCount
         )
 
     End Function
@@ -2480,85 +2363,229 @@ Public Class Form1
 
     End Function
 
-    Private Function GetLatestSubmission(
-    manuscript As Manuscript
-) As JournalSubmission
+    Private Function BuildAttentionSnapshots(
+        today As DateTime
+    ) As Dictionary(Of Guid, ManuscriptAttentionSnapshot)
 
-        Return ManuscriptAttentionService.
-        GetLatestSubmission(
-            manuscript
-        )
+        Dim result As New Dictionary(
+            Of Guid,
+            ManuscriptAttentionSnapshot
+        )()
 
-    End Function
+        For Each manuscript As Manuscript In manuscripts
 
-    Private Function GetLatestDecision(
-    submission As JournalSubmission
-) As EditorialDecisionEvent
+            If manuscript Is Nothing Then
+                Continue For
+            End If
 
-        Return ManuscriptAttentionService.
-        GetLatestDecision(
-            submission
-        )
+            result(manuscript.Id) =
+                ManuscriptAttentionService.Evaluate(
+                    manuscript,
+                    today,
+                    appSettings.RevisionWarningDays,
+                    appSettings.LongReviewThresholdDays,
+                    appSettings.RecentRejectionThresholdDays
+                )
 
-    End Function
+        Next
 
-    Private Function HasOverdueRevision(
-    manuscript As Manuscript
-) As Boolean
-
-        Return ManuscriptAttentionService.
-        HasOverdueRevision(
-            manuscript,
-            DateTime.Today
-        )
+        Return result
 
     End Function
 
-    Private Function IsLongWaitingManuscript(
-    manuscript As Manuscript
-) As Boolean
 
-        Return ManuscriptAttentionService.
-        IsLongWaitingManuscript(
-            manuscript,
-            DateTime.Today,
-            appSettings.LongReviewThresholdDays
-        )
+    Private Function GetAttentionSnapshot(
+        manuscript As Manuscript
+    ) As ManuscriptAttentionSnapshot
+
+        If manuscript Is Nothing Then
+            Return New ManuscriptAttentionSnapshot()
+        End If
+
+        Dim snapshot As ManuscriptAttentionSnapshot =
+            Nothing
+
+        If currentAttentionSnapshots.TryGetValue(
+            manuscript.Id,
+            snapshot
+        ) Then
+
+            Return snapshot
+
+        End If
+
+        snapshot =
+            ManuscriptAttentionService.Evaluate(
+                manuscript,
+                DateTime.Today,
+                appSettings.RevisionWarningDays,
+                appSettings.LongReviewThresholdDays,
+                appSettings.RecentRejectionThresholdDays
+            )
+
+        currentAttentionSnapshots(manuscript.Id) =
+            snapshot
+
+        Return snapshot
 
     End Function
 
-    Private Function HasMissingTargetJournal(
-    manuscript As Manuscript
-) As Boolean
 
-        Return ManuscriptAttentionService.
-        HasMissingTargetJournal(
-            manuscript
+    Private Sub ClearAndDisposeControls(
+        panel As Control
+    )
+
+        While panel.Controls.Count > 0
+
+            Dim child As Control =
+                panel.Controls(0)
+
+            panel.Controls.RemoveAt(
+                0
+            )
+
+            child.Dispose()
+
+        End While
+
+    End Sub
+
+
+    Private Sub ResetSharedDashboardFonts()
+
+        DisposeSharedDashboardFonts()
+
+        cardTitleFont =
+            New Font(
+                Me.Font.FontFamily,
+                11.0F,
+                FontStyle.Bold
+            )
+
+        cardBadgeFont =
+            New Font(
+                Me.Font.FontFamily,
+                8.5F,
+                FontStyle.Bold
+            )
+
+        cardInsightFont =
+            New Font(
+                Me.Font.FontFamily,
+                9.0F,
+                FontStyle.Bold
+            )
+
+        routeLinkFont =
+            New Font(
+                Me.Font,
+                FontStyle.Underline
+            )
+
+        attentionTitleFont =
+            New Font(
+                Me.Font.FontFamily,
+                9.0F,
+                FontStyle.Bold
+            )
+
+        attentionRegularFont =
+            New Font(
+                Me.Font,
+                FontStyle.Regular
+            )
+
+        attentionActiveFont =
+            New Font(
+                Me.Font,
+                FontStyle.Bold Or
+                FontStyle.Underline
+            )
+
+        sectionHeaderFont =
+            New Font(
+                Me.Font.FontFamily,
+                10.0F,
+                FontStyle.Bold
+            )
+
+    End Sub
+
+
+    Private Sub DisposeSharedDashboardFonts()
+
+        For Each font As Font In New Font() {
+            cardTitleFont,
+            cardBadgeFont,
+            cardInsightFont,
+            routeLinkFont,
+            attentionTitleFont,
+            attentionRegularFont,
+            attentionActiveFont,
+            sectionHeaderFont
+        }
+
+            If font IsNot Nothing Then
+                font.Dispose()
+            End If
+
+        Next
+
+        cardTitleFont = Nothing
+        cardBadgeFont = Nothing
+        cardInsightFont = Nothing
+        routeLinkFont = Nothing
+        attentionTitleFont = Nothing
+        attentionRegularFont = Nothing
+        attentionActiveFont = Nothing
+        sectionHeaderFont = Nothing
+
+    End Sub
+
+
+    Protected Overrides Sub OnFormClosed(
+        e As FormClosedEventArgs
+    )
+
+        boardSearchDebounceTimer.Stop()
+        boardSearchDebounceTimer.Dispose()
+        DisposeSharedDashboardFonts()
+
+        MyBase.OnFormClosed(
+            e
         )
 
-    End Function
+    End Sub
 
-    Private Function WasRecentlyRejected(
-    manuscript As Manuscript
-) As Boolean
-
-        Return ManuscriptAttentionService.
-        WasRecentlyRejected(
-            manuscript,
-            DateTime.Today,
-            appSettings.RecentRejectionThresholdDays
-        )
-
-    End Function
 
     Private Sub RenderManuscripts()
+
+        boardSearchDebounceTimer.Stop()
+
+        currentAttentionSnapshots =
+            BuildAttentionSnapshots(
+                DateTime.Today
+            )
 
         RefreshStageFilterItems()
         RefreshAttentionDashboard()
 
-        pipelinePanel.Controls.Clear()
-        publishedPanel.Controls.Clear()
-        fileDrawerPanel.Controls.Clear()
+        Me.SuspendLayout()
+        pipelinePanel.SuspendLayout()
+        publishedPanel.SuspendLayout()
+        fileDrawerPanel.SuspendLayout()
+
+        ClearAndDisposeControls(
+            pipelinePanel
+        )
+
+        ClearAndDisposeControls(
+            publishedPanel
+        )
+
+        ClearAndDisposeControls(
+            fileDrawerPanel
+        )
 
 
         ' =================================================
@@ -2780,13 +2807,21 @@ Public Class Form1
     )
 
 
-        pipelinePanel.PerformLayout()
-        publishedPanel.PerformLayout()
-        fileDrawerPanel.PerformLayout()
+        pipelinePanel.ResumeLayout(
+            True
+        )
 
-        pipelinePanel.Invalidate(True)
-        publishedPanel.Invalidate(True)
-        fileDrawerPanel.Invalidate(True)
+        publishedPanel.ResumeLayout(
+            True
+        )
+
+        fileDrawerPanel.ResumeLayout(
+            True
+        )
+
+        Me.ResumeLayout(
+            True
+        )
 
     End Sub
 
@@ -2837,23 +2872,19 @@ Public Class Form1
                 manuscript.CurrentStage
             )
 
-        Dim titleFont As New Font(
-            Me.Font.FontFamily,
-            11.0F,
-            FontStyle.Bold
-        )
+        Dim titleFont As Font =
+            cardTitleFont
 
-        Dim badgeFont As New Font(
-            Me.Font.FontFamily,
-            8.5F,
-            FontStyle.Bold
-        )
+        Dim badgeFont As Font =
+            cardBadgeFont
 
-        Dim insightFont As New Font(
-            Me.Font.FontFamily,
-            9.0F,
-            FontStyle.Bold
-        )
+        Dim insightFont As Font =
+            cardInsightFont
+
+        Dim snapshot As ManuscriptAttentionSnapshot =
+            GetAttentionSnapshot(
+                manuscript
+            )
 
         Dim titleHeight As Integer =
             TextRenderer.MeasureText(
@@ -3017,9 +3048,9 @@ Public Class Form1
 
         Dim lblStats As New Label With {
             .Text =
-                manuscript.SubmissionCount.ToString() &
+                snapshot.SubmissionCount.ToString() &
                 " submissions  •  " &
-                manuscript.RejectionCount.ToString() &
+                snapshot.RejectionCount.ToString() &
                 " rejections",
             .AutoSize = True,
             .Left = 18,
@@ -3221,10 +3252,7 @@ Public Class Form1
             .TextAlign = ContentAlignment.MiddleRight,
             .ForeColor = UiTheme.AccentColor(),
             .Cursor = Cursors.Hand,
-            .Font = New Font(
-                Me.Font,
-                FontStyle.Underline
-            )
+            .Font = routeLinkFont
         }
 
         AddHandler lblRoute.Click,
@@ -3348,15 +3376,16 @@ Public Class Form1
 
         For Each control As Control In panel.Controls
 
-            If TypeOf control Is Panel Then
+            If TypeOf control Is Panel OrElse
+               TypeOf control Is Label Then
 
-                control.Width =
-                    newWidth
+                If control.Width <>
+                   newWidth Then
 
-            ElseIf TypeOf control Is Label Then
+                    control.Width =
+                        newWidth
 
-                control.Width =
-                    newWidth
+                End If
 
             End If
 

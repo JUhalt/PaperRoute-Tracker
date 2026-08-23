@@ -1,4 +1,4 @@
-Imports System
+﻿Imports System
 Imports System.Collections.Generic
 Imports System.IO
 Imports System.Text.Json
@@ -280,38 +280,42 @@ Namespace Services
 
             Try
 
-                Dim json As String =
-                    File.ReadAllText(
-                        filePath
-                    )
+                Using stream As New FileStream(
+                    filePath,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.Read,
+                    bufferSize:=65536,
+                    options:=FileOptions.SequentialScan
+                )
 
-                If String.IsNullOrWhiteSpace(
-                    json
-                ) Then
+                    If stream.Length = 0 Then
 
-                    Throw New InvalidDataException(
-                        "The manuscript data file is empty."
-                    )
+                        Throw New InvalidDataException(
+                            "The manuscript data file is empty."
+                        )
 
-                End If
+                    End If
 
-                Dim loaded As List(Of Manuscript) =
-                    JsonSerializer.Deserialize(
-                        Of List(Of Manuscript)
-                    )(
-                        json,
-                        _jsonOptions
-                    )
+                    Dim loaded As List(Of Manuscript) =
+                        JsonSerializer.Deserialize(
+                            Of List(Of Manuscript)
+                        )(
+                            stream,
+                            _jsonOptions
+                        )
 
-                If loaded Is Nothing Then
+                    If loaded Is Nothing Then
 
-                    Throw New InvalidDataException(
-                        "The manuscript data file does not contain a valid PaperRoute library."
-                    )
+                        Throw New InvalidDataException(
+                            "The manuscript data file does not contain a valid PaperRoute library."
+                        )
 
-                End If
+                    End If
 
-                Return loaded
+                    Return loaded
+
+                End Using
 
             Catch ex As Exception
 
@@ -549,12 +553,6 @@ Namespace Services
                 manuscripts
             )
 
-            Dim json As String =
-                JsonSerializer.Serialize(
-                    manuscripts,
-                    _jsonOptions
-                )
-
             Dim tempFilePath As String =
                 Path.Combine(
                     _dataDirectory,
@@ -563,10 +561,28 @@ Namespace Services
 
             Try
 
-                File.WriteAllText(
+                Using stream As New FileStream(
                     tempFilePath,
-                    json
+                    FileMode.Create,
+                    FileAccess.Write,
+                    FileShare.None,
+                    bufferSize:=65536,
+                    options:=FileOptions.SequentialScan
                 )
+
+                    JsonSerializer.Serialize(
+                        Of List(Of Manuscript)
+                    )(
+                        stream,
+                        manuscripts,
+                        _jsonOptions
+                    )
+
+                    stream.Flush(
+                        flushToDisk:=True
+                    )
+
+                End Using
 
                 If File.Exists(
                     _dataFilePath

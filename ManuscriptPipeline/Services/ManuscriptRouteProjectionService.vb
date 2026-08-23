@@ -60,7 +60,8 @@ Namespace Services
 
             AddHistoryWaypoints(
                 route,
-                history
+                history,
+                submissions
             )
 
             AddSubmissionAndDecisionWaypoints(
@@ -107,7 +108,8 @@ Namespace Services
 
         Private Shared Sub AddHistoryWaypoints(
             route As ManuscriptRoute,
-            history As List(Of HistoryEvent)
+            history As List(Of HistoryEvent),
+            submissions As List(Of JournalSubmission)
         )
 
             For Each historyEvent As HistoryEvent In history
@@ -116,23 +118,149 @@ Namespace Services
                     Continue For
                 End If
 
+                If IsRedundantWorkflowStage(
+                    historyEvent,
+                    submissions
+                ) Then
+
+                    Continue For
+
+                End If
+
                 route.Waypoints.Add(
                     New ManuscriptRouteWaypoint With {
-                        .Kind = ManuscriptRouteWaypointKind.Stage,
-                        .EventDate = historyEvent.EventDate,
-                        .Stage = historyEvent.Stage,
-                        .HistoryEventId = historyEvent.Id,
-                        .Note = If(
-                            historyEvent.Note,
-                            String.Empty
-                        ),
-                        .ProjectionOrder = route.Waypoints.Count
+                        .Kind =
+                            ManuscriptRouteWaypointKind.Stage,
+                        .EventDate =
+                            historyEvent.EventDate,
+                        .Stage =
+                            historyEvent.Stage,
+                        .HistoryEventId =
+                            historyEvent.Id,
+                        .Note =
+                            If(
+                                historyEvent.Note,
+                                String.Empty
+                            ),
+                        .ProjectionOrder =
+                            route.Waypoints.Count
                     }
                 )
 
             Next
 
         End Sub
+
+
+        Private Shared Function IsRedundantWorkflowStage(
+            historyEvent As HistoryEvent,
+            submissions As List(Of JournalSubmission)
+        ) As Boolean
+
+            Dim note As String =
+                If(
+                    historyEvent.Note,
+                    String.Empty
+                ).Trim()
+
+            If Not note.StartsWith(
+                "Stage changed from ",
+                StringComparison.OrdinalIgnoreCase
+            ) Then
+
+                Return False
+
+            End If
+
+            Select Case historyEvent.Stage
+
+                Case PaperStage.Submitted
+
+                    For Each submission As JournalSubmission In submissions
+
+                        If submission IsNot Nothing AndAlso
+                           submission.SubmittedDate.Date =
+                           historyEvent.EventDate.Date Then
+
+                            Return True
+
+                        End If
+
+                    Next
+
+                Case PaperStage.Revision
+
+                    Return HasMatchingDecision(
+                        submissions,
+                        historyEvent.EventDate.Date,
+                        Function(decision As EditorialDecision) As Boolean
+
+                            Return decision =
+                                EditorialDecision.MajorRevision OrElse
+                                decision =
+                                EditorialDecision.MinorRevision OrElse
+                                decision =
+                                EditorialDecision.ReviseAndResubmit
+
+                        End Function
+                    )
+
+                Case PaperStage.Accepted
+
+                    Return HasMatchingDecision(
+                        submissions,
+                        historyEvent.EventDate.Date,
+                        Function(decision As EditorialDecision) As Boolean
+
+                            Return decision =
+                                EditorialDecision.Accepted
+
+                        End Function
+                    )
+
+            End Select
+
+            Return False
+
+        End Function
+
+
+        Private Shared Function HasMatchingDecision(
+            submissions As List(Of JournalSubmission),
+            eventDate As DateTime,
+            predicate As Func(Of EditorialDecision, Boolean)
+        ) As Boolean
+
+            For Each submission As JournalSubmission In submissions
+
+                If submission Is Nothing OrElse
+                   submission.Decisions Is Nothing Then
+
+                    Continue For
+
+                End If
+
+                For Each decisionEvent As EditorialDecisionEvent In
+                    submission.Decisions
+
+                    If decisionEvent IsNot Nothing AndAlso
+                       decisionEvent.DecisionDate.Date =
+                       eventDate.Date AndAlso
+                       predicate(
+                           decisionEvent.Decision
+                       ) Then
+
+                        Return True
+
+                    End If
+
+                Next
+
+            Next
+
+            Return False
+
+        End Function
 
 
         Private Shared Sub AddSubmissionAndDecisionWaypoints(
@@ -155,18 +283,24 @@ Namespace Services
                 End If
 
                 Dim submissionWaypoint As New ManuscriptRouteWaypoint With {
-                    .Kind = ManuscriptRouteWaypointKind.Submission,
-                    .EventDate = submission.SubmittedDate,
-                    .SubmissionId = submission.Id,
-                    .JournalName = If(
-                        submission.JournalName,
-                        String.Empty
-                    ),
-                    .Note = If(
-                        submission.Notes,
-                        String.Empty
-                    ),
-                    .ProjectionOrder = route.Waypoints.Count
+                    .Kind =
+                        ManuscriptRouteWaypointKind.Submission,
+                    .EventDate =
+                        submission.SubmittedDate,
+                    .SubmissionId =
+                        submission.Id,
+                    .JournalName =
+                        If(
+                            submission.JournalName,
+                            String.Empty
+                        ),
+                    .Note =
+                        If(
+                            submission.Notes,
+                            String.Empty
+                        ),
+                    .ProjectionOrder =
+                        route.Waypoints.Count
                 }
 
                 route.Waypoints.Add(
@@ -198,20 +332,28 @@ Namespace Services
                     End If
 
                     Dim decisionWaypoint As New ManuscriptRouteWaypoint With {
-                        .Kind = ManuscriptRouteWaypointKind.Decision,
-                        .EventDate = decisionEvent.DecisionDate,
-                        .SubmissionId = submission.Id,
-                        .DecisionId = decisionEvent.Id,
-                        .JournalName = If(
-                            submission.JournalName,
-                            String.Empty
-                        ),
-                        .Decision = decisionEvent.Decision,
-                        .Note = If(
-                            decisionEvent.Notes,
-                            String.Empty
-                        ),
-                        .ProjectionOrder = route.Waypoints.Count
+                        .Kind =
+                            ManuscriptRouteWaypointKind.Decision,
+                        .EventDate =
+                            decisionEvent.DecisionDate,
+                        .SubmissionId =
+                            submission.Id,
+                        .DecisionId =
+                            decisionEvent.Id,
+                        .JournalName =
+                            If(
+                                submission.JournalName,
+                                String.Empty
+                            ),
+                        .Decision =
+                            decisionEvent.Decision,
+                        .Note =
+                            If(
+                                decisionEvent.Notes,
+                                String.Empty
+                            ),
+                        .ProjectionOrder =
+                            route.Waypoints.Count
                     }
 
                     route.Waypoints.Add(
@@ -313,26 +455,36 @@ Namespace Services
 
                 route.Waypoints.Add(
                     New ManuscriptRouteWaypoint With {
-                        .Kind = ManuscriptRouteWaypointKind.Version,
-                        .EventDate = version.CreatedDate,
-                        .SubmissionId = version.SubmissionId,
-                        .DecisionId = version.DecisionId,
-                        .VersionId = version.Id,
-                        .RevisionRoundNumber = version.RevisionRoundNumber,
-                        .Note = If(
-                            version.Notes,
-                            String.Empty
-                        ),
+                        .Kind =
+                            ManuscriptRouteWaypointKind.Version,
+                        .EventDate =
+                            version.CreatedDate,
+                        .SubmissionId =
+                            version.SubmissionId,
+                        .DecisionId =
+                            version.DecisionId,
+                        .VersionId =
+                            version.Id,
+                        .RevisionRoundNumber =
+                            version.RevisionRoundNumber,
+                        .Note =
+                            If(
+                                version.Notes,
+                                String.Empty
+                            ),
                         .IsCurrent =
                             manuscript.CurrentVersionId.HasValue AndAlso
-                            manuscript.CurrentVersionId.Value = version.Id,
+                            manuscript.CurrentVersionId.Value =
+                            version.Id,
                         .ContainsCurrentVersion =
                             manuscript.CurrentVersionId.HasValue AndAlso
-                            manuscript.CurrentVersionId.Value = version.Id,
+                            manuscript.CurrentVersionId.Value =
+                            version.Id,
                         .HasUnresolvedLink =
                             version.SubmissionId.HasValue OrElse
                             version.DecisionId.HasValue,
-                        .ProjectionOrder = route.Waypoints.Count
+                        .ProjectionOrder =
+                            route.Waypoints.Count
                     }
                 )
 
@@ -352,7 +504,8 @@ Namespace Services
             )
 
             If currentVersionId.HasValue AndAlso
-               currentVersionId.Value = version.Id Then
+               currentVersionId.Value =
+               version.Id Then
 
                 waypoint.ContainsCurrentVersion =
                     True
@@ -390,14 +543,19 @@ Namespace Services
 
             route.Waypoints.Add(
                 New ManuscriptRouteWaypoint With {
-                    .Kind = ManuscriptRouteWaypointKind.FileDrawer,
-                    .EventDate = manuscript.FileDrawerDate.Value,
-                    .Location = ManuscriptLocation.FileDrawer,
-                    .Note = If(
-                        manuscript.FileDrawerReason,
-                        String.Empty
-                    ),
-                    .ProjectionOrder = route.Waypoints.Count
+                    .Kind =
+                        ManuscriptRouteWaypointKind.FileDrawer,
+                    .EventDate =
+                        manuscript.FileDrawerDate.Value,
+                    .Location =
+                        ManuscriptLocation.FileDrawer,
+                    .Note =
+                        If(
+                            manuscript.FileDrawerReason,
+                            String.Empty
+                        ),
+                    .ProjectionOrder =
+                        route.Waypoints.Count
                 }
             )
 
@@ -412,7 +570,8 @@ Namespace Services
             Dim matchingHistory As ManuscriptRouteWaypoint =
                 Nothing
 
-            For Each waypoint As ManuscriptRouteWaypoint In route.Waypoints
+            For Each waypoint As ManuscriptRouteWaypoint In
+                route.Waypoints
 
                 If waypoint.Kind <>
                    ManuscriptRouteWaypointKind.Stage OrElse
@@ -456,12 +615,18 @@ Namespace Services
 
             route.Waypoints.Add(
                 New ManuscriptRouteWaypoint With {
-                    .Kind = ManuscriptRouteWaypointKind.CurrentState,
-                    .EventDate = manuscript.StageEnteredDate,
-                    .Stage = manuscript.CurrentStage,
-                    .Location = manuscript.Location,
-                    .IsCurrent = True,
-                    .ProjectionOrder = route.Waypoints.Count
+                    .Kind =
+                        ManuscriptRouteWaypointKind.CurrentState,
+                    .EventDate =
+                        manuscript.StageEnteredDate,
+                    .Stage =
+                        manuscript.CurrentStage,
+                    .Location =
+                        manuscript.Location,
+                    .IsCurrent =
+                        True,
+                    .ProjectionOrder =
+                        route.Waypoints.Count
                 }
             )
 
@@ -472,20 +637,23 @@ Namespace Services
             route As ManuscriptRoute
         )
 
-            For Each waypoint As ManuscriptRouteWaypoint In route.Waypoints
+            For Each waypoint As ManuscriptRouteWaypoint In
+                route.Waypoints
 
                 If waypoint.Kind <>
                    ManuscriptRouteWaypointKind.Decision OrElse
                    Not waypoint.Decision.HasValue OrElse
-                   Not IsRejection(
-                       waypoint.Decision.Value
-                   ) Then
+                   Not ManuscriptAttentionService.
+                       IsRejectionDecision(
+                           waypoint.Decision.Value
+                       ) Then
 
                     Continue For
 
                 End If
 
-                For Each candidate As ManuscriptRouteWaypoint In route.Waypoints
+                For Each candidate As ManuscriptRouteWaypoint In
+                    route.Waypoints
 
                     If candidate.Kind =
                        ManuscriptRouteWaypointKind.Submission AndAlso
@@ -533,35 +701,18 @@ Namespace Services
         End Function
 
 
-        Private Shared Function IsRejection(
-            decision As EditorialDecision
-        ) As Boolean
-
-            Select Case decision
-
-                Case EditorialDecision.Rejected,
-                     EditorialDecision.DeskRejected,
-                     EditorialDecision.RejectedAfterReview
-
-                    Return True
-
-                Case Else
-
-                    Return False
-
-            End Select
-
-        End Function
-
-
         Private Shared Sub SortRelatedVersions(
             route As ManuscriptRoute
         )
 
-            For Each waypoint As ManuscriptRouteWaypoint In route.Waypoints
+            For Each waypoint As ManuscriptRouteWaypoint In
+                route.Waypoints
 
                 waypoint.RelatedVersionIds.Sort(
-                    Function(leftId As Guid, rightId As Guid) As Integer
+                    Function(
+                        leftId As Guid,
+                        rightId As Guid
+                    ) As Integer
 
                         Return StringComparer.Ordinal.Compare(
                             leftId.ToString("N"),
@@ -630,19 +781,23 @@ Namespace Services
         ) As String
 
             If waypoint.HistoryEventId.HasValue Then
-                Return "H:" & waypoint.HistoryEventId.Value.ToString("N")
+                Return "H:" &
+                    waypoint.HistoryEventId.Value.ToString("N")
             End If
 
             If waypoint.DecisionId.HasValue Then
-                Return "D:" & waypoint.DecisionId.Value.ToString("N")
+                Return "D:" &
+                    waypoint.DecisionId.Value.ToString("N")
             End If
 
             If waypoint.SubmissionId.HasValue Then
-                Return "S:" & waypoint.SubmissionId.Value.ToString("N")
+                Return "S:" &
+                    waypoint.SubmissionId.Value.ToString("N")
             End If
 
             If waypoint.VersionId.HasValue Then
-                Return "V:" & waypoint.VersionId.Value.ToString("N")
+                Return "V:" &
+                    waypoint.VersionId.Value.ToString("N")
             End If
 
             Return "Z:" &
@@ -650,13 +805,17 @@ Namespace Services
                 ":" &
                 If(
                     waypoint.Stage.HasValue,
-                    CInt(waypoint.Stage.Value).ToString("D2"),
+                    CInt(
+                        waypoint.Stage.Value
+                    ).ToString("D2"),
                     "NA"
                 ) &
                 ":" &
                 If(
                     waypoint.Location.HasValue,
-                    CInt(waypoint.Location.Value).ToString("D2"),
+                    CInt(
+                        waypoint.Location.Value
+                    ).ToString("D2"),
                     "NA"
                 )
 
