@@ -337,13 +337,12 @@ Namespace Forms
             Dim root As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .ColumnCount = 1,
-                .RowCount = 3,
+                .RowCount = 2,
                 .Padding = New Padding(10)
             }
 
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 56))
-            root.RowStyles.Add(New RowStyle(SizeType.Percent, 42))
-            root.RowStyles.Add(New RowStyle(SizeType.Percent, 58))
+            root.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
 
             Dim toolbar As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
@@ -406,11 +405,57 @@ Namespace Forms
             txtDecisionDetails.ReadOnly = True
             txtDecisionDetails.ScrollBars = ScrollBars.Vertical
             txtDecisionDetails.BackColor = SystemColors.Window
-            txtDecisionDetails.MinimumSize = New Size(0, 130)
+            Dim split As New SplitContainer With {
+                .Dock = DockStyle.Fill,
+                .Orientation = Orientation.Vertical,
+                .SplitterWidth = 6
+            }
+
+            AddHandler split.SizeChanged,
+                Sub(sender, e)
+
+                    Const minimumLeft As Integer = 220
+                    Const minimumRight As Integer = 280
+
+                    Dim availableWidth As Integer =
+                        split.Width -
+                        split.SplitterWidth
+
+                    If availableWidth <=
+                       minimumLeft + minimumRight Then
+
+                        Return
+
+                    End If
+
+                    Dim desired As Integer =
+                        CInt(
+                            Math.Round(
+                                availableWidth * 0.43
+                            )
+                        )
+
+                    split.SplitterDistance =
+                        Math.Min(
+                            availableWidth - minimumRight,
+                            Math.Max(
+                                minimumLeft,
+                                desired
+                            )
+                        )
+
+                End Sub
+
+            split.Panel1.Controls.Add(
+                lstDecisions
+            )
+
+            split.Panel2.Controls.Add(
+                txtDecisionDetails
+            )
 
             root.Controls.Add(toolbar, 0, 0)
-            root.Controls.Add(lstDecisions, 0, 1)
-            root.Controls.Add(txtDecisionDetails, 0, 2)
+            root.Controls.Add(split, 0, 1)
 
             Return root
 
@@ -509,6 +554,13 @@ Namespace Forms
                     decisionEvent.RevisionDeadline.Value.ToString("MMMM d, yyyy")
 
             End If
+
+            details &=
+                Environment.NewLine &
+                "Workflow effect: " &
+                DescribeDecisionWorkflowEffect(
+                    decisionEvent.Decision
+                )
 
             details &=
                 Environment.NewLine &
@@ -1493,6 +1545,41 @@ Namespace Forms
         ' =====================================================
         ' Formatting
         ' =====================================================
+
+        Private Function DescribeDecisionWorkflowEffect(
+            decision As EditorialDecision
+        ) As String
+
+            Select Case decision
+
+                Case EditorialDecision.MajorRevision,
+                     EditorialDecision.MinorRevision,
+                     EditorialDecision.ReviseAndResubmit
+
+                    Return "If this is the latest workflow event, the manuscript is in Revision."
+
+                Case EditorialDecision.Accepted
+
+                    Return "If this is the latest workflow event, the manuscript is Accepted."
+
+                Case EditorialDecision.Rejected,
+                     EditorialDecision.DeskRejected,
+                     EditorialDecision.RejectedAfterReview
+
+                    Return "This closes the submission and returns the manuscript to Draft for rerouting unless a later workflow event exists."
+
+                Case EditorialDecision.Withdrawn
+
+                    Return "Withdrawn closes this submission and returns the manuscript to Draft for rerouting unless a later workflow event exists."
+
+                Case Else
+
+                    Return "No lifecycle change is associated with this decision."
+
+            End Select
+
+        End Function
+
 
         Private Function FormatDecision(
             decision As EditorialDecision

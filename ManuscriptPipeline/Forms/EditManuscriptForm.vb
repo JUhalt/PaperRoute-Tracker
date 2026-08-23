@@ -48,6 +48,8 @@ Namespace Forms
 
         Private ReadOnly lblSubmissionInfo As New Label()
 
+        Private versionHistoryControl As ManuscriptVersionHistoryControl = Nothing
+
         Private ReadOnly _displayedSubmissions As New List(Of JournalSubmission)()
 
 
@@ -104,7 +106,7 @@ Namespace Forms
 
             Else
 
-                Me.Size = New Size(980, 900)
+                Me.Size = New Size(980, 960)
 
             End If
 
@@ -115,9 +117,15 @@ Namespace Forms
             Dim shell As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .ColumnCount = 1,
-                .RowCount = 2,
+                .RowCount = 3,
                 .Padding = New Padding(0)
             }
+
+            shell.RowStyles.Add(
+                New RowStyle(
+                    SizeType.AutoSize
+                )
+            )
 
             shell.RowStyles.Add(
                 New RowStyle(
@@ -143,13 +151,14 @@ Namespace Forms
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 .ColumnCount = 1,
-                .RowCount = 4,
+                .RowCount = 5,
                 .Padding = New Padding(20, 20, 20, 12)
             }
 
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 330))
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 260))
+            root.RowStyles.Add(New RowStyle(SizeType.Absolute, 285))
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 250))
 
             ' =================================================
@@ -491,6 +500,18 @@ Namespace Forms
             authorsGroup.Controls.Add(authorsLayout)
 
             ' =================================================
+            ' Manuscript version history
+            ' =================================================
+
+            versionHistoryControl =
+                New ManuscriptVersionHistoryControl(
+                    _workingManuscript
+                ) With {
+                    .Dock = DockStyle.Fill,
+                    .Margin = New Padding(3, 8, 3, 8)
+                }
+
+            ' =================================================
             ' Submissions
             ' =================================================
 
@@ -680,23 +701,120 @@ Namespace Forms
             root.Controls.Add(detailsGroup, 0, 0)
             root.Controls.Add(fileDrawerGroup, 0, 1)
             root.Controls.Add(authorsGroup, 0, 2)
-            root.Controls.Add(submissionsGroup, 0, 3)
+            root.Controls.Add(versionHistoryControl, 0, 3)
+            root.Controls.Add(submissionsGroup, 0, 4)
 
             Me.AcceptButton = btnSave
             Me.CancelButton = btnCancel
 
             scrollHost.Controls.Add(root)
 
+            Dim sectionNav As New FlowLayoutPanel With {
+                .Dock = DockStyle.Fill,
+                .AutoSize = True,
+                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                .FlowDirection = FlowDirection.LeftToRight,
+                .WrapContents = True,
+                .Padding = New Padding(20, 7, 20, 5),
+                .Margin = New Padding(0)
+            }
+
+            Dim lblSections As New Label With {
+                .Text = "Sections:",
+                .AutoSize = True,
+                .Anchor = AnchorStyles.Left,
+                .Font = New Font(Me.Font, FontStyle.Bold),
+                .Margin = New Padding(0, 8, 8, 0)
+            }
+
+            Dim btnJumpManuscript As New Button With {
+                .Text = "Manuscript",
+                .AutoSize = True,
+                .Height = 32
+            }
+
+            Dim btnJumpAuthors As New Button With {
+                .Text = "Authors",
+                .AutoSize = True,
+                .Height = 32
+            }
+
+            Dim btnJumpVersions As New Button With {
+                .Text = "Version History",
+                .AutoSize = True,
+                .Height = 32
+            }
+
+            Dim btnJumpSubmissions As New Button With {
+                .Text = "Journal Submissions",
+                .AutoSize = True,
+                .Height = 32
+            }
+
+            AddHandler btnJumpManuscript.Click,
+                Sub(sender, e)
+                    scrollHost.ScrollControlIntoView(
+                        detailsGroup
+                    )
+                End Sub
+
+            AddHandler btnJumpAuthors.Click,
+                Sub(sender, e)
+                    scrollHost.ScrollControlIntoView(
+                        authorsGroup
+                    )
+                End Sub
+
+            AddHandler btnJumpVersions.Click,
+                Sub(sender, e)
+                    scrollHost.ScrollControlIntoView(
+                        versionHistoryControl
+                    )
+                End Sub
+
+            AddHandler btnJumpSubmissions.Click,
+                Sub(sender, e)
+                    scrollHost.ScrollControlIntoView(
+                        submissionsGroup
+                    )
+                End Sub
+
+            sectionNav.Controls.Add(
+                lblSections
+            )
+
+            sectionNav.Controls.Add(
+                btnJumpManuscript
+            )
+
+            sectionNav.Controls.Add(
+                btnJumpAuthors
+            )
+
+            sectionNav.Controls.Add(
+                btnJumpVersions
+            )
+
+            sectionNav.Controls.Add(
+                btnJumpSubmissions
+            )
+
             shell.Controls.Add(
-                scrollHost,
+                sectionNav,
                 0,
                 0
             )
 
             shell.Controls.Add(
-                footer,
+                scrollHost,
                 0,
                 1
+            )
+
+            shell.Controls.Add(
+                footer,
+                0,
+                2
             )
 
             Me.Controls.Add(
@@ -1598,6 +1716,10 @@ Namespace Forms
 
             UpdateSubmissionButtons()
             RefreshRevisionDeadlineDisplay()
+
+            If versionHistoryControl IsNot Nothing Then
+                versionHistoryControl.RefreshVersions()
+            End If
 
         End Sub
 
