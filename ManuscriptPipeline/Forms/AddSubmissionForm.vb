@@ -741,6 +741,18 @@ Namespace Forms
                 New JournalSubmission With {
                     .Id =
                         submissionId,
+                    .RecordedAtUtc =
+                        If(
+                            _existingSubmission Is Nothing,
+                            Nothing,
+                            _existingSubmission.RecordedAtUtc
+                        ),
+                    .LastModifiedAtUtc =
+                        If(
+                            _existingSubmission Is Nothing,
+                            Nothing,
+                            _existingSubmission.LastModifiedAtUtc
+                        ),
                     .JournalName =
                         txtJournal.Text.Trim(),
                     .JournalId =
@@ -760,6 +772,20 @@ Namespace Forms
                     .Correspondence =
                         correspondence
                 }
+
+            If _existingSubmission Is Nothing Then
+
+                ChronologyProvenanceService.StampCreated(
+                    _createdSubmission
+                )
+
+            Else
+
+                ChronologyProvenanceService.StampModified(
+                    _createdSubmission
+                )
+
+            End If
 
             Me.DialogResult =
                 DialogResult.OK

@@ -1,4 +1,4 @@
-Imports System
+﻿Imports System
 Imports System.Collections.Generic
 Imports ManuscriptPipeline.Models
 
@@ -132,6 +132,10 @@ Namespace Services
                 .RevisionRoundNumber = revisionRoundNumber
             }
 
+            ChronologyProvenanceService.StampCreated(
+                version
+            )
+
             manuscript.Versions.Add(
                 version
             )
@@ -250,6 +254,10 @@ Namespace Services
             version.SubmissionId =
                 submission.Id
 
+            ChronologyProvenanceService.StampModified(
+                version
+            )
+
         End Sub
 
 
@@ -310,6 +318,10 @@ Namespace Services
                     revisionRoundNumber
 
             End If
+
+            ChronologyProvenanceService.StampModified(
+                version
+            )
 
         End Sub
 

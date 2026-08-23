@@ -301,11 +301,37 @@ Namespace Forms
             _createdDecision =
                 New EditorialDecisionEvent With {
                     .Id = decisionId,
+                    .RecordedAtUtc =
+                        If(
+                            _existingDecision Is Nothing,
+                            Nothing,
+                            _existingDecision.RecordedAtUtc
+                        ),
+                    .LastModifiedAtUtc =
+                        If(
+                            _existingDecision Is Nothing,
+                            Nothing,
+                            _existingDecision.LastModifiedAtUtc
+                        ),
                     .DecisionDate = dtpDecisionDate.Value.Date,
                     .Decision = selectedOption.Value,
                     .RevisionDeadline = deadline,
                     .Notes = txtNotes.Text.Trim()
                 }
+
+            If _existingDecision Is Nothing Then
+
+                ChronologyProvenanceService.StampCreated(
+                    _createdDecision
+                )
+
+            Else
+
+                ChronologyProvenanceService.StampModified(
+                    _createdDecision
+                )
+
+            End If
 
             Me.DialogResult = DialogResult.OK
 

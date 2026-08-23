@@ -3571,13 +3571,21 @@ Public Class Form1
 
         End If
 
+        Dim fileDrawerHistory As New HistoryEvent With {
+            .EventDate =
+                manuscript.FileDrawerDate.Value,
+            .Stage =
+                manuscript.CurrentStage,
+            .Note =
+                historyNote
+        }
+
+        ChronologyProvenanceService.StampCreated(
+            fileDrawerHistory
+        )
+
         manuscript.History.Add(
-            New HistoryEvent With {
-                .Stage =
-                    manuscript.CurrentStage,
-                .Note =
-                    historyNote
-            }
+            fileDrawerHistory
         )
 
         SaveManuscripts()
@@ -3599,13 +3607,20 @@ Public Class Form1
         manuscript.FileDrawerReason =
             String.Empty
 
+        Dim restoreHistory As New HistoryEvent With {
+            .EventDate = DateTime.Now,
+            .Stage =
+                manuscript.CurrentStage,
+            .Note =
+                "Restored from File Drawer to active Pipeline."
+        }
+
+        ChronologyProvenanceService.StampCreated(
+            restoreHistory
+        )
+
         manuscript.History.Add(
-            New HistoryEvent With {
-                .Stage =
-                    manuscript.CurrentStage,
-                .Note =
-                    "Restored from File Drawer to active Pipeline."
-            }
+            restoreHistory
         )
 
         SaveManuscripts()
@@ -4379,8 +4394,20 @@ Public Class Form1
             End Try
 
 
+            Dim importedAtUtc As DateTime =
+                DateTime.UtcNow
+
             For Each importedManuscript As Manuscript In manuscriptsToAdd
-                manuscripts.Add(importedManuscript)
+
+                ChronologyProvenanceService.StampImportedManuscript(
+                    importedManuscript,
+                    importedAtUtc
+                )
+
+                manuscripts.Add(
+                    importedManuscript
+                )
+
             Next
 
 

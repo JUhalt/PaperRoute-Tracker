@@ -19,6 +19,13 @@ Namespace Models
 
         Public Property EventDate As DateTime
 
+        ' Audit provenance is deliberately separate from EventDate.
+        ' It may break same-day ties, but never moves an event to the
+        ' date on which PaperRoute happened to learn about it.
+        Public Property RecordedAtUtc As DateTime? = Nothing
+
+        Public Property LastModifiedAtUtc As DateTime? = Nothing
+
         Public Property Stage As PaperStage? = Nothing
 
         Public Property Location As ManuscriptLocation? = Nothing

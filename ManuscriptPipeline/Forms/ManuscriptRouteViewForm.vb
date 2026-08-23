@@ -479,39 +479,15 @@ Namespace Forms
             waypoint As ManuscriptRouteWaypoint
         ) As Label
 
-            Dim dateText As String =
-                waypoint.EventDate.ToString(
-                    "MMM d, yyyy"
-                )
-
-            Dim timeText As String =
-                waypoint.EventDate.ToString(
-                    "h:mm tt"
-                )
-
-            If waypoint.EventDate.TimeOfDay =
-               TimeSpan.Zero Then
-
-                timeText =
-                    String.Empty
-
-            End If
-
-            Dim fullText As String =
-                dateText
-
-            If Not String.IsNullOrWhiteSpace(
-                timeText
-            ) Then
-
-                fullText &=
-                    Environment.NewLine &
-                    timeText
-
-            End If
-
+            ' Route chronology presents the real-world event date only.
+            ' RecordedAtUtc and LastModifiedAtUtc are audit metadata, not
+            ' scholarly-history timestamps, and therefore stay out of the
+            ' normal timeline display.
             Return New Label With {
-                .Text = fullText,
+                .Text =
+                    waypoint.EventDate.ToString(
+                        "MMM d, yyyy"
+                    ),
                 .Dock = DockStyle.Top,
                 .AutoSize = True,
                 .TextAlign = ContentAlignment.TopRight,

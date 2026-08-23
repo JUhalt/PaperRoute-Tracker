@@ -1,13 +1,12 @@
 ﻿Imports System
 Imports System.Collections.Generic
 Imports System.IO
-Imports System.Text.Json
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
 <TestClass>
-Public Class Schema3MigrationTests
+Public Class Schema4MigrationTests
 
     Private _root As String = String.Empty
     Private _legacyData As String = String.Empty
@@ -20,31 +19,23 @@ Public Class Schema3MigrationTests
     Public Sub Initialize()
 
         _root =
-            CreateTemporaryRoot()
+            Path.Combine(
+                Path.GetTempPath(),
+                "PaperRouteSchema4_" &
+                Guid.NewGuid().ToString("N")
+            )
 
         _legacyData =
-            Path.Combine(
-                _root,
-                "legacy-data"
-            )
+            Path.Combine(_root, "legacy-data")
 
         _currentData =
-            Path.Combine(
-                _root,
-                "paperroute-data"
-            )
+            Path.Combine(_root, "paperroute-data")
 
         _legacyLibrary =
-            Path.Combine(
-                _root,
-                "legacy-library"
-            )
+            Path.Combine(_root, "legacy-library")
 
         _currentLibrary =
-            Path.Combine(
-                _root,
-                "paperroute-library"
-            )
+            Path.Combine(_root, "paperroute-library")
 
     End Sub
 
@@ -52,15 +43,15 @@ Public Class Schema3MigrationTests
     <TestCleanup>
     Public Sub Cleanup()
 
-        DeleteTemporaryRoot(
-            _root
-        )
+        If Directory.Exists(_root) Then
+            Directory.Delete(_root, True)
+        End If
 
     End Sub
 
 
     <TestMethod>
-    Public Sub Schema2_MigratesToCurrentSchemaWithoutRewritingManuscripts()
+    Public Sub Schema3_MigratesToSchema4WithoutRewritingManuscripts()
 
         Dim dataDirectory As String =
             Path.Combine(
@@ -78,15 +69,12 @@ Public Class Schema3MigrationTests
                 "manuscripts.json"
             )
 
-        Dim originalManuscripts As String =
-            JsonSerializer.Serialize(
-                CreateRepresentativeLibrary(),
-                CreateJsonOptions()
-            )
+        Const legacyJson As String =
+            "[{""Id"":""11111111-1111-1111-1111-111111111111"",""Title"":""Legacy provenance"",""CurrentStage"":1,""Location"":0,""StageEnteredDate"":""2022-03-10T00:00:00"",""History"":[{""Id"":""22222222-2222-2222-2222-222222222222"",""EventDate"":""2022-03-10T00:00:00"",""Stage"":1,""Note"":""Legacy""}],""Submissions"":[]}]"
 
         File.WriteAllText(
             manuscriptsPath,
-            originalManuscripts
+            legacyJson
         )
 
         Dim schemaPath As String =
@@ -95,7 +83,7 @@ Public Class Schema3MigrationTests
             )
 
         Const originalSchema As String =
-            "{""SchemaVersion"":2,""UpdatedAtUtc"":""2026-08-22T00:00:00.0000000Z""}"
+            "{""SchemaVersion"":3,""UpdatedAtUtc"":""2026-08-23T00:00:00.0000000Z""}"
 
         File.WriteAllText(
             schemaPath,
@@ -110,39 +98,20 @@ Public Class Schema3MigrationTests
         )
 
         Assert.AreEqual(
-            StorageMigrationService.CurrentSchemaVersion,
+            4,
             StorageMigrationService.ReadSchemaVersion(
                 schemaPath
             )
         )
 
         Assert.AreEqual(
-            originalManuscripts,
+            legacyJson,
             File.ReadAllText(
                 manuscriptsPath
             )
         )
 
-        Dim schemaBackupPath As String =
-            Path.Combine(
-                dataDirectory,
-                "schema.v2.bak"
-            )
-
-        Assert.IsTrue(
-            File.Exists(
-                schemaBackupPath
-            )
-        )
-
-        Assert.AreEqual(
-            originalSchema,
-            File.ReadAllText(
-                schemaBackupPath
-            )
-        )
-
-        Dim schema3BackupPath As String =
+        Dim backupPath As String =
             Path.Combine(
                 dataDirectory,
                 "schema.v3.bak"
@@ -150,22 +119,38 @@ Public Class Schema3MigrationTests
 
         Assert.IsTrue(
             File.Exists(
-                schema3BackupPath
+                backupPath
             )
         )
 
         Assert.AreEqual(
-            3,
-            StorageMigrationService.ReadSchemaVersion(
-                schema3BackupPath
+            originalSchema,
+            File.ReadAllText(
+                backupPath
             )
+        )
+
+        Dim repository As New ManuscriptRepository(
+            dataDirectory,
+            _currentLibrary
+        )
+
+        Dim loaded As List(Of Manuscript) =
+            repository.Load()
+
+        Assert.IsFalse(
+            loaded(0).History(0).RecordedAtUtc.HasValue
+        )
+
+        Assert.IsFalse(
+            loaded(0).History(0).LastModifiedAtUtc.HasValue
         )
 
     End Sub
 
 
     <TestMethod>
-    Public Sub Schema1_MigratesSequentiallyAndPreservesAllSchemaBackups()
+    Public Sub Schema3_InvalidManuscriptDataDoesNotUpgradeSchema()
 
         Dim dataDirectory As String =
             Path.Combine(
@@ -183,118 +168,12 @@ Public Class Schema3MigrationTests
                 "manuscripts.json"
             )
 
-        Dim originalManuscripts As String =
-            JsonSerializer.Serialize(
-                CreateRepresentativeLibrary(),
-                CreateJsonOptions()
-            )
-
-        File.WriteAllText(
-            manuscriptsPath,
-            originalManuscripts
-        )
-
-        Dim schemaPath As String =
-            StorageMigrationService.SchemaFilePath(
-                _currentData
-            )
-
-        Const originalSchema As String =
-            "{""SchemaVersion"":1,""UpdatedAtUtc"":""2026-08-22T00:00:00.0000000Z""}"
-
-        File.WriteAllText(
-            schemaPath,
-            originalSchema
-        )
-
-        StorageMigrationService.EnsureCurrentStorage(
-            _currentData,
-            _legacyData,
-            _currentLibrary,
-            _legacyLibrary
-        )
-
-        Assert.AreEqual(
-            StorageMigrationService.CurrentSchemaVersion,
-            StorageMigrationService.ReadSchemaVersion(
-                schemaPath
-            )
-        )
-
-        Assert.AreEqual(
-            originalManuscripts,
-            File.ReadAllText(
-                manuscriptsPath
-            )
-        )
-
-        Dim schema1BackupPath As String =
-            Path.Combine(
-                dataDirectory,
-                "schema.v1.bak"
-            )
-
-        Dim schema2BackupPath As String =
-            Path.Combine(
-                dataDirectory,
-                "schema.v2.bak"
-            )
-
-        Assert.AreEqual(
-            originalSchema,
-            File.ReadAllText(
-                schema1BackupPath
-            )
-        )
-
-        Assert.AreEqual(
-            2,
-            StorageMigrationService.ReadSchemaVersion(
-                schema2BackupPath
-            )
-        )
-
-        Dim schema3BackupPath As String =
-            Path.Combine(
-                dataDirectory,
-                "schema.v3.bak"
-            )
-
-        Assert.AreEqual(
-            3,
-            StorageMigrationService.ReadSchemaVersion(
-                schema3BackupPath
-            )
-        )
-
-    End Sub
-
-
-    <TestMethod>
-    Public Sub Schema2_InvalidManuscriptDataDoesNotUpgradeSchema()
-
-        Dim dataDirectory As String =
-            Path.Combine(
-                _currentData,
-                "data"
-            )
-
-        Directory.CreateDirectory(
-            dataDirectory
-        )
-
-        Dim manuscriptsPath As String =
-            Path.Combine(
-                dataDirectory,
-                "manuscripts.json"
-            )
-
-        Const invalidManuscripts As String =
+        Const invalidJson As String =
             "{ definitely not valid json"
 
         File.WriteAllText(
             manuscriptsPath,
-            invalidManuscripts
+            invalidJson
         )
 
         Dim schemaPath As String =
@@ -303,7 +182,7 @@ Public Class Schema3MigrationTests
             )
 
         Const originalSchema As String =
-            "{""SchemaVersion"":2,""UpdatedAtUtc"":""2026-08-22T00:00:00.0000000Z""}"
+            "{""SchemaVersion"":3,""UpdatedAtUtc"":""2026-08-23T00:00:00.0000000Z""}"
 
         File.WriteAllText(
             schemaPath,
@@ -331,7 +210,7 @@ Public Class Schema3MigrationTests
         )
 
         Assert.AreEqual(
-            invalidManuscripts,
+            invalidJson,
             File.ReadAllText(
                 manuscriptsPath
             )
@@ -341,7 +220,85 @@ Public Class Schema3MigrationTests
             File.Exists(
                 Path.Combine(
                     dataDirectory,
+                    "schema.v3.bak"
+                )
+            )
+        )
+
+    End Sub
+
+
+    <TestMethod>
+    Public Sub Schema1_SequentialMigrationCreatesSchema3Backup()
+
+        Dim dataDirectory As String =
+            Path.Combine(
+                _currentData,
+                "data"
+            )
+
+        Directory.CreateDirectory(
+            dataDirectory
+        )
+
+        Dim manuscriptsPath As String =
+            Path.Combine(
+                dataDirectory,
+                "manuscripts.json"
+            )
+
+        File.WriteAllText(
+            manuscriptsPath,
+            "[]"
+        )
+
+        Dim schemaPath As String =
+            StorageMigrationService.SchemaFilePath(
+                _currentData
+            )
+
+        File.WriteAllText(
+            schemaPath,
+            "{""SchemaVersion"":1}"
+        )
+
+        StorageMigrationService.EnsureCurrentStorage(
+            _currentData,
+            _legacyData,
+            _currentLibrary,
+            _legacyLibrary
+        )
+
+        Assert.AreEqual(
+            4,
+            StorageMigrationService.ReadSchemaVersion(
+                schemaPath
+            )
+        )
+
+        Assert.IsTrue(
+            File.Exists(
+                Path.Combine(
+                    dataDirectory,
+                    "schema.v1.bak"
+                )
+            )
+        )
+
+        Assert.IsTrue(
+            File.Exists(
+                Path.Combine(
+                    dataDirectory,
                     "schema.v2.bak"
+                )
+            )
+        )
+
+        Assert.IsTrue(
+            File.Exists(
+                Path.Combine(
+                    dataDirectory,
+                    "schema.v3.bak"
                 )
             )
         )

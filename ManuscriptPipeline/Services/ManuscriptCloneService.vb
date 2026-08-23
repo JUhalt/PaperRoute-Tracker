@@ -85,6 +85,8 @@ Namespace Services
                     clone.History.Add(
                         New HistoryEvent With {
                             .Id = historyEvent.Id,
+                            .RecordedAtUtc = historyEvent.RecordedAtUtc,
+                            .LastModifiedAtUtc = historyEvent.LastModifiedAtUtc,
                             .EventDate = historyEvent.EventDate,
                             .Stage = historyEvent.Stage,
                             .Note = historyEvent.Note
@@ -222,6 +224,8 @@ Namespace Services
 
             Return New ManuscriptVersion With {
                 .Id = source.Id,
+                .RecordedAtUtc = source.RecordedAtUtc,
+                .LastModifiedAtUtc = source.LastModifiedAtUtc,
                 .CreatedDate = source.CreatedDate,
                 .Label = source.Label,
                 .Notes = source.Notes,
@@ -245,6 +249,8 @@ Namespace Services
 
             Dim clone As New JournalSubmission With {
                 .Id = source.Id,
+                .RecordedAtUtc = source.RecordedAtUtc,
+                .LastModifiedAtUtc = source.LastModifiedAtUtc,
                 .JournalName = source.JournalName,
                 .JournalId = source.JournalId,
                 .ManuscriptNumber = source.ManuscriptNumber,
@@ -259,6 +265,8 @@ Namespace Services
                     clone.Decisions.Add(
                         New EditorialDecisionEvent With {
                             .Id = decisionEvent.Id,
+                            .RecordedAtUtc = decisionEvent.RecordedAtUtc,
+                            .LastModifiedAtUtc = decisionEvent.LastModifiedAtUtc,
                             .DecisionDate = decisionEvent.DecisionDate,
                             .Decision = decisionEvent.Decision,
                             .RevisionDeadline = decisionEvent.RevisionDeadline,
@@ -273,6 +281,8 @@ Namespace Services
                     clone.Correspondence.Add(
                         New CorrespondenceItem With {
                             .Id = item.Id,
+                            .RecordedAtUtc = item.RecordedAtUtc,
+                            .LastModifiedAtUtc = item.LastModifiedAtUtc,
                             .ItemDate = item.ItemDate,
                             .Type = item.Type,
                             .Title = item.Title,

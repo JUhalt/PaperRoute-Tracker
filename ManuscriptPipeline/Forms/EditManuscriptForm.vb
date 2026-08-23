@@ -2363,16 +2363,24 @@ Namespace Forms
                 _workingManuscript.StageEnteredDate =
                     DateTime.Now
 
+                Dim stageHistory As New HistoryEvent With {
+                    .EventDate =
+                        _workingManuscript.StageEnteredDate,
+                    .Stage = newStage,
+                    .Note =
+                        "Stage changed from " &
+                        oldStage.ToString() &
+                        " to " &
+                        newStage.ToString() &
+                        "."
+                }
+
+                ChronologyProvenanceService.StampCreated(
+                    stageHistory
+                )
+
                 _workingManuscript.History.Add(
-                    New HistoryEvent With {
-                        .Stage = newStage,
-                        .Note =
-                            "Stage changed from " &
-                            oldStage.ToString() &
-                            " to " &
-                            newStage.ToString() &
-                            "."
-                    }
+                    stageHistory
                 )
 
             Else
@@ -2452,13 +2460,20 @@ Namespace Forms
 
             End If
 
+            Dim reasonHistory As New HistoryEvent With {
+                .EventDate = DateTime.Now,
+                .Stage =
+                    _workingManuscript.CurrentStage,
+                .Note =
+                    note
+            }
+
+            ChronologyProvenanceService.StampCreated(
+                reasonHistory
+            )
+
             _workingManuscript.History.Add(
-                New HistoryEvent With {
-                    .Stage =
-                        _workingManuscript.CurrentStage,
-                    .Note =
-                        note
-                }
+                reasonHistory
             )
 
         End Sub
@@ -2485,6 +2500,8 @@ Namespace Forms
 
             Dim clone As New JournalSubmission With {
                 .Id = source.Id,
+                .RecordedAtUtc = source.RecordedAtUtc,
+                .LastModifiedAtUtc = source.LastModifiedAtUtc,
                 .JournalName = source.JournalName,
                 .JournalId = source.JournalId,
                 .ManuscriptNumber = source.ManuscriptNumber,
@@ -2500,6 +2517,8 @@ Namespace Forms
                 clone.Decisions.Add(
                     New EditorialDecisionEvent With {
                         .Id = decisionEvent.Id,
+                        .RecordedAtUtc = decisionEvent.RecordedAtUtc,
+                        .LastModifiedAtUtc = decisionEvent.LastModifiedAtUtc,
                         .DecisionDate = decisionEvent.DecisionDate,
                         .Decision = decisionEvent.Decision,
                         .RevisionDeadline = decisionEvent.RevisionDeadline,
@@ -2515,6 +2534,8 @@ Namespace Forms
                 clone.Correspondence.Add(
                     New CorrespondenceItem With {
                         .Id = item.Id,
+                        .RecordedAtUtc = item.RecordedAtUtc,
+                        .LastModifiedAtUtc = item.LastModifiedAtUtc,
                         .ItemDate = item.ItemDate,
                         .Type = item.Type,
                         .Title = item.Title,

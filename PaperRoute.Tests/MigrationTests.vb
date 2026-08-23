@@ -1,4 +1,4 @@
-Imports System
+﻿Imports System
 Imports System.Collections.Generic
 Imports System.IO
 Imports System.Text.Json
@@ -477,7 +477,7 @@ Public Class MigrationTests
             CreateCurrentSchemaDirectory()
 
         Const original As String =
-            "{""SchemaVersion"":3,""UpdatedAtUtc"":""2000-01-01T00:00:00.0000000Z""}"
+            "{""SchemaVersion"":4,""UpdatedAtUtc"":""2000-01-01T00:00:00.0000000Z""}"
 
         File.WriteAllText(
             schemaPath,

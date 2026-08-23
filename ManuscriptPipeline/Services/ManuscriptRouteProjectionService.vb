@@ -133,6 +133,10 @@ Namespace Services
                             ManuscriptRouteWaypointKind.Stage,
                         .EventDate =
                             historyEvent.EventDate,
+                        .RecordedAtUtc =
+                            historyEvent.RecordedAtUtc,
+                        .LastModifiedAtUtc =
+                            historyEvent.LastModifiedAtUtc,
                         .Stage =
                             historyEvent.Stage,
                         .HistoryEventId =
@@ -287,6 +291,10 @@ Namespace Services
                         ManuscriptRouteWaypointKind.Submission,
                     .EventDate =
                         submission.SubmittedDate,
+                    .RecordedAtUtc =
+                        submission.RecordedAtUtc,
+                    .LastModifiedAtUtc =
+                        submission.LastModifiedAtUtc,
                     .SubmissionId =
                         submission.Id,
                     .JournalName =
@@ -336,6 +344,10 @@ Namespace Services
                             ManuscriptRouteWaypointKind.Decision,
                         .EventDate =
                             decisionEvent.DecisionDate,
+                        .RecordedAtUtc =
+                            decisionEvent.RecordedAtUtc,
+                        .LastModifiedAtUtc =
+                            decisionEvent.LastModifiedAtUtc,
                         .SubmissionId =
                             submission.Id,
                         .DecisionId =
@@ -459,6 +471,10 @@ Namespace Services
                             ManuscriptRouteWaypointKind.Version,
                         .EventDate =
                             version.CreatedDate,
+                        .RecordedAtUtc =
+                            version.RecordedAtUtc,
+                        .LastModifiedAtUtc =
+                            version.LastModifiedAtUtc,
                         .SubmissionId =
                             version.SubmissionId,
                         .DecisionId =
@@ -681,22 +697,10 @@ Namespace Services
             reference As ManuscriptRouteWaypoint
         ) As Boolean
 
-            Dim dateComparison As Integer =
-                DateTime.Compare(
-                    candidate.EventDate.Date,
-                    reference.EventDate.Date
-                )
-
-            If dateComparison > 0 Then
-                Return True
-            End If
-
-            If dateComparison < 0 Then
-                Return False
-            End If
-
-            Return candidate.ProjectionOrder >
-                reference.ProjectionOrder
+            Return CompareChronology(
+                candidate,
+                reference
+            ) > 0
 
         End Function
 
@@ -732,6 +736,33 @@ Namespace Services
             right As ManuscriptRouteWaypoint
         ) As Integer
 
+            Dim chronologyComparison As Integer =
+                CompareChronology(
+                    left,
+                    right
+                )
+
+            If chronologyComparison <> 0 Then
+                Return chronologyComparison
+            End If
+
+            Return CompareStableKeys(
+                left,
+                right
+            )
+
+        End Function
+
+
+        Private Shared Function CompareChronology(
+            left As ManuscriptRouteWaypoint,
+            right As ManuscriptRouteWaypoint
+        ) As Integer
+
+            ' Real-world chronology always wins. Audit timestamps are used
+            ' only to resolve same-calendar-day ordering when both records
+            ' genuinely have provenance. LastModifiedAtUtc is intentionally
+            ' ignored so later metadata edits never reshuffle the Route.
             Dim dateComparison As Integer =
                 DateTime.Compare(
                     left.EventDate.Date,
@@ -742,18 +773,23 @@ Namespace Services
                 Return dateComparison
             End If
 
-            Dim projectionOrderComparison As Integer =
-                left.ProjectionOrder.CompareTo(
-                    right.ProjectionOrder
-                )
+            If left.RecordedAtUtc.HasValue AndAlso
+               right.RecordedAtUtc.HasValue Then
 
-            If projectionOrderComparison <> 0 Then
-                Return projectionOrderComparison
+                Dim recordedComparison As Integer =
+                    DateTime.Compare(
+                        left.RecordedAtUtc.Value,
+                        right.RecordedAtUtc.Value
+                    )
+
+                If recordedComparison <> 0 Then
+                    Return recordedComparison
+                End If
+
             End If
 
-            Return CompareStableKeys(
-                left,
-                right
+            Return left.ProjectionOrder.CompareTo(
+                right.ProjectionOrder
             )
 
         End Function

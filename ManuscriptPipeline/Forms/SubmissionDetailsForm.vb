@@ -1221,6 +1221,10 @@ Namespace Forms
             .IsManagedCopy = managedCopy
         }
 
+                ChronologyProvenanceService.StampCreated(
+                    item
+                )
+
                 _submission.Correspondence.Add(item)
 
                 addedCount += 1

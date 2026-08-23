@@ -1,4 +1,4 @@
-Imports System
+﻿Imports System
 Imports System.Collections.Generic
 
 Namespace Models
@@ -6,6 +6,10 @@ Namespace Models
     Public Class JournalSubmission
 
         Public Property Id As Guid = Guid.NewGuid()
+
+        Public Property RecordedAtUtc As DateTime? = Nothing
+
+        Public Property LastModifiedAtUtc As DateTime? = Nothing
 
         Public Property JournalName As String = String.Empty
 

@@ -199,12 +199,18 @@ Namespace Forms
                 .StageEnteredDate = createdAt
             }
 
+            Dim initialHistory As New HistoryEvent With {
+                .EventDate = createdAt,
+                .Stage = selectedStage,
+                .Note = "Manuscript added to PaperRoute."
+            }
+
+            ChronologyProvenanceService.StampCreated(
+                initialHistory
+            )
+
             _createdManuscript.History.Add(
-                New HistoryEvent With {
-                    .EventDate = createdAt,
-                    .Stage = selectedStage,
-                    .Note = "Manuscript added to PaperRoute."
-                }
+                initialHistory
             )
 
             Me.DialogResult = DialogResult.OK

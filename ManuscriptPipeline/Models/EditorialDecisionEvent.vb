@@ -6,6 +6,10 @@ Namespace Models
 
         Public Property Id As Guid = Guid.NewGuid()
 
+        Public Property RecordedAtUtc As DateTime? = Nothing
+
+        Public Property LastModifiedAtUtc As DateTime? = Nothing
+
         Public Property DecisionDate As DateTime = DateTime.Now
 
         Public Property Decision As EditorialDecision =
