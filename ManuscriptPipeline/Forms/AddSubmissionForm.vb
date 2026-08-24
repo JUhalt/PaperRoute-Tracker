@@ -114,7 +114,7 @@ Namespace Forms
             root.ColumnStyles.Add(
                 New ColumnStyle(
                     SizeType.Absolute,
-                    170
+                    235
                 )
             )
 
@@ -290,7 +290,10 @@ Namespace Forms
             )
 
             root.Controls.Add(
-                CreateFieldLabel("Manuscript number"),
+                CreateFieldLabelWithHelp(
+                    "Journal manuscript ID",
+                    WorkflowHelpCatalog.JournalManuscriptId
+                ),
                 0,
                 1
             )
@@ -489,6 +492,38 @@ Namespace Forms
                         FontStyle.Bold
                     )
             }
+
+        End Function
+
+
+        Private Function CreateFieldLabelWithHelp(
+            text As String,
+            helpText As String
+        ) As Control
+
+            Dim host As New FlowLayoutPanel With {
+                .Dock = DockStyle.Fill,
+                .AutoSize = True,
+                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                .FlowDirection = FlowDirection.LeftToRight,
+                .WrapContents = False,
+                .Margin = New Padding(0),
+                .Padding = New Padding(0, 7, 0, 0)
+            }
+
+            host.Controls.Add(
+                CreateFieldLabel(
+                    text
+                )
+            )
+
+            host.Controls.Add(
+                New ContextHelpControl(
+                    helpText
+                )
+            )
+
+            Return host
 
         End Function
 

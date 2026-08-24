@@ -161,21 +161,11 @@ Namespace Services
             submissions As List(Of JournalSubmission)
         ) As Boolean
 
-            Dim note As String =
-                If(
-                    historyEvent.Note,
-                    String.Empty
-                ).Trim()
-
-            If Not note.StartsWith(
-                "Stage changed from ",
-                StringComparison.OrdinalIgnoreCase
-            ) Then
-
-                Return False
-
-            End If
-
+            ' A stage row is redundant when a canonical workflow event on
+            ' the same real-world date already explains that transition.
+            ' This applies equally to native and imported history; the Route
+            ' should communicate the publication workflow, not expose storage
+            ' mechanics such as an imported CurrentStage snapshot.
             Select Case historyEvent.Stage
 
                 Case PaperStage.Submitted
@@ -218,6 +208,25 @@ Namespace Services
 
                             Return decision =
                                 EditorialDecision.Accepted
+
+                        End Function
+                    )
+
+                Case PaperStage.Draft
+
+                    Return HasMatchingDecision(
+                        submissions,
+                        historyEvent.EventDate.Date,
+                        Function(decision As EditorialDecision) As Boolean
+
+                            Return decision =
+                                EditorialDecision.Rejected OrElse
+                                decision =
+                                EditorialDecision.DeskRejected OrElse
+                                decision =
+                                EditorialDecision.RejectedAfterReview OrElse
+                                decision =
+                                EditorialDecision.Withdrawn
 
                         End Function
                     )
@@ -583,6 +592,24 @@ Namespace Services
             manuscript As Manuscript
         )
 
+            Dim matchingWorkflow As ManuscriptRouteWaypoint =
+                FindWorkflowWaypointForCurrentState(
+                    route,
+                    manuscript
+                )
+
+            If matchingWorkflow IsNot Nothing Then
+
+                matchingWorkflow.IsCurrent =
+                    True
+
+                matchingWorkflow.Location =
+                    manuscript.Location
+
+                Return
+
+            End If
+
             Dim matchingHistory As ManuscriptRouteWaypoint =
                 Nothing
 
@@ -647,6 +674,105 @@ Namespace Services
             )
 
         End Sub
+
+
+        Private Shared Function FindWorkflowWaypointForCurrentState(
+            route As ManuscriptRoute,
+            manuscript As Manuscript
+        ) As ManuscriptRouteWaypoint
+
+            Dim bestMatch As ManuscriptRouteWaypoint =
+                Nothing
+
+            For Each waypoint As ManuscriptRouteWaypoint In
+                route.Waypoints
+
+                If waypoint.EventDate.Date <>
+                   manuscript.StageEnteredDate.Date OrElse
+                   Not WorkflowWaypointRepresentsStage(
+                       waypoint,
+                       manuscript.CurrentStage
+                   ) Then
+
+                    Continue For
+
+                End If
+
+                If bestMatch Is Nothing OrElse
+                   CompareChronology(
+                       waypoint,
+                       bestMatch
+                   ) > 0 Then
+
+                    bestMatch =
+                        waypoint
+
+                End If
+
+            Next
+
+            Return bestMatch
+
+        End Function
+
+
+        Private Shared Function WorkflowWaypointRepresentsStage(
+            waypoint As ManuscriptRouteWaypoint,
+            stage As PaperStage
+        ) As Boolean
+
+            Select Case stage
+
+                Case PaperStage.Submitted
+
+                    Return waypoint.Kind =
+                        ManuscriptRouteWaypointKind.Submission
+
+                Case PaperStage.Revision
+
+                    Return waypoint.Kind =
+                        ManuscriptRouteWaypointKind.Decision AndAlso
+                        waypoint.Decision.HasValue AndAlso
+                        (
+                            waypoint.Decision.Value =
+                                EditorialDecision.MajorRevision OrElse
+                            waypoint.Decision.Value =
+                                EditorialDecision.MinorRevision OrElse
+                            waypoint.Decision.Value =
+                                EditorialDecision.ReviseAndResubmit
+                        )
+
+                Case PaperStage.Accepted
+
+                    Return waypoint.Kind =
+                        ManuscriptRouteWaypointKind.Decision AndAlso
+                        waypoint.Decision.HasValue AndAlso
+                        waypoint.Decision.Value =
+                            EditorialDecision.Accepted
+
+                Case PaperStage.Draft
+
+                    Return waypoint.Kind =
+                        ManuscriptRouteWaypointKind.Decision AndAlso
+                        waypoint.Decision.HasValue AndAlso
+                        (
+                            waypoint.Decision.Value =
+                                EditorialDecision.Rejected OrElse
+                            waypoint.Decision.Value =
+                                EditorialDecision.DeskRejected OrElse
+                            waypoint.Decision.Value =
+                                EditorialDecision.RejectedAfterReview OrElse
+                            waypoint.Decision.Value =
+                                EditorialDecision.Withdrawn
+                        )
+
+                Case Else
+
+                    Return False
+
+            End Select
+
+        End Function
 
 
         Private Shared Sub MarkRerouteSources(

@@ -17,6 +17,14 @@ Namespace Forms
         Private ReadOnly _manuscript As Manuscript
         Private ReadOnly _route As ManuscriptRoute
 
+        Private _selectedWaypoint As ManuscriptRouteWaypoint = Nothing
+
+        Public ReadOnly Property SelectedWaypoint As ManuscriptRouteWaypoint
+            Get
+                Return _selectedWaypoint
+            End Get
+        End Property
+
 
         Public Sub New(
             manuscript As Manuscript
@@ -191,7 +199,7 @@ Namespace Forms
 
             Dim lblHint As New Label With {
                 .Text =
-                    "PaperRoute builds this view only from stored manuscript history, submissions, decisions, versions, and current state.",
+                    "Double-click a route card—or use Open in Manuscript Details—to inspect the authoritative record.",
                 .AutoSize = True,
                 .MaximumSize = New Size(640, 0),
                 .Margin = New Padding(0, 10, 0, 0),
@@ -441,6 +449,57 @@ Namespace Forms
         End Function
 
 
+        Private Sub MakeWaypointCardInteractive(
+            rootControl As Control,
+            waypoint As ManuscriptRouteWaypoint
+        )
+
+            If rootControl Is Nothing Then
+                Return
+            End If
+
+            rootControl.Cursor =
+                Cursors.Hand
+
+            AddHandler rootControl.DoubleClick,
+                Sub(sender, e)
+                    RequestOpenWaypoint(
+                        waypoint
+                    )
+                End Sub
+
+            For Each child As Control In
+                rootControl.Controls
+
+                MakeWaypointCardInteractive(
+                    child,
+                    waypoint
+                )
+
+            Next
+
+        End Sub
+
+
+        Private Sub RequestOpenWaypoint(
+            waypoint As ManuscriptRouteWaypoint
+        )
+
+            If waypoint Is Nothing Then
+                Return
+            End If
+
+            _selectedWaypoint =
+                waypoint
+
+            Me.DialogResult =
+                DialogResult.Yes
+
+            Close()
+
+        End Sub
+
+
         Private Function BuildFooter() As Control
 
             Dim footer As New FlowLayoutPanel With {
@@ -540,12 +599,12 @@ Namespace Forms
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 .ColumnCount = 1,
-                .RowCount = 4,
+                .RowCount = 5,
                 .Margin = New Padding(0),
                 .Padding = New Padding(0)
             }
 
-            For index As Integer = 0 To 3
+            For index As Integer = 0 To 4
                 content.RowStyles.Add(
                     New RowStyle(
                         SizeType.AutoSize
@@ -584,6 +643,29 @@ Namespace Forms
                 waypoint
             )
 
+            Dim lblOpenDetails As New Label With {
+                .Text = "Open in Manuscript Details →",
+                .AutoSize = True,
+                .Margin = New Padding(8, 2, 0, 0),
+                .ForeColor = UiTheme.AccentSecondaryColor(),
+                .Cursor = Cursors.Hand,
+                .Font = New Font(
+                    Me.Font,
+                    FontStyle.Underline
+                )
+            }
+
+            AddHandler lblOpenDetails.Click,
+                Sub(sender, e)
+                    RequestOpenWaypoint(
+                        waypoint
+                    )
+                End Sub
+
+            topRow.Controls.Add(
+                lblOpenDetails
+            )
+
             Dim lblTitle As New Label With {
                 .Text = WaypointTitle(waypoint),
                 .AutoSize = True,
@@ -611,6 +693,29 @@ Namespace Forms
                 .Visible =
                     Not String.IsNullOrWhiteSpace(
                         detailText
+                    )
+            }
+
+            Dim resultingStateText As String =
+                WorkflowPresentationService.ResultingStateText(
+                    _manuscript,
+                    waypoint
+                )
+
+            Dim lblResultingState As New Label With {
+                .Text = resultingStateText,
+                .AutoSize = True,
+                .MaximumSize = New Size(420, 0),
+                .Margin = New Padding(0, 7, 0, 0),
+                .ForeColor = UiTheme.SecondaryText(),
+                .Font = New Font(
+                    Me.Font.FontFamily,
+                    9.0F,
+                    FontStyle.Bold
+                ),
+                .Visible =
+                    Not String.IsNullOrWhiteSpace(
+                        resultingStateText
                     )
             }
 
@@ -650,13 +755,24 @@ Namespace Forms
             )
 
             content.Controls.Add(
-                lblVersions,
+                lblResultingState,
                 0,
                 3
             )
 
+            content.Controls.Add(
+                lblVersions,
+                0,
+                4
+            )
+
             card.Controls.Add(
                 content
+            )
+
+            MakeWaypointCardInteractive(
+                card,
+                waypoint
             )
 
             Dim resizeWrappedText As Action =
@@ -683,6 +799,12 @@ Namespace Forms
                         )
 
                     lblDetail.MaximumSize =
+                        New Size(
+                            wrapWidth,
+                            0
+                        )
+
+                    lblResultingState.MaximumSize =
                         New Size(
                             wrapWidth,
                             0
@@ -715,22 +837,50 @@ Namespace Forms
 
             If waypoint.IsCurrent Then
 
-                host.Controls.Add(
-                    CreateBadge(
-                        "CURRENT",
-                        UiTheme.AccentColor()
+                If waypoint.Kind =
+                   ManuscriptRouteWaypointKind.Version Then
+
+                    host.Controls.Add(
+                        CreateBadge(
+                            "CURRENT VERSION",
+                            UiTheme.AccentSecondaryColor()
+                        )
                     )
-                )
+
+                ElseIf waypoint.Kind <>
+                       ManuscriptRouteWaypointKind.CurrentState Then
+
+                    host.Controls.Add(
+                        CreateBadge(
+                            "CURRENT STATE",
+                            UiTheme.AccentColor()
+                        )
+                    )
+
+                    host.Controls.Add(
+                        New ContextHelpControl(
+                            WorkflowHelpCatalog.CurrentState
+                        )
+                    )
+
+                End If
 
             End If
 
             If waypoint.ContainsCurrentVersion AndAlso
-               Not waypoint.IsCurrent Then
+               waypoint.Kind <>
+               ManuscriptRouteWaypointKind.Version Then
 
                 host.Controls.Add(
                     CreateBadge(
                         "CURRENT VERSION",
                         UiTheme.AccentSecondaryColor()
+                    )
+                )
+
+                host.Controls.Add(
+                    New ContextHelpControl(
+                        WorkflowHelpCatalog.CurrentVersion
                     )
                 )
 

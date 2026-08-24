@@ -389,6 +389,38 @@ Namespace Forms
         End Sub
 
 
+        Public Function SelectVersionById(
+            versionId As Guid
+        ) As Boolean
+
+            Dim index As Integer =
+                FindDisplayedVersionIndex(
+                    versionId
+                )
+
+            If index < 0 Then
+
+                RefreshVersions()
+
+                index =
+                    FindDisplayedVersionIndex(
+                        versionId
+                    )
+
+            End If
+
+            If index < 0 Then
+                Return False
+            End If
+
+            lstVersions.SelectedIndex =
+                index
+
+            Return True
+
+        End Function
+
+
         Private Function FormatVersionListItem(
             version As ManuscriptVersion
         ) As String

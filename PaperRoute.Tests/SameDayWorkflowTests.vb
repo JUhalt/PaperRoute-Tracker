@@ -180,42 +180,43 @@ Public Class SameDayWorkflowTests
             )
 
         Assert.AreEqual(
-            5,
+            3,
             route.Waypoints.Count
         )
 
         Assert.AreEqual(
-            ManuscriptRouteWaypointKind.Stage,
+            ManuscriptRouteWaypointKind.Submission,
             route.Waypoints(0).Kind
         )
 
         Assert.AreEqual(
-            ManuscriptRouteWaypointKind.Submission,
-            route.Waypoints(1).Kind
-        )
-
-        Assert.AreEqual(
             revision.Id,
-            route.Waypoints(2).DecisionId.Value
+            route.Waypoints(1).DecisionId.Value
         )
 
         Assert.AreEqual(
             rejection.Id,
-            route.Waypoints(3).DecisionId.Value
+            route.Waypoints(2).DecisionId.Value
         )
 
         Assert.AreEqual(
-            ManuscriptRouteWaypointKind.CurrentState,
-            route.Waypoints(4).Kind
-        )
-
-        Assert.AreEqual(
-            PaperStage.Draft,
-            route.Waypoints(4).Stage.Value
+            EditorialDecision.Rejected,
+            route.Waypoints(2).Decision.Value
         )
 
         Assert.IsTrue(
-            route.Waypoints(4).IsCurrent
+            route.Waypoints(2).IsCurrent
+        )
+
+        Assert.IsFalse(
+            route.Waypoints.Any(
+                Function(item)
+                    Return item.Kind =
+                        ManuscriptRouteWaypointKind.Stage OrElse
+                        item.Kind =
+                        ManuscriptRouteWaypointKind.CurrentState
+                End Function
+            )
         )
 
     End Sub

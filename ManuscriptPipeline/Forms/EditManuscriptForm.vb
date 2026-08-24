@@ -50,6 +50,8 @@ Namespace Forms
 
         Private versionHistoryControl As ManuscriptVersionHistoryControl = Nothing
 
+        Private _pendingRouteWaypoint As ManuscriptRouteWaypoint = Nothing
+
         Private ReadOnly _displayedSubmissions As New List(Of JournalSubmission)()
 
 
@@ -88,6 +90,252 @@ Namespace Forms
             LoadManuscript()
 
         End Sub
+
+
+        Public Sub NavigateToRouteWaypoint(
+            waypoint As ManuscriptRouteWaypoint
+        )
+
+            _pendingRouteWaypoint =
+                waypoint
+
+        End Sub
+
+
+        Protected Overrides Sub OnShown(
+            e As EventArgs
+        )
+
+            MyBase.OnShown(
+                e
+            )
+
+            ApplyResponsiveInitialSize()
+
+            If _pendingRouteWaypoint IsNot Nothing Then
+
+                BeginInvoke(
+                    New Action(
+                        AddressOf ApplyPendingRouteNavigation
+                    )
+                )
+
+            End If
+
+        End Sub
+
+
+        Private Sub ApplyResponsiveInitialSize()
+
+            Dim referenceControl As Control =
+                If(
+                    Me.Owner,
+                    Me
+                )
+
+            Dim workingArea As Rectangle =
+                Screen.FromControl(
+                    referenceControl
+                ).WorkingArea
+
+            Dim desiredHeight As Integer =
+                If(
+                    _workingManuscript.Location =
+                    ManuscriptLocation.FileDrawer,
+                    980,
+                    940
+                )
+
+            Dim initialSize As Size =
+                ResponsiveDialogSizingService.CalculateInitialSize(
+                    workingArea,
+                    New Size(1180, desiredHeight),
+                    Me.MinimumSize,
+                    72
+                )
+
+            Me.Size =
+                initialSize
+
+            Me.Location =
+                ResponsiveDialogSizingService.CalculateCenteredLocation(
+                    workingArea,
+                    initialSize
+                )
+
+        End Sub
+
+
+        Private Sub ApplyPendingRouteNavigation()
+
+            Dim waypoint As ManuscriptRouteWaypoint =
+                _pendingRouteWaypoint
+
+            _pendingRouteWaypoint =
+                Nothing
+
+            If waypoint Is Nothing Then
+                Return
+            End If
+
+            Select Case RouteNavigationService.SectionForWaypoint(
+                waypoint
+            )
+
+                Case ManuscriptDetailsSection.VersionHistory
+
+                    If waypoint.VersionId.HasValue AndAlso
+                       versionHistoryControl IsNot Nothing Then
+
+                        versionHistoryControl.SelectVersionById(
+                            waypoint.VersionId.Value
+                        )
+
+                    End If
+
+                    ScrollControlIntoDetailsView(
+                        versionHistoryControl
+                    )
+
+                Case ManuscriptDetailsSection.JournalSubmissions
+
+                    If waypoint.SubmissionId.HasValue Then
+
+                        SelectSubmissionById(
+                            waypoint.SubmissionId.Value
+                        )
+
+                    End If
+
+                    ScrollControlIntoDetailsView(
+                        FindGroupBoxByText(
+                            Me,
+                            "Journal Submissions"
+                        )
+                    )
+
+                Case Else
+
+                    ScrollControlIntoDetailsView(
+                        FindGroupBoxByText(
+                            Me,
+                            "Manuscript"
+                        )
+                    )
+
+            End Select
+
+        End Sub
+
+
+        Private Sub SelectSubmissionById(
+            submissionId As Guid
+        )
+
+            For index As Integer =
+                0 To _displayedSubmissions.Count - 1
+
+                Dim submission As JournalSubmission =
+                    _displayedSubmissions(index)
+
+                If submission IsNot Nothing AndAlso
+                   submission.Id =
+                   submissionId Then
+
+                    lstSubmissions.SelectedIndex =
+                        index
+
+                    Return
+
+                End If
+
+            Next
+
+        End Sub
+
+
+        Private Sub ScrollControlIntoDetailsView(
+            target As Control
+        )
+
+            If target Is Nothing Then
+                Return
+            End If
+
+            Dim current As Control =
+                target.Parent
+
+            While current IsNot Nothing
+
+                Dim scrollable As ScrollableControl =
+                    TryCast(
+                        current,
+                        ScrollableControl
+                    )
+
+                If scrollable IsNot Nothing AndAlso
+                   scrollable.AutoScroll Then
+
+                    scrollable.ScrollControlIntoView(
+                        target
+                    )
+
+                    Return
+
+                End If
+
+                current =
+                    current.Parent
+
+            End While
+
+        End Sub
+
+
+        Private Function FindGroupBoxByText(
+            rootControl As Control,
+            groupText As String
+        ) As GroupBox
+
+            If rootControl Is Nothing Then
+                Return Nothing
+            End If
+
+            Dim group As GroupBox =
+                TryCast(
+                    rootControl,
+                    GroupBox
+                )
+
+            If group IsNot Nothing AndAlso
+               String.Equals(
+                   group.Text,
+                   groupText,
+                   StringComparison.CurrentCultureIgnoreCase
+               ) Then
+
+                Return group
+
+            End If
+
+            For Each child As Control In
+                rootControl.Controls
+
+                Dim match As GroupBox =
+                    FindGroupBoxByText(
+                        child,
+                        groupText
+                    )
+
+                If match IsNot Nothing Then
+                    Return match
+                End If
+
+            Next
+
+            Return Nothing
+
+        End Function
 
 
         ' =====================================================

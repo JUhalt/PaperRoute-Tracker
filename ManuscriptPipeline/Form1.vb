@@ -3424,13 +3424,22 @@ Public Class Form1
 
 
     Private Sub OpenManuscript(
-        manuscript As Manuscript
+        manuscript As Manuscript,
+        Optional routeWaypoint As ManuscriptRouteWaypoint = Nothing
     )
 
         Using dialog As New EditManuscriptForm(
             manuscript,
             manuscripts
         )
+
+            If routeWaypoint IsNot Nothing Then
+
+                dialog.NavigateToRouteWaypoint(
+                    routeWaypoint
+                )
+
+            End If
 
             Dim result As DialogResult =
                 dialog.ShowDialog(Me)
@@ -3469,6 +3478,9 @@ Public Class Form1
         manuscript As Manuscript
     )
 
+        Dim selectedWaypoint As ManuscriptRouteWaypoint =
+            Nothing
+
         Using dialog As New ManuscriptRouteViewForm(
             manuscript
         )
@@ -3477,7 +3489,19 @@ Public Class Form1
                 Me
             )
 
+            selectedWaypoint =
+                dialog.SelectedWaypoint
+
         End Using
+
+        If selectedWaypoint IsNot Nothing Then
+
+            OpenManuscript(
+                manuscript,
+                selectedWaypoint
+            )
+
+        End If
 
     End Sub
 

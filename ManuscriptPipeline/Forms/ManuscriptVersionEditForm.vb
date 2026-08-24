@@ -289,7 +289,10 @@ Namespace Forms
             )
 
             root.Controls.Add(
-                CreateFieldLabel("Version date"),
+                CreateFieldLabelWithHelp(
+                    "Version date",
+                    WorkflowHelpCatalog.VersionDate
+                ),
                 0,
                 1
             )
@@ -318,7 +321,10 @@ Namespace Forms
                 AddressOf SubmissionChanged
 
             root.Controls.Add(
-                CreateFieldLabel("Submission"),
+                CreateFieldLabelWithHelp(
+                    "Submission",
+                    WorkflowHelpCatalog.SubmissionAssociation
+                ),
                 0,
                 4
             )
@@ -339,7 +345,10 @@ Namespace Forms
                 AddressOf DecisionChanged
 
             root.Controls.Add(
-                CreateFieldLabel("Decision"),
+                CreateFieldLabelWithHelp(
+                    "Decision",
+                    WorkflowHelpCatalog.DecisionAssociation
+                ),
                 0,
                 5
             )
@@ -363,9 +372,7 @@ Namespace Forms
                 New Padding(2, 3, 2, 2)
 
             lblAssociationHelp.Text =
-                "Submission = this exact version was sent with that journal submission. " &
-                "Decision = this version was created in response to that editorial decision. " &
-                "A submitted version can correctly have Decision = None."
+                "Workflow associations are optional. Use the ? hints for the distinction between a submitted version and a version created in response to editorial feedback."
 
             root.Controls.Add(
                 lblAssociationHelp,
@@ -396,7 +403,10 @@ Namespace Forms
                 AnchorStyles.Left
 
             root.Controls.Add(
-                CreateFieldLabel("Current version"),
+                CreateFieldLabelWithHelp(
+                    "Current version",
+                    WorkflowHelpCatalog.CurrentVersion
+                ),
                 0,
                 8
             )
@@ -753,7 +763,10 @@ Namespace Forms
             )
 
             root.Controls.Add(
-                CreateFieldLabel("Revision round"),
+                CreateFieldLabelWithHelp(
+                    "Revision round",
+                    WorkflowHelpCatalog.RevisionRound
+                ),
                 0,
                 7
             )
@@ -781,6 +794,38 @@ Namespace Forms
                         FontStyle.Bold
                     )
             }
+
+        End Function
+
+
+        Private Function CreateFieldLabelWithHelp(
+            text As String,
+            helpText As String
+        ) As Control
+
+            Dim host As New FlowLayoutPanel With {
+                .Dock = DockStyle.Fill,
+                .AutoSize = True,
+                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                .FlowDirection = FlowDirection.LeftToRight,
+                .WrapContents = False,
+                .Margin = New Padding(0),
+                .Padding = New Padding(0, 6, 0, 0)
+            }
+
+            host.Controls.Add(
+                CreateFieldLabel(
+                    text
+                )
+            )
+
+            host.Controls.Add(
+                New ContextHelpControl(
+                    helpText
+                )
+            )
+
+            Return host
 
         End Function
 
