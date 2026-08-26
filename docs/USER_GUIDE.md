@@ -1,8 +1,8 @@
-# PaperRoute User Guide
+﻿# PaperRoute User Guide
 
 PaperRoute is a local-first academic manuscript tracker for researchers. It is designed to keep the complete route of a paper understandable: idea, writing, submission, peer review, revision, publication, or the File Drawer.
 
-This guide is the user-facing source of truth for PaperRoute v0.2.
+This guide is the user-facing source of truth for PaperRoute v0.3.
 
 ## Quick Start
 
@@ -11,7 +11,7 @@ If you only read one section, read this one.
 1. Open PaperRoute and choose **Add Manuscript**.
 2. Give the manuscript a title and place it at the stage that best matches reality.
 3. Open **Manuscript Details** to add structured authors, a target journal, metadata, links, and submission history.
-4. When you submit the paper, add a **Journal Submission** with the journal, date, manuscript number if available, portal URL, and optional follow-up date.
+4. When you submit the paper, add a **Journal Submission** with the journal, date, Journal manuscript ID if available, portal URL, and optional follow-up date.
 5. When the journal responds, open that submission and record the **Editorial Decision**. Revision decisions can carry a revision deadline.
 6. Save decision letters, reviewer comments, response letters, revised manuscripts, and related correspondence under the appropriate submission.
 7. Use **Settings > Reminders & Calendar...** to see revision deadlines, journal follow-ups, and custom reminders in one place.
@@ -78,11 +78,28 @@ This is the main working area for:
 - current stage;
 - publication metadata;
 - structured authors and affiliations;
+- manuscript Version History;
 - journal submissions;
 - preprint and project links; and
 - File Drawer information when relevant.
 
 PaperRoute uses a working copy while the Manuscript Details window is open. Choosing **Cancel** discards unsaved changes from that window.
+
+### Version History and the Route
+
+**Version History** records meaningful manuscript snapshots without overwriting earlier files. A version may be:
+
+- copied into the PaperRoute Library as an immutable historical snapshot;
+- linked to an original file that remains under your control; or
+- tracked as metadata only.
+
+A version can be associated with the journal submission for which that exact file was sent. A later revised version can also be associated with the editorial decision that prompted it and with a revision-round number.
+
+**Current Version** means the manuscript snapshot you currently consider your active working version. This is different from **Current State**, which means the manuscript's lifecycle position such as Submitted, Revision, Accepted, or Draft.
+
+Use **View route →** from the main board to see the manuscript's deterministic publication history. The Route is read-only: double-clicking or opening a Route waypoint returns you to the authoritative record in Manuscript Details rather than creating a second editing pathway.
+
+Deleting a Version History record is also working-copy based. If the version owns an immutable PaperRoute Library snapshot, the snapshot is removed only when **Save & Close** succeeds. Choosing **Cancel** leaves the saved version history and managed snapshot intact. Deleting a linked-file version never deletes the original external file.
 
 ### Legacy co-author text
 
@@ -243,7 +260,7 @@ Each submission can contain:
 
 - journal name;
 - optional reusable journal link;
-- manuscript number;
+- Journal manuscript ID;
 - submission date;
 - publisher portal URL;
 - optional follow-up date; and
@@ -508,7 +525,7 @@ For a manual record:
 1. Open Manuscript Details.
 2. In Journal Submissions, choose **Add Submission**.
 3. Enter the journal or choose **Use Library...**.
-4. Enter the submission date and manuscript number if known.
+4. Enter the submission date and Journal manuscript ID if known.
 5. Save the publisher portal URL if useful.
 6. Optionally enable a follow-up date.
 7. Save the submission.
@@ -537,7 +554,7 @@ The deadline will then appear in Reminders & Calendar and in the Needs Attention
 
 Open the journal submission and add correspondence/files for the reviewer comments, editor communication, revised manuscript, and response-to-reviewers materials.
 
-PaperRoute v0.2 stores these records and files. A structured Reviewer Response Matrix is planned for v0.3.
+PaperRoute v0.3 stores these records and files. A structured Reviewer Response Matrix is planned for v0.5.
 
 ## How do I move a rejected paper to another journal?
 
@@ -661,20 +678,18 @@ PaperRoute ships a local copy of this guide. Open it from the **Help** button in
 
 ---
 
-## What Is Not in v0.2?
+## What Comes After v0.3?
 
-Several larger workflow features are intentionally reserved for v0.3, including:
+The Route and Version History are the historical spine. Later releases build on that same record rather than creating parallel workflow systems:
 
-- Visual Route View;
-- manuscript version history;
-- Submission Packet Vault;
-- per-journal readiness checklists;
-- Reviewer Response Matrix;
-- a richer Deadline Center;
-- optional AI-assisted reviewer action extraction; and
-- route/time-to-publication analytics.
+- **v0.4 — Submission Readiness:** submission packets and per-journal readiness.
+- **v0.5 — Reviewer Response Workflow:** structured reviewer/editor action items and response drafting.
+- **v0.6 — Deadline Center:** richer action and deadline management.
+- **v0.7 — Route Analytics & Reports:** printable/archiveable manuscript-route reports and timing analytics.
+- **v0.8 — Optional AI Assistance:** user-controlled clerical assistance that never becomes authoritative.
+- **v0.9 — 1.0 Hardening:** onboarding/tutorial work, accessibility, responsive-layout refinement, and release certification.
 
-The v0.2 reminder system is deliberately the canonical deadline foundation that the v0.3 Deadline Center will build upon.
+The in-app `?` guidance is intentionally reusable so a future guided tutorial can teach the same concepts without maintaining a second vocabulary.
 
 ---
 

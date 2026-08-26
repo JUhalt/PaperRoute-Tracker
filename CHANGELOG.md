@@ -1,6 +1,40 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to PaperRoute Tracker will be documented here.
+
+## [0.3.0] - Unreleased
+
+### Added
+
+- Visual Route View derived deterministically from stored manuscript history, with direct drill-down into authoritative Manuscript Details.
+- Manuscript Version History with working, submitted, and revised snapshots; current-version identity; submission/decision associations; revision-round metadata; and provenance.
+- Immutable PaperRoute Library snapshots for manuscript versions, alongside linked-file and metadata-only histories.
+- Transactional manuscript-version deletion: managed snapshots are staged reversibly and removed only when the manuscript save succeeds.
+- Schema 3 version-history model and schema 4 chronology/audit provenance without rewriting legacy event chronology.
+- Reusable manual-certification fixtures for repeatable Route and Version History F5 validation.
+- Contextual `?` guidance for ambiguous workflow concepts, including Current State, Current Version, journal manuscript IDs, version dates, and workflow associations.
+
+### Changed
+
+- Route chronology now suppresses redundant lifecycle cards when a canonical submission or editorial decision already explains the state.
+- Current workflow events explicitly show their resulting manuscript state.
+- Manuscript Details and Submission Details use adaptive monitor-aware sizing.
+- Editorial history, Version History, and Correspondence & Files use consistent master/detail presentation.
+- Main-dashboard manuscript actions reflow into a dedicated wrapping row at narrow widths rather than competing with title/journal text.
+- In-app updater release notes convert common Markdown headings, bullets, links, and paragraphs into clean readable text.
+
+### Compatibility and safety
+
+- Existing manuscripts without Version History remain valid.
+- Real-world event dates remain separate from `RecordedAtUtc` and `LastModifiedAtUtc`; later metadata edits do not reorder the Route.
+- Canceling Manuscript Details discards unsaved version additions, edits, and deletions.
+- Linked original version files are never deleted by deleting a PaperRoute version record.
+- Managed snapshot deletion is coordinated with authoritative JSON persistence and supports interrupted-transaction recovery.
+
+### Testing
+
+- Reusable `ZZZ-CERT-v0.3-*` certification cases cover empty drafts, active submissions, major revisions, rejection/reroute, withdrawal, and same-day workflow ordering.
+- Final v0.3.0 publication requires display-scaling, installed-update, backup/restore, clean-install, and packaging certification.
 
 ## [0.2.0] - 2026-08-22
 

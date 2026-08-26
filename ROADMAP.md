@@ -121,7 +121,7 @@ v0.3 establishes the canonical historical spine that later releases build upon.
 - [x] Version History UI
 - [x] Add / edit metadata / open file / set current workflows
 - [x] Managed snapshots remain physically immutable after commit
-- [ ] Transactional version deletion with managed-file orphan prevention
+- [x] Transactional version deletion with managed-file orphan prevention
 
 ## Visual Route
 
@@ -129,8 +129,8 @@ v0.3 establishes the canonical historical spine that later releases build upon.
 - [x] Submission, decision, version, reroute, File Drawer, and current-state waypoints
 - [x] Suppression of redundant workflow-derived stage cards
 - [x] Responsive timeline and deterministic same-day ordering
-- [ ] Route drill-down into the authoritative Manuscript Details record
-- [ ] Final route terminology/help polish
+- [x] Route drill-down into the authoritative Manuscript Details record
+- [x] Final route terminology/help polish
 
 ## Manual certification
 
@@ -143,6 +143,17 @@ ZZZ-CERT-<release>-<case>
 ```
 
 This allows repeatable F5 certification without turning a user's real manuscripts into test specimens.
+
+## Release closure
+
+- [x] Clean, readable in-app updater release notes (#32)
+- [x] Narrow-width manuscript-card action reflow and reduced forced horizontal scrolling (#33 implementation)
+- [x] Reusable contextual help for ambiguous Route / Version terminology (#35)
+- [ ] Main-board display certification at 100%, 125%, and 150% scaling
+- [ ] v0.2 → v0.3 installed-update certification
+- [ ] v0.3 portable backup / restore certification
+- [ ] Clean-install / first-launch certification
+- [ ] Final release packaging, checksums, and GitHub Release
 
 ---
 

@@ -23,6 +23,7 @@ Namespace Forms
         Private ReadOnly btnEdit As New Button()
         Private ReadOnly btnOpenFile As New Button()
         Private ReadOnly btnSetCurrent As New Button()
+        Private ReadOnly btnDeleteVersion As New Button()
 
         Private ReadOnly _displayedVersions As New List(Of ManuscriptVersion)()
 
@@ -152,6 +153,21 @@ Namespace Forms
             btnSetCurrent.Enabled =
                 False
 
+            btnDeleteVersion.Text =
+                "Delete Version"
+
+            btnDeleteVersion.AutoSize =
+                True
+
+            btnDeleteVersion.Height =
+                36
+
+            btnDeleteVersion.Enabled =
+                False
+
+            btnDeleteVersion.ForeColor =
+                UiTheme.DangerColor()
+
             AddHandler btnAdd.Click,
                 AddressOf AddVersion
 
@@ -163,6 +179,9 @@ Namespace Forms
 
             AddHandler btnSetCurrent.Click,
                 AddressOf SetSelectedVersionCurrent
+
+            AddHandler btnDeleteVersion.Click,
+                AddressOf DeleteSelectedVersion
 
             buttons.Controls.Add(
                 btnAdd
@@ -178,6 +197,10 @@ Namespace Forms
 
             buttons.Controls.Add(
                 btnSetCurrent
+            )
+
+            buttons.Controls.Add(
+                btnDeleteVersion
             )
 
             lstVersions.Dock =
@@ -562,6 +585,9 @@ Namespace Forms
                     _manuscript.CurrentVersionId.Value <>
                     selected.Id
                 )
+
+            btnDeleteVersion.Enabled =
+                hasSelection
 
         End Sub
 
@@ -1042,6 +1068,113 @@ Namespace Forms
                 End Try
 
             End Using
+
+        End Sub
+
+
+
+        Private Sub DeleteSelectedVersion(
+            sender As Object,
+            e As EventArgs
+        )
+
+            Dim selected As ManuscriptVersion =
+                GetSelectedVersion()
+
+            If selected Is Nothing Then
+                Return
+            End If
+
+            Dim label As String =
+                If(
+                    String.IsNullOrWhiteSpace(
+                        selected.Label
+                    ),
+                    "(unlabeled version)",
+                    selected.Label
+                )
+
+            Dim message As String =
+                "Delete the version '" &
+                label &
+                "' from this manuscript's Version History?" &
+                Environment.NewLine &
+                Environment.NewLine
+
+            If selected.IsManagedCopy AndAlso
+               _managedLibrary.IsManagedPath(
+                   selected.LocalFilePath
+               ) Then
+
+                message &=
+                    "Its PaperRoute Library snapshot will be removed only when you Save & Close Manuscript Details."
+
+            ElseIf Not String.IsNullOrWhiteSpace(
+                selected.LocalFilePath
+            ) Then
+
+                message &=
+                    "The linked original file will NOT be deleted."
+
+            Else
+
+                message &=
+                    "This removes the metadata-only version record."
+
+            End If
+
+            message &=
+                Environment.NewLine &
+                Environment.NewLine &
+                "Canceling Manuscript Details before Save & Close leaves the saved library unchanged."
+
+            If _manuscript.CurrentVersionId.HasValue AndAlso
+               _manuscript.CurrentVersionId.Value =
+               selected.Id Then
+
+                message &=
+                    Environment.NewLine &
+                    Environment.NewLine &
+                    "This is the current version. PaperRoute will make the newest remaining version current, or clear Current Version if none remain."
+
+            End If
+
+            If MessageBox.Show(
+                Me,
+                message,
+                "Delete Manuscript Version?",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2
+            ) <> DialogResult.Yes Then
+
+                Return
+
+            End If
+
+            Try
+
+                ManuscriptVersionService.DeleteVersion(
+                    _manuscript,
+                    selected.Id
+                )
+
+                RefreshVersions()
+
+            Catch ex As Exception
+
+                MessageBox.Show(
+                    Me,
+                    "PaperRoute could not delete this manuscript version." &
+                    Environment.NewLine &
+                    Environment.NewLine &
+                    ex.Message,
+                    "Version Not Deleted",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                )
+
+            End Try
 
         End Sub
 

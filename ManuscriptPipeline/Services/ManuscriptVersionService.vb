@@ -271,6 +271,63 @@ Namespace Services
 
         End Sub
 
+
+        Public Shared Function DeleteVersion(
+            manuscript As Manuscript,
+            versionId As Guid
+        ) As ManuscriptVersion
+
+            ValidateManuscript(
+                manuscript
+            )
+
+            EnsureCollections(
+                manuscript
+            )
+
+            Dim version As ManuscriptVersion =
+                RequireVersion(
+                    manuscript,
+                    versionId
+                )
+
+            Dim wasCurrent As Boolean =
+                manuscript.CurrentVersionId.HasValue AndAlso
+                manuscript.CurrentVersionId.Value =
+                version.Id
+
+            manuscript.Versions.Remove(
+                version
+            )
+
+            If wasCurrent Then
+
+                Dim remaining As List(Of ManuscriptVersion) =
+                    GetChronologicalVersions(
+                        manuscript
+                    )
+
+                If remaining.Count = 0 Then
+
+                    manuscript.CurrentVersionId =
+                        Nothing
+
+                Else
+
+                    manuscript.CurrentVersionId =
+                        remaining(
+                            remaining.Count - 1
+                        ).Id
+
+                End If
+
+            End If
+
+            Return version
+
+        End Function
+
+
         Public Shared Sub LinkVersionToSubmission(
             manuscript As Manuscript,
             versionId As Guid,

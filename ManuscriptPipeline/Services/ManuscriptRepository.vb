@@ -18,6 +18,8 @@ Namespace Services
         Private _lastLoadRecoveredFromBackup As Boolean
         Private _lastRecoveryPreservedFilePath As String =
             String.Empty
+        Private _lastManagedLibraryRecoveryWarning As String =
+            String.Empty
 
 
         Public Sub New()
@@ -30,7 +32,8 @@ Namespace Services
 
         Friend Sub New(
             dataDirectory As String,
-            managedLibraryRoot As String
+            managedLibraryRoot As String,
+            Optional managedLibraryOverride As ManagedLibraryService = Nothing
         )
 
             If String.IsNullOrWhiteSpace(
@@ -61,7 +64,12 @@ Namespace Services
                     "manuscripts.bak"
                 )
 
-            If String.IsNullOrWhiteSpace(
+            If managedLibraryOverride IsNot Nothing Then
+
+                _managedLibrary =
+                    managedLibraryOverride
+
+            ElseIf String.IsNullOrWhiteSpace(
                 managedLibraryRoot
             ) Then
 
@@ -133,6 +141,13 @@ Namespace Services
         End Property
 
 
+        Public ReadOnly Property LastManagedLibraryRecoveryWarning As String
+            Get
+                Return _lastManagedLibraryRecoveryWarning
+            End Get
+        End Property
+
+
         ' =====================================================
         ' Load
         ' =====================================================
@@ -182,6 +197,10 @@ Namespace Services
                         primary
                     )
 
+                    TryRecoverManagedLibraryStaging(
+                        primary
+                    )
+
                     Return primary
 
                 End If
@@ -206,6 +225,10 @@ Namespace Services
                         )
 
                         NormalizeLoadedData(
+                            backup
+                        )
+
+                        TryRecoverManagedLibraryStaging(
                             backup
                         )
 
@@ -259,6 +282,10 @@ Namespace Services
             )
 
             NormalizeLoadedData(
+                recovered
+            )
+
+            TryRecoverManagedLibraryStaging(
                 recovered
             )
 
@@ -517,12 +544,66 @@ Namespace Services
         End Function
 
 
+        Private Sub TryRecoverManagedLibraryStaging(
+            manuscripts As IEnumerable(Of Manuscript)
+        )
+
+            Try
+
+                _managedLibrary.RecoverStagedVersionDeletions(
+                    manuscripts
+                )
+
+            Catch ex As UnauthorizedAccessException
+
+                _lastManagedLibraryRecoveryWarning =
+                    BuildManagedLibraryRecoveryWarning(
+                        ex
+                    )
+
+            Catch ex As IOException
+
+                _lastManagedLibraryRecoveryWarning =
+                    BuildManagedLibraryRecoveryWarning(
+                        ex
+                    )
+
+            End Try
+
+        End Sub
+
+
+        Private Function BuildManagedLibraryRecoveryWarning(
+            ex As Exception
+        ) As String
+
+            Return (
+                "PaperRoute loaded the manuscript database, but could not finish recovery or cleanup of its internal managed-version staging area." &
+                Environment.NewLine &
+                Environment.NewLine &
+                "Managed library: " &
+                _managedLibrary.RootDirectory &
+                Environment.NewLine &
+                Environment.NewLine &
+                "PaperRoute did not discard the manuscript database. You can continue using the library, but one or more managed Version History files may be missing or awaiting cleanup." &
+                Environment.NewLine &
+                Environment.NewLine &
+                "Technical details: " &
+                ex.Message
+            )
+
+        End Function
+
+
         Private Sub ResetRecoveryState()
 
             _lastLoadRecoveredFromBackup =
                 False
 
             _lastRecoveryPreservedFilePath =
+                String.Empty
+
+            _lastManagedLibraryRecoveryWarning =
                 String.Empty
 
         End Sub
@@ -559,7 +640,19 @@ Namespace Services
                     "manuscripts.tmp"
                 )
 
+            Dim deletionTransaction As ManagedLibraryService.ManagedVersionDeletionTransaction =
+                Nothing
+
             Try
+
+                ' Managed version directories removed from the working model
+                ' are moved into reversible staging before authoritative JSON
+                ' changes. A failed save restores those snapshots; a
+                ' successful save commits their removal.
+                deletionTransaction =
+                    _managedLibrary.BeginVersionDeletionTransaction(
+                        manuscripts
+                    )
 
                 Using stream As New FileStream(
                     tempFilePath,
@@ -604,7 +697,38 @@ Namespace Services
 
                 End If
 
+                deletionTransaction.Commit()
+
+            Catch saveException As Exception
+
+                If deletionTransaction IsNot Nothing Then
+
+                    Try
+
+                        deletionTransaction.Rollback()
+
+                    Catch rollbackException As Exception
+
+                        Throw New InvalidDataException(
+                            "PaperRoute could not save the manuscript library and could not fully restore staged manuscript-version snapshots. " &
+                            "The staged files have been preserved for startup recovery.",
+                            New AggregateException(
+                                saveException,
+                                rollbackException
+                            )
+                        )
+
+                    End Try
+
+                End If
+
+                Throw
+
             Finally
+
+                If deletionTransaction IsNot Nothing Then
+                    deletionTransaction.Dispose()
+                End If
 
                 If File.Exists(
                     tempFilePath
