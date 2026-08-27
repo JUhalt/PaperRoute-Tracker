@@ -540,8 +540,8 @@ Namespace Forms
             AddHandler btnJournalLinks.Click,
                 AddressOf OpenJournalLinks
 
-            details.Controls.Add(CreateFieldLabel("Links"), 0, 5)
-            details.Controls.Add(btnJournalLinks, 1, 5)
+            details.Controls.Add(CreateFieldLabel("Journal tools"), 0, 5)
+            details.Controls.Add(CreateJournalToolsPanel(), 1, 5)
 
             detailsGroup.Controls.Add(details)
 
@@ -2969,6 +2969,10 @@ Namespace Forms
 
             _originalManuscript.CurrentVersionId =
                 committed.CurrentVersionId
+
+            CopyReadinessStateToOriginal(
+                committed
+            )
 
             _originalManuscript.CurrentStage =
                 committed.CurrentStage
