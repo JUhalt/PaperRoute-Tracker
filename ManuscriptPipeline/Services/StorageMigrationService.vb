@@ -10,7 +10,7 @@ Namespace Services
 
     Public NotInheritable Class StorageMigrationService
 
-        Public Const CurrentSchemaVersion As Integer = 4
+        Public Const CurrentSchemaVersion As Integer = 5
 
         Private Const MinimumMigratableSchemaVersion As Integer = 1
 
@@ -355,6 +355,13 @@ Namespace Services
                     Case 3
 
                         MigrateSchema3To4(
+                            currentRoot,
+                            schemaPath
+                        )
+
+                    Case 4
+
+                        Schema5MigrationService.Migrate(
                             currentRoot,
                             schemaPath
                         )

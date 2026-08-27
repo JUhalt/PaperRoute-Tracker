@@ -756,6 +756,10 @@ Namespace Services
                         String.Empty
                     )
 
+                SubmissionReadinessValidationService.NormalizeAndValidateJournal(
+                    journal
+                )
+
             Next
 
         End Sub

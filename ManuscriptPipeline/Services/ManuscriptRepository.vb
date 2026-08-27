@@ -1142,6 +1142,10 @@ Namespace Services
 
                 Next
 
+                SubmissionReadinessValidationService.NormalizeAndValidateManuscript(
+                    manuscript
+                )
+
             Next
 
         End Sub
