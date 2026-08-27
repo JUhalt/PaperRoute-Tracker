@@ -419,6 +419,18 @@ Namespace Forms
             _createdItem =
                 New CorrespondenceItem With {
                     .Id = itemId,
+                    .RecordedAtUtc =
+                        If(
+                            _existingItem Is Nothing,
+                            Nothing,
+                            _existingItem.RecordedAtUtc
+                        ),
+                    .LastModifiedAtUtc =
+                        If(
+                            _existingItem Is Nothing,
+                            Nothing,
+                            _existingItem.LastModifiedAtUtc
+                        ),
                     .ItemDate = dtpDate.Value.Date,
                     .Type = selectedOption.Value,
                     .Title = itemTitle,
@@ -427,6 +439,20 @@ Namespace Forms
                     .SourceUrl = sourceUrl,
                     .IsManagedCopy = managedCopy
                 }
+
+            If _existingItem Is Nothing Then
+
+                ChronologyProvenanceService.StampCreated(
+                    _createdItem
+                )
+
+            Else
+
+                ChronologyProvenanceService.StampModified(
+                    _createdItem
+                )
+
+            End If
 
             Me.DialogResult = DialogResult.OK
 

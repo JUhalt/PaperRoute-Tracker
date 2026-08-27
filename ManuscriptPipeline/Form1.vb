@@ -1,4 +1,4 @@
-Imports System
+﻿Imports System
 Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.Linq
@@ -51,6 +51,28 @@ Public Class Form1
 
     Private uiInitialized As Boolean = False
     Private suppressBoardFilterEvents As Boolean = False
+
+    Private ReadOnly boardSearchDebounceTimer As New Timer With {
+        .Interval = 200
+    }
+
+    Private authorSearchIndex As New AuthorLibrarySearchIndex(
+        Nothing
+    )
+
+    Private currentAttentionSnapshots As New Dictionary(
+        Of Guid,
+        ManuscriptAttentionSnapshot
+    )()
+
+    Private cardTitleFont As Font = Nothing
+    Private cardBadgeFont As Font = Nothing
+    Private cardInsightFont As Font = Nothing
+    Private routeLinkFont As Font = Nothing
+    Private attentionTitleFont As Font = Nothing
+    Private attentionRegularFont As Font = Nothing
+    Private attentionActiveFont As Font = Nothing
+    Private sectionHeaderFont As Font = Nothing
 
 
     Private NotInheritable Class StageFilterOption
@@ -179,12 +201,21 @@ Public Class Form1
         Me.BackColor = UiTheme.BoardBackground()
         Me.DoubleBuffered = True
 
+        ResetSharedDashboardFonts()
+
         Dim root As New TableLayoutPanel With {
             .Dock = DockStyle.Fill,
             .ColumnCount = 1,
             .RowCount = 3,
             .BackColor = UiTheme.BoardBackground()
         }
+
+        root.ColumnStyles.Add(
+            New ColumnStyle(
+                SizeType.Percent,
+                100.0F
+            )
+        )
 
         root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
         root.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
@@ -548,8 +579,8 @@ Public Class Form1
     0
 )
 
-
         ' =================================================
+        ' Assemble header        ' =================================================
         ' Assemble header
         ' =================================================
 
@@ -575,8 +606,15 @@ Public Class Form1
             .RowCount = 8,
             .Padding = New Padding(18, 8, 18, 12),
             .BackColor = UiTheme.BoardBackground(),
-            .AutoScroll = True
+            .AutoScroll = False
         }
+
+        body.ColumnStyles.Add(
+            New ColumnStyle(
+                SizeType.Percent,
+                100.0F
+            )
+        )
 
         ' The dashboard is built at runtime. At high Windows scaling, fonts
         ' grow even though hard-coded pixel row heights do not. Keep all
@@ -617,11 +655,7 @@ Public Class Form1
     True
 
         lblAttentionTitle.Font =
-    New Font(
-        Me.Font.FontFamily,
-        9.0F,
-        FontStyle.Bold
-    )
+            attentionTitleFont
 
         lblAttentionTitle.ForeColor =
     UiTheme.PrimaryText()
@@ -702,7 +736,7 @@ Public Class Form1
 
 
         txtBoardSearch.PlaceholderText =
-            "Search title, journal, or co-authors..."
+            "Search title, journal, or authors..."
 
         txtBoardSearch.Width =
             Math.Max(
@@ -785,8 +819,11 @@ Public Class Form1
         )
 
 
+        AddHandler boardSearchDebounceTimer.Tick,
+            AddressOf BoardSearchDebounceElapsed
+
         AddHandler txtBoardSearch.TextChanged,
-            AddressOf BoardFilterChanged
+            AddressOf BoardSearchTextChanged
 
         AddHandler cboStageFilter.SelectedIndexChanged,
             AddressOf BoardFilterChanged
@@ -1114,45 +1151,40 @@ Public Class Form1
 
         For Each manuscript As Manuscript In manuscripts
 
-            If HasOverdueRevision(
-            manuscript
-        ) Then
+            Dim snapshot As ManuscriptAttentionSnapshot =
+                GetAttentionSnapshot(
+                    manuscript
+                )
+
+            If snapshot.HasOverdueRevision Then
 
                 overdueCount += 1
 
             End If
 
 
-            If IsRevisionDueSoon(
-            manuscript
-        ) Then
+            If snapshot.IsRevisionDueSoon Then
 
                 dueSoonCount += 1
 
             End If
 
 
-            If IsLongWaitingManuscript(
-            manuscript
-        ) Then
+            If snapshot.IsLongWaitingManuscript Then
 
                 longReviewCount += 1
 
             End If
 
 
-            If HasMissingTargetJournal(
-            manuscript
-        ) Then
+            If snapshot.HasMissingTargetJournal Then
 
                 missingJournalCount += 1
 
             End If
 
 
-            If WasRecentlyRejected(
-            manuscript
-        ) Then
+            If snapshot.WasRecentlyRejected Then
 
                 recentRejectionCount += 1
 
@@ -1274,22 +1306,15 @@ Public Class Form1
 
 
         If activeAttentionFilter =
-        filter Then
+           filter Then
 
             label.Font =
-            New Font(
-                label.Font,
-                FontStyle.Bold Or
-                FontStyle.Underline
-            )
+                attentionActiveFont
 
         Else
 
             label.Font =
-            New Font(
-                label.Font,
-                FontStyle.Regular
-            )
+                attentionRegularFont
 
         End If
 
@@ -1303,42 +1328,26 @@ Public Class Form1
         insightColor =
         UiTheme.SecondaryText()
 
+        Dim snapshot As ManuscriptAttentionSnapshot =
+            GetAttentionSnapshot(
+                manuscript
+            )
+
 
         ' =================================================
         ' Overdue revision
         ' =================================================
 
-        If HasOverdueRevision(
-        manuscript
-    ) Then
+        If snapshot.HasOverdueRevision AndAlso
+           snapshot.OverdueDays.HasValue Then
 
-            Dim latestSubmission As JournalSubmission =
-            GetLatestSubmission(
-                manuscript
-            )
+            Dim overdueDays As Integer =
+                snapshot.OverdueDays.Value
 
-            Dim latestDecision As EditorialDecisionEvent =
-            GetLatestDecision(
-                latestSubmission
-            )
-
-            If latestDecision IsNot Nothing AndAlso
-           latestDecision.RevisionDeadline.HasValue Then
-
-                Dim overdueDays As Integer =
-                CInt(
-                    Math.Floor(
-                        (
-                            DateTime.Today -
-                            latestDecision.RevisionDeadline.Value.Date
-                        ).TotalDays
-                    )
-                )
-
-                insightColor =
+            insightColor =
                 UiTheme.DangerColor()
 
-                Return "Revision overdue by " &
+            Return "Revision overdue by " &
                 overdueDays.ToString() &
                 " day" &
                 If(
@@ -1347,8 +1356,6 @@ Public Class Form1
                     "s"
                 )
 
-            End If
-
         End If
 
 
@@ -1356,41 +1363,20 @@ Public Class Form1
         ' Revision due soon
         ' =================================================
 
-        If IsRevisionDueSoon(
-        manuscript
-    ) Then
+        If snapshot.IsRevisionDueSoon AndAlso
+           snapshot.RevisionDaysRemaining.HasValue Then
 
-            Dim latestSubmission As JournalSubmission =
-            GetLatestSubmission(
-                manuscript
-            )
+            Dim remainingDays As Integer =
+                snapshot.RevisionDaysRemaining.Value
 
-            Dim latestDecision As EditorialDecisionEvent =
-            GetLatestDecision(
-                latestSubmission
-            )
-
-            If latestDecision IsNot Nothing AndAlso
-           latestDecision.RevisionDeadline.HasValue Then
-
-                Dim remainingDays As Integer =
-                CInt(
-                    Math.Floor(
-                        (
-                            latestDecision.RevisionDeadline.Value.Date -
-                            DateTime.Today
-                        ).TotalDays
-                    )
-                )
-
-                insightColor =
+            insightColor =
                 UiTheme.WarningColor()
 
-                If remainingDays = 0 Then
-                    Return "Revision due today"
-                End If
+            If remainingDays = 0 Then
+                Return "Revision due today"
+            End If
 
-                Return "Revision due in " &
+            Return "Revision due in " &
                 remainingDays.ToString() &
                 " day" &
                 If(
@@ -1399,8 +1385,6 @@ Public Class Form1
                     "s"
                 )
 
-            End If
-
         End If
 
 
@@ -1408,35 +1392,15 @@ Public Class Form1
         ' Long review
         ' =================================================
 
-        If IsLongWaitingManuscript(
-        manuscript
-    ) Then
+        If snapshot.IsLongWaitingManuscript AndAlso
+           snapshot.WaitingDays.HasValue Then
 
-            Dim submission As JournalSubmission =
-            GetLatestSubmission(
-                manuscript
-            )
-
-            If submission IsNot Nothing Then
-
-                Dim waitingDays As Integer =
-                CInt(
-                    Math.Floor(
-                        (
-                            DateTime.Today -
-                            submission.SubmittedDate.Date
-                        ).TotalDays
-                    )
-                )
-
-                insightColor =
+            insightColor =
                 UiTheme.WarningColor()
 
-                Return "Waiting " &
-                waitingDays.ToString() &
+            Return "Waiting " &
+                snapshot.WaitingDays.Value.ToString() &
                 " days for a decision"
-
-            End If
 
         End If
 
@@ -1445,36 +1409,16 @@ Public Class Form1
         ' Recent rejection
         ' =================================================
 
-        If WasRecentlyRejected(
-        manuscript
-    ) Then
+        If snapshot.WasRecentlyRejected AndAlso
+           snapshot.RejectionDaysAgo.HasValue Then
 
-            Dim latestSubmission As JournalSubmission =
-            GetLatestSubmission(
-                manuscript
-            )
+            Dim daysAgo As Integer =
+                snapshot.RejectionDaysAgo.Value
 
-            Dim latestDecision As EditorialDecisionEvent =
-            GetLatestDecision(
-                latestSubmission
-            )
-
-            If latestDecision IsNot Nothing Then
-
-                Dim daysAgo As Integer =
-                CInt(
-                    Math.Floor(
-                        (
-                            DateTime.Today -
-                            latestDecision.DecisionDate.Date
-                        ).TotalDays
-                    )
-                )
-
-                insightColor =
+            insightColor =
                 UiTheme.DangerColor()
 
-                Return "Rejected " &
+            Return "Rejected " &
                 daysAgo.ToString() &
                 " day" &
                 If(
@@ -1484,8 +1428,6 @@ Public Class Form1
                 ) &
                 " ago • choose the next target"
 
-            End If
-
         End If
 
 
@@ -1493,9 +1435,7 @@ Public Class Form1
         ' Missing target
         ' =================================================
 
-        If HasMissingTargetJournal(
-        manuscript
-    ) Then
+        If snapshot.HasMissingTargetJournal Then
 
             insightColor =
             UiTheme.WarningColor()
@@ -1511,14 +1451,14 @@ Public Class Form1
 
         If manuscript.Location =
             ManuscriptLocation.Pipeline AndAlso
-       manuscript.RejectionCount >=
+       snapshot.RejectionCount >=
             appSettings.FileDrawerSuggestionThreshold Then
 
             insightColor =
             UiTheme.WarningColor()
 
             Return "Consider filing after " &
-            manuscript.RejectionCount.ToString() &
+            snapshot.RejectionCount.ToString() &
             " rejections"
 
         End If
@@ -1538,11 +1478,7 @@ Public Class Form1
         label.Anchor = AnchorStyles.Left
 
         label.Font =
-        New Font(
-            Me.Font.FontFamily,
-            10.0F,
-            FontStyle.Bold
-        )
+            sectionHeaderFont
 
         label.ForeColor =
         UiTheme.PrimaryText()
@@ -1612,6 +1548,32 @@ Public Class Form1
 
             End If
 
+            If Not String.IsNullOrWhiteSpace(
+                repository.LastManagedLibraryRecoveryWarning
+            ) Then
+
+                MessageBox.Show(
+                    Me,
+                    "Your manuscript database loaded successfully, but PaperRoute could not finish recovery or cleanup of an internal managed-version staging folder." &
+                    Environment.NewLine &
+                    Environment.NewLine &
+                    "PaperRoute will continue rather than treat this as database corruption." &
+                    Environment.NewLine &
+                    Environment.NewLine &
+                    "Some managed Version History files may appear as [FILE NOT FOUND] until the staging-folder problem is resolved." &
+                    Environment.NewLine &
+                    Environment.NewLine &
+                    repository.LastManagedLibraryRecoveryWarning,
+                    "Managed Version Recovery Warning",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                )
+
+                lblStatus.Text =
+                    "Library loaded with a managed-file recovery warning."
+
+            End If
+
             Return True
 
         Catch ex As Exception
@@ -1657,6 +1619,11 @@ Public Class Form1
 
             authorLibrary =
                 authorRepository.Load()
+
+            authorSearchIndex =
+                New AuthorLibrarySearchIndex(
+                    authorLibrary
+                )
 
             If authorRepository.LastLoadRecoveredFromBackup Then
 
@@ -1756,9 +1723,17 @@ Public Class Form1
 )
 
         panel.Dock = DockStyle.Fill
-        panel.FlowDirection = FlowDirection.TopDown
-        panel.WrapContents = False
+
+        ' Each manuscript card is deliberately almost the full shelf width.
+        ' Left-to-right wrapping therefore produces one card per visual row,
+        ' while avoiding FlowLayoutPanel's phantom horizontal scroll extent
+        ' that can occur with TopDown + WrapContents=False + AutoScroll=True.
+        panel.FlowDirection = FlowDirection.LeftToRight
+        panel.WrapContents = True
+
         panel.AutoScroll = True
+        panel.AutoScrollMargin = New Size(0, 0)
+        panel.AutoScrollMinSize = Size.Empty
         panel.AutoSize = False
         panel.Padding = New Padding(4)
         panel.BackColor = UiTheme.BoardBackground()
@@ -1766,8 +1741,8 @@ Public Class Form1
 
     End Sub
 
-
     ' =====================================================
+    ' Render manuscripts    ' =====================================================
     ' Render manuscripts
     ' =====================================================
 
@@ -2009,10 +1984,27 @@ Public Class Form1
     End Sub
 
 
-    Private Sub BoardFilterChanged(
+    Private Sub BoardSearchTextChanged(
         sender As Object,
         e As EventArgs
     )
+
+        If suppressBoardFilterEvents Then
+            Return
+        End If
+
+        boardSearchDebounceTimer.Stop()
+        boardSearchDebounceTimer.Start()
+
+    End Sub
+
+
+    Private Sub BoardSearchDebounceElapsed(
+        sender As Object,
+        e As EventArgs
+    )
+
+        boardSearchDebounceTimer.Stop()
 
         If suppressBoardFilterEvents Then
             Return
@@ -2023,22 +2015,48 @@ Public Class Form1
     End Sub
 
 
+    Private Sub BoardFilterChanged(
+        sender As Object,
+        e As EventArgs
+    )
+
+        If suppressBoardFilterEvents Then
+            Return
+        End If
+
+        boardSearchDebounceTimer.Stop()
+        RenderManuscripts()
+
+    End Sub
+
+
     Private Sub ClearBoardFilters(
         sender As Object,
         e As EventArgs
     )
 
-        txtBoardSearch.Text =
-            String.Empty
+        boardSearchDebounceTimer.Stop()
+        suppressBoardFilterEvents = True
 
-        cboStageFilter.SelectedIndex =
-            0
+        Try
 
-        cboBoardSort.SelectedIndex =
-            0
+            txtBoardSearch.Text =
+                String.Empty
 
-        activeAttentionFilter =
-    AttentionFilter.None
+            cboStageFilter.SelectedIndex =
+                0
+
+            cboBoardSort.SelectedIndex =
+                0
+
+            activeAttentionFilter =
+                AttentionFilter.None
+
+        Finally
+
+            suppressBoardFilterEvents = False
+
+        End Try
 
         RenderManuscripts()
 
@@ -2106,81 +2124,8 @@ Public Class Form1
         manuscript As Manuscript
     ) As String
 
-        If manuscript Is Nothing OrElse
-           manuscript.Authors Is Nothing OrElse
-           manuscript.Authors.Count = 0 Then
-
-            Return String.Empty
-
-        End If
-
-        Dim names As New List(Of String)()
-
-        For Each authorLink As ManuscriptAuthor In
-            manuscript.Authors
-
-            If authorLink Is Nothing Then
-                Continue For
-            End If
-
-            Dim author As AuthorRecord =
-                authorLibrary.Authors.
-                    FirstOrDefault(
-                        Function(item)
-                            Return item.Id =
-                                authorLink.AuthorId
-                        End Function
-                    )
-
-            If author IsNot Nothing Then
-
-                names.Add(
-                    author.DisplayName
-                )
-
-                If Not String.IsNullOrWhiteSpace(
-                    author.Orcid
-                ) Then
-
-                    names.Add(
-                        author.Orcid
-                    )
-
-                End If
-
-            End If
-
-            If authorLink.AffiliationIds IsNot Nothing Then
-
-                For Each affiliationId As Guid In
-                    authorLink.AffiliationIds
-
-                    Dim affiliation As AffiliationRecord =
-                        authorLibrary.Affiliations.
-                            FirstOrDefault(
-                                Function(item)
-                                    Return item.Id =
-                                        affiliationId
-                                End Function
-                            )
-
-                    If affiliation IsNot Nothing Then
-
-                        names.Add(
-                            affiliation.DisplayName
-                        )
-
-                    End If
-
-                Next
-
-            End If
-
-        Next
-
-        Return String.Join(
-            " ",
-            names
+        Return authorSearchIndex.BuildSearchText(
+            manuscript
         )
 
     End Function
@@ -2192,6 +2137,11 @@ Public Class Form1
 
         Dim query As String =
         txtBoardSearch.Text.Trim()
+
+        Dim snapshot As ManuscriptAttentionSnapshot =
+            GetAttentionSnapshot(
+                manuscript
+            )
 
 
         If Not String.IsNullOrWhiteSpace(
@@ -2205,10 +2155,6 @@ Public Class Form1
             ) OrElse
             ContainsSearchText(
                 manuscript.TargetJournal,
-                query
-            ) OrElse
-            ContainsSearchText(
-                manuscript.CoAuthors,
                 query
             ) OrElse
             ContainsSearchText(
@@ -2244,9 +2190,7 @@ Public Class Form1
 
             Case AttentionFilter.OverdueRevision
 
-                If Not HasOverdueRevision(
-                manuscript
-            ) Then
+                If Not snapshot.HasOverdueRevision Then
 
                     Return False
 
@@ -2255,9 +2199,7 @@ Public Class Form1
 
             Case AttentionFilter.RevisionDueSoon
 
-                If Not IsRevisionDueSoon(
-                manuscript
-            ) Then
+                If Not snapshot.IsRevisionDueSoon Then
 
                     Return False
 
@@ -2266,9 +2208,7 @@ Public Class Form1
 
             Case AttentionFilter.LongReview
 
-                If Not IsLongWaitingManuscript(
-                manuscript
-            ) Then
+                If Not snapshot.IsLongWaitingManuscript Then
 
                     Return False
 
@@ -2277,9 +2217,7 @@ Public Class Form1
 
             Case AttentionFilter.MissingTargetJournal
 
-                If Not HasMissingTargetJournal(
-                manuscript
-            ) Then
+                If Not snapshot.HasMissingTargetJournal Then
 
                     Return False
 
@@ -2288,9 +2226,7 @@ Public Class Form1
 
             Case AttentionFilter.RecentRejection
 
-                If Not WasRecentlyRejected(
-                manuscript
-            ) Then
+                If Not snapshot.WasRecentlyRejected Then
 
                     Return False
 
@@ -2300,19 +2236,6 @@ Public Class Form1
 
 
         Return True
-
-    End Function
-
-    Private Function IsRevisionDueSoon(
-    manuscript As Manuscript
-) As Boolean
-
-        Return ManuscriptAttentionService.
-        IsRevisionDueSoon(
-            manuscript,
-            DateTime.Today,
-            appSettings.RevisionWarningDays
-        )
 
     End Function
 
@@ -2412,8 +2335,12 @@ Public Class Form1
         second As Manuscript
     ) As Integer
 
-        Return second.RejectionCount.CompareTo(
-            first.RejectionCount
+        Return GetAttentionSnapshot(
+            second
+        ).RejectionCount.CompareTo(
+            GetAttentionSnapshot(
+                first
+            ).RejectionCount
         )
 
     End Function
@@ -2424,8 +2351,12 @@ Public Class Form1
         second As Manuscript
     ) As Integer
 
-        Return first.RejectionCount.CompareTo(
-            second.RejectionCount
+        Return GetAttentionSnapshot(
+            first
+        ).RejectionCount.CompareTo(
+            GetAttentionSnapshot(
+                second
+            ).RejectionCount
         )
 
     End Function
@@ -2480,85 +2411,229 @@ Public Class Form1
 
     End Function
 
-    Private Function GetLatestSubmission(
-    manuscript As Manuscript
-) As JournalSubmission
+    Private Function BuildAttentionSnapshots(
+        today As DateTime
+    ) As Dictionary(Of Guid, ManuscriptAttentionSnapshot)
 
-        Return ManuscriptAttentionService.
-        GetLatestSubmission(
-            manuscript
-        )
+        Dim result As New Dictionary(
+            Of Guid,
+            ManuscriptAttentionSnapshot
+        )()
 
-    End Function
+        For Each manuscript As Manuscript In manuscripts
 
-    Private Function GetLatestDecision(
-    submission As JournalSubmission
-) As EditorialDecisionEvent
+            If manuscript Is Nothing Then
+                Continue For
+            End If
 
-        Return ManuscriptAttentionService.
-        GetLatestDecision(
-            submission
-        )
+            result(manuscript.Id) =
+                ManuscriptAttentionService.Evaluate(
+                    manuscript,
+                    today,
+                    appSettings.RevisionWarningDays,
+                    appSettings.LongReviewThresholdDays,
+                    appSettings.RecentRejectionThresholdDays
+                )
 
-    End Function
+        Next
 
-    Private Function HasOverdueRevision(
-    manuscript As Manuscript
-) As Boolean
-
-        Return ManuscriptAttentionService.
-        HasOverdueRevision(
-            manuscript,
-            DateTime.Today
-        )
+        Return result
 
     End Function
 
-    Private Function IsLongWaitingManuscript(
-    manuscript As Manuscript
-) As Boolean
 
-        Return ManuscriptAttentionService.
-        IsLongWaitingManuscript(
-            manuscript,
-            DateTime.Today,
-            appSettings.LongReviewThresholdDays
-        )
+    Private Function GetAttentionSnapshot(
+        manuscript As Manuscript
+    ) As ManuscriptAttentionSnapshot
+
+        If manuscript Is Nothing Then
+            Return New ManuscriptAttentionSnapshot()
+        End If
+
+        Dim snapshot As ManuscriptAttentionSnapshot =
+            Nothing
+
+        If currentAttentionSnapshots.TryGetValue(
+            manuscript.Id,
+            snapshot
+        ) Then
+
+            Return snapshot
+
+        End If
+
+        snapshot =
+            ManuscriptAttentionService.Evaluate(
+                manuscript,
+                DateTime.Today,
+                appSettings.RevisionWarningDays,
+                appSettings.LongReviewThresholdDays,
+                appSettings.RecentRejectionThresholdDays
+            )
+
+        currentAttentionSnapshots(manuscript.Id) =
+            snapshot
+
+        Return snapshot
 
     End Function
 
-    Private Function HasMissingTargetJournal(
-    manuscript As Manuscript
-) As Boolean
 
-        Return ManuscriptAttentionService.
-        HasMissingTargetJournal(
-            manuscript
+    Private Sub ClearAndDisposeControls(
+        panel As Control
+    )
+
+        While panel.Controls.Count > 0
+
+            Dim child As Control =
+                panel.Controls(0)
+
+            panel.Controls.RemoveAt(
+                0
+            )
+
+            child.Dispose()
+
+        End While
+
+    End Sub
+
+
+    Private Sub ResetSharedDashboardFonts()
+
+        DisposeSharedDashboardFonts()
+
+        cardTitleFont =
+            New Font(
+                Me.Font.FontFamily,
+                11.0F,
+                FontStyle.Bold
+            )
+
+        cardBadgeFont =
+            New Font(
+                Me.Font.FontFamily,
+                8.5F,
+                FontStyle.Bold
+            )
+
+        cardInsightFont =
+            New Font(
+                Me.Font.FontFamily,
+                9.0F,
+                FontStyle.Bold
+            )
+
+        routeLinkFont =
+            New Font(
+                Me.Font,
+                FontStyle.Underline
+            )
+
+        attentionTitleFont =
+            New Font(
+                Me.Font.FontFamily,
+                9.0F,
+                FontStyle.Bold
+            )
+
+        attentionRegularFont =
+            New Font(
+                Me.Font,
+                FontStyle.Regular
+            )
+
+        attentionActiveFont =
+            New Font(
+                Me.Font,
+                FontStyle.Bold Or
+                FontStyle.Underline
+            )
+
+        sectionHeaderFont =
+            New Font(
+                Me.Font.FontFamily,
+                10.0F,
+                FontStyle.Bold
+            )
+
+    End Sub
+
+
+    Private Sub DisposeSharedDashboardFonts()
+
+        For Each font As Font In New Font() {
+            cardTitleFont,
+            cardBadgeFont,
+            cardInsightFont,
+            routeLinkFont,
+            attentionTitleFont,
+            attentionRegularFont,
+            attentionActiveFont,
+            sectionHeaderFont
+        }
+
+            If font IsNot Nothing Then
+                font.Dispose()
+            End If
+
+        Next
+
+        cardTitleFont = Nothing
+        cardBadgeFont = Nothing
+        cardInsightFont = Nothing
+        routeLinkFont = Nothing
+        attentionTitleFont = Nothing
+        attentionRegularFont = Nothing
+        attentionActiveFont = Nothing
+        sectionHeaderFont = Nothing
+
+    End Sub
+
+
+    Protected Overrides Sub OnFormClosed(
+        e As FormClosedEventArgs
+    )
+
+        boardSearchDebounceTimer.Stop()
+        boardSearchDebounceTimer.Dispose()
+        DisposeSharedDashboardFonts()
+
+        MyBase.OnFormClosed(
+            e
         )
 
-    End Function
+    End Sub
 
-    Private Function WasRecentlyRejected(
-    manuscript As Manuscript
-) As Boolean
-
-        Return ManuscriptAttentionService.
-        WasRecentlyRejected(
-            manuscript,
-            DateTime.Today,
-            appSettings.RecentRejectionThresholdDays
-        )
-
-    End Function
 
     Private Sub RenderManuscripts()
+
+        boardSearchDebounceTimer.Stop()
+
+        currentAttentionSnapshots =
+            BuildAttentionSnapshots(
+                DateTime.Today
+            )
 
         RefreshStageFilterItems()
         RefreshAttentionDashboard()
 
-        pipelinePanel.Controls.Clear()
-        publishedPanel.Controls.Clear()
-        fileDrawerPanel.Controls.Clear()
+        Me.SuspendLayout()
+        pipelinePanel.SuspendLayout()
+        publishedPanel.SuspendLayout()
+        fileDrawerPanel.SuspendLayout()
+
+        ClearAndDisposeControls(
+            pipelinePanel
+        )
+
+        ClearAndDisposeControls(
+            publishedPanel
+        )
+
+        ClearAndDisposeControls(
+            fileDrawerPanel
+        )
 
 
         ' =================================================
@@ -2780,13 +2855,21 @@ Public Class Form1
     )
 
 
-        pipelinePanel.PerformLayout()
-        publishedPanel.PerformLayout()
-        fileDrawerPanel.PerformLayout()
+        pipelinePanel.ResumeLayout(
+            True
+        )
 
-        pipelinePanel.Invalidate(True)
-        publishedPanel.Invalidate(True)
-        fileDrawerPanel.Invalidate(True)
+        publishedPanel.ResumeLayout(
+            True
+        )
+
+        fileDrawerPanel.ResumeLayout(
+            True
+        )
+
+        Me.ResumeLayout(
+            True
+        )
 
     End Sub
 
@@ -2828,37 +2911,24 @@ Public Class Form1
 
 
     Private Function CreateManuscriptCard(
-    manuscript As Manuscript,
-    parentPanel As FlowLayoutPanel
-) As Panel
+        manuscript As Manuscript,
+        parentPanel As FlowLayoutPanel
+    ) As Panel
 
         Dim stageText As String =
             FormatStage(
                 manuscript.CurrentStage
             )
 
-        Dim titleFont As New Font(
-            Me.Font.FontFamily,
-            11.0F,
-            FontStyle.Bold
-        )
-
-        Dim badgeFont As New Font(
-            Me.Font.FontFamily,
-            8.5F,
-            FontStyle.Bold
-        )
-
-        Dim insightFont As New Font(
-            Me.Font.FontFamily,
-            9.0F,
-            FontStyle.Bold
-        )
+        Dim snapshot As ManuscriptAttentionSnapshot =
+            GetAttentionSnapshot(
+                manuscript
+            )
 
         Dim titleHeight As Integer =
             TextRenderer.MeasureText(
                 "Ag",
-                titleFont
+                cardTitleFont
             ).Height
 
         Dim bodyTextHeight As Integer =
@@ -2872,16 +2942,22 @@ Public Class Form1
                 25,
                 TextRenderer.MeasureText(
                     stageText.ToUpperInvariant(),
-                    badgeFont
+                    cardBadgeFont
                 ).Height + 7
             )
 
         Dim buttonHeight As Integer =
-            GetResponsiveButtonHeight(34)
+            GetResponsiveButtonHeight(
+                34
+            )
 
-        Dim titleTop As Integer = 13
+        Dim titleTop As Integer =
+            13
+
         Dim secondRowTop As Integer =
-            titleTop + titleHeight + 6
+            titleTop +
+            titleHeight +
+            6
 
         Dim secondRowHeight As Integer =
             Math.Max(
@@ -2890,7 +2966,9 @@ Public Class Form1
             )
 
         Dim statsTop As Integer =
-            secondRowTop + secondRowHeight + 8
+            secondRowTop +
+            secondRowHeight +
+            8
 
         Dim insightColor As Color
 
@@ -2900,11 +2978,13 @@ Public Class Form1
                 insightColor
             )
 
-        Dim cardHeight As Integer =
-            statsTop + bodyTextHeight + 16
+        Dim insightTop As Integer =
+            statsTop +
+            bodyTextHeight +
+            8
 
-        Dim insightTop As Integer = 0
-        Dim insightHeight As Integer = 0
+        Dim insightHeight As Integer =
+            0
 
         If Not String.IsNullOrWhiteSpace(
             insightText
@@ -2913,32 +2993,41 @@ Public Class Form1
             insightHeight =
                 TextRenderer.MeasureText(
                     "Ag",
-                    insightFont
+                    cardInsightFont
                 ).Height
-
-            insightTop =
-                statsTop + bodyTextHeight + 8
-
-            cardHeight =
-                insightTop + insightHeight + 16
 
         End If
 
-        cardHeight =
-            Math.Max(
-                cardHeight,
-                secondRowTop + buttonHeight + 16
+        Dim actionsTop As Integer =
+            If(
+                insightHeight > 0,
+                insightTop +
+                insightHeight +
+                10,
+                statsTop +
+                bodyTextHeight +
+                10
             )
 
         Dim card As New RoundedPanel With {
-            .Height = cardHeight,
-            .Width = GetCardWidth(parentPanel),
-            .BackColor = UiTheme.CardBackground(),
-            .BorderColor = UiTheme.CardBorder(),
-            .BorderThickness = 1.0F,
-            .CornerRadius = 14,
-            .Margin = New Padding(4, 4, 4, 4),
-            .Cursor = Cursors.Hand
+            .Width =
+                GetCardWidth(
+                    parentPanel
+                ),
+            .BackColor =
+                UiTheme.CardBackground(),
+            .BorderColor =
+                UiTheme.CardBorder(),
+            .BorderThickness =
+                1.0F,
+            .CornerRadius =
+                14,
+            .Margin =
+                New Padding(
+                    4
+                ),
+            .Cursor =
+                Cursors.Hand
         }
 
 
@@ -2947,239 +3036,214 @@ Public Class Form1
         ' =================================================
 
         Dim lblTitle As New Label With {
-            .Text = manuscript.Title,
-            .AutoEllipsis = True,
-            .Left = 18,
-            .Top = titleTop,
-            .Height = titleHeight + 2,
-            .Font = titleFont,
-            .ForeColor = UiTheme.PrimaryText(),
-            .Cursor = Cursors.Hand
+            .Text =
+                manuscript.Title,
+            .AutoEllipsis =
+                True,
+            .Left =
+                18,
+            .Top =
+                titleTop,
+            .Height =
+                titleHeight + 2,
+            .Font =
+                cardTitleFont,
+            .ForeColor =
+                UiTheme.PrimaryText(),
+            .Cursor =
+                Cursors.Hand
         }
 
 
         ' =================================================
-        ' Stage pill
+        ' Stage + journal
         ' =================================================
 
         Dim badgeWidth As Integer =
             TextRenderer.MeasureText(
                 stageText.ToUpperInvariant(),
-                badgeFont
+                cardBadgeFont
             ).Width + 22
 
         Dim stageBadge As New PillLabel With {
-            .Text = stageText.ToUpperInvariant(),
-            .Left = 18,
-            .Top = secondRowTop,
-            .Width = badgeWidth,
-            .Height = badgeHeight,
-            .Font = badgeFont,
-            .BackColor = UiTheme.StageBackground(manuscript.CurrentStage),
-            .ForeColor = UiTheme.StageForeground(manuscript.CurrentStage)
+            .Text =
+                stageText.ToUpperInvariant(),
+            .Left =
+                18,
+            .Top =
+                secondRowTop,
+            .Width =
+                badgeWidth,
+            .Height =
+                badgeHeight,
+            .Font =
+                cardBadgeFont,
+            .BackColor =
+                UiTheme.StageBackground(
+                    manuscript.CurrentStage
+                ),
+            .ForeColor =
+                UiTheme.StageForeground(
+                    manuscript.CurrentStage
+                )
         }
 
-
-        ' =================================================
-        ' Journal
-        ' =================================================
-
-        Dim journalText As String
-
-        If String.IsNullOrWhiteSpace(
-            manuscript.TargetJournal
-        ) Then
-
-            journalText =
-                "Target journal not set"
-
-        Else
-
-            journalText =
+        Dim journalText As String =
+            If(
+                String.IsNullOrWhiteSpace(
+                    manuscript.TargetJournal
+                ),
+                "Target journal not set",
                 manuscript.TargetJournal
-
-        End If
+            )
 
         Dim lblJournal As New Label With {
-            .Text = journalText,
-            .AutoEllipsis = True,
-            .Left = 18 + badgeWidth + 10,
-            .Top = secondRowTop + Math.Max(0, (secondRowHeight - bodyTextHeight) \ 2),
-            .Height = bodyTextHeight + 3,
-            .ForeColor = UiTheme.SecondaryText(),
-            .Cursor = Cursors.Hand
+            .Text =
+                journalText,
+            .AutoEllipsis =
+                True,
+            .Left =
+                18 +
+                badgeWidth +
+                10,
+            .Top =
+                secondRowTop +
+                Math.Max(
+                    0,
+                    (
+                        secondRowHeight -
+                        bodyTextHeight
+                    ) \ 2
+                ),
+            .Height =
+                bodyTextHeight + 3,
+            .ForeColor =
+                UiTheme.SecondaryText(),
+            .Cursor =
+                Cursors.Hand
         }
 
 
         ' =================================================
-        ' Stats
+        ' Stats + Route
         ' =================================================
 
         Dim lblStats As New Label With {
             .Text =
-                manuscript.SubmissionCount.ToString() &
+                snapshot.SubmissionCount.ToString() &
                 " submissions  •  " &
-                manuscript.RejectionCount.ToString() &
+                snapshot.RejectionCount.ToString() &
                 " rejections",
-            .AutoSize = True,
-            .Left = 18,
-            .Top = statsTop,
-            .ForeColor = UiTheme.PrimaryText(),
-            .Cursor = Cursors.Hand
+            .AutoEllipsis =
+                True,
+            .AutoSize =
+                False,
+            .Left =
+                18,
+            .Top =
+                statsTop,
+            .Height =
+                bodyTextHeight + 4,
+            .ForeColor =
+                UiTheme.PrimaryText(),
+            .Cursor =
+                Cursors.Hand
+        }
+
+        Dim routeLinkText As String =
+            "View route →"
+
+        Dim routeLinkWidth As Integer =
+            TextRenderer.MeasureText(
+                routeLinkText,
+                Me.Font
+            ).Width + 4
+
+        Dim lblRoute As New Label With {
+            .Text =
+                routeLinkText,
+            .AutoSize =
+                False,
+            .Width =
+                routeLinkWidth,
+            .Height =
+                bodyTextHeight + 4,
+            .Top =
+                statsTop,
+            .TextAlign =
+                ContentAlignment.MiddleRight,
+            .ForeColor =
+                UiTheme.AccentColor(),
+            .Cursor =
+                Cursors.Hand,
+            .Font =
+                routeLinkFont
         }
 
 
         ' =================================================
-        ' Double-click behavior
+        ' Attention insight
         ' =================================================
 
-        AddHandler card.DoubleClick,
-            Sub(sender, e)
-                OpenManuscript(manuscript)
-            End Sub
+        Dim lblInsight As Label =
+            Nothing
 
-        AddHandler lblTitle.DoubleClick,
-            Sub(sender, e)
-                OpenManuscript(manuscript)
-            End Sub
+        If Not String.IsNullOrWhiteSpace(
+            insightText
+        ) Then
 
-        AddHandler lblJournal.DoubleClick,
-            Sub(sender, e)
-                OpenManuscript(manuscript)
-            End Sub
-
-        AddHandler lblStats.DoubleClick,
-            Sub(sender, e)
-                OpenManuscript(manuscript)
-            End Sub
-
-
-        ' =================================================
-        ' Delete
-        ' =================================================
-
-        Dim btnDelete As New Button With {
-            .Text = "Delete",
-            .Width = GetResponsiveButtonWidth("Delete", 88),
-            .Height = buttonHeight,
-            .Top = secondRowTop,
-            .Anchor = AnchorStyles.Top Or AnchorStyles.Right
-        }
-
-        btnDelete.Left =
-            card.ClientSize.Width -
-            btnDelete.Width -
-            18
-
-        StyleCardButton(
-            btnDelete,
-            UiTheme.DangerColor()
-        )
-
-        AddHandler btnDelete.Click,
-            Sub(sender, e)
-                DeleteManuscript(manuscript)
-            End Sub
-
-        Dim nextRight As Integer =
-            btnDelete.Left - 10
-
-
-        ' =================================================
-        ' Location-specific action
-        ' =================================================
-
-        If manuscript.Location =
-            ManuscriptLocation.Pipeline Then
-
-            Dim btnMoveToDrawer As New Button With {
-                .Text = "Move to File Drawer",
-                .Height = buttonHeight,
-                .Top = secondRowTop,
-                .Anchor = AnchorStyles.Top Or AnchorStyles.Right
-            }
-
-            btnMoveToDrawer.Width =
-                GetResponsiveButtonWidth(
-                    btnMoveToDrawer.Text,
-                    175
-                )
-
-            btnMoveToDrawer.Left =
-                nextRight -
-                btnMoveToDrawer.Width
-
-            nextRight =
-                btnMoveToDrawer.Left - 10
-
-            StyleCardButton(
-                btnMoveToDrawer,
-                UiTheme.WarningColor()
-            )
-
-            AddHandler btnMoveToDrawer.Click,
-                Sub(sender, e)
-                    MoveToFileDrawer(manuscript)
-                End Sub
-
-            card.Controls.Add(
-                btnMoveToDrawer
-            )
-
-        ElseIf manuscript.Location =
-            ManuscriptLocation.FileDrawer Then
-
-            Dim btnRestoreToPipeline As New Button With {
-                .Text = "Restore to Pipeline",
-                .Height = buttonHeight,
-                .Top = secondRowTop,
-                .Anchor = AnchorStyles.Top Or AnchorStyles.Right
-            }
-
-            btnRestoreToPipeline.Width =
-                GetResponsiveButtonWidth(
-                    btnRestoreToPipeline.Text,
-                    175
-                )
-
-            btnRestoreToPipeline.Left =
-                nextRight -
-                btnRestoreToPipeline.Width
-
-            nextRight =
-                btnRestoreToPipeline.Left - 10
-
-            StyleCardButton(
-                btnRestoreToPipeline,
-                UiTheme.SuccessColor()
-            )
-
-            AddHandler btnRestoreToPipeline.Click,
-                Sub(sender, e)
-                    RestoreToPipeline(manuscript)
-                End Sub
-
-            card.Controls.Add(
-                btnRestoreToPipeline
-            )
+            lblInsight =
+                New Label With {
+                    .Text =
+                        insightText,
+                    .AutoEllipsis =
+                        True,
+                    .AutoSize =
+                        False,
+                    .Left =
+                        18,
+                    .Top =
+                        insightTop,
+                    .Height =
+                        insightHeight + 2,
+                    .ForeColor =
+                        insightColor,
+                    .Font =
+                        cardInsightFont
+                }
 
         End If
 
+
         ' =================================================
-        ' Open
+        ' Actions
+        '
+        ' The supported main-window minimum leaves room for the three
+        ' manuscript actions. A deterministic table keeps every button
+        ' inside the visible card instead of letting FlowLayout preferred
+        ' sizing create an invisible wider action surface.
         ' =================================================
 
         Dim btnOpen As New Button With {
-            .Text = "Open",
-            .Width = GetResponsiveButtonWidth("Open", 88),
-            .Height = buttonHeight,
-            .Top = secondRowTop,
-            .Anchor = AnchorStyles.Top Or AnchorStyles.Right
+            .Text =
+                "Open",
+            .Width =
+                GetResponsiveButtonWidth(
+                    "Open",
+                    88
+                ),
+            .Height =
+                buttonHeight,
+            .Anchor =
+                AnchorStyles.Right,
+            .Margin =
+                New Padding(
+                    5,
+                    0,
+                    5,
+                    6
+                )
         }
-
-        btnOpen.Left =
-            nextRight -
-            btnOpen.Width
 
         StyleCardButton(
             btnOpen,
@@ -3188,76 +3252,376 @@ Public Class Form1
 
         AddHandler btnOpen.Click,
             Sub(sender, e)
-                OpenManuscript(manuscript)
+                OpenManuscript(
+                    manuscript
+                )
             End Sub
 
+        Dim locationButton As Button =
+            Nothing
 
-        ' =================================================
-        ' Responsive text width
-        ' =================================================
+        If manuscript.Location =
+           ManuscriptLocation.Pipeline Then
 
-        Dim textWidth As Integer =
-            Math.Max(
-                180,
-                btnOpen.Left - 36
+            locationButton =
+                New Button With {
+                    .Text =
+                        "Move to File Drawer",
+                    .Width =
+                        GetResponsiveButtonWidth(
+                            "Move to File Drawer",
+                            175
+                        ),
+                    .Height =
+                        buttonHeight,
+                    .Anchor =
+                        AnchorStyles.Right,
+                    .Margin =
+                        New Padding(
+                            5,
+                            0,
+                            5,
+                            6
+                        )
+                }
+
+            StyleCardButton(
+                locationButton,
+                UiTheme.WarningColor()
             )
 
-        lblTitle.Width =
-            textWidth
+            AddHandler locationButton.Click,
+                Sub(sender, e)
+                    MoveToFileDrawer(
+                        manuscript
+                    )
+                End Sub
 
-        lblJournal.Width =
-            Math.Max(
-                70,
-                textWidth -
-                badgeWidth -
-                10
+        ElseIf manuscript.Location =
+               ManuscriptLocation.FileDrawer Then
+
+            locationButton =
+                New Button With {
+                    .Text =
+                        "Restore to Pipeline",
+                    .Width =
+                        GetResponsiveButtonWidth(
+                            "Restore to Pipeline",
+                            175
+                        ),
+                    .Height =
+                        buttonHeight,
+                    .Anchor =
+                        AnchorStyles.Right,
+                    .Margin =
+                        New Padding(
+                            5,
+                            0,
+                            5,
+                            6
+                        )
+                }
+
+            StyleCardButton(
+                locationButton,
+                UiTheme.SuccessColor()
             )
 
-        lblTitle.Anchor =
-            AnchorStyles.Top Or
-            AnchorStyles.Left Or
-            AnchorStyles.Right
+            AddHandler locationButton.Click,
+                Sub(sender, e)
+                    RestoreToPipeline(
+                        manuscript
+                    )
+                End Sub
 
-        lblJournal.Anchor =
-            AnchorStyles.Top Or
-            AnchorStyles.Left Or
-            AnchorStyles.Right
+        End If
+
+        Dim btnDelete As New Button With {
+            .Text =
+                "Delete",
+            .Width =
+                GetResponsiveButtonWidth(
+                    "Delete",
+                    88
+                ),
+            .Height =
+                buttonHeight,
+            .Anchor =
+                AnchorStyles.Right,
+            .Margin =
+                New Padding(
+                    5,
+                    0,
+                    5,
+                    6
+                )
+        }
+
+        StyleCardButton(
+            btnDelete,
+            UiTheme.DangerColor()
+        )
+
+        AddHandler btnDelete.Click,
+            Sub(sender, e)
+                DeleteManuscript(
+                    manuscript
+                )
+            End Sub
+
+        Dim actionButtonCount As Integer =
+            If(
+                locationButton Is Nothing,
+                2,
+                3
+            )
+
+        Dim actionPanel As New TableLayoutPanel With {
+            .Dock =
+                DockStyle.Bottom,
+            .ColumnCount =
+                actionButtonCount + 1,
+            .RowCount =
+                1,
+            .Height =
+                buttonHeight + 14,
+            .Padding =
+                New Padding(
+                    18,
+                    0,
+                    18,
+                    8
+                ),
+            .Margin =
+                New Padding(
+                    0
+                ),
+            .BackColor =
+                UiTheme.CardBackground()
+        }
+
+        actionPanel.RowStyles.Add(
+            New RowStyle(
+                SizeType.Percent,
+                100
+            )
+        )
+
+        actionPanel.ColumnStyles.Add(
+            New ColumnStyle(
+                SizeType.Percent,
+                100
+            )
+        )
+
+        For actionColumn As Integer =
+            1 To actionButtonCount
+
+            actionPanel.ColumnStyles.Add(
+                New ColumnStyle(
+                    SizeType.AutoSize
+                )
+            )
+
+        Next
+
+        Dim nextActionColumn As Integer =
+            1
+
+        actionPanel.Controls.Add(
+            btnOpen,
+            nextActionColumn,
+            0
+        )
+
+        nextActionColumn +=
+            1
+
+        If locationButton IsNot Nothing Then
+
+            actionPanel.Controls.Add(
+                locationButton,
+                nextActionColumn,
+                0
+            )
+
+            nextActionColumn +=
+                1
+
+        End If
+
+        actionPanel.Controls.Add(
+            btnDelete,
+            nextActionColumn,
+            0
+        )
+
+
+        ' =================================================
+        ' Navigation behavior
+        ' =================================================
+
+        AddHandler card.DoubleClick,
+            Sub(sender, e)
+                OpenManuscript(
+                    manuscript
+                )
+            End Sub
+
+        AddHandler lblTitle.DoubleClick,
+            Sub(sender, e)
+                OpenManuscript(
+                    manuscript
+                )
+            End Sub
+
+        AddHandler lblJournal.DoubleClick,
+            Sub(sender, e)
+                OpenManuscript(
+                    manuscript
+                )
+            End Sub
+
+        AddHandler lblStats.DoubleClick,
+            Sub(sender, e)
+                OpenManuscript(
+                    manuscript
+                )
+            End Sub
+
+        AddHandler lblRoute.Click,
+            Sub(sender, e)
+                OpenRouteView(
+                    manuscript
+                )
+            End Sub
 
 
         ' =================================================
         ' Assemble
         ' =================================================
 
-        card.Controls.Add(lblTitle)
-        card.Controls.Add(stageBadge)
-        card.Controls.Add(lblJournal)
-        card.Controls.Add(lblStats)
-        card.Controls.Add(btnOpen)
-        card.Controls.Add(btnDelete)
+        card.Controls.Add(
+            lblTitle
+        )
 
+        card.Controls.Add(
+            stageBadge
+        )
 
-        ' =================================================
-        ' Attention insight
-        ' =================================================
+        card.Controls.Add(
+            lblJournal
+        )
 
-        If Not String.IsNullOrWhiteSpace(
-            insightText
-        ) Then
+        card.Controls.Add(
+            lblStats
+        )
 
-            Dim lblInsight As New Label With {
-                .Text = insightText,
-                .AutoSize = True,
-                .Left = 18,
-                .Top = insightTop,
-                .ForeColor = insightColor,
-                .Font = insightFont
-            }
+        card.Controls.Add(
+            lblRoute
+        )
+
+        If lblInsight IsNot Nothing Then
 
             card.Controls.Add(
                 lblInsight
             )
 
         End If
+
+        card.Controls.Add(
+            actionPanel
+        )
+
+
+        ' =================================================
+        ' Responsive layout
+        ' =================================================
+
+        Dim applyingLayout As Boolean =
+            False
+
+        Dim applyResponsiveLayout As Action =
+            Sub()
+
+                If applyingLayout Then
+                    Return
+                End If
+
+                applyingLayout =
+                    True
+
+                Try
+
+                    Dim contentWidth As Integer =
+                        Math.Max(
+                            1,
+                            card.ClientSize.Width -
+                            36
+                        )
+
+                    lblTitle.Width =
+                        contentWidth
+
+                    lblJournal.Width =
+                        Math.Max(
+                            70,
+                            contentWidth -
+                            badgeWidth -
+                            10
+                        )
+
+                    lblRoute.Left =
+                        Math.Max(
+                            18,
+                            card.ClientSize.Width -
+                            routeLinkWidth -
+                            18
+                        )
+
+                    lblStats.Width =
+                        Math.Max(
+                            80,
+                            lblRoute.Left -
+                            lblStats.Left -
+                            10
+                        )
+
+                    If lblInsight IsNot Nothing Then
+
+                        lblInsight.Width =
+                            contentWidth
+
+                    End If
+
+                    Dim desiredCardHeight As Integer =
+                        actionsTop +
+                        8 +
+                        actionPanel.Height
+
+                    If card.Height <>
+                       desiredCardHeight Then
+
+                        card.Height =
+                            desiredCardHeight
+
+                    End If
+
+                Finally
+
+                    applyingLayout =
+                        False
+
+                End Try
+
+            End Sub
+
+        AddHandler card.ClientSizeChanged,
+            Sub(sender, e)
+                applyResponsiveLayout()
+            End Sub
+
+        applyResponsiveLayout()
 
         Return card
 
@@ -3269,7 +3633,7 @@ Public Class Form1
 ) As Label
 
         Return New Label With {
-        .Text = text,
+        .text = text,
         .AutoSize = False,
         .Width = 650,
         .Height = Math.Max(48, TextRenderer.MeasureText("Ag", Me.Font).Height + 24),
@@ -3285,12 +3649,12 @@ Public Class Form1
         panel As FlowLayoutPanel
     ) As Integer
 
-        Return Math.Max(
-            500,
-            panel.ClientSize.Width -
-            panel.Padding.Horizontal -
-            30
-        )
+        Return DashboardResponsiveLayoutService.
+            CalculateCardWidth(
+                panel.ClientSize.Width,
+                panel.Padding.Horizontal,
+                SystemInformation.VerticalScrollBarWidth
+            )
 
     End Function
 
@@ -3299,26 +3663,66 @@ Public Class Form1
         panel As FlowLayoutPanel
     )
 
+        If panel Is Nothing OrElse
+           panel.IsDisposed OrElse
+           panel.ClientSize.Width <= 0 Then
+
+            Return
+
+        End If
+
         Dim newWidth As Integer =
             GetCardWidth(
                 panel
             )
 
-        For Each control As Control In panel.Controls
+        panel.SuspendLayout()
 
-            If TypeOf control Is Panel Then
+        Try
 
-                control.Width =
-                    newWidth
+            panel.AutoScrollMinSize =
+                Size.Empty
 
-            ElseIf TypeOf control Is Label Then
+            If panel.AutoScrollPosition.X <> 0 Then
 
-                control.Width =
-                    newWidth
+                panel.AutoScrollPosition =
+                    Point.Empty
 
             End If
 
-        Next
+            For Each control As Control In panel.Controls
+
+                If TypeOf control Is Panel OrElse
+                   TypeOf control Is Label Then
+
+                    If control.Width <>
+                       newWidth Then
+
+                        control.Width =
+                            newWidth
+
+                    End If
+
+                    ' Every manuscript card (and empty-state row) is a
+                    ' deliberate full-width row. Explicitly ending the flow
+                    ' here prevents FlowLayoutPanel from creating a horizontal
+                    ' continuation/scroll range for a following control.
+                    panel.SetFlowBreak(
+                        control,
+                        True
+                    )
+
+                End If
+
+            Next
+
+        Finally
+
+            panel.ResumeLayout(
+                True
+            )
+
+        End Try
 
     End Sub
 
@@ -3353,13 +3757,22 @@ Public Class Form1
 
 
     Private Sub OpenManuscript(
-        manuscript As Manuscript
+        manuscript As Manuscript,
+        Optional routeWaypoint As ManuscriptRouteWaypoint = Nothing
     )
 
         Using dialog As New EditManuscriptForm(
             manuscript,
             manuscripts
         )
+
+            If routeWaypoint IsNot Nothing Then
+
+                dialog.NavigateToRouteWaypoint(
+                    routeWaypoint
+                )
+
+            End If
 
             Dim result As DialogResult =
                 dialog.ShowDialog(Me)
@@ -3390,6 +3803,38 @@ Public Class Form1
             End If
 
         End Using
+
+    End Sub
+
+
+    Private Sub OpenRouteView(
+        manuscript As Manuscript
+    )
+
+        Dim selectedWaypoint As ManuscriptRouteWaypoint =
+            Nothing
+
+        Using dialog As New ManuscriptRouteViewForm(
+            manuscript
+        )
+
+            dialog.ShowDialog(
+                Me
+            )
+
+            selectedWaypoint =
+                dialog.SelectedWaypoint
+
+        End Using
+
+        If selectedWaypoint IsNot Nothing Then
+
+            OpenManuscript(
+                manuscript,
+                selectedWaypoint
+            )
+
+        End If
 
     End Sub
 
@@ -3483,13 +3928,21 @@ Public Class Form1
 
         End If
 
+        Dim fileDrawerHistory As New HistoryEvent With {
+            .EventDate =
+                manuscript.FileDrawerDate.Value,
+            .Stage =
+                manuscript.CurrentStage,
+            .Note =
+                historyNote
+        }
+
+        ChronologyProvenanceService.StampCreated(
+            fileDrawerHistory
+        )
+
         manuscript.History.Add(
-            New HistoryEvent With {
-                .Stage =
-                    manuscript.CurrentStage,
-                .Note =
-                    historyNote
-            }
+            fileDrawerHistory
         )
 
         SaveManuscripts()
@@ -3511,13 +3964,20 @@ Public Class Form1
         manuscript.FileDrawerReason =
             String.Empty
 
+        Dim restoreHistory As New HistoryEvent With {
+            .EventDate = DateTime.Now,
+            .Stage =
+                manuscript.CurrentStage,
+            .Note =
+                "Restored from File Drawer to active Pipeline."
+        }
+
+        ChronologyProvenanceService.StampCreated(
+            restoreHistory
+        )
+
         manuscript.History.Add(
-            New HistoryEvent With {
-                .Stage =
-                    manuscript.CurrentStage,
-                .Note =
-                    "Restored from File Drawer to active Pipeline."
-            }
+            restoreHistory
         )
 
         SaveManuscripts()
@@ -4291,8 +4751,20 @@ Public Class Form1
             End Try
 
 
+            Dim importedAtUtc As DateTime =
+                DateTime.UtcNow
+
             For Each importedManuscript As Manuscript In manuscriptsToAdd
-                manuscripts.Add(importedManuscript)
+
+                ChronologyProvenanceService.StampImportedManuscript(
+                    importedManuscript,
+                    importedAtUtc
+                )
+
+                manuscripts.Add(
+                    importedManuscript
+                )
+
             Next
 
 

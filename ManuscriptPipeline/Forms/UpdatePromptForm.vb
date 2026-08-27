@@ -1,4 +1,4 @@
-Imports System
+﻿Imports System
 Imports System.Drawing
 Imports System.Windows.Forms
 Imports ManuscriptPipeline.Services
@@ -82,7 +82,10 @@ Namespace Forms
             }
 
             Dim txtNotes As New TextBox With {
-                .Text = releaseNotes,
+                .Text =
+                    ReleaseNotesPresentationService.ToDisplayText(
+                        releaseNotes
+                    ),
                 .Dock = DockStyle.Fill,
                 .Multiline = True,
                 .ReadOnly = True,

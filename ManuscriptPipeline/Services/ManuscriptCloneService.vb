@@ -1,4 +1,4 @@
-Imports System
+﻿Imports System
 Imports System.Collections.Generic
 Imports ManuscriptPipeline.Models
 
@@ -26,6 +26,7 @@ Namespace Services
                 .TargetJournalId = source.TargetJournalId,
                 .ManuscriptUrl = source.ManuscriptUrl,
                 .Metadata = CloneMetadata(source.Metadata),
+                .CurrentVersionId = source.CurrentVersionId,
                 .CurrentStage = source.CurrentStage,
                 .Location = source.Location,
                 .StageEnteredDate = source.StageEnteredDate,
@@ -64,12 +65,28 @@ Namespace Services
                 Next
             End If
 
+            If source.Versions IsNot Nothing Then
+                For Each version As ManuscriptVersion In source.Versions
+
+                    If version Is Nothing Then
+                        Continue For
+                    End If
+
+                    clone.Versions.Add(
+                        CloneVersion(version)
+                    )
+
+                Next
+            End If
+
             If source.History IsNot Nothing Then
                 For Each historyEvent As HistoryEvent In source.History
 
                     clone.History.Add(
                         New HistoryEvent With {
                             .Id = historyEvent.Id,
+                            .RecordedAtUtc = historyEvent.RecordedAtUtc,
+                            .LastModifiedAtUtc = historyEvent.LastModifiedAtUtc,
                             .EventDate = historyEvent.EventDate,
                             .Stage = historyEvent.Stage,
                             .Note = historyEvent.Note
@@ -197,6 +214,31 @@ Namespace Services
         End Function
 
 
+        Public Shared Function CloneVersion(
+            source As ManuscriptVersion
+        ) As ManuscriptVersion
+
+            If source Is Nothing Then
+                Throw New ArgumentNullException(NameOf(source))
+            End If
+
+            Return New ManuscriptVersion With {
+                .Id = source.Id,
+                .RecordedAtUtc = source.RecordedAtUtc,
+                .LastModifiedAtUtc = source.LastModifiedAtUtc,
+                .CreatedDate = source.CreatedDate,
+                .Label = source.Label,
+                .Notes = source.Notes,
+                .LocalFilePath = source.LocalFilePath,
+                .IsManagedCopy = source.IsManagedCopy,
+                .SubmissionId = source.SubmissionId,
+                .DecisionId = source.DecisionId,
+                .RevisionRoundNumber = source.RevisionRoundNumber
+            }
+
+        End Function
+
+
         Public Shared Function CloneSubmission(
             source As JournalSubmission
         ) As JournalSubmission
@@ -207,6 +249,8 @@ Namespace Services
 
             Dim clone As New JournalSubmission With {
                 .Id = source.Id,
+                .RecordedAtUtc = source.RecordedAtUtc,
+                .LastModifiedAtUtc = source.LastModifiedAtUtc,
                 .JournalName = source.JournalName,
                 .JournalId = source.JournalId,
                 .ManuscriptNumber = source.ManuscriptNumber,
@@ -221,6 +265,8 @@ Namespace Services
                     clone.Decisions.Add(
                         New EditorialDecisionEvent With {
                             .Id = decisionEvent.Id,
+                            .RecordedAtUtc = decisionEvent.RecordedAtUtc,
+                            .LastModifiedAtUtc = decisionEvent.LastModifiedAtUtc,
                             .DecisionDate = decisionEvent.DecisionDate,
                             .Decision = decisionEvent.Decision,
                             .RevisionDeadline = decisionEvent.RevisionDeadline,
@@ -235,6 +281,8 @@ Namespace Services
                     clone.Correspondence.Add(
                         New CorrespondenceItem With {
                             .Id = item.Id,
+                            .RecordedAtUtc = item.RecordedAtUtc,
+                            .LastModifiedAtUtc = item.LastModifiedAtUtc,
                             .ItemDate = item.ItemDate,
                             .Type = item.Type,
                             .Title = item.Title,

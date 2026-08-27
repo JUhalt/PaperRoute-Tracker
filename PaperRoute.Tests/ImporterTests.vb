@@ -1,4 +1,4 @@
-Imports System
+﻿Imports System
 Imports System.Collections.Generic
 Imports System.IO
 Imports ClosedXML.Excel
@@ -32,11 +32,10 @@ Public Class ImporterTests
             Dim manuscripts = workbook.Worksheet("Manuscripts")
             manuscripts.Cell("A2").Value = "M001"
             manuscripts.Cell("B2").Value = "Template Study"
-            manuscripts.Cell("C2").Value = "A. Author; B. Author"
-            manuscripts.Cell("D2").Value = "UnderReview"
-            manuscripts.Cell("E2").Value = "Pipeline"
-            manuscripts.Cell("F2").Value = "Journal of Template Studies"
-            manuscripts.Cell("G2").Value = New DateTime(2026, 8, 1)
+            manuscripts.Cell("C2").Value = "UnderReview"
+            manuscripts.Cell("D2").Value = "Pipeline"
+            manuscripts.Cell("E2").Value = "Journal of Template Studies"
+            manuscripts.Cell("F2").Value = New DateTime(2026, 8, 1)
 
             Dim submissions = workbook.Worksheet("Submissions")
             submissions.Cell("A2").Value = "S001"
@@ -187,6 +186,116 @@ Public Class ImporterTests
         )
 
     End Sub
+
+    <TestMethod>
+    Public Sub StandardTemplate_DoesNotExposeLegacyCoAuthorsColumn()
+
+        Dim workbookPath As String =
+            Path.Combine(
+                _root,
+                "modern-template.xlsx"
+            )
+
+        Dim templateGenerator As New StandardTemplateGenerator()
+
+        templateGenerator.Generate(
+            workbookPath
+        )
+
+        Using workbook As New XLWorkbook(workbookPath)
+
+            Dim worksheet =
+                workbook.Worksheet("Manuscripts")
+
+            Dim headers As New List(Of String)()
+
+            For Each cell In worksheet.Row(1).CellsUsed()
+                headers.Add(cell.GetString())
+            Next
+
+            CollectionAssert.DoesNotContain(
+                headers,
+                "CoAuthors"
+            )
+
+            Assert.AreEqual(
+                "CurrentStage*",
+                worksheet.Cell("C1").GetString()
+            )
+
+        End Using
+
+    End Sub
+
+
+    <TestMethod>
+    Public Sub FlexibleImporter_DoesNotAutoMapAuthorTextToLegacyField()
+
+        Dim importer As New FlexibleExcelImporter()
+
+        Assert.AreEqual(
+            ExcelImportField.Ignore,
+            importer.SuggestField("Authors")
+        )
+
+        CollectionAssert.DoesNotContain(
+            importer.GetFieldDisplayNames(),
+            "Co-authors"
+        )
+
+    End Sub
+
+
+    <TestMethod>
+    Public Sub StandardImporter_IgnoresLegacyCoAuthorsColumn()
+
+        Dim workbookPath As String =
+            Path.Combine(
+                _root,
+                "old-author-column.xlsx"
+            )
+
+        Dim templateGenerator As New StandardTemplateGenerator()
+
+        templateGenerator.Generate(
+            workbookPath
+        )
+
+        Using workbook As New XLWorkbook(workbookPath)
+
+            Dim manuscripts =
+                workbook.Worksheet("Manuscripts")
+
+            manuscripts.Column(3).InsertColumnsBefore(1)
+            manuscripts.Cell("C1").Value = "CoAuthors"
+
+            manuscripts.Cell("A2").Value = "M001"
+            manuscripts.Cell("B2").Value = "Legacy Author Test"
+            manuscripts.Cell("C2").Value = "A. Author; B. Author"
+            manuscripts.Cell("D2").Value = "Draft"
+            manuscripts.Cell("E2").Value = "Pipeline"
+
+            workbook.Save()
+
+        End Using
+
+        Dim result As ExcelImportResult =
+            New StandardExcelImporter().Import(
+                workbookPath
+            )
+
+        Assert.AreEqual(
+            1,
+            result.Manuscripts.Count
+        )
+
+        Assert.AreEqual(
+            String.Empty,
+            result.Manuscripts(0).CoAuthors
+        )
+
+    End Sub
+
 
     Private Function CreateMinimalWorkbook(fileName As String) As String
 

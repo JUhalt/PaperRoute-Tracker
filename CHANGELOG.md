@@ -1,6 +1,54 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to PaperRoute Tracker will be documented here.
+
+## [0.3.0] - 2026-08-27
+
+### Added
+
+- **Visual Route View** derived deterministically from stored manuscript history, showing submissions, editorial decisions, reroutes, lifecycle state, manuscript versions, and File Drawer outcomes without inventing missing workflow events.
+- **Manuscript Version History** with working, submitted, and revised snapshots; current-version identity; notes; submission/decision associations; and revision-round metadata.
+- Immutable **PaperRoute-managed manuscript-version snapshots**, alongside linked-file and metadata-only version histories.
+- **Current State** and **Current Version** route semantics so workflow position and active manuscript snapshot remain distinct.
+- Direct Route drill-down into the authoritative **Manuscript Details** record.
+- Reusable contextual `?` help for Current State, Current Version, Journal manuscript ID, version dates, submission associations, decision associations, and revision rounds.
+- Reusable manual-certification fixtures using the `ZZZ-CERT-v0.3-*` naming convention for repeatable Route and Version History validation.
+- Managed-library recovery warning behavior that allows a valid manuscript database to continue loading when internal staged-deletion recovery encounters an access or I/O problem.
+
+### Changed
+
+- Route chronology now uses canonical workflow events so submission and editorial-decision cards explain lifecycle state without redundant Submitted, Revision, Draft, or Accepted stage cards.
+- Rejection is presented as a **reroute** when the manuscript later moves to another journal rather than as a dead-end state.
+- Real-world event chronology is kept separate from `RecordedAtUtc` and `LastModifiedAtUtc`, preventing later metadata edits from silently reordering manuscript history.
+- Manuscript Details, Submission Details, Version History, Correspondence & Files, and related workflow surfaces received responsive/high-DPI layout improvements.
+- Main-dashboard manuscript actions reflow more reliably at narrow widths, keeping Open, Move/Restore, Delete, and View Route reachable.
+- In-app updater release notes now convert common Markdown headings, bullets, links, and paragraphs into cleaner readable text.
+- Journal submission terminology now uses **Journal manuscript ID** rather than the ambiguous Manuscript number label.
+
+### Compatibility and safety
+
+- Existing manuscripts without Version History remain valid and load without requiring synthetic historical records.
+- Schema 3 adds manuscript-version history; Schema 4 adds chronology/audit provenance while preserving legacy real-world event dates.
+- Historical PaperRoute-managed manuscript snapshots remain immutable after commit.
+- Deleting a PaperRoute Version History record never deletes an externally linked original file.
+- Managed manuscript-version deletion is transactional: PaperRoute stages owned snapshots reversibly and removes them only after authoritative manuscript JSON saves successfully.
+- Interrupted managed-version deletion can be recovered on startup without corrupting valid manuscript metadata.
+- Canceling Manuscript Details discards unsaved version additions, edits, and deletions.
+- Portable backup/restore preserves manuscript versions and PaperRoute-managed snapshot content.
+
+### Testing and certification
+
+- Automated regression suite contains **299 passing tests**.
+- Manual certification passed for Route chronology, same-day ordering, rejection/reroute behavior, withdrawal behavior, Current State vs. Current Version semantics, contextual help, and Version History persistence.
+- Linked-file deletion certification confirmed that deleting a PaperRoute version record leaves the external source file present and SHA-256-identical.
+- Managed-copy deletion certification confirmed that both the version metadata and PaperRoute-owned snapshot are removed together after Save & Close.
+- Managed-library recovery resilience was certified with a deliberately inaccessible/missing staged-deletion path; PaperRoute warned the user, loaded the valid library, and remained usable.
+- Main-board and affected workflow UI passed release smoke testing at **100%, 125%, and 150% Windows display scaling**.
+- Installed **v0.2 → v0.3** upgrade, updater presentation, portable backup/restore, clean-install/first-launch, release packaging, and SHA-256 checksum workflows were certified before release.
+
+### Known cosmetic issue
+
+- At some narrow/high-DPI main-window sizes, manuscript shelves may display an unnecessary horizontal scrollbar even when all controls fit and remain reachable. This is cosmetic and deferred to a later hardening release.
 
 ## [0.2.0] - 2026-08-22
 

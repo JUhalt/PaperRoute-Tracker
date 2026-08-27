@@ -3,14 +3,249 @@ Imports ManuscriptPipeline.Models
 
 Namespace Services
 
+    Public NotInheritable Class ManuscriptAttentionSnapshot
+
+        Public Property LatestSubmission As JournalSubmission = Nothing
+        Public Property LatestDecision As EditorialDecisionEvent = Nothing
+
+        Public Property SubmissionCount As Integer = 0
+        Public Property RejectionCount As Integer = 0
+
+        Public Property HasOverdueRevision As Boolean = False
+        Public Property IsRevisionDueSoon As Boolean = False
+        Public Property IsLongWaitingManuscript As Boolean = False
+        Public Property HasMissingTargetJournal As Boolean = False
+        Public Property WasRecentlyRejected As Boolean = False
+
+        Public Property OverdueDays As Integer? = Nothing
+        Public Property RevisionDaysRemaining As Integer? = Nothing
+        Public Property WaitingDays As Integer? = Nothing
+        Public Property RejectionDaysAgo As Integer? = Nothing
+
+    End Class
+
+
     Public NotInheritable Class ManuscriptAttentionService
 
         Private Sub New()
         End Sub
 
 
+        Public Shared Function Evaluate(
+            manuscript As Manuscript,
+            today As DateTime,
+            revisionWarningDays As Integer,
+            longReviewThresholdDays As Integer,
+            recentRejectionThresholdDays As Integer
+        ) As ManuscriptAttentionSnapshot
+
+            Dim snapshot As New ManuscriptAttentionSnapshot()
+
+            If manuscript Is Nothing Then
+                Return snapshot
+            End If
+
+            Dim latestSubmission As JournalSubmission =
+                Nothing
+
+            Dim latestDecision As EditorialDecisionEvent =
+                Nothing
+
+            If manuscript.Submissions IsNot Nothing Then
+
+                For Each submission As JournalSubmission In
+                    manuscript.Submissions
+
+                    If submission Is Nothing Then
+                        Continue For
+                    End If
+
+                    snapshot.SubmissionCount +=
+                        1
+
+                    Dim latestDecisionForSubmission As EditorialDecisionEvent =
+                        Nothing
+
+                    If submission.Decisions IsNot Nothing Then
+
+                        For Each decision As EditorialDecisionEvent In
+                            submission.Decisions
+
+                            If decision Is Nothing Then
+                                Continue For
+                            End If
+
+                            If IsRejectionDecision(
+                                decision.Decision
+                            ) Then
+
+                                snapshot.RejectionCount +=
+                                    1
+
+                            End If
+
+                            If latestDecisionForSubmission Is Nothing OrElse
+                               decision.DecisionDate.Date >=
+                               latestDecisionForSubmission.DecisionDate.Date Then
+
+                                latestDecisionForSubmission =
+                                    decision
+
+                            End If
+
+                        Next
+
+                    End If
+
+                    If latestSubmission Is Nothing OrElse
+                       submission.SubmittedDate.Date >=
+                       latestSubmission.SubmittedDate.Date Then
+
+                        latestSubmission =
+                            submission
+
+                        latestDecision =
+                            latestDecisionForSubmission
+
+                    End If
+
+                Next
+
+            End If
+
+            snapshot.LatestSubmission =
+                latestSubmission
+
+            snapshot.LatestDecision =
+                latestDecision
+
+            Dim todayDate As DateTime =
+                today.Date
+
+            If manuscript.Location =
+               ManuscriptLocation.Pipeline Then
+
+                If manuscript.CurrentStage =
+                   PaperStage.Revision AndAlso
+                   latestDecision IsNot Nothing AndAlso
+                   latestDecision.RevisionDeadline.HasValue Then
+
+                    Dim daysRemaining As Integer =
+                        CInt(
+                            Math.Floor(
+                                (
+                                    latestDecision.
+                                        RevisionDeadline.
+                                        Value.
+                                        Date -
+                                    todayDate
+                                ).TotalDays
+                            )
+                        )
+
+                    snapshot.RevisionDaysRemaining =
+                        daysRemaining
+
+                    If daysRemaining < 0 Then
+
+                        snapshot.HasOverdueRevision =
+                            True
+
+                        snapshot.OverdueDays =
+                            Math.Abs(
+                                daysRemaining
+                            )
+
+                    ElseIf daysRemaining <=
+                           revisionWarningDays Then
+
+                        snapshot.IsRevisionDueSoon =
+                            True
+
+                    End If
+
+                End If
+
+                If (
+                    manuscript.CurrentStage =
+                        PaperStage.Submitted OrElse
+                    manuscript.CurrentStage =
+                        PaperStage.UnderReview
+                ) AndAlso
+                   latestSubmission IsNot Nothing Then
+
+                    Dim waitingDays As Integer =
+                        CInt(
+                            Math.Floor(
+                                (
+                                    todayDate -
+                                    latestSubmission.
+                                        SubmittedDate.
+                                        Date
+                                ).TotalDays
+                            )
+                        )
+
+                    snapshot.WaitingDays =
+                        waitingDays
+
+                    snapshot.IsLongWaitingManuscript =
+                        waitingDays >=
+                        longReviewThresholdDays
+
+                End If
+
+                If (
+                    manuscript.CurrentStage =
+                        PaperStage.Idea OrElse
+                    manuscript.CurrentStage =
+                        PaperStage.Draft
+                ) AndAlso
+                   String.IsNullOrWhiteSpace(
+                       manuscript.TargetJournal
+                   ) Then
+
+                    snapshot.HasMissingTargetJournal =
+                        True
+
+                End If
+
+            End If
+
+            If latestDecision IsNot Nothing AndAlso
+               IsRejectionDecision(
+                   latestDecision.Decision
+               ) Then
+
+                Dim daysAgo As Integer =
+                    CInt(
+                        Math.Floor(
+                            (
+                                todayDate -
+                                latestDecision.
+                                    DecisionDate.
+                                    Date
+                            ).TotalDays
+                        )
+                    )
+
+                snapshot.RejectionDaysAgo =
+                    daysAgo
+
+                snapshot.WasRecentlyRejected =
+                    daysAgo >= 0 AndAlso
+                    daysAgo <=
+                    recentRejectionThresholdDays
+
+            End If
+
+            Return snapshot
+
+        End Function
+
+
         ' =====================================================
-        ' Overdue revision
+        ' Compatibility helpers
         ' =====================================================
 
         Public Shared Function HasOverdueRevision(
@@ -18,53 +253,16 @@ Namespace Services
             today As DateTime
         ) As Boolean
 
-            If manuscript Is Nothing Then
-                Return False
-            End If
-
-            If manuscript.Location <>
-               ManuscriptLocation.Pipeline Then
-
-                Return False
-
-            End If
-
-            If manuscript.CurrentStage <>
-               PaperStage.Revision Then
-
-                Return False
-
-            End If
-
-            Dim latestSubmission As JournalSubmission =
-                GetLatestSubmission(
-                    manuscript
-                )
-
-            Dim latestDecision As EditorialDecisionEvent =
-                GetLatestDecision(
-                    latestSubmission
-                )
-
-            If latestDecision Is Nothing OrElse
-               Not latestDecision.RevisionDeadline.HasValue Then
-
-                Return False
-
-            End If
-
-            Return latestDecision.
-                RevisionDeadline.
-                Value.
-                Date <
-                today.Date
+            Return Evaluate(
+                manuscript,
+                today,
+                revisionWarningDays:=0,
+                longReviewThresholdDays:=Integer.MaxValue,
+                recentRejectionThresholdDays:=0
+            ).HasOverdueRevision
 
         End Function
 
-
-        ' =====================================================
-        ' Revision due soon
-        ' =====================================================
 
         Public Shared Function IsRevisionDueSoon(
             manuscript As Manuscript,
@@ -72,63 +270,16 @@ Namespace Services
             warningDays As Integer
         ) As Boolean
 
-            If manuscript Is Nothing Then
-                Return False
-            End If
-
-            If manuscript.Location <>
-               ManuscriptLocation.Pipeline Then
-
-                Return False
-
-            End If
-
-            If manuscript.CurrentStage <>
-               PaperStage.Revision Then
-
-                Return False
-
-            End If
-
-            Dim latestSubmission As JournalSubmission =
-                GetLatestSubmission(
-                    manuscript
-                )
-
-            Dim latestDecision As EditorialDecisionEvent =
-                GetLatestDecision(
-                    latestSubmission
-                )
-
-            If latestDecision Is Nothing OrElse
-               Not latestDecision.RevisionDeadline.HasValue Then
-
-                Return False
-
-            End If
-
-            Dim daysRemaining As Integer =
-                CInt(
-                    Math.Floor(
-                        (
-                            latestDecision.
-                                RevisionDeadline.
-                                Value.
-                                Date -
-                            today.Date
-                        ).TotalDays
-                    )
-                )
-
-            Return daysRemaining >= 0 AndAlso
-                   daysRemaining <= warningDays
+            Return Evaluate(
+                manuscript,
+                today,
+                warningDays,
+                longReviewThresholdDays:=Integer.MaxValue,
+                recentRejectionThresholdDays:=0
+            ).IsRevisionDueSoon
 
         End Function
 
-
-        ' =====================================================
-        ' Long review / waiting period
-        ' =====================================================
 
         Public Shared Function IsLongWaitingManuscript(
             manuscript As Manuscript,
@@ -136,55 +287,16 @@ Namespace Services
             thresholdDays As Integer
         ) As Boolean
 
-            If manuscript Is Nothing Then
-                Return False
-            End If
-
-            If manuscript.Location <>
-               ManuscriptLocation.Pipeline Then
-
-                Return False
-
-            End If
-
-            If manuscript.CurrentStage <>
-               PaperStage.Submitted AndAlso
-               manuscript.CurrentStage <>
-               PaperStage.UnderReview Then
-
-                Return False
-
-            End If
-
-            Dim latestSubmission As JournalSubmission =
-                GetLatestSubmission(
-                    manuscript
-                )
-
-            If latestSubmission Is Nothing Then
-                Return False
-            End If
-
-            Dim waitingDays As Integer =
-                CInt(
-                    Math.Floor(
-                        (
-                            today.Date -
-                            latestSubmission.
-                                SubmittedDate.
-                                Date
-                        ).TotalDays
-                    )
-                )
-
-            Return waitingDays >= thresholdDays
+            Return Evaluate(
+                manuscript,
+                today,
+                revisionWarningDays:=0,
+                longReviewThresholdDays:=thresholdDays,
+                recentRejectionThresholdDays:=0
+            ).IsLongWaitingManuscript
 
         End Function
 
-
-        ' =====================================================
-        ' Missing target journal
-        ' =====================================================
 
         Public Shared Function HasMissingTargetJournal(
             manuscript As Manuscript
@@ -217,66 +329,25 @@ Namespace Services
         End Function
 
 
-        ' =====================================================
-        ' Recent rejection
-        ' =====================================================
-
         Public Shared Function WasRecentlyRejected(
             manuscript As Manuscript,
             today As DateTime,
             thresholdDays As Integer
         ) As Boolean
 
-            If manuscript Is Nothing Then
-                Return False
-            End If
-
-            Dim latestSubmission As JournalSubmission =
-                GetLatestSubmission(
-                    manuscript
-                )
-
-            Dim latestDecision As EditorialDecisionEvent =
-                GetLatestDecision(
-                    latestSubmission
-                )
-
-            If latestDecision Is Nothing Then
-                Return False
-            End If
-
-            Select Case latestDecision.Decision
-
-                Case EditorialDecision.Rejected,
-                     EditorialDecision.DeskRejected,
-                     EditorialDecision.RejectedAfterReview
-
-                Case Else
-
-                    Return False
-
-            End Select
-
-            Dim daysAgo As Integer =
-                CInt(
-                    Math.Floor(
-                        (
-                            today.Date -
-                            latestDecision.
-                                DecisionDate.
-                                Date
-                        ).TotalDays
-                    )
-                )
-
-            Return daysAgo >= 0 AndAlso
-                   daysAgo <= thresholdDays
+            Return Evaluate(
+                manuscript,
+                today,
+                revisionWarningDays:=0,
+                longReviewThresholdDays:=Integer.MaxValue,
+                recentRejectionThresholdDays:=thresholdDays
+            ).WasRecentlyRejected
 
         End Function
 
 
         ' =====================================================
-        ' Latest route helpers
+        ' Latest workflow helpers
         ' =====================================================
 
         Public Shared Function GetLatestSubmission(
@@ -301,8 +372,8 @@ Namespace Services
                 End If
 
                 If latest Is Nothing OrElse
-                   submission.SubmittedDate >
-                   latest.SubmittedDate Then
+                   submission.SubmittedDate.Date >=
+                   latest.SubmittedDate.Date Then
 
                     latest =
                         submission
@@ -338,8 +409,8 @@ Namespace Services
                 End If
 
                 If latest Is Nothing OrElse
-                   decision.DecisionDate >
-                   latest.DecisionDate Then
+                   decision.DecisionDate.Date >=
+                   latest.DecisionDate.Date Then
 
                     latest =
                         decision
@@ -349,6 +420,26 @@ Namespace Services
             Next
 
             Return latest
+
+        End Function
+
+
+        Public Shared Function IsRejectionDecision(
+            decision As EditorialDecision
+        ) As Boolean
+
+            Select Case decision
+
+                Case EditorialDecision.Rejected,
+                     EditorialDecision.DeskRejected,
+                     EditorialDecision.RejectedAfterReview
+
+                    Return True
+
+                Case Else
+                    Return False
+
+            End Select
 
         End Function
 

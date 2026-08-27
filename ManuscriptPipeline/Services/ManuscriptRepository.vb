@@ -1,4 +1,4 @@
-Imports System
+﻿Imports System
 Imports System.Collections.Generic
 Imports System.IO
 Imports System.Text.Json
@@ -18,6 +18,8 @@ Namespace Services
         Private _lastLoadRecoveredFromBackup As Boolean
         Private _lastRecoveryPreservedFilePath As String =
             String.Empty
+        Private _lastManagedLibraryRecoveryWarning As String =
+            String.Empty
 
 
         Public Sub New()
@@ -30,7 +32,8 @@ Namespace Services
 
         Friend Sub New(
             dataDirectory As String,
-            managedLibraryRoot As String
+            managedLibraryRoot As String,
+            Optional managedLibraryOverride As ManagedLibraryService = Nothing
         )
 
             If String.IsNullOrWhiteSpace(
@@ -61,7 +64,12 @@ Namespace Services
                     "manuscripts.bak"
                 )
 
-            If String.IsNullOrWhiteSpace(
+            If managedLibraryOverride IsNot Nothing Then
+
+                _managedLibrary =
+                    managedLibraryOverride
+
+            ElseIf String.IsNullOrWhiteSpace(
                 managedLibraryRoot
             ) Then
 
@@ -133,6 +141,13 @@ Namespace Services
         End Property
 
 
+        Public ReadOnly Property LastManagedLibraryRecoveryWarning As String
+            Get
+                Return _lastManagedLibraryRecoveryWarning
+            End Get
+        End Property
+
+
         ' =====================================================
         ' Load
         ' =====================================================
@@ -182,6 +197,10 @@ Namespace Services
                         primary
                     )
 
+                    TryRecoverManagedLibraryStaging(
+                        primary
+                    )
+
                     Return primary
 
                 End If
@@ -206,6 +225,10 @@ Namespace Services
                         )
 
                         NormalizeLoadedData(
+                            backup
+                        )
+
+                        TryRecoverManagedLibraryStaging(
                             backup
                         )
 
@@ -262,6 +285,10 @@ Namespace Services
                 recovered
             )
 
+            TryRecoverManagedLibraryStaging(
+                recovered
+            )
+
             _lastLoadRecoveredFromBackup =
                 True
 
@@ -280,38 +307,42 @@ Namespace Services
 
             Try
 
-                Dim json As String =
-                    File.ReadAllText(
-                        filePath
-                    )
+                Using stream As New FileStream(
+                    filePath,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.Read,
+                    bufferSize:=65536,
+                    options:=FileOptions.SequentialScan
+                )
 
-                If String.IsNullOrWhiteSpace(
-                    json
-                ) Then
+                    If stream.Length = 0 Then
 
-                    Throw New InvalidDataException(
-                        "The manuscript data file is empty."
-                    )
+                        Throw New InvalidDataException(
+                            "The manuscript data file is empty."
+                        )
 
-                End If
+                    End If
 
-                Dim loaded As List(Of Manuscript) =
-                    JsonSerializer.Deserialize(
-                        Of List(Of Manuscript)
-                    )(
-                        json,
-                        _jsonOptions
-                    )
+                    Dim loaded As List(Of Manuscript) =
+                        JsonSerializer.Deserialize(
+                            Of List(Of Manuscript)
+                        )(
+                            stream,
+                            _jsonOptions
+                        )
 
-                If loaded Is Nothing Then
+                    If loaded Is Nothing Then
 
-                    Throw New InvalidDataException(
-                        "The manuscript data file does not contain a valid PaperRoute library."
-                    )
+                        Throw New InvalidDataException(
+                            "The manuscript data file does not contain a valid PaperRoute library."
+                        )
 
-                End If
+                    End If
 
-                Return loaded
+                    Return loaded
+
+                End Using
 
             Catch ex As Exception
 
@@ -513,12 +544,66 @@ Namespace Services
         End Function
 
 
+        Private Sub TryRecoverManagedLibraryStaging(
+            manuscripts As IEnumerable(Of Manuscript)
+        )
+
+            Try
+
+                _managedLibrary.RecoverStagedVersionDeletions(
+                    manuscripts
+                )
+
+            Catch ex As UnauthorizedAccessException
+
+                _lastManagedLibraryRecoveryWarning =
+                    BuildManagedLibraryRecoveryWarning(
+                        ex
+                    )
+
+            Catch ex As IOException
+
+                _lastManagedLibraryRecoveryWarning =
+                    BuildManagedLibraryRecoveryWarning(
+                        ex
+                    )
+
+            End Try
+
+        End Sub
+
+
+        Private Function BuildManagedLibraryRecoveryWarning(
+            ex As Exception
+        ) As String
+
+            Return (
+                "PaperRoute loaded the manuscript database, but could not finish recovery or cleanup of its internal managed-version staging area." &
+                Environment.NewLine &
+                Environment.NewLine &
+                "Managed library: " &
+                _managedLibrary.RootDirectory &
+                Environment.NewLine &
+                Environment.NewLine &
+                "PaperRoute did not discard the manuscript database. You can continue using the library, but one or more managed Version History files may be missing or awaiting cleanup." &
+                Environment.NewLine &
+                Environment.NewLine &
+                "Technical details: " &
+                ex.Message
+            )
+
+        End Function
+
+
         Private Sub ResetRecoveryState()
 
             _lastLoadRecoveredFromBackup =
                 False
 
             _lastRecoveryPreservedFilePath =
+                String.Empty
+
+            _lastManagedLibraryRecoveryWarning =
                 String.Empty
 
         End Sub
@@ -549,24 +634,48 @@ Namespace Services
                 manuscripts
             )
 
-            Dim json As String =
-                JsonSerializer.Serialize(
-                    manuscripts,
-                    _jsonOptions
-                )
-
             Dim tempFilePath As String =
                 Path.Combine(
                     _dataDirectory,
                     "manuscripts.tmp"
                 )
 
+            Dim deletionTransaction As ManagedLibraryService.ManagedVersionDeletionTransaction =
+                Nothing
+
             Try
 
-                File.WriteAllText(
+                ' Managed version directories removed from the working model
+                ' are moved into reversible staging before authoritative JSON
+                ' changes. A failed save restores those snapshots; a
+                ' successful save commits their removal.
+                deletionTransaction =
+                    _managedLibrary.BeginVersionDeletionTransaction(
+                        manuscripts
+                    )
+
+                Using stream As New FileStream(
                     tempFilePath,
-                    json
+                    FileMode.Create,
+                    FileAccess.Write,
+                    FileShare.None,
+                    bufferSize:=65536,
+                    options:=FileOptions.SequentialScan
                 )
+
+                    JsonSerializer.Serialize(
+                        Of List(Of Manuscript)
+                    )(
+                        stream,
+                        manuscripts,
+                        _jsonOptions
+                    )
+
+                    stream.Flush(
+                        flushToDisk:=True
+                    )
+
+                End Using
 
                 If File.Exists(
                     _dataFilePath
@@ -588,7 +697,38 @@ Namespace Services
 
                 End If
 
+                deletionTransaction.Commit()
+
+            Catch saveException As Exception
+
+                If deletionTransaction IsNot Nothing Then
+
+                    Try
+
+                        deletionTransaction.Rollback()
+
+                    Catch rollbackException As Exception
+
+                        Throw New InvalidDataException(
+                            "PaperRoute could not save the manuscript library and could not fully restore staged manuscript-version snapshots. " &
+                            "The staged files have been preserved for startup recovery.",
+                            New AggregateException(
+                                saveException,
+                                rollbackException
+                            )
+                        )
+
+                    End Try
+
+                End If
+
+                Throw
+
             Finally
+
+                If deletionTransaction IsNot Nothing Then
+                    deletionTransaction.Dispose()
+                End If
 
                 If File.Exists(
                     tempFilePath
@@ -819,6 +959,95 @@ Namespace Services
                     End If
 
                 Next
+
+                If manuscript.Versions Is Nothing Then
+
+                    manuscript.Versions =
+                        New List(Of ManuscriptVersion)()
+
+                End If
+
+                Dim versionIds As New HashSet(Of Guid)()
+
+                For Each version As ManuscriptVersion In
+                    manuscript.Versions
+
+                    If version Is Nothing Then
+
+                        Throw New InvalidDataException(
+                            "The manuscript library contains an invalid null manuscript-version record."
+                        )
+
+                    End If
+
+                    If version.Id = Guid.Empty OrElse
+                       Not versionIds.Add(
+                           version.Id
+                       ) Then
+
+                        Throw New InvalidDataException(
+                            "The manuscript library contains invalid or duplicate manuscript-version identifiers."
+                        )
+
+                    End If
+
+                    version.Label =
+                        If(
+                            version.Label,
+                            String.Empty
+                        )
+
+                    version.Notes =
+                        If(
+                            version.Notes,
+                            String.Empty
+                        )
+
+                    version.LocalFilePath =
+                        If(
+                            version.LocalFilePath,
+                            String.Empty
+                        )
+
+                    If version.SubmissionId.HasValue AndAlso
+                       version.SubmissionId.Value = Guid.Empty Then
+
+                        Throw New InvalidDataException(
+                            "The manuscript library contains a manuscript version with an invalid submission reference."
+                        )
+
+                    End If
+
+                    If version.DecisionId.HasValue AndAlso
+                       version.DecisionId.Value = Guid.Empty Then
+
+                        Throw New InvalidDataException(
+                            "The manuscript library contains a manuscript version with an invalid decision reference."
+                        )
+
+                    End If
+
+                    If version.RevisionRoundNumber.HasValue AndAlso
+                       version.RevisionRoundNumber.Value <= 0 Then
+
+                        Throw New InvalidDataException(
+                            "The manuscript library contains a manuscript version with an invalid revision-round number."
+                        )
+
+                    End If
+
+                Next
+
+                If manuscript.CurrentVersionId.HasValue AndAlso
+                   Not versionIds.Contains(
+                       manuscript.CurrentVersionId.Value
+                   ) Then
+
+                    Throw New InvalidDataException(
+                        "The manuscript library identifies a current manuscript version that is not present in version history."
+                    )
+
+                End If
 
                 If manuscript.Authors Is Nothing Then
 

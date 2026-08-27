@@ -1,101 +1,267 @@
-# PaperRoute Roadmap
+﻿# PaperRoute Roadmap
 
-PaperRoute is moving toward a simple goal: **a trustworthy, local-first home for the complete route of an academic manuscript.**
+PaperRoute is moving toward one connected goal:
 
-The live GitHub milestones and issues are the source of truth for active work. This file is the public high-level route.
+> **A trustworthy, local-first record of how an academic manuscript actually moves from working draft to publication.**
+
+The roadmap is organized around that workflow rather than isolated features. Each release should deepen the same canonical manuscript route without creating parallel sources of truth.
+
+The live GitHub milestones and issues remain the source of truth for active work. This file explains how those pieces fit together.
+
+## Workflow model
+
+PaperRoute treats the manuscript as the long-lived research object.
+
+```text
+Manuscript
+├─ Version History
+│  ├─ working versions
+│  ├─ submitted snapshots
+│  └─ revised versions
+│
+├─ Submission Attempt — Journal A
+│  ├─ readiness checklist
+│  ├─ exact submission packet
+│  ├─ submitted manuscript version
+│  ├─ editorial decision
+│  ├─ correspondence / reviewer files
+│  ├─ revision round(s)
+│  └─ accepted / rejected / withdrawn
+│
+└─ Submission Attempt — Journal B
+   └─ begins only when the manuscript is genuinely rerouted
+```
+
+A normal revision **does not create a new submission attempt**. It remains part of the journal interaction that produced the decision. External integrations may suggest metadata, but they must never silently rewrite authoritative manuscript history, lifecycle state, version relationships, readiness state, or packet contents.
+
+---
 
 ## Release train
 
-PaperRoute is targeting a rapid pre-1.0 release train. These are **target dates, not promises**: data integrity, migration safety, and release certification take priority over the calendar.
+Targets are directional rather than promises. Data integrity, migrations, backup/recovery, and release certification take precedence over cadence.
 
-| Release | Target | Focus |
+| Release | Theme | Workflow question |
 | --- | --- | --- |
-| **v0.2.0** | **August 22, 2026** | Metadata, integrations, reminders, calendar export, and Help |
-| **v0.3.0** | **August 25, 2026** | Visual Route View and manuscript version history |
-| **v0.4.0** | **August 28, 2026** | Submission Packet Vault and per-journal readiness |
-| **v0.5.0** | **August 31, 2026** | Reviewer Response Matrix |
-| **v0.6.0** | **September 3, 2026** | Deadline Center |
-| **v0.7.0** | **September 6, 2026** | Route statistics and time-to-publication analytics |
-| **v0.8.0** | **September 9, 2026** | Optional AI-assisted reviewer action extraction |
-| **v0.9.0** | **September 12, 2026** | 1.0 hardening and workflow polish |
-| **v1.0.0** | **September 15, 2026** | Stable-release certification |
+| **v0.1** | Reliable Core ✅ | Can I trust PaperRoute with local manuscript data? |
+| **v0.2** | Metadata & Integrations ✅ | Can PaperRoute describe and connect my research accurately? |
+| **v0.3** | The Route ✅ | What happened to this manuscript, in what order, and which file was which? |
+| **v0.4** | **Submission Readiness — active** | What exactly am I preparing and sending to this journal? |
+| **v0.5** | Reviewer Response Workflow | What did the journal ask me to change, and how am I responding? |
+| **v0.6** | Deadline Center | What requires action, and when? |
+| **v0.7** | Route Analytics & Reports | What does this publication journey show me—and how can I communicate it? |
+| **v0.8** | Optional AI Assistance | Can AI reduce clerical work without becoming authoritative? |
+| **v0.9** | 1.0 Hardening | Is the entire workflow polished, resilient, and certifiable? |
+| **v1.0** | Trusted Research Workflow | Would I trust this with my real publication pipeline? |
+
+---
 
 ## COMPLETE — v0.1 Reliable Core
 
-PaperRoute v0.1.0 established the trusted local core: installation and updates, schema validation, recovery, import/export, backup/restore, accessibility, high-DPI support, diagnostics, and release hardening.
+PaperRoute v0.1 established the trusted local core: installation/update infrastructure, versioned storage, conservative migrations, recovery/backups, import/export, diagnostics, accessibility, and high-DPI groundwork.
 
-## RELEASE CANDIDATE — v0.2 Metadata & Integrations
+## COMPLETE — v0.2 Metadata & Integrations
 
-The v0.2 feature set is frozen. Release-candidate work is limited to certification, packaging, documentation, and release-blocking fixes.
+PaperRoute v0.2 added structured authors and affiliations, DOI/Crossref and ORCID workflows, BibTeX/RIS exchange, Journal Library, external research links, publication/CV exports, reminders/calendar support, notifications, Help, and the User Guide.
 
-- [x] Storage schema 2 metadata foundation and validated schema-1 migration
-- [x] Reusable authors and affiliations
-- [x] DOI and Crossref metadata enrichment
-- [x] ORCID public-profile import / one-way sync
-- [x] BibTeX and RIS import/export
-- [x] Journal library, target-journal workflow, and submission portal shortcuts
-- [x] Preprint / journal-version linkage and project links
-- [x] Publication and CV exports
-- [x] Calendar export, reminders, and optional Windows notifications
-- [x] User Guide and in-app Help
-- [ ] Final v0.1.0 → v0.2.0 upgrade certification
-- [ ] Final backup/restore, clean-install, updater, UI, and packaging certification
+**Safety rule:** integrations can assist, but cannot silently alter authoritative lifecycle history.
 
-**Safety rule:** external integrations may suggest metadata, but they must not silently overwrite user-entered metadata or change manuscript lifecycle state. Any import that changes lifecycle placement must be an explicit user choice.
+## COMPLETE — v0.3 The Route
 
-## v0.3.0 — The Route — target August 25
+Issues: **#23 Visual Route View** and **#24 Manuscript Version History**
 
-- Visual Route View and manuscript rerouting (#23)
-- Manuscript version history linked to submissions and decisions (#24)
+v0.3 established the canonical historical spine used by later releases:
 
-## v0.4.0 — Submission Readiness — target August 28
+- deterministic Visual Route projection
+- Schema 3 manuscript Version History
+- Schema 4 chronology/audit provenance
+- immutable managed manuscript snapshots
+- linked-file and metadata-only versions
+- Current State vs. Current Version
+- submission/decision/revision-round version associations
+- reroute semantics and canonical workflow chronology
+- Route drill-down into authoritative Manuscript Details
+- safe transactional version deletion
+- contextual workflow help
+- managed-library recovery hardening
+- readable updater release notes
+- responsive/high-DPI hardening
+- reusable `ZZZ-CERT-v0.3-*` manual-certification fixtures
+- 299-test automated regression suite
+- installed-update, backup/restore, clean-install, updater, managed-file, and scaling certification
 
-- Submission Packet Vault and file integrity (#25)
-- Per-journal readiness checklists (#26)
+Known cosmetic follow-up: some narrow/high-DPI manuscript shelves can still display an unnecessary horizontal scrollbar even though controls remain reachable. Track this as a hardening issue rather than reopening v0.3.
 
-## v0.5.0 — Reviewer Response Workflow — target August 31
+---
 
-- Reviewer Response Matrix (#27)
+# ACTIVE — v0.4 Submission Readiness
 
-## v0.6.0 — Deadline Center — target September 3
+Issues:
 
-- Deadline Center built on the canonical v0.2 reminder engine (#28)
+- **#25 Submission Packet Vault and file integrity**
+- **#26 Per-journal readiness checklists**
+- **new foundation issue:** Schema 5 readiness and submission-packet foundation
 
-## v0.7.0 — Route Analytics — target September 6
+v0.4 turns a manuscript version into a concrete, reconstructable journal submission package.
 
-- Route statistics and time-to-publication analytics (#30)
+## Planned flow
 
-## v0.8.0 — Optional AI Assistance — target September 9
+```text
+Current manuscript version
+        ↓
+Choose target journal / preparation
+        ↓
+Apply journal checklist template
+        ↓
+Resolve manuscript-specific readiness
+        ↓
+Assemble Submission Packet
+├─ exact manuscript snapshot
+├─ cover letter
+├─ figures / tables
+├─ supplements
+├─ required statements / metadata
+└─ journal-specific supporting files
+        ↓
+Freeze/verify exact files actually sent
+        ↓
+Record Journal Submission
+```
 
-- Optional AI-assisted reviewer action extraction (#29)
-- AI remains opt-in, preview-before-apply, and never a dependency for the reviewer workflow.
+## v0.4A — Schema 5 foundation
 
-## v0.9.0 — 1.0 Hardening — target September 12
+Build the persistence model before adding UI:
 
-- Migration, recovery, backup/restore, and updater burn-down
-- Keyboard, DPI, resize, theme, and secondary-dialog polish
-- File Drawer revival / rerouting workflow polish
-- Portable project-sharing format decision and any safe pre-1.0 groundwork
-- Installer trust/signing decision and remaining release infrastructure work
+- reusable journal checklist template items
+- manuscript/journal-specific readiness state
+- checklist item statuses: unresolved, complete, not applicable
+- submission packet model
+- packet file-role model
+- managed-copy vs. external-link semantics
+- optional deterministic SHA-256 integrity metadata
+- link packet to the exact manuscript version
+- optional link to a journal submission/revision round when one exists
+- clone/save/load/backup/restore support
+- Schema 4 → Schema 5 conservative migration
+- regression coverage before any workflow UI ships
 
-## v1.0.0 — Trusted Research Workflow — target September 15
+**Critical rule:** opening or editing readiness data must never change manuscript lifecycle state.
+
+## v0.4B — Journal checklist templates
+
+- reusable per-journal templates
+- required files/statements/metadata
+- journal-specific notes and formatting requirements
+- template editing without silently changing historical manuscript completion state
+
+## v0.4C — Manuscript-specific readiness
+
+- apply a journal template to a manuscript preparation
+- explainable readiness derived from individual items
+- complete / not applicable / unresolved state
+- readiness is advisory and never blocks recording a real submission
+
+## v0.4D — Submission Packet Vault
+
+- assemble the exact files intended for a submission
+- preserve file roles and packet membership
+- managed copies and intentional external links
+- reconstruct a packet without guessing which files belonged to it
+
+## v0.4E — File integrity
+
+- optional local SHA-256 hashing
+- clear unchanged / changed / missing status
+- integrity checks never modify source files
+- managed files participate in portable backup/restore
+
+## v0.4F — Submission integration
+
+- connect the finished packet to the exact submitted manuscript version
+- associate the packet with the journal submission/revision round
+- submission portal shortcut from the readiness workflow
+- preserve explicit user control over when a real submission is recorded
+
+## v0.4G — Readiness UX
+
+- concise readiness summary
+- clear unresolved requirements
+- packet completeness/integrity status
+- direct navigation between manuscript, readiness, packet, and submission
+- responsive/high-DPI behavior from the start
+
+## v0.4H — Certification and release
+
+- Schema 4 → 5 migration
+- backup/restore
+- linked-file preservation
+- managed-packet deletion/recovery safety
+- hash determinism
+- installed v0.3 → v0.4 update
+- clean install
+- release packaging/checksums
+
+---
+
+# v0.5 Reviewer Response Workflow
+
+Issue: **#27 Reviewer Response Matrix**
+
+Own the iterative conversation within a journal submission attempt: reviewer/editor comments, action items, status, manuscript location references, response drafting, revision-round linkage, and editable response-to-reviewers export.
+
+The workflow must remain fully usable without AI.
+
+---
+
+# v0.6 Deadline Center
+
+Issue: **#28 Deadline Center**
+
+Aggregate revision deadlines, follow-up dates, readiness/submission obligations, reviewer-response work, and manuscript reminders using the existing canonical reminder engine rather than a second scheduling system.
+
+---
+
+# v0.7 Route Analytics & Reports
+
+Issue: **#30 Route statistics and time-to-publication analytics**
+
+Derive transparent local analytics and print-friendly route reports from the same canonical history. Missing dates must produce partial/missing results rather than fabricated values.
+
+---
+
+# v0.8 Optional AI Assistance
+
+Issue: **#29 Optional AI-assisted reviewer action extraction**
+
+AI remains opt-in, preview-before-apply, non-authoritative, and unnecessary for core workflows. No manuscript/reviewer content is silently transmitted externally.
+
+---
+
+# v0.9 1.0 Hardening
+
+Systematic burn-down before 1.0:
+
+- migration/recovery verification
+- backup/restore certification
+- installer/updater certification
+- keyboard/accessibility pass
+- responsive sizing across dialogs and DPI levels
+- eliminate phantom horizontal shelf scrolling at narrow/high-DPI widths
+- consistent master/detail patterns
+- guided onboarding/tutorial using the shared contextual-help catalog
+- File Drawer revival/rerouting polish
+- test-suite redundancy/obsolescence audit
+- manual certification fixtures for major workflows
+- portable project-sharing decision
+- installer trust/signing decision
+
+---
+
+# v1.0 Trusted Research Workflow
 
 PaperRoute 1.0 is not defined by feature count.
 
 > **I trust this application with my research workflow.**
 
-The 1.0 bar includes:
+The 1.0 bar includes stable migrations, reliable installer/updater behavior, curated regression coverage, recovery tooling, proven backup/restore, accessible keyboard-first UI, transparent local analytics, coherent manuscript/submission/decision/revision/version relationships, clear privacy boundaries, and fully certified release artifacts.
 
-- Stable versioned data model and tested migrations
-- Reliable installer and updater
-- Strong automated regression coverage
-- Recovery tooling and proven backup/restore
-- Accessible keyboard-first UI
-- Transparent local route analytics
-- Complete rerouting / File Drawer workflow
-- Clear privacy boundaries and no silent external transmission of manuscript content
-- Release artifacts, checksums, documentation, and upgrade path verified before publication
-
-### Release discipline
-
-A target date may slip when a release candidate exposes a data-loss, migration, recovery, packaging, or updater defect. PaperRoute does not trade trustworthiness for cadence.
+PaperRoute does not trade trustworthiness for cadence.

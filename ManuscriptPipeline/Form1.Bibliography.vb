@@ -1,4 +1,4 @@
-Imports System
+﻿Imports System
 Imports System.IO
 Imports System.Windows.Forms
 Imports ManuscriptPipeline.Forms
@@ -60,6 +60,20 @@ Partial Public Class Form1
 
                     repository.CreatePreImportBackup()
 
+                    Dim existingManuscriptIds As New System.Collections.Generic.HashSet(Of Guid)()
+
+                    For Each existingManuscript As Manuscript In manuscripts
+
+                        If existingManuscript IsNot Nothing Then
+
+                            existingManuscriptIds.Add(
+                                existingManuscript.Id
+                            )
+
+                        End If
+
+                    Next
+
                     Dim result As BibliographyImportResult =
                         BibliographyExchangeService.Apply(
                             dialog.SelectedRecords,
@@ -70,6 +84,27 @@ Partial Public Class Form1
                                     dialog.ImportPublishedRecordsAsPublished
                             }
                         )
+
+                    Dim importedAtUtc As DateTime =
+                        DateTime.UtcNow
+
+                    For Each importedManuscript As Manuscript In manuscripts
+
+                        If importedManuscript Is Nothing OrElse
+                           existingManuscriptIds.Contains(
+                               importedManuscript.Id
+                           ) Then
+
+                            Continue For
+
+                        End If
+
+                        ChronologyProvenanceService.StampImportedManuscript(
+                            importedManuscript,
+                            importedAtUtc
+                        )
+
+                    Next
 
                     ' Save reusable people first. If the manuscript save then
                     ' fails, the worst case is an unused reusable author record;

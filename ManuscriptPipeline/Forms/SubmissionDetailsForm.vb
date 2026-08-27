@@ -1,4 +1,4 @@
-Imports System
+﻿Imports System
 Imports System.Collections.Generic
 Imports System.Diagnostics
 Imports System.Drawing
@@ -12,6 +12,7 @@ Namespace Forms
     Public Class SubmissionDetailsForm
         Inherits Form
 
+        Private ReadOnly _manuscript As Manuscript
         Private ReadOnly _submission As JournalSubmission
 
         ' Editorial decisions
@@ -38,14 +39,72 @@ Namespace Forms
         Private ReadOnly _displayedCorrespondence As New List(Of CorrespondenceItem)()
 
 
-        Public Sub New(submission As JournalSubmission)
+        Public Sub New(
+            submission As JournalSubmission
+        )
 
-            _submission = submission
+            Me.New(
+                Nothing,
+                submission
+            )
+
+        End Sub
+
+
+        Public Sub New(
+            manuscript As Manuscript,
+            submission As JournalSubmission
+        )
+
+            _manuscript =
+                manuscript
+
+            _submission =
+                submission
 
             BuildInterface()
             UiPolish.ApplyDialog(Me)
             RefreshDecisionList()
             RefreshCorrespondenceList()
+
+        End Sub
+
+
+        Protected Overrides Sub OnShown(
+            e As EventArgs
+        )
+
+            MyBase.OnShown(
+                e
+            )
+
+            Dim referenceControl As Control =
+                If(
+                    Me.Owner,
+                    Me
+                )
+
+            Dim workingArea As Rectangle =
+                Screen.FromControl(
+                    referenceControl
+                ).WorkingArea
+
+            Dim initialSize As Size =
+                ResponsiveDialogSizingService.CalculateInitialSize(
+                    workingArea,
+                    New Size(1040, 880),
+                    Me.MinimumSize,
+                    72
+                )
+
+            Me.Size =
+                initialSize
+
+            Me.Location =
+                ResponsiveDialogSizingService.CalculateCenteredLocation(
+                    workingArea,
+                    initialSize
+                )
 
         End Sub
 
@@ -58,8 +117,8 @@ Namespace Forms
 
             Me.Text = "Submission Details"
             Me.StartPosition = FormStartPosition.CenterParent
-            Me.Size = New Size(860, 760)
-            Me.MinimumSize = New Size(760, 660)
+            Me.Size = New Size(900, 840)
+            Me.MinimumSize = New Size(780, 700)
             Me.Font = New Font("Segoe UI", 10.0F)
             Me.AutoScaleMode = AutoScaleMode.Dpi
 
@@ -70,8 +129,8 @@ Namespace Forms
                 .Padding = New Padding(20)
             }
 
-            root.RowStyles.Add(New RowStyle(SizeType.Absolute, 264))
-            root.RowStyles.Add(New RowStyle(SizeType.Absolute, 140))
+            root.RowStyles.Add(New RowStyle(SizeType.Absolute, 238))
+            root.RowStyles.Add(New RowStyle(SizeType.Absolute, 110))
             root.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 58))
 
@@ -97,7 +156,7 @@ Namespace Forms
                 )
             Next
 
-            summary.ColumnStyles.Add(New ColumnStyle(SizeType.Absolute, 165))
+            summary.ColumnStyles.Add(New ColumnStyle(SizeType.Absolute, 195))
             summary.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
 
             summary.Controls.Add(CreateFieldLabel("Journal"), 0, 0)
@@ -109,7 +168,7 @@ Namespace Forms
                 manuscriptNumber = "Not recorded"
             End If
 
-            summary.Controls.Add(CreateFieldLabel("Manuscript number"), 0, 1)
+            summary.Controls.Add(CreateFieldLabel("Journal manuscript ID"), 0, 1)
             summary.Controls.Add(CreateValueLabel(manuscriptNumber), 1, 1)
 
             summary.Controls.Add(CreateFieldLabel("Submitted"), 0, 2)
@@ -317,13 +376,12 @@ Namespace Forms
             Dim root As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .ColumnCount = 1,
-                .RowCount = 3,
+                .RowCount = 2,
                 .Padding = New Padding(10)
             }
 
-            root.RowStyles.Add(New RowStyle(SizeType.Absolute, 60))
-            root.RowStyles.Add(New RowStyle(SizeType.Percent, 55))
-            root.RowStyles.Add(New RowStyle(SizeType.Percent, 45))
+            root.RowStyles.Add(New RowStyle(SizeType.Absolute, 56))
+            root.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
 
             Dim toolbar As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
@@ -376,6 +434,7 @@ Namespace Forms
 
             lstDecisions.Dock = DockStyle.Fill
             lstDecisions.IntegralHeight = False
+            lstDecisions.MinimumSize = New Size(0, 110)
 
             AddHandler lstDecisions.SelectedIndexChanged, AddressOf DecisionSelectionChanged
             AddHandler lstDecisions.DoubleClick, AddressOf EditSelectedDecision
@@ -385,10 +444,57 @@ Namespace Forms
             txtDecisionDetails.ReadOnly = True
             txtDecisionDetails.ScrollBars = ScrollBars.Vertical
             txtDecisionDetails.BackColor = SystemColors.Window
+            Dim split As New SplitContainer With {
+                .Dock = DockStyle.Fill,
+                .Orientation = Orientation.Vertical,
+                .SplitterWidth = 6
+            }
+
+            AddHandler split.SizeChanged,
+                Sub(sender, e)
+
+                    Const minimumLeft As Integer = 220
+                    Const minimumRight As Integer = 280
+
+                    Dim availableWidth As Integer =
+                        split.Width -
+                        split.SplitterWidth
+
+                    If availableWidth <=
+                       minimumLeft + minimumRight Then
+
+                        Return
+
+                    End If
+
+                    Dim desired As Integer =
+                        CInt(
+                            Math.Round(
+                                availableWidth * 0.43
+                            )
+                        )
+
+                    split.SplitterDistance =
+                        Math.Min(
+                            availableWidth - minimumRight,
+                            Math.Max(
+                                minimumLeft,
+                                desired
+                            )
+                        )
+
+                End Sub
+
+            split.Panel1.Controls.Add(
+                lstDecisions
+            )
+
+            split.Panel2.Controls.Add(
+                txtDecisionDetails
+            )
 
             root.Controls.Add(toolbar, 0, 0)
-            root.Controls.Add(lstDecisions, 0, 1)
-            root.Controls.Add(txtDecisionDetails, 0, 2)
+            root.Controls.Add(split, 0, 1)
 
             Return root
 
@@ -490,6 +596,13 @@ Namespace Forms
 
             details &=
                 Environment.NewLine &
+                "Workflow effect: " &
+                DescribeDecisionWorkflowEffect(
+                    decisionEvent.Decision
+                )
+
+            details &=
+                Environment.NewLine &
                 Environment.NewLine &
                 "Notes:" &
                 Environment.NewLine
@@ -512,6 +625,16 @@ Namespace Forms
                 If dialog.ShowDialog(Me) = DialogResult.OK AndAlso dialog.CreatedDecision IsNot Nothing Then
 
                     _submission.Decisions.Add(dialog.CreatedDecision)
+
+                    If _manuscript IsNot Nothing Then
+
+                        ManuscriptLifecycleService.ApplyDecision(
+                            _manuscript,
+                            _submission,
+                            dialog.CreatedDecision
+                        )
+
+                    End If
 
                     RefreshDecisionList()
 
@@ -548,6 +671,23 @@ Namespace Forms
                     End If
 
                 Next
+
+                If _manuscript IsNot Nothing Then
+
+                    If Not ManuscriptLifecycleService.ApplyDecision(
+                        _manuscript,
+                        _submission,
+                        updated
+                    ) Then
+
+                        ManuscriptLifecycleService.
+                            ReconcileAfterWorkflowMutation(
+                                _manuscript
+                            )
+
+                    End If
+
+                End If
 
                 RefreshDecisionList()
 
@@ -596,6 +736,16 @@ Namespace Forms
 
             _submission.Decisions.Remove(selected)
 
+            If _manuscript IsNot Nothing Then
+
+                ManuscriptLifecycleService.
+                    ReconcileAfterDecisionRemoval(
+                        _manuscript,
+                        selected
+                    )
+
+            End If
+
             RefreshDecisionList()
 
         End Sub
@@ -608,47 +758,64 @@ Namespace Forms
         Private Function BuildCorrespondencePanel() As Control
 
             Dim root As New TableLayoutPanel With {
-        .Dock = DockStyle.Fill,
-        .ColumnCount = 1,
-        .RowCount = 3,
-        .Padding = New Padding(10)
-    }
+                .Dock = DockStyle.Fill,
+                .ColumnCount = 1,
+                .RowCount = 2,
+                .Padding = New Padding(10)
+            }
 
             root.RowStyles.Add(
-        New RowStyle(SizeType.Absolute, 48)
-    )
+                New RowStyle(
+                    SizeType.Absolute,
+                    96
+                )
+            )
 
             root.RowStyles.Add(
-        New RowStyle(SizeType.Percent, 50)
-    )
-
-            root.RowStyles.Add(
-        New RowStyle(SizeType.Percent, 50)
-    )
+                New RowStyle(
+                    SizeType.Percent,
+                    100
+                )
+            )
 
             Dim toolbar As New TableLayoutPanel With {
-        .Dock = DockStyle.Fill,
-        .ColumnCount = 2,
-        .RowCount = 1
-    }
+                .Dock = DockStyle.Fill,
+                .ColumnCount = 1,
+                .RowCount = 2,
+                .Margin = New Padding(0)
+            }
 
-            toolbar.ColumnStyles.Add(
-        New ColumnStyle(SizeType.Percent, 100)
-    )
+            toolbar.RowStyles.Add(
+                New RowStyle(
+                    SizeType.Absolute,
+                    32
+                )
+            )
 
-            toolbar.ColumnStyles.Add(
-        New ColumnStyle(SizeType.AutoSize)
-    )
+            toolbar.RowStyles.Add(
+                New RowStyle(
+                    SizeType.Percent,
+                    100
+                )
+            )
 
-            lblCorrespondenceHelp.AutoSize = True
-            lblCorrespondenceHelp.Anchor = AnchorStyles.Left
-            lblCorrespondenceHelp.ForeColor = SystemColors.GrayText
+            lblCorrespondenceHelp.AutoSize =
+                True
+
+            lblCorrespondenceHelp.Anchor =
+                AnchorStyles.Left
+
+            lblCorrespondenceHelp.ForeColor =
+                SystemColors.GrayText
 
             Dim itemButtons As New FlowLayoutPanel With {
-        .AutoSize = True,
-        .FlowDirection = FlowDirection.LeftToRight,
-        .WrapContents = False
-    }
+                .Dock = DockStyle.Fill,
+                .AutoSize = False,
+                .FlowDirection = FlowDirection.LeftToRight,
+                .WrapContents = True,
+                .Padding = New Padding(0, 3, 0, 3),
+                .Margin = New Padding(0)
+            }
 
             btnOpenFile.Text = "Open File"
             btnOpenFile.AutoSize = True
@@ -671,30 +838,43 @@ Namespace Forms
             btnRemoveCorrespondence.Visible = False
 
             Dim btnLinkFiles As New Button With {
-        .Text = "Link Files...",
-        .AutoSize = True,
-        .Height = 34
-    }
+                .Text = "Link Files...",
+                .AutoSize = True,
+                .Height = 34
+            }
 
             Dim btnCopyFiles As New Button With {
-        .Text = "Copy to Library...",
-        .AutoSize = True,
-        .Height = 34
-    }
+                .Text = "Copy to Library...",
+                .AutoSize = True,
+                .Height = 34
+            }
 
             Dim btnAddCorrespondence As New Button With {
-        .Text = "+ Add Item",
-        .AutoSize = True,
-        .Height = 34
-    }
+                .Text = "+ Add Item",
+                .AutoSize = True,
+                .Height = 34
+            }
 
-            AddHandler btnOpenFile.Click, AddressOf OpenSelectedFile
-            AddHandler btnOpenSource.Click, AddressOf OpenSelectedSource
-            AddHandler btnEditCorrespondence.Click, AddressOf EditSelectedCorrespondence
-            AddHandler btnRemoveCorrespondence.Click, AddressOf RemoveSelectedCorrespondence
-            AddHandler btnLinkFiles.Click, AddressOf LinkFiles
-            AddHandler btnCopyFiles.Click, AddressOf CopyFilesToLibrary
-            AddHandler btnAddCorrespondence.Click, AddressOf AddCorrespondence
+            AddHandler btnOpenFile.Click,
+                AddressOf OpenSelectedFile
+
+            AddHandler btnOpenSource.Click,
+                AddressOf OpenSelectedSource
+
+            AddHandler btnEditCorrespondence.Click,
+                AddressOf EditSelectedCorrespondence
+
+            AddHandler btnRemoveCorrespondence.Click,
+                AddressOf RemoveSelectedCorrespondence
+
+            AddHandler btnLinkFiles.Click,
+                AddressOf LinkFiles
+
+            AddHandler btnCopyFiles.Click,
+                AddressOf CopyFilesToLibrary
+
+            AddHandler btnAddCorrespondence.Click,
+                AddressOf AddCorrespondence
 
             itemButtons.Controls.Add(btnOpenFile)
             itemButtons.Controls.Add(btnOpenSource)
@@ -705,49 +885,113 @@ Namespace Forms
             itemButtons.Controls.Add(btnAddCorrespondence)
 
             toolbar.Controls.Add(
-        lblCorrespondenceHelp,
-        0,
-        0
-    )
+                lblCorrespondenceHelp,
+                0,
+                0
+            )
 
             toolbar.Controls.Add(
-        itemButtons,
-        1,
-        0
-    )
+                itemButtons,
+                0,
+                1
+            )
 
-            lstCorrespondence.Dock = DockStyle.Fill
-            lstCorrespondence.IntegralHeight = False
-            lstCorrespondence.AllowDrop = True
+            lstCorrespondence.Dock =
+                DockStyle.Fill
 
-            AddHandler lstCorrespondence.SelectedIndexChanged, AddressOf CorrespondenceSelectionChanged
-            AddHandler lstCorrespondence.DoubleClick, AddressOf OpenSelectedFile
-            AddHandler lstCorrespondence.DragEnter, AddressOf CorrespondenceDragEnter
-            AddHandler lstCorrespondence.DragDrop, AddressOf CorrespondenceDragDrop
+            lstCorrespondence.IntegralHeight =
+                False
 
-            txtCorrespondenceDetails.Dock = DockStyle.Fill
-            txtCorrespondenceDetails.Multiline = True
-            txtCorrespondenceDetails.ReadOnly = True
-            txtCorrespondenceDetails.ScrollBars = ScrollBars.Vertical
-            txtCorrespondenceDetails.BackColor = SystemColors.Window
+            lstCorrespondence.AllowDrop =
+                True
+
+            AddHandler lstCorrespondence.SelectedIndexChanged,
+                AddressOf CorrespondenceSelectionChanged
+
+            AddHandler lstCorrespondence.DoubleClick,
+                AddressOf OpenSelectedFile
+
+            AddHandler lstCorrespondence.DragEnter,
+                AddressOf CorrespondenceDragEnter
+
+            AddHandler lstCorrespondence.DragDrop,
+                AddressOf CorrespondenceDragDrop
+
+            txtCorrespondenceDetails.Dock =
+                DockStyle.Fill
+
+            txtCorrespondenceDetails.Multiline =
+                True
+
+            txtCorrespondenceDetails.ReadOnly =
+                True
+
+            txtCorrespondenceDetails.ScrollBars =
+                ScrollBars.Vertical
+
+            txtCorrespondenceDetails.BackColor =
+                SystemColors.Window
+
+            Dim split As New SplitContainer With {
+                .Dock = DockStyle.Fill,
+                .Orientation = Orientation.Vertical,
+                .SplitterWidth = 6
+            }
+
+            AddHandler split.SizeChanged,
+                Sub(sender, e)
+
+                    Const minimumLeft As Integer = 240
+                    Const minimumRight As Integer = 300
+
+                    Dim availableWidth As Integer =
+                        split.Width -
+                        split.SplitterWidth
+
+                    If availableWidth <=
+                       minimumLeft + minimumRight Then
+
+                        Return
+
+                    End If
+
+                    Dim desired As Integer =
+                        CInt(
+                            Math.Round(
+                                availableWidth * 0.43
+                            )
+                        )
+
+                    split.SplitterDistance =
+                        Math.Min(
+                            availableWidth - minimumRight,
+                            Math.Max(
+                                minimumLeft,
+                                desired
+                            )
+                        )
+
+                End Sub
+
+            split.Panel1.Controls.Add(
+                lstCorrespondence
+            )
+
+            split.Panel2.Controls.Add(
+                txtCorrespondenceDetails
+            )
 
             root.Controls.Add(
-        toolbar,
-        0,
-        0
-    )
+                toolbar,
+                0,
+                0
+            )
 
             root.Controls.Add(
-        lstCorrespondence,
-        0,
-        1
-    )
-
-            root.Controls.Add(
-        txtCorrespondenceDetails,
-        0,
-        2
-    )
+                split,
+                0,
+                1
+            )
 
             Return root
 
@@ -1162,6 +1406,10 @@ Namespace Forms
             .IsManagedCopy = managedCopy
         }
 
+                ChronologyProvenanceService.StampCreated(
+                    item
+                )
+
                 _submission.Correspondence.Add(item)
 
                 addedCount += 1
@@ -1430,6 +1678,41 @@ Namespace Forms
         ' =====================================================
         ' Formatting
         ' =====================================================
+
+        Private Function DescribeDecisionWorkflowEffect(
+            decision As EditorialDecision
+        ) As String
+
+            Select Case decision
+
+                Case EditorialDecision.MajorRevision,
+                     EditorialDecision.MinorRevision,
+                     EditorialDecision.ReviseAndResubmit
+
+                    Return "If this is the latest workflow event, the manuscript is in Revision."
+
+                Case EditorialDecision.Accepted
+
+                    Return "If this is the latest workflow event, the manuscript is Accepted."
+
+                Case EditorialDecision.Rejected,
+                     EditorialDecision.DeskRejected,
+                     EditorialDecision.RejectedAfterReview
+
+                    Return "This closes the submission and returns the manuscript to Draft for rerouting unless a later workflow event exists."
+
+                Case EditorialDecision.Withdrawn
+
+                    Return "Withdrawn closes this submission and returns the manuscript to Draft for rerouting unless a later workflow event exists."
+
+                Case Else
+
+                    Return "No lifecycle change is associated with this decision."
+
+            End Select
+
+        End Function
+
 
         Private Function FormatDecision(
             decision As EditorialDecision

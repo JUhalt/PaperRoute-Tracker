@@ -1,4 +1,4 @@
-Imports System
+﻿Imports System
 Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.Linq
@@ -21,7 +21,6 @@ Namespace Forms
         Private _deleteRequested As Boolean = False
 
         Private ReadOnly txtTitle As New TextBox()
-        Private ReadOnly txtCoAuthors As New TextBox()
         Private ReadOnly txtTargetJournal As New TextBox()
         Private ReadOnly cmbStage As New ComboBox()
         Private ReadOnly btnMetadata As New Button()
@@ -48,6 +47,10 @@ Namespace Forms
         Private ReadOnly btnDeleteSubmission As New Button()
 
         Private ReadOnly lblSubmissionInfo As New Label()
+
+        Private versionHistoryControl As ManuscriptVersionHistoryControl = Nothing
+
+        Private _pendingRouteWaypoint As ManuscriptRouteWaypoint = Nothing
 
         Private ReadOnly _displayedSubmissions As New List(Of JournalSubmission)()
 
@@ -89,6 +92,252 @@ Namespace Forms
         End Sub
 
 
+        Public Sub NavigateToRouteWaypoint(
+            waypoint As ManuscriptRouteWaypoint
+        )
+
+            _pendingRouteWaypoint =
+                waypoint
+
+        End Sub
+
+
+        Protected Overrides Sub OnShown(
+            e As EventArgs
+        )
+
+            MyBase.OnShown(
+                e
+            )
+
+            ApplyResponsiveInitialSize()
+
+            If _pendingRouteWaypoint IsNot Nothing Then
+
+                BeginInvoke(
+                    New Action(
+                        AddressOf ApplyPendingRouteNavigation
+                    )
+                )
+
+            End If
+
+        End Sub
+
+
+        Private Sub ApplyResponsiveInitialSize()
+
+            Dim referenceControl As Control =
+                If(
+                    Me.Owner,
+                    Me
+                )
+
+            Dim workingArea As Rectangle =
+                Screen.FromControl(
+                    referenceControl
+                ).WorkingArea
+
+            Dim desiredHeight As Integer =
+                If(
+                    _workingManuscript.Location =
+                    ManuscriptLocation.FileDrawer,
+                    980,
+                    940
+                )
+
+            Dim initialSize As Size =
+                ResponsiveDialogSizingService.CalculateInitialSize(
+                    workingArea,
+                    New Size(1180, desiredHeight),
+                    Me.MinimumSize,
+                    72
+                )
+
+            Me.Size =
+                initialSize
+
+            Me.Location =
+                ResponsiveDialogSizingService.CalculateCenteredLocation(
+                    workingArea,
+                    initialSize
+                )
+
+        End Sub
+
+
+        Private Sub ApplyPendingRouteNavigation()
+
+            Dim waypoint As ManuscriptRouteWaypoint =
+                _pendingRouteWaypoint
+
+            _pendingRouteWaypoint =
+                Nothing
+
+            If waypoint Is Nothing Then
+                Return
+            End If
+
+            Select Case RouteNavigationService.SectionForWaypoint(
+                waypoint
+            )
+
+                Case ManuscriptDetailsSection.VersionHistory
+
+                    If waypoint.VersionId.HasValue AndAlso
+                       versionHistoryControl IsNot Nothing Then
+
+                        versionHistoryControl.SelectVersionById(
+                            waypoint.VersionId.Value
+                        )
+
+                    End If
+
+                    ScrollControlIntoDetailsView(
+                        versionHistoryControl
+                    )
+
+                Case ManuscriptDetailsSection.JournalSubmissions
+
+                    If waypoint.SubmissionId.HasValue Then
+
+                        SelectSubmissionById(
+                            waypoint.SubmissionId.Value
+                        )
+
+                    End If
+
+                    ScrollControlIntoDetailsView(
+                        FindGroupBoxByText(
+                            Me,
+                            "Journal Submissions"
+                        )
+                    )
+
+                Case Else
+
+                    ScrollControlIntoDetailsView(
+                        FindGroupBoxByText(
+                            Me,
+                            "Manuscript"
+                        )
+                    )
+
+            End Select
+
+        End Sub
+
+
+        Private Sub SelectSubmissionById(
+            submissionId As Guid
+        )
+
+            For index As Integer =
+                0 To _displayedSubmissions.Count - 1
+
+                Dim submission As JournalSubmission =
+                    _displayedSubmissions(index)
+
+                If submission IsNot Nothing AndAlso
+                   submission.Id =
+                   submissionId Then
+
+                    lstSubmissions.SelectedIndex =
+                        index
+
+                    Return
+
+                End If
+
+            Next
+
+        End Sub
+
+
+        Private Sub ScrollControlIntoDetailsView(
+            target As Control
+        )
+
+            If target Is Nothing Then
+                Return
+            End If
+
+            Dim current As Control =
+                target.Parent
+
+            While current IsNot Nothing
+
+                Dim scrollable As ScrollableControl =
+                    TryCast(
+                        current,
+                        ScrollableControl
+                    )
+
+                If scrollable IsNot Nothing AndAlso
+                   scrollable.AutoScroll Then
+
+                    scrollable.ScrollControlIntoView(
+                        target
+                    )
+
+                    Return
+
+                End If
+
+                current =
+                    current.Parent
+
+            End While
+
+        End Sub
+
+
+        Private Function FindGroupBoxByText(
+            rootControl As Control,
+            groupText As String
+        ) As GroupBox
+
+            If rootControl Is Nothing Then
+                Return Nothing
+            End If
+
+            Dim group As GroupBox =
+                TryCast(
+                    rootControl,
+                    GroupBox
+                )
+
+            If group IsNot Nothing AndAlso
+               String.Equals(
+                   group.Text,
+                   groupText,
+                   StringComparison.CurrentCultureIgnoreCase
+               ) Then
+
+                Return group
+
+            End If
+
+            For Each child As Control In
+                rootControl.Controls
+
+                Dim match As GroupBox =
+                    FindGroupBoxByText(
+                        child,
+                        groupText
+                    )
+
+                If match IsNot Nothing Then
+                    Return match
+                End If
+
+            Next
+
+            Return Nothing
+
+        End Function
+
+
         ' =====================================================
         ' Interface
         ' =====================================================
@@ -105,7 +354,7 @@ Namespace Forms
 
             Else
 
-                Me.Size = New Size(980, 900)
+                Me.Size = New Size(980, 960)
 
             End If
 
@@ -116,9 +365,15 @@ Namespace Forms
             Dim shell As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .ColumnCount = 1,
-                .RowCount = 2,
+                .RowCount = 3,
                 .Padding = New Padding(0)
             }
+
+            shell.RowStyles.Add(
+                New RowStyle(
+                    SizeType.AutoSize
+                )
+            )
 
             shell.RowStyles.Add(
                 New RowStyle(
@@ -144,13 +399,14 @@ Namespace Forms
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 .ColumnCount = 1,
-                .RowCount = 4,
+                .RowCount = 5,
                 .Padding = New Padding(20, 20, 20, 12)
             }
 
-            root.RowStyles.Add(New RowStyle(SizeType.Absolute, 370))
+            root.RowStyles.Add(New RowStyle(SizeType.Absolute, 330))
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 260))
+            root.RowStyles.Add(New RowStyle(SizeType.Absolute, 285))
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 250))
 
             ' =================================================
@@ -166,7 +422,7 @@ Namespace Forms
             Dim details As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .ColumnCount = 2,
-                .RowCount = 7
+                .RowCount = 6
             }
 
             details.ColumnStyles.Add(
@@ -177,14 +433,13 @@ Namespace Forms
                 New ColumnStyle(SizeType.Percent, 100)
             )
 
-            For i As Integer = 0 To 6
+            For i As Integer = 0 To 5
                 details.RowStyles.Add(
-                    New RowStyle(SizeType.Percent, 14.2857F)
+                    New RowStyle(SizeType.Percent, 16.6667F)
                 )
             Next
 
             txtTitle.Dock = DockStyle.Fill
-            txtCoAuthors.Dock = DockStyle.Fill
             txtTargetJournal.Dock = DockStyle.Fill
 
             cmbStage.Dock = DockStyle.Fill
@@ -200,14 +455,11 @@ Namespace Forms
             details.Controls.Add(CreateFieldLabel("Title"), 0, 0)
             details.Controls.Add(txtTitle, 1, 0)
 
-            details.Controls.Add(CreateFieldLabel("Legacy co-authors"), 0, 1)
-            details.Controls.Add(txtCoAuthors, 1, 1)
+            details.Controls.Add(CreateFieldLabel("Target journal"), 0, 1)
+            details.Controls.Add(txtTargetJournal, 1, 1)
 
-            details.Controls.Add(CreateFieldLabel("Target journal"), 0, 2)
-            details.Controls.Add(txtTargetJournal, 1, 2)
-
-            details.Controls.Add(CreateFieldLabel("Current stage"), 0, 3)
-            details.Controls.Add(cmbStage, 1, 3)
+            details.Controls.Add(CreateFieldLabel("Current stage"), 0, 2)
+            details.Controls.Add(cmbStage, 1, 2)
 
             AddHandler cmbStage.SelectedIndexChanged,
                 Sub(sender, e)
@@ -246,13 +498,13 @@ Namespace Forms
             details.Controls.Add(
                 CreateFieldLabel("Revision deadline"),
                 0,
-                4
+                3
             )
 
             details.Controls.Add(
                 revisionDeadlinePanel,
                 1,
-                4
+                3
             )
 
             btnMetadata.Text =
@@ -270,8 +522,8 @@ Namespace Forms
             AddHandler btnMetadata.Click,
                 AddressOf OpenCrossrefMetadata
 
-            details.Controls.Add(CreateFieldLabel("Metadata"), 0, 5)
-            details.Controls.Add(btnMetadata, 1, 5)
+            details.Controls.Add(CreateFieldLabel("Metadata"), 0, 4)
+            details.Controls.Add(btnMetadata, 1, 4)
 
             btnJournalLinks.Text =
                 "Journal, Preprint && Links..."
@@ -288,8 +540,8 @@ Namespace Forms
             AddHandler btnJournalLinks.Click,
                 AddressOf OpenJournalLinks
 
-            details.Controls.Add(CreateFieldLabel("Links"), 0, 6)
-            details.Controls.Add(btnJournalLinks, 1, 6)
+            details.Controls.Add(CreateFieldLabel("Links"), 0, 5)
+            details.Controls.Add(btnJournalLinks, 1, 5)
 
             detailsGroup.Controls.Add(details)
 
@@ -496,6 +748,18 @@ Namespace Forms
             authorsGroup.Controls.Add(authorsLayout)
 
             ' =================================================
+            ' Manuscript version history
+            ' =================================================
+
+            versionHistoryControl =
+                New ManuscriptVersionHistoryControl(
+                    _workingManuscript
+                ) With {
+                    .Dock = DockStyle.Fill,
+                    .Margin = New Padding(3, 8, 3, 8)
+                }
+
+            ' =================================================
             ' Submissions
             ' =================================================
 
@@ -685,23 +949,120 @@ Namespace Forms
             root.Controls.Add(detailsGroup, 0, 0)
             root.Controls.Add(fileDrawerGroup, 0, 1)
             root.Controls.Add(authorsGroup, 0, 2)
-            root.Controls.Add(submissionsGroup, 0, 3)
+            root.Controls.Add(versionHistoryControl, 0, 3)
+            root.Controls.Add(submissionsGroup, 0, 4)
 
             Me.AcceptButton = btnSave
             Me.CancelButton = btnCancel
 
             scrollHost.Controls.Add(root)
 
+            Dim sectionNav As New FlowLayoutPanel With {
+                .Dock = DockStyle.Fill,
+                .AutoSize = True,
+                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                .FlowDirection = FlowDirection.LeftToRight,
+                .WrapContents = True,
+                .Padding = New Padding(20, 7, 20, 5),
+                .Margin = New Padding(0)
+            }
+
+            Dim lblSections As New Label With {
+                .Text = "Sections:",
+                .AutoSize = True,
+                .Anchor = AnchorStyles.Left,
+                .Font = New Font(Me.Font, FontStyle.Bold),
+                .Margin = New Padding(0, 8, 8, 0)
+            }
+
+            Dim btnJumpManuscript As New Button With {
+                .Text = "Manuscript",
+                .AutoSize = True,
+                .Height = 32
+            }
+
+            Dim btnJumpAuthors As New Button With {
+                .Text = "Authors",
+                .AutoSize = True,
+                .Height = 32
+            }
+
+            Dim btnJumpVersions As New Button With {
+                .Text = "Version History",
+                .AutoSize = True,
+                .Height = 32
+            }
+
+            Dim btnJumpSubmissions As New Button With {
+                .Text = "Journal Submissions",
+                .AutoSize = True,
+                .Height = 32
+            }
+
+            AddHandler btnJumpManuscript.Click,
+                Sub(sender, e)
+                    scrollHost.ScrollControlIntoView(
+                        detailsGroup
+                    )
+                End Sub
+
+            AddHandler btnJumpAuthors.Click,
+                Sub(sender, e)
+                    scrollHost.ScrollControlIntoView(
+                        authorsGroup
+                    )
+                End Sub
+
+            AddHandler btnJumpVersions.Click,
+                Sub(sender, e)
+                    scrollHost.ScrollControlIntoView(
+                        versionHistoryControl
+                    )
+                End Sub
+
+            AddHandler btnJumpSubmissions.Click,
+                Sub(sender, e)
+                    scrollHost.ScrollControlIntoView(
+                        submissionsGroup
+                    )
+                End Sub
+
+            sectionNav.Controls.Add(
+                lblSections
+            )
+
+            sectionNav.Controls.Add(
+                btnJumpManuscript
+            )
+
+            sectionNav.Controls.Add(
+                btnJumpAuthors
+            )
+
+            sectionNav.Controls.Add(
+                btnJumpVersions
+            )
+
+            sectionNav.Controls.Add(
+                btnJumpSubmissions
+            )
+
             shell.Controls.Add(
-                scrollHost,
+                sectionNav,
                 0,
                 0
             )
 
             shell.Controls.Add(
-                footer,
+                scrollHost,
                 0,
                 1
+            )
+
+            shell.Controls.Add(
+                footer,
+                0,
+                2
             )
 
             Me.Controls.Add(
@@ -729,11 +1090,13 @@ Namespace Forms
 
         Private Sub LoadManuscript()
 
+            ManuscriptLifecycleService.
+                ReconcileFromLatestWorkflow(
+                    _workingManuscript
+                )
+
             txtTitle.Text =
                 _workingManuscript.Title
-
-            txtCoAuthors.Text =
-                _workingManuscript.CoAuthors
 
             txtTargetJournal.Text =
                 _workingManuscript.TargetJournal
@@ -770,6 +1133,19 @@ Namespace Forms
 
         End Sub
 
+
+
+        Private Sub RefreshLifecycleControls()
+
+            txtTargetJournal.Text =
+                _workingManuscript.TargetJournal
+
+            cmbStage.SelectedItem =
+                _workingManuscript.CurrentStage
+
+            RefreshRevisionDeadlineDisplay()
+
+        End Sub
 
 
         ' =====================================================
@@ -930,8 +1306,11 @@ Namespace Forms
                         dialog.CreatedDecision
                     )
 
-                    _workingManuscript.RevisionDeadline =
-                        dialog.CreatedDecision.RevisionDeadline
+                    ManuscriptLifecycleService.ApplyDecision(
+                        _workingManuscript,
+                        latestSubmission,
+                        dialog.CreatedDecision
+                    )
 
                 End Using
 
@@ -966,13 +1345,17 @@ Namespace Forms
 
                     Next
 
-                    _workingManuscript.RevisionDeadline =
-                        updated.RevisionDeadline
+                    ManuscriptLifecycleService.ApplyDecision(
+                        _workingManuscript,
+                        latestSubmission,
+                        updated
+                    )
 
                 End Using
 
             End If
 
+            RefreshLifecycleControls()
             RefreshSubmissionList()
             RefreshRevisionDeadlineDisplay()
 
@@ -1049,7 +1432,7 @@ Namespace Forms
             If _workingManuscript.Authors.Count = 0 Then
 
                 lblAuthorInfo.Text =
-                    "No structured authors yet. Legacy co-author text is preserved above."
+                    "No authors assigned yet. Use Add Author to build the manuscript author list."
 
             Else
 
@@ -1582,6 +1965,10 @@ Namespace Forms
             UpdateSubmissionButtons()
             RefreshRevisionDeadlineDisplay()
 
+            If versionHistoryControl IsNot Nothing Then
+                versionHistoryControl.RefreshVersions()
+            End If
+
         End Sub
 
 
@@ -1716,12 +2103,22 @@ Namespace Forms
                 Return
             End If
 
-            Using dialog As New SubmissionDetailsForm(submission)
+            Using dialog As New SubmissionDetailsForm(
+                _workingManuscript,
+                submission
+            )
 
                 dialog.ShowDialog(Me)
 
             End Using
 
+            ManuscriptLifecycleService.
+                ReconcileFromLatestWorkflow(
+                    _workingManuscript,
+                    allowSameDay:=True
+                )
+
+            RefreshLifecycleControls()
             RefreshSubmissionList()
 
         End Sub
@@ -1746,6 +2143,12 @@ Namespace Forms
                         dialog.CreatedSubmission
                     )
 
+                    ManuscriptLifecycleService.ApplySubmission(
+                        _workingManuscript,
+                        dialog.CreatedSubmission
+                    )
+
+                    RefreshLifecycleControls()
                     RefreshSubmissionList()
 
                     lstSubmissions.SelectedIndex =
@@ -1801,6 +2204,13 @@ Namespace Forms
 
                 Next
 
+                ManuscriptLifecycleService.
+                    ReconcileFromLatestWorkflow(
+                        _workingManuscript,
+                        allowSameDay:=True
+                    )
+
+                RefreshLifecycleControls()
                 RefreshSubmissionList()
 
                 For i As Integer = 0 To _displayedSubmissions.Count - 1
@@ -1874,6 +2284,13 @@ Namespace Forms
                 selected
             )
 
+            ManuscriptLifecycleService.
+                ReconcileAfterSubmissionRemoval(
+                    _workingManuscript,
+                    selected
+                )
+
+            RefreshLifecycleControls()
             RefreshSubmissionList()
 
         End Sub
@@ -1948,6 +2365,247 @@ Namespace Forms
         End Sub
 
 
+        Private Function RecordRequiredSubmission() As Boolean
+
+            Using dialog As New AddSubmissionForm(
+                txtTargetJournal.Text.Trim()
+            )
+
+                If dialog.ShowDialog(Me) <>
+                   DialogResult.OK OrElse
+                   dialog.CreatedSubmission Is Nothing Then
+
+                    Return False
+
+                End If
+
+                _workingManuscript.Submissions.Add(
+                    dialog.CreatedSubmission
+                )
+
+                ManuscriptLifecycleService.ApplySubmission(
+                    _workingManuscript,
+                    dialog.CreatedSubmission
+                )
+
+            End Using
+
+            RefreshLifecycleControls()
+            RefreshSubmissionList()
+
+            If lstSubmissions.Items.Count > 0 Then
+
+                lstSubmissions.SelectedIndex =
+                    lstSubmissions.Items.Count - 1
+
+            End If
+
+            Return True
+
+        End Function
+
+
+        Private Function EnsureWorkflowForRequestedStage(
+            requestedStage As PaperStage
+        ) As Boolean
+
+            If ManuscriptStagePolicyService.IsStageSupported(
+                _workingManuscript,
+                requestedStage
+            ) Then
+
+                Return True
+
+            End If
+
+            Dim requirement As ManuscriptStageWorkflowRequirement =
+                ManuscriptStagePolicyService.GetRequirement(
+                    requestedStage
+                )
+
+            Select Case requirement
+
+                Case ManuscriptStageWorkflowRequirement.ActiveSubmission
+
+                    Dim recordSubmission As DialogResult =
+                        MessageBox.Show(
+                            Me,
+                            "PaperRoute ties " &
+                            FormatStageForPrompt(requestedStage) &
+                            " to an active Journal Submission record." &
+                            Environment.NewLine &
+                            Environment.NewLine &
+                            "Record the submission details now?",
+                            "Submission Details Required",
+                            MessageBoxButtons.YesNo,
+                            MessageBoxIcon.Information
+                        )
+
+                    If recordSubmission <>
+                       DialogResult.Yes Then
+
+                        Return False
+
+                    End If
+
+                    If Not RecordRequiredSubmission() Then
+                        Return False
+                    End If
+
+                Case ManuscriptStageWorkflowRequirement.RevisionDecision,
+                     ManuscriptStageWorkflowRequirement.AcceptanceDecision
+
+                    Dim latestSubmission As JournalSubmission =
+                        ManuscriptAttentionService.
+                            GetLatestSubmission(
+                                _workingManuscript
+                            )
+
+                    If latestSubmission Is Nothing Then
+
+                        Dim recordSubmission As DialogResult =
+                            MessageBox.Show(
+                                Me,
+                                "This stage requires an editorial decision " &
+                                "attached to a Journal Submission." &
+                                Environment.NewLine &
+                                Environment.NewLine &
+                                "Record the submission first?",
+                                "Submission Required",
+                                MessageBoxButtons.YesNo,
+                                MessageBoxIcon.Information
+                            )
+
+                        If recordSubmission <>
+                           DialogResult.Yes OrElse
+                           Not RecordRequiredSubmission() Then
+
+                            Return False
+
+                        End If
+
+                        latestSubmission =
+                            ManuscriptAttentionService.
+                                GetLatestSubmission(
+                                    _workingManuscript
+                                )
+
+                    End If
+
+                    If latestSubmission Is Nothing Then
+                        Return False
+                    End If
+
+                    Dim decisionPrompt As String
+
+                    If requirement =
+                       ManuscriptStageWorkflowRequirement.RevisionDecision Then
+
+                        decisionPrompt =
+                            "Revision is driven by a Major Revision, " &
+                            "Minor Revision, or Revise & Resubmit decision."
+
+                    Else
+
+                        decisionPrompt =
+                            FormatStageForPrompt(requestedStage) &
+                            " requires an Accepted editorial decision."
+
+                    End If
+
+                    Dim openSubmission As DialogResult =
+                        MessageBox.Show(
+                            Me,
+                            decisionPrompt &
+                            Environment.NewLine &
+                            Environment.NewLine &
+                            "Open the latest submission to record or edit " &
+                            "the editorial decision now?",
+                            "Editorial Decision Required",
+                            MessageBoxButtons.YesNo,
+                            MessageBoxIcon.Information
+                        )
+
+                    If openSubmission <>
+                       DialogResult.Yes Then
+
+                        Return False
+
+                    End If
+
+                    Using dialog As New SubmissionDetailsForm(
+                        _workingManuscript,
+                        latestSubmission
+                    )
+
+                        dialog.ShowDialog(
+                            Me
+                        )
+
+                    End Using
+
+                    ManuscriptLifecycleService.
+                        ReconcileFromLatestWorkflow(
+                            _workingManuscript,
+                            allowSameDay:=True
+                        )
+
+                    ManuscriptLifecycleService.
+                        ReconcileAfterWorkflowMutation(
+                            _workingManuscript
+                        )
+
+                    RefreshLifecycleControls()
+                    RefreshSubmissionList()
+
+            End Select
+
+            If ManuscriptStagePolicyService.IsStageSupported(
+                _workingManuscript,
+                requestedStage
+            ) Then
+
+                Return True
+
+            End If
+
+            MessageBox.Show(
+                Me,
+                "PaperRoute did not find " &
+                ManuscriptStagePolicyService.RequirementDescription(
+                    requirement
+                ) &
+                ", so the current stage was not changed.",
+                "Stage Not Changed",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information
+            )
+
+            Return False
+
+        End Function
+
+
+        Private Function FormatStageForPrompt(
+            stage As PaperStage
+        ) As String
+
+            Select Case stage
+
+                Case PaperStage.UnderReview
+                    Return "Under Review"
+
+                Case PaperStage.InPress
+                    Return "In Press"
+
+                Case Else
+                    Return stage.ToString()
+
+            End Select
+
+        End Function
+
+
         ' =====================================================
         ' Save working copy
         ' =====================================================
@@ -1988,6 +2646,26 @@ Namespace Forms
                     PaperStage
                 )
 
+            If oldStage <> newStage Then
+
+                If Not EnsureWorkflowForRequestedStage(
+                    newStage
+                ) Then
+
+                    cmbStage.SelectedItem =
+                        _workingManuscript.CurrentStage
+
+                    RefreshRevisionDeadlineDisplay()
+
+                    Return
+
+                End If
+
+                oldStage =
+                    _workingManuscript.CurrentStage
+
+            End If
+
             If newStage = PaperStage.Published Then
 
                 _workingManuscript.Location =
@@ -2003,9 +2681,6 @@ Namespace Forms
 
             _workingManuscript.Title =
                 txtTitle.Text.Trim()
-
-            _workingManuscript.CoAuthors =
-                txtCoAuthors.Text.Trim()
 
             Dim oldTargetJournalText As String =
                 If(
@@ -2058,16 +2733,24 @@ Namespace Forms
                 _workingManuscript.StageEnteredDate =
                     DateTime.Now
 
+                Dim stageHistory As New HistoryEvent With {
+                    .EventDate =
+                        _workingManuscript.StageEnteredDate,
+                    .Stage = newStage,
+                    .Note =
+                        "Stage changed from " &
+                        oldStage.ToString() &
+                        " to " &
+                        newStage.ToString() &
+                        "."
+                }
+
+                ChronologyProvenanceService.StampCreated(
+                    stageHistory
+                )
+
                 _workingManuscript.History.Add(
-                    New HistoryEvent With {
-                        .Stage = newStage,
-                        .Note =
-                            "Stage changed from " &
-                            oldStage.ToString() &
-                            " to " &
-                            newStage.ToString() &
-                            "."
-                    }
+                    stageHistory
                 )
 
             Else
@@ -2147,13 +2830,20 @@ Namespace Forms
 
             End If
 
+            Dim reasonHistory As New HistoryEvent With {
+                .EventDate = DateTime.Now,
+                .Stage =
+                    _workingManuscript.CurrentStage,
+                .Note =
+                    note
+            }
+
+            ChronologyProvenanceService.StampCreated(
+                reasonHistory
+            )
+
             _workingManuscript.History.Add(
-                New HistoryEvent With {
-                    .Stage =
-                        _workingManuscript.CurrentStage,
-                    .Note =
-                        note
-                }
+                reasonHistory
             )
 
         End Sub
@@ -2180,6 +2870,8 @@ Namespace Forms
 
             Dim clone As New JournalSubmission With {
                 .Id = source.Id,
+                .RecordedAtUtc = source.RecordedAtUtc,
+                .LastModifiedAtUtc = source.LastModifiedAtUtc,
                 .JournalName = source.JournalName,
                 .JournalId = source.JournalId,
                 .ManuscriptNumber = source.ManuscriptNumber,
@@ -2195,6 +2887,8 @@ Namespace Forms
                 clone.Decisions.Add(
                     New EditorialDecisionEvent With {
                         .Id = decisionEvent.Id,
+                        .RecordedAtUtc = decisionEvent.RecordedAtUtc,
+                        .LastModifiedAtUtc = decisionEvent.LastModifiedAtUtc,
                         .DecisionDate = decisionEvent.DecisionDate,
                         .Decision = decisionEvent.Decision,
                         .RevisionDeadline = decisionEvent.RevisionDeadline,
@@ -2210,6 +2904,8 @@ Namespace Forms
                 clone.Correspondence.Add(
                     New CorrespondenceItem With {
                         .Id = item.Id,
+                        .RecordedAtUtc = item.RecordedAtUtc,
+                        .LastModifiedAtUtc = item.LastModifiedAtUtc,
                         .ItemDate = item.ItemDate,
                         .Type = item.Type,
                         .Title = item.Title,
@@ -2267,6 +2963,12 @@ Namespace Forms
 
             _originalManuscript.Reminders =
                 committed.Reminders
+
+            _originalManuscript.Versions =
+                committed.Versions
+
+            _originalManuscript.CurrentVersionId =
+                committed.CurrentVersionId
 
             _originalManuscript.CurrentStage =
                 committed.CurrentStage

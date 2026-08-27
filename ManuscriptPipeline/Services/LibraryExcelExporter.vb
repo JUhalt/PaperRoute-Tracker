@@ -65,28 +65,25 @@ Namespace Services
                         manuscript.Title
 
                     manuscriptsSheet.Cell(manuscriptRow, 3).Value =
-                        manuscript.CoAuthors
-
-                    manuscriptsSheet.Cell(manuscriptRow, 4).Value =
                         FormatStage(manuscript.CurrentStage)
 
-                    manuscriptsSheet.Cell(manuscriptRow, 5).Value =
+                    manuscriptsSheet.Cell(manuscriptRow, 4).Value =
                         FormatLocation(manuscript.Location)
 
-                    manuscriptsSheet.Cell(manuscriptRow, 6).Value =
+                    manuscriptsSheet.Cell(manuscriptRow, 5).Value =
                         manuscript.TargetJournal
 
-                    manuscriptsSheet.Cell(manuscriptRow, 7).Value =
+                    manuscriptsSheet.Cell(manuscriptRow, 6).Value =
                         manuscript.StageEnteredDate
 
                     If manuscript.FileDrawerDate.HasValue Then
 
-                        manuscriptsSheet.Cell(manuscriptRow, 8).Value =
+                        manuscriptsSheet.Cell(manuscriptRow, 7).Value =
                             manuscript.FileDrawerDate.Value
 
                     End If
 
-                    manuscriptsSheet.Cell(manuscriptRow, 9).Value =
+                    manuscriptsSheet.Cell(manuscriptRow, 8).Value =
                         manuscript.FileDrawerReason
 
                     manuscriptRow += 1

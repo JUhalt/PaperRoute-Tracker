@@ -130,7 +130,9 @@ Namespace Services
                     Return ExcelImportField.Title
 
                 Case "COAUTHORS", "COAUTHOR", "AUTHORS", "AUTHOR", "COLLABORATORS", "COLLABORATOR"
-                    Return ExcelImportField.CoAuthors
+                    ' PaperRoute authors are structured records. Do not
+                    ' silently collapse author names into legacy free text.
+                    Return ExcelImportField.Ignore
 
                 Case "TARGETJOURNAL", "TARGETOUTLET", "TARGET", "NEXTJOURNAL", "NEXTTARGET"
                     Return ExcelImportField.TargetJournal
@@ -187,7 +189,13 @@ Namespace Services
             Dim result As New List(Of String)()
 
             For Each field As ExcelImportField In [Enum].GetValues(GetType(ExcelImportField))
+
+                If field = ExcelImportField.CoAuthors Then
+                    Continue For
+                End If
+
                 result.Add(GetFieldDisplayName(field))
+
             Next
 
             Return result
@@ -378,7 +386,6 @@ Namespace Services
                         manuscript = New Manuscript With {
                             .Id = Guid.NewGuid(),
                             .Title = normalizedTitle,
-                            .CoAuthors = String.Empty,
                             .TargetJournal = String.Empty,
                             .CurrentStage = PaperStage.Draft,
                             .Location = ManuscriptLocation.Pipeline,
@@ -448,21 +455,6 @@ Namespace Services
             isNewManuscript As Boolean,
             result As ExcelImportResult
         )
-
-            Dim coAuthors As String =
-                ReadMappedText(
-                    worksheet,
-                    rowNumber,
-                    mappingByField,
-                    ExcelImportField.CoAuthors
-                )
-
-            If Not String.IsNullOrWhiteSpace(coAuthors) AndAlso
-               (isNewManuscript OrElse String.IsNullOrWhiteSpace(manuscript.CoAuthors)) Then
-
-                manuscript.CoAuthors = coAuthors
-
-            End If
 
             Dim targetJournal As String =
                 ReadMappedText(
