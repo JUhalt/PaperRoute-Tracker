@@ -34,6 +34,18 @@ Namespace Models
 
         Public Property CurrentVersionId As Guid? = Nothing
 
+        ' Readiness is journal-specific and intentionally independent of the
+        ' manuscript lifecycle. A manuscript may retain preparation history
+        ' for several journals after rerouting.
+        Public Property ReadinessProfiles As List(Of ManuscriptReadiness) =
+            New List(Of ManuscriptReadiness)()
+
+        ' Submission packets may be prepared before a real submission exists.
+        ' They therefore live on the manuscript rather than under
+        ' JournalSubmission.
+        Public Property SubmissionPackets As List(Of SubmissionPacket) =
+            New List(Of SubmissionPacket)()
+
         Public Property CurrentStage As PaperStage = PaperStage.Idea
 
         Public Property Location As ManuscriptLocation = ManuscriptLocation.Pipeline

@@ -1,4 +1,5 @@
 Imports System
+Imports System.Collections.Generic
 
 Namespace Models
 
@@ -19,6 +20,9 @@ Namespace Models
         Public Property IsFavorite As Boolean = False
 
         Public Property IsShortlisted As Boolean = False
+
+        Public Property ReadinessChecklistTemplate As List(Of JournalChecklistTemplateItem) =
+            New List(Of JournalChecklistTemplateItem)()
 
 
         Public ReadOnly Property DisplayName As String
