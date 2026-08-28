@@ -153,7 +153,7 @@ Namespace Forms
             }
 
             btnRefreshTemplate.Text =
-                "Check for New Requirements"
+                "Add New Template Requirements"
 
             btnRefreshTemplate.AutoSize =
                 True
@@ -183,6 +183,11 @@ Namespace Forms
             profileBar.Controls.Add(cmbProfiles)
             profileBar.Controls.Add(btnNewProfile)
             profileBar.Controls.Add(btnRefreshTemplate)
+            profileBar.Controls.Add(
+                New ContextHelpControl(
+                    WorkflowHelpCatalog.ReadinessTemplateRefresh
+                )
+            )
             profileBar.Controls.Add(btnDeleteProfile)
 
             lblSummary.AutoSize =
@@ -311,6 +316,11 @@ Namespace Forms
 
             itemButtons.Controls.Add(btnComplete)
             itemButtons.Controls.Add(btnNotApplicable)
+            itemButtons.Controls.Add(
+                New ContextHelpControl(
+                    WorkflowHelpCatalog.ReadinessNotApplicable
+                )
+            )
             itemButtons.Controls.Add(btnReset)
             itemButtons.Controls.Add(btnNotes)
 

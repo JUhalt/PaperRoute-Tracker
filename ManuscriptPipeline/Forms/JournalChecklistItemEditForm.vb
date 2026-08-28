@@ -53,14 +53,14 @@ Namespace Forms
 
             Me.Size =
                 New Size(
-                    660,
-                    520
+                    700,
+                    530
                 )
 
             Me.MinimumSize =
                 New Size(
-                    560,
-                    440
+                    600,
+                    450
                 )
 
             Me.Font =
@@ -82,7 +82,7 @@ Namespace Forms
             root.ColumnStyles.Add(
                 New ColumnStyle(
                     SizeType.Absolute,
-                    155
+                    205
                 )
             )
 
@@ -102,8 +102,14 @@ Namespace Forms
             txtTitle.Dock =
                 DockStyle.Fill
 
+            txtTitle.PlaceholderText =
+                "e.g., Anonymous manuscript"
+
             txtCategory.Dock =
                 DockStyle.Fill
+
+            txtCategory.PlaceholderText =
+                "e.g., Manuscript, Editorial, Compliance"
 
             txtDescription.Dock =
                 DockStyle.Fill
@@ -114,8 +120,11 @@ Namespace Forms
             txtDescription.ScrollBars =
                 ScrollBars.Vertical
 
+            txtDescription.PlaceholderText =
+                "Optional journal-specific details or instructions"
+
             chkRequired.Text =
-                "Required for readiness"
+                "Required (otherwise optional)"
 
             chkRequired.AutoSize =
                 True
@@ -123,17 +132,65 @@ Namespace Forms
             chkRequired.Checked =
                 True
 
-            root.Controls.Add(CreateLabel("Requirement"), 0, 0)
-            root.Controls.Add(txtTitle, 1, 0)
+            root.Controls.Add(
+                CreateLabelWithHelp(
+                    "Requirement title",
+                    WorkflowHelpCatalog.ReadinessRequirementTitle
+                ),
+                0,
+                0
+            )
 
-            root.Controls.Add(CreateLabel("Category"), 0, 1)
-            root.Controls.Add(txtCategory, 1, 1)
+            root.Controls.Add(
+                txtTitle,
+                1,
+                0
+            )
 
-            root.Controls.Add(CreateLabel("Instructions"), 0, 2)
-            root.Controls.Add(txtDescription, 1, 2)
+            root.Controls.Add(
+                CreateLabelWithHelp(
+                    "Category",
+                    WorkflowHelpCatalog.ReadinessCategory
+                ),
+                0,
+                1
+            )
 
-            root.Controls.Add(CreateLabel("Importance"), 0, 3)
-            root.Controls.Add(chkRequired, 1, 3)
+            root.Controls.Add(
+                txtCategory,
+                1,
+                1
+            )
+
+            root.Controls.Add(
+                CreateLabelWithHelp(
+                    "Instructions / details",
+                    WorkflowHelpCatalog.ReadinessInstructions
+                ),
+                0,
+                2
+            )
+
+            root.Controls.Add(
+                txtDescription,
+                1,
+                2
+            )
+
+            root.Controls.Add(
+                CreateLabelWithHelp(
+                    "Importance",
+                    WorkflowHelpCatalog.ReadinessImportance
+                ),
+                0,
+                3
+            )
+
+            root.Controls.Add(
+                chkRequired,
+                1,
+                3
+            )
 
             Dim buttons As New FlowLayoutPanel With {
                 .Dock = DockStyle.Fill,
@@ -172,6 +229,7 @@ Namespace Forms
                 btnCancel
 
             Me.Controls.Add(root)
+            txtTitle.Select()
 
         End Sub
 
@@ -195,6 +253,45 @@ Namespace Forms
                     9
                 )
             }
+
+        End Function
+
+
+        Private Function CreateLabelWithHelp(
+            text As String,
+            helpText As String
+        ) As Control
+
+            Dim host As New FlowLayoutPanel With {
+                .Dock = DockStyle.Fill,
+                .AutoSize = True,
+                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                .FlowDirection = FlowDirection.LeftToRight,
+                .WrapContents = False,
+                .Margin = New Padding(0),
+                .Padding = New Padding(0, 7, 0, 0)
+            }
+
+            Dim label As Label =
+                CreateLabel(text)
+
+            label.Margin =
+                New Padding(
+                    3,
+                    2,
+                    3,
+                    2
+                )
+
+            host.Controls.Add(label)
+
+            host.Controls.Add(
+                New ContextHelpControl(
+                    helpText
+                )
+            )
+
+            Return host
 
         End Function
 
@@ -231,8 +328,8 @@ Namespace Forms
 
                 MessageBox.Show(
                     Me,
-                    "Enter a short requirement title.",
-                    "Requirement Required",
+                    "Enter a short requirement title, such as Anonymous manuscript or Cover letter.",
+                    "Requirement Title Required",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information
                 )

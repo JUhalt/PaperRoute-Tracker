@@ -172,6 +172,80 @@ Namespace Services
 
                 End If
 
+                If manuscript.SubmissionPackets IsNot Nothing Then
+
+                    For Each packet As SubmissionPacket In manuscript.SubmissionPackets
+
+                        If packet Is Nothing OrElse
+                           packet.Files Is Nothing Then
+                            Continue For
+                        End If
+
+                        If packet.Id = Guid.Empty Then
+                            Throw New InvalidDataException(
+                                "A Submission Packet marked for the PaperRoute Library does not have a valid identifier."
+                            )
+                        End If
+
+                        For Each packetFile As SubmissionPacketFile In packet.Files
+
+                            If packetFile Is Nothing OrElse
+                               packetFile.StorageMode <>
+                                   SubmissionPacketFileStorageMode.ManagedCopy Then
+                                Continue For
+                            End If
+
+                            If String.IsNullOrWhiteSpace(packetFile.LocalFilePath) Then
+                                Continue For
+                            End If
+
+                            If IsManagedPath(packetFile.LocalFilePath) Then
+                                Continue For
+                            End If
+
+                            If packetFile.Id = Guid.Empty Then
+                                Throw New InvalidDataException(
+                                    "A Submission Packet file marked for the PaperRoute Library does not have a valid identifier."
+                                )
+                            End If
+
+                            If Not File.Exists(packetFile.LocalFilePath) Then
+                                Throw New FileNotFoundException(
+                                    "A Submission Packet file marked for the PaperRoute Library could not be found.",
+                                    packetFile.LocalFilePath
+                                )
+                            End If
+
+                            Dim destinationDirectory As String =
+                                Path.Combine(
+                                    _rootDirectory,
+                                    manuscript.Id.ToString("N"),
+                                    "packets",
+                                    packet.Id.ToString("N"),
+                                    packetFile.Id.ToString("N")
+                                )
+
+                            Dim destinationPath As String =
+                                CreateUniqueDestinationPath(
+                                    destinationDirectory,
+                                    packetFile.LocalFilePath
+                                )
+
+                            operations.Add(
+                                New CopyOperation(
+                                    packetFile,
+                                    packetFile.LocalFilePath,
+                                    destinationDirectory,
+                                    destinationPath
+                                )
+                            )
+
+                        Next
+
+                    Next
+
+                End If
+
                 If manuscript.Submissions Is Nothing Then
                     Continue For
                 End If
@@ -850,6 +924,7 @@ Namespace Services
 
             Private ReadOnly _correspondenceItem As CorrespondenceItem
             Private ReadOnly _version As ManuscriptVersion
+            Private ReadOnly _packetFile As SubmissionPacketFile
 
             Public ReadOnly Property SourcePath As String
             Public ReadOnly Property DestinationDirectory As String
@@ -885,6 +960,19 @@ Namespace Services
 
             End Sub
 
+            Public Sub New(
+                packetFile As SubmissionPacketFile,
+                sourcePath As String,
+                destinationDirectory As String,
+                destinationPath As String
+            )
+
+                Me._packetFile = packetFile
+                Me.SourcePath = sourcePath
+                Me.DestinationDirectory = destinationDirectory
+                Me.DestinationPath = destinationPath
+
+            End Sub
 
             Public Sub CommitReference()
 
@@ -907,6 +995,29 @@ Namespace Services
 
                     _version.IsManagedCopy =
                         True
+
+                    Return
+
+                End If
+
+                If _packetFile IsNot Nothing Then
+
+                    _packetFile.LocalFilePath =
+                        DestinationPath
+
+                    _packetFile.StorageMode =
+                        SubmissionPacketFileStorageMode.ManagedCopy
+
+                    If String.IsNullOrWhiteSpace(
+                        _packetFile.OriginalFileName
+                    ) Then
+
+                        _packetFile.OriginalFileName =
+                            Path.GetFileName(
+                                SourcePath
+                            )
+
+                    End If
 
                     Return
 

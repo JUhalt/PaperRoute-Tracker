@@ -1,4 +1,4 @@
-﻿Imports System
+Imports System
 Imports System.Drawing
 Imports System.Windows.Forms
 Imports ManuscriptPipeline.Services
@@ -33,49 +33,22 @@ Namespace Forms
                 True
             )
 
-            Me.Size =
-                New Size(19, 19)
+            Me.Size = New Size(19, 19)
+            Me.MinimumSize = New Size(19, 19)
+            Me.MaximumSize = New Size(19, 19)
+            Me.Margin = New Padding(5, 0, 0, 0)
+            Me.Cursor = Cursors.Help
+            Me.TabStop = True
+            Me.AccessibleRole = AccessibleRole.PushButton
+            Me.AccessibleName = "Help"
+            Me.AccessibleDescription = _helpText
 
-            Me.MinimumSize =
-                New Size(19, 19)
+            _toolTip.InitialDelay = 350
+            _toolTip.ReshowDelay = 100
+            _toolTip.AutoPopDelay = 6000
+            _toolTip.SetToolTip(Me, _helpText)
 
-            Me.MaximumSize =
-                New Size(19, 19)
-
-            Me.Margin =
-                New Padding(5, 0, 0, 0)
-
-            Me.Cursor =
-                Cursors.Help
-
-            Me.TabStop =
-                True
-
-            Me.AccessibleRole =
-                AccessibleRole.PushButton
-
-            Me.AccessibleName =
-                "Help"
-
-            Me.AccessibleDescription =
-                _helpText
-
-            _toolTip.InitialDelay =
-                350
-
-            _toolTip.ReshowDelay =
-                100
-
-            _toolTip.AutoPopDelay =
-                6000
-
-            _toolTip.SetToolTip(
-                Me,
-                _helpText
-            )
-
-            _dismissTimer.Interval =
-                750
+            _dismissTimer.Interval = 750
 
             AddHandler _dismissTimer.Tick,
                 AddressOf DismissTimerTick
@@ -87,18 +60,13 @@ Namespace Forms
             e As PaintEventArgs
         )
 
-            MyBase.OnPaint(
-                e
-            )
+            MyBase.OnPaint(e)
 
             e.Graphics.SmoothingMode =
                 System.Drawing.Drawing2D.SmoothingMode.AntiAlias
 
             Dim diameter As Single =
-                Math.Min(
-                    ClientSize.Width,
-                    ClientSize.Height
-                ) - 3.0F
+                Math.Min(ClientSize.Width, ClientSize.Height) - 3.0F
 
             Dim bounds As New RectangleF(
                 1.5F,
@@ -111,12 +79,7 @@ Namespace Forms
                 UiTheme.SecondaryText(),
                 1.4F
             )
-
-                e.Graphics.DrawEllipse(
-                    pen,
-                    bounds
-                )
-
+                e.Graphics.DrawEllipse(pen, bounds)
             End Using
 
             TextRenderer.DrawText(
@@ -131,12 +94,10 @@ Namespace Forms
             )
 
             If Focused Then
-
                 ControlPaint.DrawFocusRectangle(
                     e.Graphics,
                     ClientRectangle
                 )
-
             End If
 
         End Sub
@@ -146,22 +107,15 @@ Namespace Forms
             e As EventArgs
         )
 
-            MyBase.OnClick(
-                e
-            )
-
+            MyBase.OnClick(e)
             Focus()
 
             If _clickHelpVisible Then
-
                 HideHelp()
                 Return
-
             End If
 
-            ShowHelp(
-                fromClick:=True
-            )
+            ShowHelp(fromClick:=True)
 
         End Sub
 
@@ -171,10 +125,7 @@ Namespace Forms
         )
 
             _dismissTimer.Stop()
-
-            MyBase.OnMouseEnter(
-                e
-            )
+            MyBase.OnMouseEnter(e)
 
         End Sub
 
@@ -183,15 +134,11 @@ Namespace Forms
             e As EventArgs
         )
 
-            MyBase.OnMouseLeave(
-                e
-            )
+            MyBase.OnMouseLeave(e)
 
             If _clickHelpVisible Then
-
                 _dismissTimer.Stop()
                 _dismissTimer.Start()
-
             End If
 
         End Sub
@@ -201,14 +148,12 @@ Namespace Forms
             e As EventArgs
         )
 
-            MyBase.OnEnter(
-                e
-            )
+            MyBase.OnEnter(e)
 
-            ShowHelp(
-                fromClick:=False
-            )
-
+            ' Focus alone should not open a tooltip. This prevents a help
+            ' control that happens to receive initial dialog focus from
+            ' covering the first field before the user asks for help.
+            ' Keyboard users can still press Enter, Space, or F1.
             Invalidate()
 
         End Sub
@@ -219,11 +164,7 @@ Namespace Forms
         )
 
             HideHelp()
-
-            MyBase.OnLeave(
-                e
-            )
-
+            MyBase.OnLeave(e)
             Invalidate()
 
         End Sub
@@ -233,34 +174,20 @@ Namespace Forms
             e As KeyEventArgs
         )
 
-            MyBase.OnKeyDown(
-                e
-            )
+            MyBase.OnKeyDown(e)
 
-            If e.KeyCode =
-               Keys.Enter OrElse
-               e.KeyCode =
-               Keys.Space OrElse
-               e.KeyCode =
-               Keys.F1 Then
+            If e.KeyCode = Keys.Enter OrElse
+               e.KeyCode = Keys.Space OrElse
+               e.KeyCode = Keys.F1 Then
 
                 If _clickHelpVisible Then
-
                     HideHelp()
-
                 Else
-
-                    ShowHelp(
-                        fromClick:=True
-                    )
-
+                    ShowHelp(fromClick:=True)
                 End If
 
-                e.Handled =
-                    True
-
-                e.SuppressKeyPress =
-                    True
+                e.Handled = True
+                e.SuppressKeyPress = True
 
             End If
 
@@ -271,26 +198,17 @@ Namespace Forms
             fromClick As Boolean
         )
 
-            If String.IsNullOrWhiteSpace(
-                _helpText
-            ) Then
-
+            If String.IsNullOrWhiteSpace(_helpText) Then
                 Return
-
             End If
 
             _dismissTimer.Stop()
-
-            _clickHelpVisible =
-                fromClick
+            _clickHelpVisible = fromClick
 
             _toolTip.Show(
                 _helpText,
                 Me,
-                New Point(
-                    Width + 4,
-                    Height
-                ),
+                New Point(Width + 4, Height),
                 8000
             )
 
@@ -300,13 +218,8 @@ Namespace Forms
         Private Sub HideHelp()
 
             _dismissTimer.Stop()
-
-            _clickHelpVisible =
-                False
-
-            _toolTip.Hide(
-                Me
-            )
+            _clickHelpVisible = False
+            _toolTip.Hide(Me)
 
         End Sub
 
@@ -335,9 +248,7 @@ Namespace Forms
 
             End If
 
-            MyBase.Dispose(
-                disposing
-            )
+            MyBase.Dispose(disposing)
 
         End Sub
 
