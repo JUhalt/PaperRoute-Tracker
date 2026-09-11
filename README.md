@@ -6,7 +6,7 @@
 
 [![Build PaperRoute Tracker](https://github.com/JUhalt/PaperRoute-Tracker/actions/workflows/build.yml/badge.svg)](https://github.com/JUhalt/PaperRoute-Tracker/actions/workflows/build.yml)
 [![Latest Release](https://img.shields.io/github/v/release/JUhalt/PaperRoute-Tracker)](https://github.com/JUhalt/PaperRoute-Tracker/releases/latest)
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE.txt)
+[![License: GPL-3.0-only](https://img.shields.io/badge/License-GPL--3.0--only-blue.svg)](LICENSE.txt)
 
 **A local-first academic manuscript tracker for researchers.**
 
@@ -14,6 +14,7 @@
 
 PaperRoute Tracker helps researchers manage manuscripts from idea through submission, peer review, revision, publication—or the File Drawer—without requiring an account or sending the core workflow database to a cloud service.
 
+**Current stable release:** [v0.3.0 — The Route](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v0.3.0). **Active development:** [v0.4.0 — Submission Readiness](https://github.com/JUhalt/PaperRoute-Tracker/milestone/6). See the [roadmap](ROADMAP.md) for planned work and its issue owners.
 
 
 **New to PaperRoute?** Start with the [`PaperRoute User Guide`](docs/USER_GUIDE.md) for a Quick Start, feature tour, and task-oriented "How do I...?" reference.
@@ -101,7 +102,7 @@ When legacy ManuscriptPipeline storage is migrated, PaperRoute retains the legac
 
 On the GitHub **Releases** page, download and run the PaperRoute Setup executable from the latest stable release. Installed builds can then check GitHub Releases for future PaperRoute updates.
 
-Fresh installations default to the **Stable** update channel. Users who intentionally want prerelease builds can opt into **Preview** from **Settings → Updates**.
+Fresh installations default to the **Stable** update channel. Users who intentionally want prerelease builds can choose **Preview** under **Settings → Preferences... → Update channel**. Use **Settings → Check for Updates...** to check immediately.
 
 ### Portable CI build
 
@@ -209,4 +210,4 @@ Bug reports, usability feedback, importer edge cases, and pull requests are welc
 
 ## License
 
-PaperRoute Tracker is licensed under the **GNU General Public License v3.0**. See [`LICENSE.txt`](LICENSE.txt).
+PaperRoute Tracker is licensed under the **GNU General Public License, version 3 only** (SPDX: `GPL-3.0-only`). See [`LICENSE.txt`](LICENSE.txt) for the complete license and [`NOTICE.md`](NOTICE.md) for the project-specific notice.

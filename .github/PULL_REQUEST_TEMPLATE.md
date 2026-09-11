@@ -8,6 +8,8 @@ Explain why this change belongs in PaperRoute.
 
 ## Testing
 
+For documentation-only changes, mark build/application checks as not applicable and describe the relevant documentation/link validation.
+
 - [ ] `dotnet restore ManuscriptPipeline.slnx`
 - [ ] `dotnet build ManuscriptPipeline.slnx --configuration Release`
 - [ ] `dotnet test PaperRoute.Tests/PaperRoute.Tests.vbproj --configuration Release --no-build`
@@ -22,3 +24,11 @@ For persistence, migration, import/export, backup/restore, managed-file, or life
 ## Notes
 
 Call out schema, migration, installer/updater, accessibility, API, or compatibility considerations that deserve review.
+
+## Tracking and documentation
+
+- Linked issue(s):
+- Roadmap/milestone impact (or not applicable):
+- README, guide, release notes, or other documentation updated (or not applicable):
+
+Record accepted findings and new development ideas in a linked issue or explicit roadmap proposal. A proposal does not become a release commitment until scoped.
