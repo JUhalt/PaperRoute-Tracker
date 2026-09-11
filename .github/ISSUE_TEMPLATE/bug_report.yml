@@ -12,7 +12,7 @@ body:
     attributes:
       label: PaperRoute version
       description: Copy the version from About or Diagnostics when possible.
-      placeholder: 0.1.0
+      placeholder: 0.3.0
     validations:
       required: true
   - type: dropdown

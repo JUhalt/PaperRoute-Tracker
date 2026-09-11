@@ -5,6 +5,8 @@
 # PaperRoute
 
 [![Build PaperRoute Tracker](https://github.com/JUhalt/PaperRoute-Tracker/actions/workflows/build.yml/badge.svg)](https://github.com/JUhalt/PaperRoute-Tracker/actions/workflows/build.yml)
+[![Latest Release](https://img.shields.io/github/v/release/JUhalt/PaperRoute-Tracker)](https://github.com/JUhalt/PaperRoute-Tracker/releases/latest)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE.txt)
 
 **A local-first academic manuscript tracker for researchers.**
 
@@ -49,15 +51,15 @@ Output is available as plain text, Markdown, or HTML in publication-list or CV-s
 Active reminders can be exported as a portable `.ics` calendar for Outlook, Google Calendar, Apple Calendar, and other iCalendar-compatible tools. Optional Windows notifications are disabled by default and checked when PaperRoute starts; notification failure never blocks the in-app reminder workflow.
 
 ### Built-in User Guide
-The **Help** button in the main PaperRoute header (and **Settings → User Guide...**) opens the same v0.2 guide that is maintained in [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md). Installed and portable builds ship a local copy so core help remains available offline.
+The **Help** button in the main PaperRoute header (and **Settings → User Guide...**) opens the current user guide maintained in [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md). Installed and portable builds ship a local copy so core help remains available offline.
 
 ## Current status
 
-**v0.1.0** — first stable release of the PaperRoute Reliable Core.
+**v0.3.0** - current stable release, **The Route**.
 
-The stable 0.1 line focuses on trustworthy local storage, manuscript lifecycle tracking, spreadsheet import/export, backup/restore, installation and updates, accessibility, and recovery. New feature development continues toward v0.2 Metadata & Integrations.
+PaperRoute v0.3 adds the canonical manuscript-history layer: Visual Route View, manuscript Version History, workflow-linked versions, immutable managed snapshots, chronology/provenance tracking, and safer recovery behavior.
 
-Development on `master` is now targeting **v0.2.0-alpha.1**, beginning with storage schema 2 and the metadata foundation. Stable users remain on the published v0.1.x release line unless they intentionally opt into Preview builds.
+Development is now targeting **v0.4.0 - Submission Readiness**, including per-journal readiness checklists, exact submission packets, file-integrity tracking, and linkage between the files actually submitted and the manuscript/version/journal round they belong to. Stable users remain on the published v0.3.x release line unless they intentionally opt into Preview builds.
 
 ## Highlights
 
