@@ -90,7 +90,7 @@ All notable changes to PaperRoute Tracker will be documented here.
 
 - Automated regression suite contains **159 passing tests**.
 - GitHub Actions builds and tests the Windows Release configuration and publishes a Windows x64 CI artifact.
-- Final v0.2.0 publication requires upgrade, backup/restore, clean-install, updater, UI, and packaging certification.
+- Historical release gate: final v0.2.0 publication required upgrade, backup/restore, clean-install, updater, UI, and packaging certification. See the [published v0.2.0 release](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v0.2.0) and [release tracking issue #22](https://github.com/JUhalt/PaperRoute-Tracker/issues/22). The test total above is the historical v0.2 checkpoint.
 
 ## [0.1.0] - 2026-08-20
 

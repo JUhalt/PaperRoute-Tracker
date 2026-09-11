@@ -8,7 +8,7 @@ Security fixes are prioritized for the current stable PaperRoute release and act
 
 Please do not publish suspected vulnerabilities, sensitive local paths, manuscript content, credentials, tokens, or private research data in a public GitHub issue.
 
-Use GitHub's private vulnerability-reporting feature when available. If private reporting is unavailable, contact the maintainer privately before disclosing details publicly.
+Send suspected vulnerability reports privately to Joshua Uhalt at [Josh.Uhalt@gmail.com](mailto:Josh.Uhalt@gmail.com). Do not include private research data unless needed and explicitly agreed; start with a minimal, anonymized description.
 
 Useful reports include:
 

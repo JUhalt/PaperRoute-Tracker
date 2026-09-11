@@ -316,7 +316,7 @@ Choose **Settings > Reminders & Calendar...**.
 PaperRoute combines three reminder sources:
 
 1. **Revision deadlines** recorded in the manuscript workflow.
-2. **Submission follow-up dates** recorded on journal submissions that do not yet have a decision.
+2. **Submission follow-up dates** explicitly recorded on journal submissions; these remain active until you clear or change them.
 3. **Custom reminders** that you create yourself.
 
 The reminder list shows due date, status, type, manuscript, reminder title, and journal where relevant.
@@ -488,7 +488,7 @@ Theme changes currently take effect after restarting PaperRoute.
 
 Installed builds can check GitHub Releases for PaperRoute updates.
 
-Stable installations default to the Stable channel. Preview is opt-in.
+Stable installations default to the Stable channel. To opt into Preview, choose **Settings > Preferences... > Update channel**. Use **Settings > Check for Updates...** to check immediately.
 
 Portable/developer builds are intended for development and smoke testing and do not behave exactly like an installed updater-enabled build.
 
