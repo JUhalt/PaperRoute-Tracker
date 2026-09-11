@@ -105,7 +105,7 @@ Deleting a Version History record is also working-copy based. If the version own
 
 Older or imported records may still contain free-text co-author information. PaperRoute preserves that text rather than silently parsing or replacing it.
 
-Structured authors are the preferred v0.2 workflow for reusable people, affiliations, ordering, and ORCID information.
+Structured authors are the preferred workflow for reusable people, affiliations, ordering, and ORCID information.
 
 ---
 
@@ -638,7 +638,7 @@ PaperRoute does not require a PaperRoute account for the core manuscript library
 
 ### A window looks clipped or unusable
 
-PaperRoute v0.2 includes high-DPI and responsive-dialog work, but Windows display scaling can expose edge cases.
+PaperRoute includes high-DPI and responsive-dialog support, but Windows display scaling can expose edge cases.
 
 Try:
 

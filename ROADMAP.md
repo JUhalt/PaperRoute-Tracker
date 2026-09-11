@@ -99,7 +99,7 @@ Issues:
 
 - **#25 Submission Packet Vault and file integrity**
 - **#26 Per-journal readiness checklists**
-- **new foundation issue:** Schema 5 readiness and submission-packet foundation
+- **#38 Schema 5 readiness and submission-packet foundation**
 
 v0.4 turns a manuscript version into a concrete, reconstructable journal submission package.
 
