@@ -64,6 +64,14 @@ Development is now targeting **v0.4.0 - Submission Readiness**, including per-jo
 
 ## Highlights
 
+### v0.4 development progress — September 12, 2026
+
+The [Submission Readiness draft PR #40](https://github.com/JUhalt/PaperRoute-Tracker/pull/40) now brings together journal checklists, exact submission packets, local file-integrity checks, and navigation between readiness, versions, packets, and recorded submissions. The packet layout has been checked at minimum and expanded window sizes, and a disposable workflow demo supports hands-on review without an existing manuscript library.
+
+See the [development evidence and demo instructions](https://github.com/JUhalt/PaperRoute-Tracker/blob/v0.4-submission-readiness/ManualCertification/v0.4-Development-Checkpoint.md) for completed checks and how to try the work. [Release gate #42](https://github.com/JUhalt/PaperRoute-Tracker/issues/42) tracks the remaining display-scaling, installed-upgrade, and packaging checks. **v0.4 is unreleased; stable downloads remain v0.3.0.**
+
+### Stable features
+
 - **Pipeline, Published, and File Drawer shelves** for the complete manuscript lifecycle.
 - **Journal submission history** with manuscript numbers, dates, notes, and publisher portal links.
 - **Editorial decisions** including rejection, revision, acceptance, and revision deadlines.
