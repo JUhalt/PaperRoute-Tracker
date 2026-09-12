@@ -103,6 +103,8 @@ Issues:
 
 **Release certification:** [#42](https://github.com/JUhalt/PaperRoute-Tracker/issues/42). **Development PR:** [#40](https://github.com/JUhalt/PaperRoute-Tracker/pull/40) remains a draft; issue acceptance evidence determines completion.
 
+**September 12 development checkpoint:** readiness, packet assembly, explicit file-integrity checks, and connected submission navigation are implemented in the development branch. Minimum/expanded layouts and a disposable save/reload workflow have been exercised. [Checkpoint evidence and demo instructions](https://github.com/JUhalt/PaperRoute-Tracker/blob/v0.4-submission-readiness/ManualCertification/v0.4-Development-Checkpoint.md) distinguish automated checks from manual certification. Display scaling, installed upgrade, and release packaging remain open in #42; v0.4 has not been released.
+
 v0.4 turns a manuscript version into a concrete, reconstructable journal submission package.
 
 ## Planned flow
