@@ -115,7 +115,9 @@ Public Class SubmissionDetailsLayoutTests
         Dim ancestor As Control = control.Parent
         While ancestor IsNot Nothing
             Assert.IsTrue(ancestor.ClientRectangle.Contains(ancestor.RectangleToClient(screenBounds)),
-                control.GetType().Name & " is clipped by " & ancestor.GetType().Name)
+                control.GetType().Name & " is clipped by " & ancestor.GetType().Name &
+                "; child=" & ancestor.RectangleToClient(screenBounds).ToString() &
+                "; available=" & ancestor.ClientRectangle.ToString())
             ancestor = ancestor.Parent
         End While
     End Sub

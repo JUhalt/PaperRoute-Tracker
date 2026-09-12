@@ -475,7 +475,8 @@ Namespace Forms
 
             lstDecisions.Dock = DockStyle.Fill
             lstDecisions.IntegralHeight = False
-            lstDecisions.MinimumSize = New Size(0, 110)
+            ' Let the docked list fit its actual panel height. A fixed child
+            ' minimum can extend below the panel on different Windows metrics.
 
             AddHandler lstDecisions.SelectedIndexChanged, AddressOf DecisionSelectionChanged
             AddHandler lstDecisions.DoubleClick, AddressOf EditSelectedDecision
