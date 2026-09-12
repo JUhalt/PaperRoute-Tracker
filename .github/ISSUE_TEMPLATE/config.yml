@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: PaperRoute User Guide
+    url: https://github.com/JUhalt/PaperRoute-Tracker/blob/master/docs/USER_GUIDE.md
+    about: Check the user guide before opening a usage question or issue.

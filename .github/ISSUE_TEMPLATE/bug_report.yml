@@ -12,9 +12,31 @@ body:
     attributes:
       label: PaperRoute version
       description: Copy the version from About or Diagnostics when possible.
-      placeholder: 0.1.0
+      placeholder: 0.3.0
     validations:
       required: true
+  - type: dropdown
+    id: build_source
+    attributes:
+      label: Release channel or build source
+      options:
+        - Stable release
+        - Preview release
+        - Portable CI build
+        - Visual Studio / development build
+        - Not sure
+  - type: input
+    id: windows_version
+    attributes:
+      label: Windows version
+      description: Include the Windows version/build when known; you can find it in Settings > System > About.
+      placeholder: Windows 11, version and build
+  - type: input
+    id: display_scaling
+    attributes:
+      label: Display scaling and window size (for layout issues)
+      description: Include Windows scaling, approximate window size, and whether more than one monitor is involved. Leave blank if unrelated.
+      placeholder: 125% scaling, smallest window size, one monitor
   - type: dropdown
     id: theme
     attributes:
