@@ -90,4 +90,10 @@ dotnet run --project ManualCertification/V04Demo/PaperRoute.V04Demo.csproj -- re
 - Select the missing linked figure and inspect its recorded path. Open is disabled for missing files. Use the optional integrity mode above to check missing, changed, unchanged, and absent-baseline behavior with real disposable fixtures.
 - For genuine display scaling checks, set Windows scaling through the normal display settings and start a new demo process. The host uses SystemAware DPI; `--minimum` uses the form's actual minimum size after initialization. It does not simulate Windows DPI by changing fonts or calling `Scale`.
 
+Add `--primary` to place a demo on the primary display and append its actual
+`DeviceDpi` to the title. This avoids recording a scaling pass against the wrong
+monitor on a multi-display desktop. Expected DPI values are 96 at 100%, 120 at
+125%, and 144 at 150%; verify the title instead of assuming a Settings change
+has taken effect. Restore the original Windows scaling after the checks.
+
 Record the commit or working-tree changes, Windows scaling, surface, window size, and screenshot path alongside pass/fail notes. A clean visual result is evidence for these dialogs only; it does not certify the entire application or a release.

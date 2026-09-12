@@ -9,7 +9,7 @@ internal static class Program
 {
     private const string Usage = "PaperRoute v0.4 manual demo\n\n" +
         "Surfaces: vault (default), readiness, packet, packet-new, file, file-new, notes, submission, workflow\n" +
-        "Options: --minimum, --empty (vault/readiness only), --integrity (populated vault only), --dark or --system, --help\n\n" +
+        "Options: --minimum, --primary, --empty (vault/readiness only), --integrity (populated vault only), --dark or --system, --help\n\n" +
         "Default surfaces discard manuscript changes when the window closes.\n" +
         "workflow saves only in a new disposable temporary session.\n" +
         "--integrity creates and retains disposable files in a unique temporary directory.";
@@ -31,12 +31,14 @@ internal static class Program
         var positional = args.Where(argument => !argument.StartsWith("--")).ToArray();
         var surface = positional.FirstOrDefault()?.ToLowerInvariant() ?? "vault";
         var minimum = args.Contains("--minimum", StringComparer.OrdinalIgnoreCase);
+        var primary = args.Contains("--primary", StringComparer.OrdinalIgnoreCase);
         var empty = args.Contains("--empty", StringComparer.OrdinalIgnoreCase);
         var integrity = args.Contains("--integrity", StringComparer.OrdinalIgnoreCase);
         var dark = args.Contains("--dark", StringComparer.OrdinalIgnoreCase);
         var system = args.Contains("--system", StringComparer.OrdinalIgnoreCase);
         var invalidOption = args.Any(argument => argument.StartsWith("--") &&
             !argument.Equals("--minimum", StringComparison.OrdinalIgnoreCase) &&
+            !argument.Equals("--primary", StringComparison.OrdinalIgnoreCase) &&
             !argument.Equals("--empty", StringComparison.OrdinalIgnoreCase) &&
             !argument.Equals("--integrity", StringComparison.OrdinalIgnoreCase) &&
             !argument.Equals("--dark", StringComparison.OrdinalIgnoreCase) &&
@@ -66,6 +68,7 @@ internal static class Program
                     "PaperRoute-V04-Workflow-Demo-" + Guid.NewGuid().ToString("N"));
                 StorageEnvironment.ConfigureIsolatedSessionRoot(sessionRoot);
                 using var launcher = new WorkflowDemoForm(sessionRoot, minimum);
+                ConfigureDisplayEvidence(launcher, primary);
                 launcher.ShowDialog();
                 return;
             }
@@ -102,6 +105,7 @@ internal static class Program
         form.Text += integrity
             ? " [DEMO - unsaved sample data; disposable integrity files]"
             : " [DEMO - unsaved sample data]";
+        ConfigureDisplayEvidence(form, primary);
         if (minimum)
         {
             form.Shown += (_, _) =>
@@ -117,6 +121,23 @@ internal static class Program
         // These forms use DialogResult for Save and Cancel. Hosting them modally
         // preserves their normal behavior; closing ends this disposable process.
         form.ShowDialog();
+    }
+
+    private static void ConfigureDisplayEvidence(Form form, bool primary)
+    {
+        if (!primary) return;
+
+        // Keep native Windows scaling tests on the display whose scale was changed.
+        // Report the actual form DPI instead of inferring it from Settings.
+        form.StartPosition = FormStartPosition.Manual;
+        form.Location = Screen.PrimaryScreen!.WorkingArea.Location;
+        form.Shown += (_, _) => form.BeginInvoke(new Action(() =>
+        {
+            var area = Screen.PrimaryScreen!.WorkingArea;
+            form.Location = new Point(area.Left + Math.Max(0, (area.Width - form.Width) / 2),
+                area.Top + Math.Max(0, (area.Height - form.Height) / 2));
+            form.Text += $" [DPI {form.DeviceDpi}; primary display]";
+        }));
     }
 }
 

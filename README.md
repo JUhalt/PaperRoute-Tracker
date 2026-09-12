@@ -14,7 +14,7 @@
 
 PaperRoute Tracker helps researchers manage manuscripts from idea through submission, peer review, revision, publication—or the File Drawer—without requiring an account or sending the core workflow database to a cloud service.
 
-**Current stable release:** [v0.3.0 — The Route](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v0.3.0). **Active development:** [v0.4.0 — Submission Readiness](https://github.com/JUhalt/PaperRoute-Tracker/milestone/6). See the [roadmap](ROADMAP.md) for planned work and its issue owners.
+**Current stable release:** [v0.3.0 — The Route](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v0.3.0). **Release preparation:** [v0.4.0 — Submission Readiness](docs/releases/0.4.0.md), an unreleased candidate tracked in the [v0.4 milestone](https://github.com/JUhalt/PaperRoute-Tracker/milestone/6). See the [roadmap](ROADMAP.md) for planned work and its issue owners.
 
 
 **New to PaperRoute?** Start with the [`PaperRoute User Guide`](docs/USER_GUIDE.md) for a Quick Start, feature tour, and task-oriented "How do I...?" reference.
@@ -28,7 +28,7 @@ From **Data → Authors & Affiliations**, PaperRoute can read a selected author'
 A successful public lookup confirms that the ORCID iD exists in the registry, but PaperRoute does not treat that as proof that the record holder authenticated the iD to PaperRoute. Selected dated works can be imported directly to the Published shelf when the user explicitly chooses that behavior; undated works remain Ideas. Imported works are deduplicated by DOI first and exact title second.
 
 ### BibTeX & RIS interchange
-PaperRoute can import standard BibTeX (`.bib`) and RIS (`.ris`) bibliography files with a review-before-import workflow. Common title, author, DOI, journal/outlet, publication date, volume, issue, pages, publisher, URL, abstract, and keyword metadata are mapped into the schema-2 manuscript model. Duplicate detection uses DOI first and normalized title second.
+PaperRoute can import standard BibTeX (`.bib`) and RIS (`.ris`) bibliography files with a review-before-import workflow. Common title, author, DOI, journal/outlet, publication date, volume, issue, pages, publisher, URL, abstract, and keyword metadata are mapped into PaperRoute manuscript metadata. Duplicate detection uses DOI first and normalized title second.
 
 Unsupported or ambiguous source fields are shown as warnings rather than silently discarded. Imported structured authors are matched against the reusable author library before new people are created. Bibliographic publication metadata does not fabricate journal-submission history.
 
@@ -60,7 +60,7 @@ The **Help** button in the main PaperRoute header (and **Settings → User Guide
 
 PaperRoute v0.3 adds the canonical manuscript-history layer: Visual Route View, manuscript Version History, workflow-linked versions, immutable managed snapshots, chronology/provenance tracking, and safer recovery behavior.
 
-Development is now targeting **v0.4.0 - Submission Readiness**, including per-journal readiness checklists, exact submission packets, file-integrity tracking, and linkage between the files actually submitted and the manuscript/version/journal round they belong to. Stable users remain on the published v0.3.x release line unless they intentionally opt into Preview builds.
+The **v0.4.0 — Submission Readiness** candidate adds per-journal readiness checklists, exact submission packets, file-integrity tracking, and connected navigation to the manuscript version and journal interaction they belong to. See the [candidate release notes](docs/releases/0.4.0.md) and [upgrade notes](UPGRADE_NOTES.md). Stable users remain on the published v0.3.x release line until v0.4 is published.
 
 ## Highlights
 
@@ -131,7 +131,7 @@ Use **Data → Get Import Template...** to generate the supported multi-sheet wo
 - `Decisions`
 - `Correspondence`
 
-This is the best format for loss-minimized round-trip import/export.
+This workbook exchanges the supported manuscript, submission, decision, and correspondence fields. It does not preserve the full library, including Version History, readiness profiles, or submission packets. Use **Backup Library...** for a complete portable library backup.
 
 ### 2. Legacy tracker
 
@@ -161,12 +161,12 @@ Choose **Data → Backup Library...** to create a portable ZIP containing:
 ```text
 backup-info.txt
 manuscripts.json
-authors.json        (when reusable author metadata exists)
+authors.json        (when reusable metadata exists)
 library.xlsx
 files\
 ```
 
-Managed document copies are included in the backup. Reusable author, affiliation, and journal metadata is included when present. Externally linked files remain references to their original paths.
+The native JSON preserves manuscript history, readiness profiles, packet associations, and saved file fingerprints. Reusable authors, affiliations, journals, and journal checklist templates are included when present. Managed document copies, including version and packet snapshots, are included; externally linked files remain references to their original paths. The included Excel workbook is a convenient partial export, not a replacement for the ZIP backup.
 
 **Restore Backup...** validates the archive, previews record/file counts, asks for explicit confirmation, creates an emergency backup of the current library, and then restores the selected archive.
 

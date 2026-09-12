@@ -45,7 +45,7 @@ Targets are directional rather than promises. Data integrity, migrations, backup
 | **v0.1** | Reliable Core ✅ | Can I trust PaperRoute with local manuscript data? |
 | **v0.2** | Metadata & Integrations ✅ | Can PaperRoute describe and connect my research accurately? |
 | **v0.3** | The Route ✅ | What happened to this manuscript, in what order, and which file was which? |
-| **v0.4** | **Submission Readiness — active** | What exactly am I preparing and sending to this journal? |
+| **v0.4** | **Submission Readiness — release preparation** | What exactly am I preparing and sending to this journal? |
 | **v0.5** | Reviewer Response Workflow | What did the journal ask me to change, and how am I responding? |
 | **v0.6** | Deadline Center | What requires action, and when? |
 | **v0.7** | Route Analytics & Reports | What does this publication journey show me—and how can I communicate it? |
@@ -95,6 +95,8 @@ Known cosmetic follow-up: some narrow/high-DPI manuscript shelves can still disp
 
 # ACTIVE — v0.4 Submission Readiness
 
+The **v0.4.0 candidate is unreleased**. [Candidate release notes](docs/releases/0.4.0.md), the [user guide](docs/USER_GUIDE.md), and [upgrade notes](UPGRADE_NOTES.md) describe the release target; they do not mark its certification gates complete. The current stable release remains v0.3.0.
+
 Issues:
 
 - **[#25 Submission Packet Vault and file integrity](https://github.com/JUhalt/PaperRoute-Tracker/issues/25)**
@@ -107,7 +109,7 @@ Issues:
 
 v0.4 turns a manuscript version into a concrete, reconstructable journal submission package.
 
-## Planned flow
+## Connected workflow
 
 ```text
 Current manuscript version

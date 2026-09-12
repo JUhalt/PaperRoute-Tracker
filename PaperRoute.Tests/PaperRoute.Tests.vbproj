@@ -18,4 +18,10 @@
     <ProjectReference Include="..\ManuscriptPipeline\ManuscriptPipeline.vbproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="Fixtures\Schema4Representative\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

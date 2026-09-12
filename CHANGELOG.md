@@ -4,7 +4,7 @@ All notable changes to PaperRoute Tracker will be documented here.
 
 ## [Unreleased] — v0.4 Submission Readiness
 
-Development is tracked in [draft PR #40](https://github.com/JUhalt/PaperRoute-Tracker/pull/40) and the [v0.4 milestone](https://github.com/JUhalt/PaperRoute-Tracker/milestone/6). The current stable release remains v0.3.0. See the [development checkpoint](ManualCertification/v0.4-Development-Checkpoint.md) for validation evidence and outstanding release gates.
+The release target is **v0.4.0**, currently an **unreleased candidate**. Development is tracked in [draft PR #40](https://github.com/JUhalt/PaperRoute-Tracker/pull/40) and the [v0.4 milestone](https://github.com/JUhalt/PaperRoute-Tracker/milestone/6). The current stable release remains v0.3.0. See the [candidate release notes](docs/releases/0.4.0.md) and [development checkpoint](ManualCertification/v0.4-Development-Checkpoint.md) for validation evidence and outstanding release gates.
 
 ### Added
 
@@ -13,6 +13,7 @@ Development is tracked in [draft PR #40](https://github.com/JUhalt/PaperRoute-Tr
 - Explicit local SHA-256 fingerprint recording and background checks, with clear changed, unchanged, missing, unavailable, and unchecked states. Replacing a fingerprint requires confirmation; checks never write source files.
 - Connected navigation between Manuscript Details, readiness, Version History, packets, and actual submissions. Recording a submission remains an explicit action, and child-dialog saves remain pending until Manuscript Details is saved.
 - Disposable demos for reviewing real dialogs and exercising save/reload without using an existing manuscript library.
+- Schema 5 migration for readiness profiles, submission packets, saved fingerprints, and reusable journal checklist templates. Existing libraries do not require invented preparation or submission history.
 
 ### Fixed
 
@@ -21,6 +22,12 @@ Development is tracked in [draft PR #40](https://github.com/JUhalt/PaperRoute-Tr
 - Invalid packet/version/submission associations are rejected before file operations. Valid imported revision rounds above 99 are preserved.
 - Failed schema replacement preserves prior recovery metadata. Conflicting staged versions remain recoverable, and independent packet recovery still runs.
 - Light-theme action/link text and dark-theme destructive-action hover text have improved contrast.
+
+### Compatibility and release status
+
+- Portable ZIP backup/restore preserves readiness, journal templates, packet/version/submission references, fingerprints, and managed snapshots. Excel remains a partial interchange format.
+- The [v0.4 user guide](docs/USER_GUIDE.md) describes the preparation workflow and its explicit save boundaries; [upgrade notes](UPGRADE_NOTES.md) describe the schema-4-to-5 transition.
+- Installed upgrade, clean install, display-scaling, and artifact certification are tracked in [release gate #42](https://github.com/JUhalt/PaperRoute-Tracker/issues/42). This entry does not claim publication or completion of those gates.
 
 ## [0.3.0] - 2026-08-27
 

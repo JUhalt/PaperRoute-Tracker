@@ -2,7 +2,7 @@
 
 PaperRoute is a local-first academic manuscript tracker for researchers. It is designed to keep the complete route of a paper understandable: idea, writing, submission, peer review, revision, publication, or the File Drawer.
 
-This guide is the user-facing source of truth for PaperRoute v0.3.
+This guide describes the **PaperRoute v0.4.0 candidate**, which is currently unreleased. The current stable release remains v0.3.0. See the [candidate release notes](releases/0.4.0.md) for scope and certification status.
 
 ## Quick Start
 
@@ -11,11 +11,13 @@ If you only read one section, read this one.
 1. Open PaperRoute and choose **Add Manuscript**.
 2. Give the manuscript a title and place it at the stage that best matches reality.
 3. Open **Manuscript Details** to add structured authors, a target journal, metadata, links, and submission history.
-4. When you submit the paper, add a **Journal Submission** with the journal, date, Journal manuscript ID if available, portal URL, and optional follow-up date.
-5. When the journal responds, open that submission and record the **Editorial Decision**. Revision decisions can carry a revision deadline.
-6. Save decision letters, reviewer comments, response letters, revised manuscripts, and related correspondence under the appropriate submission.
-7. Use **Settings > Reminders & Calendar...** to see revision deadlines, journal follow-ups, and custom reminders in one place.
-8. Use **Data > Backup Library...** before major changes or moving PaperRoute to another computer.
+4. Before submitting, record the exact manuscript snapshot in **Version History**, use **Submission Readiness...** for the journal's checklist, and assemble **Submission Packets...** for the files you intend to send.
+5. When you actually submit the paper, use the packet's **Record Submission...** action or add a **Journal Submission** with the journal, date, Journal manuscript ID if available, portal URL, and optional follow-up date.
+6. Save each child dialog, then choose **Save & Close** in **Manuscript Details** to persist the complete workflow.
+7. When the journal responds, open that submission and record the **Editorial Decision**. Revision decisions can carry a revision deadline.
+8. Save decision letters, reviewer comments, response letters, revised manuscripts, and related correspondence under the appropriate submission.
+9. Use **Settings > Reminders & Calendar...** to see revision deadlines, journal follow-ups, and custom reminders in one place.
+10. Use **Data > Backup Library...** before major changes or moving PaperRoute to another computer.
 
 PaperRoute does not require an account for its core workflow, and the manuscript-tracking database is stored locally.
 
@@ -79,11 +81,12 @@ This is the main working area for:
 - publication metadata;
 - structured authors and affiliations;
 - manuscript Version History;
+- journal-specific readiness and submission packets;
 - journal submissions;
 - preprint and project links; and
 - File Drawer information when relevant.
 
-PaperRoute uses a working copy while the Manuscript Details window is open. Choosing **Cancel** discards unsaved changes from that window.
+PaperRoute uses a working copy while the Manuscript Details window is open. Readiness, packet, version, and submission edits saved in child dialogs update that working copy. Choose **Save & Close** in Manuscript Details to persist it; choosing **Cancel** there discards unsaved manuscript changes.
 
 ### Version History and the Route
 
@@ -101,11 +104,13 @@ Use **View route →** from the main board to see the manuscript's deterministic
 
 Deleting a Version History record is also working-copy based. If the version owns an immutable PaperRoute Library snapshot, the snapshot is removed only when **Save & Close** succeeds. Choosing **Cancel** leaves the saved version history and managed snapshot intact. Deleting a linked-file version never deletes the original external file.
 
-### Submission Readiness and Packets — v0.4 development preview
+### Submission Readiness and Packets
 
-These features are available in the current development build; they are not part of the v0.3 release.
+These features are included in the v0.4.0 candidate described by this guide; they are not part of the v0.3 release.
 
 From **Manuscript Details**, open **Submission Readiness...** to apply a reusable journal checklist and track manuscript-specific requirements. Complete, not-applicable, and unresolved states explain the readiness summary. Readiness is advisory: it does not change the manuscript stage or prevent recording a real submission.
+
+Choose **New from Journal...** to copy that journal's current template into a new readiness profile. Later template edits do not rewrite existing profile wording or progress. **Add New Template Requirements** adds requirements that are new to the selected profile while retaining its existing states and notes.
 
 Open **Submission Packets...** to assemble file records tied to an exact **Version History** entry. You can optionally associate a packet with an existing journal submission and revision round. Preparing a packet does not record a submission. Managed copies become separate snapshots when Manuscript Details is saved; external links continue to point to the original files. Metadata-only entries contain no file to check.
 
@@ -257,10 +262,17 @@ Journal records can include:
 - journal homepage;
 - submission portal;
 - notes;
-- Favorite status; and
-- Shortlist status.
+- Favorite status;
+- Shortlist status; and
+- a reusable readiness checklist.
 
 A manuscript can link its target journal to one of these reusable records while retaining the free-text target-journal field for backward compatibility.
+
+### Journal checklist templates
+
+Add or edit a journal and open its **Readiness Checklist** tab. Use **Add Requirement** to give a requirement a title, instructions, category, and required/optional designation. You can edit, remove, or reorder requirements before saving the journal.
+
+Apply this template from a manuscript's **Submission Readiness...** window. Each readiness profile keeps its own copied requirements and completion history, so changing the reusable journal template does not silently rewrite earlier preparations.
 
 ### Publisher portals
 
@@ -453,7 +465,7 @@ The workbook includes:
 - Decisions
 - Correspondence
 
-This is the preferred spreadsheet format for loss-minimized round-trip import/export.
+This format exchanges the supported manuscript, submission, decision, and correspondence fields. It does not preserve the complete library: Version History, readiness profiles, submission packets, and their fingerprints are not included. Use a portable ZIP backup for complete library preservation.
 
 ### Legacy tracker
 
@@ -485,9 +497,9 @@ library.xlsx
 files\
 ```
 
-Depending on the library, `authors.json` contains reusable authors, affiliations, and journals.
+Depending on the library, `authors.json` contains reusable authors, affiliations, and journals, including journal checklist templates. `manuscripts.json` preserves manuscript histories, readiness profiles, packet associations, and saved fingerprints.
 
-Managed document copies are included. Externally linked files remain references.
+Managed document copies, including version and packet snapshots, are included. Externally linked files remain references; retain those originals separately. The included Excel workbook is a partial human-readable export, not a replacement for the native JSON and managed files in the ZIP.
 
 ### Restore safety
 
@@ -570,7 +582,20 @@ For a manual record:
 4. Enter the submission date and Journal manuscript ID if known.
 5. Save the publisher portal URL if useful.
 6. Optionally enable a follow-up date.
-7. Save the submission.
+7. Save the submission, then choose **Save & Close** in Manuscript Details.
+
+If you already prepared an unlinked packet, use its **Save & Go To... > Record Submission...** action instead to associate the packet with the new submission. For another revision round at the same journal, retain the existing submission and select that submission and round in the packet editor.
+
+## How do I prepare a packet before submitting?
+
+1. In Manuscript Details, open **Version History** and record the exact manuscript snapshot.
+2. Open **Submission Readiness...**, choose **New from Journal...**, and review the copied requirements.
+3. Use **Save & Go To... > Save & View Packets**, then create a packet linked to the intended version.
+4. Add file records as managed copies, external links, or metadata only.
+5. Optionally **Record Fingerprint** for each local file and use **Check Files** to compare contents before sending them.
+6. Save the vault, then choose **Save & Close** in Manuscript Details.
+
+This records preparation only. Record the journal submission after it actually occurs. A managed copy retains bytes when the manuscript is saved; a linked original can change independently of PaperRoute.
 
 ## How do I remind myself to check on a journal?
 
@@ -596,7 +621,7 @@ The deadline will then appear in Reminders & Calendar and in the Needs Attention
 
 Open the journal submission and add correspondence/files for the reviewer comments, editor communication, revised manuscript, and response-to-reviewers materials.
 
-PaperRoute v0.3 stores these records and files. A structured Reviewer Response Matrix is planned for v0.5.
+PaperRoute stores these records and files. A structured Reviewer Response Matrix is planned for v0.5.
 
 ## How do I move a rejected paper to another journal?
 
@@ -720,11 +745,10 @@ PaperRoute ships a local copy of this guide. Open it from the **Help** button in
 
 ---
 
-## What Comes After v0.3?
+## What Comes After v0.4?
 
-The Route and Version History are the historical spine. Later releases build on that same record rather than creating parallel workflow systems:
+The Route, Version History, readiness profiles, and submission packets form one connected manuscript record. Later releases build on that record:
 
-- **v0.4 — Submission Readiness:** submission packets and per-journal readiness.
 - **v0.5 — Reviewer Response Workflow:** structured reviewer/editor action items and response drafting.
 - **v0.6 — Deadline Center:** richer action and deadline management.
 - **v0.7 — Route Analytics & Reports:** printable/archiveable manuscript-route reports and timing analytics.
