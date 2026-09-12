@@ -14,6 +14,13 @@ Namespace Forms
 
         Private ReadOnly _manuscript As Manuscript
         Private ReadOnly _submission As JournalSubmission
+        Private ReadOnly _workflowNavigationEnabled As Boolean
+        Private _requestedNavigation As SubmissionWorkflowRequest
+        Public ReadOnly Property RequestedNavigation As SubmissionWorkflowRequest
+            Get
+                Return _requestedNavigation
+            End Get
+        End Property
 
         ' Editorial decisions
         Private ReadOnly lstDecisions As New ListBox()
@@ -53,7 +60,8 @@ Namespace Forms
 
         Public Sub New(
             manuscript As Manuscript,
-            submission As JournalSubmission
+            submission As JournalSubmission,
+            Optional workflowNavigationEnabled As Boolean = False
         )
 
             _manuscript =
@@ -61,6 +69,8 @@ Namespace Forms
 
             _submission =
                 submission
+
+            _workflowNavigationEnabled = workflowNavigationEnabled
 
             BuildInterface()
             UiPolish.ApplyDialog(Me)
@@ -118,7 +128,9 @@ Namespace Forms
             Me.Text = "Submission Details"
             Me.StartPosition = FormStartPosition.CenterParent
             Me.Size = New Size(900, 840)
-            Me.MinimumSize = New Size(780, 700)
+            ' Keep the five-row summary and a usable editorial-history area
+            ' visible together at the smallest supported window size.
+            Me.MinimumSize = New Size(780, 780)
             Me.Font = New Font("Segoe UI", 10.0F)
             Me.AutoScaleMode = AutoScaleMode.Dpi
 
@@ -129,7 +141,7 @@ Namespace Forms
                 .Padding = New Padding(20)
             }
 
-            root.RowStyles.Add(New RowStyle(SizeType.Absolute, 238))
+            root.RowStyles.Add(New RowStyle(SizeType.Absolute))
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 110))
             root.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 58))
@@ -150,11 +162,20 @@ Namespace Forms
                 .RowCount = 5
             }
 
+            Const summaryRowHeight As Integer = 44
             For summaryRowIndex As Integer = 0 To 4
                 summary.RowStyles.Add(
-                    New RowStyle(SizeType.Absolute, 44)
+                    New RowStyle(SizeType.Absolute, summaryRowHeight)
                 )
             Next
+
+            ' Reserve all five fixed rows plus the GroupBox heading and layout
+            ' insets. The former 238px cell clipped the fifth (portal) row.
+            ' Normal DPI autoscaling scales this budget with the row heights;
+            ' long journal names must not determine the summary's height.
+            root.RowStyles(0).Height = summary.RowCount * summaryRowHeight +
+                summaryGroup.Padding.Vertical + summaryGroup.Margin.Vertical +
+                summary.Margin.Vertical + Me.Font.Height + 4
 
             summary.ColumnStyles.Add(New ColumnStyle(SizeType.Absolute, 195))
             summary.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
@@ -204,18 +225,21 @@ Namespace Forms
 
             summary.Controls.Add(CreateFieldLabel("Publisher portal"), 0, 4)
 
-            Dim portalPanel As New FlowLayoutPanel With {
+            Dim portalPanel As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
-                .AutoSize = True,
-                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                .FlowDirection = FlowDirection.LeftToRight,
-                .WrapContents = False,
+                .ColumnCount = 2,
+                .RowCount = 1,
+                .Margin = New Padding(0),
                 .Padding = New Padding(0, 2, 0, 0)
             }
+            portalPanel.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
+            portalPanel.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
+            portalPanel.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
 
             Dim lblPortal As New Label With {
-                .AutoSize = True,
-                .Anchor = AnchorStyles.Left
+                .Dock = DockStyle.Fill,
+                .AutoEllipsis = True,
+                .TextAlign = ContentAlignment.MiddleLeft
             }
 
             Dim btnPortal As New Button With {
@@ -238,8 +262,8 @@ Namespace Forms
 
             AddHandler btnPortal.Click, AddressOf OpenPublisherPortal
 
-            portalPanel.Controls.Add(btnPortal)
-            portalPanel.Controls.Add(lblPortal)
+            portalPanel.Controls.Add(btnPortal, 0, 0)
+            portalPanel.Controls.Add(lblPortal, 1, 0)
 
             summary.Controls.Add(portalPanel, 1, 4)
 
@@ -314,6 +338,22 @@ Namespace Forms
 
             buttons.Controls.Add(btnClose)
 
+            If _workflowNavigationEnabled AndAlso _manuscript IsNot Nothing Then
+                Dim btnPackets As New Button With {
+                    .Text = "View Submission Packets...", .AutoSize = True,
+                    .AccessibleName = "View packets for this submission"
+                }
+                AddHandler btnPackets.Click,
+                    Sub()
+                        _requestedNavigation = New SubmissionWorkflowRequest With {
+                            .Target = SubmissionWorkflowTarget.Packets, .SubmissionId = _submission.Id
+                        }
+                        Me.DialogResult = DialogResult.OK
+                        Me.Close()
+                    End Sub
+                buttons.Controls.Add(btnPackets)
+            End If
+
             root.Controls.Add(summaryGroup, 0, 0)
             root.Controls.Add(notesGroup, 0, 1)
             root.Controls.Add(tabs, 0, 2)
@@ -342,8 +382,9 @@ Namespace Forms
 
             Return New Label With {
                 .Text = text,
-                .AutoSize = True,
-                .Anchor = AnchorStyles.Left
+                .Dock = DockStyle.Fill,
+                .AutoEllipsis = True,
+                .TextAlign = ContentAlignment.MiddleLeft
             }
 
         End Function

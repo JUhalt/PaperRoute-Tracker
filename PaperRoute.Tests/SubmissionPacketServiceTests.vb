@@ -116,7 +116,11 @@ Public Class SubmissionPacketServiceTests
     Public Sub AddLinkedFile_RecordsMetadataWithoutMovingSource()
 
         Dim packet As New SubmissionPacket()
-        Dim sourcePath As String = CreateSourceFile("cover-letter.docx", "cover")
+        Dim sourcePath As String =
+            CreateSourceFile(
+                "cover-letter.docx",
+                "cover"
+            )
 
         Dim packetFile As SubmissionPacketFile =
             SubmissionPacketService.AddFile(
@@ -128,9 +132,21 @@ Public Class SubmissionPacketServiceTests
                 SubmissionPacketFileStorageMode.LinkedExternal
             )
 
-        Assert.AreEqual(SubmissionPacketFileStorageMode.LinkedExternal, packetFile.StorageMode)
-        Assert.AreEqual(Path.GetFullPath(sourcePath), packetFile.LocalFilePath)
-        Assert.AreEqual("cover-letter.docx", packetFile.OriginalFileName)
+        Assert.AreEqual(
+            SubmissionPacketFileStorageMode.LinkedExternal,
+            packetFile.StorageMode
+        )
+
+        Assert.AreEqual(
+            Path.GetFullPath(sourcePath),
+            packetFile.LocalFilePath
+        )
+
+        Assert.AreEqual(
+            "cover-letter.docx",
+            packetFile.OriginalFileName
+        )
+
         Assert.IsTrue(packetFile.FileSizeBytes.HasValue)
         Assert.IsTrue(packetFile.LastWriteTimeUtc.HasValue)
         Assert.IsTrue(File.Exists(sourcePath))
@@ -153,9 +169,20 @@ Public Class SubmissionPacketServiceTests
                 SubmissionPacketFileStorageMode.MetadataOnly
             )
 
-        Assert.AreEqual(SubmissionPacketFileStorageMode.MetadataOnly, packetFile.StorageMode)
-        Assert.AreEqual(String.Empty, packetFile.LocalFilePath)
-        Assert.AreEqual("Reporting checklist", packetFile.Label)
+        Assert.AreEqual(
+            SubmissionPacketFileStorageMode.MetadataOnly,
+            packetFile.StorageMode
+        )
+
+        Assert.AreEqual(
+            String.Empty,
+            packetFile.LocalFilePath
+        )
+
+        Assert.AreEqual(
+            "Reporting checklist",
+            packetFile.Label
+        )
 
     End Sub
 
@@ -163,11 +190,26 @@ Public Class SubmissionPacketServiceTests
     <TestMethod>
     Public Sub ManagedPacketFile_RepositorySaveCopiesIntoManagedLibraryAndPreservesSource()
 
-        Dim dataDirectory As String = Path.Combine(_root, "data")
-        Dim managedDirectory As String = Path.Combine(_root, "managed")
-        Dim sourcePath As String = CreateSourceFile("manuscript.docx", "packet manuscript")
+        Dim dataDirectory As String =
+            Path.Combine(
+                _root,
+                "data"
+            )
 
-        Dim manuscript As Manuscript = CreateManuscriptWithVersion()
+        Dim managedDirectory As String =
+            Path.Combine(
+                _root,
+                "managed"
+            )
+
+        Dim sourcePath As String =
+            CreateSourceFile(
+                "manuscript.docx",
+                "packet manuscript"
+            )
+
+        Dim manuscript As Manuscript =
+            CreateManuscriptWithVersion()
 
         Dim packet As SubmissionPacket =
             SubmissionPacketService.CreatePacket(
@@ -198,12 +240,32 @@ Public Class SubmissionPacketServiceTests
             }
         )
 
-        Assert.IsTrue(File.Exists(sourcePath))
-        Assert.AreNotEqual(Path.GetFullPath(sourcePath), packetFile.LocalFilePath)
-        Assert.IsTrue(File.Exists(packetFile.LocalFilePath))
+        Assert.IsTrue(
+            File.Exists(
+                sourcePath
+            )
+        )
 
-        Dim managedLibrary As New ManagedLibraryService(managedDirectory)
-        Assert.IsTrue(managedLibrary.IsManagedPath(packetFile.LocalFilePath))
+        Assert.AreNotEqual(
+            Path.GetFullPath(sourcePath),
+            packetFile.LocalFilePath
+        )
+
+        Assert.IsTrue(
+            File.Exists(
+                packetFile.LocalFilePath
+            )
+        )
+
+        Dim managedLibrary As New ManagedLibraryService(
+            managedDirectory
+        )
+
+        Assert.IsTrue(
+            managedLibrary.IsManagedPath(
+                packetFile.LocalFilePath
+            )
+        )
 
         StringAssert.Contains(
             packetFile.LocalFilePath,
@@ -219,46 +281,69 @@ Public Class SubmissionPacketServiceTests
 
 
     <TestMethod>
-    Public Sub RemoveCommittedManagedFile_IsRejectedWithoutDeletingFile()
+    Public Sub RemoveCommittedManagedFile_QueuesRecordRemovalWithoutDeletingPhysicalFileImmediately()
 
-        Dim managedDirectory As String = Path.Combine(_root, "managed")
-        Dim managedLibrary As New ManagedLibraryService(managedDirectory)
+        Dim managedDirectory As String =
+            Path.Combine(
+                _root,
+                "managed"
+            )
+
+        Dim managedLibrary As New ManagedLibraryService(
+            managedDirectory
+        )
+
         Dim packet As New SubmissionPacket()
         Dim packetFileId As Guid = Guid.NewGuid()
 
         Dim managedPath As String =
             Path.Combine(
                 managedDirectory,
-                "manuscript",
+                Guid.NewGuid().ToString("N"),
                 "packets",
-                "packet",
+                Guid.NewGuid().ToString("N"),
                 packetFileId.ToString("N"),
                 "file.docx"
             )
 
-        Directory.CreateDirectory(Path.GetDirectoryName(managedPath))
-        File.WriteAllText(managedPath, "managed")
+        Directory.CreateDirectory(
+            Path.GetDirectoryName(
+                managedPath
+            )
+        )
+
+        File.WriteAllText(
+            managedPath,
+            "managed"
+        )
 
         packet.Files.Add(
             New SubmissionPacketFile With {
                 .Id = packetFileId,
-                .StorageMode = SubmissionPacketFileStorageMode.ManagedCopy,
+                .StorageMode =
+                    SubmissionPacketFileStorageMode.ManagedCopy,
                 .LocalFilePath = managedPath
             }
         )
 
-        Assert.ThrowsExactly(Of InvalidOperationException)(
-            Sub()
-                SubmissionPacketService.RemoveFile(
-                    packet,
-                    packetFileId,
-                    managedLibrary
-                )
-            End Sub
+        SubmissionPacketService.RemoveFile(
+            packet,
+            packetFileId,
+            managedLibrary
         )
 
-        Assert.AreEqual(1, packet.Files.Count)
-        Assert.IsTrue(File.Exists(managedPath))
+        Assert.AreEqual(
+            0,
+            packet.Files.Count
+        )
+
+        ' Metadata removal is immediate on the working model. Physical
+        ' deletion is deferred to the repository's reversible save staging.
+        Assert.IsTrue(
+            File.Exists(
+                managedPath
+            )
+        )
 
     End Sub
 
@@ -266,9 +351,20 @@ Public Class SubmissionPacketServiceTests
     <TestMethod>
     Public Sub RemoveLinkedFile_RemovesRecordButNeverDeletesExternalFile()
 
-        Dim managedLibrary As New ManagedLibraryService(Path.Combine(_root, "managed"))
+        Dim managedLibrary As New ManagedLibraryService(
+            Path.Combine(
+                _root,
+                "managed"
+            )
+        )
+
         Dim packet As New SubmissionPacket()
-        Dim sourcePath As String = CreateSourceFile("figure.png", "figure")
+
+        Dim sourcePath As String =
+            CreateSourceFile(
+                "figure.png",
+                "figure"
+            )
 
         Dim packetFile As SubmissionPacketFile =
             SubmissionPacketService.AddFile(
@@ -286,8 +382,16 @@ Public Class SubmissionPacketServiceTests
             managedLibrary
         )
 
-        Assert.AreEqual(0, packet.Files.Count)
-        Assert.IsTrue(File.Exists(sourcePath))
+        Assert.AreEqual(
+            0,
+            packet.Files.Count
+        )
+
+        Assert.IsTrue(
+            File.Exists(
+                sourcePath
+            )
+        )
 
     End Sub
 
@@ -295,13 +399,16 @@ Public Class SubmissionPacketServiceTests
     <TestMethod>
     Public Sub UpdatePacket_CanRetargetExactVersionAndStampsModification()
 
-        Dim manuscript As Manuscript = CreateManuscriptWithVersion()
+        Dim manuscript As Manuscript =
+            CreateManuscriptWithVersion()
 
         Dim secondVersion As New ManuscriptVersion With {
             .Label = "Second version"
         }
 
-        manuscript.Versions.Add(secondVersion)
+        manuscript.Versions.Add(
+            secondVersion
+        )
 
         Dim packet As SubmissionPacket =
             SubmissionPacketService.CreatePacket(
@@ -312,7 +419,15 @@ Public Class SubmissionPacketServiceTests
             )
 
         Dim modified As DateTime =
-            New DateTime(2026, 8, 28, 10, 0, 0, DateTimeKind.Utc)
+            New DateTime(
+                2026,
+                8,
+                28,
+                10,
+                0,
+                0,
+                DateTimeKind.Utc
+            )
 
         Dim changed As Boolean =
             SubmissionPacketService.UpdatePacket(
@@ -324,10 +439,24 @@ Public Class SubmissionPacketServiceTests
                 modifiedAtUtc:=modified
             )
 
-        Assert.IsTrue(changed)
-        Assert.AreEqual(secondVersion.Id, packet.ManuscriptVersionId)
-        Assert.AreEqual("Retargeted packet", packet.Label)
-        Assert.AreEqual(modified, packet.LastModifiedAtUtc.Value)
+        Assert.IsTrue(
+            changed
+        )
+
+        Assert.AreEqual(
+            secondVersion.Id,
+            packet.ManuscriptVersionId
+        )
+
+        Assert.AreEqual(
+            "Retargeted packet",
+            packet.Label
+        )
+
+        Assert.AreEqual(
+            modified,
+            packet.LastModifiedAtUtc.Value
+        )
 
     End Sub
 
@@ -354,11 +483,26 @@ Public Class SubmissionPacketServiceTests
         contents As String
     ) As String
 
-        Dim sourceDirectory As String = Path.Combine(_root, "source")
-        Directory.CreateDirectory(sourceDirectory)
+        Dim sourceDirectory As String =
+            Path.Combine(
+                _root,
+                "source"
+            )
 
-        Dim filePath As String = Path.Combine(sourceDirectory, fileName)
-        File.WriteAllText(filePath, contents)
+        Directory.CreateDirectory(
+            sourceDirectory
+        )
+
+        Dim filePath As String =
+            Path.Combine(
+                sourceDirectory,
+                fileName
+            )
+
+        File.WriteAllText(
+            filePath,
+            contents
+        )
 
         Return filePath
 

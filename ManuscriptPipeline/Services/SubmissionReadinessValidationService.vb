@@ -182,7 +182,7 @@ Namespace Services
 
             End If
 
-            Dim submissionIds As New HashSet(Of Guid)()
+            Dim submissionsById As New Dictionary(Of Guid, JournalSubmission)()
 
             If manuscript.Submissions IsNot Nothing Then
 
@@ -191,9 +191,7 @@ Namespace Services
                     If submission IsNot Nothing AndAlso
                        submission.Id <> Guid.Empty Then
 
-                        submissionIds.Add(
-                            submission.Id
-                        )
+                        submissionsById.TryAdd(submission.Id, submission)
 
                     End If
 
@@ -273,7 +271,7 @@ Namespace Services
                 If packet.SubmissionId.HasValue Then
 
                     If packet.SubmissionId.Value = Guid.Empty OrElse
-                       Not submissionIds.Contains(
+                       Not submissionsById.ContainsKey(
                            packet.SubmissionId.Value
                        ) Then
 
@@ -282,6 +280,12 @@ Namespace Services
                         )
 
                     End If
+
+                    ValidateLinkedSubmissionJournal(
+                        packet,
+                        linkedReadiness,
+                        submissionsById(packet.SubmissionId.Value)
+                    )
 
                 End If
 
@@ -420,6 +424,68 @@ Namespace Services
             Next
 
         End Sub
+
+
+        ' Preflight a proposed submission edit before the caller replaces the
+        ' working record or reconciles lifecycle state. This performs no mutation.
+        Public Shared Sub ValidateSubmissionJournalAssociations(
+            manuscript As Manuscript,
+            proposedSubmission As JournalSubmission
+        )
+
+            If manuscript Is Nothing Then Throw New ArgumentNullException(NameOf(manuscript))
+            If proposedSubmission Is Nothing Then Throw New ArgumentNullException(NameOf(proposedSubmission))
+            If manuscript.SubmissionPackets Is Nothing Then Return
+
+            For Each packet As SubmissionPacket In manuscript.SubmissionPackets
+                If packet Is Nothing OrElse
+                   Not packet.SubmissionId.HasValue OrElse
+                   packet.SubmissionId.Value <> proposedSubmission.Id Then
+                    Continue For
+                End If
+
+                Dim linkedReadiness As ManuscriptReadiness = Nothing
+                If packet.ReadinessProfileId.HasValue AndAlso manuscript.ReadinessProfiles IsNot Nothing Then
+                    For Each readiness As ManuscriptReadiness In manuscript.ReadinessProfiles
+                        If readiness IsNot Nothing AndAlso readiness.Id = packet.ReadinessProfileId.Value Then
+                            linkedReadiness = readiness
+                            Exit For
+                        End If
+                    Next
+                End If
+
+                ValidateLinkedSubmissionJournal(packet, linkedReadiness, proposedSubmission)
+            Next
+
+        End Sub
+
+
+        Private Shared Sub ValidateLinkedSubmissionJournal(
+            packet As SubmissionPacket,
+            readiness As ManuscriptReadiness,
+            submission As JournalSubmission
+        )
+
+            If KnownJournalIdsConflict(packet.JournalId, submission.JournalId) OrElse
+               (readiness IsNot Nothing AndAlso
+                KnownJournalIdsConflict(readiness.JournalId, submission.JournalId)) Then
+
+                Throw New InvalidDataException(
+                    "This submission's reusable journal conflicts with the linked Submission Packet '" &
+                    packet.Label & "' or its readiness profile. Open Submission Packets and unlink or " &
+                    "reassign the packet before changing this submission's journal."
+                )
+            End If
+
+        End Sub
+
+
+        Private Shared Function KnownJournalIdsConflict(left As Guid?, right As Guid?) As Boolean
+            ' Names are historical snapshots; missing IDs are not evidence of a
+            ' conflict and must not be inferred from names or the current target.
+            Return left.HasValue AndAlso left.Value <> Guid.Empty AndAlso
+                right.HasValue AndAlso right.Value <> Guid.Empty AndAlso left.Value <> right.Value
+        End Function
 
 
         Public Shared Sub NormalizeAndValidateJournal(

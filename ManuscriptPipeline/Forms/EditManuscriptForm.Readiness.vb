@@ -7,6 +7,7 @@ Namespace Forms
     Partial Public Class EditManuscriptForm
 
         Private ReadOnly btnReadiness As New Button()
+        Private ReadOnly btnSubmissionPackets As New Button()
 
 
         Private Function CreateJournalToolsPanel() As Control
@@ -35,8 +36,32 @@ Namespace Forms
             AddHandler btnReadiness.Click,
                 AddressOf OpenSubmissionReadiness
 
-            panel.Controls.Add(btnJournalLinks)
-            panel.Controls.Add(btnReadiness)
+            btnSubmissionPackets.Text =
+                "Submission Packets..."
+
+            btnSubmissionPackets.AutoSize =
+                True
+
+            btnSubmissionPackets.Height =
+                36
+
+            btnSubmissionPackets.Anchor =
+                AnchorStyles.Left
+
+            AddHandler btnSubmissionPackets.Click,
+                AddressOf OpenSubmissionPackets
+
+            panel.Controls.Add(
+                btnJournalLinks
+            )
+
+            panel.Controls.Add(
+                btnReadiness
+            )
+
+            panel.Controls.Add(
+                btnSubmissionPackets
+            )
 
             Return panel
 
@@ -51,14 +76,17 @@ Namespace Forms
             _authorLibrary =
                 _authorRepository.Load()
 
-            Using dialog As New ManuscriptReadinessForm(
-                _workingManuscript,
-                _authorLibrary
-            )
+            RunSubmissionWorkflow(New SubmissionWorkflowRequest With {.Target = SubmissionWorkflowTarget.Readiness})
 
-                dialog.ShowDialog(Me)
+        End Sub
 
-            End Using
+
+        Private Sub OpenSubmissionPackets(
+            sender As Object,
+            e As EventArgs
+        )
+
+            RunSubmissionWorkflow(New SubmissionWorkflowRequest With {.Target = SubmissionWorkflowTarget.Packets})
 
         End Sub
 

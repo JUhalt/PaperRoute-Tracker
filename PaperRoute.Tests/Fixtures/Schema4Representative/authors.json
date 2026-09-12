@@ -1,0 +1,42 @@
+{
+  "Authors": [
+    {
+      "Id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1",
+      "GivenName": "Avery",
+      "FamilyName": "Researcher",
+      "Orcid": "0000-0002-1825-0097",
+      "OrcidLastCheckedUtc": null,
+      "IsMe": true,
+      "Notes": "Fictional certification author; no registry lookup is performed."
+    },
+    {
+      "Id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2",
+      "GivenName": "Morgan",
+      "FamilyName": "Scholar",
+      "DisplayNameOverride": "M. Scholar",
+      "Orcid": "",
+      "IsMe": false
+    }
+  ],
+  "Affiliations": [
+    {
+      "Id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1",
+      "Institution": "Fictional Research Institute",
+      "Department": "Methods",
+      "City": "Example City",
+      "Country": "Example Country"
+    }
+  ],
+  "Journals": [
+    {
+      "Id": "cccccccc-cccc-cccc-cccc-ccccccccccc1",
+      "Name": "Journal of Reproducible Fixtures",
+      "Publisher": "Fictional Academic Press",
+      "HomepageUrl": "https://journal.example.invalid/",
+      "SubmissionPortalUrl": "https://journal.example.invalid/submit",
+      "Notes": "Current reusable name differs from the historical submission snapshot.",
+      "IsFavorite": true,
+      "IsShortlisted": false
+    }
+  ]
+}

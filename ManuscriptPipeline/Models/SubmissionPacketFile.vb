@@ -20,9 +20,9 @@ Namespace Models
 
         Public Property OriginalFileName As String = String.Empty
 
-        ' Integrity metadata is deliberately passive in v0.4A.
-        ' Later packet-vault/integrity services may populate these fields,
-        ' but the model itself never reads, hashes, copies, or modifies files.
+        ' Optional baseline populated explicitly by the packet integrity service.
+        ' Verification preserves it; the model itself never reads, hashes,
+        ' copies, or modifies files.
         Public Property Sha256 As String = String.Empty
 
         Public Property FileSizeBytes As Long? = Nothing

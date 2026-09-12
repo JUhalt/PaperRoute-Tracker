@@ -96,7 +96,9 @@ Namespace Services
                 Return Color.FromArgb(45, 212, 191)
             End If
 
-            Return Color.FromArgb(13, 148, 136)
+            ' Keep normal-size action/link text legible on both white cards and
+            ' the light hover background (at least 4.5:1 contrast).
+            Return Color.FromArgb(15, 118, 110)
 
         End Function
 
@@ -107,7 +109,7 @@ Namespace Services
                 Return Color.FromArgb(34, 211, 238)
             End If
 
-            Return Color.FromArgb(8, 145, 178)
+            Return Color.FromArgb(14, 116, 144)
 
         End Function
 
@@ -126,7 +128,8 @@ Namespace Services
         Public Shared Function DangerColor() As Color
 
             If IsDark() Then
-                Return Color.FromArgb(248, 113, 113)
+                ' Preserve readable destructive-action text on dark hover states.
+                Return Color.FromArgb(248, 124, 124)
             End If
 
             Return Color.FromArgb(190, 35, 45)

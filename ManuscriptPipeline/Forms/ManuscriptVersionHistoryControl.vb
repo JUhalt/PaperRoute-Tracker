@@ -3,6 +3,7 @@ Imports System.Collections.Generic
 Imports System.Diagnostics
 Imports System.Drawing
 Imports System.IO
+Imports System.Linq
 Imports System.Windows.Forms
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
@@ -24,6 +25,8 @@ Namespace Forms
         Private ReadOnly btnOpenFile As New Button()
         Private ReadOnly btnSetCurrent As New Button()
         Private ReadOnly btnDeleteVersion As New Button()
+        Private ReadOnly btnPackets As New Button()
+        Public Event ViewPacketsRequested(versionId As Guid)
 
         Private ReadOnly _displayedVersions As New List(Of ManuscriptVersion)()
 
@@ -102,6 +105,7 @@ Namespace Forms
 
             Dim buttons As New FlowLayoutPanel With {
                 .Dock = DockStyle.Fill,
+                .AutoSize = True,
                 .FlowDirection = FlowDirection.LeftToRight,
                 .WrapContents = True,
                 .Padding = New Padding(0),
@@ -110,6 +114,17 @@ Namespace Forms
 
             btnAdd.Text =
                 "Add Version"
+
+            layout.RowStyles(1).SizeType = SizeType.AutoSize
+            btnPackets.Text = "Submission Packets..."
+            btnPackets.AutoSize = True
+            btnPackets.AccessibleName = "View packets for selected version"
+            AddHandler btnPackets.Click,
+                Sub()
+                    Dim version = GetSelectedVersion()
+                    If version IsNot Nothing Then RaiseEvent ViewPacketsRequested(version.Id)
+                End Sub
+            buttons.Controls.Add(btnPackets)
 
             btnAdd.AutoSize =
                 True
@@ -569,6 +584,8 @@ Namespace Forms
             Dim hasSelection As Boolean =
                 selected IsNot Nothing
 
+            btnPackets.Enabled = hasSelection
+
             btnEdit.Enabled =
                 hasSelection
 
@@ -774,13 +791,13 @@ Namespace Forms
                 If submission Is Nothing Then
 
                     lines.Add(
-                        "Submission: Historical link is unresolved"
+                        "Submission link on version: Historical link is unresolved"
                     )
 
                 Else
 
                     lines.Add(
-                        "Submission: " &
+                        "Submission link on version: " &
                         submission.SubmittedDate.ToString(
                             "MMM d, yyyy"
                         ) &
@@ -799,9 +816,17 @@ Namespace Forms
             Else
 
                 lines.Add(
-                    "Submission: None"
+                    "Submission link on version: None"
                 )
 
+            End If
+
+            If _manuscript.SubmissionPackets IsNot Nothing Then
+                Dim packets = _manuscript.SubmissionPackets.Where(
+                    Function(item) item IsNot Nothing AndAlso item.ManuscriptVersionId = version.Id).ToList()
+                lines.Add("Submission packets: " & packets.Count.ToString() & " (" &
+                    packets.Where(Function(item) item.SubmissionId.HasValue).Count().ToString() & " linked to recorded submissions)")
+                If packets.Count > 0 Then lines.Add("Use Submission Packets to view each preparation or submission association.")
             End If
 
             If version.DecisionId.HasValue Then

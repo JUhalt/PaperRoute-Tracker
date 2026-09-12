@@ -35,6 +35,10 @@ Namespace Services
 
         Private Shared Function GetDefaultRootDirectory() As String
 
+            If StorageEnvironment.IsIsolatedSession Then
+                Return StorageMigrationService.CurrentManagedLibraryRoot()
+            End If
+
             Dim documentsDirectory As String =
                 Environment.GetFolderPath(
                     Environment.SpecialFolder.MyDocuments
@@ -199,20 +203,9 @@ Namespace Services
                                 Continue For
                             End If
 
-                            If IsManagedPath(packetFile.LocalFilePath) Then
-                                Continue For
-                            End If
-
                             If packetFile.Id = Guid.Empty Then
                                 Throw New InvalidDataException(
                                     "A Submission Packet file marked for the PaperRoute Library does not have a valid identifier."
-                                )
-                            End If
-
-                            If Not File.Exists(packetFile.LocalFilePath) Then
-                                Throw New FileNotFoundException(
-                                    "A Submission Packet file marked for the PaperRoute Library could not be found.",
-                                    packetFile.LocalFilePath
                                 )
                             End If
 
@@ -224,6 +217,24 @@ Namespace Services
                                     packet.Id.ToString("N"),
                                     packetFile.Id.ToString("N")
                                 )
+
+                            ' A snapshot belongs to this exact packet-file record.
+                            ' A source elsewhere in the library still needs its own
+                            ' copy so deleting that source record cannot remove it.
+                            If String.Equals(
+                                Path.GetDirectoryName(Path.GetFullPath(packetFile.LocalFilePath)),
+                                destinationDirectory,
+                                StringComparison.OrdinalIgnoreCase
+                            ) Then
+                                Continue For
+                            End If
+
+                            If Not File.Exists(packetFile.LocalFilePath) Then
+                                Throw New FileNotFoundException(
+                                    "A Submission Packet file marked for the PaperRoute Library could not be found.",
+                                    packetFile.LocalFilePath
+                                )
+                            End If
 
                             Dim destinationPath As String =
                                 CreateUniqueDestinationPath(
@@ -500,9 +511,14 @@ Namespace Services
                             originalDirectory
                         ) Then
 
-                            Directory.Delete(
-                                versionDirectory,
-                                True
+                            ' The destination may be empty or incomplete after
+                            ' an interrupted save. Preserve both locations until
+                            ' the conflict can be resolved without data loss.
+                            Throw New IOException(
+                                "PaperRoute could not safely restore a staged Version History file because the original directory already exists: " &
+                                originalDirectory &
+                                ". The staged files have been preserved at: " &
+                                versionDirectory
                             )
 
                         Else

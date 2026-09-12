@@ -83,13 +83,17 @@ Namespace Forms
                 .Padding = New Padding(18)
             }
 
+            root.RowStyles.Add(New RowStyle(SizeType.Percent, 40))
+            root.RowStyles.Add(New RowStyle(SizeType.Percent, 60))
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
-            root.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
-            root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+            root.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
 
-            Dim intro As New Label With {
-                .AutoSize = True,
-                .MaximumSize = New Size(560, 0),
+            Dim intro As New TextBox With {
+                .Dock = DockStyle.Fill,
+                .Multiline = True,
+                .ReadOnly = True,
+                .ScrollBars = ScrollBars.Vertical,
+                .AccessibleName = "Requirement instructions",
                 .Text =
                     _source.Title &
                     Environment.NewLine &
@@ -108,6 +112,7 @@ Namespace Forms
 
             txtNotes.Multiline =
                 True
+            txtNotes.AccessibleName = "Manuscript-specific notes"
 
             txtNotes.ScrollBars =
                 ScrollBars.Vertical

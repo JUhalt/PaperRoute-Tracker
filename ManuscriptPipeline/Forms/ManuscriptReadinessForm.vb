@@ -18,7 +18,7 @@ Namespace Forms
         Private ReadOnly cmbProfiles As New ComboBox()
         Private ReadOnly lblSummary As New Label()
         Private ReadOnly lstItems As New ListBox()
-        Private ReadOnly lblItemDetail As New Label()
+        Private ReadOnly txtItemDetail As New TextBox()
 
         Private ReadOnly btnRefreshTemplate As New Button()
         Private ReadOnly btnDeleteProfile As New Button()
@@ -35,7 +35,8 @@ Namespace Forms
 
         Public Sub New(
             manuscript As Manuscript,
-            library As AuthorLibraryData
+            library As AuthorLibraryData,
+            Optional workflowContext As SubmissionWorkflowRequest = Nothing
         )
 
             If manuscript Is Nothing Then
@@ -58,9 +59,11 @@ Namespace Forms
                     New AuthorLibraryData()
                 )
 
+            _workflowContext = workflowContext
             BuildInterface()
             UiPolish.ApplyDialog(Me)
-            RefreshProfiles()
+            RefreshProfiles(If(workflowContext Is Nothing, Nothing, workflowContext.ReadinessProfileId))
+            UpdateWorkflowButtons()
 
         End Sub
 
@@ -107,15 +110,14 @@ Namespace Forms
             root.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+            root.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
 
             Dim intro As New Label With {
                 .AutoSize = True,
-                .MaximumSize = New Size(870, 0),
+                .Dock = DockStyle.Fill,
                 .Text =
-                    "Track whether '" &
-                    _workingManuscript.Title &
-                    "' is ready for a specific journal. " &
-                    "Readiness is advisory: it never changes the manuscript stage, creates a submission, or blocks you from recording what actually happened.",
+                    "Track journal-specific requirements for this manuscript. Readiness is advisory: " &
+                    "you can record a real submission with unresolved or missing requirements.",
                 .Margin = New Padding(0, 0, 0, 10)
             }
 
@@ -189,6 +191,7 @@ Namespace Forms
                 )
             )
             profileBar.Controls.Add(btnDeleteProfile)
+            ConfigureWorkflowNavigation(profileBar)
 
             lblSummary.AutoSize =
                 True
@@ -214,28 +217,28 @@ Namespace Forms
                 .Margin = New Padding(0)
             }
 
-            itemArea.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
-            itemArea.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+            itemArea.RowStyles.Add(New RowStyle(SizeType.Percent, 55))
+            itemArea.RowStyles.Add(New RowStyle(SizeType.Percent, 45))
+            itemArea.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
 
             lstItems.Dock =
                 DockStyle.Fill
+            lstItems.IntegralHeight = False
+            lstItems.HorizontalScrollbar = True
 
             AddHandler lstItems.SelectedIndexChanged,
                 AddressOf ItemSelectionChanged
 
-            lblItemDetail.AutoSize =
-                True
+            txtItemDetail.Dock = DockStyle.Fill
+            txtItemDetail.Multiline = True
+            txtItemDetail.ReadOnly = True
+            txtItemDetail.ScrollBars = ScrollBars.Vertical
+            txtItemDetail.AccessibleName = "Selected readiness requirement details"
 
-            lblItemDetail.MaximumSize =
-                New Size(
-                    860,
-                    0
-                )
-
-            lblItemDetail.ForeColor =
+            txtItemDetail.ForeColor =
                 SystemColors.GrayText
 
-            lblItemDetail.Margin =
+            txtItemDetail.Margin =
                 New Padding(
                     0,
                     8,
@@ -244,7 +247,7 @@ Namespace Forms
                 )
 
             itemArea.Controls.Add(lstItems, 0, 0)
-            itemArea.Controls.Add(lblItemDetail, 0, 1)
+            itemArea.Controls.Add(txtItemDetail, 0, 1)
 
             Dim itemButtons As New FlowLayoutPanel With {
                 .Dock = DockStyle.Fill,
@@ -333,7 +336,7 @@ Namespace Forms
             }
 
             Dim btnSave As New Button With {
-                .Text = "Save & Close",
+                .Text = "Save && Close",
                 .AutoSize = True,
                 .Height = 38
             }
@@ -537,6 +540,7 @@ Namespace Forms
         )
 
             RefreshItems()
+            UpdateWorkflowButtons()
             UpdateProfileButtons()
 
         End Sub
@@ -557,7 +561,7 @@ Namespace Forms
                 lblSummary.Text =
                     "No readiness profile yet. Choose New from Journal to begin."
 
-                lblItemDetail.Text =
+                txtItemDetail.Text =
                     "Readiness profiles are journal-specific snapshots. They do not create submission records."
 
                 UpdateItemButtons()
@@ -634,7 +638,7 @@ Namespace Forms
 
             Else
 
-                lblItemDetail.Text =
+                txtItemDetail.Text =
                     "This journal profile currently has no checklist requirements."
 
             End If
@@ -752,7 +756,7 @@ Namespace Forms
 
             If item Is Nothing Then
 
-                lblItemDetail.Text =
+                txtItemDetail.Text =
                     String.Empty
 
                 UpdateItemButtons()
@@ -779,9 +783,9 @@ Namespace Forms
                         item.UserNotes.Trim()
                 )
 
-            lblItemDetail.Text =
-                description &
-                "   •   " &
+            txtItemDetail.Text =
+                item.Title & Environment.NewLine & Environment.NewLine &
+                description & Environment.NewLine & Environment.NewLine &
                 notes
 
             UpdateItemButtons()

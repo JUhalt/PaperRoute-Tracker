@@ -233,12 +233,8 @@ Namespace Services
                     )
                 )
 
-                If File.Exists(backupPath) Then
-                    File.Delete(
-                        backupPath
-                    )
-                End If
-
+                ' File.Replace handles an existing backup. Removing it first
+                ' would destroy recovery metadata if the schema is locked.
                 File.Replace(
                     tempPath,
                     schemaPath,

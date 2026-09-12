@@ -1,0 +1,152 @@
+[
+  {
+    "Id": "11111111-1111-1111-1111-111111111111",
+    "Title": "Fictional revision study — café methods",
+    "CoAuthors": "Avery Researcher; M. Scholar (historical free text)",
+    "Authors": [
+      {
+        "AuthorId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1",
+        "AffiliationIds": ["bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1"],
+        "IsCorrespondingAuthor": true
+      },
+      {
+        "AuthorId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2",
+        "AffiliationIds": ["bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1"],
+        "IsCorrespondingAuthor": false
+      }
+    ],
+    "TargetJournalId": "cccccccc-cccc-cccc-cccc-ccccccccccc1",
+    "TargetJournal": "Historical Journal Title",
+    "CurrentStage": "Revision",
+    "Location": "Pipeline",
+    "StageEnteredDate": "2026-08-15T00:00:00",
+    "RevisionDeadline": "2026-09-30T00:00:00",
+    "CurrentVersionId": "11111111-1111-1111-1111-111111111102",
+    "Metadata": {
+      "AbstractText": "Representative synthetic library: no real manuscript material.",
+      "Keywords": ["reproducibility", "methods"],
+      "ExternalIdentifiers": {"fixture": "v03-revision"}
+    },
+    "History": [
+      {
+        "Id": "11111111-1111-1111-1111-111111111201",
+        "EventDate": "2026-07-01T12:34:56",
+        "Stage": "Draft",
+        "Note": "Imported historical event; audit timestamps intentionally unavailable.",
+        "RecordedAtUtc": null,
+        "LastModifiedAtUtc": null
+      }
+    ],
+    "Versions": [
+      {
+        "Id": "11111111-1111-1111-1111-111111111101",
+        "CreatedDate": "2026-08-01T08:15:00",
+        "Label": "Exact original submitted manuscript",
+        "Notes": "Managed snapshot retained from v0.3.",
+        "LocalFilePath": "__MANAGED_VERSION__",
+        "IsManagedCopy": true,
+        "SubmissionId": "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee1",
+        "RecordedAtUtc": "2026-08-01T12:20:00Z",
+        "LastModifiedAtUtc": null
+      },
+      {
+        "Id": "11111111-1111-1111-1111-111111111102",
+        "CreatedDate": "2026-08-20T11:45:00",
+        "Label": "Linked revision working file",
+        "LocalFilePath": "__EXTERNAL_VERSION__",
+        "IsManagedCopy": false,
+        "SubmissionId": "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee1",
+        "DecisionId": "dddddddd-dddd-dddd-dddd-ddddddddddd1",
+        "RevisionRoundNumber": 1,
+        "RecordedAtUtc": null,
+        "LastModifiedAtUtc": null
+      },
+      {
+        "Id": "11111111-1111-1111-1111-111111111103",
+        "CreatedDate": "2026-06-05T10:00:00",
+        "Label": "Metadata history with unresolved imported associations",
+        "LocalFilePath": "",
+        "IsManagedCopy": false,
+        "SubmissionId": "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee9",
+        "DecisionId": "dddddddd-dddd-dddd-dddd-ddddddddddd9",
+        "RevisionRoundNumber": 1001
+      }
+    ],
+    "Submissions": [
+      {
+        "Id": "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee1",
+        "JournalId": "cccccccc-cccc-cccc-cccc-ccccccccccc1",
+        "JournalName": "Historical Journal Title",
+        "ManuscriptNumber": "FIXTURE-2026-042",
+        "SubmittedDate": "2026-08-01T00:00:00",
+        "FollowUpDate": "2026-09-21T00:00:00",
+        "PortalUrl": "https://journal.example.invalid/submit/FIXTURE-2026-042",
+        "Notes": "Original submission record; no new submission is inferred by migration.",
+        "RecordedAtUtc": "2026-08-01T12:30:00Z",
+        "Decisions": [
+          {
+            "Id": "dddddddd-dddd-dddd-dddd-ddddddddddd1",
+            "DecisionDate": "2026-08-15T00:00:00",
+            "Decision": "MajorRevision",
+            "RevisionDeadline": "2026-09-30T00:00:00",
+            "Notes": "Clarify the method and update the reporting checklist.",
+            "RecordedAtUtc": null,
+            "LastModifiedAtUtc": null
+          }
+        ],
+        "Correspondence": [
+          {
+            "Id": "ffffffff-ffff-ffff-ffff-ffffffffff01",
+            "ItemDate": "2026-08-15T00:00:00",
+            "Type": "DecisionLetter",
+            "Title": "Managed decision letter",
+            "LocalFilePath": "__MANAGED_CORRESPONDENCE__",
+            "IsManagedCopy": true,
+            "RecordedAtUtc": null
+          },
+          {
+            "Id": "ffffffff-ffff-ffff-ffff-ffffffffff02",
+            "ItemDate": "2026-08-20T00:00:00",
+            "Type": "Other",
+            "Title": "Missing linked historical attachment",
+            "LocalFilePath": "__MISSING_EXTERNAL__",
+            "IsManagedCopy": false,
+            "Notes": "The missing external file must remain a preserved reference."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Id": "22222222-2222-2222-2222-222222222222",
+    "Title": "Fictional published study",
+    "CoAuthors": "Legacy author text retained verbatim",
+    "CurrentStage": "Published",
+    "Location": "Published",
+    "StageEnteredDate": "2026-05-15T00:00:00",
+    "Metadata": {
+      "Doi": "10.5555/paperroute-fixture",
+      "PublicationJournal": "Fictional Results Journal",
+      "PublishedDate": "2026-05-15T00:00:00",
+      "Volume": "12",
+      "Issue": "3",
+      "Pages": "100–110",
+      "Keywords": ["synthetic", "certification"]
+    },
+    "History": [],
+    "Versions": [],
+    "Submissions": []
+  },
+  {
+    "Id": "33333333-3333-3333-3333-333333333333",
+    "Title": "Fictional filed study",
+    "CurrentStage": "Draft",
+    "Location": "FileDrawer",
+    "StageEnteredDate": "2026-04-01T00:00:00",
+    "FileDrawerDate": "2026-04-02T00:00:00",
+    "FileDrawerReason": "Paused pending additional data.",
+    "History": [],
+    "Versions": [],
+    "Submissions": []
+  }
+]

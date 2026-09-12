@@ -3633,7 +3633,7 @@ Public Class Form1
 ) As Label
 
         Return New Label With {
-        .text = text,
+        .Text = text,
         .AutoSize = False,
         .Width = 650,
         .Height = Math.Max(48, TextRenderer.MeasureText("Ag", Me.Font).Height + 24),

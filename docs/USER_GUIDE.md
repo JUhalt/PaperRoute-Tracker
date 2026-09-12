@@ -101,6 +101,48 @@ Use **View route →** from the main board to see the manuscript's deterministic
 
 Deleting a Version History record is also working-copy based. If the version owns an immutable PaperRoute Library snapshot, the snapshot is removed only when **Save & Close** succeeds. Choosing **Cancel** leaves the saved version history and managed snapshot intact. Deleting a linked-file version never deletes the original external file.
 
+### Submission Readiness and Packets — v0.4 development preview
+
+These features are available in the current development build; they are not part of the v0.3 release.
+
+From **Manuscript Details**, open **Submission Readiness...** to apply a reusable journal checklist and track manuscript-specific requirements. Complete, not-applicable, and unresolved states explain the readiness summary. Readiness is advisory: it does not change the manuscript stage or prevent recording a real submission.
+
+Open **Submission Packets...** to assemble file records tied to an exact **Version History** entry. You can optionally associate a packet with an existing journal submission and revision round. Preparing a packet does not record a submission. Managed copies become separate snapshots when Manuscript Details is saved; external links continue to point to the original files. Metadata-only entries contain no file to check.
+
+#### Move between related records
+
+In readiness, **Save & Go To... > Save & View Packets** opens the packets linked to the selected profile. **Open Submission Portal** uses that profile's linked journal when it has a web portal recorded.
+
+In the vault, **Save & Go To...** can return to Manuscript Details, select the packet's exact version, or open its linked readiness profile or actual submission. **Submission Packets...** in Version History shows packets for the selected version; **View Submission Packets...** in Submission Details shows packets for that submission. The vault explains which records it is showing, and **Show all packets** removes that filter. New packets inherit the selected context, with choices visible in the packet editor.
+
+For an unlinked preparation packet, choose **Save & Go To... > Record Submission...** and complete **Record Journal Submission**. Cancel returns to the prepared packet without recording an event. Adding the submission associates that packet with the new record and applies the usual manuscript-stage rules. Unresolved readiness and an empty file list do not prevent recording what actually happened. For a revision round of an existing submission, edit the packet and select the existing submission and round instead of recording a duplicate submission.
+
+These navigation actions save the current child dialog into Manuscript Details' working copy. Choose **Save & Close** in Manuscript Details to keep the full workflow; Cancel there discards its unsaved manuscript changes. Version records retain their existing submission/decision history: the same exact version can appear in separate packets for different interactions. Packet navigation shows each packet's own associations without rewriting that earlier history.
+
+Changing a submission to a different linked journal is rejected if it conflicts with its packets. Review or reassign those packet associations first. Imported revision-round numbers above 99 are preserved when editing notes.
+
+#### Check whether packet files changed
+
+1. Select a file and choose **Record Fingerprint** to record a SHA-256 fingerprint of its current contents. This is optional and reads the file without changing it.
+2. Choose **Check Files** to compare all files in the selected packet with their saved fingerprints. Checking never replaces a fingerprint or changes manuscript history.
+3. Read the status beside each file and the selected-file details:
+
+| Status | Meaning |
+| --- | --- |
+| No fingerprint | No content comparison point has been recorded. |
+| Not checked | A fingerprint exists, but contents have not been checked in this open window. |
+| Unchanged | Contents matched the fingerprint at the last check. |
+| Changed | Contents differed from the fingerprint at the last check. |
+| Missing | No file was found at its recorded path. |
+| Unavailable | PaperRoute could not read the file, for example because it was locked or access was denied. |
+| Metadata only | This entry has no file contents to compare. |
+
+Results reflect the last observation, not continuous monitoring. Choose **Check Files** again after editing or moving files. File size and modification date alone do not establish that contents are unchanged. Hashing runs in the background; Cancel closes the dialog without adopting pending results.
+
+**Replace Fingerprint...** explicitly replaces an existing comparison point after confirmation. To preserve an earlier submitted file, retain its packet record and add a new file record instead. A fingerprint detects differences; it cannot reconstruct an old external file. Choose a managed copy when you need PaperRoute to retain the actual bytes.
+
+Choose **Save & Close** in the vault and then **Save & Close** in **Manuscript Details** to persist newly recorded fingerprints and packet edits. Canceling Manuscript Details discards those unsaved changes. Managed-file copies and portable backup/restore preserve the saved fingerprints; they do not silently record a new baseline. A packet-linked version or submission must be unlinked from the packet, retargeted where appropriate, or have the packet removed before that referenced record can be deleted.
+
 ### Legacy co-author text
 
 Older or imported records may still contain free-text co-author information. PaperRoute preserves that text rather than silently parsing or replacing it.

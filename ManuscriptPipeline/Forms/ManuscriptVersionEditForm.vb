@@ -737,13 +737,13 @@ Namespace Forms
                 1
 
             nudRevisionRound.Maximum =
-                999
+                Integer.MaxValue
 
             nudRevisionRound.Value =
                 1
 
             nudRevisionRound.Width =
-                80
+                128
 
             nudRevisionRound.Enabled =
                 False

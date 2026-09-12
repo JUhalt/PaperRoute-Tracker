@@ -235,12 +235,6 @@ Namespace Services
             Dim packetFile As SubmissionPacketFile =
                 RequireFile(packet, packetFileId)
 
-            If IsCommittedManagedFile(packetFile, managedLibrary) Then
-                Throw New InvalidOperationException(
-                    "This file is already stored in the PaperRoute Library. Safe physical deletion is intentionally deferred to the next Packet Vault safety checkpoint; the file record was left unchanged."
-                )
-            End If
-
             packet.Files.Remove(packetFile)
             TouchPacket(packet, Nothing)
 
@@ -263,20 +257,6 @@ Namespace Services
             End If
 
             Dim packet As SubmissionPacket = RequirePacket(manuscript, packetId)
-
-            If packet.Files IsNot Nothing AndAlso
-               packet.Files.Any(
-                   Function(item)
-                       Return item IsNot Nothing AndAlso
-                           IsCommittedManagedFile(item, managedLibrary)
-                   End Function
-               ) Then
-
-                Throw New InvalidOperationException(
-                    "This Submission Packet contains a file already stored in the PaperRoute Library. Safe managed-packet deletion is intentionally deferred to the next Packet Vault safety checkpoint; the packet was left unchanged."
-                )
-
-            End If
 
             manuscript.SubmissionPackets.Remove(packet)
 

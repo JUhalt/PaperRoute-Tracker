@@ -5,6 +5,8 @@
 # PaperRoute
 
 [![Build PaperRoute Tracker](https://github.com/JUhalt/PaperRoute-Tracker/actions/workflows/build.yml/badge.svg)](https://github.com/JUhalt/PaperRoute-Tracker/actions/workflows/build.yml)
+[![Latest Release](https://img.shields.io/github/v/release/JUhalt/PaperRoute-Tracker)](https://github.com/JUhalt/PaperRoute-Tracker/releases/latest)
+[![License: GPL-3.0-only](https://img.shields.io/badge/License-GPL--3.0--only-blue.svg)](LICENSE.txt)
 
 **A local-first academic manuscript tracker for researchers.**
 
@@ -12,6 +14,7 @@
 
 PaperRoute Tracker helps researchers manage manuscripts from idea through submission, peer review, revision, publication—or the File Drawer—without requiring an account or sending the core workflow database to a cloud service.
 
+**Current stable release:** [v0.3.0 — The Route](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v0.3.0). **Active development:** [v0.4.0 — Submission Readiness](https://github.com/JUhalt/PaperRoute-Tracker/milestone/6). See the [roadmap](ROADMAP.md) for planned work and its issue owners.
 
 
 **New to PaperRoute?** Start with the [`PaperRoute User Guide`](docs/USER_GUIDE.md) for a Quick Start, feature tour, and task-oriented "How do I...?" reference.
@@ -49,17 +52,25 @@ Output is available as plain text, Markdown, or HTML in publication-list or CV-s
 Active reminders can be exported as a portable `.ics` calendar for Outlook, Google Calendar, Apple Calendar, and other iCalendar-compatible tools. Optional Windows notifications are disabled by default and checked when PaperRoute starts; notification failure never blocks the in-app reminder workflow.
 
 ### Built-in User Guide
-The **Help** button in the main PaperRoute header (and **Settings → User Guide...**) opens the same v0.2 guide that is maintained in [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md). Installed and portable builds ship a local copy so core help remains available offline.
+The **Help** button in the main PaperRoute header (and **Settings → User Guide...**) opens the current user guide maintained in [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md). Installed and portable builds ship a local copy so core help remains available offline.
 
 ## Current status
 
-**v0.1.0** — first stable release of the PaperRoute Reliable Core.
+**v0.3.0** - current stable release, **The Route**.
 
-The stable 0.1 line focuses on trustworthy local storage, manuscript lifecycle tracking, spreadsheet import/export, backup/restore, installation and updates, accessibility, and recovery. New feature development continues toward v0.2 Metadata & Integrations.
+PaperRoute v0.3 adds the canonical manuscript-history layer: Visual Route View, manuscript Version History, workflow-linked versions, immutable managed snapshots, chronology/provenance tracking, and safer recovery behavior.
 
-Development on `master` is now targeting **v0.2.0-alpha.1**, beginning with storage schema 2 and the metadata foundation. Stable users remain on the published v0.1.x release line unless they intentionally opt into Preview builds.
+Development is now targeting **v0.4.0 - Submission Readiness**, including per-journal readiness checklists, exact submission packets, file-integrity tracking, and linkage between the files actually submitted and the manuscript/version/journal round they belong to. Stable users remain on the published v0.3.x release line unless they intentionally opt into Preview builds.
 
 ## Highlights
+
+### v0.4 development progress — September 12, 2026
+
+The [Submission Readiness draft PR #40](https://github.com/JUhalt/PaperRoute-Tracker/pull/40) now brings together journal checklists, exact submission packets, local file-integrity checks, and navigation between readiness, versions, packets, and recorded submissions. The packet layout has been checked at minimum and expanded window sizes, and a disposable workflow demo supports hands-on review without an existing manuscript library.
+
+See the [development evidence and demo instructions](https://github.com/JUhalt/PaperRoute-Tracker/blob/v0.4-submission-readiness/ManualCertification/v0.4-Development-Checkpoint.md) for completed checks and how to try the work. [Release gate #42](https://github.com/JUhalt/PaperRoute-Tracker/issues/42) tracks the remaining display-scaling, installed-upgrade, and packaging checks. **v0.4 is unreleased; stable downloads remain v0.3.0.**
+
+### Stable features
 
 - **Pipeline, Published, and File Drawer shelves** for the complete manuscript lifecycle.
 - **Journal submission history** with manuscript numbers, dates, notes, and publisher portal links.
@@ -99,7 +110,7 @@ When legacy ManuscriptPipeline storage is migrated, PaperRoute retains the legac
 
 On the GitHub **Releases** page, download and run the PaperRoute Setup executable from the latest stable release. Installed builds can then check GitHub Releases for future PaperRoute updates.
 
-Fresh installations default to the **Stable** update channel. Users who intentionally want prerelease builds can opt into **Preview** from **Settings → Updates**.
+Fresh installations default to the **Stable** update channel. Users who intentionally want prerelease builds can choose **Preview** under **Settings → Preferences... → Update channel**. Use **Settings → Check for Updates...** to check immediately.
 
 ### Portable CI build
 
@@ -207,4 +218,4 @@ Bug reports, usability feedback, importer edge cases, and pull requests are welc
 
 ## License
 
-PaperRoute Tracker is licensed under the **GNU General Public License v3.0**. See [`LICENSE.txt`](LICENSE.txt).
+PaperRoute Tracker is licensed under the **GNU General Public License, version 3 only** (SPDX: `GPL-3.0-only`). See [`LICENSE.txt`](LICENSE.txt) for the complete license and [`NOTICE.md`](NOTICE.md) for the project-specific notice.

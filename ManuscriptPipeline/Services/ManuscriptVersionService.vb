@@ -291,6 +291,23 @@ Namespace Services
                     versionId
                 )
 
+            If manuscript.SubmissionPackets IsNot Nothing Then
+
+                For Each packet As SubmissionPacket In manuscript.SubmissionPackets
+
+                    If packet IsNot Nothing AndAlso
+                       packet.ManuscriptVersionId = version.Id Then
+
+                        Throw New InvalidOperationException(
+                            "This version is used by a Submission Packet. Choose another exact version for that packet or delete the packet before deleting this version."
+                        )
+
+                    End If
+
+                Next
+
+            End If
+
             Dim wasCurrent As Boolean =
                 manuscript.CurrentVersionId.HasValue AndAlso
                 manuscript.CurrentVersionId.Value =

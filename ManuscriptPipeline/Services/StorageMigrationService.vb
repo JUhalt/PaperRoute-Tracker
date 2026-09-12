@@ -86,48 +86,48 @@ Namespace Services
 
         Public Shared Function CurrentDataRoot() As String
 
-            Return Path.Combine(
+            Return StorageEnvironment.ResolveStorageRoot("current-data", Function() Path.Combine(
                 Environment.GetFolderPath(
                     Environment.SpecialFolder.LocalApplicationData
                 ),
                 StorageEnvironment.DataFolderName()
-            )
+            ))
 
         End Function
 
 
         Public Shared Function LegacyDataRoot() As String
 
-            Return Path.Combine(
+            Return StorageEnvironment.ResolveStorageRoot("legacy-data", Function() Path.Combine(
                 Environment.GetFolderPath(
                     Environment.SpecialFolder.LocalApplicationData
                 ),
                 StorageEnvironment.LegacyDataFolderName()
-            )
+            ))
 
         End Function
 
 
         Public Shared Function CurrentManagedLibraryRoot() As String
 
-            Return Path.Combine(
+            Return StorageEnvironment.ResolveStorageRoot("managed-library", Function() Path.Combine(
                 Environment.GetFolderPath(
                     Environment.SpecialFolder.MyDocuments
                 ),
                 StorageEnvironment.ManagedLibraryFolderName()
-            )
+            ))
 
         End Function
 
 
         Public Shared Function LegacyManagedLibraryRoot() As String
 
-            Return Path.Combine(
+            Return StorageEnvironment.ResolveStorageRoot("legacy-managed-library", Function() Path.Combine(
                 Environment.GetFolderPath(
                     Environment.SpecialFolder.MyDocuments
                 ),
                 StorageEnvironment.LegacyManagedLibraryFolderName()
-            )
+            ))
 
         End Function
 
@@ -721,14 +721,8 @@ Namespace Services
                     )
                 )
 
-                If File.Exists(backupPath) Then
-
-                    File.Delete(
-                        backupPath
-                    )
-
-                End If
-
+                ' File.Replace handles an existing backup. Removing it first
+                ' would destroy recovery metadata if the schema is locked.
                 File.Replace(
                     tempPath,
                     schemaPath,

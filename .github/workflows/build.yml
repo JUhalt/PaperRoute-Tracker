@@ -37,6 +37,9 @@ jobs:
       - name: Build Release
         run: dotnet build ManuscriptPipeline.slnx --configuration Release --no-restore
 
+      - name: Build disposable workflow demo
+        run: dotnet build ManualCertification/V04Demo/PaperRoute.V04Demo.csproj --configuration Release
+
       - name: Run automated tests
         run: dotnet test PaperRoute.Tests/PaperRoute.Tests.vbproj --configuration Release --no-build --logger "trx;LogFileName=PaperRoute.Tests.trx" --results-directory "${{ github.workspace }}/TestResults"
 

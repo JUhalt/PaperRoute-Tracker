@@ -23,6 +23,7 @@ Namespace Forms
         Private ReadOnly txtNotes As New TextBox()
 
         Private _selectedJournalId As Guid?
+        Private _initialJournalName As String = String.Empty
         Private _createdSubmission As JournalSubmission
 
 
@@ -44,7 +45,9 @@ Namespace Forms
 
 
         Public Sub New(
-            initialJournalName As String
+            initialJournalName As String,
+            Optional initialJournalId As Guid? = Nothing,
+            Optional initialPortalUrl As String = Nothing
         )
 
             Me.New()
@@ -54,6 +57,10 @@ Namespace Forms
                     initialJournalName,
                     String.Empty
                 ).Trim()
+
+            _selectedJournalId = initialJournalId
+            _initialJournalName = txtJournal.Text
+            txtPortalUrl.Text = If(initialPortalUrl, String.Empty)
 
         End Sub
 
@@ -677,7 +684,7 @@ Namespace Forms
                 Dim originalJournalName As String =
                     If(
                         _existingSubmission Is Nothing,
-                        String.Empty,
+                        _initialJournalName,
                         If(
                             _existingSubmission.JournalName,
                             String.Empty
@@ -685,7 +692,6 @@ Namespace Forms
                     )
 
                 Dim journalTextChanged As Boolean =
-                    _existingSubmission Is Nothing OrElse
                     Not String.Equals(
                         originalJournalName,
                         txtJournal.Text.Trim(),
