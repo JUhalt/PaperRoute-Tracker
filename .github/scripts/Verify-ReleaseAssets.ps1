@@ -144,10 +144,15 @@ if ($Mode -eq 'Stage') {
         $local = $local[0]
         $remote = $remote[0]
         $packagePath = Join-Path $releaseRoot $name
+        $expectedType = if ($name -cmatch '-full\.nupkg$') { 'Full' }
+            elseif ($name -cmatch '-delta\.nupkg$') { 'Delta' }
+            else { throw "Invalid local package metadata for '$name': unrecognized package suffix." }
+        $buildEntry = @($buildAssets | Where-Object { $_.RelativeFileName -ceq $name })
         if ($local.PackageId -cne 'JUhalt.PaperRouteTracker' -or $local.Version -cne $Version -or
             $local.SHA256 -ine (Get-Hash $packagePath) -or
             [long] $local.Size -ne (Get-Item -LiteralPath $packagePath).Length -or
-            $local.Type -notin @('Full', 'Delta')) { throw "Invalid local package metadata for '$name'." }
+            $buildEntry.Count -ne 1 -or $buildEntry[0].Type -cne $expectedType -or
+            $local.Type -cne $expectedType) { throw "Invalid local package metadata for '$name'." }
         Assert-SameNames @($local.PSObject.Properties.Name) @($remote.PSObject.Properties.Name)
         foreach ($property in $local.PSObject.Properties) {
             if ((ConvertTo-Json -InputObject $property.Value -Compress -Depth 10) -cne

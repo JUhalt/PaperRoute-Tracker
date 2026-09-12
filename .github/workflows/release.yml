@@ -101,6 +101,10 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore ManuscriptPipeline.slnx
 
+      - name: Verify release asset checks with synthetic fixtures
+        shell: pwsh
+        run: ./ManualCertification/Test-ReleaseAssetVerifier.ps1 -RunName release-ci
+
       - name: Build release candidate
         run: >
           dotnet build
@@ -131,7 +135,9 @@ jobs:
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: PaperRoute-release-test-results
-          path: TestResults/
+          path: |
+            TestResults/
+            artifacts/release-verifier-tests/release-ci/report.json
           if-no-files-found: warn
           retention-days: 14
 
