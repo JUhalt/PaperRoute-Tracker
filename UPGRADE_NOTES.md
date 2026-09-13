@@ -21,7 +21,7 @@ Use **Data → Backup Library...** to create a portable backup.
 
 ## Preparing to move from v0.3 to v0.4
 
-**v0.4.0 is currently an unreleased candidate.** Installed-upgrade and clean-install certification are tracked in [release gate #42](https://github.com/JUhalt/PaperRoute-Tracker/issues/42); these notes describe the intended upgrade behavior, not a completed release certification.
+**v0.4.0 is the current Stable release.** Installed v0.3-to-v0.4 migration and clean-install behavior were certified before Stable publication. The migration moves compatible Schema 4 libraries to Schema 5 while preserving existing manuscript history and managed/linked files.
 
 v0.4 uses storage **schema 5**. The schema-4-to-5 migration adds readiness profiles, submission packets, and reusable journal checklist templates while retaining existing manuscripts, versions, submissions, and chronology. Older records can have empty preparation histories; migration does not invent checklists, submitted files, or submission events.
 
