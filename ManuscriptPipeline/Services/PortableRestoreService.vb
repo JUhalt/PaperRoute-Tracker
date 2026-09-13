@@ -830,6 +830,10 @@ Namespace Services
 
                 End If
 
+                SubmissionReadinessValidationService.NormalizeAndValidateJournal(
+                    journal
+                )
+
             Next
 
             Return authorLibrary
@@ -1128,6 +1132,10 @@ Namespace Services
 
                 Next
 
+                SubmissionReadinessValidationService.NormalizeAndValidateManuscript(
+                    manuscript
+                )
+
             Next
 
         End Sub
@@ -1186,6 +1194,45 @@ Namespace Services
                         )
 
                     End If
+
+                Next
+
+                For Each packet As SubmissionPacket In manuscript.SubmissionPackets
+
+                    For Each packetFile As SubmissionPacketFile In packet.Files
+
+                        If packetFile.StorageMode <>
+                           SubmissionPacketFileStorageMode.ManagedCopy Then
+                            Continue For
+                        End If
+
+                        If String.IsNullOrWhiteSpace(packetFile.LocalFilePath) Then
+                            Throw New InvalidDataException(
+                                "A managed Submission Packet file does not contain a file path."
+                            )
+                        End If
+
+                        Dim packetFileName As String =
+                            Path.GetFileName(packetFile.LocalFilePath)
+
+                        Dim expectedPacketFile As String =
+                            Path.Combine(
+                                extractedFilesRoot,
+                                manuscript.Id.ToString("N"),
+                                "packets",
+                                packet.Id.ToString("N"),
+                                packetFile.Id.ToString("N"),
+                                packetFileName
+                            )
+
+                        If Not File.Exists(expectedPacketFile) Then
+                            Throw New InvalidDataException(
+                                "The backup is missing a managed Submission Packet file: " &
+                                packetFileName
+                            )
+                        End If
+
+                    Next
 
                 Next
 
@@ -1266,6 +1313,29 @@ Namespace Services
 
                 Next
 
+                For Each packet As SubmissionPacket In manuscript.SubmissionPackets
+
+                    For Each packetFile As SubmissionPacketFile In packet.Files
+
+                        If packetFile.StorageMode <>
+                           SubmissionPacketFileStorageMode.ManagedCopy Then
+                            Continue For
+                        End If
+
+                        packetFile.LocalFilePath =
+                            Path.Combine(
+                                managedRoot,
+                                manuscript.Id.ToString("N"),
+                                "packets",
+                                packet.Id.ToString("N"),
+                                packetFile.Id.ToString("N"),
+                                Path.GetFileName(packetFile.LocalFilePath)
+                            )
+
+                    Next
+
+                Next
+
                 For Each submission As JournalSubmission In manuscript.Submissions
 
                     For Each item As CorrespondenceItem In submission.Correspondence
@@ -1317,6 +1387,19 @@ Namespace Services
                     If version.IsManagedCopy Then
                         result.ManagedFileCount += 1
                     End If
+
+                Next
+
+                For Each packet As SubmissionPacket In manuscript.SubmissionPackets
+
+                    For Each packetFile As SubmissionPacketFile In packet.Files
+
+                        If packetFile.StorageMode =
+                           SubmissionPacketFileStorageMode.ManagedCopy Then
+                            result.ManagedFileCount += 1
+                        End If
+
+                    Next
 
                 Next
 

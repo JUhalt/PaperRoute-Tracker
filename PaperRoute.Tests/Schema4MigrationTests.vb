@@ -98,11 +98,11 @@ Public Class Schema4MigrationTests
         )
 
         Assert.AreEqual(
-            4,
-            StorageMigrationService.ReadSchemaVersion(
-                schemaPath
-            )
-        )
+    StorageMigrationService.CurrentSchemaVersion,
+    StorageMigrationService.ReadSchemaVersion(
+        schemaPath
+    )
+)
 
         Assert.AreEqual(
             legacyJson,
@@ -270,11 +270,11 @@ Public Class Schema4MigrationTests
         )
 
         Assert.AreEqual(
-            4,
-            StorageMigrationService.ReadSchemaVersion(
-                schemaPath
-            )
-        )
+    StorageMigrationService.CurrentSchemaVersion,
+    StorageMigrationService.ReadSchemaVersion(
+        schemaPath
+    )
+)
 
         Assert.IsTrue(
             File.Exists(

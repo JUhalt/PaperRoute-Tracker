@@ -540,8 +540,8 @@ Namespace Forms
             AddHandler btnJournalLinks.Click,
                 AddressOf OpenJournalLinks
 
-            details.Controls.Add(CreateFieldLabel("Links"), 0, 5)
-            details.Controls.Add(btnJournalLinks, 1, 5)
+            details.Controls.Add(CreateFieldLabel("Journal tools"), 0, 5)
+            details.Controls.Add(CreateJournalToolsPanel(), 1, 5)
 
             detailsGroup.Controls.Add(details)
 
@@ -758,6 +758,13 @@ Namespace Forms
                     .Dock = DockStyle.Fill,
                     .Margin = New Padding(3, 8, 3, 8)
                 }
+
+            AddHandler versionHistoryControl.ViewPacketsRequested,
+                Sub(versionId)
+                    RunSubmissionWorkflow(New SubmissionWorkflowRequest With {
+                        .Target = SubmissionWorkflowTarget.Packets, .VersionId = versionId
+                    })
+                End Sub
 
             ' =================================================
             ' Submissions
@@ -2103,23 +2110,9 @@ Namespace Forms
                 Return
             End If
 
-            Using dialog As New SubmissionDetailsForm(
-                _workingManuscript,
-                submission
-            )
-
-                dialog.ShowDialog(Me)
-
-            End Using
-
-            ManuscriptLifecycleService.
-                ReconcileFromLatestWorkflow(
-                    _workingManuscript,
-                    allowSameDay:=True
-                )
-
-            RefreshLifecycleControls()
-            RefreshSubmissionList()
+            RunSubmissionWorkflow(New SubmissionWorkflowRequest With {
+                .Target = SubmissionWorkflowTarget.Submission, .SubmissionId = submission.Id
+            })
 
         End Sub
 
@@ -2190,6 +2183,22 @@ Namespace Forms
                 Dim updated As JournalSubmission =
                     dialog.CreatedSubmission
 
+                Try
+                    SubmissionReadinessValidationService.ValidateSubmissionJournalAssociations(
+                        _workingManuscript,
+                        updated
+                    )
+                Catch ex As System.IO.InvalidDataException
+                    MessageBox.Show(
+                        Me,
+                        ex.Message,
+                        "Submission Used by Packet",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information
+                    )
+                    Return
+                End Try
+
                 For i As Integer = 0 To _workingManuscript.Submissions.Count - 1
 
                     If _workingManuscript.Submissions(i).Id =
@@ -2246,6 +2255,27 @@ Namespace Forms
 
             If selected Is Nothing Then
                 Return
+            End If
+
+            If _workingManuscript.SubmissionPackets IsNot Nothing AndAlso
+               _workingManuscript.SubmissionPackets.Any(
+                   Function(packet)
+                       Return packet IsNot Nothing AndAlso
+                           packet.SubmissionId.HasValue AndAlso
+                           packet.SubmissionId.Value = selected.Id
+                   End Function
+               ) Then
+
+                MessageBox.Show(
+                    Me,
+                    "This submission is linked to a Submission Packet. Open Submission Packets and unlink or delete the packet before deleting this submission.",
+                    "Submission Used by Packet",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information
+                )
+
+                Return
+
             End If
 
             Dim warning As String =
@@ -2969,6 +2999,10 @@ Namespace Forms
 
             _originalManuscript.CurrentVersionId =
                 committed.CurrentVersionId
+
+            CopyReadinessStateToOriginal(
+                committed
+            )
 
             _originalManuscript.CurrentStage =
                 committed.CurrentStage

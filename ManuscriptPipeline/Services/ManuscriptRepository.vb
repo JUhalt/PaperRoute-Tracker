@@ -548,48 +548,64 @@ Namespace Services
             manuscripts As IEnumerable(Of Manuscript)
         )
 
+            Dim failures As New List(Of String)()
+
             Try
 
                 _managedLibrary.RecoverStagedVersionDeletions(
                     manuscripts
                 )
 
-            Catch ex As UnauthorizedAccessException
+            Catch ex As Exception When TypeOf ex Is UnauthorizedAccessException OrElse TypeOf ex Is IOException
 
-                _lastManagedLibraryRecoveryWarning =
-                    BuildManagedLibraryRecoveryWarning(
-                        ex
-                    )
-
-            Catch ex As IOException
-
-                _lastManagedLibraryRecoveryWarning =
-                    BuildManagedLibraryRecoveryWarning(
-                        ex
-                    )
+                failures.Add("Version History: " & ex.Message)
 
             End Try
+
+            ' Recovery of one staging area must not prevent an independent
+            ' packet snapshot from being restored to its recorded location.
+            Try
+
+                Dim packetDeletionService As New ManagedPacketDeletionService(
+                    _managedLibrary.RootDirectory
+                )
+
+                packetDeletionService.RecoverStagedDeletions(
+                    manuscripts
+                )
+
+            Catch ex As Exception When TypeOf ex Is UnauthorizedAccessException OrElse TypeOf ex Is IOException
+
+                failures.Add("Submission Packets: " & ex.Message)
+
+            End Try
+
+            If failures.Count > 0 Then
+                _lastManagedLibraryRecoveryWarning = BuildManagedLibraryRecoveryWarning(
+                    String.Join(Environment.NewLine, failures)
+                )
+            End If
 
         End Sub
 
 
         Private Function BuildManagedLibraryRecoveryWarning(
-            ex As Exception
+            technicalDetails As String
         ) As String
 
             Return (
-                "PaperRoute loaded the manuscript database, but could not finish recovery or cleanup of its internal managed-version staging area." &
+                "PaperRoute loaded the manuscript database, but could not finish recovery or cleanup of its internal managed-file staging area." &
                 Environment.NewLine &
                 Environment.NewLine &
                 "Managed library: " &
                 _managedLibrary.RootDirectory &
                 Environment.NewLine &
                 Environment.NewLine &
-                "PaperRoute did not discard the manuscript database. You can continue using the library, but one or more managed Version History files may be missing or awaiting cleanup." &
+                "PaperRoute did not discard the manuscript database. You can continue using the library, but one or more managed Version History or Submission Packet files may be missing or awaiting cleanup." &
                 Environment.NewLine &
                 Environment.NewLine &
                 "Technical details: " &
-                ex.Message
+                technicalDetails
             )
 
         End Function
@@ -625,6 +641,23 @@ Namespace Services
 
             End If
 
+            ' Reject dangling packet/readiness references before copying or
+            ' staging managed files, or replacing the authoritative database.
+            ' The saved model must satisfy the same constraints as a reload.
+            For Each manuscript As Manuscript In manuscripts
+
+                If manuscript Is Nothing Then
+                    Throw New InvalidDataException(
+                        "The manuscript library contains an invalid null manuscript record."
+                    )
+                End If
+
+                SubmissionReadinessValidationService.NormalizeAndValidateManuscript(
+                    manuscript
+                )
+
+            Next
+
             Directory.CreateDirectory(
                 _dataDirectory
             )
@@ -643,6 +676,9 @@ Namespace Services
             Dim deletionTransaction As ManagedLibraryService.ManagedVersionDeletionTransaction =
                 Nothing
 
+            Dim packetDeletionTransaction As ManagedPacketDeletionService.ManagedPacketDeletionTransaction =
+                Nothing
+
             Try
 
                 ' Managed version directories removed from the working model
@@ -651,6 +687,15 @@ Namespace Services
                 ' successful save commits their removal.
                 deletionTransaction =
                     _managedLibrary.BeginVersionDeletionTransaction(
+                        manuscripts
+                    )
+
+                Dim packetDeletionService As New ManagedPacketDeletionService(
+                    _managedLibrary.RootDirectory
+                )
+
+                packetDeletionTransaction =
+                    packetDeletionService.BeginDeletionTransaction(
                         manuscripts
                     )
 
@@ -697,9 +742,28 @@ Namespace Services
 
                 End If
 
+                packetDeletionTransaction.Commit()
                 deletionTransaction.Commit()
 
             Catch saveException As Exception
+
+                Dim rollbackFailures As New List(Of Exception)()
+
+                If packetDeletionTransaction IsNot Nothing Then
+
+                    Try
+
+                        packetDeletionTransaction.Rollback()
+
+                    Catch packetRollbackException As Exception
+
+                        rollbackFailures.Add(
+                            packetRollbackException
+                        )
+
+                    End Try
+
+                End If
 
                 If deletionTransaction IsNot Nothing Then
 
@@ -707,24 +771,42 @@ Namespace Services
 
                         deletionTransaction.Rollback()
 
-                    Catch rollbackException As Exception
+                    Catch versionRollbackException As Exception
 
-                        Throw New InvalidDataException(
-                            "PaperRoute could not save the manuscript library and could not fully restore staged manuscript-version snapshots. " &
-                            "The staged files have been preserved for startup recovery.",
-                            New AggregateException(
-                                saveException,
-                                rollbackException
-                            )
+                        rollbackFailures.Add(
+                            versionRollbackException
                         )
 
                     End Try
 
                 End If
 
+                If rollbackFailures.Count > 0 Then
+
+                    Dim failures As New List(Of Exception) From {
+                        saveException
+                    }
+
+                    failures.AddRange(
+                        rollbackFailures
+                    )
+
+                    Throw New InvalidDataException(
+                        "PaperRoute could not save the manuscript library and could not fully restore one or more staged managed files. The staged files have been preserved for startup recovery.",
+                        New AggregateException(
+                            failures
+                        )
+                    )
+
+                End If
+
                 Throw
 
             Finally
+
+                If packetDeletionTransaction IsNot Nothing Then
+                    packetDeletionTransaction.Dispose()
+                End If
 
                 If deletionTransaction IsNot Nothing Then
                     deletionTransaction.Dispose()
@@ -1141,6 +1223,10 @@ Namespace Services
                     End If
 
                 Next
+
+                SubmissionReadinessValidationService.NormalizeAndValidateManuscript(
+                    manuscript
+                )
 
             Next
 

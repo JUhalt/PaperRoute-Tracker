@@ -1,4 +1,4 @@
-﻿Namespace Services
+Namespace Services
 
     Public NotInheritable Class WorkflowHelpCatalog
 
@@ -51,6 +51,48 @@
         Public Shared ReadOnly Property RevisionRound As String
             Get
                 Return "Use a round number for revised manuscript versions created while responding to editorial or reviewer feedback within the same journal submission attempt."
+            End Get
+        End Property
+
+
+        Public Shared ReadOnly Property ReadinessRequirementTitle As String
+            Get
+                Return "The short name of the thing the journal expects, such as Anonymous manuscript, Cover letter, or Data availability statement. Do not enter Required or Optional here; PaperRoute shows that automatically."
+            End Get
+        End Property
+
+
+        Public Shared ReadOnly Property ReadinessCategory As String
+            Get
+                Return "A grouping label for related requirements, such as Manuscript, Editorial, Compliance, Files, or Figures. Keep the actual requirement name in Requirement title."
+            End Get
+        End Property
+
+
+        Public Shared ReadOnly Property ReadinessInstructions As String
+            Get
+                Return "Optional detail about what the journal expects for this requirement, such as a word limit, anonymization rule, upload format, or journal-specific instruction."
+            End Get
+        End Property
+
+
+        Public Shared ReadOnly Property ReadinessImportance As String
+            Get
+                Return "Checked means this item is required for the manuscript to be considered ready. Unchecked means optional. PaperRoute displays Required or Optional automatically."
+            End Get
+        End Property
+
+
+        Public Shared ReadOnly Property ReadinessNotApplicable As String
+            Get
+                Return "Use Not Applicable only when this journal requirement genuinely does not apply to this manuscript. It counts as resolved for readiness, but it is not counted as completed."
+            End Get
+        End Property
+
+
+        Public Shared ReadOnly Property ReadinessTemplateRefresh As String
+            Get
+                Return "Adds only requirements that were newly added to the reusable journal template. Existing manuscript snapshot text, status, notes, and completion history are not rewritten."
             End Get
         End Property
 

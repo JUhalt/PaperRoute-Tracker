@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>PaperRoute.Tests</AssemblyName>
     <RootNamespace>PaperRoute.Tests</RootNamespace>
     <IsTestProject>true</IsTestProject>
@@ -15,6 +16,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ManuscriptPipeline\ManuscriptPipeline.vbproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Fixtures\Schema4Representative\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

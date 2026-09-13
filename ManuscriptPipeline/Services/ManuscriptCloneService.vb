@@ -79,6 +79,34 @@ Namespace Services
                 Next
             End If
 
+            If source.ReadinessProfiles IsNot Nothing Then
+                For Each readiness As ManuscriptReadiness In source.ReadinessProfiles
+
+                    If readiness Is Nothing Then
+                        Continue For
+                    End If
+
+                    clone.ReadinessProfiles.Add(
+                        CloneReadiness(readiness)
+                    )
+
+                Next
+            End If
+
+            If source.SubmissionPackets IsNot Nothing Then
+                For Each packet As SubmissionPacket In source.SubmissionPackets
+
+                    If packet Is Nothing Then
+                        Continue For
+                    End If
+
+                    clone.SubmissionPackets.Add(
+                        CloneSubmissionPacket(packet)
+                    )
+
+                Next
+            End If
+
             If source.History IsNot Nothing Then
                 For Each historyEvent As HistoryEvent In source.History
 
@@ -234,6 +262,133 @@ Namespace Services
                 .SubmissionId = source.SubmissionId,
                 .DecisionId = source.DecisionId,
                 .RevisionRoundNumber = source.RevisionRoundNumber
+            }
+
+        End Function
+
+
+        Public Shared Function CloneReadiness(
+            source As ManuscriptReadiness
+        ) As ManuscriptReadiness
+
+            If source Is Nothing Then
+                Throw New ArgumentNullException(NameOf(source))
+            End If
+
+            Dim clone As New ManuscriptReadiness With {
+                .Id = source.Id,
+                .JournalId = source.JournalId,
+                .JournalName = source.JournalName,
+                .Notes = source.Notes,
+                .CreatedAtUtc = source.CreatedAtUtc,
+                .LastModifiedAtUtc = source.LastModifiedAtUtc
+            }
+
+            If source.Items IsNot Nothing Then
+                For Each item As ReadinessItemState In source.Items
+
+                    If item Is Nothing Then
+                        Continue For
+                    End If
+
+                    clone.Items.Add(
+                        CloneReadinessItemState(item)
+                    )
+
+                Next
+            End If
+
+            Return clone
+
+        End Function
+
+
+        Public Shared Function CloneReadinessItemState(
+            source As ReadinessItemState
+        ) As ReadinessItemState
+
+            If source Is Nothing Then
+                Throw New ArgumentNullException(NameOf(source))
+            End If
+
+            Return New ReadinessItemState With {
+                .Id = source.Id,
+                .TemplateItemId = source.TemplateItemId,
+                .Title = source.Title,
+                .Description = source.Description,
+                .Category = source.Category,
+                .SortOrder = source.SortOrder,
+                .IsRequired = source.IsRequired,
+                .Status = source.Status,
+                .UserNotes = source.UserNotes,
+                .CompletedAtUtc = source.CompletedAtUtc,
+                .LastModifiedAtUtc = source.LastModifiedAtUtc
+            }
+
+        End Function
+
+
+        Public Shared Function CloneSubmissionPacket(
+            source As SubmissionPacket
+        ) As SubmissionPacket
+
+            If source Is Nothing Then
+                Throw New ArgumentNullException(NameOf(source))
+            End If
+
+            Dim clone As New SubmissionPacket With {
+                .Id = source.Id,
+                .ReadinessProfileId = source.ReadinessProfileId,
+                .JournalId = source.JournalId,
+                .JournalName = source.JournalName,
+                .ManuscriptVersionId = source.ManuscriptVersionId,
+                .SubmissionId = source.SubmissionId,
+                .RevisionRoundNumber = source.RevisionRoundNumber,
+                .Label = source.Label,
+                .Notes = source.Notes,
+                .CreatedAtUtc = source.CreatedAtUtc,
+                .LastModifiedAtUtc = source.LastModifiedAtUtc
+            }
+
+            If source.Files IsNot Nothing Then
+                For Each item As SubmissionPacketFile In source.Files
+
+                    If item Is Nothing Then
+                        Continue For
+                    End If
+
+                    clone.Files.Add(
+                        CloneSubmissionPacketFile(item)
+                    )
+
+                Next
+            End If
+
+            Return clone
+
+        End Function
+
+
+        Public Shared Function CloneSubmissionPacketFile(
+            source As SubmissionPacketFile
+        ) As SubmissionPacketFile
+
+            If source Is Nothing Then
+                Throw New ArgumentNullException(NameOf(source))
+            End If
+
+            Return New SubmissionPacketFile With {
+                .Id = source.Id,
+                .Role = source.Role,
+                .Label = source.Label,
+                .Notes = source.Notes,
+                .LocalFilePath = source.LocalFilePath,
+                .StorageMode = source.StorageMode,
+                .OriginalFileName = source.OriginalFileName,
+                .Sha256 = source.Sha256,
+                .FileSizeBytes = source.FileSizeBytes,
+                .LastWriteTimeUtc = source.LastWriteTimeUtc,
+                .HashComputedAtUtc = source.HashComputedAtUtc
             }
 
         End Function

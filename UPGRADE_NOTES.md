@@ -19,6 +19,18 @@ PaperRoute upgrades are designed not to overwrite the manuscript database, setti
 
 Use **Data → Backup Library...** to create a portable backup.
 
+## Preparing to move from v0.3 to v0.4
+
+**v0.4.0 is currently an unreleased candidate.** Installed-upgrade and clean-install certification are tracked in [release gate #42](https://github.com/JUhalt/PaperRoute-Tracker/issues/42); these notes describe the intended upgrade behavior, not a completed release certification.
+
+v0.4 uses storage **schema 5**. The schema-4-to-5 migration adds readiness profiles, submission packets, and reusable journal checklist templates while retaining existing manuscripts, versions, submissions, and chronology. Older records can have empty preparation histories; migration does not invent checklists, submitted files, or submission events.
+
+Before upgrading, create a portable ZIP backup with v0.3 and retain it separately. A v0.4 library is not intended to be opened directly by v0.3, so keep that pre-upgrade backup if you need to return to the older application.
+
+After upgrading, confirm the existing manuscript and version history first. Then try the new preparation workflow on a disposable manuscript: create a readiness profile, associate a packet with an exact version, save the child dialog, and choose **Save & Close** in Manuscript Details. Reopen the manuscript to confirm the saved associations.
+
+v0.4 ZIP backups preserve readiness, journal templates, packet associations, saved fingerprints, and PaperRoute-managed packet/version snapshots. Externally linked originals remain external references and must be retained separately. The Excel workbook alone does not preserve this complete workflow.
+
 ## Legacy ManuscriptPipeline data
 
 PaperRoute can migrate compatible legacy ManuscriptPipeline storage into the current PaperRoute storage layout.
