@@ -14,8 +14,7 @@
 
 PaperRoute Tracker helps researchers manage manuscripts from idea through submission, peer review, revision, publication—or the File Drawer—without requiring an account or sending the core workflow database to a cloud service.
 
-**Current stable release:** [v0.3.0 — The Route](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v0.3.0). **Release preparation:** [v0.4.0 — Submission Readiness](docs/releases/0.4.0.md), an unreleased candidate tracked in the [v0.4 milestone](https://github.com/JUhalt/PaperRoute-Tracker/milestone/6). See the [roadmap](ROADMAP.md) for planned work and its issue owners.
-
+**Current stable release:** [v0.4.0 — Submission Readiness](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v0.4.0). See the [release notes](docs/releases/0.4.0.md), [user guide](docs/USER_GUIDE.md), and [roadmap](ROADMAP.md).
 
 **New to PaperRoute?** Start with the [`PaperRoute User Guide`](docs/USER_GUIDE.md) for a Quick Start, feature tour, and task-oriented "How do I...?" reference.
 
@@ -56,19 +55,17 @@ The **Help** button in the main PaperRoute header (and **Settings → User Guide
 
 ## Current status
 
-**v0.3.0** - current stable release, **The Route**.
+**v0.4.0** - current stable release, **Submission Readiness**.
 
-PaperRoute v0.3 adds the canonical manuscript-history layer: Visual Route View, manuscript Version History, workflow-linked versions, immutable managed snapshots, chronology/provenance tracking, and safer recovery behavior.
-
-The **v0.4.0 — Submission Readiness** candidate adds per-journal readiness checklists, exact submission packets, file-integrity tracking, and connected navigation to the manuscript version and journal interaction they belong to. See the [candidate release notes](docs/releases/0.4.0.md) and [upgrade notes](UPGRADE_NOTES.md). Stable users remain on the published v0.3.x release line until v0.4 is published.
+PaperRoute v0.4 adds per-journal readiness checklists, exact submission packets, local file-integrity tracking, Schema 5 persistence, and connected navigation between readiness, versions, packets, and recorded submissions.
 
 ## Highlights
 
-### v0.4 development progress — September 12, 2026
+### v0.4.0 — Submission Readiness
 
-The [Submission Readiness draft PR #40](https://github.com/JUhalt/PaperRoute-Tracker/pull/40) now brings together journal checklists, exact submission packets, local file-integrity checks, and navigation between readiness, versions, packets, and recorded submissions. The packet layout has been checked at minimum and expanded window sizes, and a disposable workflow demo supports hands-on review without an existing manuscript library.
+PaperRoute v0.4.0 connects journal preparation to the exact manuscript version, readiness state, packet files, and recorded submission they belong to. Preparing a packet remains advisory; recording a real submission is always explicit.
 
-See the [development evidence and demo instructions](https://github.com/JUhalt/PaperRoute-Tracker/blob/v0.4-submission-readiness/ManualCertification/v0.4-Development-Checkpoint.md) for completed checks and how to try the work. [Release gate #42](https://github.com/JUhalt/PaperRoute-Tracker/issues/42) tracks the remaining display-scaling, installed-upgrade, and packaging checks. **v0.4 is unreleased; stable downloads remain v0.3.0.**
+The release passed native Windows scaling/keyboard checks, clean-install and v0.3-to-v0.4 upgrade certification, Preview updater certification through v0.4.0-rc.1, and final release-asset verification.
 
 ### Stable features
 

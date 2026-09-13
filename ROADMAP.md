@@ -45,8 +45,8 @@ Targets are directional rather than promises. Data integrity, migrations, backup
 | **v0.1** | Reliable Core ✅ | Can I trust PaperRoute with local manuscript data? |
 | **v0.2** | Metadata & Integrations ✅ | Can PaperRoute describe and connect my research accurately? |
 | **v0.3** | The Route ✅ | What happened to this manuscript, in what order, and which file was which? |
-| **v0.4** | **Submission Readiness — release preparation** | What exactly am I preparing and sending to this journal? |
-| **v0.5** | Reviewer Response Workflow | What did the journal ask me to change, and how am I responding? |
+| **v0.4** | Submission Readiness ✅ | What exactly am I preparing and sending to this journal? |
+| **v0.5** | **Reviewer Response Workflow — active** | What did the journal ask me to change, and how am I responding? |
 | **v0.6** | Deadline Center | What requires action, and when? |
 | **v0.7** | Route Analytics & Reports | What does this publication journey show me—and how can I communicate it? |
 | **v0.8** | Optional AI Assistance | Can AI reduce clerical work without becoming authoritative? |
@@ -93,9 +93,9 @@ Known cosmetic follow-up: some narrow/high-DPI manuscript shelves can still disp
 
 ---
 
-# ACTIVE — v0.4 Submission Readiness
+## COMPLETE — v0.4 Submission Readiness
 
-The **v0.4.0 candidate is unreleased**. [Candidate release notes](docs/releases/0.4.0.md), the [user guide](docs/USER_GUIDE.md), and [upgrade notes](UPGRADE_NOTES.md) describe the release target; they do not mark its certification gates complete. The current stable release remains v0.3.0.
+PaperRoute v0.4.0 was released on September 13, 2026. It completed Schema 5, journal-specific readiness, exact Submission Packets, local file-integrity checks, connected preparation/submission navigation, and the associated migration, installer, updater, backup/recovery, keyboard, theme, and DPI certification.
 
 Issues:
 
@@ -103,9 +103,9 @@ Issues:
 - **[#26 Per-journal readiness checklists](https://github.com/JUhalt/PaperRoute-Tracker/issues/26)**
 - **[#38 Schema 5 readiness and submission-packet foundation](https://github.com/JUhalt/PaperRoute-Tracker/issues/38)**
 
-**Release certification:** [#42](https://github.com/JUhalt/PaperRoute-Tracker/issues/42). **Development PR:** [#40](https://github.com/JUhalt/PaperRoute-Tracker/pull/40) remains a draft; issue acceptance evidence determines completion.
+Implementation was delivered through [PR #40](https://github.com/JUhalt/PaperRoute-Tracker/pull/40). Scope was owned by [#38](https://github.com/JUhalt/PaperRoute-Tracker/issues/38), [#26](https://github.com/JUhalt/PaperRoute-Tracker/issues/26), [#25](https://github.com/JUhalt/PaperRoute-Tracker/issues/25), and release certification [#42](https://github.com/JUhalt/PaperRoute-Tracker/issues/42).
 
-**September 12 development checkpoint:** readiness, packet assembly, explicit file-integrity checks, and connected submission navigation are implemented in the development branch. Minimum/expanded layouts and a disposable save/reload workflow have been exercised. [Checkpoint evidence and demo instructions](https://github.com/JUhalt/PaperRoute-Tracker/blob/v0.4-submission-readiness/ManualCertification/v0.4-Development-Checkpoint.md) distinguish automated checks from manual certification. Display scaling, installed upgrade, and release packaging remain open in #42; v0.4 has not been released.
+Release certification included native 100%/125%/150% scaling, Light/Dark/System checks, clean install, installed v0.3-to-v0.4 migration, RC1 Preview updater validation, and release-candidate packaging/asset verification.
 
 v0.4 turns a manuscript version into a concrete, reconstructable journal submission package.
 
@@ -224,7 +224,7 @@ Build the persistence model before adding UI:
 
 ---
 
-# v0.5 Reviewer Response Workflow
+# ACTIVE — v0.5 Reviewer Response Workflow
 
 Issue: **[#27 Reviewer Response Matrix](https://github.com/JUhalt/PaperRoute-Tracker/issues/27)**
 

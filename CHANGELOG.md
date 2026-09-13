@@ -2,9 +2,9 @@
 
 All notable changes to PaperRoute Tracker will be documented here.
 
-## [Unreleased] — v0.4 Submission Readiness
+## [0.4.0] - 2026-09-13
 
-The release target is **v0.4.0**, currently an **unreleased candidate**. Development is tracked in [draft PR #40](https://github.com/JUhalt/PaperRoute-Tracker/pull/40) and the [v0.4 milestone](https://github.com/JUhalt/PaperRoute-Tracker/milestone/6). The current stable release remains v0.3.0. See the [candidate release notes](docs/releases/0.4.0.md) and [development checkpoint](ManualCertification/v0.4-Development-Checkpoint.md) for validation evidence and outstanding release gates.
+PaperRoute v0.4.0 — **Submission Readiness** — was released on September 13, 2026. It adds journal-specific readiness, exact submission packets, local file-integrity checks, connected preparation/submission navigation, and Schema 5 persistence.
 
 ### Added
 

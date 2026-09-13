@@ -2,7 +2,7 @@
 
 PaperRoute is a local-first academic manuscript tracker for researchers. It is designed to keep the complete route of a paper understandable: idea, writing, submission, peer review, revision, publication, or the File Drawer.
 
-This guide describes the **PaperRoute v0.4.0 candidate**, which is currently unreleased. The current stable release remains v0.3.0. See the [candidate release notes](releases/0.4.0.md) for scope and certification status.
+This guide describes **PaperRoute v0.4.0**, the current Stable release. See the [v0.4.0 release notes](releases/0.4.0.md) for release details.
 
 ## Quick Start
 
@@ -106,7 +106,7 @@ Deleting a Version History record is also working-copy based. If the version own
 
 ### Submission Readiness and Packets
 
-These features are included in the v0.4.0 candidate described by this guide; they are not part of the v0.3 release.
+These features were introduced in PaperRoute v0.4.0.
 
 From **Manuscript Details**, open **Submission Readiness...** to apply a reusable journal checklist and track manuscript-specific requirements. Complete, not-applicable, and unresolved states explain the readiness summary. Readiness is advisory: it does not change the manuscript stage or prevent recording a real submission.
 
