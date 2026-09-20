@@ -6,7 +6,7 @@ All notable changes to PaperRoute Tracker will be documented here.
 
 ### Fixed
 
-- Manuscript shelves now reconcile stale horizontal scroll extents after wide-to-narrow resizing, maximize/restore, and card replacement. The board keeps genuine vertical scrolling and card actions reachable; native 150% minimum-window recheck remains pending before #37 closes.
+- Manuscript shelves now reconcile stale horizontal scroll extents after wide-to-narrow resizing, maximize/restore, and card replacement. The board keeps genuine vertical scrolling and card actions reachable; the final native 150% minimum-window check passes and #37 is ready for closure with this fix.
 
 ## [0.4.0] - 2026-09-13
 

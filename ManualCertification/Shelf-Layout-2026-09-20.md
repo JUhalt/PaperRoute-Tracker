@@ -12,6 +12,6 @@ After a wide-to-narrow restore, a shelf could retain a display width of about 17
 - Focused minimum-height and overflow regressions: **8/8 passed** after the refinement at the supported layout stress sizes.
 - Final shelf worktree full suite after the minimum-height refinement: **486/486 passed, 0 failed, 0 skipped**. TRX: `TestResults/shelf-final-full-after-minheight.trx`.
 - Native 100% (DeviceDpi 96) and 125% (DeviceDpi 120) demo checks passed through minimum → maximize → restore with vertical scrolling retained and no horizontal shelf scrollbars. At 125%, the pre-fix restored display width was 1772 pixels; the fixed restored width was 915 pixels inside a 923-pixel viewport.
-- Native 150% (DeviceDpi 144) was checked before the minimum-height refinement: the horizontal range was corrected, but the minimum window pushed lower shelf content below the visible form. The refinement addresses that vertical reservation; a fresh native 150% launch remains required before issue closure.
+- Native 150% (DeviceDpi 144) final verification passed after the minimum-height refinement. The minimum board window showed vertical shelf scrolling with no horizontal shelf range; the last Pipeline card was reachable by scrolling, and its `View route` action opened successfully.
 
 Evidence files are retained in the ignored shelf worktree `TestResults` directory, including `shelf-native-125-before.json`, `shelf-native-125-after.json`, and `shelf-native-100-after.json`. No normal PaperRoute library is used by the demo.

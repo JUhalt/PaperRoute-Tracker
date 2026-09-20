@@ -23,7 +23,7 @@ Each run starts fresh. By default, the title ends with `[DEMO - unsaved sample d
 
 The standalone `submission` surface opens the real Submission Details form on the existing fictional submission, without repositories or new files. Use it to inspect the summary, publisher-portal row, and minimum-size layout without repeating the workflow. Decisions and correspondence remain editable disposable sample events; closing discards those edits. This preview does not enable **View Submission Packets...** navigation. Use `workflow` to test that connected action and the final save boundary. `submission --minimum` applies the actual minimum after the form finishes its normal initial sizing.
 
-The board's resize and DPI evidence is recorded in [Shelf-Layout-2026-09-20.md](../Shelf-Layout-2026-09-20.md). Native 150% verification must be repeated after the final minimum-height refinement before issue #37 is closed.
+The board's resize and DPI evidence is recorded in [Shelf-Layout-2026-09-20.md](../Shelf-Layout-2026-09-20.md). Final native 150% verification after the minimum-height refinement passed with vertical shelf scrolling, no horizontal shelf range, and a reachable last-card `View route` action.
 
 ## Data and persistence limits
 
