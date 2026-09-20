@@ -2,6 +2,13 @@
 
 This directory contains disposable import fixtures used for repeatable F5/manual certification.
 
+## v0.4 release records
+
+- [Release closure and published-asset verification](v0.4-Release-Closure.md)
+- [Historical development checkpoints](v0.4-Development-Checkpoint.md)
+- [Disposable workflow demo](V04Demo/README.md)
+- [Candidate packaging and installation procedure](v0.4-Release-Packaging.md)
+
 ## Safety
 
 Certification workbooks are **additive imports**.

@@ -33,7 +33,7 @@ PaperRoute v0.4.0 — **Submission Readiness** — was released on September 13,
 
 - Portable ZIP backup/restore preserves readiness, journal templates, packet/version/submission references, fingerprints, and managed snapshots. Excel remains a partial interchange format.
 - The [v0.4 user guide](docs/USER_GUIDE.md) describes the preparation workflow and its explicit save boundaries; [upgrade notes](UPGRADE_NOTES.md) describe the schema-4-to-5 transition.
-- Installed upgrade, clean install, display-scaling, and artifact certification are tracked in [release gate #42](https://github.com/JUhalt/PaperRoute-Tracker/issues/42). This entry does not claim publication or completion of those gates.
+- Release gate [#42](https://github.com/JUhalt/PaperRoute-Tracker/issues/42) closed after installed-upgrade, clean-install, native display/keyboard, updater, and artifact certification. See the [release closure record](ManualCertification/v0.4-Release-Closure.md) for the tagged build and published-asset evidence.
 
 ## [0.3.0] - 2026-08-27
 
