@@ -2,6 +2,12 @@
 
 All notable changes to PaperRoute Tracker will be documented here.
 
+## [Unreleased] — v0.5 development
+
+### Fixed
+
+- Manuscript shelves now reconcile stale horizontal scroll extents after wide-to-narrow resizing, maximize/restore, and card replacement. The board keeps genuine vertical scrolling and card actions reachable; the final native 150% minimum-window check passes and #37 is ready for closure with this fix.
+
 ## [0.4.0] - 2026-09-13
 
 PaperRoute v0.4.0 — **Submission Readiness** — was released on September 13, 2026. It adds journal-specific readiness, exact submission packets, local file-integrity checks, connected preparation/submission navigation, and Schema 5 persistence.

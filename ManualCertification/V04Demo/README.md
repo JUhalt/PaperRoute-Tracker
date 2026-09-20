@@ -1,6 +1,6 @@
 # PaperRoute v0.4 disposable UI demo
 
-This Windows Forms harness opens the actual PaperRoute forms with synthetic samples. Use it for screenshots, narrow-window checks, keyboard navigation, and experimenting with edits before using a real manuscript. The optional `workflow` surface runs connected Manuscript Details in a disposable storage session. The harness is separate from the release solution and requires Windows with the .NET 10 SDK.
+This Windows Forms harness opens the actual PaperRoute forms with synthetic samples. Use it for screenshots, narrow-window checks, keyboard navigation, and experimenting with edits before using a real manuscript. The optional `workflow` surface runs connected Manuscript Details in a disposable storage session; `board` opens the actual main board with a disposable synthetic library. The harness is separate from the release solution and requires Windows with the .NET 10 SDK.
 
 From the repository root:
 
@@ -14,21 +14,34 @@ dotnet run --project ManualCertification/V04Demo/PaperRoute.V04Demo.csproj -- su
 dotnet run --project ManualCertification/V04Demo/PaperRoute.V04Demo.csproj -- submission --minimum
 dotnet run --project ManualCertification/V04Demo/PaperRoute.V04Demo.csproj -- workflow
 dotnet run --project ManualCertification/V04Demo/PaperRoute.V04Demo.csproj -- workflow --minimum
+dotnet run --project ManualCertification/V04Demo/PaperRoute.V04Demo.csproj -- board --minimum --primary
 ```
 
-Other surface arguments are `packet-new`, `file-new`, and `notes`. With no surface argument the vault opens. `--empty` is supported for `vault` and `readiness`; it clears the sample packets and readiness profiles while keeping versions and the journal library available. `--integrity` is supported only for the populated vault and creates the disposable file fixtures described below. `workflow` supports `--minimum` and cannot be combined with `--empty` or `--integrity`. `--help` displays the options. To reuse a completed build, add `--no-build` before the application argument separator `--`.
+Other surface arguments are `packet-new`, `file-new`, and `notes`. With no surface argument the vault opens. `--empty` is supported for `vault` and `readiness`; it clears the sample packets and readiness profiles while keeping versions and the journal library available. `--integrity` is supported only for the populated vault and creates the disposable file fixtures described below. `workflow` and `board` support `--minimum` and cannot be combined with `--empty` or `--integrity`. `--help` displays the options. To reuse a completed build, add `--no-build` before the application argument separator `--`.
 
 Each run starts fresh. By default, the title ends with `[DEMO - unsaved sample data]`. On these single-dialog surfaces, Save & Close and Cancel operate on the sample objects and close the window. Use the normal buttons in the vault/readiness forms to open their child dialogs, or launch those dialogs directly with the commands above. The `workflow` launcher stays open so you can save and reopen the sample. Close the demo before rebuilding its referenced application.
 
 The standalone `submission` surface opens the real Submission Details form on the existing fictional submission, without repositories or new files. Use it to inspect the summary, publisher-portal row, and minimum-size layout without repeating the workflow. Decisions and correspondence remain editable disposable sample events; closing discards those edits. This preview does not enable **View Submission Packets...** navigation. Use `workflow` to test that connected action and the final save boundary. `submission --minimum` applies the actual minimum after the form finishes its normal initial sizing.
 
+The board's resize and DPI evidence is recorded in [Shelf-Layout-2026-09-20.md](../Shelf-Layout-2026-09-20.md). Final native 150% verification after the minimum-height refinement passed with vertical shelf scrolling, no horizontal shelf range, and a reachable last-card `View route` action.
+
 ## Data and persistence limits
 
-No demo surface starts PaperRoute's main program or invokes storage migration. The default single-dialog surfaces do not construct repositories or open Manuscript Details, and never load, save, import, or delete manuscript/library records. Their sample files are metadata entries; the one missing linked file points to a unique temporary path that is never created. These surfaces write no files unless `--integrity` is supplied. The explicit `workflow` surface instead uses repositories beneath its unique temporary session root, as described below.
+No demo surface starts PaperRoute's main program or invokes storage migration. The default single-dialog surfaces do not construct repositories or open Manuscript Details, and never load, save, import, or delete manuscript/library records. Their sample files are metadata entries; the one missing linked file points to a unique temporary path that is never created. These surfaces write no files unless `--integrity` is supplied. The explicit `workflow` and `board` surfaces instead use repositories beneath their unique temporary session roots, as described below.
 
 The standalone vault's production constructor constructs `ManagedLibraryService`, which resolves the normal library path but performs no writes. These single-dialog surfaces do not invoke the managed-copy commit or staged-deletion services. Vault Save changes only the in-memory manuscript; removal changes only sample packet entries. They do not certify managed storage, backup/restore, persisted outer-save behavior, or actual file deletion. The workflow session can exercise the real outer-save boundary against disposable storage; that still does not replace full release certification.
 
 The real Browse/Open controls remain available. For file-picker experimentation, choose a disposable file you created for testing. A selected file can be inspected or opened by its normal associated application. On single-dialog surfaces, no selected content is copied because the outer persistence step is absent. In a workflow session, managed-copy choices are committed to that session's temporary managed library when you save Manuscript Details.
+
+## Main board in disposable storage
+
+The `board` surface opens the actual main board with five fictional manuscripts in each shelf. Before any repository or board is constructed, it configures and verifies a new `PaperRoute-Board-Demo-<GUID>` session under the operating system temporary directory. Settings, author data, manuscript data, and managed files all stay beneath this root. Automatic update checks and reminder notifications are disabled in the session settings. No installed profile or existing manuscript is loaded, and normal startup migration is not invoked.
+
+Use `board --minimum --primary` to start at minimum size on the primary display with actual `DeviceDpi` in the title. Narrow, widen, maximize, and restore the board repeatedly. Shelves should have no horizontal scroll range when their cards fit; scroll vertically to the last card in every shelf. Check **Open**, **Move to File Drawer** or **Restore**, **Delete**, and **View route**, plus Tab and Shift+Tab navigation. Search for an absent title and clear the search to compare empty and populated shelves. Each launch starts fresh and leaves its disposable directory for inspection afterward. The real import/export/file-picker actions remain available and operate on explicitly selected paths, so use disposable files if exercising those controls.
+
+The automated shelf regressions include larger text sizes; those are layout stress tests, not native DPI certification. For native 100%, 125%, and 150% checks, follow the display-scaling instructions below and verify the title's actual DPI value each time.
+
+The board demo writes `board-layout.json` beneath its disposable session directory after the initial display and each settled resize. It records actual DPI, window state, shelf scroll ranges, and synthetic card bounds for the last 30 observations. Keep this diagnostic file alongside screenshots when reporting resize problems; it contains no existing user-library data.
 
 ## Connected workflow in disposable storage
 
