@@ -193,10 +193,6 @@ Namespace Services
 
                 If primary IsNot Nothing Then
 
-                    NormalizeLoadedData(
-                        primary
-                    )
-
                     TryRecoverManagedLibraryStaging(
                         primary
                     )
@@ -222,10 +218,6 @@ Namespace Services
 
                         RecoverPrimaryFromBackup(
                             preserveExistingPrimary:=True
-                        )
-
-                        NormalizeLoadedData(
-                            backup
                         )
 
                         TryRecoverManagedLibraryStaging(
@@ -279,10 +271,6 @@ Namespace Services
 
             RecoverPrimaryFromBackup(
                 preserveExistingPrimary:=False
-            )
-
-            NormalizeLoadedData(
-                recovered
             )
 
             TryRecoverManagedLibraryStaging(
@@ -339,6 +327,11 @@ Namespace Services
                         )
 
                     End If
+
+                    ' Validate references and records before a backup is
+                    ' eligible to replace the primary database. Syntactically
+                    ' valid JSON can still contain an unusable library.
+                    NormalizeLoadedData(loaded)
 
                     Return loaded
 
@@ -655,6 +648,8 @@ Namespace Services
                 SubmissionReadinessValidationService.NormalizeAndValidateManuscript(
                     manuscript
                 )
+
+                ReviewerResponseService.NormalizeAndValidateManuscript(manuscript)
 
             Next
 
@@ -1227,6 +1222,8 @@ Namespace Services
                 SubmissionReadinessValidationService.NormalizeAndValidateManuscript(
                     manuscript
                 )
+
+                ReviewerResponseService.NormalizeAndValidateManuscript(manuscript)
 
             Next
 

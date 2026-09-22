@@ -728,46 +728,6 @@ Namespace Forms
 
             End If
 
-            Dim submissionId As Guid
-
-            Dim decisions As List(Of EditorialDecisionEvent)
-
-            Dim correspondence As List(Of CorrespondenceItem)
-
-            If _existingSubmission Is Nothing Then
-
-                submissionId =
-                    Guid.NewGuid()
-
-                decisions =
-                    New List(Of EditorialDecisionEvent)()
-
-                correspondence =
-                    New List(Of CorrespondenceItem)()
-
-            Else
-
-                submissionId =
-                    _existingSubmission.Id
-
-                decisions =
-                    New List(Of EditorialDecisionEvent)(
-                        If(
-                            _existingSubmission.Decisions,
-                            New List(Of EditorialDecisionEvent)()
-                        )
-                    )
-
-                correspondence =
-                    New List(Of CorrespondenceItem)(
-                        If(
-                            _existingSubmission.Correspondence,
-                            New List(Of CorrespondenceItem)()
-                        )
-                    )
-
-            End If
-
             Dim followUpDate As DateTime? =
                 Nothing
 
@@ -778,41 +738,17 @@ Namespace Forms
 
             End If
 
-            _createdSubmission =
-                New JournalSubmission With {
-                    .Id =
-                        submissionId,
-                    .RecordedAtUtc =
-                        If(
-                            _existingSubmission Is Nothing,
-                            Nothing,
-                            _existingSubmission.RecordedAtUtc
-                        ),
-                    .LastModifiedAtUtc =
-                        If(
-                            _existingSubmission Is Nothing,
-                            Nothing,
-                            _existingSubmission.LastModifiedAtUtc
-                        ),
-                    .JournalName =
-                        txtJournal.Text.Trim(),
-                    .JournalId =
-                        journalId,
-                    .ManuscriptNumber =
-                        txtManuscriptNumber.Text.Trim(),
-                    .SubmittedDate =
-                        dtpSubmitted.Value.Date,
-                    .FollowUpDate =
-                        followUpDate,
-                    .PortalUrl =
-                        portalText,
-                    .Notes =
-                        txtNotes.Text.Trim(),
-                    .Decisions =
-                        decisions,
-                    .Correspondence =
-                        correspondence
-                }
+            ' Preserve every child collection when editing submission metadata.
+            ' Keep the returned draft independent of the caller until accepted.
+            _createdSubmission = If(_existingSubmission Is Nothing,
+                New JournalSubmission(), ManuscriptCloneService.CloneSubmission(_existingSubmission))
+            _createdSubmission.JournalName = txtJournal.Text.Trim()
+            _createdSubmission.JournalId = journalId
+            _createdSubmission.ManuscriptNumber = txtManuscriptNumber.Text.Trim()
+            _createdSubmission.SubmittedDate = dtpSubmitted.Value.Date
+            _createdSubmission.FollowUpDate = followUpDate
+            _createdSubmission.PortalUrl = portalText
+            _createdSubmission.Notes = txtNotes.Text.Trim()
 
             If _existingSubmission Is Nothing Then
 

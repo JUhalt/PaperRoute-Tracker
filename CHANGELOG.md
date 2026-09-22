@@ -4,9 +4,19 @@ All notable changes to PaperRoute Tracker will be documented here.
 
 ## [Unreleased] — v0.5 development
 
+### Added
+
+- Manual Reviewer Response Matrix within each journal submission: comments/actions, reviewer labels, four work statuses, response drafts, manuscript locations, and notes. Each item references an existing editorial decision and an explicit revision round.
+- Status filtering, stored item ordering, and an editable Markdown export preview. Drafting and exporting do not record submissions or change manuscript lifecycle state.
+- Working-copy save/cancel support and conservative Schema 5 to 6 migration, with decision-reference validation and portable backup/restore coverage.
+
+The v0.5.0-rc.1 candidate is tracked in [#27](https://github.com/JUhalt/PaperRoute-Tracker/issues/27) and [release certification #52](https://github.com/JUhalt/PaperRoute-Tracker/issues/52). See the [preview guide](docs/REVIEWER_RESPONSE_PREVIEW.md). v0.4.0 remains the current Stable release while final certification is completed.
+
+The September 20 [development checkpoint](ManualCertification/v0.5-Development-Evidence-2026-09-20.md) records the initial 531-test response increment. The combined response and shelf implementation passed **539 tests, 0 failed, 0 skipped** on September 22, 2026; final package and installed checks are recorded in #52.
+
 ### Fixed
 
-- Manuscript shelves now reconcile stale horizontal scroll extents after wide-to-narrow resizing, maximize/restore, and card replacement. The board keeps genuine vertical scrolling and card actions reachable; the final native 150% minimum-window check passes and #37 is ready for closure with this fix.
+- Manuscript shelves now reconcile stale horizontal scroll extents after wide-to-narrow resizing, maximize/restore, and card replacement. The board keeps genuine vertical scrolling and card actions reachable. Native 100%, 125%, and 150% checks passed; [PR #51](https://github.com/JUhalt/PaperRoute-Tracker/pull/51) completed [#37](https://github.com/JUhalt/PaperRoute-Tracker/issues/37).
 
 ## [0.4.0] - 2026-09-13
 

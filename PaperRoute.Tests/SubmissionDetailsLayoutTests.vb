@@ -85,6 +85,9 @@ Public Class SubmissionDetailsLayoutTests
                         Function(item) item.AccessibleName = "View packets for this submission")
                     AssertInsideAncestors(closeButton)
                     AssertInsideAncestors(packetsButton)
+                    Dim responsesButton As Button = Descendants(dialog).OfType(Of Button)().Single(
+                        Function(item) item.AccessibleName = "Reviewer responses for this submission")
+                    AssertInsideAncestors(responsesButton)
                     Dim summaryBottom As Integer = dialog.RectangleToClient(group.Parent.RectangleToScreen(group.Bounds)).Bottom
                     Dim footerTop As Integer = dialog.RectangleToClient(closeButton.Parent.RectangleToScreen(closeButton.Bounds)).Top
                     Assert.IsTrue(summaryBottom < footerTop)

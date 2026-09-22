@@ -338,6 +338,18 @@ Namespace Forms
 
             buttons.Controls.Add(btnClose)
 
+            Dim btnResponses As New Button With {
+                .Text = "Reviewer Responses...", .AutoSize = True,
+                .AccessibleName = "Reviewer responses for this submission"
+            }
+            AddHandler btnResponses.Click,
+                Sub()
+                    Using dialog As New ReviewerResponseMatrixForm(_manuscript, _submission)
+                        dialog.ShowDialog(Me)
+                    End Using
+                End Sub
+            buttons.Controls.Add(btnResponses)
+
             If _workflowNavigationEnabled AndAlso _manuscript IsNot Nothing Then
                 Dim btnPackets As New Button With {
                     .Text = "View Submission Packets...", .AutoSize = True,
@@ -754,6 +766,14 @@ Namespace Forms
             If selected Is Nothing Then
                 Return
             End If
+
+            Try
+                ReviewerResponseService.EnsureDecisionCanBeRemoved(_submission, selected.Id)
+            Catch ex As InvalidOperationException
+                MessageBox.Show(Me, ex.Message, "Decision Has Reviewer Responses",
+                                MessageBoxButtons.OK, MessageBoxIcon.Information)
+                Return
+            End Try
 
             Dim result As DialogResult =
                 MessageBox.Show(

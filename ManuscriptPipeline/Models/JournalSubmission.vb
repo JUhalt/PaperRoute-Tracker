@@ -31,6 +31,10 @@ Namespace Models
         Public Property Correspondence As List(Of CorrespondenceItem) =
             New List(Of CorrespondenceItem)()
 
+        ' List order is the user-controlled matrix and export order.
+        Public Property ReviewerResponses As List(Of ReviewerResponseItem) =
+            New List(Of ReviewerResponseItem)()
+
     End Class
 
 End Namespace

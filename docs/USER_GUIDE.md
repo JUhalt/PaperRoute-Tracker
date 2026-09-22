@@ -2,7 +2,7 @@
 
 PaperRoute is a local-first academic manuscript tracker for researchers. It is designed to keep the complete route of a paper understandable: idea, writing, submission, peer review, revision, publication, or the File Drawer.
 
-This guide describes **PaperRoute v0.4.0**, the current Stable release. See the [v0.4.0 release notes](releases/0.4.0.md) for release details.
+This guide describes **PaperRoute v0.5.0 — Reviewer Response Workflow**. See the [v0.5.0 release notes](releases/0.5.0.md) for the changes and the [repository homepage](../README.md) for current release availability.
 
 ## Quick Start
 
@@ -15,7 +15,7 @@ If you only read one section, read this one.
 5. When you actually submit the paper, use the packet's **Record Submission...** action or add a **Journal Submission** with the journal, date, Journal manuscript ID if available, portal URL, and optional follow-up date.
 6. Save each child dialog, then choose **Save & Close** in **Manuscript Details** to persist the complete workflow.
 7. When the journal responds, open that submission and record the **Editorial Decision**. Revision decisions can carry a revision deadline.
-8. Save decision letters, reviewer comments, response letters, revised manuscripts, and related correspondence under the appropriate submission.
+8. Open **Reviewer Responses...** in that submission to track individual comments, actions, and response drafts. Save the matrix, close Submission Details, then save Manuscript Details. Keep original letters and revised files under the submission's correspondence.
 9. Use **Settings > Reminders & Calendar...** to see revision deadlines, journal follow-ups, and custom reminders in one place.
 10. Use **Data > Backup Library...** before major changes or moving PaperRoute to another computer.
 
@@ -82,11 +82,11 @@ This is the main working area for:
 - structured authors and affiliations;
 - manuscript Version History;
 - journal-specific readiness and submission packets;
-- journal submissions;
+- journal submissions and their reviewer-response matrices;
 - preprint and project links; and
 - File Drawer information when relevant.
 
-PaperRoute uses a working copy while the Manuscript Details window is open. Readiness, packet, version, and submission edits saved in child dialogs update that working copy. Choose **Save & Close** in Manuscript Details to persist it; choosing **Cancel** there discards unsaved manuscript changes.
+PaperRoute uses a working copy while the Manuscript Details window is open. Readiness, packet, version, submission, and reviewer-response edits saved in child dialogs update that working copy. Choose **Save & Close** in Manuscript Details to persist it; choosing **Cancel** there discards unsaved manuscript changes.
 
 ### Version History and the Route
 
@@ -344,6 +344,44 @@ For discoverability, **Manuscript Details** also shows a **Revision deadline** r
 
 ---
 
+## Reviewer Response Matrix
+
+Open an existing journal submission in **Manuscript Details**, record its editorial decision, then choose **Reviewer Responses...** in Submission Details. Keep a normal revision within the existing journal submission; create a new submission attempt only when that is what happened.
+
+### Record and track comments
+
+Choose **Add Comment...** and select the recorded **Editorial decision**. Enter the positive **Revision round** number explicitly; PaperRoute does not infer historical rounds from the order of decisions.
+
+Each item stores a reviewer/editor label, comment or action, status, draft response, manuscript location, and working notes. A reviewer label and either a comment or an action are required. Use separate items for separate requests and consistent labels such as "Reviewer 1" or "Editor".
+
+| Status | Meaning |
+| --- | --- |
+| Unresolved | You have not yet resolved this request. |
+| In progress | You are working on the revision or response. |
+| Addressed | You consider this request addressed. |
+| Not applicable | You have decided the request does not apply; explain why in the response or notes. |
+
+These statuses describe response work. They do not change manuscript stage, record a submission, or complete a reminder. The workflow uses manual entry and works without AI or an online account.
+
+Choose **Save Comment** to accept an item into the matrix. Use **Show status** to focus the list. Choose **All statuses** before using **Move Up** or **Move Down**; ordering applies to the complete sequence of items. A decision linked to response items cannot be deleted until you reassign or remove those items.
+
+### Save the complete workflow
+
+1. Choose **Save Comment** in the item editor.
+2. Choose **Save & Close** in the matrix to accept its edits into the manuscript working copy.
+3. Choose **Close** in Submission Details. This window has no additional save/cancel boundary.
+4. Choose **Save & Close** in Manuscript Details to store the manuscript permanently.
+
+**Cancel** in the item editor or matrix discards that dialog's edits. **Cancel** in Manuscript Details discards all its unsaved manuscript changes, including changes already accepted from the matrix. Reopen the manuscript to confirm saved work.
+
+### Export an editable response draft
+
+Choose **Export Markdown...**, review or edit the preview, then choose **Save Markdown...** to save a file. The export includes the submission context, decision and revision round, reviewer labels, comments, actions, statuses, responses, locations, and working notes in stored order. The status filter does not limit the export: it includes the complete matrix. Review the notes before sharing the draft with a journal.
+
+Preview edits and the exported file are independent of the matrix. Exporting does not save matrix edits or change item status or manuscript history. An export can therefore include work that you later cancel in PaperRoute. Subsequent matrix changes do not update a previously exported file.
+
+---
+
 ## Correspondence and Files
 
 Submission history can include correspondence and related files such as:
@@ -465,7 +503,7 @@ The workbook includes:
 - Decisions
 - Correspondence
 
-This format exchanges the supported manuscript, submission, decision, and correspondence fields. It does not preserve the complete library: Version History, readiness profiles, submission packets, and their fingerprints are not included. Use a portable ZIP backup for complete library preservation.
+This format exchanges the supported manuscript, submission, decision, and correspondence fields. It does not preserve the complete library: Version History, readiness profiles, submission packets, their fingerprints, and reviewer-response matrices are not included. Use a portable ZIP backup for complete library preservation.
 
 ### Legacy tracker
 
@@ -497,7 +535,7 @@ library.xlsx
 files\
 ```
 
-Depending on the library, `authors.json` contains reusable authors, affiliations, and journals, including journal checklist templates. `manuscripts.json` preserves manuscript histories, readiness profiles, packet associations, and saved fingerprints.
+Depending on the library, `authors.json` contains reusable authors, affiliations, and journals, including journal checklist templates. `manuscripts.json` preserves manuscript histories, readiness profiles, packet associations, saved fingerprints, and reviewer-response items with their decisions, revision rounds, statuses, drafts, and order.
 
 Managed document copies, including version and packet snapshots, are included. Externally linked files remain references; retain those originals separately. The included Excel workbook is a partial human-readable export, not a replacement for the native JSON and managed files in the ZIP.
 
@@ -512,6 +550,8 @@ Managed document copies, including version and packet snapshots, are included. E
 5. restores the selected backup.
 
 PaperRoute is intentionally conservative about restore operations because the manuscript library is the primary research-workflow record.
+
+PaperRoute v0.5 uses **Schema 6**. Restore a backup made by v0.5 with **v0.5 or later**. Older restore code may ignore reviewer-response fields even though an older application refuses to open a Schema 6 library directly. Keep a separate pre-upgrade v0.4 ZIP backup if you need to return to v0.4; do not use a v0.5 backup for that rollback. See the [upgrade notes](../UPGRADE_NOTES.md).
 
 ---
 
@@ -619,9 +659,13 @@ The deadline will then appear in Reminders & Calendar and in the Needs Attention
 
 ## How do I record reviewer comments and my response?
 
-Open the journal submission and add correspondence/files for the reviewer comments, editor communication, revised manuscript, and response-to-reviewers materials.
+1. Open the existing journal submission and record the relevant editorial decision.
+2. Choose **Reviewer Responses...**, then **Add Comment...**.
+3. Select that decision, enter the revision round and reviewer label, and record a comment or action.
+4. Add a draft response, manuscript location, notes, and the appropriate status, then choose **Save Comment**.
+5. Choose **Save & Close** in the matrix, **Close** in Submission Details, and **Save & Close** in Manuscript Details.
 
-PaperRoute stores these records and files. A structured Reviewer Response Matrix is planned for v0.5.
+Use **Export Markdown...** in the matrix for an editable response draft. Keep the original reviewer/editor letters and revised manuscript files as correspondence under the same submission. See [Reviewer Response Matrix](#reviewer-response-matrix) for ordering, export, and save behavior.
 
 ## How do I move a rejected paper to another journal?
 
@@ -745,11 +789,10 @@ PaperRoute ships a local copy of this guide. Open it from the **Help** button in
 
 ---
 
-## What Comes After v0.4?
+## What Comes After v0.5?
 
-The Route, Version History, readiness profiles, and submission packets form one connected manuscript record. Later releases build on that record:
+The Route, Version History, readiness profiles, submission packets, and reviewer responses form one connected manuscript record. Later releases build on that record:
 
-- **v0.5 — Reviewer Response Workflow:** structured reviewer/editor action items and response drafting.
 - **v0.6 — Deadline Center:** richer action and deadline management.
 - **v0.7 — Route Analytics & Reports:** printable/archiveable manuscript-route reports and timing analytics.
 - **v0.8 — Optional AI Assistance:** user-controlled clerical assistance that never becomes authoritative.

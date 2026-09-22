@@ -1,4 +1,18 @@
-# PaperRoute v0.4 disposable UI demo
+# PaperRoute disposable UI demos
+
+The harness retains its original `V04Demo` project path and also supports the unreleased v0.5 response workflow.
+
+## Reviewer-response preview
+
+```powershell
+dotnet run --project ManualCertification/V04Demo/PaperRoute.V04Demo.csproj -- responses --minimum --primary
+```
+
+This opens the real Reviewer Response Matrix on fictional sample data with two explicit decision rounds and four response statuses. It does not load the user's library. Add/edit comments, change the status filter, reorder with all statuses visible, and open **Export Markdown...** to inspect or edit the draft. **Save Markdown...** writes a file only when explicitly chosen; use a disposable destination.
+
+Confirm that long comments stay within the scrolling detail pane, lists remain usable when maximized/restored, and every action remains reachable. Edit a response, cancel the item editor, and verify the matrix stays unchanged. Matrix **Save & Close** and **Cancel** both close this standalone demo; changes live only in the fictional objects. Persistence and the final Manuscript Details save boundary require the separate integration checks. See the [development preview guide](../../docs/REVIEWER_RESPONSE_PREVIEW.md).
+
+## Existing readiness and packet surfaces
 
 This Windows Forms harness opens the actual PaperRoute forms with synthetic samples. Use it for screenshots, narrow-window checks, keyboard navigation, and experimenting with edits before using a real manuscript. The optional `workflow` surface runs connected Manuscript Details in a disposable storage session; `board` opens the actual main board with a disposable synthetic library. The harness is separate from the release solution and requires Windows with the .NET 10 SDK.
 

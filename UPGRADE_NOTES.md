@@ -19,9 +19,25 @@ PaperRoute upgrades are designed not to overwrite the manuscript database, setti
 
 Use **Data → Backup Library...** to create a portable backup.
 
-## Preparing to move from v0.3 to v0.4
+## Moving from v0.4 to v0.5
 
-**v0.4.0 is the current Stable release.** Installed v0.3-to-v0.4 migration and clean-install behavior were certified before Stable publication. The migration moves compatible Schema 4 libraries to Schema 5 while preserving existing manuscript history and managed/linked files.
+PaperRoute v0.5 adds the Reviewer Response Matrix and uses storage **Schema 6**. Check the [repository homepage](README.md) for current release availability before installing a candidate.
+
+Before upgrading, create a portable ZIP backup with v0.4 and retain it separately. The Schema 5-to-6 migration validates the existing library, retains the original manuscript and author data bytes and previous schema marker, and preserves existing histories, readiness profiles, packets, managed files, and external links. It does not invent reviewer comments, editorial decisions, or revision rounds.
+
+After upgrading, confirm your existing manuscript, version, submission, and packet histories first. On a disposable manuscript, open a submission with an editorial decision, choose **Reviewer Responses...**, add a comment, and choose **Save Comment**. Choose **Save & Close** in the matrix, **Close** in Submission Details, and **Save & Close** in Manuscript Details. Reopen it to confirm the reviewer response persisted. A Markdown export is a separate draft; exporting alone does not save the matrix.
+
+### Backups and returning to an older version
+
+v0.5 ZIP backups preserve reviewer-response fields and their decision/round links, statuses, drafts, and stored order alongside the existing library data. Restore a v0.5 backup with **v0.5 or later**. Older restore code may ignore the new fields and lose reviewer responses, even though older applications refuse to open a Schema 6 library directly.
+
+If you need to return to v0.4, use the separate backup made by v0.4 before the upgrade. A v0.5 backup is not a supported rollback path, and changes made after the pre-upgrade backup will not be present in it. Do not edit the schema marker to force an older application to open newer data.
+
+Excel exports remain partial interchange files and do not preserve the response matrix or complete workflow. Use a portable ZIP backup for the full library; retain externally linked original files separately.
+
+## Earlier upgrade: v0.3 to v0.4
+
+Installed v0.3-to-v0.4 migration and clean-install behavior were certified before v0.4 Stable publication. That migration moves compatible Schema 4 libraries to Schema 5 while preserving existing manuscript history and managed/linked files.
 
 v0.4 uses storage **schema 5**. The schema-4-to-5 migration adds readiness profiles, submission packets, and reusable journal checklist templates while retaining existing manuscripts, versions, submissions, and chronology. Older records can have empty preparation histories; migration does not invent checklists, submitted files, or submission events.
 

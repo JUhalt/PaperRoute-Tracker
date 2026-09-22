@@ -7,8 +7,8 @@ namespace PaperRoute.V04Demo;
 
 internal static class Program
 {
-    private const string Usage = "PaperRoute v0.4 manual demo\n\n" +
-        "Surfaces: vault (default), readiness, packet, packet-new, file, file-new, notes, submission, workflow, board\n" +
+    private const string Usage = "PaperRoute workflow manual demo\n\n" +
+        "Surfaces: vault (default), readiness, packet, packet-new, file, file-new, notes, submission, responses, workflow, board\n" +
         "Options: --minimum, --primary, --empty (vault/readiness only), --integrity (populated vault only), --dark or --system, --help\n\n" +
         "Default surfaces discard manuscript changes when the window closes.\n" +
         "workflow and board save only in a new disposable temporary session.\n" +
@@ -23,11 +23,11 @@ internal static class Program
 
         if (args.Contains("--help", StringComparer.OrdinalIgnoreCase))
         {
-            MessageBox.Show(Usage, "PaperRoute v0.4 demo");
+            MessageBox.Show(Usage, "PaperRoute workflow demo");
             return;
         }
 
-        var surfaces = new[] { "vault", "readiness", "packet", "packet-new", "file", "file-new", "notes", "submission", "workflow", "board" };
+        var surfaces = new[] { "vault", "readiness", "packet", "packet-new", "file", "file-new", "notes", "submission", "responses", "workflow", "board" };
         var positional = args.Where(argument => !argument.StartsWith("--")).ToArray();
         var surface = positional.FirstOrDefault()?.ToLowerInvariant() ?? "vault";
         var minimum = args.Contains("--minimum", StringComparer.OrdinalIgnoreCase);
@@ -104,6 +104,11 @@ internal static class Program
             fixture.Manuscript.SubmissionPackets.Clear();
             fixture.Manuscript.ReadinessProfiles.Clear();
         }
+        if (surface == "responses")
+        {
+            fixture.Manuscript.Title = "ZZZ-CERT-v0.5 Reviewer response matrix — fictional preview";
+            DemoFixture.AddReviewerResponses(fixture.Manuscript.Submissions[0]);
+        }
 
         // Instantiate the real forms without the application's startup, migration,
         // repositories, or Manuscript Details persistence boundary.
@@ -116,6 +121,7 @@ internal static class Program
             "file-new" => new SubmissionPacketFileEditForm(fixture.Packet, null),
             "notes" => new ReadinessItemNotesForm(fixture.Manuscript.ReadinessProfiles[0].Items[0]),
             "submission" => new SubmissionDetailsForm(fixture.Manuscript, fixture.Manuscript.Submissions[0]),
+            "responses" => new ReviewerResponseMatrixForm(fixture.Manuscript, fixture.Manuscript.Submissions[0]),
             _ => new SubmissionPacketVaultForm(fixture.Manuscript)
         };
 
@@ -161,6 +167,45 @@ internal static class Program
 
 internal sealed record DemoFixture(Manuscript Manuscript, AuthorLibraryData Library, SubmissionPacket Packet)
 {
+    internal static void AddReviewerResponses(JournalSubmission submission)
+    {
+        // Fictional editorial history belongs only to this explicit sample surface.
+        var first = new EditorialDecisionEvent
+        {
+            Decision = EditorialDecision.MajorRevision, DecisionDate = new DateTime(2026, 9, 15),
+            Notes = "Fictional first-round decision for the reviewer-response preview."
+        };
+        var second = new EditorialDecisionEvent
+        {
+            Decision = EditorialDecision.MinorRevision, DecisionDate = new DateTime(2026, 9, 19),
+            Notes = "Fictional second-round decision for the reviewer-response preview."
+        };
+        submission.Decisions.Add(first);
+        submission.Decisions.Add(second);
+        var comments = new[]
+        {
+            "Explain the sampling strategy and clarify whether all eligibility criteria were applied before the primary analysis. " + LongNotes,
+            "Add an accessible figure caption describing the study flow and the handling of incomplete responses.",
+            "Please specify the manuscript location of the revised sensitivity analysis and explain how it changes the interpretation.",
+            "Provide the requested data availability statement and confirm that the response agrees with the final manuscript."
+        };
+        for (var index = 0; index < comments.Length; index++)
+        {
+            ReviewerResponseService.AddItem(submission, new ReviewerResponseItem
+            {
+                DecisionId = index < 2 ? first.Id : second.Id,
+                RevisionRoundNumber = index < 2 ? 1 : 2,
+                ReviewerLabel = index % 2 == 0 ? "Reviewer 1" : "Reviewer 2",
+                CommentText = comments[index],
+                ActionText = "Review the relevant section and record the changes made to the manuscript. " + LongNotes,
+                ResponseText = index == 1 ? "Thank you for this suggestion. We revised the caption to explain each stage of the study flow." : "",
+                ManuscriptLocation = index == 1 ? "Figure 1 caption; Methods, page 4, lines 82–96" : "",
+                Notes = "Synthetic preview content only. " + LongNotes,
+                Status = (ReviewerResponseStatus)index
+            });
+        }
+    }
+
     private const string LongNotes =
         "Synthetic certification notes: confirm the title, author details, reporting checklist, and " +
         "supplementary material agree with the selected manuscript snapshot. The methods appendix " +

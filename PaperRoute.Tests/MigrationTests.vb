@@ -476,8 +476,9 @@ Public Class MigrationTests
         Dim schemaPath As String =
             CreateCurrentSchemaDirectory()
 
-        Const original As String =
-            "{""SchemaVersion"":5,""UpdatedAtUtc"":""2000-01-01T00:00:00.0000000Z""}"
+        Dim original As String =
+            "{""SchemaVersion"":" & StorageMigrationService.CurrentSchemaVersion.ToString() &
+            ",""UpdatedAtUtc"":""2000-01-01T00:00:00.0000000Z""}"
 
         File.WriteAllText(
             schemaPath,
