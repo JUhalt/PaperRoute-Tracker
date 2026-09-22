@@ -1136,6 +1136,8 @@ Namespace Services
                     manuscript
                 )
 
+                ReviewerResponseService.NormalizeAndValidateManuscript(manuscript)
+
             Next
 
         End Sub

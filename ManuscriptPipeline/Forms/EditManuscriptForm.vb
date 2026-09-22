@@ -2897,59 +2897,7 @@ Namespace Forms
         Private Function CloneSubmission(
             source As JournalSubmission
         ) As JournalSubmission
-
-            Dim clone As New JournalSubmission With {
-                .Id = source.Id,
-                .RecordedAtUtc = source.RecordedAtUtc,
-                .LastModifiedAtUtc = source.LastModifiedAtUtc,
-                .JournalName = source.JournalName,
-                .JournalId = source.JournalId,
-                .ManuscriptNumber = source.ManuscriptNumber,
-                .SubmittedDate = source.SubmittedDate,
-                .FollowUpDate = source.FollowUpDate,
-                .Notes = source.Notes,
-                .PortalUrl = source.PortalUrl
-            }
-
-            For Each decisionEvent As EditorialDecisionEvent In
-                source.Decisions
-
-                clone.Decisions.Add(
-                    New EditorialDecisionEvent With {
-                        .Id = decisionEvent.Id,
-                        .RecordedAtUtc = decisionEvent.RecordedAtUtc,
-                        .LastModifiedAtUtc = decisionEvent.LastModifiedAtUtc,
-                        .DecisionDate = decisionEvent.DecisionDate,
-                        .Decision = decisionEvent.Decision,
-                        .RevisionDeadline = decisionEvent.RevisionDeadline,
-                        .Notes = decisionEvent.Notes
-                    }
-                )
-
-            Next
-
-            For Each item As CorrespondenceItem In
-                source.Correspondence
-
-                clone.Correspondence.Add(
-                    New CorrespondenceItem With {
-                        .Id = item.Id,
-                        .RecordedAtUtc = item.RecordedAtUtc,
-                        .LastModifiedAtUtc = item.LastModifiedAtUtc,
-                        .ItemDate = item.ItemDate,
-                        .Type = item.Type,
-                        .Title = item.Title,
-                        .Notes = item.Notes,
-                        .LocalFilePath = item.LocalFilePath,
-                        .SourceUrl = item.SourceUrl,
-                        .IsManagedCopy = item.IsManagedCopy
-                    }
-                )
-
-            Next
-
-            Return clone
-
+            Return ManuscriptCloneService.CloneSubmission(source)
         End Function
 
 

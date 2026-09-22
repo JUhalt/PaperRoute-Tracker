@@ -169,7 +169,7 @@ Public Class Schema5MigrationTests
         )
 
         Assert.AreEqual(
-            5,
+            StorageMigrationService.CurrentSchemaVersion,
             StorageMigrationService.ReadSchemaVersion(
                 schemaPath
             )
@@ -396,7 +396,7 @@ Public Class Schema5MigrationTests
         )
 
         Assert.AreEqual(
-            5,
+            StorageMigrationService.CurrentSchemaVersion,
             StorageMigrationService.ReadSchemaVersion(
                 schemaPath
             )

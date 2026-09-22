@@ -431,6 +431,12 @@ Namespace Services
                 Next
             End If
 
+            If source.ReviewerResponses IsNot Nothing Then
+                For Each item As ReviewerResponseItem In source.ReviewerResponses
+                    clone.ReviewerResponses.Add(CloneReviewerResponse(item))
+                Next
+            End If
+
             If source.Correspondence IsNot Nothing Then
                 For Each item As CorrespondenceItem In source.Correspondence
                     clone.Correspondence.Add(
@@ -451,6 +457,31 @@ Namespace Services
             End If
 
             Return clone
+
+        End Function
+
+        Public Shared Function CloneReviewerResponse(
+            source As ReviewerResponseItem
+        ) As ReviewerResponseItem
+
+            If source Is Nothing Then
+                Throw New ArgumentNullException(NameOf(source))
+            End If
+
+            Return New ReviewerResponseItem With {
+                .Id = source.Id,
+                .DecisionId = source.DecisionId,
+                .RevisionRoundNumber = source.RevisionRoundNumber,
+                .ReviewerLabel = source.ReviewerLabel,
+                .CommentText = source.CommentText,
+                .ActionText = source.ActionText,
+                .ResponseText = source.ResponseText,
+                .ManuscriptLocation = source.ManuscriptLocation,
+                .Notes = source.Notes,
+                .Status = source.Status,
+                .CreatedAtUtc = source.CreatedAtUtc,
+                .LastModifiedAtUtc = source.LastModifiedAtUtc
+            }
 
         End Function
 

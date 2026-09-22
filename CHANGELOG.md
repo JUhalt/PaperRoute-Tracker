@@ -2,6 +2,18 @@
 
 All notable changes to PaperRoute Tracker will be documented here.
 
+## [Unreleased] — v0.5 development
+
+### Added
+
+- Manual Reviewer Response Matrix within each journal submission: comments/actions, reviewer labels, four work statuses, response drafts, manuscript locations, and notes. Each item references an existing editorial decision and an explicit revision round.
+- Status filtering, stored item ordering, and an editable Markdown export preview. Drafting and exporting do not record submissions or change manuscript lifecycle state.
+- Working-copy save/cancel support and conservative Schema 5 to 6 migration, with decision-reference validation and portable backup/restore coverage.
+
+Development is tracked in [#27](https://github.com/JUhalt/PaperRoute-Tracker/issues/27). See the [preview guide](docs/REVIEWER_RESPONSE_PREVIEW.md). v0.4.0 remains the current Stable release; v0.5 release certification and packaging are not complete.
+
+The September 20 development checkpoint records a clean Release build, 531 passing regression tests, and 12/12 response UI checks in [ManualCertification/v0.5-Development-Evidence-2026-09-20.md](ManualCertification/v0.5-Development-Evidence-2026-09-20.md).
+
 ## [0.4.0] - 2026-09-13
 
 PaperRoute v0.4.0 — **Submission Readiness** — was released on September 13, 2026. It adds journal-specific readiness, exact submission packets, local file-integrity checks, connected preparation/submission navigation, and Schema 5 persistence.

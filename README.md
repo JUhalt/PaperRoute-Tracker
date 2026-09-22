@@ -209,6 +209,8 @@ The implementation, local-first data model, import/export system, backup workflo
 
 See [`ROADMAP.md`](ROADMAP.md) for the public high-level route. GitHub milestones and issues are the live source of truth for active release work.
 
+**In development: v0.5 Reviewer Response Workflow.** The first increment adds a manual reviewer-response matrix within an existing journal submission, linked decisions and revision rounds, response drafting, and editable Markdown export ([#27](https://github.com/JUhalt/PaperRoute-Tracker/issues/27)). See the [development preview guide](docs/REVIEWER_RESPONSE_PREVIEW.md) for the workflow and save boundaries. The narrow/high-DPI shelf scrolling fix ([#37](https://github.com/JUhalt/PaperRoute-Tracker/issues/37)) is being brought forward alongside this work. v0.4.0 remains the Stable release; these changes do not announce a v0.5 release.
+
 ## Contributing
 
 Bug reports, usability feedback, importer edge cases, and pull requests are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md).

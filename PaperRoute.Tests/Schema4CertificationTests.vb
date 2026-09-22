@@ -50,13 +50,15 @@ Public Class Schema4CertificationTests
 
         Migrate()
 
-        Assert.AreEqual(5, StorageMigrationService.ReadSchemaVersion(SchemaPath()))
+        Assert.AreEqual(StorageMigrationService.CurrentSchemaVersion, StorageMigrationService.ReadSchemaVersion(SchemaPath()))
         Dim backupPath As String = Path.Combine(_dataDirectory, "schema.v4.bak")
+        Dim schema5BackupPath As String = Path.Combine(_dataDirectory, "schema.v5.bak")
         CollectionAssert.AreEqual(oldSchema, File.ReadAllBytes(backupPath))
+        Assert.AreEqual(5, StorageMigrationService.ReadSchemaVersion(schema5BackupPath))
         AssertExistingFilesUnchanged(beforeFiles, SchemaPath())
         Dim afterFiles As Dictionary(Of String, Byte()) = SnapshotFiles(_root)
         CollectionAssert.AreEquivalent(
-            beforeFiles.Keys.Concat({backupPath}).ToArray(), afterFiles.Keys.ToArray())
+            beforeFiles.Keys.Concat({backupPath, schema5BackupPath}).ToArray(), afterFiles.Keys.ToArray())
         Assert.AreEqual(beforeModels, Serialize(repository.Load()))
         Assert.AreEqual(beforeAuthors, Serialize(authors.Load()))
         AssertRepresentativeSemantics(repository.Load(), authors.Load())
@@ -153,6 +155,7 @@ Public Class Schema4CertificationTests
     <DataRow(2)>
     <DataRow(3)>
     <DataRow(4)>
+    <DataRow(5)>
     Public Sub LockedSchema_PreservesPriorBackupAndSourceBytesThenRetryCompletes(schemaVersion As Integer)
         File.WriteAllText(Path.Combine(_dataDirectory, "manuscripts.json"), "[]")
         File.WriteAllText(Path.Combine(_dataDirectory, "authors.json"), "{}")
@@ -171,7 +174,7 @@ Public Class Schema4CertificationTests
 
         Migrate()
 
-        Assert.AreEqual(5, StorageMigrationService.ReadSchemaVersion(SchemaPath()))
+        Assert.AreEqual(StorageMigrationService.CurrentSchemaVersion, StorageMigrationService.ReadSchemaVersion(SchemaPath()))
         CollectionAssert.AreEqual(oldSchema, File.ReadAllBytes(backupPath))
         CollectionAssert.AreEqual(before(Path.Combine(_dataDirectory, "manuscripts.json")), File.ReadAllBytes(Path.Combine(_dataDirectory, "manuscripts.json")))
         CollectionAssert.AreEqual(before(Path.Combine(_dataDirectory, "authors.json")), File.ReadAllBytes(Path.Combine(_dataDirectory, "authors.json")))
