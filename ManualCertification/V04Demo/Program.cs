@@ -8,10 +8,10 @@ namespace PaperRoute.V04Demo;
 internal static class Program
 {
     private const string Usage = "PaperRoute workflow manual demo\n\n" +
-        "Surfaces: vault (default), readiness, packet, packet-new, file, file-new, notes, submission, responses, workflow\n" +
+        "Surfaces: vault (default), readiness, packet, packet-new, file, file-new, notes, submission, responses, workflow, board\n" +
         "Options: --minimum, --primary, --empty (vault/readiness only), --integrity (populated vault only), --dark or --system, --help\n\n" +
         "Default surfaces discard manuscript changes when the window closes.\n" +
-        "workflow saves only in a new disposable temporary session.\n" +
+        "workflow and board save only in a new disposable temporary session.\n" +
         "--integrity creates and retains disposable files in a unique temporary directory.";
 
     [STAThread]
@@ -27,7 +27,7 @@ internal static class Program
             return;
         }
 
-        var surfaces = new[] { "vault", "readiness", "packet", "packet-new", "file", "file-new", "notes", "submission", "responses", "workflow" };
+        var surfaces = new[] { "vault", "readiness", "packet", "packet-new", "file", "file-new", "notes", "submission", "responses", "workflow", "board" };
         var positional = args.Where(argument => !argument.StartsWith("--")).ToArray();
         var surface = positional.FirstOrDefault()?.ToLowerInvariant() ?? "vault";
         var minimum = args.Contains("--minimum", StringComparer.OrdinalIgnoreCase);
@@ -60,6 +60,24 @@ internal static class Program
         DemoFixture fixture;
         try
         {
+            if (surface == "board")
+            {
+                var sessionRoot = Path.Combine(Path.GetTempPath(),
+                    "PaperRoute-Board-Demo-" + Guid.NewGuid().ToString("N"));
+                StorageEnvironment.ConfigureIsolatedSessionRoot(sessionRoot);
+                BoardDemo.CreateSamples(sessionRoot);
+                using var board = new ManuscriptPipeline.Form1();
+                BoardDemo.RecordLayoutEvidence(board, sessionRoot);
+                board.Shown += (_, _) =>
+                {
+                    board.Text += " [DEMO - disposable synthetic library]";
+                    if (minimum) board.Size = board.MinimumSize;
+                };
+                ConfigureDisplayEvidence(board, primary);
+                board.ShowDialog();
+                return;
+            }
+
             if (surface == "workflow")
             {
                 // Configure before constructing ANY sample, repository, or form.

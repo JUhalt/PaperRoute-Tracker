@@ -28,9 +28,9 @@ Public Class Form1
 
     Private authorLibrary As New AuthorLibraryData()
 
-    Private ReadOnly pipelinePanel As New FlowLayoutPanel()
-    Private ReadOnly publishedPanel As New FlowLayoutPanel()
-    Private ReadOnly fileDrawerPanel As New FlowLayoutPanel()
+    Private ReadOnly pipelinePanel As New ManuscriptShelfPanel()
+    Private ReadOnly publishedPanel As New ManuscriptShelfPanel()
+    Private ReadOnly fileDrawerPanel As New ManuscriptShelfPanel()
 
     Private ReadOnly lblPipelineHeader As New Label()
     Private ReadOnly lblPublishedHeader As New Label()
@@ -1724,12 +1724,12 @@ Public Class Form1
 
         panel.Dock = DockStyle.Fill
 
-        ' Each manuscript card is deliberately almost the full shelf width.
-        ' Left-to-right wrapping therefore produces one card per visual row,
-        ' while avoiding FlowLayoutPanel's phantom horizontal scroll extent
-        ' that can occur with TopDown + WrapContents=False + AutoScroll=True.
-        panel.FlowDirection = FlowDirection.LeftToRight
-        panel.WrapContents = True
+        ' Shelves are single vertical columns. Horizontal flow with explicit
+        ' breaks can retain a two-card-wide extent when restoring from a wide
+        ' window, despite placing every card on its own row. The shelf control
+        ' reconciles the scroll range after this vertical layout completes.
+        panel.FlowDirection = FlowDirection.TopDown
+        panel.WrapContents = False
 
         panel.AutoScroll = True
         panel.AutoScrollMargin = New Size(0, 0)
@@ -2835,9 +2835,6 @@ Public Class Form1
         btnClearBoardFilters.Enabled =
         HasActiveBoardFilters()
 
-        UpdateShelfMinimumHeights()
-
-
         ' =================================================
         ' Finish layout and repaint
         ' =================================================
@@ -2872,42 +2869,6 @@ Public Class Form1
         )
 
     End Sub
-
-
-    Private Sub UpdateShelfMinimumHeights()
-
-        publishedPanel.MinimumSize =
-            New Size(
-                0,
-                GetShelfMinimumHeight(publishedPanel)
-            )
-
-        fileDrawerPanel.MinimumSize =
-            New Size(
-                0,
-                GetShelfMinimumHeight(fileDrawerPanel)
-            )
-
-    End Sub
-
-
-    Private Function GetShelfMinimumHeight(
-        panel As FlowLayoutPanel
-    ) As Integer
-
-        If panel.Controls.Count = 0 Then
-            Return 0
-        End If
-
-        Dim firstControl As Control =
-            panel.Controls(0)
-
-        Return firstControl.Height +
-            firstControl.Margin.Vertical +
-            panel.Padding.Vertical +
-            6
-
-    End Function
 
 
     Private Function CreateManuscriptCard(
@@ -3702,15 +3663,6 @@ Public Class Form1
                             newWidth
 
                     End If
-
-                    ' Every manuscript card (and empty-state row) is a
-                    ' deliberate full-width row. Explicitly ending the flow
-                    ' here prevents FlowLayoutPanel from creating a horizontal
-                    ' continuation/scroll range for a following control.
-                    panel.SetFlowBreak(
-                        control,
-                        True
-                    )
 
                 End If
 

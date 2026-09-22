@@ -14,6 +14,10 @@ Development is tracked in [#27](https://github.com/JUhalt/PaperRoute-Tracker/iss
 
 The September 20 development checkpoint records a clean Release build, 531 passing regression tests, and 12/12 response UI checks in [ManualCertification/v0.5-Development-Evidence-2026-09-20.md](ManualCertification/v0.5-Development-Evidence-2026-09-20.md).
 
+### Fixed
+
+- Manuscript shelves now reconcile stale horizontal scroll extents after wide-to-narrow resizing, maximize/restore, and card replacement. The board keeps genuine vertical scrolling and card actions reachable. Native 100%, 125%, and 150% checks passed; [PR #51](https://github.com/JUhalt/PaperRoute-Tracker/pull/51) completed [#37](https://github.com/JUhalt/PaperRoute-Tracker/issues/37).
+
 ## [0.4.0] - 2026-09-13
 
 PaperRoute v0.4.0 — **Submission Readiness** — was released on September 13, 2026. It adds journal-specific readiness, exact submission packets, local file-integrity checks, connected preparation/submission navigation, and Schema 5 persistence.
@@ -39,7 +43,7 @@ PaperRoute v0.4.0 — **Submission Readiness** — was released on September 13,
 
 - Portable ZIP backup/restore preserves readiness, journal templates, packet/version/submission references, fingerprints, and managed snapshots. Excel remains a partial interchange format.
 - The [v0.4 user guide](docs/USER_GUIDE.md) describes the preparation workflow and its explicit save boundaries; [upgrade notes](UPGRADE_NOTES.md) describe the schema-4-to-5 transition.
-- Installed upgrade, clean install, display-scaling, and artifact certification are tracked in [release gate #42](https://github.com/JUhalt/PaperRoute-Tracker/issues/42). This entry does not claim publication or completion of those gates.
+- Release gate [#42](https://github.com/JUhalt/PaperRoute-Tracker/issues/42) closed after installed-upgrade, clean-install, native display/keyboard, updater, and artifact certification. See the [release closure record](ManualCertification/v0.4-Release-Closure.md) for the tagged build and published-asset evidence.
 
 ## [0.3.0] - 2026-08-27
 
