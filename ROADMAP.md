@@ -89,7 +89,7 @@ v0.3 established the canonical historical spine used by later releases:
 - 299-test automated regression suite
 - installed-update, backup/restore, clean-install, updater, managed-file, and scaling certification
 
-Known cosmetic follow-up: some narrow/high-DPI manuscript shelves can still display an unnecessary horizontal scrollbar even though controls remain reachable. Tracked in [#37](https://github.com/JUhalt/PaperRoute-Tracker/issues/37), now being brought forward alongside v0.5 development.
+The narrow/high-DPI shelf scrollbar follow-up from v0.3, [#37](https://github.com/JUhalt/PaperRoute-Tracker/issues/37), was brought forward into v0.5 and completed in [PR #51](https://github.com/JUhalt/PaperRoute-Tracker/pull/51). It is included in the v0.5 candidate.
 
 ---
 
@@ -226,13 +226,13 @@ Build the persistence model before adding UI:
 
 # ACTIVE — v0.5 Reviewer Response Workflow
 
-Issue: **[#27 Reviewer Response Matrix](https://github.com/JUhalt/PaperRoute-Tracker/issues/27)**
+Milestone: **[v0.5.0 — Reviewer Response Workflow](https://github.com/JUhalt/PaperRoute-Tracker/milestone/7)**. Feature owner: **[#27 Reviewer Response Matrix](https://github.com/JUhalt/PaperRoute-Tracker/issues/27)**. Completed visual fix: **[#37 shelf scrolling](https://github.com/JUhalt/PaperRoute-Tracker/issues/37)**, merged in **[PR #51](https://github.com/JUhalt/PaperRoute-Tracker/pull/51)**.
 
 Own the iterative conversation within a journal submission attempt: reviewer/editor comments, action items, status, manuscript location references, response drafting, revision-round linkage, and editable response-to-reviewers export.
 
 The workflow must remain fully usable without AI.
 
-### First development increment
+### Release scope
 
 - Manually add, edit, remove, filter, and reorder reviewer/editor comments and actions within an existing submission.
 - Keep each item linked to an existing editorial decision and an explicitly entered revision-round number. Never derive historical rounds from list position or create submission events while drafting responses.
@@ -241,11 +241,13 @@ The workflow must remain fully usable without AI.
 - Preserve the existing child-dialog and final Manuscript Details save/cancel boundaries.
 - Introduce conservative Schema 5 to 6 migration, deep cloning, reference validation, and persistence/export regression coverage.
 
-The [preview guide](docs/REVIEWER_RESPONSE_PREVIEW.md) describes the development workflow. This is unreleased work under #27. Full v0.5 certification and packaging remain separate release gates; no release date is assigned.
+The [user guide](docs/USER_GUIDE.md#reviewer-response-matrix) describes the implemented workflow and its nested save boundaries. The [candidate release notes](docs/releases/0.5.0.md) and [upgrade notes](UPGRADE_NOTES.md) describe Schema 6 and require v0.5 or later when restoring v0.5 backups; older restore code may ignore the new reviewer-response fields.
+
+v0.4.0 remains the current Stable release. Before v0.5 publication, complete combined regression tests, native keyboard/theme/100%/125%/150% checks, v0.4-to-v0.5 installed migration, clean installation, updater checks, and package/checksum verification. Record the evidence, merge the release work, and reconcile version metadata before tagging. Close the milestone after the release is published.
 
 ### Visual polish brought forward
 
-[#37](https://github.com/JUhalt/PaperRoute-Tracker/issues/37) is being worked in parallel with this increment. Its acceptance still requires usable vertical scrolling and card actions, repeated resize checks, and native 100%/125%/150% minimum-width checks. Automated scaled-layout tests alone do not establish native DPI certification.
+[#37](https://github.com/JUhalt/PaperRoute-Tracker/issues/37) is closed after [PR #51](https://github.com/JUhalt/PaperRoute-Tracker/pull/51) removed stale horizontal shelf scroll space while preserving vertical scrolling and card actions. The [shelf certification record](ManualCertification/Shelf-Layout-2026-09-20.md) records native 100%/125%/150% checks. Final v0.5 certification also covers the combined application and new response dialogs; the shelf record does not certify those later changes.
 
 ---
 
@@ -284,7 +286,7 @@ Systematic burn-down before 1.0:
 - installer/updater certification
 - keyboard/accessibility pass
 - responsive sizing across dialogs and DPI levels
-- verify the shelf scrolling fix brought forward alongside v0.5 ([#37](https://github.com/JUhalt/PaperRoute-Tracker/issues/37)) as part of the whole-application hardening pass
+- retain regression coverage for the shelf scrolling fix completed for v0.5 ([#37](https://github.com/JUhalt/PaperRoute-Tracker/issues/37), [PR #51](https://github.com/JUhalt/PaperRoute-Tracker/pull/51)) during the whole-application hardening pass
 - consistent master/detail patterns
 - guided onboarding/tutorial using the shared contextual-help catalog
 - File Drawer revival/rerouting polish

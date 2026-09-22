@@ -10,9 +10,9 @@ All notable changes to PaperRoute Tracker will be documented here.
 - Status filtering, stored item ordering, and an editable Markdown export preview. Drafting and exporting do not record submissions or change manuscript lifecycle state.
 - Working-copy save/cancel support and conservative Schema 5 to 6 migration, with decision-reference validation and portable backup/restore coverage.
 
-Development is tracked in [#27](https://github.com/JUhalt/PaperRoute-Tracker/issues/27). See the [preview guide](docs/REVIEWER_RESPONSE_PREVIEW.md). v0.4.0 remains the current Stable release; v0.5 release certification and packaging are not complete.
+The v0.5.0-rc.1 candidate is tracked in [#27](https://github.com/JUhalt/PaperRoute-Tracker/issues/27) and [release certification #52](https://github.com/JUhalt/PaperRoute-Tracker/issues/52). See the [preview guide](docs/REVIEWER_RESPONSE_PREVIEW.md). v0.4.0 remains the current Stable release while final certification is completed.
 
-The September 20 development checkpoint records a clean Release build, 531 passing regression tests, and 12/12 response UI checks in [ManualCertification/v0.5-Development-Evidence-2026-09-20.md](ManualCertification/v0.5-Development-Evidence-2026-09-20.md).
+The September 20 [development checkpoint](ManualCertification/v0.5-Development-Evidence-2026-09-20.md) records the initial 531-test response increment. The combined response and shelf implementation passed **539 tests, 0 failed, 0 skipped** on September 22, 2026; final package and installed checks are recorded in #52.
 
 ### Fixed
 

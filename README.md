@@ -14,9 +14,9 @@
 
 PaperRoute Tracker helps researchers manage manuscripts from idea through submission, peer review, revision, publication—or the File Drawer—without requiring an account or sending the core workflow database to a cloud service.
 
-**Current stable release:** [v0.4.0 — Submission Readiness](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v0.4.0). See the [release notes](docs/releases/0.4.0.md), [user guide](docs/USER_GUIDE.md), and [roadmap](ROADMAP.md).
+**Current stable release:** [v0.4.0 — Submission Readiness](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v0.4.0). See the [release notes](docs/releases/0.4.0.md), [v0.4 user guide](https://github.com/JUhalt/PaperRoute-Tracker/blob/v0.4.0/docs/USER_GUIDE.md), and [roadmap](ROADMAP.md).
 
-**New to PaperRoute?** Start with the [`PaperRoute User Guide`](docs/USER_GUIDE.md) for a Quick Start, feature tour, and task-oriented "How do I...?" reference.
+**New to PaperRoute?** Start with the [Stable PaperRoute User Guide](https://github.com/JUhalt/PaperRoute-Tracker/blob/v0.4.0/docs/USER_GUIDE.md) for a Quick Start, feature tour, and task-oriented "How do I...?" reference.
 
 ### DOI & Crossref enrichment
 PaperRoute can normalize a DOI or doi.org link, retrieve metadata from Crossref, preview the response, and apply only user-selected fields. Crossref never changes manuscript stage, shelf/location, or target journal. Structured authors are matched to the reusable author library by ORCID or name before new records are proposed/created.
@@ -58,6 +58,10 @@ The **Help** button in the main PaperRoute header (and **Settings → User Guide
 **v0.4.0** - current stable release, **Submission Readiness**.
 
 PaperRoute v0.4 adds per-journal readiness checklists, exact submission packets, local file-integrity tracking, Schema 5 persistence, and connected navigation between readiness, versions, packets, and recorded submissions.
+
+**Preparing v0.5.0 — Reviewer Response Workflow.** The candidate adds a manual response matrix within each journal submission, explicit decision and revision-round links, response drafting, and editable Markdown export ([#27](https://github.com/JUhalt/PaperRoute-Tracker/issues/27)). The shelf scrolling fix [#37](https://github.com/JUhalt/PaperRoute-Tracker/issues/37) is complete and merged through [PR #51](https://github.com/JUhalt/PaperRoute-Tracker/pull/51). See the [v0.5 guide](docs/USER_GUIDE.md), [candidate release notes](docs/releases/0.5.0.md), and [milestone](https://github.com/JUhalt/PaperRoute-Tracker/milestone/7). Release certification and publication are still being completed; v0.4.0 remains Stable.
+
+v0.5 uses Schema 6. Keep a separate v0.4 backup before upgrading, and restore v0.5 backups only with v0.5 or later because older restore code may ignore reviewer-response fields. The [upgrade notes](UPGRADE_NOTES.md) explain the save and compatibility boundaries.
 
 ## Highlights
 
@@ -209,7 +213,6 @@ The implementation, local-first data model, import/export system, backup workflo
 
 See [`ROADMAP.md`](ROADMAP.md) for the public high-level route. GitHub milestones and issues are the live source of truth for active release work.
 
-**In development: v0.5 Reviewer Response Workflow.** The first increment adds a manual reviewer-response matrix within an existing journal submission, linked decisions and revision rounds, response drafting, and editable Markdown export ([#27](https://github.com/JUhalt/PaperRoute-Tracker/issues/27)). See the [development preview guide](docs/REVIEWER_RESPONSE_PREVIEW.md) for the workflow and save boundaries. The narrow/high-DPI shelf scrolling fix ([#37](https://github.com/JUhalt/PaperRoute-Tracker/issues/37)) is being brought forward alongside this work. v0.4.0 remains the Stable release; these changes do not announce a v0.5 release.
 
 ## Contributing
 
