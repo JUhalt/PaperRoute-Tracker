@@ -14,88 +14,63 @@
 
 PaperRoute Tracker helps researchers manage manuscripts from idea through submission, peer review, revision, publication—or the File Drawer—without requiring an account or sending the core workflow database to a cloud service.
 
-**Current stable release:** [v0.4.0 — Submission Readiness](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v0.4.0). See the [release notes](docs/releases/0.4.0.md), [v0.4 user guide](https://github.com/JUhalt/PaperRoute-Tracker/blob/v0.4.0/docs/USER_GUIDE.md), and [roadmap](ROADMAP.md).
-
-**New to PaperRoute?** Start with the [Stable PaperRoute User Guide](https://github.com/JUhalt/PaperRoute-Tracker/blob/v0.4.0/docs/USER_GUIDE.md) for a Quick Start, feature tour, and task-oriented "How do I...?" reference.
-
-### DOI & Crossref enrichment
-PaperRoute can normalize a DOI or doi.org link, retrieve metadata from Crossref, preview the response, and apply only user-selected fields. Crossref never changes manuscript stage, shelf/location, or target journal. Structured authors are matched to the reusable author library by ORCID or name before new records are proposed/created.
-
-### ORCID public-profile import
-From **Data → Authors & Affiliations**, PaperRoute can read a selected author's public ORCID record, preview public identity data, employment affiliations, and works, and apply only the items the user chooses. ORCID lookup is read-only and user initiated; PaperRoute stores no ORCID password, OAuth token, or client secret.
-
-A successful public lookup confirms that the ORCID iD exists in the registry, but PaperRoute does not treat that as proof that the record holder authenticated the iD to PaperRoute. Selected dated works can be imported directly to the Published shelf when the user explicitly chooses that behavior; undated works remain Ideas. Imported works are deduplicated by DOI first and exact title second.
-
-### BibTeX & RIS interchange
-PaperRoute can import standard BibTeX (`.bib`) and RIS (`.ris`) bibliography files with a review-before-import workflow. Common title, author, DOI, journal/outlet, publication date, volume, issue, pages, publisher, URL, abstract, and keyword metadata are mapped into PaperRoute manuscript metadata. Duplicate detection uses DOI first and normalized title second.
-
-Unsupported or ambiguous source fields are shown as warnings rather than silently discarded. Imported structured authors are matched against the reusable author library before new people are created. Bibliographic publication metadata does not fabricate journal-submission history.
-
-PaperRoute can also export any user-selected manuscripts to BibTeX or RIS for use with reference managers and scholarly tools.
-
-### Journal library, portals & related links
-PaperRoute can store reusable journal records alongside the reusable author/affiliation metadata library. Journal records may include publisher, homepage, submission portal, notes, favorite status, and shortlist status. Manuscripts can link a target journal to one of these reusable records while retaining the existing free-text target-journal field for backward compatibility.
-
-The manuscript Links editor also stores preprint DOI/URL data and labeled project-style web links such as OSF projects, preregistrations, data repositories, or publisher pages. PaperRoute opens only valid `http://` or `https://` links and stores **no publisher passwords or credentials**.
-
-Journal submissions may be seeded from the reusable journal library. A reusable journal link helps fill the journal and portal fields, but PaperRoute continues to preserve submission-specific history rather than inventing events from journal metadata.
-
-### Publication & CV exports
-**Data → Publication & CV Export...** creates human-readable publication output from PaperRoute metadata without modifying manuscript records. Exports can be filtered to Published records, Accepted/In Press/Published records, or the complete manuscript library, then narrowed to individually selected records.
-
-Output is available as plain text, Markdown, or HTML in publication-list or CV-section style. Structured authors are used when available; legacy author text remains a fallback. DOI, journal, volume, issue, pages, publication URL, and preprint information are included when present, while incomplete records still produce editable output.
-
-### Reminders, Windows notifications & calendar export
-**Settings → Reminders & Calendar...** combines revision deadlines, journal-submission follow-up dates, and custom manuscript reminders into one deterministic local view. Custom reminders can be added, edited, and completed without a cloud service.
-
-Active reminders can be exported as a portable `.ics` calendar for Outlook, Google Calendar, Apple Calendar, and other iCalendar-compatible tools. Optional Windows notifications are disabled by default and checked when PaperRoute starts; notification failure never blocks the in-app reminder workflow.
-
-### Built-in User Guide
-The **Help** button in the main PaperRoute header (and **Settings → User Guide...**) opens the current user guide maintained in [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md). Installed and portable builds ship a local copy so core help remains available offline.
-
 ## Current status
 
-**v0.4.0** - current stable release, **Submission Readiness**.
-
-PaperRoute v0.4 adds per-journal readiness checklists, exact submission packets, local file-integrity tracking, Schema 5 persistence, and connected navigation between readiness, versions, packets, and recorded submissions.
-
-**Preparing v0.5.0 — Reviewer Response Workflow.** The candidate adds a manual response matrix within each journal submission, explicit decision and revision-round links, response drafting, and editable Markdown export ([#27](https://github.com/JUhalt/PaperRoute-Tracker/issues/27)). The shelf scrolling fix [#37](https://github.com/JUhalt/PaperRoute-Tracker/issues/37) is complete and merged through [PR #51](https://github.com/JUhalt/PaperRoute-Tracker/pull/51). See the [v0.5 guide](docs/USER_GUIDE.md), [candidate release notes](docs/releases/0.5.0.md), and [milestone](https://github.com/JUhalt/PaperRoute-Tracker/milestone/7). Release certification and publication are still being completed; v0.4.0 remains Stable.
+- **Stable:** [v0.4.0 — Submission Readiness](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v0.4.0). See the [release notes](docs/releases/0.4.0.md) and the [v0.4 user guide](https://github.com/JUhalt/PaperRoute-Tracker/blob/v0.4.0/docs/USER_GUIDE.md).
+- **Preview:** [v0.5.0-rc.1 — Reviewer Response Workflow](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v0.5.0-rc.1) adds a manual response matrix within each journal submission, explicit decision and revision-round links, response drafting, and editable Markdown export ([#27](https://github.com/JUhalt/PaperRoute-Tracker/issues/27)), plus the completed shelf scrolling fix ([#37](https://github.com/JUhalt/PaperRoute-Tracker/issues/37)). Release certification is still in progress in [#52](https://github.com/JUhalt/PaperRoute-Tracker/issues/52); see the [v0.5 guide](docs/USER_GUIDE.md), [candidate release notes](docs/releases/0.5.0.md), and [milestone](https://github.com/JUhalt/PaperRoute-Tracker/milestone/7).
+- **Next:** [v0.6 — Workspace UI](https://github.com/JUhalt/PaperRoute-Tracker/milestone/8) brings PaperRoute into one main window with pages instead of stacked dialogs, a tabbed page for each manuscript with a single save step, and a calmer card-based design.
 
 v0.5 uses Schema 6. Keep a separate v0.4 backup before upgrading, and restore v0.5 backups only with v0.5 or later because older restore code may ignore reviewer-response fields. The [upgrade notes](UPGRADE_NOTES.md) explain the save and compatibility boundaries.
 
-## Highlights
+**New to PaperRoute?** Start with the [Stable PaperRoute User Guide](https://github.com/JUhalt/PaperRoute-Tracker/blob/v0.4.0/docs/USER_GUIDE.md) for a Quick Start, feature tour, and task-oriented "How do I...?" reference.
 
-### v0.4.0 — Submission Readiness
+## What PaperRoute does
 
-PaperRoute v0.4.0 connects journal preparation to the exact manuscript version, readiness state, packet files, and recorded submission they belong to. Preparing a packet remains advisory; recording a real submission is always explicit.
+### Track the whole route
 
-The release passed native Windows scaling/keyboard checks, clean-install and v0.3-to-v0.4 upgrade certification, Preview updater certification through v0.4.0-rc.1, and final release-asset verification.
-
-### Stable features
-
-- **Pipeline, Published, and File Drawer shelves** for the complete manuscript lifecycle.
-- **Journal submission history** with manuscript numbers, dates, notes, and publisher portal links.
-- **Editorial decisions** including rejection, revision, acceptance, and revision deadlines.
-- **Correspondence and local-file tracking** for decision letters, reviewer comments, response letters, revised manuscripts, and related material.
-- **Needs Attention dashboard** for overdue revisions, long reviews, missing target journals, and recent rejections.
+- **Pipeline, Published, and File Drawer shelves** for the complete manuscript lifecycle. A filed manuscript can return to the active Pipeline.
+- **Needs Attention** for overdue revisions, long reviews, missing target journals, and recent rejections.
 - **Search, stage filtering, and sorting** across the manuscript library.
-- **Reusable authors and affiliations** with manuscript-specific order, corresponding-author designation, optional ORCID, and preserved legacy author text.
-- **ORCID public-profile import** for user-reviewed names, affiliations, and works, with explicit Published-vs-Idea control for imported records.
-- **Reusable journal library** with favorites/shortlists, publisher homepages, submission portals, and manuscript target links.
-- **Preprint and project links** for OSF-style resources and other manuscript web destinations, without storing publisher credentials.
-- **Publication & CV exports** to editable plain text, Markdown, and HTML.
-- **Local reminders and calendar export** for revision deadlines, submission follow-ups, custom reminders, optional Windows notifications, and portable `.ics` events.
-- **Built-in User Guide** with Quick Start, feature discovery, and task-oriented help.
-- **Light, Dark, and Follow Windows themes** using modern .NET 10 WinForms theming.
-- **Excel import/export** using the PaperRoute workbook format.
-- **Legacy tracker import** for the original development spreadsheet format.
-- **Column-mapping import wizard** for arbitrary spreadsheets whose headings do not match PaperRoute.
-- **Portable ZIP backup and restore** with an emergency pre-restore backup.
-- **Local-first storage** and a managed local document library.
+- **Visual Route View** showing submissions, decisions, revisions, and reroutes in order.
+- **Version History** with immutable managed snapshots, linked files, or metadata-only versions associated with submissions, decisions, and revision rounds.
+
+### Prepare and submit
+
+- **Journal submission history** with manuscript numbers, dates, notes, and publisher portal links.
+- **Reusable Journal Library** with favorites and shortlists, homepages, submission portals, and checklist templates.
+- **Per-journal readiness checklists** applied to a manuscript and tracked as unresolved, complete, or not applicable. Readiness is advisory and never records a submission by itself.
+- **Submission Packet Vault** that preserves the exact files prepared for a journal as managed copies, external links, or metadata-only records, with optional local SHA-256 checks that report unchanged, changed, or missing files.
+
+### Revise and respond
+
+- **Editorial decisions** including desk rejection, revision requests, acceptance, and revision deadlines.
+- **Reviewer Response Matrix** *(v0.5 preview)* for reviewer and editor comments, statuses, draft responses, manuscript locations, and an editable response-to-reviewers export.
+- **Correspondence and local-file tracking** for decision letters, reviewer comments, response letters, and revised manuscripts.
+- **Local reminders and calendar export** for revision deadlines, submission follow-ups, and custom reminders, with optional Windows notifications and portable `.ics` events.
+
+### Describe and publish
+
+- **DOI & Crossref enrichment** with a preview; only selected fields are applied, and Crossref never changes stage, shelf, or target journal.
+- **ORCID public-profile import** of names, affiliations, and works, with explicit control over whether dated works go to Published.
+- **Reusable authors and affiliations** with manuscript-specific order, corresponding-author designation, and optional ORCID iDs.
+- **BibTeX and RIS** import with review-before-import and duplicate detection, plus export of selected records.
+- **Publication & CV exports** to plain text, Markdown, and HTML.
+- **Preprint and project links** for OSF-style resources and other destinations, without storing publisher credentials.
+
+### Keep your data yours
+
+- **Local-first storage** and a managed local document library; no PaperRoute account.
+- **Portable ZIP backup and restore** with validation, a preview, and an emergency pre-restore backup.
+- **Excel import/export**, legacy tracker import, and a column-mapping wizard for arbitrary spreadsheets.
+- **Light, Dark, and Follow Windows themes** and a built-in offline **User Guide**.
+
+The [User Guide](docs/USER_GUIDE.md) explains each workflow in detail.
 
 ## Privacy and local-first design
 
 PaperRoute is designed so that its core manuscript-tracking workflow works offline. No PaperRoute account is required.
+
+Crossref and ORCID lookups are read-only and user initiated, and their results are previewed before anything is applied. PaperRoute stores no ORCID password, OAuth token, or client secret, and no publisher credentials.
 
 Current installed/portable PaperRoute application data is stored under `%LocalAppData%\PaperRoute\`.
 
@@ -211,8 +186,16 @@ The implementation, local-first data model, import/export system, backup workflo
 
 ## Roadmap
 
-See [`ROADMAP.md`](ROADMAP.md) for the public high-level route. GitHub milestones and issues are the live source of truth for active release work.
+| | Release | Focus |
+| --- | --- | --- |
+| **Now** | v0.5 — Reviewer Response Workflow | Response matrix; release certification in progress |
+| **Next** | [v0.6 — Workspace UI](https://github.com/JUhalt/PaperRoute-Tracker/milestone/8) | One window, manuscript pages, one save step, calmer design |
+| **Then** | [v0.7 — Deadline Center](https://github.com/JUhalt/PaperRoute-Tracker/milestone/9) | Everything that needs action, and when |
+| | [v0.8 — Route Analytics & Reports](https://github.com/JUhalt/PaperRoute-Tracker/milestone/10) | Your own turnaround data, route and status reports, types and tags |
+| | [v0.9 — 1.0 Hardening](https://github.com/JUhalt/PaperRoute-Tracker/milestone/11) | Onboarding, accessibility, recovery, certification |
+| **Goal** | [v1.0 — Trusted Research Workflow](https://github.com/JUhalt/PaperRoute-Tracker/milestone/12) | "I trust this application with my research workflow." |
 
+See [`ROADMAP.md`](ROADMAP.md) for the reasoning behind each release. GitHub milestones and issues are the live source of truth for active release work.
 
 ## Contributing
 
