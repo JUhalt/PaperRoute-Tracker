@@ -464,7 +464,7 @@ Namespace Forms
             }
 
             Dim btnSave As New Button With {
-                .Text = "Save & Close",
+                .Text = "Save && Close",
                 .AutoSize = True,
                 .Height = 38
             }
