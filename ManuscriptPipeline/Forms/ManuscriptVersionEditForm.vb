@@ -671,6 +671,9 @@ Namespace Forms
             lblFileHelp.AutoEllipsis =
                 True
 
+            lblFileHelp.UseMnemonic =
+                False
+
             lblFileHelp.ForeColor =
                 UiTheme.SecondaryText()
 
