@@ -404,7 +404,7 @@ Namespace Services
         End Function
 
 
-        Private Shared Function FindMatchingAffiliation(
+        Friend Shared Function FindMatchingAffiliation(
             affiliationName As String,
             library As AuthorLibraryData
         ) As AffiliationRecord

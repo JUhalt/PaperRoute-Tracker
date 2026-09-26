@@ -32,9 +32,12 @@ Public Class Form1
     Private ReadOnly publishedPanel As New ManuscriptShelfPanel()
     Private ReadOnly fileDrawerPanel As New ManuscriptShelfPanel()
 
-    Private ReadOnly lblPipelineHeader As New Label()
-    Private ReadOnly lblPublishedHeader As New Label()
-    Private ReadOnly lblFileDrawerHeader As New Label()
+    ' One shelf is shown at a time under a single scroll area; the tabs carry
+    ' each shelf's count.
+    Private ReadOnly tabPipeline As New ShelfTabButton()
+    Private ReadOnly tabPublished As New ShelfTabButton()
+    Private ReadOnly tabFileDrawer As New ShelfTabButton()
+    Private ReadOnly shelfHost As New Panel()
 
     Private ReadOnly lblStatus As New Label()
 
@@ -44,6 +47,7 @@ Public Class Form1
     Private ReadOnly btnClearBoardFilters As New Button()
 
     Private ReadOnly lblAttentionTitle As New Label()
+    Private ReadOnly lblAttentionClear As New Label()
     Private ReadOnly lblOverdueRevisions As New Label()
     Private ReadOnly lblLongReviews As New Label()
     Private ReadOnly lblMissingJournal As New Label()
@@ -68,11 +72,9 @@ Public Class Form1
     Private cardTitleFont As Font = Nothing
     Private cardBadgeFont As Font = Nothing
     Private cardInsightFont As Font = Nothing
-    Private routeLinkFont As Font = Nothing
     Private attentionTitleFont As Font = Nothing
     Private attentionRegularFont As Font = Nothing
     Private attentionActiveFont As Font = Nothing
-    Private sectionHeaderFont As Font = Nothing
 
 
     Private NotInheritable Class StageFilterOption
@@ -603,7 +605,7 @@ Public Class Form1
         Dim body As New TableLayoutPanel With {
             .Dock = DockStyle.Fill,
             .ColumnCount = 1,
-            .RowCount = 8,
+            .RowCount = 4,
             .Padding = New Padding(18, 8, 18, 12),
             .BackColor = UiTheme.BoardBackground(),
             .AutoScroll = False
@@ -618,19 +620,12 @@ Public Class Form1
 
         ' The dashboard is built at runtime. At high Windows scaling, fonts
         ' grow even though hard-coded pixel row heights do not. Keep all
-        ' text/tool rows content-driven and reserve the percentage rows for
-        ' the manuscript shelves themselves.
+        ' text/tool rows content-driven and give the remaining height to the
+        ' one visible shelf.
         body.RowStyles.Add(New RowStyle(SizeType.AutoSize))
         body.RowStyles.Add(New RowStyle(SizeType.AutoSize))
-
         body.RowStyles.Add(New RowStyle(SizeType.AutoSize))
-        body.RowStyles.Add(New RowStyle(SizeType.Percent, 40))
-
-        body.RowStyles.Add(New RowStyle(SizeType.AutoSize))
-        body.RowStyles.Add(New RowStyle(SizeType.Percent, 30))
-
-        body.RowStyles.Add(New RowStyle(SizeType.AutoSize))
-        body.RowStyles.Add(New RowStyle(SizeType.Percent, 30))
+        body.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
 
 
         ' =================================================
@@ -699,8 +694,19 @@ Public Class Form1
 )
 
 
+        ' Shown instead of a row of zero counts when nothing needs attention.
+        lblAttentionClear.Text = "Nothing needs attention right now."
+        lblAttentionClear.AutoSize = True
+        lblAttentionClear.ForeColor = UiTheme.SecondaryText()
+        lblAttentionClear.Margin = New Padding(0, 3, 18, 0)
+        lblAttentionClear.Visible = False
+
         attentionBar.Controls.Add(
     lblAttentionTitle
+)
+
+        attentionBar.Controls.Add(
+    lblAttentionClear
 )
 
         attentionBar.Controls.Add(
@@ -855,21 +861,6 @@ Public Class Form1
         ' Shelves
         ' =================================================
 
-        ConfigureSectionHeader(
-            lblPipelineHeader,
-            "PIPELINE"
-        )
-
-        ConfigureSectionHeader(
-            lblPublishedHeader,
-            "PUBLISHED"
-        )
-
-        ConfigureSectionHeader(
-            lblFileDrawerHeader,
-            "FILE DRAWER"
-        )
-
         ConfigureFlowPanel(
             pipelinePanel
         )
@@ -882,6 +873,42 @@ Public Class Form1
             fileDrawerPanel
         )
 
+        Dim shelfTabs As New FlowLayoutPanel With {
+            .Dock = DockStyle.Top,
+            .AutoSize = True,
+            .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            .FlowDirection = FlowDirection.LeftToRight,
+            .WrapContents = False,
+            .Padding = New Padding(0, 6, 0, 0),
+            .Margin = New Padding(0, 0, 0, 6),
+            .BackColor = UiTheme.BoardBackground()
+        }
+
+        ' A hairline under the tabs, which the selected tab's underline sits on.
+        AddHandler shelfTabs.Paint,
+            Sub(sender, e)
+                Using line As New Pen(UiTheme.CardBorder())
+                    e.Graphics.DrawLine(line, 0, shelfTabs.Height - 1, shelfTabs.Width, shelfTabs.Height - 1)
+                End Using
+            End Sub
+
+        ConfigureShelfTab(tabPipeline, "Pipeline", pipelinePanel)
+        ConfigureShelfTab(tabPublished, "Published", publishedPanel)
+        ConfigureShelfTab(tabFileDrawer, "File Drawer", fileDrawerPanel)
+
+        shelfTabs.Controls.Add(tabPipeline)
+        shelfTabs.Controls.Add(tabPublished)
+        shelfTabs.Controls.Add(tabFileDrawer)
+
+        shelfHost.Dock = DockStyle.Fill
+        shelfHost.Margin = New Padding(0)
+        shelfHost.BackColor = UiTheme.BoardBackground()
+        shelfHost.Controls.Add(fileDrawerPanel)
+        shelfHost.Controls.Add(publishedPanel)
+        shelfHost.Controls.Add(pipelinePanel)
+
+        tabPipeline.Checked = True
+        ShowShelf(pipelinePanel)
 
         body.Controls.Add(
     attentionBar,
@@ -896,39 +923,15 @@ Public Class Form1
 )
 
         body.Controls.Add(
-    lblPipelineHeader,
+    shelfTabs,
     0,
     2
 )
 
         body.Controls.Add(
-    pipelinePanel,
+    shelfHost,
     0,
     3
-)
-
-        body.Controls.Add(
-    lblPublishedHeader,
-    0,
-    4
-)
-
-        body.Controls.Add(
-    publishedPanel,
-    0,
-    5
-)
-
-        body.Controls.Add(
-    lblFileDrawerHeader,
-    0,
-    6
-)
-
-        body.Controls.Add(
-    fileDrawerPanel,
-    0,
-    7
 )
 
         ' =================================================
@@ -1268,6 +1271,10 @@ Public Class Form1
         UiTheme.DangerColor()
     )
 
+        lblAttentionClear.Visible =
+            overdueCount + dueSoonCount + longReviewCount + missingJournalCount + recentRejectionCount = 0 AndAlso
+            activeAttentionFilter = AttentionFilter.None
+
     End Sub
 
 
@@ -1285,6 +1292,12 @@ Public Class Form1
 
         label.Tag =
         count
+
+        ' List only what needs attention. An active filter's label stays so
+        ' it can be clicked to clear the filter.
+        label.Visible =
+            count > 0 OrElse
+            activeAttentionFilter = filter
 
         If count = 0 Then
 
@@ -1468,20 +1481,31 @@ Public Class Form1
 
     End Function
 
-    Private Sub ConfigureSectionHeader(
-    label As Label,
-    text As String
-)
+    Private Sub ConfigureShelfTab(
+        tab As ShelfTabButton,
+        text As String,
+        shelf As ManuscriptShelfPanel
+    )
 
-        label.Text = text
-        label.AutoSize = True
-        label.Anchor = AnchorStyles.Left
+        tab.Text = text
 
-        label.Font =
-            sectionHeaderFont
+        AddHandler tab.CheckedChanged,
+            Sub(sender, e)
+                If tab.Checked Then
+                    ShowShelf(shelf)
+                End If
+            End Sub
 
-        label.ForeColor =
-        UiTheme.PrimaryText()
+    End Sub
+
+
+    Private Sub ShowShelf(shelf As ManuscriptShelfPanel)
+
+        For Each candidate As ManuscriptShelfPanel In {pipelinePanel, publishedPanel, fileDrawerPanel}
+            candidate.Visible = candidate Is shelf
+        Next
+
+        ResizeCards(shelf)
 
     End Sub
 
@@ -2524,12 +2548,6 @@ Public Class Form1
                 FontStyle.Bold
             )
 
-        routeLinkFont =
-            New Font(
-                Me.Font,
-                FontStyle.Underline
-            )
-
         attentionTitleFont =
             New Font(
                 Me.Font.FontFamily,
@@ -2550,13 +2568,6 @@ Public Class Form1
                 FontStyle.Underline
             )
 
-        sectionHeaderFont =
-            New Font(
-                Me.Font.FontFamily,
-                10.0F,
-                FontStyle.Bold
-            )
-
     End Sub
 
 
@@ -2566,11 +2577,9 @@ Public Class Form1
             cardTitleFont,
             cardBadgeFont,
             cardInsightFont,
-            routeLinkFont,
             attentionTitleFont,
             attentionRegularFont,
-            attentionActiveFont,
-            sectionHeaderFont
+            attentionActiveFont
         }
 
             If font IsNot Nothing Then
@@ -2582,11 +2591,9 @@ Public Class Form1
         cardTitleFont = Nothing
         cardBadgeFont = Nothing
         cardInsightFont = Nothing
-        routeLinkFont = Nothing
         attentionTitleFont = Nothing
         attentionRegularFont = Nothing
         attentionActiveFont = Nothing
-        sectionHeaderFont = Nothing
 
     End Sub
 
@@ -2731,23 +2738,23 @@ Public Class Form1
         ' Section headings
         ' =================================================
 
-        lblPipelineHeader.Text =
+        tabPipeline.Text =
         BuildSectionTitle(
-            "PIPELINE",
+            "Pipeline",
             pipelineCount,
             pipelineTotal
         )
 
-        lblPublishedHeader.Text =
+        tabPublished.Text =
         BuildSectionTitle(
-            "PUBLISHED",
+            "Published",
             publishedCount,
             publishedTotal
         )
 
-        lblFileDrawerHeader.Text =
+        tabFileDrawer.Text =
         BuildSectionTitle(
-            "FILE DRAWER",
+            "File Drawer",
             drawerCount,
             drawerTotal
         )
@@ -2886,6 +2893,12 @@ Public Class Form1
                 manuscript
             )
 
+        Dim stageAgeText As String =
+            StageClockService.Describe(
+                manuscript,
+                DateTime.Today
+            )
+
         Dim titleHeight As Integer =
             TextRenderer.MeasureText(
                 "Ag",
@@ -2907,9 +2920,9 @@ Public Class Form1
                 ).Height + 7
             )
 
-        Dim buttonHeight As Integer =
+        Dim moreButtonHeight As Integer =
             GetResponsiveButtonHeight(
-                34
+                30
             )
 
         Dim titleTop As Integer =
@@ -2959,15 +2972,13 @@ Public Class Form1
 
         End If
 
-        Dim actionsTop As Integer =
+        Dim contentBottom As Integer =
             If(
                 insightHeight > 0,
                 insightTop +
-                insightHeight +
-                10,
+                insightHeight,
                 statsTop +
-                bodyTextHeight +
-                10
+                bodyTextHeight
             )
 
         Dim card As New RoundedPanel With {
@@ -2996,11 +3007,14 @@ Public Class Form1
         ' Title
         ' =================================================
 
-        Dim lblTitle As New Label With {
+        ' A link, so the title is the card's keyboard-focusable way to open it.
+        Dim lblTitle As New LinkLabel With {
             .Text =
                 manuscript.Title,
             .AutoEllipsis =
                 True,
+            .UseMnemonic =
+                False,
             .Left =
                 18,
             .Top =
@@ -3009,7 +3023,13 @@ Public Class Form1
                 titleHeight + 2,
             .Font =
                 cardTitleFont,
-            .ForeColor =
+            .LinkBehavior =
+                LinkBehavior.HoverUnderline,
+            .LinkColor =
+                UiTheme.PrimaryText(),
+            .ActiveLinkColor =
+                UiTheme.AccentColor(),
+            .VisitedLinkColor =
                 UiTheme.PrimaryText(),
             .Cursor =
                 Cursors.Hand
@@ -3058,24 +3078,77 @@ Public Class Form1
                 manuscript.TargetJournal
             )
 
+        Dim secondRowTextTop As Integer =
+            secondRowTop +
+            Math.Max(
+                0,
+                (
+                    secondRowHeight -
+                    bodyTextHeight
+                ) \ 2
+            )
+
+        ' Time in the current stage, from recorded dates (active manuscripts only).
+        Dim lblAge As Label =
+            Nothing
+
+        Dim ageWidth As Integer =
+            0
+
+        If stageAgeText.Length > 0 Then
+
+            Dim ageText As String =
+                stageAgeText & "  " & ChrW(&HB7)
+
+            ageWidth =
+                TextRenderer.MeasureText(
+                    ageText,
+                    Me.Font
+                ).Width + 4
+
+            lblAge =
+                New Label With {
+                    .Text =
+                        ageText,
+                    .AutoSize =
+                        False,
+                    .UseMnemonic =
+                        False,
+                    .Width =
+                        ageWidth,
+                    .Left =
+                        18 +
+                        badgeWidth +
+                        10,
+                    .Top =
+                        secondRowTextTop,
+                    .Height =
+                        bodyTextHeight + 3,
+                    .ForeColor =
+                        UiTheme.SecondaryText(),
+                    .Cursor =
+                        Cursors.Hand
+                }
+
+        End If
+
+        Dim journalLeft As Integer =
+            18 +
+            badgeWidth +
+            10 +
+            If(ageWidth > 0, ageWidth + 6, 0)
+
         Dim lblJournal As New Label With {
             .Text =
                 journalText,
             .AutoEllipsis =
                 True,
+            .UseMnemonic =
+                False,
             .Left =
-                18 +
-                badgeWidth +
-                10,
+                journalLeft,
             .Top =
-                secondRowTop +
-                Math.Max(
-                    0,
-                    (
-                        secondRowHeight -
-                        bodyTextHeight
-                    ) \ 2
-                ),
+                secondRowTextTop,
             .Height =
                 bodyTextHeight + 3,
             .ForeColor =
@@ -3097,6 +3170,8 @@ Public Class Form1
                 " rejections",
             .AutoEllipsis =
                 True,
+            .UseMnemonic =
+                False,
             .AutoSize =
                 False,
             .Left =
@@ -3120,10 +3195,13 @@ Public Class Form1
                 Me.Font
             ).Width + 4
 
-        Dim lblRoute As New Label With {
+        ' A real link, so the route is reachable from the keyboard.
+        Dim lblRoute As New LinkLabel With {
             .Text =
                 routeLinkText,
             .AutoSize =
+                False,
+            .UseMnemonic =
                 False,
             .Width =
                 routeLinkWidth,
@@ -3133,12 +3211,16 @@ Public Class Form1
                 statsTop,
             .TextAlign =
                 ContentAlignment.MiddleRight,
-            .ForeColor =
+            .LinkBehavior =
+                LinkBehavior.AlwaysUnderline,
+            .LinkColor =
+                UiTheme.AccentColor(),
+            .ActiveLinkColor =
+                UiTheme.AccentSecondaryColor(),
+            .VisitedLinkColor =
                 UiTheme.AccentColor(),
             .Cursor =
-                Cursors.Hand,
-            .Font =
-                routeLinkFont
+                Cursors.Hand
         }
 
 
@@ -3159,6 +3241,8 @@ Public Class Form1
                         insightText,
                     .AutoEllipsis =
                         True,
+                    .UseMnemonic =
+                        False,
                     .AutoSize =
                         False,
                     .Left =
@@ -3179,278 +3263,177 @@ Public Class Form1
         ' =================================================
         ' Actions
         '
-        ' The supported main-window minimum leaves room for the three
-        ' manuscript actions. A deterministic table keeps every button
-        ' inside the visible card instead of letting FlowLayout preferred
-        ' sizing create an invisible wider action surface.
+        ' The card opens on click. Less frequent actions live in a menu,
+        ' shown by the card's more-actions button or by right-clicking the
+        ' card, so a destructive Delete does not sit on every card.
         ' =================================================
 
-        Dim btnOpen As New Button With {
-            .Text =
-                "Open",
-            .Width =
-                GetResponsiveButtonWidth(
-                    "Open",
-                    88
-                ),
-            .Height =
-                buttonHeight,
-            .Anchor =
-                AnchorStyles.Right,
-            .Margin =
-                New Padding(
-                    5,
-                    0,
-                    5,
-                    6
-                )
-        }
+        Dim cardMenu As New ContextMenuStrip()
 
-        StyleCardButton(
-            btnOpen,
-            UiTheme.AccentColor()
-        )
-
-        AddHandler btnOpen.Click,
+        cardMenu.Items.Add(
+            "Open",
+            Nothing,
             Sub(sender, e)
                 OpenManuscript(
                     manuscript
                 )
             End Sub
+        )
 
-        Dim locationButton As Button =
-            Nothing
+        cardMenu.Items.Add(
+            "View Route",
+            Nothing,
+            Sub(sender, e)
+                OpenRouteView(
+                    manuscript
+                )
+            End Sub
+        )
 
         If manuscript.Location =
            ManuscriptLocation.Pipeline Then
 
-            locationButton =
-                New Button With {
-                    .Text =
-                        "Move to File Drawer",
-                    .Width =
-                        GetResponsiveButtonWidth(
-                            "Move to File Drawer",
-                            175
-                        ),
-                    .Height =
-                        buttonHeight,
-                    .Anchor =
-                        AnchorStyles.Right,
-                    .Margin =
-                        New Padding(
-                            5,
-                            0,
-                            5,
-                            6
-                        )
-                }
-
-            StyleCardButton(
-                locationButton,
-                UiTheme.WarningColor()
+            cardMenu.Items.Add(
+                New ToolStripSeparator()
             )
 
-            AddHandler locationButton.Click,
+            cardMenu.Items.Add(
+                "Move to File Drawer...",
+                Nothing,
                 Sub(sender, e)
                     MoveToFileDrawer(
                         manuscript
                     )
                 End Sub
+            )
 
         ElseIf manuscript.Location =
                ManuscriptLocation.FileDrawer Then
 
-            locationButton =
-                New Button With {
-                    .Text =
-                        "Restore to Pipeline",
-                    .Width =
-                        GetResponsiveButtonWidth(
-                            "Restore to Pipeline",
-                            175
-                        ),
-                    .Height =
-                        buttonHeight,
-                    .Anchor =
-                        AnchorStyles.Right,
-                    .Margin =
-                        New Padding(
-                            5,
-                            0,
-                            5,
-                            6
-                        )
-                }
-
-            StyleCardButton(
-                locationButton,
-                UiTheme.SuccessColor()
+            cardMenu.Items.Add(
+                New ToolStripSeparator()
             )
 
-            AddHandler locationButton.Click,
+            cardMenu.Items.Add(
+                "Restore to Pipeline",
+                Nothing,
                 Sub(sender, e)
                     RestoreToPipeline(
                         manuscript
                     )
                 End Sub
+            )
 
         End If
 
-        Dim btnDelete As New Button With {
+        cardMenu.Items.Add(
+            New ToolStripSeparator()
+        )
+
+        Dim deleteItem As ToolStripItem =
+            cardMenu.Items.Add(
+                "Delete...",
+                Nothing,
+                Sub(sender, e)
+                    DeleteManuscript(
+                        manuscript
+                    )
+                End Sub
+            )
+
+        deleteItem.ForeColor =
+            UiTheme.DangerColor()
+
+        AddHandler card.Disposed,
+            Sub(sender, e)
+                cardMenu.Dispose()
+            End Sub
+
+        Dim btnMore As New Button With {
             .Text =
-                "Delete",
+                ChrW(&H22EF),
             .Width =
-                GetResponsiveButtonWidth(
-                    "Delete",
-                    88
-                ),
+                moreButtonHeight + 8,
             .Height =
-                buttonHeight,
-            .Anchor =
-                AnchorStyles.Right,
-            .Margin =
-                New Padding(
-                    5,
-                    0,
-                    5,
-                    6
-                )
+                moreButtonHeight,
+            .Top =
+                Math.Max(
+                    4,
+                    titleTop - 4
+                ),
+            .AccessibleName =
+                "More actions for " & manuscript.Title,
+            .UseMnemonic =
+                False
         }
 
         StyleCardButton(
-            btnDelete,
-            UiTheme.DangerColor()
+            btnMore,
+            UiTheme.SecondaryText()
         )
 
-        AddHandler btnDelete.Click,
+        btnMore.FlatAppearance.BorderSize =
+            0
+
+        AddHandler btnMore.Click,
             Sub(sender, e)
-                DeleteManuscript(
-                    manuscript
+                cardMenu.Show(
+                    btnMore,
+                    New Point(
+                        0,
+                        btnMore.Height
+                    )
                 )
             End Sub
-
-        Dim actionButtonCount As Integer =
-            If(
-                locationButton Is Nothing,
-                2,
-                3
-            )
-
-        Dim actionPanel As New TableLayoutPanel With {
-            .Dock =
-                DockStyle.Bottom,
-            .ColumnCount =
-                actionButtonCount + 1,
-            .RowCount =
-                1,
-            .Height =
-                buttonHeight + 14,
-            .Padding =
-                New Padding(
-                    18,
-                    0,
-                    18,
-                    8
-                ),
-            .Margin =
-                New Padding(
-                    0
-                ),
-            .BackColor =
-                UiTheme.CardBackground()
-        }
-
-        actionPanel.RowStyles.Add(
-            New RowStyle(
-                SizeType.Percent,
-                100
-            )
-        )
-
-        actionPanel.ColumnStyles.Add(
-            New ColumnStyle(
-                SizeType.Percent,
-                100
-            )
-        )
-
-        For actionColumn As Integer =
-            1 To actionButtonCount
-
-            actionPanel.ColumnStyles.Add(
-                New ColumnStyle(
-                    SizeType.AutoSize
-                )
-            )
-
-        Next
-
-        Dim nextActionColumn As Integer =
-            1
-
-        actionPanel.Controls.Add(
-            btnOpen,
-            nextActionColumn,
-            0
-        )
-
-        nextActionColumn +=
-            1
-
-        If locationButton IsNot Nothing Then
-
-            actionPanel.Controls.Add(
-                locationButton,
-                nextActionColumn,
-                0
-            )
-
-            nextActionColumn +=
-                1
-
-        End If
-
-        actionPanel.Controls.Add(
-            btnDelete,
-            nextActionColumn,
-            0
-        )
 
 
         ' =================================================
         ' Navigation behavior
         ' =================================================
 
-        AddHandler card.DoubleClick,
+        Dim openOnLeftClick As MouseEventHandler =
+            Sub(sender, e)
+                If e.Button = MouseButtons.Left Then
+                    OpenManuscript(
+                        manuscript
+                    )
+                End If
+            End Sub
+
+        AddHandler card.MouseClick,
+            openOnLeftClick
+
+        AddHandler stageBadge.MouseClick,
+            openOnLeftClick
+
+        AddHandler lblJournal.MouseClick,
+            openOnLeftClick
+
+        AddHandler lblStats.MouseClick,
+            openOnLeftClick
+
+        If lblAge IsNot Nothing Then
+
+            AddHandler lblAge.MouseClick,
+                openOnLeftClick
+
+        End If
+
+        If lblInsight IsNot Nothing Then
+
+            AddHandler lblInsight.MouseClick,
+                openOnLeftClick
+
+        End If
+
+        AddHandler lblTitle.LinkClicked,
             Sub(sender, e)
                 OpenManuscript(
                     manuscript
                 )
             End Sub
 
-        AddHandler lblTitle.DoubleClick,
-            Sub(sender, e)
-                OpenManuscript(
-                    manuscript
-                )
-            End Sub
-
-        AddHandler lblJournal.DoubleClick,
-            Sub(sender, e)
-                OpenManuscript(
-                    manuscript
-                )
-            End Sub
-
-        AddHandler lblStats.DoubleClick,
-            Sub(sender, e)
-                OpenManuscript(
-                    manuscript
-                )
-            End Sub
-
-        AddHandler lblRoute.Click,
+        AddHandler lblRoute.LinkClicked,
             Sub(sender, e)
                 OpenRouteView(
                     manuscript
@@ -3467,8 +3450,20 @@ Public Class Form1
         )
 
         card.Controls.Add(
+            btnMore
+        )
+
+        card.Controls.Add(
             stageBadge
         )
+
+        If lblAge IsNot Nothing Then
+
+            card.Controls.Add(
+                lblAge
+            )
+
+        End If
 
         card.Controls.Add(
             lblJournal
@@ -3490,9 +3485,17 @@ Public Class Form1
 
         End If
 
-        card.Controls.Add(
-            actionPanel
-        )
+        ' Right-click (or the keyboard context-menu key on the focused title)
+        ' anywhere on the card shows the same menu.
+        card.ContextMenuStrip =
+            cardMenu
+
+        For Each child As Control In card.Controls
+
+            child.ContextMenuStrip =
+                cardMenu
+
+        Next
 
 
         ' =================================================
@@ -3521,15 +3524,30 @@ Public Class Form1
                             36
                         )
 
+                    btnMore.Left =
+                        Math.Max(
+                            18,
+                            card.ClientSize.Width -
+                            btnMore.Width -
+                            12
+                        )
+
                     lblTitle.Width =
-                        contentWidth
+                        Math.Max(
+                            80,
+                            btnMore.Left -
+                            lblTitle.Left -
+                            8
+                        )
 
                     lblJournal.Width =
                         Math.Max(
                             70,
                             contentWidth -
-                            badgeWidth -
-                            10
+                            (
+                                journalLeft -
+                                18
+                            )
                         )
 
                     lblRoute.Left =
@@ -3556,9 +3574,8 @@ Public Class Form1
                     End If
 
                     Dim desiredCardHeight As Integer =
-                        actionsTop +
-                        8 +
-                        actionPanel.Height
+                        contentBottom +
+                        16
 
                     If card.Height <>
                        desiredCardHeight Then
@@ -3688,11 +3705,47 @@ Public Class Form1
         e As EventArgs
     )
 
-        Using dialog As New AddManuscriptForm()
+        ' Pasting a title page matches authors against a fresh copy of the
+        ' reusable library, so a failed save never leaves unsaved people in the
+        ' board's copy. If the library cannot be read, Add Manuscript still works.
+        Dim editableLibrary As AuthorLibraryData = Nothing
+
+        Try
+            editableLibrary = authorRepository.Load()
+        Catch ex As Exception
+            editableLibrary = Nothing
+        End Try
+
+        Using dialog As New AddManuscriptForm(editableLibrary)
 
             If dialog.ShowDialog(Me) =
                 DialogResult.OK AndAlso
                dialog.CreatedManuscript IsNot Nothing Then
+
+                ' Save reusable people first, as bibliography import does, so a
+                ' manuscript never references an author record that failed to save.
+                If dialog.AuthorLibraryChanged Then
+                    Try
+                        authorRepository.Save(editableLibrary)
+                    Catch ex As Exception
+                        MessageBox.Show(
+                            Me,
+                            "PaperRoute could not save the new authors, so the manuscript was not added." &
+                            Environment.NewLine &
+                            Environment.NewLine &
+                            ex.Message,
+                            "Add Manuscript",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Warning
+                        )
+                        Return
+                    End Try
+
+                    ' Refresh the board's library and author search index.
+                    If Not LoadAuthorLibrary() Then
+                        Return
+                    End If
+                End If
 
                 manuscripts.Add(
                     dialog.CreatedManuscript
