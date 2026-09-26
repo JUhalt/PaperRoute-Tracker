@@ -10,27 +10,6 @@ Partial Public Class Form1
     Private reminderNotificationCleanupInstalled As Boolean = False
 
 
-    Private Sub OpenReminders(
-        sender As Object,
-        e As EventArgs
-    )
-
-        Using dialog As New RemindersForm(
-            manuscripts,
-            repository
-        )
-
-            dialog.ShowDialog(
-                Me
-            )
-
-        End Using
-
-        RenderManuscripts()
-
-    End Sub
-
-
     Private Sub OpenUserGuide(
         sender As Object,
         e As EventArgs

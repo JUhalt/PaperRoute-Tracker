@@ -17,7 +17,7 @@ Portable and developer builds intentionally do not replace themselves in place.
 
 PaperRoute upgrades are designed not to overwrite the manuscript database, settings, schema metadata, managed document library, or externally linked files. Even so, creating a current PaperRoute backup before an important upgrade is a sensible precaution.
 
-Use **Data → Backup Library...** to create a portable backup.
+Use **Settings → Backup Library...** to create a portable backup. In v0.5 and earlier, it is **Data → Backup Library...**.
 
 ## Moving from v0.4 to v0.5
 

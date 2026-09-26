@@ -16,8 +16,8 @@ If you only read one section, read this one.
 6. Save each child dialog, then choose **Save & Close** in **Manuscript Details** to persist the complete workflow.
 7. When the journal responds, open that submission and record the **Editorial Decision**. Revision decisions can carry a revision deadline.
 8. Open **Reviewer Responses...** in that submission to track individual comments, actions, and response drafts. Save the matrix, close Submission Details, then save Manuscript Details. Keep original letters and revised files under the submission's correspondence.
-9. Use **Settings > Reminders & Calendar...** to see revision deadlines, journal follow-ups, and custom reminders in one place.
-10. Use **Data > Backup Library...** before major changes or moving PaperRoute to another computer.
+9. Open **Reminders** in the left rail to see revision deadlines, journal follow-ups, and custom reminders in one place.
+10. Use **Settings > Backup Library...** before major changes or moving PaperRoute to another computer.
 
 PaperRoute does not require an account for its core workflow, and the manuscript-tracking database is stored locally.
 
@@ -49,6 +49,25 @@ PaperRoute currently supports these stages:
 - Published
 
 The stage describes the manuscript's current lifecycle position. Submission history, editorial decisions, and correspondence provide the detailed record underneath that stage.
+
+### Finding your way around
+
+PaperRoute opens in one window. The left rail lists its pages: **Board**, **Library**, **Journals**, **Reminders**, and **Import & Export**, with **Settings** and **Help** at the bottom. Press **Ctrl+1** to **Ctrl+5** to open the pages in that order, **Alt+Left** and **Alt+Right** to go back and forward, and **F1** for this guide.
+
+Earlier versions reached these places through menus. Every command is still available:
+
+| Earlier location | Now |
+| --- | --- |
+| Data > Import Spreadsheet..., Import BibTeX / RIS..., Get Import Template... | **Import & Export** page |
+| Data > Export Library to Excel..., as BibTeX..., as RIS..., Publication & CV Export... | **Import & Export** page |
+| Data > Backup Library..., Restore Backup... | **Settings** in the rail, and the **Import & Export** page |
+| Data > Authors & Affiliations... | **Library** page, **Authors & Affiliations** |
+| Data > Journal Library... | **Journals** page |
+| Settings > Reminders & Calendar... | **Reminders** page |
+| Settings > Preferences..., Check for Updates..., Diagnostics..., About | **Settings** in the rail |
+| Settings > User Guide... and the Help button | **Help** in the rail, or **F1** |
+
+The **Library** page lists every manuscript on every shelf in a sortable table; press Enter or double-click a row to open it.
 
 ### The Needs Attention area
 
@@ -170,7 +189,7 @@ Structured authors are the preferred workflow for reusable people, affiliations,
 
 ## Reusable Authors and Affiliations
 
-Choose **Data > Authors & Affiliations...** to manage reusable people and institutions.
+Open **Library** in the left rail and choose **Authors & Affiliations** to manage reusable people and institutions.
 
 An author record can contain:
 
@@ -214,7 +233,7 @@ External metadata should help fill a record, not take control of the research wo
 
 ## ORCID Public-Profile Import
 
-Choose **Data > Authors & Affiliations...**, select an author, and use the ORCID workflow.
+Open **Library > Authors & Affiliations**, select an author, and use the ORCID workflow.
 
 PaperRoute can read public ORCID information for a user-supplied ORCID iD, including public identity information, public employment/affiliation data, and public works.
 
@@ -231,7 +250,7 @@ When importing public works, dated works can be placed directly on the Published
 
 ## BibTeX and RIS
 
-Choose **Data > Import BibTeX / RIS...** to bring bibliography records into PaperRoute.
+Choose **Import & Export > Import BibTeX / RIS...** to bring bibliography records into PaperRoute.
 
 PaperRoute maps common scholarly metadata such as:
 
@@ -256,8 +275,8 @@ Importing publication metadata does not fabricate journal-submission history.
 
 Use:
 
-- **Data > Export Library as BibTeX...**
-- **Data > Export Library as RIS...**
+- **Import & Export > Export Library as BibTeX...**
+- **Import & Export > Export Library as RIS...**
 
 You choose which manuscripts to export.
 
@@ -265,7 +284,7 @@ You choose which manuscripts to export.
 
 ## Journal Library, Portals, Preprints, and Project Links
 
-Choose **Data > Journal Library...** to maintain reusable journal information.
+Open **Journals** in the left rail to maintain reusable journal information. Changes there are saved as you make them.
 
 Journal records can include:
 
@@ -332,7 +351,7 @@ Each submission can contain:
 - optional follow-up date; and
 - notes.
 
-The follow-up date appears in **Settings > Reminders & Calendar...** whenever it is explicitly set. PaperRoute treats it as a user-owned reminder, so recording an editorial decision does not silently remove it; clear or change the follow-up date when it is no longer useful.
+The follow-up date appears on the **Reminders** page whenever it is explicitly set. PaperRoute treats it as a user-owned reminder, so recording an editorial decision does not silently remove it; clear or change the follow-up date when it is no longer useful.
 
 ### Reusing the Journal Library
 
@@ -415,7 +434,7 @@ Externally linked files remain references to their original paths. If those file
 
 ## Reminders and Calendar
 
-Choose **Settings > Reminders & Calendar...**.
+Open **Reminders** in the left rail.
 
 PaperRoute combines three reminder sources:
 
@@ -437,7 +456,7 @@ The calculation is deterministic: the same stored dates and same "today" date pr
 
 ### Custom reminders
 
-Use **Add Reminder...** in the Reminders & Calendar window to create a manuscript-specific reminder.
+Use **Add Reminder...** on the Reminders page to create a manuscript-specific reminder.
 
 Custom reminders can be edited or marked complete from the same window.
 
@@ -466,7 +485,7 @@ Important limitations:
 - PaperRoute does not run a hidden cloud reminder service.
 - If PaperRoute is not running, it cannot perform its startup reminder check.
 - Windows may suppress or change how notification balloons are displayed.
-- A Windows notification failure never prevents PaperRoute from opening or using the Reminders & Calendar view.
+- A Windows notification failure never prevents PaperRoute from opening or using the Reminders page.
 
 The in-app reminder list is the authoritative reminder view.
 
@@ -474,7 +493,7 @@ The in-app reminder list is the authoritative reminder view.
 
 ## Publication and CV Export
 
-Choose **Data > Publication & CV Export...**.
+Choose **Import & Export > Publication & CV Export...**.
 
 You can filter the source records to:
 
@@ -500,13 +519,13 @@ Export never changes manuscript data.
 
 ## Spreadsheet Import and Export
 
-Choose **Data > Import Spreadsheet...**.
+Choose **Import & Export > Import Spreadsheet...**.
 
 PaperRoute supports three broad import paths.
 
 ### Standard PaperRoute workbook
 
-Use **Data > Get Import Template...** for the supported workbook structure.
+Use **Import & Export > Get Import Template...** for the supported workbook structure.
 
 The workbook includes:
 
@@ -529,13 +548,13 @@ Only Title is required.
 
 ### Exporting the library to Excel
 
-Use **Data > Export Library to Excel...** to create a workbook from the current library.
+Use **Import & Export > Export Library to Excel...** to create a workbook from the current library.
 
 ---
 
 ## Backup and Restore
 
-Choose **Data > Backup Library...** to create a portable ZIP backup.
+Choose **Settings > Backup Library...**, or **Backup Library...** on the Import & Export page, to create a portable ZIP backup.
 
 A backup can contain:
 
@@ -553,7 +572,7 @@ Managed document copies, including version and packet snapshots, are included. E
 
 ### Restore safety
 
-**Data > Restore Backup...**:
+**Settings > Restore Backup...** (also on the Import & Export page):
 
 1. validates the selected archive;
 2. previews record/file counts;
@@ -611,7 +630,7 @@ Use **Settings > Diagnostics...** when troubleshooting storage, environment, or 
 1. Choose **Add Manuscript**.
 2. Enter the title, or choose **Paste a Title Page...** (see below).
 3. Use Draft as the stage if active writing has begun.
-4. Optionally check **Remind me** and name a first deadline. It becomes an ordinary custom reminder under **Reminders & Calendar**.
+4. Optionally check **Remind me** and name a first deadline. It becomes an ordinary custom reminder on the **Reminders** page.
 5. Choose **Add Manuscript**, then open Manuscript Details to add or adjust structured authors and a target journal.
 
 ### Paste a title page
@@ -664,7 +683,7 @@ This records preparation only. Record the journal submission after it actually o
 Use either method:
 
 - Edit the journal submission and set a follow-up date; or
-- open **Settings > Reminders & Calendar...** and add a custom reminder.
+- open **Reminders** and add a custom reminder.
 
 An explicitly saved submission follow-up remains active until you clear or change it, even if an editorial decision is later recorded.
 
@@ -677,7 +696,7 @@ An explicitly saved submission follow-up remains active until you clear or chang
 5. Save.
 6. Confirm the manuscript is in the Revision stage.
 
-The deadline will then appear in Reminders & Calendar and in the Needs Attention workflow as appropriate.
+The deadline will then appear on the Reminders page and in the Needs Attention workflow as appropriate.
 
 ## How do I record reviewer comments and my response?
 
@@ -719,7 +738,7 @@ Open **Journal, Preprint & Links...** and enter the preprint DOI and/or preprint
 
 ## How do I make a CV publication list?
 
-1. Choose **Data > Publication & CV Export...**.
+1. Choose **Import & Export > Publication & CV Export...**.
 2. Select Published only, or Accepted / In Press / Published if desired.
 3. Choose the manuscripts to include.
 4. Select CV section.
@@ -730,9 +749,9 @@ Open **Journal, Preprint & Links...** and enter the preprint DOI and/or preprint
 
 The safest approach is:
 
-1. create a portable backup with **Data > Backup Library...**;
+1. create a portable backup with **Settings > Backup Library...**;
 2. install PaperRoute on the destination computer;
-3. use **Data > Restore Backup...**;
+3. use **Settings > Restore Backup...**;
 4. confirm manuscript counts and managed files before retiring the old installation.
 
 ## How do I recover from a bad import or restore?
@@ -795,7 +814,7 @@ https://example.org/path
 
 ### A reminder notification did not appear
 
-Open **Settings > Reminders & Calendar...** first. If the reminder is present there, the stored reminder data is working.
+Open **Reminders** first. If the reminder is present there, the stored reminder data is working.
 
 Then check:
 
@@ -807,7 +826,7 @@ Normal PaperRoute use does not depend on system notification delivery.
 
 ### The local User Guide did not load
 
-PaperRoute ships a local copy of this guide. Open it from the **Help** button in the main header or **Settings > User Guide...**. If the local file cannot be read, the in-app Help window falls back to a short built-in Quick Start and can link to the GitHub copy when internet access is available.
+PaperRoute ships a local copy of this guide. Open it with **Help** at the bottom of the left rail, or press **F1**. If the local file cannot be read, the in-app Help window falls back to a short built-in Quick Start and can link to the GitHub copy when internet access is available.
 
 ---
 

@@ -93,13 +93,13 @@ The repository's **Build PaperRoute Tracker** workflow still produces a self-con
 
 ## Importing existing work
 
-Choose **Data → Import Spreadsheet...**.
+Choose **Import & Export → Import Spreadsheet...**.
 
 PaperRoute uses three import paths automatically:
 
 ### 1. Standard PaperRoute workbook
 
-Use **Data → Get Import Template...** to generate the supported multi-sheet workbook. It contains:
+Use **Import & Export → Get Import Template...** to generate the supported multi-sheet workbook. It contains:
 
 - `Manuscripts`
 - `Submissions`
@@ -131,7 +131,7 @@ Only **Title** is required. PaperRoute auto-suggests mappings from common academ
 
 ## Backup and restore
 
-Choose **Data → Backup Library...** to create a portable ZIP containing:
+Choose **Settings → Backup Library...** (also on the Import & Export page) to create a portable ZIP containing:
 
 ```text
 backup-info.txt

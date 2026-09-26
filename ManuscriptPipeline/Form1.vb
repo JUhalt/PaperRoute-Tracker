@@ -197,8 +197,8 @@ Public Class Form1
                 "PaperRoute Tracker"
             )
         Me.StartPosition = FormStartPosition.CenterScreen
-        Me.Size = New Size(1180, 820)
-        Me.MinimumSize = New Size(900, 680)
+        Me.Size = New Size(1280, 840)
+        Me.MinimumSize = New Size(960, 680)
         Me.Font = New Font("Segoe UI", 10.0F)
         Me.AutoScaleMode = AutoScaleMode.Dpi
         Me.BackColor = UiTheme.BoardBackground()
@@ -206,390 +206,55 @@ Public Class Form1
 
         ResetSharedDashboardFonts()
 
-        Dim root As New TableLayoutPanel With {
+        ' =================================================
+        ' Shell: the left rail and one content area
+        ' =================================================
+
+        Dim shell As New TableLayoutPanel With {
             .Dock = DockStyle.Fill,
-            .ColumnCount = 1,
-            .RowCount = 3,
+            .ColumnCount = 2,
+            .RowCount = 1,
+            .Margin = New Padding(0),
+            .Padding = New Padding(0),
             .BackColor = UiTheme.BoardBackground()
         }
 
-        root.ColumnStyles.Add(
-            New ColumnStyle(
-                SizeType.Percent,
-                100.0F
-            )
-        )
+        shell.ColumnStyles.Add(New ColumnStyle(SizeType.Absolute, RailWidth()))
+        shell.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100.0F))
+        shell.RowStyles.Add(New RowStyle(SizeType.Percent, 100.0F))
 
-        root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
-        root.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
-        root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+        Dim content As New TableLayoutPanel With {
+            .Dock = DockStyle.Fill,
+            .ColumnCount = 1,
+            .RowCount = 2,
+            .Margin = New Padding(0),
+            .Padding = New Padding(0),
+            .BackColor = UiTheme.BoardBackground()
+        }
 
-        ' =================================================
-        ' Header
-        ' =================================================
+        content.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100.0F))
+        content.RowStyles.Add(New RowStyle(SizeType.Percent, 100.0F))
+        content.RowStyles.Add(New RowStyle(SizeType.AutoSize))
 
-        Dim header As New TableLayoutPanel With {
-    .Dock = DockStyle.Top,
-    .AutoSize = True,
-    .AutoSizeMode = AutoSizeMode.GrowAndShrink,
-    .ColumnCount = 2,
-    .RowCount = 1,
-    .Padding = New Padding(18, 10, 18, 10),
-    .BackColor = UiTheme.HeaderBackground()
-}
+        contentHost.Dock = DockStyle.Fill
+        contentHost.Margin = New Padding(0)
+        contentHost.BackColor = UiTheme.BoardBackground()
+        contentHost.Controls.Clear()
 
-        header.ColumnStyles.Add(
-    New ColumnStyle(SizeType.Percent, 100)
-)
-
-        header.ColumnStyles.Add(
-    New ColumnStyle(SizeType.AutoSize)
-)
-
-        header.RowStyles.Add(
-    New RowStyle(SizeType.AutoSize)
-)
+        boardPage.Dock = DockStyle.Fill
+        boardPage.BackColor = UiTheme.BoardBackground()
+        boardPage.Controls.Clear()
+        contentHost.Controls.Add(boardPage)
 
         ' =================================================
-        ' Branding
-        ' =================================================
-
-        Dim branding As New TableLayoutPanel With {
-    .Dock = DockStyle.Fill,
-    .AutoSize = True,
-    .AutoSizeMode = AutoSizeMode.GrowAndShrink,
-    .ColumnCount = 1,
-    .RowCount = 2,
-    .Margin = New Padding(0)
-}
-
-        branding.RowStyles.Add(
-    New RowStyle(SizeType.AutoSize)
-)
-
-        branding.RowStyles.Add(
-    New RowStyle(SizeType.AutoSize)
-)
-
-
-        Dim lblTitle As New Label With {
-    .Text = "PaperRoute",
-    .AutoSize = True,
-    .Anchor = AnchorStyles.Left,
-    .Margin = New Padding(0),
-    .Cursor = Cursors.Hand,
-    .Font = New Font(
-        Me.Font.FontFamily,
-        16.0F,
-        FontStyle.Bold
-    ),
-    .ForeColor = UiTheme.AccentColor()
-}
-
-        Dim lblSubtitle As New Label With {
-    .Text =
-        If(
-            StorageEnvironment.IsDevelopmentProfile(),
-            "Development profile • isolated local data",
-            "Academic manuscript tracking, locally"
-        ),
-    .AutoSize = True,
-    .Anchor = AnchorStyles.Left,
-    .ForeColor = UiTheme.SecondaryText(),
-    .Margin = New Padding(0, 2, 0, 0)
-}
-
-        branding.Controls.Add(
-    lblTitle,
-    0,
-    0
-)
-
-        branding.Controls.Add(
-    lblSubtitle,
-    0,
-    1
-)
-
-
-        ' =================================================
-        ' Header actions
-        ' =================================================
-
-        Dim headerActions As New TableLayoutPanel With {
-    .AutoSize = True,
-    .AutoSizeMode = AutoSizeMode.GrowAndShrink,
-    .Anchor = AnchorStyles.Right,
-    .ColumnCount = 4,
-    .RowCount = 1,
-    .Margin = New Padding(12, 0, 0, 0),
-    .BackColor = UiTheme.HeaderBackground()
-}
-
-        headerActions.RowStyles.Add(
-    New RowStyle(SizeType.AutoSize)
-)
-
-        For actionColumn As Integer = 0 To 3
-
-            headerActions.ColumnStyles.Add(
-        New ColumnStyle(SizeType.AutoSize)
-    )
-
-        Next
-
-
-        ' One primary action per view; the rest are quiet outlines.
-        Dim btnAdd As New ActionButton With {
-    .Text = "+ Add Manuscript",
-    .Role = ActionButtonRole.Primary,
-    .AccessibleName = "Add Manuscript",
-    .Width = GetResponsiveButtonWidth("+ Add Manuscript", 150),
-    .Height = GetResponsiveButtonHeight(36),
-    .Margin = New Padding(8, 0, 0, 0)
-}
-
-        Dim btnData As New ActionButton With {
-    .Text = "Data ▾",
-    .Width = GetResponsiveButtonWidth("Data ▾", 96),
-    .Height = GetResponsiveButtonHeight(36),
-    .Margin = New Padding(8, 0, 0, 0)
-}
-
-        Dim btnHelp As New ActionButton With {
-    .Text = "Help",
-    .Width = GetResponsiveButtonWidth("Help", 76),
-    .Height = GetResponsiveButtonHeight(36),
-    .Margin = New Padding(0)
-}
-
-        Dim btnSettings As New ActionButton With {
-    .Text = "Settings ▾",
-    .Width = GetResponsiveButtonWidth("Settings ▾", 108),
-    .Height = GetResponsiveButtonHeight(36),
-    .Margin = New Padding(8, 0, 0, 0)
-}
-
-
-        ' =================================================
-        ' Data menu
-        ' =================================================
-
-        Dim dataMenu As New ContextMenuStrip()
-
-        dataMenu.Items.Add(
-    "Get Import Template...",
-    Nothing,
-    AddressOf ExportBlankTemplate
-)
-
-        dataMenu.Items.Add(
-    "Import Spreadsheet...",
-    Nothing,
-    AddressOf ImportExcelHistory
-)
-
-        dataMenu.Items.Add(
-    "Export Library to Excel...",
-    Nothing,
-    AddressOf ExportLibraryExcel
-)
-
-        dataMenu.Items.Add(
-    New ToolStripSeparator()
-)
-
-        dataMenu.Items.Add(
-    "Import BibTeX / RIS...",
-    Nothing,
-    AddressOf ImportBibliography
-)
-
-        dataMenu.Items.Add(
-    "Export Library as BibTeX...",
-    Nothing,
-    AddressOf ExportBibTeX
-)
-
-        dataMenu.Items.Add(
-    "Export Library as RIS...",
-    Nothing,
-    AddressOf ExportRis
-)
-
-        dataMenu.Items.Add(
-    "Authors && Affiliations...",
-    Nothing,
-    AddressOf OpenAuthorLibrary
-)
-
-        dataMenu.Items.Add(
-    "Journal Library...",
-    Nothing,
-    AddressOf OpenJournalLibrary
-)
-
-        dataMenu.Items.Add(
-    "Publication && CV Export...",
-    Nothing,
-    AddressOf OpenPublicationExport
-)
-
-        dataMenu.Items.Add(
-    New ToolStripSeparator()
-)
-
-        dataMenu.Items.Add(
-    "Backup Library...",
-    Nothing,
-    AddressOf BackupLibrary
-)
-
-        dataMenu.Items.Add(
-    "Restore Backup...",
-    Nothing,
-    AddressOf RestoreLibraryBackup
-)
-
-        ' =================================================
-        ' Settings menu
-        ' =================================================
-
-        Dim settingsMenu As New ContextMenuStrip()
-
-        settingsMenu.Items.Add(
-    "Preferences...",
-    Nothing,
-    AddressOf OpenSettings
-)
-
-        settingsMenu.Items.Add(
-    "Reminders && Calendar...",
-    Nothing,
-    AddressOf OpenReminders
-)
-
-        settingsMenu.Items.Add(
-    New ToolStripSeparator()
-)
-
-        settingsMenu.Items.Add(
-    "Check for Updates...",
-    Nothing,
-    AddressOf CheckForUpdatesNow
-)
-
-        settingsMenu.Items.Add(
-    "Diagnostics...",
-    Nothing,
-    AddressOf OpenDiagnostics
-)
-
-        settingsMenu.Items.Add(
-    New ToolStripSeparator()
-)
-
-        settingsMenu.Items.Add(
-    "User Guide...",
-    Nothing,
-    AddressOf OpenUserGuide
-)
-
-        settingsMenu.Items.Add(
-    "About PaperRoute",
-    Nothing,
-    AddressOf OpenAbout
-)
-
-        ' =================================================
-        ' Header handlers
-        ' =================================================
-
-        AddHandler lblTitle.DoubleClick,
-    AddressOf OpenAbout
-
-        AddHandler btnAdd.Click,
-    AddressOf AddManuscript
-
-        AddHandler btnHelp.Click,
-    AddressOf OpenUserGuide
-
-        AddHandler btnSettings.Click,
-    Sub(sender, e)
-
-        settingsMenu.Show(
-            btnSettings,
-            New Point(
-                0,
-                btnSettings.Height
-            )
-        )
-
-    End Sub
-
-        AddHandler btnData.Click,
-    Sub(sender, e)
-
-        dataMenu.Show(
-            btnData,
-            New Point(
-                0,
-                btnData.Height
-            )
-        )
-
-    End Sub
-
-        headerActions.Controls.Add(
-    btnHelp,
-    0,
-    0
-)
-
-        headerActions.Controls.Add(
-    btnSettings,
-    1,
-    0
-)
-
-        headerActions.Controls.Add(
-    btnData,
-    2,
-    0
-)
-
-        headerActions.Controls.Add(
-    btnAdd,
-    3,
-    0
-)
-
-        ' =================================================
-        ' Assemble header        ' =================================================
-        ' Assemble header
-        ' =================================================
-
-        header.Controls.Add(
-    branding,
-    0,
-    0
-)
-
-        header.Controls.Add(
-    headerActions,
-    1,
-    0
-)
-
-        ' =================================================
-        ' Main body
+        ' Board page
         ' =================================================
 
         Dim body As New TableLayoutPanel With {
             .Dock = DockStyle.Fill,
             .ColumnCount = 1,
             .RowCount = 4,
-            .Padding = New Padding(18, 8, 18, 12),
+            .Padding = New Padding(UiTheme.Px(22, DeviceDpi), UiTheme.Px(14, DeviceDpi), UiTheme.Px(22, DeviceDpi), UiTheme.Px(8, DeviceDpi)),
             .BackColor = UiTheme.BoardBackground(),
             .AutoScroll = False
         }
@@ -601,81 +266,86 @@ Public Class Form1
             )
         )
 
-        ' The dashboard is built at runtime. At high Windows scaling, fonts
-        ' grow even though hard-coded pixel row heights do not. Keep all
-        ' text/tool rows content-driven and give the remaining height to the
-        ' one visible shelf.
+        ' The board is built at runtime. At high Windows scaling, fonts grow
+        ' even though hard-coded pixel row heights do not. Keep all text and
+        ' tool rows content-driven and give the remaining height to the one
+        ' visible shelf.
         body.RowStyles.Add(New RowStyle(SizeType.AutoSize))
         body.RowStyles.Add(New RowStyle(SizeType.AutoSize))
         body.RowStyles.Add(New RowStyle(SizeType.AutoSize))
         body.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
 
+        ' Page header: title, search, and the one primary action.
+        txtBoardSearch.PlaceholderText =
+            "Search titles, journals, authors"
 
-        ' =================================================
-        ' Search / filter / sort bar
-        ' =================================================
+        txtBoardSearch.Width =
+            Math.Max(
+                UiTheme.Px(250, DeviceDpi),
+                TextRenderer.MeasureText(
+                    txtBoardSearch.PlaceholderText,
+                    Me.Font
+                ).Width + UiTheme.Px(20, DeviceDpi)
+            )
 
+        txtBoardSearch.Margin =
+            New Padding(0)
+        txtBoardSearch.BackColor = UiTheme.CardBackground()
+        txtBoardSearch.ForeColor = UiTheme.PrimaryText()
+        txtBoardSearch.BorderStyle = BorderStyle.None
+        txtBoardSearch.AccessibleName = "Search the board (Ctrl+F)"
+
+        Dim searchField As RoundedPanel =
+            CreateSearchField()
+
+        Dim btnAdd As New ActionButton With {
+            .Text = "+ Add Manuscript",
+            .Role = ActionButtonRole.Primary,
+            .AccessibleName = "Add Manuscript",
+            .Width = GetResponsiveButtonWidth("+ Add Manuscript", 150),
+            .Height = searchField.Height,
+            .Margin = New Padding(UiTheme.Px(10, DeviceDpi), 1, 0, 0)
+        }
+
+        AddHandler btnAdd.Click,
+            AddressOf AddManuscript
+
+        searchField.TabIndex = 0
+        btnAdd.TabIndex = 1
+
+        body.Controls.Add(
+            CreatePageHeader("Board", searchField, btnAdd),
+            0,
+            0
+        )
+
+        ' Needs Attention
         Dim attentionBar As New FlowLayoutPanel With {
-    .Dock = DockStyle.Top,
-    .AutoSize = True,
-    .AutoSizeMode = AutoSizeMode.GrowAndShrink,
-    .FlowDirection = FlowDirection.LeftToRight,
-    .WrapContents = True,
-    .Padding = New Padding(0, 7, 0, 3),
-    .Margin = New Padding(0),
-    .BackColor = UiTheme.BoardBackground()
-}
+            .Dock = DockStyle.Top,
+            .AutoSize = True,
+            .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            .FlowDirection = FlowDirection.LeftToRight,
+            .WrapContents = True,
+            .Padding = New Padding(0, UiTheme.Px(10, DeviceDpi), 0, UiTheme.Px(6, DeviceDpi)),
+            .Margin = New Padding(0),
+            .BackColor = UiTheme.BoardBackground()
+        }
 
-        lblAttentionTitle.Text =
-    "NEEDS ATTENTION"
+        lblAttentionTitle.Text = "NEEDS ATTENTION"
+        lblAttentionTitle.AutoSize = True
+        lblAttentionTitle.Font = attentionTitleFont
+        lblAttentionTitle.ForeColor = UiTheme.MutedText()
+        lblAttentionTitle.Margin = New Padding(0, 5, 10, 0)
 
-        lblAttentionTitle.AutoSize =
-    True
+        For Each chip As FilterChip In {lblOverdueRevisions, lblRevisionDueSoon, lblLongReviews, lblMissingJournal, lblRecentRejections}
+            ConfigureAttentionLabel(chip)
+        Next
 
-        lblAttentionTitle.Font =
-            attentionTitleFont
-
-        lblAttentionTitle.ForeColor =
-    UiTheme.MutedText()
-
-        lblAttentionTitle.Margin =
-    New Padding(0, 5, 10, 0)
-
-        ConfigureAttentionLabel(
-    lblOverdueRevisions
-)
-
-        ConfigureAttentionLabel(
-    lblRevisionDueSoon
-)
-
-        AddHandler lblOverdueRevisions.Click,
-    AddressOf FilterOverdueRevisions
-
-        AddHandler lblRevisionDueSoon.Click,
-    AddressOf FilterRevisionDueSoon
-
-        AddHandler lblLongReviews.Click,
-    AddressOf FilterLongReviews
-
-        AddHandler lblMissingJournal.Click,
-    AddressOf FilterMissingJournal
-
-        AddHandler lblRecentRejections.Click,
-    AddressOf FilterRecentRejections
-
-        ConfigureAttentionLabel(
-    lblLongReviews
-)
-
-        ConfigureAttentionLabel(
-    lblMissingJournal
-)
-
-        ConfigureAttentionLabel(
-    lblRecentRejections
-)
-
+        AddHandler lblOverdueRevisions.Click, AddressOf FilterOverdueRevisions
+        AddHandler lblRevisionDueSoon.Click, AddressOf FilterRevisionDueSoon
+        AddHandler lblLongReviews.Click, AddressOf FilterLongReviews
+        AddHandler lblMissingJournal.Click, AddressOf FilterMissingJournal
+        AddHandler lblRecentRejections.Click, AddressOf FilterRecentRejections
 
         ' Shown instead of a row of zero counts when nothing needs attention.
         lblAttentionClear.Text = "Nothing needs attention right now."
@@ -684,68 +354,17 @@ Public Class Form1
         lblAttentionClear.Margin = New Padding(0, 5, 18, 0)
         lblAttentionClear.Visible = False
 
-        attentionBar.Controls.Add(
-    lblAttentionTitle
-)
+        attentionBar.Controls.Add(lblAttentionTitle)
+        attentionBar.Controls.Add(lblAttentionClear)
+        attentionBar.Controls.Add(lblOverdueRevisions)
+        attentionBar.Controls.Add(lblRevisionDueSoon)
+        attentionBar.Controls.Add(lblLongReviews)
+        attentionBar.Controls.Add(lblMissingJournal)
+        attentionBar.Controls.Add(lblRecentRejections)
 
-        attentionBar.Controls.Add(
-    lblAttentionClear
-)
+        body.Controls.Add(attentionBar, 0, 1)
 
-        attentionBar.Controls.Add(
-    lblOverdueRevisions
-)
-
-        attentionBar.Controls.Add(
-    lblRevisionDueSoon
-)
-
-        attentionBar.Controls.Add(
-    lblLongReviews
-)
-
-        attentionBar.Controls.Add(
-    lblMissingJournal
-)
-
-        attentionBar.Controls.Add(
-    lblRecentRejections
-)
-
-        Dim boardToolbar As New FlowLayoutPanel With {
-            .Dock = DockStyle.Top,
-            .AutoSize = True,
-            .AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            .FlowDirection = FlowDirection.LeftToRight,
-            .WrapContents = True,
-            .Padding = New Padding(0, 6, 0, 4),
-            .Margin = New Padding(0),
-            .BackColor = UiTheme.BoardBackground()
-        }
-
-
-        txtBoardSearch.PlaceholderText =
-            "Search titles, journals, or authors (Ctrl+F)"
-
-        txtBoardSearch.Width =
-            Math.Max(
-                310,
-                TextRenderer.MeasureText(
-                    txtBoardSearch.PlaceholderText,
-                    Me.Font
-                ).Width + 28
-            )
-
-        txtBoardSearch.Margin =
-            New Padding(0)
-        txtBoardSearch.BackColor = UiTheme.CardBackground()
-        txtBoardSearch.ForeColor = UiTheme.PrimaryText()
-        txtBoardSearch.BorderStyle = BorderStyle.None
-
-        Dim searchField As RoundedPanel =
-            CreateSearchField()
-
-
+        ' Shelf tabs with the stage filter and sort beside them.
         cboStageFilter.Width =
             Math.Max(
                 150,
@@ -754,18 +373,14 @@ Public Class Form1
                     Me.Font
                 ).Width + 46
             )
-        cboStageFilter.DropDownStyle =
-            ComboBoxStyle.DropDownList
-
+        cboStageFilter.DropDownStyle = ComboBoxStyle.DropDownList
         cboStageFilter.Items.Clear()
         RefreshStageFilterItems()
-
-        cboStageFilter.Margin =
-            New Padding(0, 2, 10, 0)
+        cboStageFilter.Margin = New Padding(UiTheme.Px(8, DeviceDpi), UiTheme.Px(5, DeviceDpi), 0, 0)
         cboStageFilter.BackColor = UiTheme.CardBackground()
         cboStageFilter.ForeColor = UiTheme.PrimaryText()
         cboStageFilter.FlatStyle = FlatStyle.Flat
-
+        cboStageFilter.AccessibleName = "Filter by stage"
 
         cboBoardSort.Width =
             Math.Max(
@@ -776,11 +391,8 @@ Public Class Form1
                 ).Width + 46
             )
         cboBoardSort.DropDownWidth = cboBoardSort.Width
-        cboBoardSort.DropDownStyle =
-            ComboBoxStyle.DropDownList
-
+        cboBoardSort.DropDownStyle = ComboBoxStyle.DropDownList
         cboBoardSort.Items.Clear()
-
         cboBoardSort.Items.Add("Sort: Current order")
         cboBoardSort.Items.Add("Sort: Title A-Z")
         cboBoardSort.Items.Add("Sort: Title Z-A")
@@ -788,90 +400,39 @@ Public Class Form1
         cboBoardSort.Items.Add("Sort: Fewest rejections")
         cboBoardSort.Items.Add("Sort: Newest stage change")
         cboBoardSort.Items.Add("Sort: Oldest stage change")
-
         cboBoardSort.SelectedIndex = 0
-
-        cboBoardSort.Margin =
-            New Padding(0, 2, 10, 0)
+        cboBoardSort.Margin = New Padding(UiTheme.Px(8, DeviceDpi), UiTheme.Px(5, DeviceDpi), 0, 0)
         cboBoardSort.BackColor = UiTheme.CardBackground()
         cboBoardSort.ForeColor = UiTheme.PrimaryText()
         cboBoardSort.FlatStyle = FlatStyle.Flat
-
+        cboBoardSort.AccessibleName = "Sort the board"
 
         btnClearBoardFilters.Text = "Clear"
-        btnClearBoardFilters.Width = GetResponsiveButtonWidth("Clear", 80)
-        btnClearBoardFilters.Height = GetResponsiveButtonHeight(30)
+        btnClearBoardFilters.AccessibleName = "Clear search and filters"
+        btnClearBoardFilters.Width = GetResponsiveButtonWidth("Clear", 72)
+        btnClearBoardFilters.Height = Math.Max(cboBoardSort.PreferredHeight + 2, GetResponsiveButtonHeight(28))
         btnClearBoardFilters.Enabled = False
-        btnClearBoardFilters.Margin =
-            New Padding(0, 1, 0, 0)
+        btnClearBoardFilters.Margin = New Padding(UiTheme.Px(8, DeviceDpi), UiTheme.Px(4, DeviceDpi), 0, 0)
 
+        AddHandler boardSearchDebounceTimer.Tick, AddressOf BoardSearchDebounceElapsed
+        AddHandler txtBoardSearch.TextChanged, AddressOf BoardSearchTextChanged
+        AddHandler cboStageFilter.SelectedIndexChanged, AddressOf BoardFilterChanged
+        AddHandler cboBoardSort.SelectedIndexChanged, AddressOf BoardFilterChanged
+        AddHandler btnClearBoardFilters.Click, AddressOf ClearBoardFilters
 
-        AddHandler boardSearchDebounceTimer.Tick,
-            AddressOf BoardSearchDebounceElapsed
-
-        AddHandler txtBoardSearch.TextChanged,
-            AddressOf BoardSearchTextChanged
-
-        AddHandler cboStageFilter.SelectedIndexChanged,
-            AddressOf BoardFilterChanged
-
-        AddHandler cboBoardSort.SelectedIndexChanged,
-            AddressOf BoardFilterChanged
-
-        AddHandler btnClearBoardFilters.Click,
-            AddressOf ClearBoardFilters
-
-
-        boardToolbar.Controls.Add(
-            searchField
-        )
-
-        boardToolbar.Controls.Add(
-            cboStageFilter
-        )
-
-        boardToolbar.Controls.Add(
-            cboBoardSort
-        )
-
-        boardToolbar.Controls.Add(
-            btnClearBoardFilters
-        )
-
-        ' =================================================
-        ' Shelves
-        ' =================================================
-
-        ConfigureFlowPanel(
-            pipelinePanel
-        )
-
-        ConfigureFlowPanel(
-            publishedPanel
-        )
-
-        ConfigureFlowPanel(
-            fileDrawerPanel
-        )
+        ConfigureFlowPanel(pipelinePanel)
+        ConfigureFlowPanel(publishedPanel)
+        ConfigureFlowPanel(fileDrawerPanel)
 
         Dim shelfTabs As New FlowLayoutPanel With {
-            .Dock = DockStyle.Top,
             .AutoSize = True,
             .AutoSizeMode = AutoSizeMode.GrowAndShrink,
             .FlowDirection = FlowDirection.LeftToRight,
             .WrapContents = False,
-            .Padding = New Padding(0, 6, 0, 0),
-            .Margin = New Padding(0, 0, 0, 6),
+            .Padding = New Padding(0),
+            .Margin = New Padding(0),
             .BackColor = UiTheme.BoardBackground()
         }
-
-        ' A hairline under the tabs, which the selected tab's underline sits on.
-        AddHandler shelfTabs.Paint,
-            Sub(sender, e)
-                Using line As New Pen(UiTheme.CardBorder())
-                    e.Graphics.DrawLine(line, 0, shelfTabs.Height - 1, shelfTabs.Width, shelfTabs.Height - 1)
-                End Using
-            End Sub
 
         ConfigureShelfTab(tabPipeline, "Pipeline", pipelinePanel)
         ConfigureShelfTab(tabPublished, "Published", publishedPanel)
@@ -881,9 +442,36 @@ Public Class Form1
         shelfTabs.Controls.Add(tabPublished)
         shelfTabs.Controls.Add(tabFileDrawer)
 
+        Dim shelfTools As New FlowLayoutPanel With {
+            .AutoSize = True,
+            .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            .FlowDirection = FlowDirection.LeftToRight,
+            .WrapContents = False,
+            .Padding = New Padding(0, 0, 0, UiTheme.Px(6, DeviceDpi)),
+            .Margin = New Padding(0),
+            .BackColor = UiTheme.BoardBackground()
+        }
+
+        shelfTools.Controls.Add(cboStageFilter)
+        shelfTools.Controls.Add(cboBoardSort)
+        shelfTools.Controls.Add(btnClearBoardFilters)
+
+        ' Shelf tabs at the left and the stage filter and sort at the right,
+        ' over one hairline; the filters move above the tabs when narrow.
+        Dim shelfBar As New SplitBar(shelfTabs, shelfTools) With {
+            .WrapRightAbove = True,
+            .ShowBaseline = True,
+            .Dock = DockStyle.Top,
+            .Margin = New Padding(0, 0, 0, UiTheme.Px(10, DeviceDpi)),
+            .BackColor = UiTheme.BoardBackground()
+        }
+
+        body.Controls.Add(shelfBar, 0, 2)
+
         shelfHost.Dock = DockStyle.Fill
         shelfHost.Margin = New Padding(0)
         shelfHost.BackColor = UiTheme.BoardBackground()
+        shelfHost.Controls.Clear()
         shelfHost.Controls.Add(fileDrawerPanel)
         shelfHost.Controls.Add(publishedPanel)
         shelfHost.Controls.Add(pipelinePanel)
@@ -891,63 +479,32 @@ Public Class Form1
         tabPipeline.Checked = True
         ShowShelf(pipelinePanel)
 
-        body.Controls.Add(
-    attentionBar,
-    0,
-    0
-)
+        body.Controls.Add(shelfHost, 0, 3)
 
-        body.Controls.Add(
-    boardToolbar,
-    0,
-    1
-)
-
-        body.Controls.Add(
-    shelfTabs,
-    0,
-    2
-)
-
-        body.Controls.Add(
-    shelfHost,
-    0,
-    3
-)
+        boardPage.Controls.Add(body)
 
         ' =================================================
-        ' Footer
+        ' Status line
         ' =================================================
 
         lblStatus.Dock = DockStyle.Fill
         lblStatus.AutoSize = True
         lblStatus.TextAlign = ContentAlignment.MiddleLeft
-        lblStatus.Padding = New Padding(18, 6, 0, 6)
+        lblStatus.Padding = New Padding(UiTheme.Px(22, DeviceDpi), 4, 0, 6)
         lblStatus.Margin = New Padding(0)
-        lblStatus.ForeColor = SystemColors.GrayText
+        lblStatus.ForeColor = UiTheme.MutedText()
         lblStatus.Text = "Local storage enabled."
 
-        root.Controls.Add(
-            header,
-            0,
-            0
-        )
+        content.Controls.Add(contentHost, 0, 0)
+        content.Controls.Add(lblStatus, 0, 1)
 
-        root.Controls.Add(
-            body,
-            0,
-            1
-        )
+        shell.Controls.Add(BuildRail(), 0, 0)
+        shell.Controls.Add(content, 1, 0)
 
-        root.Controls.Add(
-            lblStatus,
-            0,
-            2
-        )
+        Me.Controls.Add(shell)
 
-        Me.Controls.Add(
-            root
-        )
+        currentPage = WorkspacePage.Board
+        SyncRail()
 
         AddHandler pipelinePanel.Resize,
             Sub(sender, e)
@@ -2579,15 +2136,46 @@ Public Class Form1
         keyData As Keys
     ) As Boolean
 
-        ' Ctrl+F jumps to the board search.
-        If keyData = (Keys.Control Or Keys.F) AndAlso
-           txtBoardSearch.CanFocus Then
+        Select Case keyData
 
-            txtBoardSearch.Focus()
-            txtBoardSearch.SelectAll()
-            Return True
+            ' Ctrl+F jumps to the board search.
+            Case Keys.Control Or Keys.F
+                NavigateTo(WorkspacePage.Board)
+                If txtBoardSearch.CanFocus Then
+                    txtBoardSearch.Focus()
+                    txtBoardSearch.SelectAll()
+                End If
+                Return True
 
-        End If
+            ' Ctrl+1 to Ctrl+5 open the rail's pages in order.
+            Case Keys.Control Or Keys.D1, Keys.Control Or Keys.NumPad1
+                NavigateTo(WorkspacePage.Board)
+                Return True
+            Case Keys.Control Or Keys.D2, Keys.Control Or Keys.NumPad2
+                NavigateTo(WorkspacePage.Library)
+                Return True
+            Case Keys.Control Or Keys.D3, Keys.Control Or Keys.NumPad3
+                NavigateTo(WorkspacePage.Journals)
+                Return True
+            Case Keys.Control Or Keys.D4, Keys.Control Or Keys.NumPad4
+                NavigateTo(WorkspacePage.Reminders)
+                Return True
+            Case Keys.Control Or Keys.D5, Keys.Control Or Keys.NumPad5
+                NavigateTo(WorkspacePage.ImportExport)
+                Return True
+
+            Case Keys.Alt Or Keys.Left, Keys.BrowserBack
+                GoBack()
+                Return True
+            Case Keys.Alt Or Keys.Right, Keys.BrowserForward
+                GoForward()
+                Return True
+
+            Case Keys.F1
+                OpenUserGuide(Me, EventArgs.Empty)
+                Return True
+
+        End Select
 
         Return MyBase.ProcessCmdKey(
             msg,
@@ -2874,6 +2462,9 @@ Public Class Form1
         Me.ResumeLayout(
             True
         )
+
+        UpdateRailCounts()
+        RefreshOpenPage()
 
     End Sub
 
@@ -3256,7 +2847,7 @@ Public Class Form1
         Dim textScale As Single = Me.Font.SizeInPoints / 10.0F
 
         panel.MinimumCardWidth =
-            CInt(UiTheme.Px(300, Me.DeviceDpi) * textScale)
+            CInt(UiTheme.Px(280, Me.DeviceDpi) * textScale)
 
         panel.CardGap =
             UiTheme.Px(UiTheme.SpaceMd, Me.DeviceDpi)
@@ -4445,30 +4036,6 @@ Public Class Form1
     ' =====================================================
     ' Settings
     ' =====================================================
-
-
-    Private Sub OpenAuthorLibrary(
-        sender As Object,
-        e As EventArgs
-    )
-
-        Using dialog As New AuthorLibraryForm(
-            manuscripts
-        )
-
-            dialog.ShowDialog(
-                Me
-            )
-
-        End Using
-
-        If LoadAuthorLibrary() Then
-
-            RenderManuscripts()
-
-        End If
-
-    End Sub
 
 
     Private Sub OpenSettings(

@@ -3,29 +3,6 @@ Imports ManuscriptPipeline.Forms
 
 Partial Public Class Form1
 
-    Private Sub OpenJournalLibrary(
-        sender As Object,
-        e As EventArgs
-    )
-
-        Using dialog As New JournalLibraryForm(
-            manuscripts
-        )
-
-            dialog.ShowDialog(
-                Me
-            )
-
-        End Using
-
-        authorLibrary =
-            authorRepository.Load()
-
-        RenderManuscripts()
-
-    End Sub
-
-
     Private Sub OpenPublicationExport(
         sender As Object,
         e As EventArgs

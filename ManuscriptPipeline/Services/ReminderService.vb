@@ -188,7 +188,7 @@ Namespace Services
                 ", ",
                 parts
             ) &
-                ". Open Reminders & Calendar in PaperRoute for details."
+                ". Open Reminders in PaperRoute for details."
 
         End Function
 

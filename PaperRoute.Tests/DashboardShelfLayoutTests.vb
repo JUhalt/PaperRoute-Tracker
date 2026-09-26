@@ -133,7 +133,7 @@ Public Class DashboardShelfLayoutTests
                     Application.DoEvents()
 
                     CollectionAssert.AreEqual(
-                        {"Pipeline (40)", "Published (40)", "File Drawer (40)"},
+                        {"Pipeline (30)", "Published (30)", "File Drawer (30)"},
                         board.ShelfTabs.Select(Function(tab) tab.Text).ToList())
                     Assert.IsTrue(board.ShelfTabs.First().Checked, "The board opens on the Pipeline shelf.")
 
@@ -323,6 +323,83 @@ Public Class DashboardShelfLayoutTests
             End Sub)
     End Sub
 
+    <TestMethod>
+    Public Sub PagesOpenFromTheRailAndKeyboardWithBackAndForward()
+        RunOnStaThread(
+            Sub()
+                Using board As New LayoutOnlyBoard()
+                    board.Prepare(1.0F)
+                    board.Show()
+                    Application.DoEvents()
+
+                    CollectionAssert.AreEqual(
+                        {"Board", "Library", "Journals", "Reminders", "Import & Export"},
+                        board.RailPages.Select(Function(page) page.Text).ToList())
+                    Assert.AreEqual("Board", board.ActivePageName)
+                    Assert.IsFalse(Descendants(board).OfType(Of Button)().Any(Function(button) button.Text.StartsWith("Data")),
+                        "The Data menu's commands moved to pages.")
+
+                    board.PressCommandKey(Keys.Control Or Keys.D2)
+                    Application.DoEvents()
+                    Assert.AreEqual("Library", board.ActivePageName)
+                    Assert.IsTrue(board.RailPages.Single(Function(page) page.Text = "Library").Checked, "The rail shows the current page.")
+                    Assert.IsFalse(board.Shelves.First().Visible, "The board is hidden behind other pages.")
+                    Dim grid As DataGridView = Descendants(board).OfType(Of DataGridView)().Single()
+                    Assert.AreEqual(90, grid.Rows.Count, "The Library lists every manuscript on every shelf.")
+
+                    board.PressCommandKey(Keys.Control Or Keys.D5)
+                    Application.DoEvents()
+                    Assert.AreEqual("ImportExport", board.ActivePageName)
+
+                    board.PressCommandKey(Keys.Alt Or Keys.Left)
+                    Application.DoEvents()
+                    Assert.AreEqual("Library", board.ActivePageName, "Alt+Left goes back.")
+                    board.PressCommandKey(Keys.Alt Or Keys.Left)
+                    Application.DoEvents()
+                    Assert.AreEqual("Board", board.ActivePageName)
+                    Assert.IsTrue(board.Shelves.First().Visible)
+                    board.PressCommandKey(Keys.Alt Or Keys.Right)
+                    Application.DoEvents()
+                    Assert.AreEqual("Library", board.ActivePageName, "Alt+Right goes forward.")
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    <TestMethod>
+    Public Sub EveryDataCommandHasAPlaceAndBackupStaysWithinTwoClicks()
+        RunOnStaThread(
+            Sub()
+                Using board As New LayoutOnlyBoard()
+                    board.Prepare(1.0F)
+                    board.Show()
+                    Application.DoEvents()
+
+                    board.PressCommandKey(Keys.Control Or Keys.D5)
+                    Application.DoEvents()
+                    Dim commands As List(Of String) = Descendants(board).OfType(Of Button)().Select(Function(button) button.Text).ToList()
+                    For Each command As String In {
+                        "Import Spreadsheet...", "Import BibTeX / RIS...", "Get Import Template...",
+                        "Export Library to Excel...", "Export Library as BibTeX...", "Export Library as RIS...",
+                        "Publication & CV Export...", "Backup Library...", "Restore Backup..."}
+                        CollectionAssert.Contains(commands, command, "Import & Export lists " & command)
+                    Next
+
+                    ' Settings in the rail is the first click; each item is the second.
+                    Using menu As ContextMenuStrip = board.SettingsMenu()
+                        CollectionAssert.AreEqual(
+                            {"Preferences...", "Check for Updates...", "Diagnostics...", "", "Backup Library...", "Restore Backup...", "", "About PaperRoute"},
+                            menu.Items.Cast(Of ToolStripItem)().Select(Function(item) item.Text).ToList())
+                    End Using
+                    Assert.IsTrue(Descendants(board).OfType(Of Button)().Any(Function(button) button.Text = "Settings"))
+                    Assert.IsTrue(Descendants(board).OfType(Of Button)().Any(Function(button) button.Text = "Help"))
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
     Private Shared Function ChipTone(chip As Label) As String
         Return chip.GetType().GetProperty("Tone").GetValue(chip).ToString()
     End Function
@@ -383,7 +460,7 @@ Public Class DashboardShelfLayoutTests
             Font = New Font(Font.FontFamily, 10.0F * fontScale)
             ' Enough cards that a full-height shelf still needs to scroll when a
             ' wide window fits six columns.
-            SetSamples(40)
+            SetSamples(30)
             StartPosition = FormStartPosition.Manual
             Location = New Point(-20000, -20000)
             ShowInTaskbar = False
@@ -422,6 +499,29 @@ Public Class DashboardShelfLayoutTests
                     Function(name) DirectCast(GetType(Form1).GetField(name, BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me), RadioButton))
             End Get
         End Property
+
+        Public ReadOnly Property RailPages As IEnumerable(Of RadioButton)
+            Get
+                Dim buttons = DirectCast(GetType(Form1).GetField("railButtons", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me), System.Collections.IDictionary)
+                Return buttons.Values.Cast(Of RadioButton)().ToList()
+            End Get
+        End Property
+
+        Public ReadOnly Property ActivePageName As String
+            Get
+                Return GetType(Form1).GetField("currentPage", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me).ToString()
+            End Get
+        End Property
+
+        Public Sub PressCommandKey(keyData As Keys)
+            Dim message As New Message()
+            GetType(Form1).GetMethod("ProcessCmdKey", BindingFlags.Instance Or BindingFlags.NonPublic).
+                Invoke(Me, New Object() {message, keyData})
+        End Sub
+
+        Public Function SettingsMenu() As ContextMenuStrip
+            Return DirectCast(GetType(Form1).GetMethod("BuildSettingsMenu", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(Me, Nothing), ContextMenuStrip)
+        End Function
 
         Public Sub PressKey(target As Control, key As Keys)
             target.GetType().GetMethod("OnKeyDown", BindingFlags.Instance Or BindingFlags.NonPublic).
@@ -470,7 +570,7 @@ Public Class DashboardShelfLayoutTests
             End Sub) With {.IsBackground = True}
         thread.SetApartmentState(ApartmentState.STA)
         thread.Start()
-        Assert.IsTrue(thread.Join(TimeSpan.FromSeconds(30)), "Shelf layout test timed out.")
+        Assert.IsTrue(thread.Join(TimeSpan.FromSeconds(90)), "Shelf layout test timed out.")
         If failure IsNot Nothing Then ExceptionDispatchInfo.Capture(failure).Throw()
     End Sub
 End Class

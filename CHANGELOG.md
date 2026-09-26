@@ -13,6 +13,12 @@ Development is tracked in [draft PR #69](https://github.com/JUhalt/PaperRoute-Tr
 - Cards open on click, with Move, Restore, and Delete in a **⋯** menu. They show the stage, what needs attention or time in stage, and the route so far as dots and a short summary such as "2nd journal · major revision", from recorded submissions and decisions only.
 - Needs Attention items are chips that filter the board and can be used from the keyboard. **Ctrl+F** jumps to search.
 - A shared visual system: rounded controls, one filled primary action per window, and quiet outlines for the rest, in Light and Dark.
+- One main window with a left rail of pages: **Board**, **Library** (every manuscript in a sortable table, plus Authors & Affiliations), **Journals**, **Reminders**, and **Import & Export**, with Settings and Help at the bottom. **Ctrl+1** to **Ctrl+5** open the pages, **Alt+Left** and **Alt+Right** go back and forward, and **F1** opens the User Guide ([#54](https://github.com/JUhalt/PaperRoute-Tracker/issues/54)).
+- The **Import & Export** page lists every way of bringing work in or taking it out, with a sentence on what each keeps ([#58](https://github.com/JUhalt/PaperRoute-Tracker/issues/58)).
+
+### Changed
+
+- The **Data** menu is gone and its commands have moved to pages; **Backup Library** and **Restore Backup** are under **Settings** in the rail and on the Import & Export page. The User Guide has a relocation table.
 
 ### Fixed
 
