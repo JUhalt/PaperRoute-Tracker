@@ -409,6 +409,7 @@ Namespace Forms
                 .Text =
                     "Notifications are optional. The in-app Reminders & Calendar view remains available even if Windows suppresses notifications.",
                 .AutoSize = True,
+                .UseMnemonic = False,
                 .MaximumSize = New Size(680, 0),
                 .ForeColor = SystemColors.GrayText,
                 .Margin = New Padding(0, 8, 0, 4)

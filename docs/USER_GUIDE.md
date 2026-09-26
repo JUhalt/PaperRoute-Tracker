@@ -803,10 +803,12 @@ PaperRoute ships a local copy of this guide. Open it from the **Help** button in
 
 The Route, Version History, readiness profiles, submission packets, and reviewer responses form one connected manuscript record. Later releases build on that record:
 
-- **v0.6 — Deadline Center:** richer action and deadline management.
-- **v0.7 — Route Analytics & Reports:** printable/archiveable manuscript-route reports and timing analytics.
-- **v0.8 — Optional AI Assistance:** user-controlled clerical assistance that never becomes authoritative.
-- **v0.9 — 1.0 Hardening:** onboarding/tutorial work, accessibility, responsive-layout refinement, and release certification.
+- **v0.6 — Workspace UI:** one main window with pages for the Board, Library, Journals, Reminders, and Import & Export; each manuscript opens as a tabbed page with a single Save / Discard step; a calmer card-based design; and faster Add Manuscript from a pasted title page.
+- **v0.7 — Deadline Center:** richer action and deadline management, plus user-initiated checks for publications and missing metadata.
+- **v0.8 — Route Analytics & Reports:** timing analytics, your history with each journal, printable route and pipeline-status reports, and work types and tags.
+- **v0.9 — 1.0 Hardening:** guided onboarding, accessibility, consistency, recovery, and release certification.
+
+Optional AI assistance for extracting reviewer actions remains a proposal for after 1.0. Planned releases are directional and may change; see the [roadmap](https://github.com/JUhalt/PaperRoute-Tracker/blob/master/ROADMAP.md).
 
 The in-app `?` guidance is intentionally reusable so a future guided tutorial can teach the same concepts without maintaining a second vocabulary.
 

@@ -34,6 +34,10 @@ Manuscript
 
 A normal revision **does not create a new submission attempt**. It remains part of the journal interaction that produced the decision. External integrations may suggest metadata, but they must never silently rewrite authoritative manuscript history, lifecycle state, version relationships, readiness state, or packet contents.
 
+## Depth without clutter
+
+The model above is deliberately deep. The interface should not feel deep. Features belong where and when they are relevant: one window, pages instead of stacked dialogs, one save boundary per manuscript, and empty areas that explain themselves. New capability should add depth to the record without adding weight to everyday use.
+
 ---
 
 ## Release train
@@ -46,12 +50,14 @@ Targets are directional rather than promises. Data integrity, migrations, backup
 | **v0.2** | Metadata & Integrations ✅ | Can PaperRoute describe and connect my research accurately? |
 | **v0.3** | The Route ✅ | What happened to this manuscript, in what order, and which file was which? |
 | **v0.4** | Submission Readiness ✅ | What exactly am I preparing and sending to this journal? |
-| **v0.5** | **Reviewer Response Workflow — active** | What did the journal ask me to change, and how am I responding? |
-| **v0.6** | Deadline Center | What requires action, and when? |
-| **v0.7** | Route Analytics & Reports | What does this publication journey show me—and how can I communicate it? |
-| **v0.8** | Optional AI Assistance | Can AI reduce clerical work without becoming authoritative? |
+| **v0.5** | Reviewer Response Workflow ✅ | What did the journal ask me to change, and how am I responding? |
+| **v0.6** | **Workspace UI — active** | Can I find and act on everything from one calm, uncluttered workspace? |
+| **v0.7** | Deadline Center | What requires action, and when? |
+| **v0.8** | Route Analytics & Reports | What does this publication journey show me—and how can I communicate it? |
 | **v0.9** | 1.0 Hardening | Is the entire workflow polished, resilient, and certifiable? |
 | **v1.0** | Trusted Research Workflow | Would I trust this with my real publication pipeline? |
+
+On September 26, 2026, the train was re-sequenced so the interface can catch up with the depth of the data model: v0.6 became **Workspace UI**, Deadline Center moved to v0.7, Route Analytics & Reports moved to v0.8, and optional AI assistance became a proposal for after 1.0. Deadlines and Analytics arrive as pages in the new workspace rather than as additional dialogs.
 
 ---
 
@@ -89,7 +95,7 @@ v0.3 established the canonical historical spine used by later releases:
 - 299-test automated regression suite
 - installed-update, backup/restore, clean-install, updater, managed-file, and scaling certification
 
-The narrow/high-DPI shelf scrollbar follow-up from v0.3, [#37](https://github.com/JUhalt/PaperRoute-Tracker/issues/37), was brought forward into v0.5 and completed in [PR #51](https://github.com/JUhalt/PaperRoute-Tracker/pull/51). It is included in the v0.5 candidate.
+The narrow/high-DPI shelf scrollbar follow-up from v0.3, [#37](https://github.com/JUhalt/PaperRoute-Tracker/issues/37), was brought forward into v0.5 and completed in [PR #51](https://github.com/JUhalt/PaperRoute-Tracker/pull/51). It shipped in v0.5.0.
 
 ---
 
@@ -224,9 +230,9 @@ Build the persistence model before adding UI:
 
 ---
 
-# ACTIVE — v0.5 Reviewer Response Workflow
+## COMPLETE — v0.5 Reviewer Response Workflow
 
-Milestone: **[v0.5.0 — Reviewer Response Workflow](https://github.com/JUhalt/PaperRoute-Tracker/milestone/7)**. Feature owner: **[#27 Reviewer Response Matrix](https://github.com/JUhalt/PaperRoute-Tracker/issues/27)**. Completed visual fix: **[#37 shelf scrolling](https://github.com/JUhalt/PaperRoute-Tracker/issues/37)**, merged in **[PR #51](https://github.com/JUhalt/PaperRoute-Tracker/pull/51)**.
+Milestone: **[v0.5.0 — Reviewer Response Workflow](https://github.com/JUhalt/PaperRoute-Tracker/milestone/7)**. Feature owner: **[#27 Reviewer Response Matrix](https://github.com/JUhalt/PaperRoute-Tracker/issues/27)**. Completed fixes: **[#37 shelf scrolling](https://github.com/JUhalt/PaperRoute-Tracker/issues/37)**, merged in **[PR #51](https://github.com/JUhalt/PaperRoute-Tracker/pull/51)**, and **[#67 literal ampersands](https://github.com/JUhalt/PaperRoute-Tracker/issues/67)**, merged in **[PR #68](https://github.com/JUhalt/PaperRoute-Tracker/pull/68)**. PaperRoute v0.5.0 was released on September 26, 2026 from the certified v0.5.0-rc.2 source.
 
 Own the iterative conversation within a journal submission attempt: reviewer/editor comments, action items, status, manuscript location references, response drafting, revision-round linkage, and editable response-to-reviewers export.
 
@@ -241,9 +247,9 @@ The workflow must remain fully usable without AI.
 - Preserve the existing child-dialog and final Manuscript Details save/cancel boundaries.
 - Introduce conservative Schema 5 to 6 migration, deep cloning, reference validation, and persistence/export regression coverage.
 
-The [user guide](docs/USER_GUIDE.md#reviewer-response-matrix) describes the implemented workflow and its nested save boundaries. The [candidate release notes](docs/releases/0.5.0.md) and [upgrade notes](UPGRADE_NOTES.md) describe Schema 6 and require v0.5 or later when restoring v0.5 backups; older restore code may ignore the new reviewer-response fields.
+The [user guide](docs/USER_GUIDE.md#reviewer-response-matrix) describes the implemented workflow and its nested save boundaries. The [release notes](docs/releases/0.5.0.md) and [upgrade notes](UPGRADE_NOTES.md) describe Schema 6 and require v0.5 or later when restoring v0.5 backups; older restore code may ignore the new reviewer-response fields.
 
-v0.4.0 remains the current Stable release. Before v0.5 publication, complete combined regression tests, native keyboard/theme/100%/125%/150% checks, v0.4-to-v0.5 installed migration, clean installation, updater checks, and package/checksum verification. Record the evidence, merge the release work, and reconcile version metadata before tagging. Close the milestone after the release is published.
+Release certification included the combined regression suite, native 100%/125%/150% and Light/Dark checks of the response dialogs, installed v0.4-to-v0.5 migration through the real Preview updater, clean installation, portable backup/restore with managed and linked files, and published-asset verification. Evidence is recorded in [#52](https://github.com/JUhalt/PaperRoute-Tracker/issues/52).
 
 ### Visual polish brought forward
 
@@ -251,27 +257,47 @@ v0.4.0 remains the current Stable release. Before v0.5 publication, complete com
 
 ---
 
-# v0.6 Deadline Center
+# ACTIVE — v0.6 Workspace UI
+
+Milestone: **[v0.6.0 — Workspace UI](https://github.com/JUhalt/PaperRoute-Tracker/milestone/8)**
+
+Five releases added depth beneath each manuscript, and the interface grew by stacking dialogs: the application has 47 dialog forms, and reaching a reviewer-response item takes Board → Manuscript Details → Submission Details → Reviewer Responses → item editor. v0.6 keeps every feature and changes where they live.
+
+- **[#54 Single-window navigation](https://github.com/JUhalt/PaperRoute-Tracker/issues/54)** — Board, Library, Journals, Reminders, and Import & Export as pages in one window; the Data and Settings menus return to their proper jobs.
+- **[#55 Manuscript workspace page](https://github.com/JUhalt/PaperRoute-Tracker/issues/55)** — a manuscript opens as a tabbed page with one **Save / Discard** boundary instead of nested Save & Close steps.
+- **[#56 Submissions master/detail](https://github.com/JUhalt/PaperRoute-Tracker/issues/56)** — decisions, rounds, correspondence, packets, and reviewer responses beside the submission they belong to.
+- **[#57 Card-based visual system](https://github.com/JUhalt/PaperRoute-Tracker/issues/57)** — cards instead of group boxes, consistent spacing and button hierarchy, and time-in-stage on board cards from recorded dates only.
+- **[#58 Import & Export page](https://github.com/JUhalt/PaperRoute-Tracker/issues/58)** — every way in and out on one page, each explaining what it preserves.
+- **[#59 Welcome and empty states](https://github.com/JUhalt/PaperRoute-Tracker/issues/59)** — every empty area says what belongs there and offers the first action.
+- **[#60 Faster Add Manuscript](https://github.com/JUhalt/PaperRoute-Tracker/issues/60)** — paste a title page and review locally parsed fields; optionally set a first deadline as an ordinary reminder.
+
+v0.6 is planned without a storage-schema change. Existing save semantics, lifecycle rules, and data-safety guarantees carry over unchanged; only their presentation moves.
+
+---
+
+# v0.7 Deadline Center
+
+Milestone: **[v0.7.0 — Deadline Center](https://github.com/JUhalt/PaperRoute-Tracker/milestone/9)**
 
 Issue: **[#28 Deadline Center](https://github.com/JUhalt/PaperRoute-Tracker/issues/28)**
 
-Aggregate revision deadlines, follow-up dates, readiness/submission obligations, reviewer-response work, and manuscript reminders using the existing canonical reminder engine rather than a second scheduling system.
+Aggregate revision deadlines, follow-up dates, readiness/submission obligations, reviewer-response work, and manuscript reminders using the existing canonical reminder engine rather than a second scheduling system. The Deadline Center takes over the **Reminders** page in the v0.6 workspace.
+
+- **[#61 Publication check and metadata completion](https://github.com/JUhalt/PaperRoute-Tracker/issues/61)** — user-initiated checks for a possible publication of a tracked manuscript, and batch Crossref completion that fills only empty fields. Status changes only through an explicit **Mark Published** choice.
 
 ---
 
-# v0.7 Route Analytics & Reports
+# v0.8 Route Analytics & Reports
+
+Milestone: **[v0.8.0 — Route Analytics & Reports](https://github.com/JUhalt/PaperRoute-Tracker/milestone/10)**
 
 Issue: **[#30 Route statistics and time-to-publication analytics](https://github.com/JUhalt/PaperRoute-Tracker/issues/30)**
 
-Derive transparent local analytics and print-friendly route reports from the same canonical history. Missing dates must produce partial/missing results rather than fabricated values.
+Derive transparent local analytics and print-friendly route reports from the same canonical history. Missing dates must produce partial/missing results rather than fabricated values. Analytics becomes a page in the v0.6 workspace.
 
----
-
-# v0.8 Optional AI Assistance
-
-Issue: **[#29 Optional AI-assisted reviewer action extraction](https://github.com/JUhalt/PaperRoute-Tracker/issues/29)**
-
-AI remains opt-in, preview-before-apply, non-authoritative, and unnecessary for core workflows. No manuscript/reviewer content is silently transmitted externally.
+- **[#62 Your history with each journal](https://github.com/JUhalt/PaperRoute-Tracker/issues/62)** — submissions, outcomes, and turnaround from the researcher's own records, shown on the Journals page.
+- **[#63 Shareable pipeline status report](https://github.com/JUhalt/PaperRoute-Tracker/issues/63)** — a local HTML snapshot for a supervisor or coauthor that excludes notes, correspondence, reviewer comments, and file paths by default.
+- **[#64 Work types and colored tags](https://github.com/JUhalt/PaperRoute-Tracker/issues/64)** — the dimensions reports, CV exports, and the board can filter and group by. Existing records migrate with an unspecified type rather than an inferred one.
 
 ---
 
@@ -287,9 +313,9 @@ Systematic burn-down before 1.0:
 - keyboard/accessibility pass
 - responsive sizing across dialogs and DPI levels
 - retain regression coverage for the shelf scrolling fix completed for v0.5 ([#37](https://github.com/JUhalt/PaperRoute-Tracker/issues/37), [PR #51](https://github.com/JUhalt/PaperRoute-Tracker/pull/51)) during the whole-application hardening pass
-- consistent master/detail patterns
-- guided onboarding/tutorial using the shared contextual-help catalog
-- File Drawer revival/rerouting polish
+- consistency audit of every workflow against the v0.6 workspace patterns
+- guided onboarding/tutorial using the shared contextual-help catalog, building on the v0.6 welcome and empty states
+- File Drawer revival/rerouting polish, including a decision on the per-manuscript journal shortlist proposal ([#65](https://github.com/JUhalt/PaperRoute-Tracker/issues/65))
 - test-suite redundancy/obsolescence audit
 - manual certification fixtures for major workflows
 - portable project-sharing decision
@@ -313,6 +339,8 @@ PaperRoute does not trade trustworthiness for cadence.
 
 # Proposals awaiting scope review
 
+- [#29 — Optional AI-assisted reviewer action extraction (after 1.0)](https://github.com/JUhalt/PaperRoute-Tracker/issues/29): moved out of the pre-1.0 train on September 26, 2026. AI extraction is most valuable once the Reviewer Response Matrix is comfortable to use inline (v0.6). Its safeguards are retained: opt-in, preview-before-apply, non-authoritative, never required, and no manuscript or reviewer content silently transmitted.
+- [#65 — Per-manuscript journal shortlist](https://github.com/JUhalt/PaperRoute-Tracker/issues/65): an ordered list of candidate journals per manuscript (Considering, Preferred, Backup, Ruled out) that can offer the next reroute target. Reviewed with v0.9 rerouting polish.
 - [#45 — Evaluate an optional RO-Crate export for submission packets](https://github.com/JUhalt/PaperRoute-Tracker/issues/45): explore whether self-describing, locally exported packets help preserve selected files and version context outside PaperRoute. The issue cites the research paper and official specification, defines a synthetic evaluation, and requires a documented adopt/defer/reject decision. It is not assigned to a release and does not replace backup/restore.
 
 New research-informed ideas remain proposals until scoped. Every accepted finding or development path must have a linked issue and a roadmap disposition before implementation.

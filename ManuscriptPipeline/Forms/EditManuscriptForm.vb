@@ -508,7 +508,7 @@ Namespace Forms
             )
 
             btnMetadata.Text =
-                "DOI & Crossref Metadata..."
+                "DOI && Crossref Metadata..."
 
             btnMetadata.AutoSize =
                 True
@@ -930,7 +930,7 @@ Namespace Forms
             }
 
             Dim btnSave As New Button With {
-                .Text = "Save & Close",
+                .Text = "Save && Close",
                 .AutoSize = True,
                 .Height = 38,
                 .Margin = New Padding(3, 3, 3, 4)

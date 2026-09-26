@@ -414,7 +414,7 @@ Public Class Form1
 )
 
         dataMenu.Items.Add(
-    "Authors & Affiliations...",
+    "Authors && Affiliations...",
     Nothing,
     AddressOf OpenAuthorLibrary
 )
@@ -426,7 +426,7 @@ Public Class Form1
 )
 
         dataMenu.Items.Add(
-    "Publication & CV Export...",
+    "Publication && CV Export...",
     Nothing,
     AddressOf OpenPublicationExport
 )

@@ -97,6 +97,9 @@ Namespace Forms
             lblInfo.AutoEllipsis =
                 True
 
+            lblInfo.UseMnemonic =
+                False
+
             lblInfo.ForeColor =
                 UiTheme.SecondaryText()
 
