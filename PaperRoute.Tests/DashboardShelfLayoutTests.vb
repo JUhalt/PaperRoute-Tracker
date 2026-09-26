@@ -154,6 +154,60 @@ Public Class DashboardShelfLayoutTests
     End Sub
 
     <TestMethod>
+    Public Sub CardsOpenOnClickAndKeepOtherActionsInAMenu()
+        RunOnStaThread(
+            Sub()
+                Using board As New LayoutOnlyBoard()
+                    board.Prepare(1.0F)
+                    board.SetManuscripts(New List(Of Manuscript) From {
+                        New Manuscript With {.Title = "Pipeline card", .Location = ManuscriptLocation.Pipeline, .CurrentStage = PaperStage.Draft, .TargetJournal = "Memory & Cognition"},
+                        New Manuscript With {.Title = "Published card", .Location = ManuscriptLocation.Published, .CurrentStage = PaperStage.Published, .TargetJournal = "Psychology & Aging"},
+                        New Manuscript With {.Title = "Filed card", .Location = ManuscriptLocation.FileDrawer, .CurrentStage = PaperStage.Draft, .TargetJournal = "Cognition & Emotion"}
+                    })
+                    board.Show()
+                    Application.DoEvents()
+
+                    Dim expectedMenus As String()() = {
+                        New String() {"Open", "View Route", "", "Move to File Drawer...", "", "Delete..."},
+                        New String() {"Open", "View Route", "", "Delete..."},
+                        New String() {"Open", "View Route", "", "Restore to Pipeline", "", "Delete..."}
+                    }
+                    Dim journals As String() = {"Memory & Cognition", "Psychology & Aging", "Cognition & Emotion"}
+                    Dim shelfIndex As Integer = 0
+
+                    For Each shelf As FlowLayoutPanel In board.EachShelf()
+                        Dim card As Control = shelf.Controls(0)
+
+                        Dim buttons As List(Of Button) = Descendants(card).OfType(Of Button)().ToList()
+                        Assert.AreEqual(1, buttons.Count, "Only the more-actions button remains on the card.")
+                        StringAssert.StartsWith(buttons(0).AccessibleName, "More actions for ")
+                        Assert.IsTrue(buttons(0).TabStop AndAlso buttons(0).Enabled)
+
+                        CollectionAssert.AreEqual(
+                            expectedMenus(shelfIndex),
+                            card.ContextMenuStrip.Items.Cast(Of ToolStripItem)().Select(Function(item) item.Text).ToList())
+                        Assert.IsTrue(card.Controls.Cast(Of Control)().All(Function(child) child.ContextMenuStrip Is card.ContextMenuStrip),
+                            "Right-clicking anywhere on the card shows the same menu.")
+
+                        Dim title As LinkLabel = card.Controls.OfType(Of LinkLabel)().First()
+                        Assert.IsTrue(title.TabStop, "The title is the card's keyboard-focusable way to open it.")
+                        Assert.IsFalse(title.UseMnemonic)
+
+                        Dim journal As Label = card.Controls.OfType(Of Label)().Single(Function(label) label.Text = journals(shelfIndex))
+                        Assert.IsFalse(journal.UseMnemonic, "Journal names keep their ampersand.")
+
+                        Dim hasStageClock As Boolean = card.Controls.OfType(Of Label)().Any(Function(label) label.Text.StartsWith("added today"))
+                        Assert.AreEqual(shelfIndex = 0, hasStageClock, "Only active Pipeline cards show time in stage.")
+
+                        shelfIndex += 1
+                    Next
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    <TestMethod>
     Public Sub NeedsAttentionListsOnlyItemsThatNeedAttention()
         RunOnStaThread(
             Sub()
@@ -252,6 +306,10 @@ Public Class DashboardShelfLayoutTests
                     })
                 Next
             Next
+            SetManuscripts(samples)
+        End Sub
+
+        Public Sub SetManuscripts(samples As List(Of Manuscript))
             GetType(Form1).GetField("manuscripts", BindingFlags.Instance Or BindingFlags.NonPublic).SetValue(Me, samples)
             InvokePrivate("RenderManuscripts")
         End Sub
