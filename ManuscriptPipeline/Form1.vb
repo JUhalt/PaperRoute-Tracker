@@ -3688,17 +3688,18 @@ Public Class Form1
         e As EventArgs
     )
 
-        ' Pasting a title page matches authors against the reusable library.
-        ' If the library cannot be read, Add Manuscript still works without it.
-        Dim authorLibrary As AuthorLibraryData = Nothing
+        ' Pasting a title page matches authors against a fresh copy of the
+        ' reusable library, so a failed save never leaves unsaved people in the
+        ' board's copy. If the library cannot be read, Add Manuscript still works.
+        Dim editableLibrary As AuthorLibraryData = Nothing
 
         Try
-            authorLibrary = authorRepository.Load()
+            editableLibrary = authorRepository.Load()
         Catch ex As Exception
-            authorLibrary = Nothing
+            editableLibrary = Nothing
         End Try
 
-        Using dialog As New AddManuscriptForm(authorLibrary)
+        Using dialog As New AddManuscriptForm(editableLibrary)
 
             If dialog.ShowDialog(Me) =
                 DialogResult.OK AndAlso
@@ -3708,7 +3709,7 @@ Public Class Form1
                 ' manuscript never references an author record that failed to save.
                 If dialog.AuthorLibraryChanged Then
                     Try
-                        authorRepository.Save(authorLibrary)
+                        authorRepository.Save(editableLibrary)
                     Catch ex As Exception
                         MessageBox.Show(
                             Me,
@@ -3722,6 +3723,11 @@ Public Class Form1
                         )
                         Return
                     End Try
+
+                    ' Refresh the board's library and author search index.
+                    If Not LoadAuthorLibrary() Then
+                        Return
+                    End If
                 End If
 
                 manuscripts.Add(
