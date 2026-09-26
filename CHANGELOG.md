@@ -2,6 +2,22 @@
 
 All notable changes to PaperRoute Tracker will be documented here.
 
+## [Unreleased] — v0.6 Workspace UI
+
+Development is tracked in [draft PR #69](https://github.com/JUhalt/PaperRoute-Tracker/pull/69) and the [v0.6 milestone](https://github.com/JUhalt/PaperRoute-Tracker/milestone/8).
+
+### Added
+
+- **Paste a Title Page...** in Add Manuscript reads Word or LaTeX title pages on this computer and proposes the title, ordered authors with affiliations, abstract, and keywords, plus an optional first deadline ([#60](https://github.com/JUhalt/PaperRoute-Tracker/issues/60)).
+- Board shelves are tabs with counts over one scroll area, and cards fill as many columns as the window fits ([#57](https://github.com/JUhalt/PaperRoute-Tracker/issues/57)).
+- Cards open on click, with Move, Restore, and Delete in a **⋯** menu. They show the stage, what needs attention or time in stage, and the route so far as dots and a short summary such as "2nd journal · major revision", from recorded submissions and decisions only.
+- Needs Attention items are chips that filter the board and can be used from the keyboard. **Ctrl+F** jumps to search.
+- A shared visual system: rounded controls, one filled primary action per window, and quiet outlines for the rest, in Light and Dark.
+
+### Fixed
+
+- A stale border line no longer remains inside a manuscript card after the window is widened or maximized.
+
 ## [0.5.0] - 2026-09-26
 
 ### Added

@@ -9,8 +9,107 @@ Namespace Services
         End Sub
 
 
+        ' Spacing and shape tokens, in logical pixels at 96 DPI. Scale them
+        ' with Px for the control's actual DPI.
+        Public Const SpaceXs As Integer = 4
+        Public Const SpaceSm As Integer = 8
+        Public Const SpaceMd As Integer = 12
+        Public Const SpaceLg As Integer = 16
+        Public Const SpaceXl As Integer = 24
+        Public Const CardRadius As Integer = 10
+        Public Const ControlRadius As Integer = 8
+
+
+        Public Shared Function Px(
+            logicalPixels As Integer,
+            deviceDpi As Integer
+        ) As Integer
+
+            Return CInt(Math.Round(logicalPixels * Math.Max(96, deviceDpi) / 96.0))
+
+        End Function
+
+
         Public Shared Function IsDark() As Boolean
             Return SystemColors.Window.GetBrightness() < 0.5F
+        End Function
+
+
+        ' Dividers inside a card, one step quieter than CardBorder.
+        Public Shared Function SubtleBorder() As Color
+
+            If IsDark() Then
+                Return Color.FromArgb(50, 56, 65)
+            End If
+
+            Return Color.FromArgb(231, 238, 240)
+
+        End Function
+
+
+        ' Tertiary text: counts, hints, and metadata beside secondary text.
+        Public Shared Function MutedText() As Color
+
+            If IsDark() Then
+                Return Color.FromArgb(125, 136, 148)
+            End If
+
+            Return Color.FromArgb(106, 119, 131)
+
+        End Function
+
+
+        ' Text and icons drawn on a filled accent (primary) surface.
+        Public Shared Function OnAccentText() As Color
+
+            If IsDark() Then
+                Return Color.FromArgb(7, 32, 29)
+            End If
+
+            Return Color.White
+
+        End Function
+
+
+        Public Shared Function WarningMutedBackground() As Color
+
+            If IsDark() Then
+                Return Color.FromArgb(92, 63, 21)
+            End If
+
+            Return Color.FromArgb(254, 243, 199)
+
+        End Function
+
+
+        Public Shared Function DangerMutedBackground() As Color
+
+            If IsDark() Then
+                Return Color.FromArgb(91, 33, 38)
+            End If
+
+            Return Color.FromArgb(254, 226, 226)
+
+        End Function
+
+
+        ' Mixes a color toward another by the given fraction (0 to 1), for
+        ' hover and pressed states of filled surfaces.
+        Public Shared Function Blend(
+            baseColor As Color,
+            toward As Color,
+            amount As Single
+        ) As Color
+
+            Dim t As Single = Math.Max(0.0F, Math.Min(1.0F, amount))
+
+            ' Color channels are Bytes; widen before subtracting.
+            Return Color.FromArgb(
+                baseColor.A,
+                CInt(CInt(baseColor.R) + (CInt(toward.R) - CInt(baseColor.R)) * t),
+                CInt(CInt(baseColor.G) + (CInt(toward.G) - CInt(baseColor.G)) * t),
+                CInt(CInt(baseColor.B) + (CInt(toward.B) - CInt(baseColor.B)) * t))
+
         End Function
 
 

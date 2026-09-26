@@ -133,7 +133,7 @@ Public Class DashboardShelfLayoutTests
                     Application.DoEvents()
 
                     CollectionAssert.AreEqual(
-                        {"Pipeline (10)", "Published (10)", "File Drawer (10)"},
+                        {"Pipeline (40)", "Published (40)", "File Drawer (40)"},
                         board.ShelfTabs.Select(Function(tab) tab.Text).ToList())
                     Assert.IsTrue(board.ShelfTabs.First().Checked, "The board opens on the Pipeline shelf.")
 
@@ -234,6 +234,100 @@ Public Class DashboardShelfLayoutTests
     End Sub
 
     <TestMethod>
+    Public Sub CardsFillAlignedColumnsThatFitTheShelf()
+        RunOnStaThread(
+            Sub()
+                Using board As New LayoutOnlyBoard()
+                    board.Prepare(1.0F)
+                    board.Show()
+                    For Each width As Integer In {900, 1400, 2200}
+                        board.Size = New Size(width, 900)
+                        Application.DoEvents()
+                        Dim shelf As FlowLayoutPanel = board.Shelves.First()
+                        Dim cards As List(Of Control) = shelf.Controls.Cast(Of Control)().ToList()
+                        Dim columns As Integer = cards.Select(Function(card) card.Left).Distinct().Count()
+                        Dim diagnostic As String = $"window width {width}, shelf {shelf.ClientSize}, columns {columns}"
+
+                        Assert.IsTrue(columns >= If(width >= 1400, 3, 2), "Wider windows show more columns: " & diagnostic)
+                        Assert.AreEqual(1, cards.Select(Function(card) card.Width).Distinct().Count(), "Columns share one width: " & diagnostic)
+                        For Each row In cards.GroupBy(Function(card) card.Top)
+                            Assert.IsTrue(row.Count() <= columns, "Rows never exceed the column count: " & diagnostic)
+                        Next
+                        Assert.IsTrue(cards.All(Function(card) card.Right <= shelf.ClientSize.Width - shelf.Padding.Right),
+                            "Every column fits the visible width: " & diagnostic)
+                    Next
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    <TestMethod>
+    Public Sub AttentionChipsTakeFocusAndFilterFromTheKeyboard()
+        RunOnStaThread(
+            Sub()
+                Using board As New LayoutOnlyBoard()
+                    board.Prepare(1.0F)
+                    board.SetManuscripts(New List(Of Manuscript) From {
+                        New Manuscript With {.Title = "Has a journal", .Location = ManuscriptLocation.Pipeline, .CurrentStage = PaperStage.Draft, .TargetJournal = "Memory & Cognition"},
+                        New Manuscript With {.Title = "Needs a journal", .Location = ManuscriptLocation.Pipeline, .CurrentStage = PaperStage.Draft}
+                    })
+                    board.Show()
+                    Application.DoEvents()
+
+                    Dim chip As Label = board.PrivateLabel("lblMissingJournal")
+                    Assert.IsTrue(chip.TabStop AndAlso chip.CanSelect, "Attention chips are keyboard stops.")
+                    Assert.AreEqual(AccessibleRole.PushButton, chip.AccessibleRole)
+
+                    board.PressKey(chip, Keys.Enter)
+                    Application.DoEvents()
+                    Assert.AreEqual("Active", ChipTone(chip), "Enter applies the chip's filter.")
+                    Dim pipeline As FlowLayoutPanel = board.Shelves.First()
+                    Assert.AreEqual(1, pipeline.Controls.Count)
+                    Assert.AreEqual("Needs a journal", pipeline.Controls(0).AccessibleName)
+
+                    board.PressKey(chip, Keys.Space)
+                    Application.DoEvents()
+                    Assert.AreNotEqual("Active", ChipTone(chip), "Space clears it again.")
+                    Assert.AreEqual(2, pipeline.Controls.Count)
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    <TestMethod>
+    Public Sub CardsSummarizeTheRouteInWords()
+        RunOnStaThread(
+            Sub()
+                Using board As New LayoutOnlyBoard()
+                    board.Prepare(1.0F)
+                    Dim rejected As New JournalSubmission With {.JournalName = "First", .SubmittedDate = New DateTime(2026, 1, 5)}
+                    rejected.Decisions.Add(New EditorialDecisionEvent With {.Decision = EditorialDecision.DeskRejected, .DecisionDate = New DateTime(2026, 1, 20)})
+                    Dim current As New JournalSubmission With {.JournalName = "Second", .SubmittedDate = New DateTime(2026, 3, 1)}
+                    current.Decisions.Add(New EditorialDecisionEvent With {.Decision = EditorialDecision.MajorRevision, .DecisionDate = New DateTime(2026, 4, 2)})
+                    Dim manuscript As New Manuscript With {.Title = "Second journal", .Location = ManuscriptLocation.Pipeline, .CurrentStage = PaperStage.Revision, .TargetJournal = "Second"}
+                    manuscript.Submissions.Add(current)
+                    manuscript.Submissions.Add(rejected)
+                    board.SetManuscripts(New List(Of Manuscript) From {manuscript})
+                    board.Show()
+                    Application.DoEvents()
+
+                    Dim card As Control = board.Shelves.First().Controls(0)
+                    Assert.IsTrue(card.Controls.OfType(Of Label)().Any(Function(label) label.Text = "2nd journal " & ChrW(&HB7) & " major revision"),
+                        "The footer says where the manuscript is on its route.")
+                    Assert.IsFalse(card.Controls.OfType(Of Label)().Any(Function(label) label.Text.Contains("submissions")),
+                        "The old count line is gone.")
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    Private Shared Function ChipTone(chip As Label) As String
+        Return chip.GetType().GetProperty("Tone").GetValue(chip).ToString()
+    End Function
+
+    <TestMethod>
     Public Sub ShelfRangesRecalculateWhenCardsAreReplacedWithEmptyRows()
         RunOnStaThread(
             Sub()
@@ -287,8 +381,9 @@ Public Class DashboardShelfLayoutTests
         Public Sub Prepare(fontScale As Single)
             InvokePrivate("BuildInterface")
             Font = New Font(Font.FontFamily, 10.0F * fontScale)
-            ' Enough cards that one full-height shelf still needs to scroll.
-            SetSamples(10)
+            ' Enough cards that a full-height shelf still needs to scroll when a
+            ' wide window fits six columns.
+            SetSamples(40)
             StartPosition = FormStartPosition.Manual
             Location = New Point(-20000, -20000)
             ShowInTaskbar = False
@@ -327,6 +422,11 @@ Public Class DashboardShelfLayoutTests
                     Function(name) DirectCast(GetType(Form1).GetField(name, BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me), RadioButton))
             End Get
         End Property
+
+        Public Sub PressKey(target As Control, key As Keys)
+            target.GetType().GetMethod("OnKeyDown", BindingFlags.Instance Or BindingFlags.NonPublic).
+                Invoke(target, New Object() {New KeyEventArgs(key)})
+        End Sub
 
         Public Function PrivateLabel(name As String) As Label
             Return DirectCast(GetType(Form1).GetField(name, BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me), Label)

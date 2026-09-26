@@ -52,29 +52,82 @@ internal static class BoardDemo
             CheckForUpdatesAutomatically = false,
             ReminderNotificationsEnabled = false
         });
-        var manuscripts = new List<Manuscript>();
-        foreach (var location in Enum.GetValues<ManuscriptLocation>())
+        // Five fictional manuscripts per shelf with realistic variety: every
+        // Needs Attention case, several stages, and multi-journal routes. The
+        // first card on each shelf keeps a long title for layout stress.
+        var today = DateTime.Today;
+        const string LongTitle = ": Reproducible research across disciplines and journal-specific manuscript preparation";
+        var manuscripts = new List<Manuscript>
         {
-            for (var index = 1; index <= 5; index++)
-            {
-                var manuscript = new Manuscript
-                {
-                    Title = $"DEMO {location} {index}: Reproducible research across disciplines and journal-specific manuscript preparation",
-                    Location = location,
-                    CurrentStage = location == ManuscriptLocation.Published ? PaperStage.Published : PaperStage.Draft,
-                    StageEnteredDate = DateTime.Today.AddDays(-index),
-                    TargetJournal = "Fictional Journal of Reproducible Research and Interdisciplinary Methods"
-                };
-                manuscript.History.Add(new HistoryEvent
-                {
-                    Stage = manuscript.CurrentStage,
-                    EventDate = manuscript.StageEnteredDate,
-                    Note = "Fictional sample for testing shelf layout and card actions."
-                });
-                manuscripts.Add(manuscript);
-            }
-        }
+            Sample(ManuscriptLocation.Pipeline, PaperStage.Idea, "DEMO Pipeline 1" + LongTitle, "", today.AddDays(-3)),
+            Sample(ManuscriptLocation.Pipeline, PaperStage.Submitted, "DEMO Pipeline 2: Measurement invariance of a short grit scale across four countries", "Fictional Assessment Quarterly", today.AddDays(-6),
+                Submission("Fictional Assessment Quarterly", today.AddDays(-6))),
+            Sample(ManuscriptLocation.Pipeline, PaperStage.UnderReview, "DEMO Pipeline 3: Attention capture by salient distractors under working-memory load", "Fictional Journal of Perception & Performance", today.AddDays(-104),
+                Submission("Fictional Psychological Letters", today.AddDays(-150), (EditorialDecision.DeskRejected, today.AddDays(-143), null)),
+                Submission("Fictional Journal of Perception & Performance", today.AddDays(-104))),
+            Sample(ManuscriptLocation.Pipeline, PaperStage.Revision, "DEMO Pipeline 4: A preregistered replication of anchoring effects in clinical risk estimates", "Fictional Open Psychology", today.AddDays(-31),
+                Submission("Fictional Psychological Letters", today.AddDays(-150), (EditorialDecision.DeskRejected, today.AddDays(-143), null)),
+                Submission("Fictional Open Psychology", today.AddDays(-67), (EditorialDecision.MajorRevision, today.AddDays(-31), today.AddDays(9)))),
+            Sample(ManuscriptLocation.Pipeline, PaperStage.Draft, "DEMO Pipeline 5: Teaching open science to nursing students, a mixed-methods evaluation", "Fictional Nurse Education Review", today.AddDays(-5),
+                Submission("Fictional Nursing Methods", today.AddDays(-60), (EditorialDecision.RejectedAfterReview, today.AddDays(-5), null))),
+
+            Sample(ManuscriptLocation.Published, PaperStage.Published, "DEMO Published 1" + LongTitle, "Fictional Journal of Reproducible Research and Interdisciplinary Methods", today.AddDays(-40),
+                Submission("Fictional Journal of Reproducible Research and Interdisciplinary Methods", today.AddDays(-300), (EditorialDecision.Accepted, today.AddDays(-120), null))),
+            Sample(ManuscriptLocation.Published, PaperStage.Published, "DEMO Published 2: Retrieval practice in introductory statistics", "Fictional Teaching of Psychology", today.AddDays(-200),
+                Submission("Fictional Learning Science", today.AddDays(-520), (EditorialDecision.Rejected, today.AddDays(-480), null)),
+                Submission("Fictional Teaching of Psychology", today.AddDays(-450), (EditorialDecision.Accepted, today.AddDays(-300), null))),
+            Sample(ManuscriptLocation.Published, PaperStage.Published, "DEMO Published 3: Sleep and memory consolidation in older adults", "Fictional Aging & Cognition", today.AddDays(-400),
+                Submission("Fictional Aging & Cognition", today.AddDays(-700), (EditorialDecision.Accepted, today.AddDays(-500), null))),
+            Sample(ManuscriptLocation.Published, PaperStage.Published, "DEMO Published 4: A tutorial on equivalence testing", "Fictional Methods Review", today.AddDays(-600)),
+            Sample(ManuscriptLocation.Published, PaperStage.Published, "DEMO Published 5: Open materials in developmental science", "Fictional Child Development Reports", today.AddDays(-800),
+                Submission("Fictional Developmental Letters", today.AddDays(-1100), (EditorialDecision.DeskRejected, today.AddDays(-1090), null)),
+                Submission("Fictional Infancy Studies", today.AddDays(-1050), (EditorialDecision.RejectedAfterReview, today.AddDays(-980), null)),
+                Submission("Fictional Child Development Reports", today.AddDays(-950), (EditorialDecision.Accepted, today.AddDays(-850), null))),
+
+            Sample(ManuscriptLocation.FileDrawer, PaperStage.Draft, "DEMO File Drawer 1" + LongTitle, "Fictional Journal of Reproducible Research and Interdisciplinary Methods", today.AddDays(-90),
+                Submission("Fictional Journal A", today.AddDays(-400), (EditorialDecision.Rejected, today.AddDays(-360), null)),
+                Submission("Fictional Journal B", today.AddDays(-330), (EditorialDecision.DeskRejected, today.AddDays(-320), null)),
+                Submission("Fictional Journal C", today.AddDays(-300), (EditorialDecision.RejectedAfterReview, today.AddDays(-200), null))),
+            Sample(ManuscriptLocation.FileDrawer, PaperStage.Draft, "DEMO File Drawer 2: A null result on priming and choice", "Fictional Social Cognition", today.AddDays(-180),
+                Submission("Fictional Social Cognition", today.AddDays(-260), (EditorialDecision.Withdrawn, today.AddDays(-200), null))),
+            Sample(ManuscriptLocation.FileDrawer, PaperStage.Idea, "DEMO File Drawer 3: Pilot notes on reading fluency", "", today.AddDays(-500)),
+            Sample(ManuscriptLocation.FileDrawer, PaperStage.Draft, "DEMO File Drawer 4: Revisiting the ego-depletion paradigm", "Fictional Motivation Science", today.AddDays(-250),
+                Submission("Fictional Motivation Science", today.AddDays(-320), (EditorialDecision.Rejected, today.AddDays(-280), null))),
+            Sample(ManuscriptLocation.FileDrawer, PaperStage.Draft, "DEMO File Drawer 5: An unfinished scale-development project", "Fictional Assessment Quarterly", today.AddDays(-700))
+        };
         new AuthorLibraryRepository().Save(new AuthorLibraryData());
         new ManuscriptRepository().Save(manuscripts);
+    }
+
+    private static Manuscript Sample(ManuscriptLocation location, PaperStage stage, string title, string journal,
+        DateTime stageEntered, params JournalSubmission[] submissions)
+    {
+        var manuscript = new Manuscript
+        {
+            Title = title,
+            Location = location,
+            CurrentStage = stage,
+            StageEnteredDate = stageEntered,
+            TargetJournal = journal
+        };
+        manuscript.History.Add(new HistoryEvent
+        {
+            Stage = PaperStage.Idea,
+            EventDate = stageEntered.AddDays(-30),
+            Note = "Fictional sample for board and card checks."
+        });
+        if (stage != PaperStage.Idea)
+            manuscript.History.Add(new HistoryEvent { Stage = stage, EventDate = stageEntered, Note = "Fictional stage change." });
+        manuscript.Submissions.AddRange(submissions);
+        return manuscript;
+    }
+
+    private static JournalSubmission Submission(string journal, DateTime submitted,
+        params (EditorialDecision Decision, DateTime Date, DateTime? RevisionDeadline)[] decisions)
+    {
+        var submission = new JournalSubmission { JournalName = journal, SubmittedDate = submitted, ManuscriptNumber = "DEMO-" + submitted.ToString("yyMMdd") };
+        foreach (var decision in decisions)
+            submission.Decisions.Add(new EditorialDecisionEvent { Decision = decision.Decision, DecisionDate = decision.Date, RevisionDeadline = decision.RevisionDeadline });
+        return submission;
     }
 }

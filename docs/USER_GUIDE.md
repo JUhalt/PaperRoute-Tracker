@@ -62,9 +62,21 @@ The main board can flag manuscripts that may need action, including:
 
 These are prompts, not automatic decisions. PaperRoute does not move manuscripts or file them simply because a threshold was reached.
 
+Only items that currently apply are listed, each as a chip with its count. Click a chip, or Tab to it and press Enter or Space, to show just those manuscripts; activate it again to clear the filter.
+
+### Board shelves and cards
+
+Pipeline, Published, and File Drawer are tabs with counts; one shelf is shown at a time, with its cards in as many columns as the window fits. Each card shows:
+
+- the stage and, for active work, what needs attention now (such as "Revision due in 9 days") or how long the manuscript has been in its stage;
+- the title and target journal; and
+- the route so far: one dot per journal submission (grey when it ended in a rejection or withdrawal, an accent ring for the current submission, a filled accent dot when accepted) and a short summary such as "2nd journal · major revision". The summary uses recorded submissions and decisions only.
+
+Click a card, or Tab to its title and press Enter, to open it. **View route →** opens the Route. Move to File Drawer, Restore to Pipeline, and Delete are in the card's **⋯** menu, which also opens on right-click or with the keyboard's context-menu key.
+
 ### Search, filters, and sorting
 
-The main board supports search, stage filtering, and sorting. Search includes manuscript information and structured author metadata where available.
+The main board supports search, stage filtering, and sorting. Press **Ctrl+F** to jump to search. Search includes manuscript information and structured author metadata where available.
 
 ---
 

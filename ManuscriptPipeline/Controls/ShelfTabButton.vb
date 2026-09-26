@@ -32,14 +32,27 @@ Namespace Controls
             Dim background As Color = UiTheme.BoardBackground()
             e.Graphics.Clear(background)
 
-            Using font As New Font(Me.Font, If(Checked, FontStyle.Bold, FontStyle.Regular))
-                TextRenderer.DrawText(
-                    e.Graphics,
-                    Text,
-                    font,
-                    New Rectangle(0, 0, Width, Height - 3),
-                    If(Checked, UiTheme.PrimaryText(), UiTheme.SecondaryText()),
-                    TextFormatFlags.HorizontalCenter Or TextFormatFlags.VerticalCenter Or TextFormatFlags.NoPrefix)
+            ' "Pipeline (10)" paints as the name followed by a quieter count;
+            ' the text itself stays whole for assistive technology.
+            Dim name As String = Text
+            Dim count As String = String.Empty
+            Dim open As Integer = Text.LastIndexOf(" (", System.StringComparison.Ordinal)
+            If open > 0 AndAlso Text.EndsWith(")") Then
+                name = Text.Substring(0, open)
+                count = Text.Substring(open + 2, Text.Length - open - 3)
+            End If
+
+            Const flags As TextFormatFlags = TextFormatFlags.NoPrefix Or TextFormatFlags.NoPadding Or TextFormatFlags.SingleLine
+            Using font As New Font(Me.Font, FontStyle.Bold)
+                Dim nameSize As Size = TextRenderer.MeasureText(name, font, Size.Empty, flags)
+                Dim countSize As Size = If(count.Length > 0, TextRenderer.MeasureText(count, font, Size.Empty, flags), Size.Empty)
+                Dim gap As Integer = If(count.Length > 0, UiTheme.Px(5, DeviceDpi), 0)
+                Dim x As Integer = (Width - nameSize.Width - gap - countSize.Width) \ 2
+                Dim y As Integer = (Height - 3 - nameSize.Height) \ 2
+                TextRenderer.DrawText(e.Graphics, name, font, New Point(x, y), If(Checked, UiTheme.PrimaryText(), UiTheme.SecondaryText()), flags)
+                If count.Length > 0 Then
+                    TextRenderer.DrawText(e.Graphics, count, font, New Point(x + nameSize.Width + gap, y), UiTheme.MutedText(), flags)
+                End If
             End Using
 
             ' Continue the strip's hairline under this tab; the selected tab

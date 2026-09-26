@@ -117,7 +117,8 @@ Namespace Services
                 UiTheme.PrimaryText()
 
             ApplyToControlTree(
-                form
+                form,
+                TryCast(form.AcceptButton, Button)
             )
 
         End Sub
@@ -128,19 +129,22 @@ Namespace Services
         ' =====================================================
 
         Private Shared Sub ApplyToControlTree(
-            parent As Control
+            parent As Control,
+            primaryButton As Button
         )
 
             For Each control As Control In parent.Controls
 
                 ApplyControlStyle(
-                    control
+                    control,
+                    primaryButton
                 )
 
                 If control.HasChildren Then
 
                     ApplyToControlTree(
-                        control
+                        control,
+                        primaryButton
                     )
 
                 End If
@@ -151,17 +155,41 @@ Namespace Services
 
 
         Private Shared Sub ApplyControlStyle(
-            control As Control
+            control As Control,
+            primaryButton As Button
         )
+
+            ' Theme-painted buttons already follow the tokens.
+            If TypeOf control Is Global.ManuscriptPipeline.Controls.ActionButton Then
+                Return
+            End If
 
             If TypeOf control Is Button Then
 
-                StyleButton(
+                Dim button As Button =
                     DirectCast(
                         control,
                         Button
                     )
+
+                Dim isPrimary As Boolean =
+                    control Is primaryButton
+
+                StyleButton(
+                    button,
+                    isPrimary
                 )
+
+                ' A disabled filled button would show grey text on the accent.
+                If isPrimary Then
+                    AddHandler button.EnabledChanged,
+                        Sub(sender, e)
+                            StyleButton(button, button.Enabled)
+                        End Sub
+                    If Not button.Enabled Then
+                        StyleButton(button, False)
+                    End If
+                End If
 
                 Return
 
@@ -404,8 +432,11 @@ Namespace Services
         ' Buttons
         ' =====================================================
 
+        ' One filled primary action per dialog (its default button), red text
+        ' for destructive actions, and quiet neutral outlines for the rest.
         Private Shared Sub StyleButton(
-            button As Button
+            button As Button,
+            isPrimary As Boolean
         )
 
             button.FlatStyle =
@@ -413,9 +444,6 @@ Namespace Services
 
             button.UseVisualStyleBackColor =
                 False
-
-            button.BackColor =
-                UiTheme.CardBackground()
 
             button.Cursor =
                 Cursors.Hand
@@ -426,76 +454,36 @@ Namespace Services
             Dim text As String =
                 button.Text.Trim().ToUpperInvariant()
 
+            If isPrimary Then
 
-            If text.Contains("DELETE") OrElse
-               text.Contains("REMOVE") Then
+                Dim accent As Color =
+                    UiTheme.AccentColor()
 
-                ApplyButtonAccent(
-                    button,
-                    UiTheme.DangerColor()
-                )
+                Dim shade As Color =
+                    If(UiTheme.IsDark(), Color.White, Color.Black)
 
-                Return
-
-            End If
-
-
-            If text.Contains("FILE DRAWER") Then
-
-                ApplyButtonAccent(
-                    button,
-                    UiTheme.WarningColor()
-                )
+                button.BackColor = accent
+                button.ForeColor = UiTheme.OnAccentText()
+                button.FlatAppearance.BorderColor = accent
+                button.FlatAppearance.MouseOverBackColor = UiTheme.Blend(accent, shade, 0.1F)
+                button.FlatAppearance.MouseDownBackColor = UiTheme.Blend(accent, shade, 0.2F)
 
                 Return
 
             End If
 
-
-            If text.Contains("RESTORE") Then
-
-                ApplyButtonAccent(
-                    button,
-                    UiTheme.SuccessColor()
-                )
-
-                Return
-
-            End If
-
-
-            If text = "CANCEL" OrElse
-               text = "NO" OrElse
-               text = "CLOSE" Then
-
-                ApplyButtonAccent(
-                    button,
-                    UiTheme.SecondaryText()
-                )
-
-                Return
-
-            End If
-
-
-            ApplyButtonAccent(
-                button,
-                UiTheme.AccentColor()
-            )
-
-        End Sub
-
-
-        Private Shared Sub ApplyButtonAccent(
-            button As Button,
-            accent As Color
-        )
+            button.BackColor =
+                UiTheme.CardBackground()
 
             button.ForeColor =
-                accent
+                If(
+                    text.Contains("DELETE") OrElse text.Contains("REMOVE"),
+                    UiTheme.DangerColor(),
+                    UiTheme.PrimaryText()
+                )
 
             button.FlatAppearance.BorderColor =
-                accent
+                UiTheme.CardBorder()
 
             button.FlatAppearance.MouseOverBackColor =
                 UiTheme.HoverBackground()
