@@ -32,9 +32,12 @@ Public Class Form1
     Private ReadOnly publishedPanel As New ManuscriptShelfPanel()
     Private ReadOnly fileDrawerPanel As New ManuscriptShelfPanel()
 
-    Private ReadOnly lblPipelineHeader As New Label()
-    Private ReadOnly lblPublishedHeader As New Label()
-    Private ReadOnly lblFileDrawerHeader As New Label()
+    ' One shelf is shown at a time under a single scroll area; the tabs carry
+    ' each shelf's count.
+    Private ReadOnly tabPipeline As New ShelfTabButton()
+    Private ReadOnly tabPublished As New ShelfTabButton()
+    Private ReadOnly tabFileDrawer As New ShelfTabButton()
+    Private ReadOnly shelfHost As New Panel()
 
     Private ReadOnly lblStatus As New Label()
 
@@ -44,6 +47,7 @@ Public Class Form1
     Private ReadOnly btnClearBoardFilters As New Button()
 
     Private ReadOnly lblAttentionTitle As New Label()
+    Private ReadOnly lblAttentionClear As New Label()
     Private ReadOnly lblOverdueRevisions As New Label()
     Private ReadOnly lblLongReviews As New Label()
     Private ReadOnly lblMissingJournal As New Label()
@@ -72,7 +76,6 @@ Public Class Form1
     Private attentionTitleFont As Font = Nothing
     Private attentionRegularFont As Font = Nothing
     Private attentionActiveFont As Font = Nothing
-    Private sectionHeaderFont As Font = Nothing
 
 
     Private NotInheritable Class StageFilterOption
@@ -603,7 +606,7 @@ Public Class Form1
         Dim body As New TableLayoutPanel With {
             .Dock = DockStyle.Fill,
             .ColumnCount = 1,
-            .RowCount = 8,
+            .RowCount = 4,
             .Padding = New Padding(18, 8, 18, 12),
             .BackColor = UiTheme.BoardBackground(),
             .AutoScroll = False
@@ -618,19 +621,12 @@ Public Class Form1
 
         ' The dashboard is built at runtime. At high Windows scaling, fonts
         ' grow even though hard-coded pixel row heights do not. Keep all
-        ' text/tool rows content-driven and reserve the percentage rows for
-        ' the manuscript shelves themselves.
+        ' text/tool rows content-driven and give the remaining height to the
+        ' one visible shelf.
         body.RowStyles.Add(New RowStyle(SizeType.AutoSize))
         body.RowStyles.Add(New RowStyle(SizeType.AutoSize))
-
         body.RowStyles.Add(New RowStyle(SizeType.AutoSize))
-        body.RowStyles.Add(New RowStyle(SizeType.Percent, 40))
-
-        body.RowStyles.Add(New RowStyle(SizeType.AutoSize))
-        body.RowStyles.Add(New RowStyle(SizeType.Percent, 30))
-
-        body.RowStyles.Add(New RowStyle(SizeType.AutoSize))
-        body.RowStyles.Add(New RowStyle(SizeType.Percent, 30))
+        body.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
 
 
         ' =================================================
@@ -699,8 +695,19 @@ Public Class Form1
 )
 
 
+        ' Shown instead of a row of zero counts when nothing needs attention.
+        lblAttentionClear.Text = "Nothing needs attention right now."
+        lblAttentionClear.AutoSize = True
+        lblAttentionClear.ForeColor = UiTheme.SecondaryText()
+        lblAttentionClear.Margin = New Padding(0, 3, 18, 0)
+        lblAttentionClear.Visible = False
+
         attentionBar.Controls.Add(
     lblAttentionTitle
+)
+
+        attentionBar.Controls.Add(
+    lblAttentionClear
 )
 
         attentionBar.Controls.Add(
@@ -855,21 +862,6 @@ Public Class Form1
         ' Shelves
         ' =================================================
 
-        ConfigureSectionHeader(
-            lblPipelineHeader,
-            "PIPELINE"
-        )
-
-        ConfigureSectionHeader(
-            lblPublishedHeader,
-            "PUBLISHED"
-        )
-
-        ConfigureSectionHeader(
-            lblFileDrawerHeader,
-            "FILE DRAWER"
-        )
-
         ConfigureFlowPanel(
             pipelinePanel
         )
@@ -882,6 +874,42 @@ Public Class Form1
             fileDrawerPanel
         )
 
+        Dim shelfTabs As New FlowLayoutPanel With {
+            .Dock = DockStyle.Top,
+            .AutoSize = True,
+            .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            .FlowDirection = FlowDirection.LeftToRight,
+            .WrapContents = False,
+            .Padding = New Padding(0, 6, 0, 0),
+            .Margin = New Padding(0, 0, 0, 6),
+            .BackColor = UiTheme.BoardBackground()
+        }
+
+        ' A hairline under the tabs, which the selected tab's underline sits on.
+        AddHandler shelfTabs.Paint,
+            Sub(sender, e)
+                Using line As New Pen(UiTheme.CardBorder())
+                    e.Graphics.DrawLine(line, 0, shelfTabs.Height - 1, shelfTabs.Width, shelfTabs.Height - 1)
+                End Using
+            End Sub
+
+        ConfigureShelfTab(tabPipeline, "Pipeline", pipelinePanel)
+        ConfigureShelfTab(tabPublished, "Published", publishedPanel)
+        ConfigureShelfTab(tabFileDrawer, "File Drawer", fileDrawerPanel)
+
+        shelfTabs.Controls.Add(tabPipeline)
+        shelfTabs.Controls.Add(tabPublished)
+        shelfTabs.Controls.Add(tabFileDrawer)
+
+        shelfHost.Dock = DockStyle.Fill
+        shelfHost.Margin = New Padding(0)
+        shelfHost.BackColor = UiTheme.BoardBackground()
+        shelfHost.Controls.Add(fileDrawerPanel)
+        shelfHost.Controls.Add(publishedPanel)
+        shelfHost.Controls.Add(pipelinePanel)
+
+        tabPipeline.Checked = True
+        ShowShelf(pipelinePanel)
 
         body.Controls.Add(
     attentionBar,
@@ -896,39 +924,15 @@ Public Class Form1
 )
 
         body.Controls.Add(
-    lblPipelineHeader,
+    shelfTabs,
     0,
     2
 )
 
         body.Controls.Add(
-    pipelinePanel,
+    shelfHost,
     0,
     3
-)
-
-        body.Controls.Add(
-    lblPublishedHeader,
-    0,
-    4
-)
-
-        body.Controls.Add(
-    publishedPanel,
-    0,
-    5
-)
-
-        body.Controls.Add(
-    lblFileDrawerHeader,
-    0,
-    6
-)
-
-        body.Controls.Add(
-    fileDrawerPanel,
-    0,
-    7
 )
 
         ' =================================================
@@ -1268,6 +1272,10 @@ Public Class Form1
         UiTheme.DangerColor()
     )
 
+        lblAttentionClear.Visible =
+            overdueCount + dueSoonCount + longReviewCount + missingJournalCount + recentRejectionCount = 0 AndAlso
+            activeAttentionFilter = AttentionFilter.None
+
     End Sub
 
 
@@ -1285,6 +1293,12 @@ Public Class Form1
 
         label.Tag =
         count
+
+        ' List only what needs attention. An active filter's label stays so
+        ' it can be clicked to clear the filter.
+        label.Visible =
+            count > 0 OrElse
+            activeAttentionFilter = filter
 
         If count = 0 Then
 
@@ -1468,20 +1482,31 @@ Public Class Form1
 
     End Function
 
-    Private Sub ConfigureSectionHeader(
-    label As Label,
-    text As String
-)
+    Private Sub ConfigureShelfTab(
+        tab As ShelfTabButton,
+        text As String,
+        shelf As ManuscriptShelfPanel
+    )
 
-        label.Text = text
-        label.AutoSize = True
-        label.Anchor = AnchorStyles.Left
+        tab.Text = text
 
-        label.Font =
-            sectionHeaderFont
+        AddHandler tab.CheckedChanged,
+            Sub(sender, e)
+                If tab.Checked Then
+                    ShowShelf(shelf)
+                End If
+            End Sub
 
-        label.ForeColor =
-        UiTheme.PrimaryText()
+    End Sub
+
+
+    Private Sub ShowShelf(shelf As ManuscriptShelfPanel)
+
+        For Each candidate As ManuscriptShelfPanel In {pipelinePanel, publishedPanel, fileDrawerPanel}
+            candidate.Visible = candidate Is shelf
+        Next
+
+        ResizeCards(shelf)
 
     End Sub
 
@@ -2550,13 +2575,6 @@ Public Class Form1
                 FontStyle.Underline
             )
 
-        sectionHeaderFont =
-            New Font(
-                Me.Font.FontFamily,
-                10.0F,
-                FontStyle.Bold
-            )
-
     End Sub
 
 
@@ -2569,8 +2587,7 @@ Public Class Form1
             routeLinkFont,
             attentionTitleFont,
             attentionRegularFont,
-            attentionActiveFont,
-            sectionHeaderFont
+            attentionActiveFont
         }
 
             If font IsNot Nothing Then
@@ -2586,7 +2603,6 @@ Public Class Form1
         attentionTitleFont = Nothing
         attentionRegularFont = Nothing
         attentionActiveFont = Nothing
-        sectionHeaderFont = Nothing
 
     End Sub
 
@@ -2731,23 +2747,23 @@ Public Class Form1
         ' Section headings
         ' =================================================
 
-        lblPipelineHeader.Text =
+        tabPipeline.Text =
         BuildSectionTitle(
-            "PIPELINE",
+            "Pipeline",
             pipelineCount,
             pipelineTotal
         )
 
-        lblPublishedHeader.Text =
+        tabPublished.Text =
         BuildSectionTitle(
-            "PUBLISHED",
+            "Published",
             publishedCount,
             publishedTotal
         )
 
-        lblFileDrawerHeader.Text =
+        tabFileDrawer.Text =
         BuildSectionTitle(
-            "FILE DRAWER",
+            "File Drawer",
             drawerCount,
             drawerTotal
         )
