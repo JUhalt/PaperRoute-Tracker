@@ -232,7 +232,7 @@ Build the persistence model before adding UI:
 
 # ACTIVE — v0.5 Reviewer Response Workflow
 
-Milestone: **[v0.5.0 — Reviewer Response Workflow](https://github.com/JUhalt/PaperRoute-Tracker/milestone/7)**. Feature owner: **[#27 Reviewer Response Matrix](https://github.com/JUhalt/PaperRoute-Tracker/issues/27)**. Completed visual fix: **[#37 shelf scrolling](https://github.com/JUhalt/PaperRoute-Tracker/issues/37)**, merged in **[PR #51](https://github.com/JUhalt/PaperRoute-Tracker/pull/51)**.
+Milestone: **[v0.5.0 — Reviewer Response Workflow](https://github.com/JUhalt/PaperRoute-Tracker/milestone/7)**. Feature owner: **[#27 Reviewer Response Matrix](https://github.com/JUhalt/PaperRoute-Tracker/issues/27)**. Completed fixes: **[#37 shelf scrolling](https://github.com/JUhalt/PaperRoute-Tracker/issues/37)**, merged in **[PR #51](https://github.com/JUhalt/PaperRoute-Tracker/pull/51)**, and **[#67 literal ampersands](https://github.com/JUhalt/PaperRoute-Tracker/issues/67)**, merged in **[PR #68](https://github.com/JUhalt/PaperRoute-Tracker/pull/68)**. The final candidate is v0.5.0-rc.2.
 
 Own the iterative conversation within a journal submission attempt: reviewer/editor comments, action items, status, manuscript location references, response drafting, revision-round linkage, and editable response-to-reviewers export.
 
