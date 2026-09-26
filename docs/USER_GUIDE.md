@@ -597,10 +597,20 @@ Use **Settings > Diagnostics...** when troubleshooting storage, environment, or 
 ## How do I add a manuscript I am currently writing?
 
 1. Choose **Add Manuscript**.
-2. Enter the title.
+2. Enter the title, or choose **Paste a Title Page...** (see below).
 3. Use Draft as the stage if active writing has begun.
-4. Open Manuscript Details to add structured authors and a target journal.
-5. Save and close.
+4. Optionally check **Remind me** and name a first deadline. It becomes an ordinary custom reminder under **Reminders & Calendar**.
+5. Choose **Add Manuscript**, then open Manuscript Details to add or adjust structured authors and a target journal.
+
+### Paste a title page
+
+**Paste a Title Page...** reads a title page copied from Word or from LaTeX source (including the apa7, authblk, and REVTeX author commands) and proposes the title, authors in order with affiliations and the corresponding author, the abstract, and keywords. Superscript affiliation numbers that paste as plain digits, such as `Whitfield1,2*`, are recognized.
+
+- Parsing happens on this computer. Nothing is sent anywhere.
+- Review and edit everything before choosing **Use These Details**. Clear **Use** to leave an author out; separate an author's affiliations with semicolons.
+- The **Library** column shows whether each author already exists in your reusable author library. Existing authors and affiliations are reused; new ones are created only when you add the manuscript.
+- **Not placed** lists lines PaperRoute could not assign, such as a running head or an email address, along with anything to check, such as an affiliation number with no matching line. These lines are shown for review and are not saved.
+- A pasted abstract and keywords only fill fields that are still empty.
 
 ## How do I add an already-published article?
 

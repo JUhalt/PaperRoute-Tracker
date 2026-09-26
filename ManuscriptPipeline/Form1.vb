@@ -3688,11 +3688,41 @@ Public Class Form1
         e As EventArgs
     )
 
-        Using dialog As New AddManuscriptForm()
+        ' Pasting a title page matches authors against the reusable library.
+        ' If the library cannot be read, Add Manuscript still works without it.
+        Dim authorLibrary As AuthorLibraryData = Nothing
+
+        Try
+            authorLibrary = authorRepository.Load()
+        Catch ex As Exception
+            authorLibrary = Nothing
+        End Try
+
+        Using dialog As New AddManuscriptForm(authorLibrary)
 
             If dialog.ShowDialog(Me) =
                 DialogResult.OK AndAlso
                dialog.CreatedManuscript IsNot Nothing Then
+
+                ' Save reusable people first, as bibliography import does, so a
+                ' manuscript never references an author record that failed to save.
+                If dialog.AuthorLibraryChanged Then
+                    Try
+                        authorRepository.Save(authorLibrary)
+                    Catch ex As Exception
+                        MessageBox.Show(
+                            Me,
+                            "PaperRoute could not save the new authors, so the manuscript was not added." &
+                            Environment.NewLine &
+                            Environment.NewLine &
+                            ex.Message,
+                            "Add Manuscript",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Warning
+                        )
+                        Return
+                    End Try
+                End If
 
                 manuscripts.Add(
                     dialog.CreatedManuscript
