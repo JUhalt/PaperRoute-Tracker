@@ -16,13 +16,12 @@ PaperRoute Tracker helps researchers manage manuscripts from idea through submis
 
 ## Current status
 
-- **Stable:** [v0.4.0 — Submission Readiness](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v0.4.0). See the [release notes](docs/releases/0.4.0.md) and the [v0.4 user guide](https://github.com/JUhalt/PaperRoute-Tracker/blob/v0.4.0/docs/USER_GUIDE.md).
-- **Preview:** [v0.5.0-rc.2 — Reviewer Response Workflow](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v0.5.0-rc.2) adds a manual response matrix within each journal submission, explicit decision and revision-round links, response drafting, and editable Markdown export ([#27](https://github.com/JUhalt/PaperRoute-Tracker/issues/27)), plus the completed shelf scrolling fix ([#37](https://github.com/JUhalt/PaperRoute-Tracker/issues/37)) and the ampersand fix ([#67](https://github.com/JUhalt/PaperRoute-Tracker/issues/67)). Release certification is still in progress in [#52](https://github.com/JUhalt/PaperRoute-Tracker/issues/52); see the [v0.5 guide](docs/USER_GUIDE.md), [candidate release notes](docs/releases/0.5.0.md), and [milestone](https://github.com/JUhalt/PaperRoute-Tracker/milestone/7).
+- **Stable:** [v0.5.0 — Reviewer Response Workflow](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v0.5.0) adds a manual response matrix within each journal submission, explicit decision and revision-round links, response drafting, and editable Markdown export, plus the shelf scrolling and ampersand fixes. See the [release notes](docs/releases/0.5.0.md) and the [user guide](docs/USER_GUIDE.md).
 - **Next:** [v0.6 — Workspace UI](https://github.com/JUhalt/PaperRoute-Tracker/milestone/8) brings PaperRoute into one main window with pages instead of stacked dialogs, a tabbed page for each manuscript with a single save step, and a calmer card-based design.
 
-v0.5 uses Schema 6. Keep a separate v0.4 backup before upgrading, and restore v0.5 backups only with v0.5 or later because older restore code may ignore reviewer-response fields. The [upgrade notes](UPGRADE_NOTES.md) explain the save and compatibility boundaries.
+v0.5 uses Schema 6. Upgrading from v0.4? Keep a separate v0.4 backup first, and restore v0.5 backups only with v0.5 or later because older restore code may ignore reviewer-response fields. The [upgrade notes](UPGRADE_NOTES.md) explain the save and compatibility boundaries.
 
-**New to PaperRoute?** Start with the [Stable PaperRoute User Guide](https://github.com/JUhalt/PaperRoute-Tracker/blob/v0.4.0/docs/USER_GUIDE.md) for a Quick Start, feature tour, and task-oriented "How do I...?" reference.
+**New to PaperRoute?** Start with the [PaperRoute User Guide](https://github.com/JUhalt/PaperRoute-Tracker/blob/v0.5.0/docs/USER_GUIDE.md) for a Quick Start, feature tour, and task-oriented "How do I...?" reference.
 
 ## What PaperRoute does
 
@@ -44,7 +43,7 @@ v0.5 uses Schema 6. Keep a separate v0.4 backup before upgrading, and restore v0
 ### Revise and respond
 
 - **Editorial decisions** including desk rejection, revision requests, acceptance, and revision deadlines.
-- **Reviewer Response Matrix** *(v0.5 preview)* for reviewer and editor comments, statuses, draft responses, manuscript locations, and an editable response-to-reviewers export.
+- **Reviewer Response Matrix** for reviewer and editor comments, statuses, draft responses, manuscript locations, and an editable response-to-reviewers export.
 - **Correspondence and local-file tracking** for decision letters, reviewer comments, response letters, and revised manuscripts.
 - **Local reminders and calendar export** for revision deadlines, submission follow-ups, and custom reminders, with optional Windows notifications and portable `.ics` events.
 
@@ -188,8 +187,8 @@ The implementation, local-first data model, import/export system, backup workflo
 
 | | Release | Focus |
 | --- | --- | --- |
-| **Now** | v0.5 — Reviewer Response Workflow | Response matrix; release certification in progress |
-| **Next** | [v0.6 — Workspace UI](https://github.com/JUhalt/PaperRoute-Tracker/milestone/8) | One window, manuscript pages, one save step, calmer design |
+| **Released** | v0.5 — Reviewer Response Workflow | Response matrix, drafting, and Markdown export |
+| **Now** | [v0.6 — Workspace UI](https://github.com/JUhalt/PaperRoute-Tracker/milestone/8) | One window, manuscript pages, one save step, calmer design |
 | **Then** | [v0.7 — Deadline Center](https://github.com/JUhalt/PaperRoute-Tracker/milestone/9) | Everything that needs action, and when |
 | | [v0.8 — Route Analytics & Reports](https://github.com/JUhalt/PaperRoute-Tracker/milestone/10) | Your own turnaround data, route and status reports, types and tags |
 | | [v0.9 — 1.0 Hardening](https://github.com/JUhalt/PaperRoute-Tracker/milestone/11) | Onboarding, accessibility, recovery, certification |
