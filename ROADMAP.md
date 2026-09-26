@@ -50,8 +50,8 @@ Targets are directional rather than promises. Data integrity, migrations, backup
 | **v0.2** | Metadata & Integrations ✅ | Can PaperRoute describe and connect my research accurately? |
 | **v0.3** | The Route ✅ | What happened to this manuscript, in what order, and which file was which? |
 | **v0.4** | Submission Readiness ✅ | What exactly am I preparing and sending to this journal? |
-| **v0.5** | **Reviewer Response Workflow — active** | What did the journal ask me to change, and how am I responding? |
-| **v0.6** | **Workspace UI — next** | Can I find and act on everything from one calm, uncluttered workspace? |
+| **v0.5** | Reviewer Response Workflow ✅ | What did the journal ask me to change, and how am I responding? |
+| **v0.6** | **Workspace UI — active** | Can I find and act on everything from one calm, uncluttered workspace? |
 | **v0.7** | Deadline Center | What requires action, and when? |
 | **v0.8** | Route Analytics & Reports | What does this publication journey show me—and how can I communicate it? |
 | **v0.9** | 1.0 Hardening | Is the entire workflow polished, resilient, and certifiable? |
@@ -95,7 +95,7 @@ v0.3 established the canonical historical spine used by later releases:
 - 299-test automated regression suite
 - installed-update, backup/restore, clean-install, updater, managed-file, and scaling certification
 
-The narrow/high-DPI shelf scrollbar follow-up from v0.3, [#37](https://github.com/JUhalt/PaperRoute-Tracker/issues/37), was brought forward into v0.5 and completed in [PR #51](https://github.com/JUhalt/PaperRoute-Tracker/pull/51). It is included in the v0.5 candidate.
+The narrow/high-DPI shelf scrollbar follow-up from v0.3, [#37](https://github.com/JUhalt/PaperRoute-Tracker/issues/37), was brought forward into v0.5 and completed in [PR #51](https://github.com/JUhalt/PaperRoute-Tracker/pull/51). It shipped in v0.5.0.
 
 ---
 
@@ -230,9 +230,9 @@ Build the persistence model before adding UI:
 
 ---
 
-# ACTIVE — v0.5 Reviewer Response Workflow
+## COMPLETE — v0.5 Reviewer Response Workflow
 
-Milestone: **[v0.5.0 — Reviewer Response Workflow](https://github.com/JUhalt/PaperRoute-Tracker/milestone/7)**. Feature owner: **[#27 Reviewer Response Matrix](https://github.com/JUhalt/PaperRoute-Tracker/issues/27)**. Completed fixes: **[#37 shelf scrolling](https://github.com/JUhalt/PaperRoute-Tracker/issues/37)**, merged in **[PR #51](https://github.com/JUhalt/PaperRoute-Tracker/pull/51)**, and **[#67 literal ampersands](https://github.com/JUhalt/PaperRoute-Tracker/issues/67)**, merged in **[PR #68](https://github.com/JUhalt/PaperRoute-Tracker/pull/68)**. The final candidate is v0.5.0-rc.2.
+Milestone: **[v0.5.0 — Reviewer Response Workflow](https://github.com/JUhalt/PaperRoute-Tracker/milestone/7)**. Feature owner: **[#27 Reviewer Response Matrix](https://github.com/JUhalt/PaperRoute-Tracker/issues/27)**. Completed fixes: **[#37 shelf scrolling](https://github.com/JUhalt/PaperRoute-Tracker/issues/37)**, merged in **[PR #51](https://github.com/JUhalt/PaperRoute-Tracker/pull/51)**, and **[#67 literal ampersands](https://github.com/JUhalt/PaperRoute-Tracker/issues/67)**, merged in **[PR #68](https://github.com/JUhalt/PaperRoute-Tracker/pull/68)**. PaperRoute v0.5.0 was released on September 26, 2026 from the certified v0.5.0-rc.2 source.
 
 Own the iterative conversation within a journal submission attempt: reviewer/editor comments, action items, status, manuscript location references, response drafting, revision-round linkage, and editable response-to-reviewers export.
 
@@ -247,9 +247,9 @@ The workflow must remain fully usable without AI.
 - Preserve the existing child-dialog and final Manuscript Details save/cancel boundaries.
 - Introduce conservative Schema 5 to 6 migration, deep cloning, reference validation, and persistence/export regression coverage.
 
-The [user guide](docs/USER_GUIDE.md#reviewer-response-matrix) describes the implemented workflow and its nested save boundaries. The [candidate release notes](docs/releases/0.5.0.md) and [upgrade notes](UPGRADE_NOTES.md) describe Schema 6 and require v0.5 or later when restoring v0.5 backups; older restore code may ignore the new reviewer-response fields.
+The [user guide](docs/USER_GUIDE.md#reviewer-response-matrix) describes the implemented workflow and its nested save boundaries. The [release notes](docs/releases/0.5.0.md) and [upgrade notes](UPGRADE_NOTES.md) describe Schema 6 and require v0.5 or later when restoring v0.5 backups; older restore code may ignore the new reviewer-response fields.
 
-v0.4.0 remains the current Stable release. Before v0.5 publication, complete combined regression tests, native keyboard/theme/100%/125%/150% checks, v0.4-to-v0.5 installed migration, clean installation, updater checks, and package/checksum verification. Record the evidence, merge the release work, and reconcile version metadata before tagging. Close the milestone after the release is published.
+Release certification included the combined regression suite, native 100%/125%/150% and Light/Dark checks of the response dialogs, installed v0.4-to-v0.5 migration through the real Preview updater, clean installation, portable backup/restore with managed and linked files, and published-asset verification. Evidence is recorded in [#52](https://github.com/JUhalt/PaperRoute-Tracker/issues/52).
 
 ### Visual polish brought forward
 
@@ -257,7 +257,7 @@ v0.4.0 remains the current Stable release. Before v0.5 publication, complete com
 
 ---
 
-# v0.6 Workspace UI
+# ACTIVE — v0.6 Workspace UI
 
 Milestone: **[v0.6.0 — Workspace UI](https://github.com/JUhalt/PaperRoute-Tracker/milestone/8)**
 

@@ -2,7 +2,7 @@
 
 All notable changes to PaperRoute Tracker will be documented here.
 
-## [Unreleased] — v0.5 development
+## [0.5.0] - 2026-09-26
 
 ### Added
 
@@ -10,7 +10,7 @@ All notable changes to PaperRoute Tracker will be documented here.
 - Status filtering, stored item ordering, and an editable Markdown export preview. Drafting and exporting do not record submissions or change manuscript lifecycle state.
 - Working-copy save/cancel support and conservative Schema 5 to 6 migration, with decision-reference validation and portable backup/restore coverage.
 
-The v0.5.0-rc.1 candidate is tracked in [#27](https://github.com/JUhalt/PaperRoute-Tracker/issues/27) and [release certification #52](https://github.com/JUhalt/PaperRoute-Tracker/issues/52). v0.5.0-rc.2 replaces it for final certification, adding the ampersand fix and the updated roadmap in the User Guide. See the [preview guide](docs/REVIEWER_RESPONSE_PREVIEW.md). v0.4.0 remains the current Stable release while final certification is completed.
+PaperRoute v0.5.0 — **Reviewer Response Workflow** — was released on September 26, 2026 from the certified v0.5.0-rc.2 source. Scope was owned by [#27](https://github.com/JUhalt/PaperRoute-Tracker/issues/27); release certification was recorded in [#52](https://github.com/JUhalt/PaperRoute-Tracker/issues/52).
 
 The September 20 [development checkpoint](ManualCertification/v0.5-Development-Evidence-2026-09-20.md) records the initial 531-test response increment. The combined response and shelf implementation passed **539 tests, 0 failed, 0 skipped** on September 22, 2026; with the ampersand fix, the rc.2 source passes **541 tests**. Final package and installed checks are recorded in #52.
 
