@@ -296,7 +296,7 @@ Public Class Form1
         txtBoardSearch.AccessibleName = "Search the board (Ctrl+F)"
 
         Dim searchField As RoundedPanel =
-            CreateSearchField()
+            CreateSearchField(txtBoardSearch)
 
         Dim btnAdd As New ActionButton With {
             .Text = "+ Add Manuscript",
@@ -482,6 +482,11 @@ Public Class Form1
         body.Controls.Add(shelfHost, 0, 3)
 
         boardPage.Controls.Add(body)
+        boardBody = body
+
+        boardWelcome = BuildWelcome()
+        boardWelcome.Visible = False
+        boardPage.Controls.Add(boardWelcome)
 
         ' =================================================
         ' Status line
@@ -993,7 +998,7 @@ Public Class Form1
 
     ' The board search as a rounded field with a magnifier, like the other
     ' rounded controls. The text box itself keeps focus and keyboard behavior.
-    Private Function CreateSearchField() As RoundedPanel
+    Private Function CreateSearchField(box As TextBox) As RoundedPanel
 
         Dim iconSpace As Integer = UiTheme.Px(30, Me.DeviceDpi)
         Dim inset As Integer = UiTheme.Px(7, Me.DeviceDpi)
@@ -1009,16 +1014,16 @@ Public Class Form1
         }
 
         field.Width =
-            txtBoardSearch.Width + field.Padding.Horizontal
+            box.Width + field.Padding.Horizontal
 
         field.Height =
             Math.Max(
                 cboStageFilter.PreferredHeight + UiTheme.Px(4, Me.DeviceDpi),
-                txtBoardSearch.PreferredHeight + inset * 2
+                box.PreferredHeight + inset * 2
             )
 
-        txtBoardSearch.Dock = DockStyle.Fill
-        field.Controls.Add(txtBoardSearch)
+        box.Dock = DockStyle.Fill
+        field.Controls.Add(box)
 
         AddHandler field.Paint,
             Sub(sender, e)
@@ -1034,16 +1039,16 @@ Public Class Form1
 
         AddHandler field.MouseDown,
             Sub(sender, e)
-                txtBoardSearch.Focus()
+                box.Focus()
             End Sub
 
         ' The field's border shows keyboard focus.
-        AddHandler txtBoardSearch.GotFocus,
+        AddHandler box.GotFocus,
             Sub(sender, e)
                 field.BorderColor = UiTheme.AccentColor()
             End Sub
 
-        AddHandler txtBoardSearch.LostFocus,
+        AddHandler box.LostFocus,
             Sub(sender, e)
                 field.BorderColor = UiTheme.CardBorder()
             End Sub
@@ -2475,6 +2480,7 @@ Public Class Form1
         )
 
         UpdateRailCounts()
+        ShowWelcomeWhenEmpty()
         RefreshOpenPage()
 
     End Sub

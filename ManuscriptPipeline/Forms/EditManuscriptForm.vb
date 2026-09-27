@@ -132,6 +132,8 @@ Namespace Forms
                 _authorRepository.Load()
 
             BuildInterface()
+            EmptyHint.Attach(lstAuthors, "No authors yet. Add Author picks people from your reusable library; Manage Library creates new ones.")
+            EmptyHint.Attach(lstSubmissions, "No submissions yet.")
             UiPolish.ApplyDialog(Me)
             LoadManuscript()
             RefreshReadinessSummary()

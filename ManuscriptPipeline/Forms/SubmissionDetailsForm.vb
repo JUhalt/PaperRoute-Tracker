@@ -4,6 +4,7 @@ Imports System.Diagnostics
 Imports System.Drawing
 Imports System.IO
 Imports System.Windows.Forms
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
@@ -106,6 +107,8 @@ Namespace Forms
             _workflowNavigationEnabled = workflowNavigationEnabled
 
             BuildInterface()
+            EmptyHint.Attach(lstDecisions, "No decisions yet. Choose + Add Decision when the journal responds.")
+            EmptyHint.Attach(lstCorrespondence, "No letters or files yet. Keep the journal's letters, the reviews, and your revised files with this submission: + Add Item, Link Files..., or drag files here.")
             UiPolish.ApplyDialog(Me)
             RefreshDecisionList()
             RefreshCorrespondenceList()

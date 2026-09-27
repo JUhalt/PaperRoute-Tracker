@@ -42,6 +42,7 @@ Partial Public Class Form1
     Private libraryGrid As DataGridView = Nothing
     Private libraryContent As Panel = Nothing
     Private libraryAuthorsForm As Form = Nothing
+    Private libraryFilter As TextBox = Nothing
     Private tabLibraryManuscripts As ShelfTabButton = Nothing
     Private tabLibraryAuthors As ShelfTabButton = Nothing
 
@@ -423,6 +424,7 @@ Partial Public Class Form1
         libraryGrid = Nothing
         libraryContent = Nothing
         libraryAuthorsForm = Nothing
+        libraryFilter = Nothing
 
         ' Hosted editors save as they go. Refresh the board's copies, as the
         ' board did after their dialogs closed.
@@ -624,9 +626,24 @@ Partial Public Class Form1
 
     Private Function BuildLibraryPage() As Control
 
+        libraryFilter = New TextBox With {
+            .PlaceholderText = "Filter by title, journal, stage, or route",
+            .BorderStyle = BorderStyle.None,
+            .BackColor = UiTheme.CardBackground(),
+            .ForeColor = UiTheme.PrimaryText(),
+            .AccessibleName = "Filter the Library"
+        }
+        libraryFilter.Width = Math.Max(UiTheme.Px(260, DeviceDpi), TextRenderer.MeasureText(libraryFilter.PlaceholderText, Me.Font).Width + UiTheme.Px(16, DeviceDpi))
+
+        AddHandler libraryFilter.TextChanged,
+            Sub(sender, e)
+                FillLibraryGrid()
+            End Sub
+
         Dim frame As TableLayoutPanel = CreatePageFrame(
             "Library",
-            "Every manuscript on every shelf, and the reusable authors and affiliations they share.")
+            "Every manuscript on every shelf, and the reusable authors and affiliations they share.",
+            CreateSearchField(libraryFilter))
 
         ' Manuscripts | Authors
         Dim views As New FlowLayoutPanel With {
@@ -722,10 +739,19 @@ Partial Public Class Form1
     Private Sub ShowLibraryAuthors()
 
         ClearLibraryContent()
-        libraryAuthorsForm = HostEditor(New AuthorLibraryForm(manuscripts))
+        libraryAuthorsForm = HostEditor(CreateAuthorLibraryEditor())
         libraryContent.Controls.Add(libraryAuthorsForm)
 
     End Sub
+
+
+    ' Creates the Authors & Affiliations editor. Tests supply a stand-in so
+    ' they never read the real author library.
+    Protected Overridable Function CreateAuthorLibraryEditor() As Form
+
+        Return New AuthorLibraryForm(manuscripts)
+
+    End Function
 
 
     Private Sub ShowLibraryManuscripts()
@@ -764,11 +790,11 @@ Partial Public Class Form1
         grid.ColumnHeadersDefaultCellStyle.Padding = New Padding(UiTheme.Px(6, DeviceDpi), UiTheme.Px(6, DeviceDpi), UiTheme.Px(6, DeviceDpi), UiTheme.Px(6, DeviceDpi))
         grid.RowTemplate.Height = TextRenderer.MeasureText("Ag", Me.Font).Height + UiTheme.Px(14, DeviceDpi)
 
-        grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Title", .HeaderText = "Title", .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = 170, .MinimumWidth = UiTheme.Px(200, DeviceDpi)})
+        grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Title", .HeaderText = "Title", .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = 220, .MinimumWidth = UiTheme.Px(220, DeviceDpi)})
         grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Stage", .HeaderText = "Stage", .AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells})
         grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Shelf", .HeaderText = "Shelf", .AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells})
         grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Journal", .HeaderText = "Target journal", .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = 55})
-        grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Route", .HeaderText = "Route", .AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells})
+        grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Route", .HeaderText = "Route", .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = 70})
         grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Days", .HeaderText = "Days in stage", .AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells, .ValueType = GetType(Integer)})
         grid.Columns("Days").DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight
 
@@ -793,6 +819,12 @@ Partial Public Class Form1
         FillLibraryGrid()
         libraryContent.Controls.Add(grid)
 
+        EmptyHint.Attach(
+            grid,
+            Function() If(manuscripts.Count = 0,
+                          "No manuscripts yet. Add one from the Board, or bring in existing work from Import & Export.",
+                          "No manuscripts match """ & libraryFilter.Text.Trim() & """."))
+
     End Sub
 
 
@@ -808,7 +840,17 @@ Partial Public Class Form1
 
         libraryGrid.Rows.Clear()
 
+        Dim filter As String = If(libraryFilter?.Text, String.Empty).Trim()
+
         For Each manuscript As Manuscript In manuscripts
+            Dim route As String = RouteSummaryService.Describe(manuscript).Text
+
+            If filter.Length > 0 AndAlso
+               Not {manuscript.Title, manuscript.TargetJournal, FormatStage(manuscript.CurrentStage), FormatShelf(manuscript.Location), route}.
+                   Any(Function(value) If(value, String.Empty).IndexOf(filter, StringComparison.CurrentCultureIgnoreCase) >= 0) Then
+                Continue For
+            End If
+
             Dim entered As DateTime = manuscript.StageEnteredDate.Date
             Dim days As Object =
                 If(manuscript.Location = ManuscriptLocation.Pipeline AndAlso entered > DateTime.MinValue.Date AndAlso entered <= DateTime.Today,
@@ -820,7 +862,7 @@ Partial Public Class Form1
                 FormatStage(manuscript.CurrentStage),
                 FormatShelf(manuscript.Location),
                 manuscript.TargetJournal,
-                RouteSummaryService.Describe(manuscript).Text,
+                route,
                 days)
 
             libraryGrid.Rows(index).Tag = manuscript
@@ -907,7 +949,7 @@ Partial Public Class Form1
         list.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100.0F))
 
         Dim buttonWidth As Integer =
-            {"Import Spreadsheet...", "Import BibTeX / RIS...", "Get Import Template...", "Add Manuscript...",
+            {"Import Spreadsheet...", "Import BibTeX / RIS...", "ORCID Works...", "Get Import Template...", "Add Manuscript...",
              "Export Library to Excel...", "Export Library as BibTeX...", "Export Library as RIS...",
              "Publication & CV Export...", "Backup Library...", "Restore Backup..."}.
             Max(Function(text) GetResponsiveButtonWidth(text, 0)) + UiTheme.Px(8, DeviceDpi)
@@ -958,6 +1000,7 @@ Partial Public Class Form1
         addSection("Bring work in")
         addCommand("Import Spreadsheet...", "A PaperRoute template, a legacy tracker, or any workbook through column mapping. You see a preview, including likely duplicates, before anything is added.", AddressOf ImportExcelHistory)
         addCommand("Import BibTeX / RIS...", "Records from a reference manager. You review each record first; likely duplicates start unchecked.", AddressOf ImportBibliography)
+        addCommand("ORCID Works...", "Public works from an author's ORCID record, reviewed before anything is added. Opens Library > Authors & Affiliations: select the author, then choose ORCID...", Sub(sender, e) OpenOrcidWorks())
         addCommand("Add Manuscript...", "Includes Paste a Title Page, which reads a Word or LaTeX title page on this computer.", AddressOf AddManuscript)
         addCommand("Get Import Template...", "A blank workbook with the standard columns, ready to fill in.", AddressOf ExportBlankTemplate)
 

@@ -14,7 +14,10 @@ Development is tracked in [draft PR #69](https://github.com/JUhalt/PaperRoute-Tr
 - Needs Attention items are chips that filter the board and can be used from the keyboard. **Ctrl+F** jumps to search.
 - A shared visual system: rounded controls, one filled primary action per window, and quiet outlines for the rest, in Light and Dark.
 - One main window with a left rail of pages: **Board**, **Library** (every manuscript in a sortable table, plus Authors & Affiliations), **Journals**, **Reminders**, and **Import & Export**, with Settings and Help at the bottom. **Ctrl+1** to **Ctrl+5** open the pages, **Alt+Left** and **Alt+Right** go back and forward, and **F1** opens the User Guide ([#54](https://github.com/JUhalt/PaperRoute-Tracker/issues/54)).
-- The **Import & Export** page lists every way of bringing work in or taking it out, with a sentence on what each keeps ([#58](https://github.com/JUhalt/PaperRoute-Tracker/issues/58)).
+- The **Import & Export** page lists every way of bringing work in or taking it out, with a sentence on what each keeps. **ORCID Works...** opens the author the works belong to ([#58](https://github.com/JUhalt/PaperRoute-Tracker/issues/58)).
+- An empty library opens on a welcome instead of empty shelves: **+ Add Manuscript**, **Import Existing Work**, the four ways in (a pasted title page, ORCID works, BibTeX or RIS, a spreadsheet), and a plain statement that the library stays on this computer. It never adds sample data ([#59](https://github.com/JUhalt/PaperRoute-Tracker/issues/59)).
+- Empty lists and tables say what belongs there and how to add the first item, and disappear with it.
+- The Library filters as you type by title, journal, stage, or route, and says when nothing matches.
 
 - A manuscript opens as a page in the main window, with **Overview**, **Authors**, **Versions**, **Submissions**, and **Readiness & Packets** tabs. The header shows the stage, journal, and route, with **Copy Citation**, **View Route**, and **Delete Manuscript...**. Overview shows the linked journal's notes and checklist from the Journal Library ([#55](https://github.com/JUhalt/PaperRoute-Tracker/issues/55)).
 
@@ -30,6 +33,7 @@ Development is tracked in [draft PR #69](https://github.com/JUhalt/PaperRoute-Tr
 
 - Two-word field labels such as *Revision deadline* no longer lose their second line at 150% scaling.
 - A stale border line no longer remains inside a manuscript card after the window is widened or maximized.
+- Muted text such as counts, card metadata, and the status line meets 4.5:1 contrast on the board and on cards, in Light and Dark.
 
 ## [0.5.0] - 2026-09-26
 

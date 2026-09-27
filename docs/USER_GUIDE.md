@@ -8,7 +8,7 @@ This guide describes **PaperRoute v0.5.0 — Reviewer Response Workflow**. See t
 
 If you only read one section, read this one.
 
-1. Open PaperRoute and choose **Add Manuscript**.
+1. Open PaperRoute. An empty library opens on a welcome: choose **+ Add Manuscript** for a paper you are working on, or **Import Existing Work** to bring in published work from ORCID, BibTeX or RIS, or a spreadsheet.
 2. Give the manuscript a title and place it at the stage that best matches reality.
 3. Open the manuscript from its card to add structured authors, a target journal, metadata, links, and submission history.
 4. Before submitting, record the exact manuscript snapshot in **Version History**, use **Submission Readiness...** for the journal's checklist, and assemble **Submission Packets...** for the files you intend to send.
@@ -67,7 +67,9 @@ Earlier versions reached these places through menus. Every command is still avai
 | Settings > Preferences..., Check for Updates..., Diagnostics..., About | **Settings** in the rail |
 | Settings > User Guide... and the Help button | **Help** in the rail, or **F1** |
 
-The **Library** page lists every manuscript on every shelf in a sortable table; press Enter or double-click a row to open it.
+The **Library** page lists every manuscript on every shelf in a sortable table; press Enter or double-click a row to open it. Type in its filter box to narrow the table by title, journal, stage, or route.
+
+An empty list or table says what belongs there and how to add the first item.
 
 ### The Needs Attention area
 
@@ -238,7 +240,7 @@ External metadata should help fill a record, not take control of the research wo
 
 ## ORCID Public-Profile Import
 
-Open **Library > Authors & Affiliations**, select an author, and use the ORCID workflow.
+Open **Library > Authors & Affiliations**, select an author, and use the ORCID workflow. **Import & Export > ORCID Works...** and the welcome's **ORCID works** open the same place.
 
 PaperRoute can read public ORCID information for a user-supplied ORCID iD, including public identity information, public employment/affiliation data, and public works.
 

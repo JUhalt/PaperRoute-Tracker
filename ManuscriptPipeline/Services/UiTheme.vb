@@ -48,13 +48,14 @@ Namespace Services
 
 
         ' Tertiary text: counts, hints, and metadata beside secondary text.
+        ' Still 4.5:1 on both the board and card backgrounds.
         Public Shared Function MutedText() As Color
 
             If IsDark() Then
-                Return Color.FromArgb(125, 136, 148)
+                Return Color.FromArgb(138, 149, 161)
             End If
 
-            Return Color.FromArgb(106, 119, 131)
+            Return Color.FromArgb(100, 113, 125)
 
         End Function
 

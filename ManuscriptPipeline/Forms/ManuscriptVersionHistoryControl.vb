@@ -5,6 +5,7 @@ Imports System.Drawing
 Imports System.IO
 Imports System.Linq
 Imports System.Windows.Forms
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
@@ -43,6 +44,7 @@ Namespace Forms
                 manuscript
 
             BuildInterface()
+            EmptyHint.Attach(lstVersions, "No versions yet. Add Version records which file was which: a working draft, the submitted snapshot, or a revision.")
             RefreshVersions()
 
         End Sub
@@ -385,7 +387,7 @@ Namespace Forms
             If _displayedVersions.Count = 0 Then
 
                 lblInfo.Text =
-                    "No versions tracked yet. Add a working, submitted, or revised snapshot. Journal Submissions continue below ↓"
+                    "No versions tracked yet. Add a working, submitted, or revised snapshot."
 
                 txtDetails.Text =
                     "Version records are optional. Existing manuscripts remain valid without version history."

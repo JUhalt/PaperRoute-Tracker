@@ -4,6 +4,7 @@ Imports System.IO
 Imports System.Linq
 Imports System.Text
 Imports System.Windows.Forms
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
@@ -49,6 +50,16 @@ Namespace Forms
             Size = New Size(1040, 760)
             MinimumSize = New Size(800, 580)
             BuildInterface()
+            EmptyHint.Attach(
+                lstResponses,
+                Function()
+                    If Not _working.Decisions.Any(Function(item) item IsNot Nothing) Then
+                        Return "Record the editorial decision first; reviewer comments belong to a decision."
+                    End If
+                    Return If(_working.ReviewerResponses.Count = 0,
+                              "No reviewer comments yet. Choose Add Comment... to record the first request.",
+                              "No comments have this status.")
+                End Function)
             UiPolish.ApplyDialog(Me)
             RefreshItems()
         End Sub

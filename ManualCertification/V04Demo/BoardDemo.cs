@@ -37,7 +37,7 @@ internal static class BoardDemo
         board.FormClosed += (_, _) => timer.Dispose();
     }
 
-    internal static void CreateSamples(string sessionRoot)
+    internal static void CreateSamples(string sessionRoot, bool empty = false)
     {
         // Verify every root before constructing any repository or the real board.
         if (!StorageEnvironment.IsIsolatedSession ||
@@ -133,8 +133,9 @@ internal static class BoardDemo
 
         var library = new AuthorLibraryData();
         library.Journals.Add(openPsychology);
-        new AuthorLibraryRepository().Save(library);
-        new ManuscriptRepository().Save(manuscripts);
+        new AuthorLibraryRepository().Save(empty ? new AuthorLibraryData() : library);
+        // --empty shows the first-run welcome instead of the sample shelves.
+        new ManuscriptRepository().Save(empty ? new List<Manuscript>() : manuscripts);
     }
 
     private static Manuscript Sample(ManuscriptLocation location, PaperStage stage, string title, string journal,

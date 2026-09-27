@@ -6,6 +6,7 @@ Imports System.Runtime.ExceptionServices
 Imports System.Threading
 Imports System.Windows.Forms
 Imports ManuscriptPipeline
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Forms
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
@@ -307,6 +308,93 @@ Public Class ManuscriptPageTests
             End Sub)
     End Sub
 
+    ' #59: an empty library opens on a welcome, which never adds data.
+    <TestMethod>
+    Public Sub AnEmptyLibraryOpensOnTheWelcomeUntilTheFirstManuscript()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard()
+                    board.Prepare()
+
+                    Assert.IsTrue(board.Welcome.Visible, "An empty library shows the welcome.")
+                    Assert.AreEqual(0, board.Library.Count, "The welcome adds no sample data.")
+                    Assert.AreEqual(0, board.SaveCount)
+                    CollectionAssert.AreEqual(
+                        {"Paste a title page", "ORCID works", "BibTeX or RIS", "Spreadsheet"},
+                        Descendants(board.Welcome).OfType(Of FilterChip)().Select(Function(chip) chip.Text).ToList())
+
+                    board.Library.Add(Sample("The first manuscript"))
+                    board.Render()
+                    Assert.IsFalse(board.Welcome.Visible, "The shelves replace the welcome.")
+
+                    board.Library.Clear()
+                    board.Render()
+                    Assert.IsTrue(board.Welcome.Visible)
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    ' #54 and #59: the Library filters as you type and says when nothing matches.
+    <TestMethod>
+    Public Sub LibraryFilterNarrowsTheTableAndExplainsNoMatches()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard()
+                    Dim revising As Manuscript = Sample("Attention in the wild")
+                    revising.TargetJournal = "Journal of Fictional Revisions"
+                    board.Prepare(revising, Sample("A second study"), Sample("A third study"))
+                    board.PressCommandKey(Keys.Control Or Keys.D2)
+                    Assert.AreEqual("Library", board.PageName)
+
+                    Dim grid As DataGridView = Descendants(board).OfType(Of DataGridView)().Single()
+                    Dim filter As TextBox = Descendants(board).OfType(Of TextBox)().Single(Function(box) box.AccessibleName = "Filter the Library")
+                    Dim hint As Label = grid.Controls.OfType(Of Label)().Single()
+                    Assert.AreEqual(3, grid.Rows.Count)
+                    Assert.IsFalse(hint.Visible)
+
+                    filter.Text = "revisions"
+                    Assert.AreEqual(1, grid.Rows.Count, "The filter matches the target journal.")
+                    Assert.AreSame(revising, grid.Rows(0).Tag)
+
+                    filter.Text = "no such paper"
+                    Assert.AreEqual(0, grid.Rows.Count)
+                    Assert.IsTrue(hint.Visible)
+                    StringAssert.Contains(hint.Text, "no such paper")
+
+                    filter.Text = String.Empty
+                    Assert.AreEqual(3, grid.Rows.Count)
+                    Assert.IsFalse(hint.Visible)
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    ' #58: ORCID works are listed with the other imports and open the author they belong to.
+    <TestMethod>
+    Public Sub ImportExistingWorkReachesOrcidWorksThroughTheAuthor()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard()
+                    board.Prepare()
+
+                    Descendants(board.Welcome).OfType(Of Button)().Single(Function(button) button.Text = "Import Existing Work").PerformClick()
+                    Application.DoEvents()
+                    Assert.AreEqual("ImportExport", board.PageName)
+
+                    Descendants(board).OfType(Of Button)().Single(Function(button) button.Text = "ORCID Works...").PerformClick()
+                    Application.DoEvents()
+                    Assert.AreEqual("Library", board.PageName)
+                    Assert.IsTrue(board.AuthorEditorShown, "ORCID works open Authors & Affiliations.")
+                    Assert.AreEqual(0, board.Library.Count)
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
     Private Shared Sub MoveFirstResponseDown(board As PageBoard)
         Dim matrix As ReviewerResponseMatrixForm = Descendants(board.Editor).OfType(Of ReviewerResponseMatrixForm)().Single()
         Dim list As ListBox = DirectCast(GetType(ReviewerResponseMatrixForm).GetField("lstResponses", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(matrix), ListBox)
@@ -392,6 +480,30 @@ Public Class ManuscriptPageTests
         Protected Overrides Function LoadAuthorLibrary() As Boolean
             Return True
         End Function
+
+        Private _authorEditor As Form
+
+        Protected Overrides Function CreateAuthorLibraryEditor() As Form
+            _authorEditor = New Form()
+            Return _authorEditor
+        End Function
+
+        Public ReadOnly Property AuthorEditorShown As Boolean
+            Get
+                Return _authorEditor IsNot Nothing AndAlso Not _authorEditor.IsDisposed AndAlso _authorEditor.Visible
+            End Get
+        End Property
+
+        Public ReadOnly Property Welcome As Control
+            Get
+                Return DirectCast(GetType(Form1).GetField("boardWelcome", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me), Control)
+            End Get
+        End Property
+
+        Public Sub Render()
+            CallPrivate("RenderManuscripts")
+            Application.DoEvents()
+        End Sub
 
         Public Sub Prepare(ParamArray samples As Manuscript())
             CallPrivate("BuildInterface")
