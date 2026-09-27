@@ -169,7 +169,7 @@ Namespace Forms
                 .AutoSize = True,
                 .MaximumSize = New Size(480, 0),
                 .Text =
-                    "Author order is controlled from Manuscript Details. " &
+                    "Author order is set on the manuscript's Authors tab. " &
                     "Affiliations are manuscript-specific assignments."
             }
 

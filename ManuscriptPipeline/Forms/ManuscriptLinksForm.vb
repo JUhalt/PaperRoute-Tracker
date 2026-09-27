@@ -3,6 +3,7 @@ Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.Linq
 Imports System.Windows.Forms
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
@@ -161,7 +162,7 @@ Namespace Forms
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 220))
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
 
-            Dim journalGroup As New GroupBox With {
+            Dim journalGroup As New SectionCard With {
                 .Text = "Target Journal",
                 .Dock = DockStyle.Top,
                 .AutoSize = True,
@@ -301,7 +302,7 @@ Namespace Forms
 
             journalGroup.Controls.Add(journalLayout)
 
-            Dim preprintGroup As New GroupBox With {
+            Dim preprintGroup As New SectionCard With {
                 .Text = "Preprint",
                 .Dock = DockStyle.Top,
                 .AutoSize = True,
@@ -373,7 +374,7 @@ Namespace Forms
 
             preprintGroup.Controls.Add(preprintLayout)
 
-            Dim linksGroup As New GroupBox With {
+            Dim linksGroup As New SectionCard With {
                 .Text = "Related Web Links",
                 .Dock = DockStyle.Fill,
                 .Padding = New Padding(14),

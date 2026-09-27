@@ -140,7 +140,7 @@ Namespace Forms
                 .AccessibleName = "Save packet changes and go to related record"
             }
             Dim menu As New ContextMenuStrip()
-            AddWorkflowMenuItem(menu, SubmissionWorkflowTarget.Manuscript, "Manuscript Details")
+            AddWorkflowMenuItem(menu, SubmissionWorkflowTarget.Manuscript, "Manuscript Overview")
             AddWorkflowMenuItem(menu, SubmissionWorkflowTarget.Version, "Exact Version")
             AddWorkflowMenuItem(menu, SubmissionWorkflowTarget.Readiness, "Readiness")
             AddWorkflowMenuItem(menu, SubmissionWorkflowTarget.Submission, "Actual Submission")

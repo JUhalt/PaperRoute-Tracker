@@ -247,7 +247,7 @@ Public Class ReviewerResponseTests
         StringAssert.Contains(output, "Editorial decision: Minor revision — 2026-09-15")
         Assert.IsFalse(output.Contains(submission.Id.ToString("D")))
         Assert.IsFalse(output.Contains(submission.Decisions(1).Id.ToString("D")))
-        StringAssert.Contains(output, "A manual draft response\.")
+        StringAssert.Contains(output, "A manual draft response.")
         StringAssert.Contains(output, "[Not entered]")
     End Sub
 
@@ -258,10 +258,40 @@ Public Class ReviewerResponseTests
         Dim item = Draft(submission, "# Reviewer", "<script>alert(1)</script>" & vbLf & "[click](https://example.test)")
         ReviewerResponseService.AddItem(submission, item)
         Dim output = ReviewerResponseExportService.ExportMarkdown(manuscript, submission)
-        StringAssert.Contains(output, "\# Reviewer")
-        StringAssert.Contains(output, "&lt;script\>")
-        StringAssert.Contains(output, "\[click\]\(https://example\.test\)")
+        StringAssert.Contains(output, "## 1. # Reviewer", "A heading's text needs no escaping after its marker.")
+        StringAssert.Contains(output, "&lt;script>alert(1)&lt;/script>")
+        StringAssert.Contains(output, "\[click\](https\://example.test)")
         Assert.IsFalse(output.Contains("<script>"))
+    End Sub
+
+    ' #73: plain-text readers see the text as typed, and only what would
+    ' change the rendered result is escaped.
+    <TestMethod>
+    <DataRow("See p. 6, lines 112-118 (Table 2).", "See p. 6, lines 112-118 (Table 2).")>
+    <DataRow("SYNTHETIC-UPGRADE-050", "SYNTHETIC-UPGRADE-050")>
+    <DataRow("# not a heading", "\# not a heading")>
+    <DataRow("> not a quote", "\> not a quote")>
+    <DataRow("- not a list", "\- not a list")>
+    <DataRow("+ not a list", "\+ not a list")>
+    <DataRow("1. not a list", "1\. not a list")>
+    <DataRow("12) not a list", "12\) not a list")>
+    <DataRow("===", "\===")>
+    <DataRow("*emphasis* and **strong**", "\*emphasis\* and \*\*strong\*\*")>
+    <DataRow("_emphasis_ in file_name", "\_emphasis\_ in file_name")>
+    <DataRow("`code`", "\`code\`")>
+    <DataRow("[text](target) and ![image](x)", "\[text\](target) and !\[image\](x)")>
+    <DataRow("a | b", "a \| b")>
+    <DataRow("R&D <b>bold</b>", "R&amp;D &lt;b>bold&lt;/b>")>
+    <DataRow("https://example.test and www.example.test", "https\://example.test and www\.example.test")>
+    <DataRow("~~struck~~ and ~5", "\~\~struck\~\~ and ~5")>
+    <DataRow("C:\data\file and \*", "C:\data\file and \\\*")>
+    Public Sub Export_EscapesOnlyWhatWouldChangeTheRenderedText(typed As String, expected As String)
+        Assert.AreEqual(expected, ReviewerResponseExportService.EscapeMarkdown(typed, startsLine:=True))
+    End Sub
+
+    <TestMethod>
+    Public Sub Export_EscapesLineStartMarkersOnLaterLinesOnly()
+        Assert.AreEqual("- first" & vbLf & "\- second", ReviewerResponseExportService.EscapeMarkdown("- first" & vbLf & "- second"))
     End Sub
 
     <TestMethod>

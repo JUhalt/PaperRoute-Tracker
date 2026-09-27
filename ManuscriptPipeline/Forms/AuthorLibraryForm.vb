@@ -3,6 +3,7 @@ Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.Linq
 Imports System.Windows.Forms
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
@@ -51,6 +52,8 @@ Namespace Forms
                 _repository.Load()
 
             BuildInterface()
+            EmptyHint.Attach(lstAuthors, "No reusable authors yet. Add Author creates a person you can add to any manuscript; ORCID... can then read their public profile.")
+            EmptyHint.Attach(lstAffiliations, "No affiliations yet. Add Affiliation records an institution once, for every author who shares it.")
             UiPolish.ApplyDialog(Me)
             RefreshLists()
 
@@ -123,7 +126,7 @@ Namespace Forms
                 .Margin = New Padding(3, 3, 3, 12)
             }
 
-            Dim tabs As New TabControl With {
+            Dim tabs As New UnderlineTabControl With {
                 .Dock = DockStyle.Fill
             }
 

@@ -29,15 +29,10 @@ Namespace Forms
                     Case SubmissionWorkflowTarget.Submission
                         Dim submission = _workingManuscript.Submissions.FirstOrDefault(
                             Function(item) item IsNot Nothing AndAlso request.SubmissionId.HasValue AndAlso item.Id = request.SubmissionId.Value)
+                        ' The submission opens in the Submissions tab's detail pane.
                         If submission IsNot Nothing Then
                             SelectSubmissionById(submission.Id)
-                            Using dialog As New SubmissionDetailsForm(_workingManuscript, submission, True)
-                                dialog.ShowDialog(Me)
-                                nextRequest = dialog.RequestedNavigation
-                            End Using
-                            RefreshLifecycleControls()
-                            RefreshSubmissionList()
-                            SelectSubmissionById(submission.Id)
+                            ScrollControlIntoDetailsView(_submissionsSection)
                         End If
                     Case SubmissionWorkflowTarget.RecordSubmission
                         nextRequest = RecordPreparedPacketSubmission(request)
@@ -46,6 +41,7 @@ Namespace Forms
                 End Select
                 request = nextRequest
             End While
+            RefreshReadinessSummary()
         End Sub
 
         Private Function RecordPreparedPacketSubmission(request As SubmissionWorkflowRequest) As SubmissionWorkflowRequest

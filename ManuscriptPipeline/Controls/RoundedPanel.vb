@@ -19,6 +19,10 @@ Namespace Controls
             Me.DoubleBuffered = True
             Me.BorderStyle = BorderStyle.None
 
+            ' Repaint the whole panel on resize; otherwise the border drawn at
+            ' the previous width stays visible inside a widened card.
+            SetStyle(ControlStyles.ResizeRedraw, True)
+
         End Sub
 
 

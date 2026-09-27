@@ -2,6 +2,7 @@ Imports System
 Imports System.Globalization
 Imports System.Linq
 Imports System.Text
+Imports System.Text.RegularExpressions
 Imports ManuscriptPipeline.Models
 
 Namespace Services
@@ -56,17 +57,79 @@ Namespace Services
         Private Shared Sub AppendSection(output As StringBuilder, label As String, value As String)
             output.AppendLine("### " & label)
             output.AppendLine()
-            output.AppendLine(If(String.IsNullOrWhiteSpace(value), "[Not entered]", EscapeMarkdown(value)))
+            output.AppendLine(If(String.IsNullOrWhiteSpace(value), "[Not entered]", EscapeMarkdown(value, startsLine:=True)))
             output.AppendLine()
         End Sub
 
-        Private Shared Function EscapeMarkdown(value As String) As String
-            Dim result = If(value, String.Empty).Replace("\", "\\")
-            For Each character In New String() {"`", "*", "_", "{", "}", "[", "]", "(", ")", "#", "+", "-", ".", "!", "|", ">"}
-                result = result.Replace(character, "\" & character)
+        ' Escapes only what would change meaning when rendered, so the text
+        ' stays readable as plain text (#73): markers at the start of a line,
+        ' emphasis and code markers, link brackets, table pipes, and autolinks.
+        ' Raw HTML is always neutralized.
+        Private Shared ReadOnly LineStartMarker As New Regex("^(\s{0,3})([#>+\-=~])")
+        Private Shared ReadOnly OrderedListMarker As New Regex("^(\s{0,3}\d{1,9})([.)])(?=\s|$)")
+
+        Friend Shared Function EscapeMarkdown(value As String, Optional startsLine As Boolean = False) As String
+            Dim lines As String() = If(value, String.Empty).Split(ControlChars.Lf)
+            For index As Integer = 0 To lines.Length - 1
+                Dim line As String = EscapeInline(lines(index))
+                If startsLine OrElse index > 0 Then
+                    Dim ordered As Match = OrderedListMarker.Match(line)
+                    If ordered.Success Then
+                        line = ordered.Groups(1).Value & "\" & line.Substring(ordered.Groups(2).Index)
+                    Else
+                        line = LineStartMarker.Replace(line, "$1\$2", 1)
+                    End If
+                End If
+                lines(index) = line
             Next
-            ' Raw HTML is never executable when this Markdown is rendered.
-            Return result.Replace("&", "&amp;").Replace("<", "&lt;")
+            Return String.Join(ControlChars.Lf, lines)
+        End Function
+
+        Private Shared Function EscapeInline(line As String) As String
+            Dim result As New StringBuilder(line.Length + 8)
+            Dim index As Integer = 0
+            While index < line.Length
+                Dim character As Char = line(index)
+                Dim previous As Char = If(index > 0, line(index - 1), " "c)
+                Dim nextCharacter As Char = If(index + 1 < line.Length, line(index + 1), " "c)
+                Select Case character
+                    Case "\"c
+                        ' A backslash escapes punctuation, and at the end of a line it
+                        ' would become a line break.
+                        Dim endsLine As Boolean = index + 1 >= line.Length OrElse nextCharacter = ControlChars.Cr
+                        result.Append(If(endsLine OrElse Char.IsPunctuation(nextCharacter) OrElse Char.IsSymbol(nextCharacter), "\\", "\"))
+                    Case "`"c, "*"c, "["c, "]"c, "|"c
+                        result.Append("\"c).Append(character)
+                    Case "_"c
+                        ' Underscores inside words, as in file_name, are never emphasis.
+                        If Char.IsLetterOrDigit(previous) AndAlso Char.IsLetterOrDigit(nextCharacter) Then
+                            result.Append(character)
+                        Else
+                            result.Append("\_")
+                        End If
+                    Case "~"c
+                        result.Append(If(previous = "~"c OrElse nextCharacter = "~"c, "\~", "~"))
+                    Case "&"c
+                        result.Append("&amp;")
+                    Case "<"c
+                        result.Append("&lt;")
+                    Case ":"c
+                        ' A bare URL stays text rather than becoming a link.
+                        result.Append(If(String.CompareOrdinal(line, index, "://", 0, 3) = 0 AndAlso Char.IsLetter(previous), "\:", ":"))
+                    Case "w"c, "W"c
+                        If Not Char.IsLetterOrDigit(previous) AndAlso
+                           String.Compare(line, index, "www.", 0, 4, StringComparison.OrdinalIgnoreCase) = 0 Then
+                            result.Append(line, index, 3).Append("\.")
+                            index += 4
+                            Continue While
+                        End If
+                        result.Append(character)
+                    Case Else
+                        result.Append(character)
+                End Select
+                index += 1
+            End While
+            Return result.ToString()
         End Function
 
     End Class

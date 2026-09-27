@@ -17,7 +17,18 @@ Portable and developer builds intentionally do not replace themselves in place.
 
 PaperRoute upgrades are designed not to overwrite the manuscript database, settings, schema metadata, managed document library, or externally linked files. Even so, creating a current PaperRoute backup before an important upgrade is a sensible precaution.
 
-Use **Data → Backup Library...** to create a portable backup.
+Use **Settings → Backup Library...** to create a portable backup. In v0.5 and earlier, it is **Data → Backup Library...**.
+
+## Moving from v0.5 to v0.6
+
+PaperRoute v0.6 changes where things live and how they look. It does **not** migrate your data: the library stays on **Schema 6**, so v0.5 can still open a library that v0.6 has used, and portable backups made by either version restore in both. A backup before upgrading is still a sensible precaution.
+
+What to expect after upgrading:
+
+- PaperRoute opens in one window. The left rail replaces the **Data** and **Settings** menus; the User Guide's "Finding your way around" table lists each command's new location.
+- A manuscript opens as a page instead of the Manuscript Details dialog. Edits collect in one **Unsaved changes** bar; choose **Save** (or press Ctrl+S) to keep them, or **Discard**. Leaving the page or closing PaperRoute with unsaved changes asks first.
+- Submission details, editorial decisions, reviewer responses, and correspondence are edited on the manuscript's **Submissions** tab and saved with the manuscript.
+- A Markdown response draft escapes fewer characters, so its raw text differs from a v0.5 export. It renders the same.
 
 ## Moving from v0.4 to v0.5
 

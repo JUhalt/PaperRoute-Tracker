@@ -1,7 +1,9 @@
 ﻿Imports System
 Imports System.Collections.Generic
 Imports System.Drawing
+Imports System.Text.RegularExpressions
 Imports System.Windows.Forms
+Imports ManuscriptPipeline.Controls
 
 Namespace Services
 
@@ -117,7 +119,8 @@ Namespace Services
                 UiTheme.PrimaryText()
 
             ApplyToControlTree(
-                form
+                form,
+                TryCast(form.AcceptButton, Button)
             )
 
         End Sub
@@ -128,19 +131,22 @@ Namespace Services
         ' =====================================================
 
         Private Shared Sub ApplyToControlTree(
-            parent As Control
+            parent As Control,
+            primaryButton As Button
         )
 
             For Each control As Control In parent.Controls
 
                 ApplyControlStyle(
-                    control
+                    control,
+                    primaryButton
                 )
 
                 If control.HasChildren Then
 
                     ApplyToControlTree(
-                        control
+                        control,
+                        primaryButton
                     )
 
                 End If
@@ -151,17 +157,41 @@ Namespace Services
 
 
         Private Shared Sub ApplyControlStyle(
-            control As Control
+            control As Control,
+            primaryButton As Button
         )
+
+            ' Theme-painted buttons already follow the tokens.
+            If TypeOf control Is ActionButton Then
+                Return
+            End If
 
             If TypeOf control Is Button Then
 
-                StyleButton(
+                Dim button As Button =
                     DirectCast(
                         control,
                         Button
                     )
+
+                Dim isPrimary As Boolean =
+                    control Is primaryButton
+
+                StyleButton(
+                    button,
+                    isPrimary
                 )
+
+                ' A disabled filled button would show grey text on the accent.
+                If isPrimary Then
+                    AddHandler button.EnabledChanged,
+                        Sub(sender, e)
+                            StyleButton(button, button.Enabled)
+                        End Sub
+                    If Not button.Enabled Then
+                        StyleButton(button, False)
+                    End If
+                End If
 
                 Return
 
@@ -185,6 +215,10 @@ Namespace Services
                 textBox.BorderStyle =
                     BorderStyle.FixedSingle
 
+                ThemedBorder.Attach(
+                    textBox
+                )
+
                 Return
 
             End If
@@ -207,6 +241,10 @@ Namespace Services
                 richText.BorderStyle =
                     BorderStyle.FixedSingle
 
+                ThemedBorder.Attach(
+                    richText
+                )
+
                 Return
 
             End If
@@ -228,6 +266,10 @@ Namespace Services
 
                 listBox.BorderStyle =
                     BorderStyle.FixedSingle
+
+                ThemedBorder.Attach(
+                    listBox
+                )
 
                 Return
 
@@ -321,7 +363,8 @@ Namespace Services
                TypeOf control Is RadioButton Then
 
                 control.ForeColor = UiTheme.PrimaryText()
-                control.BackColor = UiTheme.BoardBackground()
+                control.BackColor = SectionCard.SurfaceBehind(control)
+                ShowLiteralAmpersands(DirectCast(control, ButtonBase))
 
                 Return
 
@@ -345,12 +388,51 @@ Namespace Services
             End If
 
 
+            ' Sections are cards; what they contain sits on the card.
+            If TypeOf control Is SectionCard Then
+
+                control.BackColor =
+                    UiTheme.CardBackground()
+
+                control.ForeColor =
+                    UiTheme.PrimaryText()
+
+                Return
+
+            End If
+
+
             If TypeOf control Is GroupBox Then
 
                 control.BackColor =
-                    UiTheme.BoardBackground()
+                    SectionCard.SurfaceBehind(control)
 
                 control.ForeColor =
+                    UiTheme.PrimaryText()
+
+                Return
+
+            End If
+
+
+            ' A tab page continues the surface around its tabs.
+            If TypeOf control Is TabPage Then
+
+                Dim page As TabPage =
+                    DirectCast(
+                        control,
+                        TabPage
+                    )
+
+                page.UseVisualStyleBackColor =
+                    False
+
+                page.BackColor =
+                    If(page.Parent Is Nothing,
+                       UiTheme.BoardBackground(),
+                       SectionCard.SurfaceBehind(page.Parent))
+
+                page.ForeColor =
                     UiTheme.PrimaryText()
 
                 Return
@@ -362,7 +444,7 @@ Namespace Services
                TypeOf control Is FlowLayoutPanel Then
 
                 control.BackColor =
-                    UiTheme.BoardBackground()
+                    SectionCard.SurfaceBehind(control)
 
                 Return
 
@@ -376,6 +458,10 @@ Namespace Services
                         control,
                         Label
                     )
+
+                If label.UseMnemonic AndAlso Not UsesAcceleratorSyntax(label.Text) Then
+                    label.UseMnemonic = False
+                End If
 
                 If label.ForeColor =
                     SystemColors.GrayText Then
@@ -401,11 +487,35 @@ Namespace Services
 
 
         ' =====================================================
+        ' Literal ampersands (#71)
+        ' =====================================================
+
+        ' A label or option shows "&" literally unless its text uses
+        ' accelerator syntax ("&s" or "&&"). Names filled in later, such as
+        ' "Memory & Cognition", keep their ampersand, while deliberate
+        ' accelerators such as "Show &status" keep working.
+        Private Shared ReadOnly AcceleratorSyntax As New Regex("&(&|[\p{L}\p{N}])")
+
+        Friend Shared Function UsesAcceleratorSyntax(text As String) As Boolean
+            Return Not String.IsNullOrEmpty(text) AndAlso AcceleratorSyntax.IsMatch(text)
+        End Function
+
+        Private Shared Sub ShowLiteralAmpersands(button As ButtonBase)
+            If button.UseMnemonic AndAlso Not UsesAcceleratorSyntax(button.Text) Then
+                button.UseMnemonic = False
+            End If
+        End Sub
+
+
+        ' =====================================================
         ' Buttons
         ' =====================================================
 
+        ' One filled primary action per dialog (its default button), red text
+        ' for destructive actions, and quiet neutral outlines for the rest.
         Private Shared Sub StyleButton(
-            button As Button
+            button As Button,
+            isPrimary As Boolean
         )
 
             button.FlatStyle =
@@ -413,9 +523,6 @@ Namespace Services
 
             button.UseVisualStyleBackColor =
                 False
-
-            button.BackColor =
-                UiTheme.CardBackground()
 
             button.Cursor =
                 Cursors.Hand
@@ -426,76 +533,36 @@ Namespace Services
             Dim text As String =
                 button.Text.Trim().ToUpperInvariant()
 
+            If isPrimary Then
 
-            If text.Contains("DELETE") OrElse
-               text.Contains("REMOVE") Then
+                Dim accent As Color =
+                    UiTheme.AccentColor()
 
-                ApplyButtonAccent(
-                    button,
-                    UiTheme.DangerColor()
-                )
+                Dim shade As Color =
+                    If(UiTheme.IsDark(), Color.White, Color.Black)
 
-                Return
-
-            End If
-
-
-            If text.Contains("FILE DRAWER") Then
-
-                ApplyButtonAccent(
-                    button,
-                    UiTheme.WarningColor()
-                )
+                button.BackColor = accent
+                button.ForeColor = UiTheme.OnAccentText()
+                button.FlatAppearance.BorderColor = accent
+                button.FlatAppearance.MouseOverBackColor = UiTheme.Blend(accent, shade, 0.1F)
+                button.FlatAppearance.MouseDownBackColor = UiTheme.Blend(accent, shade, 0.2F)
 
                 Return
 
             End If
 
-
-            If text.Contains("RESTORE") Then
-
-                ApplyButtonAccent(
-                    button,
-                    UiTheme.SuccessColor()
-                )
-
-                Return
-
-            End If
-
-
-            If text = "CANCEL" OrElse
-               text = "NO" OrElse
-               text = "CLOSE" Then
-
-                ApplyButtonAccent(
-                    button,
-                    UiTheme.SecondaryText()
-                )
-
-                Return
-
-            End If
-
-
-            ApplyButtonAccent(
-                button,
-                UiTheme.AccentColor()
-            )
-
-        End Sub
-
-
-        Private Shared Sub ApplyButtonAccent(
-            button As Button,
-            accent As Color
-        )
+            button.BackColor =
+                UiTheme.CardBackground()
 
             button.ForeColor =
-                accent
+                If(
+                    text.Contains("DELETE") OrElse text.Contains("REMOVE"),
+                    UiTheme.DangerColor(),
+                    UiTheme.PrimaryText()
+                )
 
             button.FlatAppearance.BorderColor =
-                accent
+                UiTheme.CardBorder()
 
             button.FlatAppearance.MouseOverBackColor =
                 UiTheme.HoverBackground()

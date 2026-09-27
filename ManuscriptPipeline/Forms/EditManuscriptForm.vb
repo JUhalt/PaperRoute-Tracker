@@ -3,6 +3,7 @@ Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.Linq
 Imports System.Windows.Forms
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
@@ -15,10 +16,27 @@ Namespace Forms
         Private ReadOnly _workingManuscript As Manuscript
         Private ReadOnly _allManuscripts As List(Of Manuscript)
 
-        Private ReadOnly _authorRepository As New AuthorLibraryRepository()
+        Private ReadOnly _authorRepository As AuthorLibraryRepository
         Private _authorLibrary As AuthorLibraryData
 
         Private _deleteRequested As Boolean = False
+
+        ' In page mode the form is hosted inside the main window: there is no
+        ' Save & Close or Cancel footer, and the page's Save / Discard bar
+        ' commits or drops this working copy.
+        Private ReadOnly _pageMode As Boolean
+
+        ' The working copy as last loaded or saved; unsaved changes are any
+        ' difference from it.
+        Private _baseline As String = String.Empty
+
+        Private ReadOnly _sectionTabs As New List(Of ShelfTabButton)()
+        Private ReadOnly lblReadinessSummary As New Label()
+        Private ReadOnly journalNotesGroup As New SectionCard()
+        Private ReadOnly lblJournalNotes As New Label()
+
+        ' Raised in page mode after the user confirms Delete Manuscript.
+        Friend Event DeleteConfirmed As EventHandler
 
         Private ReadOnly txtTitle As New TextBox()
         Private ReadOnly txtTargetJournal As New TextBox()
@@ -29,7 +47,7 @@ Namespace Forms
         Private ReadOnly btnRevisionDeadline As New Button()
         Private _authorLibraryDirty As Boolean = False
 
-        Private ReadOnly fileDrawerGroup As New GroupBox()
+        Private ReadOnly fileDrawerGroup As New SectionCard()
         Private ReadOnly lblFileDrawerDateValue As New Label()
         Private ReadOnly txtFileDrawerReason As New TextBox()
 
@@ -42,11 +60,16 @@ Namespace Forms
 
         Private ReadOnly lstSubmissions As New ListBox()
 
-        Private ReadOnly btnViewSubmission As New Button()
         Private ReadOnly btnEditSubmission As New Button()
         Private ReadOnly btnDeleteSubmission As New Button()
 
         Private ReadOnly lblSubmissionInfo As New Label()
+
+        ' The Submissions tab: the list beside the selected submission's
+        ' details, decisions, reviewer responses, and correspondence.
+        Private _submissionsSection As Control = Nothing
+        Private ReadOnly _submissionDetailHost As New Panel()
+        Private _submissionDetail As SubmissionDetailsForm = Nothing
 
         Private versionHistoryControl As ManuscriptVersionHistoryControl = Nothing
 
@@ -67,6 +90,29 @@ Namespace Forms
             Optional allManuscripts As IEnumerable(Of Manuscript) = Nothing
         )
 
+            Me.New(
+                manuscript,
+                allManuscripts,
+                New AuthorLibraryRepository(),
+                pageMode:=False
+            )
+
+        End Sub
+
+
+        Friend Sub New(
+            manuscript As Manuscript,
+            allManuscripts As IEnumerable(Of Manuscript),
+            authorRepository As AuthorLibraryRepository,
+            pageMode As Boolean
+        )
+
+            _pageMode =
+                pageMode
+
+            _authorRepository =
+                If(authorRepository, New AuthorLibraryRepository())
+
             _originalManuscript =
                 manuscript
 
@@ -86,8 +132,154 @@ Namespace Forms
                 _authorRepository.Load()
 
             BuildInterface()
+            EmptyHint.Attach(lstAuthors, "No authors yet. Add Author picks people from your reusable library; Manage Library creates new ones.")
+            EmptyHint.Attach(lstSubmissions, "No submissions yet.")
             UiPolish.ApplyDialog(Me)
             LoadManuscript()
+            RefreshReadinessSummary()
+            RefreshJournalNotes()
+
+            _baseline =
+                Snapshot()
+
+        End Sub
+
+
+        ' =====================================================
+        ' Page mode
+        ' =====================================================
+
+        ' True when the working copy or a field not yet applied to it differs
+        ' from what was loaded or last saved.
+        Friend Function HasUnsavedChanges() As Boolean
+
+            If _authorLibraryDirty Then
+                Return True
+            End If
+
+            If Not String.Equals(txtTitle.Text.Trim(), If(_workingManuscript.Title, String.Empty).Trim(), StringComparison.Ordinal) OrElse
+               Not String.Equals(txtTargetJournal.Text.Trim(), If(_workingManuscript.TargetJournal, String.Empty).Trim(), StringComparison.Ordinal) Then
+                Return True
+            End If
+
+            If cmbStage.SelectedItem IsNot Nothing AndAlso
+               CType(cmbStage.SelectedItem, PaperStage) <> _workingManuscript.CurrentStage Then
+                Return True
+            End If
+
+            If fileDrawerGroup.Visible AndAlso
+               Not String.Equals(txtFileDrawerReason.Text.Trim(), If(_workingManuscript.FileDrawerReason, String.Empty).Trim(), StringComparison.Ordinal) Then
+                Return True
+            End If
+
+            Return Not String.Equals(Snapshot(), _baseline, StringComparison.Ordinal)
+
+        End Function
+
+
+        Private Sub RefreshJournalNotes()
+
+            Dim journal As JournalRecord = Nothing
+
+            If _workingManuscript.TargetJournalId.HasValue AndAlso
+               _authorLibrary IsNot Nothing AndAlso
+               _authorLibrary.Journals IsNot Nothing Then
+
+                journal =
+                    _authorLibrary.Journals.FirstOrDefault(
+                        Function(item) item IsNot Nothing AndAlso item.Id = _workingManuscript.TargetJournalId.Value)
+
+            End If
+
+            Dim notes As String = If(journal?.Notes, String.Empty).Trim()
+            Dim checklist As Integer =
+                If(journal?.ReadinessChecklistTemplate, New List(Of JournalChecklistTemplateItem)()).
+                    Where(Function(item) item IsNot Nothing).Count()
+
+            If journal Is Nothing OrElse (notes.Length = 0 AndAlso checklist = 0) Then
+                journalNotesGroup.Visible = False
+                Return
+            End If
+
+            Dim lines As New List(Of String)
+
+            If notes.Length > 0 Then
+                lines.Add(If(notes.Length > 700, notes.Substring(0, 700).TrimEnd() & ChrW(&H2026), notes))
+            End If
+
+            If checklist > 0 Then
+                lines.Add(
+                    checklist.ToString() &
+                    If(checklist = 1, " checklist item", " checklist items") &
+                    " in the Journal Library; open Submission Readiness on the Readiness & Packets tab to work through them.")
+            End If
+
+            journalNotesGroup.Text = "Notes for " & journal.Name.Replace("&", "&&")
+            lblJournalNotes.Text = String.Join(Environment.NewLine & Environment.NewLine, lines)
+            journalNotesGroup.Visible = True
+
+        End Sub
+
+
+        Private Function Snapshot() As String
+            Return System.Text.Json.JsonSerializer.Serialize(_workingManuscript)
+        End Function
+
+
+        ' Opens the section a Route waypoint refers to, for a hosted page.
+        Friend Sub ShowRouteWaypoint(
+            waypoint As ManuscriptRouteWaypoint
+        )
+
+            _pendingRouteWaypoint =
+                waypoint
+
+            ApplyPendingRouteNavigation()
+
+        End Sub
+
+
+        Friend Sub ConfirmDeleteFromPage()
+
+            RequestDelete(
+                Me,
+                EventArgs.Empty
+            )
+
+        End Sub
+
+
+        Private Sub ShowSection(
+            section As Control
+        )
+
+            For Each tab As ShelfTabButton In _sectionTabs
+                Dim panel As Control = DirectCast(tab.Tag, Control)
+                panel.Visible = panel Is section
+                If panel Is section AndAlso Not tab.Checked Then
+                    tab.Checked = True
+                End If
+            Next
+
+        End Sub
+
+
+        ' Shows the tab holding a control, such as a waypoint's version.
+        Private Sub ShowSectionContaining(
+            target As Control
+        )
+
+            Dim current As Control = target
+
+            While current IsNot Nothing
+                For Each tab As ShelfTabButton In _sectionTabs
+                    If tab.Tag Is current Then
+                        ShowSection(current)
+                        Return
+                    End If
+                Next
+                current = current.Parent
+            End While
 
         End Sub
 
@@ -110,7 +302,10 @@ Namespace Forms
                 e
             )
 
-            ApplyResponsiveInitialSize()
+            ' A hosted page is sized by the main window.
+            If TopLevel Then
+                ApplyResponsiveInitialSize()
+            End If
 
             If _pendingRouteWaypoint IsNot Nothing Then
 
@@ -208,10 +403,7 @@ Namespace Forms
                     End If
 
                     ScrollControlIntoDetailsView(
-                        FindGroupBoxByText(
-                            Me,
-                            "Journal Submissions"
-                        )
+                        _submissionsSection
                     )
 
                 Case Else
@@ -261,6 +453,10 @@ Namespace Forms
             If target Is Nothing Then
                 Return
             End If
+
+            ShowSectionContaining(
+                target
+            )
 
             Dim current As Control =
                 target.Parent
@@ -394,26 +590,50 @@ Namespace Forms
                 .Padding = New Padding(0)
             }
 
+            ' The Overview tab: the manuscript's fields and, when filed, its
+            ' File Drawer details.
             Dim root As New TableLayoutPanel With {
                 .Dock = DockStyle.Top,
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 .ColumnCount = 1,
-                .RowCount = 5,
-                .Padding = New Padding(20, 20, 20, 12)
+                .RowCount = 3,
+                .Padding = New Padding(0)
             }
 
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 330))
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
-            root.RowStyles.Add(New RowStyle(SizeType.Absolute, 260))
-            root.RowStyles.Add(New RowStyle(SizeType.Absolute, 285))
-            root.RowStyles.Add(New RowStyle(SizeType.Absolute, 250))
+            root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+
+            ' The linked Journal Library record's notes and checklist, so its
+            ' requirements are in view while editing.
+            journalNotesGroup.Text = "Target journal notes"
+            journalNotesGroup.Dock = DockStyle.Top
+            journalNotesGroup.AutoSize = True
+            journalNotesGroup.AutoSizeMode = AutoSizeMode.GrowAndShrink
+            journalNotesGroup.Padding = New Padding(14, 8, 14, 12)
+            journalNotesGroup.Margin = New Padding(3, 8, 3, 8)
+            journalNotesGroup.Visible = False
+
+            lblJournalNotes.AutoSize = True
+            lblJournalNotes.UseMnemonic = False
+            lblJournalNotes.Dock = DockStyle.Top
+            lblJournalNotes.Margin = New Padding(0)
+            journalNotesGroup.Controls.Add(lblJournalNotes)
+
+            AddHandler journalNotesGroup.Resize,
+                Sub(sender, e)
+                    Dim width As Integer = Math.Max(200, journalNotesGroup.ClientSize.Width - journalNotesGroup.Padding.Horizontal)
+                    If lblJournalNotes.MaximumSize.Width <> width Then
+                        lblJournalNotes.MaximumSize = New Size(width, 0)
+                    End If
+                End Sub
 
             ' =================================================
             ' Manuscript metadata
             ' =================================================
 
-            Dim detailsGroup As New GroupBox With {
+            Dim detailsGroup As New SectionCard With {
                 .Text = "Manuscript",
                 .Dock = DockStyle.Fill,
                 .Padding = New Padding(14)
@@ -426,7 +646,7 @@ Namespace Forms
             }
 
             details.ColumnStyles.Add(
-                New ColumnStyle(SizeType.Absolute, 145)
+                New ColumnStyle(SizeType.AutoSize)
             )
 
             details.ColumnStyles.Add(
@@ -440,7 +660,10 @@ Namespace Forms
             Next
 
             txtTitle.Dock = DockStyle.Fill
+            txtTitle.AccessibleName = "Title"
             txtTargetJournal.Dock = DockStyle.Fill
+            txtTargetJournal.AccessibleName = "Target journal"
+            cmbStage.AccessibleName = "Current stage"
 
             cmbStage.Dock = DockStyle.Fill
             cmbStage.DropDownStyle = ComboBoxStyle.DropDownList
@@ -540,7 +763,7 @@ Namespace Forms
             AddHandler btnJournalLinks.Click,
                 AddressOf OpenJournalLinks
 
-            details.Controls.Add(CreateFieldLabel("Journal tools"), 0, 5)
+            details.Controls.Add(CreateFieldLabel("Links"), 0, 5)
             details.Controls.Add(CreateJournalToolsPanel(), 1, 5)
 
             detailsGroup.Controls.Add(details)
@@ -569,7 +792,7 @@ Namespace Forms
             }
 
             fileDrawerLayout.ColumnStyles.Add(
-                New ColumnStyle(SizeType.Absolute, 145)
+                New ColumnStyle(SizeType.AutoSize)
             )
 
             fileDrawerLayout.ColumnStyles.Add(
@@ -589,6 +812,7 @@ Namespace Forms
             lblFileDrawerDateValue.ForeColor = SystemColors.GrayText
 
             txtFileDrawerReason.Dock = DockStyle.Fill
+            txtFileDrawerReason.AccessibleName = "File Drawer reason"
             txtFileDrawerReason.Multiline = True
             txtFileDrawerReason.ScrollBars = ScrollBars.Vertical
             txtFileDrawerReason.MinimumSize = New Size(0, 58)
@@ -624,7 +848,7 @@ Namespace Forms
             ' Structured authors
             ' =================================================
 
-            Dim authorsGroup As New GroupBox With {
+            Dim authorsGroup As New SectionCard With {
                 .Text = "Authors",
                 .Dock = DockStyle.Fill,
                 .Padding = New Padding(14),
@@ -770,92 +994,67 @@ Namespace Forms
             ' Submissions
             ' =================================================
 
-            Dim submissionsGroup As New GroupBox With {
-                .Text = "Journal Submissions",
+            Dim submissionsGroup As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
-                .Padding = New Padding(14)
+                .ColumnCount = 2,
+                .RowCount = 1,
+                .Margin = New Padding(0),
+                .Padding = New Padding(0),
+                .AccessibleName = "Journal Submissions"
             }
 
-            Dim submissionsLayout As New TableLayoutPanel With {
+            ' Runtime-built column widths are not rescaled with the form, so
+            ' scale the list's width for the display.
+            Dim listWidth As Integer = CInt(Math.Round(330 * DeviceDpi / 96.0))
+            submissionsGroup.ColumnStyles.Add(New ColumnStyle(SizeType.Absolute, listWidth))
+            submissionsGroup.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
+            submissionsGroup.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
+
+            Dim submissionsList As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .ColumnCount = 1,
-                .RowCount = 2
-            }
-
-            submissionsLayout.RowStyles.Add(
-                New RowStyle(SizeType.Absolute, 92)
-            )
-
-            submissionsLayout.RowStyles.Add(
-                New RowStyle(SizeType.Percent, 100)
-            )
-
-            Dim submissionToolbar As New TableLayoutPanel With {
-                .Dock = DockStyle.Fill,
-                .AutoSize = False,
-                .ColumnCount = 1,
-                .RowCount = 2,
-                .Padding = New Padding(0, 2, 0, 4),
-                .Margin = New Padding(0)
-            }
-
-            submissionToolbar.ColumnStyles.Add(
-                New ColumnStyle(
-                    SizeType.Percent,
-                    100
-                )
-            )
-
-            submissionToolbar.RowStyles.Add(
-                New RowStyle(
-                    SizeType.Absolute,
-                    34
-                )
-            )
-
-            submissionToolbar.RowStyles.Add(
-                New RowStyle(
-                    SizeType.Absolute,
-                    48
-                )
-            )
-
-            lblSubmissionInfo.AutoSize = True
-            lblSubmissionInfo.Anchor = AnchorStyles.Left
-            lblSubmissionInfo.ForeColor = SystemColors.GrayText
-
-            Dim submissionButtons As New FlowLayoutPanel With {
-                .Dock = DockStyle.Fill,
-                .AutoSize = False,
-                .FlowDirection = FlowDirection.LeftToRight,
-                .WrapContents = False,
-                .Margin = New Padding(0, 4, 0, 0),
+                .RowCount = 3,
+                .Margin = New Padding(0, 0, 14, 0),
                 .Padding = New Padding(0)
             }
 
-            btnViewSubmission.Text = "View"
-            btnViewSubmission.AutoSize = True
-            btnViewSubmission.Height = 36
-            btnViewSubmission.Enabled = False
+            submissionsList.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+            submissionsList.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+            submissionsList.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
 
-            btnEditSubmission.Text = "Edit Submission"
-            btnEditSubmission.AutoSize = True
-            btnEditSubmission.Height = 36
-            btnEditSubmission.Enabled = False
+            lblSubmissionInfo.AutoSize = True
+            lblSubmissionInfo.MaximumSize = New Size(CInt(Math.Round(310 * DeviceDpi / 96.0)), 0)
+            lblSubmissionInfo.ForeColor = SystemColors.GrayText
+            lblSubmissionInfo.Margin = New Padding(0, 0, 0, 6)
 
-            btnDeleteSubmission.Text = "Delete Submission"
-            btnDeleteSubmission.AutoSize = True
-            btnDeleteSubmission.Height = 36
-            btnDeleteSubmission.Enabled = False
-
-            Dim btnAddSubmission As New Button With {
-                .Text = "Add Submission",
+            Dim submissionButtons As New FlowLayoutPanel With {
+                .Dock = DockStyle.Fill,
                 .AutoSize = True,
-                .Height = 36
+                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                .FlowDirection = FlowDirection.LeftToRight,
+                .WrapContents = True,
+                .Margin = New Padding(0, 0, 0, 6),
+                .Padding = New Padding(0)
             }
 
-            AddHandler btnViewSubmission.Click,
-                AddressOf ViewSelectedSubmission
+            ' Recording a submission stays an explicit action.
+            Dim btnAddSubmission As New Button With {
+                .Text = "Record Submission...",
+                .AutoSize = True,
+                .Height = 34
+            }
+
+            btnEditSubmission.Text = "Edit"
+            btnEditSubmission.AutoSize = True
+            btnEditSubmission.Height = 34
+            btnEditSubmission.Enabled = False
+            btnEditSubmission.AccessibleName = "Edit the selected submission's journal, dates, and portal"
+
+            btnDeleteSubmission.Text = "Delete"
+            btnDeleteSubmission.AutoSize = True
+            btnDeleteSubmission.Height = 34
+            btnDeleteSubmission.Enabled = False
+            btnDeleteSubmission.AccessibleName = "Delete the selected submission"
 
             AddHandler btnEditSubmission.Click,
                 AddressOf EditSelectedSubmission
@@ -866,27 +1065,33 @@ Namespace Forms
             AddHandler btnAddSubmission.Click,
                 AddressOf AddSubmission
 
-            submissionButtons.Controls.Add(btnViewSubmission)
+            submissionButtons.Controls.Add(btnAddSubmission)
             submissionButtons.Controls.Add(btnEditSubmission)
             submissionButtons.Controls.Add(btnDeleteSubmission)
-            submissionButtons.Controls.Add(btnAddSubmission)
-
-            submissionToolbar.Controls.Add(lblSubmissionInfo, 0, 0)
-            submissionToolbar.Controls.Add(submissionButtons, 0, 1)
 
             lstSubmissions.Dock = DockStyle.Fill
             lstSubmissions.IntegralHeight = False
+            lstSubmissions.DrawMode = DrawMode.OwnerDrawVariable
+            lstSubmissions.AccessibleName = "Journal submissions"
+
+            AddHandler lstSubmissions.MeasureItem, AddressOf MeasureSubmissionItem
+            AddHandler lstSubmissions.DrawItem, AddressOf DrawSubmissionItem
 
             AddHandler lstSubmissions.SelectedIndexChanged,
                 AddressOf SubmissionSelectionChanged
 
-            AddHandler lstSubmissions.DoubleClick,
-                AddressOf ViewSelectedSubmission
+            submissionsList.Controls.Add(submissionButtons, 0, 0)
+            submissionsList.Controls.Add(lblSubmissionInfo, 0, 1)
+            submissionsList.Controls.Add(lstSubmissions, 0, 2)
 
-            submissionsLayout.Controls.Add(submissionToolbar, 0, 0)
-            submissionsLayout.Controls.Add(lstSubmissions, 0, 1)
+            _submissionDetailHost.Dock = DockStyle.Fill
+            _submissionDetailHost.Margin = New Padding(0)
+            _submissionDetailHost.Padding = New Padding(0)
 
-            submissionsGroup.Controls.Add(submissionsLayout)
+            submissionsGroup.Controls.Add(submissionsList, 0, 0)
+            submissionsGroup.Controls.Add(_submissionDetailHost, 1, 0)
+
+            _submissionsSection = submissionsGroup
 
             ' =================================================
             ' Footer
@@ -955,122 +1160,98 @@ Namespace Forms
 
             root.Controls.Add(detailsGroup, 0, 0)
             root.Controls.Add(fileDrawerGroup, 0, 1)
-            root.Controls.Add(authorsGroup, 0, 2)
-            root.Controls.Add(versionHistoryControl, 0, 3)
-            root.Controls.Add(submissionsGroup, 0, 4)
-
-            Me.AcceptButton = btnSave
-            Me.CancelButton = btnCancel
+            root.Controls.Add(journalNotesGroup, 0, 2)
 
             scrollHost.Controls.Add(root)
 
-            Dim sectionNav As New FlowLayoutPanel With {
+            ' =================================================
+            ' Sections as tabs, one visible at a time
+            ' =================================================
+
+            Dim sectionTabs As New FlowLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 .FlowDirection = FlowDirection.LeftToRight,
-                .WrapContents = True,
-                .Padding = New Padding(20, 7, 20, 5),
+                .WrapContents = False,
+                .Padding = New Padding(20, 6, 20, 0),
+                .Margin = New Padding(0),
+                .AccessibleName = "Manuscript sections",
+                .AccessibleRole = AccessibleRole.PageTabList
+            }
+
+            AddHandler sectionTabs.Paint,
+                Sub(sender, e)
+                    Using line As New Pen(UiTheme.CardBorder())
+                        e.Graphics.DrawLine(line, 20, sectionTabs.Height - 1, sectionTabs.Width - 20, sectionTabs.Height - 1)
+                    End Using
+                End Sub
+
+            Dim sectionHost As New Panel With {
+                .Dock = DockStyle.Fill,
+                .Padding = New Padding(20, 12, 20, 8),
                 .Margin = New Padding(0)
             }
 
-            Dim lblSections As New Label With {
-                .Text = "Sections:",
-                .AutoSize = True,
-                .Anchor = AnchorStyles.Left,
-                .Font = New Font(Me.Font, FontStyle.Bold),
-                .Margin = New Padding(0, 8, 8, 0)
+            authorsGroup.Margin = New Padding(0)
+            versionHistoryControl.Margin = New Padding(0)
+
+            For Each section In {
+                ("Overview", CType(scrollHost, Control)),
+                ("Authors", CType(authorsGroup, Control)),
+                ("Versions", CType(versionHistoryControl, Control)),
+                ("Submissions", CType(submissionsGroup, Control)),
+                ("Readiness & Packets", CreateReadinessSection())
             }
+                Dim panel As Control = section.Item2
+                panel.Dock = DockStyle.Fill
+                panel.Visible = False
+                sectionHost.Controls.Add(panel)
 
-            Dim btnJumpManuscript As New Button With {
-                .Text = "Manuscript",
-                .AutoSize = True,
-                .Height = 32
-            }
+                Dim tab As New ShelfTabButton With {
+                    .Text = section.Item1,
+                    .UseMnemonic = False,
+                    .Tag = panel
+                }
 
-            Dim btnJumpAuthors As New Button With {
-                .Text = "Authors",
-                .AutoSize = True,
-                .Height = 32
-            }
+                AddHandler tab.CheckedChanged,
+                    Sub(sender, e)
+                        If tab.Checked Then
+                            ShowSection(DirectCast(tab.Tag, Control))
+                        End If
+                    End Sub
 
-            Dim btnJumpVersions As New Button With {
-                .Text = "Version History",
-                .AutoSize = True,
-                .Height = 32
-            }
+                _sectionTabs.Add(tab)
+                sectionTabs.Controls.Add(tab)
+            Next
 
-            Dim btnJumpSubmissions As New Button With {
-                .Text = "Journal Submissions",
-                .AutoSize = True,
-                .Height = 32
-            }
-
-            AddHandler btnJumpManuscript.Click,
-                Sub(sender, e)
-                    scrollHost.ScrollControlIntoView(
-                        detailsGroup
-                    )
-                End Sub
-
-            AddHandler btnJumpAuthors.Click,
-                Sub(sender, e)
-                    scrollHost.ScrollControlIntoView(
-                        authorsGroup
-                    )
-                End Sub
-
-            AddHandler btnJumpVersions.Click,
-                Sub(sender, e)
-                    scrollHost.ScrollControlIntoView(
-                        versionHistoryControl
-                    )
-                End Sub
-
-            AddHandler btnJumpSubmissions.Click,
-                Sub(sender, e)
-                    scrollHost.ScrollControlIntoView(
-                        submissionsGroup
-                    )
-                End Sub
-
-            sectionNav.Controls.Add(
-                lblSections
-            )
-
-            sectionNav.Controls.Add(
-                btnJumpManuscript
-            )
-
-            sectionNav.Controls.Add(
-                btnJumpAuthors
-            )
-
-            sectionNav.Controls.Add(
-                btnJumpVersions
-            )
-
-            sectionNav.Controls.Add(
-                btnJumpSubmissions
-            )
+            _sectionTabs(0).Checked = True
+            ShowSection(scrollHost)
 
             shell.Controls.Add(
-                sectionNav,
+                sectionTabs,
                 0,
                 0
             )
 
             shell.Controls.Add(
-                scrollHost,
+                sectionHost,
                 0,
                 1
             )
 
-            shell.Controls.Add(
-                footer,
-                0,
-                2
-            )
+            If Not _pageMode Then
+
+                shell.Controls.Add(
+                    footer,
+                    0,
+                    2
+                )
+
+                Me.AcceptButton = btnSave
+                Me.CancelButton = btnCancel
+
+            End If
 
             Me.Controls.Add(
                 shell
@@ -1943,31 +2124,58 @@ Namespace Forms
 
         Private Sub RefreshSubmissionList()
 
-            lstSubmissions.Items.Clear()
-            _displayedSubmissions.Clear()
+            Dim selectedId As Guid? = GetSelectedSubmission()?.Id
 
-            For Each submission As JournalSubmission In
-                _workingManuscript.Submissions
+            _refreshingSubmissions = True
 
-                _displayedSubmissions.Add(submission)
+            Try
 
-                lstSubmissions.Items.Add(
-                    FormatSubmission(submission)
-                )
+                lstSubmissions.Items.Clear()
+                _displayedSubmissions.Clear()
 
-            Next
+                For Each submission As JournalSubmission In
+                    _workingManuscript.Submissions
+
+                    _displayedSubmissions.Add(submission)
+
+                    lstSubmissions.Items.Add(
+                        FormatSubmission(submission)
+                    )
+
+                Next
+
+                ' Keep the selection; otherwise show the most recent submission.
+                Dim index As Integer =
+                    If(selectedId.HasValue,
+                       _displayedSubmissions.FindIndex(Function(item) item.Id = selectedId.Value),
+                       -1)
+
+                If index < 0 AndAlso _displayedSubmissions.Count > 0 Then
+                    index = _displayedSubmissions.
+                        Select(Function(item, position) New With {item, position}).
+                        OrderBy(Function(entry) entry.item.SubmittedDate).
+                        Last().position
+                End If
+
+                lstSubmissions.SelectedIndex = index
+
+            Finally
+                _refreshingSubmissions = False
+            End Try
 
             If _displayedSubmissions.Count = 0 Then
 
                 lblSubmissionInfo.Text =
-                    "No journal submissions recorded. Add one to begin."
+                    "No journal submissions recorded. Record one when you send the manuscript to a journal."
 
             Else
 
                 lblSubmissionInfo.Text =
-                    "Select a submission to view, edit, or delete it."
+                    "Select a submission to see its decisions, reviewer responses, and correspondence."
 
             End If
+
+            ShowSubmissionDetail(GetSelectedSubmission())
 
             UpdateSubmissionButtons()
             RefreshRevisionDeadlineDisplay()
@@ -2067,12 +2275,206 @@ Namespace Forms
         End Function
 
 
+        Private _refreshingSubmissions As Boolean = False
+
+
         Private Sub SubmissionSelectionChanged(
             sender As Object,
             e As EventArgs
         )
 
             UpdateSubmissionButtons()
+
+            If Not _refreshingSubmissions Then
+                ShowSubmissionDetail(GetSelectedSubmission())
+            End If
+
+        End Sub
+
+
+        ' Shows one submission in the detail pane. Its edits change the working
+        ' copy directly and join the manuscript's unsaved changes.
+        Private Sub ShowSubmissionDetail(
+            submission As JournalSubmission
+        )
+
+            _submissionDetailHost.SuspendLayout()
+
+            Try
+
+                For Each child As Control In _submissionDetailHost.Controls.Cast(Of Control)().ToList()
+                    _submissionDetailHost.Controls.Remove(child)
+                    child.Dispose()
+                Next
+
+                _submissionDetail = Nothing
+
+                If submission Is Nothing Then
+
+                    _submissionDetailHost.Controls.Add(
+                        New Label With {
+                            .Text = "Record a submission when you send this manuscript to a journal. " &
+                                    "Its editorial decisions, reviewer responses, and correspondence then appear here.",
+                            .Dock = DockStyle.Top,
+                            .AutoSize = True,
+                            .MaximumSize = New Size(560, 0),
+                            .UseMnemonic = False,
+                            .ForeColor = SystemColors.GrayText,
+                            .Padding = New Padding(4, 8, 4, 4)
+                        })
+
+                    Return
+
+                End If
+
+                Dim detail As New SubmissionDetailsForm(
+                    _workingManuscript,
+                    submission,
+                    workflowNavigationEnabled:=True,
+                    inline:=True
+                ) With {
+                    .TopLevel = False,
+                    .FormBorderStyle = FormBorderStyle.None,
+                    .Dock = DockStyle.Fill,
+                    .MinimumSize = Size.Empty
+                }
+
+                AddHandler detail.Changed, AddressOf SubmissionDetailChanged
+
+                ' Open the requested window after the detail's own click handler
+                ' has returned, since it may select another submission.
+                AddHandler detail.NavigationRequested,
+                    Sub(request)
+                        If IsHandleCreated Then
+                            BeginInvoke(New Action(Sub() RunSubmissionWorkflow(request)))
+                        Else
+                            RunSubmissionWorkflow(request)
+                        End If
+                    End Sub
+
+                detail.Visible = True
+                _submissionDetailHost.Controls.Add(detail)
+                _submissionDetail = detail
+
+            Finally
+                _submissionDetailHost.ResumeLayout()
+            End Try
+
+        End Sub
+
+
+        ' A decision, correspondence, or reviewer-response edit in the detail
+        ' pane: bring the stage, deadline, versions, and list up to date without
+        ' rebuilding the pane being edited.
+        Private Sub SubmissionDetailChanged(
+            sender As Object,
+            e As EventArgs
+        )
+
+            If cmbStage.SelectedItem Is Nothing OrElse
+               CType(cmbStage.SelectedItem, PaperStage) <> _workingManuscript.CurrentStage Then
+                cmbStage.SelectedItem = _workingManuscript.CurrentStage
+            End If
+
+            RefreshRevisionDeadlineDisplay()
+
+            ' Update the list's accessible text without re-selecting, which
+            ' would rebuild the pane being edited.
+            _refreshingSubmissions = True
+            Try
+                For index As Integer = 0 To _displayedSubmissions.Count - 1
+                    lstSubmissions.Items(index) = FormatSubmission(_displayedSubmissions(index))
+                Next
+            Finally
+                _refreshingSubmissions = False
+            End Try
+            lstSubmissions.Invalidate()
+
+            If versionHistoryControl IsNot Nothing Then
+                versionHistoryControl.RefreshVersions()
+            End If
+
+        End Sub
+
+
+        Private Sub MeasureSubmissionItem(
+            sender As Object,
+            e As MeasureItemEventArgs
+        )
+
+            e.ItemHeight = lstSubmissions.Font.Height * 3 + 20
+
+        End Sub
+
+
+        ' Journal, submitted date and ID, and the latest decision.
+        Private Sub DrawSubmissionItem(
+            sender As Object,
+            e As DrawItemEventArgs
+        )
+
+            If e.Index < 0 OrElse e.Index >= _displayedSubmissions.Count Then
+                Return
+            End If
+
+            Dim submission As JournalSubmission = _displayedSubmissions(e.Index)
+            Dim selected As Boolean = (e.State And DrawItemState.Selected) = DrawItemState.Selected
+            Dim bounds As Rectangle = e.Bounds
+
+            Using background As New SolidBrush(If(selected, UiTheme.AccentMutedBackground(), UiTheme.CardBackground()))
+                e.Graphics.FillRectangle(background, bounds)
+            End Using
+
+            If selected Then
+                Using accent As New SolidBrush(UiTheme.AccentColor())
+                    e.Graphics.FillRectangle(accent, bounds.Left, bounds.Top, 3, bounds.Height)
+                End Using
+            End If
+
+            Using divider As New Pen(UiTheme.SubtleBorder())
+                e.Graphics.DrawLine(divider, bounds.Left, bounds.Bottom - 1, bounds.Right, bounds.Bottom - 1)
+            End Using
+
+            Dim lineHeight As Integer = lstSubmissions.Font.Height
+            Dim left As Integer = bounds.Left + 12
+            Dim width As Integer = bounds.Width - 20
+            Dim flags As TextFormatFlags = TextFormatFlags.NoPrefix Or TextFormatFlags.EndEllipsis Or TextFormatFlags.SingleLine
+
+            Using bold As New Font(lstSubmissions.Font, FontStyle.Bold)
+                TextRenderer.DrawText(e.Graphics, submission.JournalName, bold,
+                    New Rectangle(left, bounds.Top + 8, width, lineHeight), UiTheme.PrimaryText(), flags)
+            End Using
+
+            Dim submitted As String = "Submitted " & submission.SubmittedDate.ToString("MMM d, yyyy")
+            If Not String.IsNullOrWhiteSpace(submission.ManuscriptNumber) Then
+                submitted &= "  " & ChrW(&HB7) & "  " & submission.ManuscriptNumber
+            End If
+
+            TextRenderer.DrawText(e.Graphics, submitted, lstSubmissions.Font,
+                New Rectangle(left, bounds.Top + 8 + lineHeight, width, lineHeight), UiTheme.SecondaryText(), flags)
+
+            Dim latest As EditorialDecisionEvent = ManuscriptAttentionService.GetLatestDecision(submission)
+            Dim outcome As String
+            Dim outcomeColor As Color
+
+            If latest Is Nothing Then
+                outcome = If(submission.FollowUpDate.HasValue,
+                             "Awaiting decision  " & ChrW(&HB7) & "  follow up " & submission.FollowUpDate.Value.ToString("MMM d"),
+                             "Awaiting decision")
+                outcomeColor = UiTheme.MutedText()
+            Else
+                outcome = EditorialDecisionDisplayService.Format(latest.Decision) & "  " & ChrW(&HB7) & "  " & latest.DecisionDate.ToString("MMM d, yyyy")
+                outcomeColor =
+                    If(ManuscriptAttentionService.IsRejectionDecision(latest.Decision), UiTheme.MutedText(),
+                       If(latest.Decision = EditorialDecision.Accepted, UiTheme.SuccessColor(), UiTheme.WarningColor()))
+            End If
+
+            Using semibold As New Font(lstSubmissions.Font, FontStyle.Bold)
+                TextRenderer.DrawText(e.Graphics, outcome, semibold,
+                    New Rectangle(left, bounds.Top + 8 + lineHeight * 2, width, lineHeight), outcomeColor, flags)
+            End Using
+
+            e.DrawFocusRectangle()
 
         End Sub
 
@@ -2082,37 +2484,11 @@ Namespace Forms
             Dim hasSelection As Boolean =
                 GetSelectedSubmission() IsNot Nothing
 
-            btnViewSubmission.Enabled =
-                hasSelection
-
             btnEditSubmission.Enabled =
                 hasSelection
 
             btnDeleteSubmission.Enabled =
                 hasSelection
-
-        End Sub
-
-
-        ' =====================================================
-        ' View submission
-        ' =====================================================
-
-        Private Sub ViewSelectedSubmission(
-            sender As Object,
-            e As EventArgs
-        )
-
-            Dim submission As JournalSubmission =
-                GetSelectedSubmission()
-
-            If submission Is Nothing Then
-                Return
-            End If
-
-            RunSubmissionWorkflow(New SubmissionWorkflowRequest With {
-                .Target = SubmissionWorkflowTarget.Submission, .SubmissionId = submission.Id
-            })
 
         End Sub
 
@@ -2359,8 +2735,19 @@ Namespace Forms
             _deleteRequested =
                 True
 
-            Me.DialogResult =
-                DialogResult.Abort
+            If _pageMode Then
+
+                RaiseEvent DeleteConfirmed(
+                    Me,
+                    EventArgs.Empty
+                )
+
+            Else
+
+                Me.DialogResult =
+                    DialogResult.Abort
+
+            End If
 
         End Sub
 
@@ -2387,6 +2774,8 @@ Namespace Forms
 
                     _authorLibrary =
                         _authorRepository.Load()
+
+                    RefreshJournalNotes()
 
                 End If
 
@@ -2645,6 +3034,23 @@ Namespace Forms
             e As EventArgs
         )
 
+            If CommitChanges() Then
+
+                Me.DialogResult =
+                    DialogResult.OK
+
+            End If
+
+        End Sub
+
+
+        ' Validates the fields, applies them and any stage change to the working
+        ' copy, saves new reusable authors, and copies the working copy to the
+        ' manuscript being edited. The caller saves the library. Returns False,
+        ' changing nothing, when a field needs attention or a stage change was
+        ' not completed.
+        Friend Function CommitChanges() As Boolean
+
             If String.IsNullOrWhiteSpace(
                 txtTitle.Text
             ) Then
@@ -2659,12 +3065,12 @@ Namespace Forms
 
                 txtTitle.Focus()
 
-                Return
+                Return False
 
             End If
 
             If cmbStage.SelectedItem Is Nothing Then
-                Return
+                Return False
             End If
 
             Dim oldStage As PaperStage =
@@ -2687,7 +3093,7 @@ Namespace Forms
 
                     RefreshRevisionDeadlineDisplay()
 
-                    Return
+                    Return False
 
                 End If
 
@@ -2805,10 +3211,12 @@ Namespace Forms
 
             CopyWorkingToOriginal()
 
-            Me.DialogResult =
-                DialogResult.OK
+            _baseline =
+                Snapshot()
 
-        End Sub
+            Return True
+
+        End Function
 
 
         Private Sub UpdateFileDrawerReasonIfNeeded()

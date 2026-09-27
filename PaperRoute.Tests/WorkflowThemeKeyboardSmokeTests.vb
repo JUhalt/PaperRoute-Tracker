@@ -24,6 +24,23 @@ Public Class WorkflowThemeKeyboardSmokeTests
     Private Shared ReadOnly DialogKeyMethod As MethodInfo =
         GetType(Control).GetMethod("ProcessDialogKey", BindingFlags.Instance Or BindingFlags.NonPublic)
 
+    ' The board, rail, and cards draw their text from these tokens directly.
+    <TestMethod>
+    <DataRow(SystemColorMode.Classic)>
+    <DataRow(SystemColorMode.Dark)>
+    Public Sub WorkspaceTextTokens_AreLegibleOnEverySurface(mode As SystemColorMode)
+
+        RunWithColorMode(mode,
+            Sub()
+                For Each surface In {("board", UiTheme.BoardBackground()), ("card", UiTheme.CardBackground())}
+                    For Each ink In {("primary", UiTheme.PrimaryText()), ("secondary", UiTheme.SecondaryText()), ("muted", UiTheme.MutedText())}
+                        AssertContrast(ink.Item2, surface.Item2, $"{ink.Item1} text on the {surface.Item1} background")
+                    Next
+                Next
+            End Sub)
+
+    End Sub
+
     <TestMethod>
     <DataRow(SystemColorMode.Classic)>
     <DataRow(SystemColorMode.Dark)>

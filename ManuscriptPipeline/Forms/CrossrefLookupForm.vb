@@ -4,6 +4,7 @@ Imports System.Linq
 Imports System.Text
 Imports System.Threading.Tasks
 Imports System.Windows.Forms
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
@@ -194,7 +195,7 @@ Namespace Forms
                     9.5F
                 )
 
-            Dim applyGroup As New GroupBox With {
+            Dim applyGroup As New SectionCard With {
                 .Text = "Apply selected",
                 .Dock = DockStyle.Top,
                 .AutoSize = True,

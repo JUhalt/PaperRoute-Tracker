@@ -9,7 +9,7 @@ internal static class Program
 {
     private const string Usage = "PaperRoute workflow manual demo\n\n" +
         "Surfaces: vault (default), readiness, packet, packet-new, file, file-new, notes, submission, responses, workflow, board\n" +
-        "Options: --minimum, --primary, --empty (vault/readiness only), --integrity (populated vault only), --dark or --system, --help\n\n" +
+        "Options: --minimum, --primary, --empty (vault/readiness/board), --integrity (populated vault only), --dark or --system, --help\n\n" +
         "Default surfaces discard manuscript changes when the window closes.\n" +
         "workflow and board save only in a new disposable temporary session.\n" +
         "--integrity creates and retains disposable files in a unique temporary directory.";
@@ -46,7 +46,7 @@ internal static class Program
 
         if (positional.Length > 1 || !surfaces.Contains(surface) || invalidOption ||
             (dark && system) ||
-            (empty && surface != "vault" && surface != "readiness") ||
+            (empty && surface != "vault" && surface != "readiness" && surface != "board") ||
             (integrity && (surface != "vault" || empty)))
         {
             MessageBox.Show(Usage, "Invalid demo arguments", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -65,7 +65,7 @@ internal static class Program
                 var sessionRoot = Path.Combine(Path.GetTempPath(),
                     "PaperRoute-Board-Demo-" + Guid.NewGuid().ToString("N"));
                 StorageEnvironment.ConfigureIsolatedSessionRoot(sessionRoot);
-                BoardDemo.CreateSamples(sessionRoot);
+                BoardDemo.CreateSamples(sessionRoot, empty);
                 using var board = new ManuscriptPipeline.Form1();
                 BoardDemo.RecordLayoutEvidence(board, sessionRoot);
                 board.Shown += (_, _) =>

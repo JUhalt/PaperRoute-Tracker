@@ -300,10 +300,10 @@ Namespace Services
                     "## Quick Start",
                     String.Empty,
                     "1. Add a manuscript from the PaperRoute board.",
-                    "2. Open Manuscript Details to add authors, target journal, metadata, submissions, decisions, and files.",
+                    "2. Open a manuscript from its card to add authors, target journal, metadata, submissions, decisions, and files.",
                     "3. Use Data for import/export, reusable authors and journals, bibliography interchange, CV exports, backup, and restore.",
-                    "4. Use Settings > Reminders & Calendar for revision deadlines, journal follow-ups, custom reminders, and calendar export.",
-                    "5. Use Data > Backup Library before major changes or moving PaperRoute to another computer.",
+                    "4. Open Reminders in the left rail for revision deadlines, journal follow-ups, custom reminders, and calendar export.",
+                    "5. Use Settings > Backup Library before major changes or moving PaperRoute to another computer.",
                     String.Empty,
                     "The complete guide is also available on the PaperRoute GitHub repository."
                 }

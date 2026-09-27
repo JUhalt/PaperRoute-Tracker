@@ -326,7 +326,7 @@ Namespace Services
             Return manuscript
         End Function
 
-        Private Shared Function FindMatchingAuthor(
+        Friend Shared Function FindMatchingAuthor(
             parsedAuthor As BibliographyAuthor,
             library As AuthorLibraryData
         ) As AuthorRecord

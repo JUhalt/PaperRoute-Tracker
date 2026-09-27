@@ -4,6 +4,7 @@ Imports System.Diagnostics
 Imports System.Drawing
 Imports System.IO
 Imports System.Windows.Forms
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
@@ -16,6 +17,19 @@ Namespace Forms
         Private ReadOnly _submission As JournalSubmission
         Private ReadOnly _workflowNavigationEnabled As Boolean
         Private _requestedNavigation As SubmissionWorkflowRequest
+
+        ' Inline, the form is the detail pane of the manuscript's Submissions
+        ' tab: a compact header instead of the summary boxes, reviewer
+        ' responses as a tab, and no Close button. Edits change the
+        ' manuscript's working copy directly, as they do in the dialog.
+        Private ReadOnly _inline As Boolean
+        Private _responsesMatrix As ReviewerResponseMatrixForm = Nothing
+
+        ' Raised after a decision, correspondence, or reviewer-response change.
+        Friend Event Changed As EventHandler
+
+        ' Raised inline instead of closing when another workflow window is requested.
+        Friend Event NavigationRequested(request As SubmissionWorkflowRequest)
         Public ReadOnly Property RequestedNavigation As SubmissionWorkflowRequest
             Get
                 Return _requestedNavigation
@@ -64,6 +78,26 @@ Namespace Forms
             Optional workflowNavigationEnabled As Boolean = False
         )
 
+            Me.New(
+                manuscript,
+                submission,
+                workflowNavigationEnabled,
+                inline:=False
+            )
+
+        End Sub
+
+
+        Friend Sub New(
+            manuscript As Manuscript,
+            submission As JournalSubmission,
+            workflowNavigationEnabled As Boolean,
+            inline As Boolean
+        )
+
+            _inline =
+                inline
+
             _manuscript =
                 manuscript
 
@@ -73,6 +107,8 @@ Namespace Forms
             _workflowNavigationEnabled = workflowNavigationEnabled
 
             BuildInterface()
+            EmptyHint.Attach(lstDecisions, "No decisions yet. Choose + Add Decision when the journal responds.")
+            EmptyHint.Attach(lstCorrespondence, "No letters or files yet. Keep the journal's letters, the reviews, and your revised files with this submission: + Add Item, Link Files..., or drag files here.")
             UiPolish.ApplyDialog(Me)
             RefreshDecisionList()
             RefreshCorrespondenceList()
@@ -87,6 +123,11 @@ Namespace Forms
             MyBase.OnShown(
                 e
             )
+
+            ' An inline detail pane is sized by the manuscript page.
+            If Not TopLevel Then
+                Return
+            End If
 
             Dim referenceControl As Control =
                 If(
@@ -150,7 +191,7 @@ Namespace Forms
             ' Submission summary
             ' =================================================
 
-            Dim summaryGroup As New GroupBox With {
+            Dim summaryGroup As New SectionCard With {
                 .Text = "Submission",
                 .Dock = DockStyle.Fill,
                 .Padding = New Padding(14)
@@ -237,6 +278,7 @@ Namespace Forms
             portalPanel.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
 
             Dim lblPortal As New Label With {
+                .UseMnemonic = False,
                 .Dock = DockStyle.Fill,
                 .AutoEllipsis = True,
                 .TextAlign = ContentAlignment.MiddleLeft
@@ -273,7 +315,7 @@ Namespace Forms
             ' Submission notes
             ' =================================================
 
-            Dim notesGroup As New GroupBox With {
+            Dim notesGroup As New SectionCard With {
                 .Text = "Submission Notes",
                 .Dock = DockStyle.Fill,
                 .Padding = New Padding(14)
@@ -300,7 +342,7 @@ Namespace Forms
             ' Tabs
             ' =================================================
 
-            Dim tabs As New TabControl With {
+            Dim tabs As New UnderlineTabControl With {
                 .Dock = DockStyle.Fill
             }
 
@@ -360,27 +402,162 @@ Namespace Forms
                         _requestedNavigation = New SubmissionWorkflowRequest With {
                             .Target = SubmissionWorkflowTarget.Packets, .SubmissionId = _submission.Id
                         }
-                        Me.DialogResult = DialogResult.OK
-                        Me.Close()
+                        If _inline Then
+                            RaiseEvent NavigationRequested(_requestedNavigation)
+                        Else
+                            Me.DialogResult = DialogResult.OK
+                            Me.Close()
+                        End If
                     End Sub
                 buttons.Controls.Add(btnPackets)
             End If
 
-            root.Controls.Add(summaryGroup, 0, 0)
-            root.Controls.Add(notesGroup, 0, 1)
-            root.Controls.Add(tabs, 0, 2)
-            root.Controls.Add(buttons, 0, 3)
+            If _inline Then
 
-            Me.AcceptButton = btnClose
+                ' Reviewer responses for this submission, edited in place.
+                Dim responsesTab As New TabPage With {
+                    .Text = "Reviewer Responses"
+                }
+
+                _responsesMatrix = New ReviewerResponseMatrixForm(_manuscript, _submission, inline:=True) With {
+                    .TopLevel = False,
+                    .FormBorderStyle = FormBorderStyle.None,
+                    .Dock = DockStyle.Fill,
+                    .MinimumSize = Size.Empty
+                }
+
+                AddHandler _responsesMatrix.Changed,
+                    Sub(sender, e)
+                        RaiseEvent Changed(Me, EventArgs.Empty)
+                    End Sub
+
+                _responsesMatrix.Visible = True
+                responsesTab.Controls.Add(_responsesMatrix)
+                tabs.TabPages.Insert(1, responsesTab)
+
+                buttons.Controls.Remove(btnClose)
+                buttons.Controls.Remove(btnResponses)
+                btnClose.Dispose()
+                btnResponses.Dispose()
+
+                root.RowStyles(0).SizeType = SizeType.AutoSize
+                root.RowStyles(1).SizeType = SizeType.Absolute
+                root.RowStyles(1).Height = 0
+                root.Padding = New Padding(0)
+
+                root.Controls.Add(BuildInlineHeader(), 0, 0)
+                root.Controls.Add(tabs, 0, 2)
+                root.Controls.Add(buttons, 0, 3)
+
+                summaryGroup.Dispose()
+                notesGroup.Dispose()
+
+            Else
+
+                root.Controls.Add(summaryGroup, 0, 0)
+                root.Controls.Add(notesGroup, 0, 1)
+                root.Controls.Add(tabs, 0, 2)
+                root.Controls.Add(buttons, 0, 3)
+
+                Me.AcceptButton = btnClose
+
+            End If
 
             Me.Controls.Add(root)
 
         End Sub
 
 
+        ' The inline detail pane's header: journal, identifiers and dates, the
+        ' publisher portal, and any notes, in a few lines.
+        Private Function BuildInlineHeader() As Control
+
+            Dim header As New TableLayoutPanel With {
+                .Dock = DockStyle.Fill,
+                .AutoSize = True,
+                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                .ColumnCount = 2,
+                .RowCount = 1,
+                .Margin = New Padding(0, 0, 0, 8)
+            }
+
+            header.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
+            header.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
+            header.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+
+            Dim identity As New FlowLayoutPanel With {
+                .AutoSize = True,
+                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                .FlowDirection = FlowDirection.TopDown,
+                .WrapContents = False,
+                .Margin = New Padding(0)
+            }
+
+            Dim lblJournal As New Label With {
+                .Text = _submission.JournalName,
+                .AutoSize = True,
+                .UseMnemonic = False,
+                .Margin = New Padding(0, 0, 0, 2),
+                .Font = New Font(Me.Font.FontFamily, Me.Font.SizeInPoints * 1.2F, FontStyle.Bold)
+            }
+
+            Dim meta As New List(Of String)
+            If Not String.IsNullOrWhiteSpace(_submission.ManuscriptNumber) Then
+                meta.Add("Manuscript ID " & _submission.ManuscriptNumber)
+            End If
+            meta.Add("Submitted " & _submission.SubmittedDate.ToString("MMMM d, yyyy"))
+            If _submission.FollowUpDate.HasValue Then
+                meta.Add("Follow up " & _submission.FollowUpDate.Value.ToString("MMMM d, yyyy"))
+            End If
+
+            Dim lblMeta As New Label With {
+                .Text = String.Join("  " & ChrW(&HB7) & "  ", meta),
+                .AutoSize = True,
+                .UseMnemonic = False,
+                .Margin = New Padding(0),
+                .ForeColor = SystemColors.GrayText
+            }
+
+            identity.Controls.Add(lblJournal)
+            identity.Controls.Add(lblMeta)
+
+            If Not String.IsNullOrWhiteSpace(_submission.Notes) Then
+                Dim lblNotes As New Label With {
+                    .Text = _submission.Notes.Trim(),
+                    .AutoSize = True,
+                    .UseMnemonic = False,
+                    .Margin = New Padding(0, 6, 0, 0),
+                    .AccessibleName = "Submission notes"
+                }
+                identity.Controls.Add(lblNotes)
+                AddHandler header.Resize,
+                    Sub(sender, e)
+                        lblNotes.MaximumSize = New Size(Math.Max(200, header.ClientSize.Width - 160), 0)
+                    End Sub
+            End If
+
+            header.Controls.Add(identity, 0, 0)
+
+            If Not String.IsNullOrWhiteSpace(_submission.PortalUrl) Then
+                Dim btnPortal As New Button With {
+                    .Text = "Open Portal",
+                    .AutoSize = True,
+                    .Anchor = AnchorStyles.Top Or AnchorStyles.Right,
+                    .AccessibleName = "Open the publisher portal"
+                }
+                AddHandler btnPortal.Click, AddressOf OpenPublisherPortal
+                header.Controls.Add(btnPortal, 1, 0)
+            End If
+
+            Return header
+
+        End Function
+
+
         Private Function CreateFieldLabel(text As String) As Label
 
             Return New Label With {
+                .UseMnemonic = False,
                 .Text = text,
                 .AutoSize = True,
                 .Anchor = AnchorStyles.Left,
@@ -393,6 +570,7 @@ Namespace Forms
         Private Function CreateValueLabel(text As String) As Label
 
             Return New Label With {
+                .UseMnemonic = False,
                 .Text = text,
                 .Dock = DockStyle.Fill,
                 .AutoEllipsis = True,
@@ -580,6 +758,11 @@ Namespace Forms
             End If
 
             UpdateDecisionButtons()
+
+            ' Decisions determine which reviewer comments can be added.
+            _responsesMatrix?.RefreshFromSubmission()
+
+            RaiseEvent Changed(Me, EventArgs.Empty)
 
         End Sub
 
@@ -1091,6 +1274,8 @@ Namespace Forms
             End If
 
             UpdateCorrespondenceButtons()
+
+            RaiseEvent Changed(Me, EventArgs.Empty)
 
         End Sub
 

@@ -547,7 +547,7 @@ Namespace Forms
 
                 MessageBox.Show(
                     Me,
-                    "The Journal Library is empty. Add journals from Data → Journal Library first.",
+                    "The Journal Library is empty. Add journals on the Journals page first.",
                     "No Reusable Journals",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information

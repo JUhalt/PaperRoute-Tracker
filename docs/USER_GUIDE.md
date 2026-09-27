@@ -8,16 +8,16 @@ This guide describes **PaperRoute v0.5.0 — Reviewer Response Workflow**. See t
 
 If you only read one section, read this one.
 
-1. Open PaperRoute and choose **Add Manuscript**.
+1. Open PaperRoute. An empty library opens on a welcome: choose **+ Add Manuscript** for a paper you are working on, or **Import Existing Work** to bring in published work from ORCID, BibTeX or RIS, or a spreadsheet.
 2. Give the manuscript a title and place it at the stage that best matches reality.
-3. Open **Manuscript Details** to add structured authors, a target journal, metadata, links, and submission history.
+3. Open the manuscript from its card to add structured authors, a target journal, metadata, links, and submission history.
 4. Before submitting, record the exact manuscript snapshot in **Version History**, use **Submission Readiness...** for the journal's checklist, and assemble **Submission Packets...** for the files you intend to send.
 5. When you actually submit the paper, use the packet's **Record Submission...** action or add a **Journal Submission** with the journal, date, Journal manuscript ID if available, portal URL, and optional follow-up date.
-6. Save each child dialog, then choose **Save & Close** in **Manuscript Details** to persist the complete workflow.
+6. Save each focused window, then choose **Save** in the manuscript page's **Unsaved changes** bar (or press **Ctrl+S**) to keep the complete workflow.
 7. When the journal responds, open that submission and record the **Editorial Decision**. Revision decisions can carry a revision deadline.
-8. Open **Reviewer Responses...** in that submission to track individual comments, actions, and response drafts. Save the matrix, close Submission Details, then save Manuscript Details. Keep original letters and revised files under the submission's correspondence.
-9. Use **Settings > Reminders & Calendar...** to see revision deadlines, journal follow-ups, and custom reminders in one place.
-10. Use **Data > Backup Library...** before major changes or moving PaperRoute to another computer.
+8. Select that submission on the **Submissions** tab and open its **Reviewer Responses** tab to track individual comments, actions, and response drafts, then choose **Save** on the manuscript page. Keep original letters and revised files under the submission's correspondence.
+9. Open **Reminders** in the left rail to see revision deadlines, journal follow-ups, and custom reminders in one place.
+10. Use **Settings > Backup Library...** before major changes or moving PaperRoute to another computer.
 
 PaperRoute does not require an account for its core workflow, and the manuscript-tracking database is stored locally.
 
@@ -50,6 +50,29 @@ PaperRoute currently supports these stages:
 
 The stage describes the manuscript's current lifecycle position. Submission history, editorial decisions, and correspondence provide the detailed record underneath that stage.
 
+### Finding your way around
+
+PaperRoute opens in one window. The left rail lists its pages: **Board**, **Library**, **Journals**, **Reminders**, and **Import & Export**, with **Settings** and **Help** at the bottom. Press **Ctrl+1** to **Ctrl+5** to open the pages in that order, **Alt+Left** and **Alt+Right** to go back and forward, and **F1** for this guide.
+
+For more room, choose the **«** button beside the PaperRoute name to collapse the rail to icons; hover over an icon to see its page, and choose **»** to expand the rail again. PaperRoute remembers your choice. Double-click the logo for **About PaperRoute**.
+
+Earlier versions reached these places through menus. Every command is still available:
+
+| Earlier location | Now |
+| --- | --- |
+| Data > Import Spreadsheet..., Import BibTeX / RIS..., Get Import Template... | **Import & Export** page |
+| Data > Export Library to Excel..., as BibTeX..., as RIS..., Publication & CV Export... | **Import & Export** page |
+| Data > Backup Library..., Restore Backup... | **Settings** in the rail, and the **Import & Export** page |
+| Data > Authors & Affiliations... | **Library** page, **Authors & Affiliations** |
+| Data > Journal Library... | **Journals** page |
+| Settings > Reminders & Calendar... | **Reminders** page |
+| Settings > Preferences..., Check for Updates..., Diagnostics..., About | **Settings** in the rail |
+| Settings > User Guide... and the Help button | **Help** in the rail, or **F1** |
+
+The **Library** page lists every manuscript on every shelf in a sortable table; press Enter or double-click a row to open it. Type in its filter box to narrow the table by title, journal, stage, or route.
+
+An empty list or table says what belongs there and how to add the first item.
+
 ### The Needs Attention area
 
 The main board can flag manuscripts that may need action, including:
@@ -62,17 +85,29 @@ The main board can flag manuscripts that may need action, including:
 
 These are prompts, not automatic decisions. PaperRoute does not move manuscripts or file them simply because a threshold was reached.
 
+Only items that currently apply are listed, each as a chip with its count. Click a chip, or Tab to it and press Enter or Space, to show just those manuscripts; activate it again to clear the filter.
+
+### Board shelves and cards
+
+Pipeline, Published, and File Drawer are tabs with counts; one shelf is shown at a time, with its cards in as many columns as the window fits. Each card shows:
+
+- the stage and, for active work, what needs attention now (such as "Revision due in 9 days") or how long the manuscript has been in its stage;
+- the title and target journal; and
+- the route so far: one dot per journal submission (grey when it ended in a rejection or withdrawal, an accent ring for the current submission, a filled accent dot when accepted) and a short summary such as "2nd journal · major revision". The summary uses recorded submissions and decisions only.
+
+Click a card, or Tab to its title and press Enter, to open it. **View route →** opens the Route. Move to File Drawer, Restore to Pipeline, and Delete are in the card's **⋯** menu, which also opens on right-click or with the keyboard's context-menu key.
+
 ### Search, filters, and sorting
 
-The main board supports search, stage filtering, and sorting. Search includes manuscript information and structured author metadata where available.
+The main board supports search, stage filtering, and sorting. Press **Ctrl+F** to jump to search. Search includes manuscript information and structured author metadata where available.
 
 ---
 
-## Manuscript Details
+## The manuscript page
 
-Open a manuscript from the board to reach **Manuscript Details**.
+Click a card on the board, or a row in the Library, to open the manuscript as a page in the main window. **← Board** (or **Alt+Left**) returns to where you opened it. The header shows the title, stage, target journal, and route so far, with **Copy Citation**, **View Route**, and **Delete Manuscript...** in the **⋯** menu.
 
-This is the main working area for:
+The page's tabs are **Overview** (title, target journal, stage, revision deadline, metadata, links, File Drawer details, and the linked journal's notes from the Journal Library), **Authors**, **Versions**, **Submissions**, and **Readiness & Packets**. Together they cover:
 
 - title;
 - legacy co-author text;
@@ -86,7 +121,12 @@ This is the main working area for:
 - preprint and project links; and
 - File Drawer information when relevant.
 
-PaperRoute uses a working copy while the Manuscript Details window is open. Readiness, packet, version, submission, and reviewer-response edits saved in child dialogs update that working copy. Choose **Save & Close** in Manuscript Details to persist it; choosing **Cancel** there discards unsaved manuscript changes.
+PaperRoute edits a working copy while the page is open. Every tab, and every focused window opened from one (readiness, packets, submissions, reviewer responses), changes that working copy. As soon as anything differs from the saved manuscript, an **Unsaved changes** bar appears at the bottom of the page:
+
+- **Save** (or **Ctrl+S**) stores the manuscript; managed-file copies and deletions happen only when this save succeeds.
+- **Discard** returns the page to the last saved version.
+
+If you go to another page, open another manuscript, or close PaperRoute while there are unsaved changes, PaperRoute asks whether to save them, discard them, or stay. Nothing is lost silently.
 
 ### Version History and the Route
 
@@ -100,29 +140,29 @@ A version can be associated with the journal submission for which that exact fil
 
 **Current Version** means the manuscript snapshot you currently consider your active working version. This is different from **Current State**, which means the manuscript's lifecycle position such as Submitted, Revision, Accepted, or Draft.
 
-Use **View route →** from the main board to see the manuscript's deterministic publication history. The Route is read-only: double-clicking or opening a Route waypoint returns you to the authoritative record in Manuscript Details rather than creating a second editing pathway.
+Use **View route →** from the main board to see the manuscript's deterministic publication history. The Route is read-only: double-clicking or opening a Route waypoint returns you to the authoritative record on the manuscript page rather than creating a second editing pathway. **View Route** in the page header opens the same view.
 
-Deleting a Version History record is also working-copy based. If the version owns an immutable PaperRoute Library snapshot, the snapshot is removed only when **Save & Close** succeeds. Choosing **Cancel** leaves the saved version history and managed snapshot intact. Deleting a linked-file version never deletes the original external file.
+Deleting a Version History record is also working-copy based. If the version owns an immutable PaperRoute Library snapshot, the snapshot is removed only when **Save** succeeds. Choosing **Discard** leaves the saved version history and managed snapshot intact. Deleting a linked-file version never deletes the original external file.
 
 ### Submission Readiness and Packets
 
 These features were introduced in PaperRoute v0.4.0.
 
-From **Manuscript Details**, open **Submission Readiness...** to apply a reusable journal checklist and track manuscript-specific requirements. Complete, not-applicable, and unresolved states explain the readiness summary. Readiness is advisory: it does not change the manuscript stage or prevent recording a real submission.
+On the manuscript's **Readiness & Packets** tab, open **Submission Readiness...** to apply a reusable journal checklist and track manuscript-specific requirements. Complete, not-applicable, and unresolved states explain the readiness summary. Readiness is advisory: it does not change the manuscript stage or prevent recording a real submission.
 
 Choose **New from Journal...** to copy that journal's current template into a new readiness profile. Later template edits do not rewrite existing profile wording or progress. **Add New Template Requirements** adds requirements that are new to the selected profile while retaining its existing states and notes.
 
-Open **Submission Packets...** to assemble file records tied to an exact **Version History** entry. You can optionally associate a packet with an existing journal submission and revision round. Preparing a packet does not record a submission. Managed copies become separate snapshots when Manuscript Details is saved; external links continue to point to the original files. Metadata-only entries contain no file to check.
+Open **Submission Packets...** to assemble file records tied to an exact **Version History** entry. You can optionally associate a packet with an existing journal submission and revision round. Preparing a packet does not record a submission. Managed copies become separate snapshots when the manuscript is saved; external links continue to point to the original files. Metadata-only entries contain no file to check.
 
 #### Move between related records
 
 In readiness, **Save & Go To... > Save & View Packets** opens the packets linked to the selected profile. **Open Submission Portal** uses that profile's linked journal when it has a web portal recorded.
 
-In the vault, **Save & Go To...** can return to Manuscript Details, select the packet's exact version, or open its linked readiness profile or actual submission. **Submission Packets...** in Version History shows packets for the selected version; **View Submission Packets...** in Submission Details shows packets for that submission. The vault explains which records it is showing, and **Show all packets** removes that filter. New packets inherit the selected context, with choices visible in the packet editor.
+In the vault, **Save & Go To...** can return to the manuscript page, select the packet's exact version, or open its linked readiness profile or actual submission. **Submission Packets...** in Version History shows packets for the selected version; **View Submission Packets...** under a selected submission shows packets for that submission. The vault explains which records it is showing, and **Show all packets** removes that filter. New packets inherit the selected context, with choices visible in the packet editor.
 
 For an unlinked preparation packet, choose **Save & Go To... > Record Submission...** and complete **Record Journal Submission**. Cancel returns to the prepared packet without recording an event. Adding the submission associates that packet with the new record and applies the usual manuscript-stage rules. Unresolved readiness and an empty file list do not prevent recording what actually happened. For a revision round of an existing submission, edit the packet and select the existing submission and round instead of recording a duplicate submission.
 
-These navigation actions save the current child dialog into Manuscript Details' working copy. Choose **Save & Close** in Manuscript Details to keep the full workflow; Cancel there discards its unsaved manuscript changes. Version records retain their existing submission/decision history: the same exact version can appear in separate packets for different interactions. Packet navigation shows each packet's own associations without rewriting that earlier history.
+These navigation actions save the current window into the manuscript page's working copy. Choose **Save** on the manuscript page to keep the full workflow; **Discard** there drops its unsaved changes. Version records retain their existing submission/decision history: the same exact version can appear in separate packets for different interactions. Packet navigation shows each packet's own associations without rewriting that earlier history.
 
 Changing a submission to a different linked journal is rejected if it conflicts with its packets. Review or reassign those packet associations first. Imported revision-round numbers above 99 are preserved when editing notes.
 
@@ -146,7 +186,7 @@ Results reflect the last observation, not continuous monitoring. Choose **Check 
 
 **Replace Fingerprint...** explicitly replaces an existing comparison point after confirmation. To preserve an earlier submitted file, retain its packet record and add a new file record instead. A fingerprint detects differences; it cannot reconstruct an old external file. Choose a managed copy when you need PaperRoute to retain the actual bytes.
 
-Choose **Save & Close** in the vault and then **Save & Close** in **Manuscript Details** to persist newly recorded fingerprints and packet edits. Canceling Manuscript Details discards those unsaved changes. Managed-file copies and portable backup/restore preserve the saved fingerprints; they do not silently record a new baseline. A packet-linked version or submission must be unlinked from the packet, retargeted where appropriate, or have the packet removed before that referenced record can be deleted.
+Choose **Save & Close** in the vault and then **Save** on the manuscript page to keep newly recorded fingerprints and packet edits. **Discard** on the page drops those unsaved changes. Managed-file copies and portable backup/restore preserve the saved fingerprints; they do not silently record a new baseline. A packet-linked version or submission must be unlinked from the packet, retargeted where appropriate, or have the packet removed before that referenced record can be deleted.
 
 ### Legacy co-author text
 
@@ -158,7 +198,7 @@ Structured authors are the preferred workflow for reusable people, affiliations,
 
 ## Reusable Authors and Affiliations
 
-Choose **Data > Authors & Affiliations...** to manage reusable people and institutions.
+Open **Library** in the left rail and choose **Authors & Affiliations** to manage reusable people and institutions.
 
 An author record can contain:
 
@@ -202,7 +242,7 @@ External metadata should help fill a record, not take control of the research wo
 
 ## ORCID Public-Profile Import
 
-Choose **Data > Authors & Affiliations...**, select an author, and use the ORCID workflow.
+Open **Library > Authors & Affiliations**, select an author, and use the ORCID workflow. **Import & Export > ORCID Works...** and the welcome's **ORCID works** open the same place.
 
 PaperRoute can read public ORCID information for a user-supplied ORCID iD, including public identity information, public employment/affiliation data, and public works.
 
@@ -219,7 +259,7 @@ When importing public works, dated works can be placed directly on the Published
 
 ## BibTeX and RIS
 
-Choose **Data > Import BibTeX / RIS...** to bring bibliography records into PaperRoute.
+Choose **Import & Export > Import BibTeX / RIS...** to bring bibliography records into PaperRoute.
 
 PaperRoute maps common scholarly metadata such as:
 
@@ -244,8 +284,8 @@ Importing publication metadata does not fabricate journal-submission history.
 
 Use:
 
-- **Data > Export Library as BibTeX...**
-- **Data > Export Library as RIS...**
+- **Import & Export > Export Library as BibTeX...**
+- **Import & Export > Export Library as RIS...**
 
 You choose which manuscripts to export.
 
@@ -253,7 +293,7 @@ You choose which manuscripts to export.
 
 ## Journal Library, Portals, Preprints, and Project Links
 
-Choose **Data > Journal Library...** to maintain reusable journal information.
+Open **Journals** in the left rail to maintain reusable journal information. Changes there are saved as you make them.
 
 Journal records can include:
 
@@ -320,7 +360,7 @@ Each submission can contain:
 - optional follow-up date; and
 - notes.
 
-The follow-up date appears in **Settings > Reminders & Calendar...** whenever it is explicitly set. PaperRoute treats it as a user-owned reminder, so recording an editorial decision does not silently remove it; clear or change the follow-up date when it is no longer useful.
+The follow-up date appears on the **Reminders** page whenever it is explicitly set. PaperRoute treats it as a user-owned reminder, so recording an editorial decision does not silently remove it; clear or change the follow-up date when it is no longer useful.
 
 ### Reusing the Journal Library
 
@@ -340,13 +380,13 @@ Revision decisions can include a revision deadline. When the manuscript is in th
 
 PaperRoute's reminder view is derived from the stored editorial-decision deadline; it does not create a second hidden copy of the revision date.
 
-For discoverability, **Manuscript Details** also shows a **Revision deadline** row. **Set / Edit...** opens the latest submission's editorial decision so you can record or change the deadline without hunting through the submission tabs. If the manuscript has no journal submission yet, PaperRoute explains that a submission must be recorded first.
+For discoverability, the manuscript's **Overview** tab also shows a **Revision deadline** row. **Set / Edit...** opens the latest submission's editorial decision so you can record or change the deadline without hunting through the submission tabs. If the manuscript has no journal submission yet, PaperRoute explains that a submission must be recorded first.
 
 ---
 
 ## Reviewer Response Matrix
 
-Open an existing journal submission in **Manuscript Details**, record its editorial decision, then choose **Reviewer Responses...** in Submission Details. Keep a normal revision within the existing journal submission; create a new submission attempt only when that is what happened.
+On the manuscript's **Submissions** tab, the list of journal submissions sits beside the selected submission. Its **Editorial History**, **Reviewer Responses**, and **Correspondence & Files** tabs show everything that belongs to it. Record the editorial decision under **Editorial History**, then track the reviewers' requests under **Reviewer Responses**. Keep a normal revision within the existing journal submission; use **Record Submission...** only when you actually send the manuscript to a journal again.
 
 ### Record and track comments
 
@@ -367,16 +407,14 @@ Choose **Save Comment** to accept an item into the matrix. Use **Show status** t
 
 ### Save the complete workflow
 
-1. Choose **Save Comment** in the item editor.
-2. Choose **Save & Close** in the matrix to accept its edits into the manuscript working copy.
-3. Choose **Close** in Submission Details. This window has no additional save/cancel boundary.
-4. Choose **Save & Close** in Manuscript Details to store the manuscript permanently.
+1. Choose **Save Comment** in the item editor. The comment joins the manuscript's unsaved changes.
+2. Choose **Save** in the manuscript page's **Unsaved changes** bar (or press **Ctrl+S**) to store the manuscript permanently.
 
-**Cancel** in the item editor or matrix discards that dialog's edits. **Cancel** in Manuscript Details discards all its unsaved manuscript changes, including changes already accepted from the matrix. Reopen the manuscript to confirm saved work.
+**Cancel** in the item editor discards that comment's edits. **Discard** on the manuscript page drops all its unsaved changes, including added, edited, removed, and reordered comments.
 
 ### Export an editable response draft
 
-Choose **Export Markdown...**, review or edit the preview, then choose **Save Markdown...** to save a file. The export includes the submission context, decision and revision round, reviewer labels, comments, actions, statuses, responses, locations, and working notes in stored order. The status filter does not limit the export: it includes the complete matrix. Review the notes before sharing the draft with a journal.
+Choose **Export Markdown...**, review or edit the preview, then choose **Save Markdown...** to save a file. The preview opens with the cursor at the start, so typing never replaces the draft. The Markdown reads as plain text: only characters that would change how it renders, such as a leading "#" or "-", or asterisks, are escaped with a backslash. The export includes the submission context, decision and revision round, reviewer labels, comments, actions, statuses, responses, locations, and working notes in stored order. The status filter does not limit the export: it includes the complete matrix. Review the notes before sharing the draft with a journal.
 
 Preview edits and the exported file are independent of the matrix. Exporting does not save matrix edits or change item status or manuscript history. An export can therefore include work that you later cancel in PaperRoute. Subsequent matrix changes do not update a previously exported file.
 
@@ -403,7 +441,7 @@ Externally linked files remain references to their original paths. If those file
 
 ## Reminders and Calendar
 
-Choose **Settings > Reminders & Calendar...**.
+Open **Reminders** in the left rail.
 
 PaperRoute combines three reminder sources:
 
@@ -425,7 +463,7 @@ The calculation is deterministic: the same stored dates and same "today" date pr
 
 ### Custom reminders
 
-Use **Add Reminder...** in the Reminders & Calendar window to create a manuscript-specific reminder.
+Use **Add Reminder...** on the Reminders page to create a manuscript-specific reminder.
 
 Custom reminders can be edited or marked complete from the same window.
 
@@ -454,7 +492,7 @@ Important limitations:
 - PaperRoute does not run a hidden cloud reminder service.
 - If PaperRoute is not running, it cannot perform its startup reminder check.
 - Windows may suppress or change how notification balloons are displayed.
-- A Windows notification failure never prevents PaperRoute from opening or using the Reminders & Calendar view.
+- A Windows notification failure never prevents PaperRoute from opening or using the Reminders page.
 
 The in-app reminder list is the authoritative reminder view.
 
@@ -462,7 +500,7 @@ The in-app reminder list is the authoritative reminder view.
 
 ## Publication and CV Export
 
-Choose **Data > Publication & CV Export...**.
+Choose **Import & Export > Publication & CV Export...**.
 
 You can filter the source records to:
 
@@ -488,13 +526,13 @@ Export never changes manuscript data.
 
 ## Spreadsheet Import and Export
 
-Choose **Data > Import Spreadsheet...**.
+Choose **Import & Export > Import Spreadsheet...**.
 
 PaperRoute supports three broad import paths.
 
 ### Standard PaperRoute workbook
 
-Use **Data > Get Import Template...** for the supported workbook structure.
+Use **Import & Export > Get Import Template...** for the supported workbook structure.
 
 The workbook includes:
 
@@ -517,13 +555,13 @@ Only Title is required.
 
 ### Exporting the library to Excel
 
-Use **Data > Export Library to Excel...** to create a workbook from the current library.
+Use **Import & Export > Export Library to Excel...** to create a workbook from the current library.
 
 ---
 
 ## Backup and Restore
 
-Choose **Data > Backup Library...** to create a portable ZIP backup.
+Choose **Settings > Backup Library...**, or **Backup Library...** on the Import & Export page, to create a portable ZIP backup.
 
 A backup can contain:
 
@@ -541,7 +579,7 @@ Managed document copies, including version and packet snapshots, are included. E
 
 ### Restore safety
 
-**Data > Restore Backup...**:
+**Settings > Restore Backup...** (also on the Import & Export page):
 
 1. validates the selected archive;
 2. previews record/file counts;
@@ -597,10 +635,20 @@ Use **Settings > Diagnostics...** when troubleshooting storage, environment, or 
 ## How do I add a manuscript I am currently writing?
 
 1. Choose **Add Manuscript**.
-2. Enter the title.
+2. Enter the title, or choose **Paste a Title Page...** (see below).
 3. Use Draft as the stage if active writing has begun.
-4. Open Manuscript Details to add structured authors and a target journal.
-5. Save and close.
+4. Optionally check **Remind me** and name a first deadline. It becomes an ordinary custom reminder on the **Reminders** page.
+5. Choose **Add Manuscript**, then open the manuscript to add or adjust structured authors and a target journal.
+
+### Paste a title page
+
+**Paste a Title Page...** reads a title page copied from Word or from LaTeX source (including the apa7, authblk, and REVTeX author commands) and proposes the title, authors in order with affiliations and the corresponding author, the abstract, and keywords. Superscript affiliation numbers that paste as plain digits, such as `Whitfield1,2*`, are recognized.
+
+- Parsing happens on this computer. Nothing is sent anywhere.
+- Review and edit everything before choosing **Use These Details**. Clear **Use** to leave an author out; separate an author's affiliations with semicolons.
+- The **Library** column shows whether each author already exists in your reusable author library. Existing authors and affiliations are reused; new ones are created only when you add the manuscript.
+- **Not placed** lists lines PaperRoute could not assign, such as a running head or an email address, along with anything to check, such as an affiliation number with no matching line. These lines are shown for review and are not saved.
+- A pasted abstract and keywords only fill fields that are still empty.
 
 ## How do I add an already-published article?
 
@@ -616,24 +664,24 @@ For a manual record:
 
 ## How do I record a new journal submission?
 
-1. Open Manuscript Details.
-2. In Journal Submissions, choose **Add Submission**.
+1. Open the manuscript.
+2. On the **Submissions** tab, choose **Record Submission...**.
 3. Enter the journal or choose **Use Library...**.
 4. Enter the submission date and Journal manuscript ID if known.
 5. Save the publisher portal URL if useful.
 6. Optionally enable a follow-up date.
-7. Save the submission, then choose **Save & Close** in Manuscript Details.
+7. Save the submission, then choose **Save** on the manuscript page.
 
 If you already prepared an unlinked packet, use its **Save & Go To... > Record Submission...** action instead to associate the packet with the new submission. For another revision round at the same journal, retain the existing submission and select that submission and round in the packet editor.
 
 ## How do I prepare a packet before submitting?
 
-1. In Manuscript Details, open **Version History** and record the exact manuscript snapshot.
-2. Open **Submission Readiness...**, choose **New from Journal...**, and review the copied requirements.
+1. Open the manuscript, go to the **Versions** tab, and record the exact manuscript snapshot.
+2. On the **Readiness & Packets** tab, open **Submission Readiness...**, choose **New from Journal...**, and review the copied requirements.
 3. Use **Save & Go To... > Save & View Packets**, then create a packet linked to the intended version.
 4. Add file records as managed copies, external links, or metadata only.
 5. Optionally **Record Fingerprint** for each local file and use **Check Files** to compare contents before sending them.
-6. Save the vault, then choose **Save & Close** in Manuscript Details.
+6. Save the vault, then choose **Save** on the manuscript page.
 
 This records preparation only. Record the journal submission after it actually occurs. A managed copy retains bytes when the manuscript is saved; a linked original can change independently of PaperRoute.
 
@@ -642,7 +690,7 @@ This records preparation only. Record the journal submission after it actually o
 Use either method:
 
 - Edit the journal submission and set a follow-up date; or
-- open **Settings > Reminders & Calendar...** and add a custom reminder.
+- open **Reminders** and add a custom reminder.
 
 An explicitly saved submission follow-up remains active until you clear or change it, even if an editorial decision is later recorded.
 
@@ -655,17 +703,17 @@ An explicitly saved submission follow-up remains active until you clear or chang
 5. Save.
 6. Confirm the manuscript is in the Revision stage.
 
-The deadline will then appear in Reminders & Calendar and in the Needs Attention workflow as appropriate.
+The deadline will then appear on the Reminders page and in the Needs Attention workflow as appropriate.
 
 ## How do I record reviewer comments and my response?
 
-1. Open the existing journal submission and record the relevant editorial decision.
-2. Choose **Reviewer Responses...**, then **Add Comment...**.
+1. Select the journal submission on the manuscript's **Submissions** tab and record the relevant editorial decision under **Editorial History**.
+2. Open its **Reviewer Responses** tab and choose **Add Comment...**.
 3. Select that decision, enter the revision round and reviewer label, and record a comment or action.
 4. Add a draft response, manuscript location, notes, and the appropriate status, then choose **Save Comment**.
-5. Choose **Save & Close** in the matrix, **Close** in Submission Details, and **Save & Close** in Manuscript Details.
+5. Choose **Save** on the manuscript page.
 
-Use **Export Markdown...** in the matrix for an editable response draft. Keep the original reviewer/editor letters and revised manuscript files as correspondence under the same submission. See [Reviewer Response Matrix](#reviewer-response-matrix) for ordering, export, and save behavior.
+Use **Export Markdown...** on the Reviewer Responses tab for an editable response draft. Keep the original reviewer/editor letters and revised manuscript files as correspondence under the same submission. See [Reviewer Response Matrix](#reviewer-response-matrix) for ordering, export, and save behavior.
 
 ## How do I move a rejected paper to another journal?
 
@@ -678,13 +726,13 @@ Do not overwrite the old submission. The old submission is part of the manuscrip
 
 ## How do I put a manuscript in the File Drawer?
 
-Open Manuscript Details and use the File Drawer workflow.
+Choose **Move to File Drawer...** in the manuscript card's **⋯** menu.
 
 The File Drawer is reversible; it is not deletion.
 
 ## How do I attach an OSF project?
 
-1. Open Manuscript Details.
+1. Open the manuscript.
 2. Choose **Journal, Preprint & Links...**.
 3. Under Related Web Links, choose **Add Link**.
 4. Use a label such as `OSF Project`.
@@ -697,7 +745,7 @@ Open **Journal, Preprint & Links...** and enter the preprint DOI and/or preprint
 
 ## How do I make a CV publication list?
 
-1. Choose **Data > Publication & CV Export...**.
+1. Choose **Import & Export > Publication & CV Export...**.
 2. Select Published only, or Accepted / In Press / Published if desired.
 3. Choose the manuscripts to include.
 4. Select CV section.
@@ -708,9 +756,9 @@ Open **Journal, Preprint & Links...** and enter the preprint DOI and/or preprint
 
 The safest approach is:
 
-1. create a portable backup with **Data > Backup Library...**;
+1. create a portable backup with **Settings > Backup Library...**;
 2. install PaperRoute on the destination computer;
-3. use **Data > Restore Backup...**;
+3. use **Settings > Restore Backup...**;
 4. confirm manuscript counts and managed files before retiring the old installation.
 
 ## How do I recover from a bad import or restore?
@@ -773,7 +821,7 @@ https://example.org/path
 
 ### A reminder notification did not appear
 
-Open **Settings > Reminders & Calendar...** first. If the reminder is present there, the stored reminder data is working.
+Open **Reminders** first. If the reminder is present there, the stored reminder data is working.
 
 Then check:
 
@@ -785,7 +833,7 @@ Normal PaperRoute use does not depend on system notification delivery.
 
 ### The local User Guide did not load
 
-PaperRoute ships a local copy of this guide. Open it from the **Help** button in the main header or **Settings > User Guide...**. If the local file cannot be read, the in-app Help window falls back to a short built-in Quick Start and can link to the GitHub copy when internet access is available.
+PaperRoute ships a local copy of this guide. Open it with **Help** at the bottom of the left rail, or press **F1**. If the local file cannot be read, the in-app Help window falls back to a short built-in Quick Start and can link to the GitHub copy when internet access is available.
 
 ---
 

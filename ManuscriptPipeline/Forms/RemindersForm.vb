@@ -4,6 +4,7 @@ Imports System.Drawing
 Imports System.IO
 Imports System.Linq
 Imports System.Windows.Forms
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
@@ -42,6 +43,7 @@ Namespace Forms
                 repository
 
             BuildInterface()
+            EmptyHint.Attach(grid, "No reminders to show. Revision deadlines and follow-up dates appear here automatically; use Add Reminder... for your own.")
             UiPolish.ApplyDialog(Me)
             RefreshGrid()
 

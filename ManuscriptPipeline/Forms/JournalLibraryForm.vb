@@ -3,6 +3,7 @@ Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.Linq
 Imports System.Windows.Forms
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
@@ -40,6 +41,7 @@ Namespace Forms
                 _repository.Load()
 
             BuildInterface()
+            EmptyHint.Attach(lstJournals, "No journals yet. Add Journal records a journal's homepage, submission portal, notes, and checklist once, for every manuscript.")
             UiPolish.ApplyDialog(Me)
             RefreshList()
 

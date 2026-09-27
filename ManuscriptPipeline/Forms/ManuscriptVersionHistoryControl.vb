@@ -5,6 +5,7 @@ Imports System.Drawing
 Imports System.IO
 Imports System.Linq
 Imports System.Windows.Forms
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
@@ -43,6 +44,7 @@ Namespace Forms
                 manuscript
 
             BuildInterface()
+            EmptyHint.Attach(lstVersions, "No versions yet. Add Version records which file was which: a working draft, the submitted snapshot, or a revision.")
             RefreshVersions()
 
         End Sub
@@ -56,7 +58,7 @@ Namespace Forms
             Me.Margin =
                 New Padding(3, 8, 3, 8)
 
-            Dim group As New GroupBox With {
+            Dim group As New SectionCard With {
                 .Text = "Version History",
                 .Dock = DockStyle.Fill,
                 .Padding = New Padding(14)
@@ -384,17 +386,18 @@ Namespace Forms
 
             If _displayedVersions.Count = 0 Then
 
+                ' The list's own hint says how to add the first version.
                 lblInfo.Text =
-                    "No versions tracked yet. Add a working, submitted, or revised snapshot. Journal Submissions continue below ↓"
+                    "Version records are optional; a manuscript is complete without them."
 
                 txtDetails.Text =
-                    "Version records are optional. Existing manuscripts remain valid without version history."
+                    String.Empty
 
             Else
 
                 lblInfo.Text =
                     _displayedVersions.Count.ToString() &
-                    " version(s), oldest to newest. Library copies are immutable after Save & Close. Journal Submissions continue below ↓"
+                    " version(s), oldest to newest. Library copies are immutable once the manuscript is saved."
 
                 Dim selectedIndex As Integer =
                     FindDisplayedVersionIndex(
@@ -1135,7 +1138,7 @@ Namespace Forms
                ) Then
 
                 message &=
-                    "Its PaperRoute Library snapshot will be removed only when you Save & Close Manuscript Details."
+                    "Its PaperRoute Library snapshot will be removed only when you save the manuscript."
 
             ElseIf Not String.IsNullOrWhiteSpace(
                 selected.LocalFilePath
@@ -1154,7 +1157,7 @@ Namespace Forms
             message &=
                 Environment.NewLine &
                 Environment.NewLine &
-                "Canceling Manuscript Details before Save & Close leaves the saved library unchanged."
+                "Discarding the manuscript's unsaved changes leaves the saved library unchanged."
 
             If _manuscript.CurrentVersionId.HasValue AndAlso
                _manuscript.CurrentVersionId.Value =

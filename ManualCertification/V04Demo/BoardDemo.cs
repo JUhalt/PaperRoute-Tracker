@@ -37,7 +37,7 @@ internal static class BoardDemo
         board.FormClosed += (_, _) => timer.Dispose();
     }
 
-    internal static void CreateSamples(string sessionRoot)
+    internal static void CreateSamples(string sessionRoot, bool empty = false)
     {
         // Verify every root before constructing any repository or the real board.
         if (!StorageEnvironment.IsIsolatedSession ||
@@ -52,29 +52,133 @@ internal static class BoardDemo
             CheckForUpdatesAutomatically = false,
             ReminderNotificationsEnabled = false
         });
-        var manuscripts = new List<Manuscript>();
-        foreach (var location in Enum.GetValues<ManuscriptLocation>())
+        // Five fictional manuscripts per shelf with realistic variety: every
+        // Needs Attention case, several stages, and multi-journal routes. The
+        // first card on each shelf keeps a long title for layout stress.
+        var today = DateTime.Today;
+        const string LongTitle = ": Reproducible research across disciplines and journal-specific manuscript preparation";
+        var manuscripts = new List<Manuscript>
         {
-            for (var index = 1; index <= 5; index++)
+            Sample(ManuscriptLocation.Pipeline, PaperStage.Idea, "DEMO Pipeline 1" + LongTitle, "", today.AddDays(-3)),
+            Sample(ManuscriptLocation.Pipeline, PaperStage.Submitted, "DEMO Pipeline 2: Measurement invariance of a short grit scale across four countries", "Fictional Assessment Quarterly", today.AddDays(-6),
+                Submission("Fictional Assessment Quarterly", today.AddDays(-6))),
+            Sample(ManuscriptLocation.Pipeline, PaperStage.UnderReview, "DEMO Pipeline 3: Attention capture by salient distractors under working-memory load", "Fictional Journal of Perception & Performance", today.AddDays(-104),
+                Submission("Fictional Psychological Letters", today.AddDays(-150), (EditorialDecision.DeskRejected, today.AddDays(-143), null)),
+                Submission("Fictional Journal of Perception & Performance", today.AddDays(-104))),
+            Sample(ManuscriptLocation.Pipeline, PaperStage.Revision, "DEMO Pipeline 4: A preregistered replication of anchoring effects in clinical risk estimates", "Fictional Open Psychology", today.AddDays(-31),
+                Submission("Fictional Psychological Letters", today.AddDays(-150), (EditorialDecision.DeskRejected, today.AddDays(-143), null)),
+                Submission("Fictional Open Psychology", today.AddDays(-67), (EditorialDecision.MajorRevision, today.AddDays(-31), today.AddDays(9)))),
+            Sample(ManuscriptLocation.Pipeline, PaperStage.Draft, "DEMO Pipeline 5: Teaching open science to nursing students, a mixed-methods evaluation", "Fictional Nurse Education Review", today.AddDays(-5),
+                Submission("Fictional Nursing Methods", today.AddDays(-60), (EditorialDecision.RejectedAfterReview, today.AddDays(-5), null))),
+
+            Sample(ManuscriptLocation.Published, PaperStage.Published, "DEMO Published 1" + LongTitle, "Fictional Journal of Reproducible Research and Interdisciplinary Methods", today.AddDays(-40),
+                Submission("Fictional Journal of Reproducible Research and Interdisciplinary Methods", today.AddDays(-300), (EditorialDecision.Accepted, today.AddDays(-120), null))),
+            Sample(ManuscriptLocation.Published, PaperStage.Published, "DEMO Published 2: Retrieval practice in introductory statistics", "Fictional Teaching of Psychology", today.AddDays(-200),
+                Submission("Fictional Learning Science", today.AddDays(-520), (EditorialDecision.Rejected, today.AddDays(-480), null)),
+                Submission("Fictional Teaching of Psychology", today.AddDays(-450), (EditorialDecision.Accepted, today.AddDays(-300), null))),
+            Sample(ManuscriptLocation.Published, PaperStage.Published, "DEMO Published 3: Sleep and memory consolidation in older adults", "Fictional Aging & Cognition", today.AddDays(-400),
+                Submission("Fictional Aging & Cognition", today.AddDays(-700), (EditorialDecision.Accepted, today.AddDays(-500), null))),
+            Sample(ManuscriptLocation.Published, PaperStage.Published, "DEMO Published 4: A tutorial on equivalence testing", "Fictional Methods Review", today.AddDays(-600)),
+            Sample(ManuscriptLocation.Published, PaperStage.Published, "DEMO Published 5: Open materials in developmental science", "Fictional Child Development Reports", today.AddDays(-800),
+                Submission("Fictional Developmental Letters", today.AddDays(-1100), (EditorialDecision.DeskRejected, today.AddDays(-1090), null)),
+                Submission("Fictional Infancy Studies", today.AddDays(-1050), (EditorialDecision.RejectedAfterReview, today.AddDays(-980), null)),
+                Submission("Fictional Child Development Reports", today.AddDays(-950), (EditorialDecision.Accepted, today.AddDays(-850), null))),
+
+            Sample(ManuscriptLocation.FileDrawer, PaperStage.Draft, "DEMO File Drawer 1" + LongTitle, "Fictional Journal of Reproducible Research and Interdisciplinary Methods", today.AddDays(-90),
+                Submission("Fictional Journal A", today.AddDays(-400), (EditorialDecision.Rejected, today.AddDays(-360), null)),
+                Submission("Fictional Journal B", today.AddDays(-330), (EditorialDecision.DeskRejected, today.AddDays(-320), null)),
+                Submission("Fictional Journal C", today.AddDays(-300), (EditorialDecision.RejectedAfterReview, today.AddDays(-200), null))),
+            Sample(ManuscriptLocation.FileDrawer, PaperStage.Draft, "DEMO File Drawer 2: A null result on priming and choice", "Fictional Social Cognition", today.AddDays(-180),
+                Submission("Fictional Social Cognition", today.AddDays(-260), (EditorialDecision.Withdrawn, today.AddDays(-200), null))),
+            Sample(ManuscriptLocation.FileDrawer, PaperStage.Idea, "DEMO File Drawer 3: Pilot notes on reading fluency", "", today.AddDays(-500)),
+            Sample(ManuscriptLocation.FileDrawer, PaperStage.Draft, "DEMO File Drawer 4: Revisiting the ego-depletion paradigm", "Fictional Motivation Science", today.AddDays(-250),
+                Submission("Fictional Motivation Science", today.AddDays(-320), (EditorialDecision.Rejected, today.AddDays(-280), null))),
+            Sample(ManuscriptLocation.FileDrawer, PaperStage.Draft, "DEMO File Drawer 5: An unfinished scale-development project", "Fictional Assessment Quarterly", today.AddDays(-700))
+        };
+        // One fictional Journal Library record, linked from the Revision sample,
+        // so the manuscript page shows its notes and checklist.
+        var openPsychology = new JournalRecord
+        {
+            Name = "Fictional Open Psychology",
+            Publisher = "Fictional Society Press",
+            Notes = "Fictional sample notes: results sections must report exact p values and effect sizes with confidence intervals. The response letter is uploaded as a separate file.",
+            ReadinessChecklistTemplate = new List<JournalChecklistTemplateItem>
             {
-                var manuscript = new Manuscript
-                {
-                    Title = $"DEMO {location} {index}: Reproducible research across disciplines and journal-specific manuscript preparation",
-                    Location = location,
-                    CurrentStage = location == ManuscriptLocation.Published ? PaperStage.Published : PaperStage.Draft,
-                    StageEnteredDate = DateTime.Today.AddDays(-index),
-                    TargetJournal = "Fictional Journal of Reproducible Research and Interdisciplinary Methods"
-                };
-                manuscript.History.Add(new HistoryEvent
-                {
-                    Stage = manuscript.CurrentStage,
-                    EventDate = manuscript.StageEnteredDate,
-                    Note = "Fictional sample for testing shelf layout and card actions."
-                });
-                manuscripts.Add(manuscript);
+                new() { Title = "Data availability statement", SortOrder = 1 },
+                new() { Title = "Preregistration link", SortOrder = 2 },
+                new() { Title = "Response letter as a separate file", SortOrder = 3 }
             }
-        }
-        new AuthorLibraryRepository().Save(new AuthorLibraryData());
-        new ManuscriptRepository().Save(manuscripts);
+        };
+        var revision = manuscripts.Single(item => item.CurrentStage == PaperStage.Revision);
+        revision.TargetJournalId = openPsychology.Id;
+
+        // Fictional reviewer comments on the major-revision decision, so the
+        // Submissions tab shows the inline response matrix.
+        var revisionSubmission = revision.Submissions.Last();
+        var majorRevision = revisionSubmission.Decisions.Single();
+        revisionSubmission.ReviewerResponses.AddRange(new[]
+        {
+            Response(majorRevision, "Reviewer 1", ReviewerResponseStatus.Unresolved,
+                "Explain how the sample size was determined and report the smallest effect size of interest.", "", "Method, p. 7"),
+            Response(majorRevision, "Reviewer 1", ReviewerResponseStatus.InProgress,
+                "Report the anchoring effect separately for high- and low-numeracy clinicians.",
+                "We now report the effect separately by numeracy group in Table 2 and Figure 3.", "Results, Table 2"),
+            Response(majorRevision, "Reviewer 2", ReviewerResponseStatus.Addressed,
+                "Add a data availability statement and link the preregistration.",
+                "Added under Open Practices, with the preregistration link.", "Open Practices"),
+            Response(majorRevision, "Editor", ReviewerResponseStatus.NotApplicable,
+                "Consider a Bayesian reanalysis of Study 2.",
+                "We explain why the preregistered analysis is retained.", "Study 2")
+        });
+
+        var library = new AuthorLibraryData();
+        library.Journals.Add(openPsychology);
+        new AuthorLibraryRepository().Save(empty ? new AuthorLibraryData() : library);
+        // --empty shows the first-run welcome instead of the sample shelves.
+        new ManuscriptRepository().Save(empty ? new List<Manuscript>() : manuscripts);
     }
+
+    private static Manuscript Sample(ManuscriptLocation location, PaperStage stage, string title, string journal,
+        DateTime stageEntered, params JournalSubmission[] submissions)
+    {
+        var manuscript = new Manuscript
+        {
+            Title = title,
+            Location = location,
+            CurrentStage = stage,
+            StageEnteredDate = stageEntered,
+            TargetJournal = journal
+        };
+        manuscript.History.Add(new HistoryEvent
+        {
+            Stage = PaperStage.Idea,
+            EventDate = stageEntered.AddDays(-30),
+            Note = "Fictional sample for board and card checks."
+        });
+        if (stage != PaperStage.Idea)
+            manuscript.History.Add(new HistoryEvent { Stage = stage, EventDate = stageEntered, Note = "Fictional stage change." });
+        manuscript.Submissions.AddRange(submissions);
+        return manuscript;
+    }
+
+    private static JournalSubmission Submission(string journal, DateTime submitted,
+        params (EditorialDecision Decision, DateTime Date, DateTime? RevisionDeadline)[] decisions)
+    {
+        var submission = new JournalSubmission { JournalName = journal, SubmittedDate = submitted, ManuscriptNumber = "DEMO-" + submitted.ToString("yyMMdd") };
+        foreach (var decision in decisions)
+            submission.Decisions.Add(new EditorialDecisionEvent { Decision = decision.Decision, DecisionDate = decision.Date, RevisionDeadline = decision.RevisionDeadline });
+        return submission;
+    }
+
+    private static ReviewerResponseItem Response(EditorialDecisionEvent decision, string reviewer, ReviewerResponseStatus status,
+        string comment, string response, string location) => new()
+    {
+        DecisionId = decision.Id,
+        RevisionRoundNumber = 1,
+        ReviewerLabel = reviewer,
+        Status = status,
+        CommentText = comment,
+        ResponseText = response,
+        ManuscriptLocation = location
+    };
 }

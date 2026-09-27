@@ -2,6 +2,45 @@
 
 All notable changes to PaperRoute Tracker will be documented here.
 
+## [Unreleased] — v0.6 Workspace UI
+
+Development is tracked in [draft PR #69](https://github.com/JUhalt/PaperRoute-Tracker/pull/69) and the [v0.6 milestone](https://github.com/JUhalt/PaperRoute-Tracker/milestone/8). The v0.6.0-rc.1 Preview candidate ([release notes](docs/releases/0.6.0-rc.1.md)) is certified in [#74](https://github.com/JUhalt/PaperRoute-Tracker/issues/74); v0.5.0 remains the current Stable release until then. v0.6 uses the same Schema 6 library as v0.5 and migrates no data.
+
+### Added
+
+- **Paste a Title Page...** in Add Manuscript reads Word or LaTeX title pages on this computer and proposes the title, ordered authors with affiliations, abstract, and keywords, plus an optional first deadline ([#60](https://github.com/JUhalt/PaperRoute-Tracker/issues/60)).
+- Board shelves are tabs with counts over one scroll area, and cards fill as many columns as the window fits ([#57](https://github.com/JUhalt/PaperRoute-Tracker/issues/57)).
+- Cards open on click, with Move, Restore, and Delete in a **⋯** menu. They show the stage, what needs attention or time in stage, and the route so far as dots and a short summary such as "2nd journal · major revision", from recorded submissions and decisions only.
+- Needs Attention items are chips that filter the board and can be used from the keyboard. **Ctrl+F** jumps to search.
+- A shared visual system: rounded controls, one filled primary action per window, and quiet outlines for the rest, in Light and Dark.
+- One main window with a left rail of pages: **Board**, **Library** (every manuscript in a sortable table, plus Authors & Affiliations), **Journals**, **Reminders**, and **Import & Export**, with Settings and Help at the bottom. **Ctrl+1** to **Ctrl+5** open the pages, **Alt+Left** and **Alt+Right** go back and forward, and **F1** opens the User Guide ([#54](https://github.com/JUhalt/PaperRoute-Tracker/issues/54)).
+- The rail can collapse to icons for more room and remembers that choice. The PaperRoute logo heads the rail; double-click it for About.
+- The **Import & Export** page lists every way of bringing work in or taking it out, with a sentence on what each keeps. **ORCID Works...** opens the author the works belong to ([#58](https://github.com/JUhalt/PaperRoute-Tracker/issues/58)).
+- An empty library opens on a welcome instead of empty shelves: **+ Add Manuscript**, **Import Existing Work**, the four ways in (a pasted title page, ORCID works, BibTeX or RIS, a spreadsheet), and a plain statement that the library stays on this computer. It never adds sample data ([#59](https://github.com/JUhalt/PaperRoute-Tracker/issues/59)).
+- Empty lists and tables say what belongs there and how to add the first item, and disappear with it.
+- The Library filters as you type by title, journal, stage, or route, and says when nothing matches.
+
+- A manuscript opens as a page in the main window, with **Overview**, **Authors**, **Versions**, **Submissions**, and **Readiness & Packets** tabs. The header shows the stage, journal, and route, with **Copy Citation**, **View Route**, and **Delete Manuscript...**. Overview shows the linked journal's notes and checklist from the Journal Library ([#55](https://github.com/JUhalt/PaperRoute-Tracker/issues/55)).
+
+- The **Submissions** tab lists each journal submission (journal, submitted date, and latest decision) beside the selected one, whose **Editorial History**, **Reviewer Responses**, and **Correspondence & Files** tabs are edited in place. **Record Submission...** and **Add Decision** remain explicit actions ([#56](https://github.com/JUhalt/PaperRoute-Tracker/issues/56)).
+
+### Changed
+
+- Sections in dialogs and on the manuscript page are cards, tabs are underlined text like the board's, and text boxes and lists have a quiet border that turns to the accent color while focused ([#57](https://github.com/JUhalt/PaperRoute-Tracker/issues/57)).
+- Reviewer comments are listed with a status pill, the reviewer and round, and the start of the comment; the whole comment is in the details.
+- **Export Markdown...** opens with the caret at the start instead of the whole draft selected, and the Markdown escapes only what would change the rendered result, so plain-text readers see `p. 6, lines 112-118` rather than `p\. 6, lines 112\-118`. The raw file differs from v0.5; the rendered result is the same ([#73](https://github.com/JUhalt/PaperRoute-Tracker/issues/73)).
+- Reviewer comments are edited on the Submissions tab and join the manuscript's unsaved changes, so the Save Comment, Save & Close, Close, and Save & Close chain is now Save Comment, then Save. Export output is unchanged.
+- One save step per manuscript: an **Unsaved changes** bar with **Save** (Ctrl+S) and **Discard** replaces Manuscript Details' Save & Close and Cancel. Leaving the page, opening another manuscript, or closing PaperRoute with unsaved changes asks to save, discard, or stay. What a save stores, including managed-file copies and deletions, is unchanged.
+- The **Data** menu is gone and its commands have moved to pages; **Backup Library** and **Restore Backup** are under **Settings** in the rail and on the Import & Export page. The User Guide has a relocation table.
+
+### Fixed
+
+- Two-word field labels such as *Revision deadline* no longer lose their second line at 150% scaling.
+- A stale border line no longer remains inside a manuscript card after the window is widened or maximized.
+- Muted text such as counts, card metadata, and the status line meets 4.5:1 contrast on the board and on cards, in Light and Dark.
+- Names that contain an ampersand, such as *Memory & Cognition*, keep it in every dialog, including Route View and Submission Details. Deliberate keyboard accelerators such as **Show &status** still work ([#71](https://github.com/JUhalt/PaperRoute-Tracker/issues/71)).
+- Version History no longer refers to Save & Close or to Journal Submissions "below".
+
 ## [0.5.0] - 2026-09-26
 
 ### Added
