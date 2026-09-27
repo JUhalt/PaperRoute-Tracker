@@ -51,8 +51,8 @@ Targets are directional rather than promises. Data integrity, migrations, backup
 | **v0.3** | The Route ✅ | What happened to this manuscript, in what order, and which file was which? |
 | **v0.4** | Submission Readiness ✅ | What exactly am I preparing and sending to this journal? |
 | **v0.5** | Reviewer Response Workflow ✅ | What did the journal ask me to change, and how am I responding? |
-| **v0.6** | **Workspace UI — active** | Can I find and act on everything from one calm, uncluttered workspace? |
-| **v0.7** | Deadline Center | What requires action, and when? |
+| **v0.6** | Workspace UI ✅ | Can I find and act on everything from one calm, uncluttered workspace? |
+| **v0.7** | **Deadline Center — active** | What requires action, and when? |
 | **v0.8** | Route Analytics & Reports | What does this publication journey show me—and how can I communicate it? |
 | **v0.9** | 1.0 Hardening | Is the entire workflow polished, resilient, and certifiable? |
 | **v1.0** | Trusted Research Workflow | Would I trust this with my real publication pipeline? |
@@ -257,7 +257,7 @@ Release certification included the combined regression suite, native 100%/125%/1
 
 ---
 
-# ACTIVE — v0.6 Workspace UI
+## COMPLETE — v0.6 Workspace UI
 
 Milestone: **[v0.6.0 — Workspace UI](https://github.com/JUhalt/PaperRoute-Tracker/milestone/8)**
 
@@ -271,11 +271,11 @@ Five releases added depth beneath each manuscript, and the interface grew by sta
 - **[#59 Welcome and empty states](https://github.com/JUhalt/PaperRoute-Tracker/issues/59)** — every empty area says what belongs there and offers the first action.
 - **[#60 Faster Add Manuscript](https://github.com/JUhalt/PaperRoute-Tracker/issues/60)** — paste a title page and review locally parsed fields; optionally set a first deadline as an ordinary reminder.
 
-v0.6 is planned without a storage-schema change. Existing save semantics, lifecycle rules, and data-safety guarantees carry over unchanged; only their presentation moves.
+PaperRoute v0.6.0 was released on September 27, 2026 from [PR #75](https://github.com/JUhalt/PaperRoute-Tracker/pull/75), after the v0.6.0-rc.1 Preview. It kept the Schema 6 library, so existing save semantics, lifecycle rules, and data-safety guarantees carried over unchanged. Certification (clean installation, native 100%/125%/150%, installed upgrades through the live Preview and Stable updaters with byte-identical libraries, and published-asset verification) is recorded in [#74](https://github.com/JUhalt/PaperRoute-Tracker/issues/74).
 
 ---
 
-# v0.7 Deadline Center
+# ACTIVE — v0.7 Deadline Center
 
 Milestone: **[v0.7.0 — Deadline Center](https://github.com/JUhalt/PaperRoute-Tracker/milestone/9)**
 
@@ -284,6 +284,20 @@ Issue: **[#28 Deadline Center](https://github.com/JUhalt/PaperRoute-Tracker/issu
 Aggregate revision deadlines, follow-up dates, readiness/submission obligations, reviewer-response work, and manuscript reminders using the existing canonical reminder engine rather than a second scheduling system. The Deadline Center takes over the **Reminders** page in the v0.6 workspace.
 
 - **[#61 Publication check and metadata completion](https://github.com/JUhalt/PaperRoute-Tracker/issues/61)** — user-initiated checks for a possible publication of a tracked manuscript, and batch Crossref completion that fills only empty fields. Status changes only through an explicit **Mark Published** choice.
+
+Decisions settled on September 27, 2026:
+
+- The page is called **Deadlines**, in the rail and as its title, and replaces **Reminders**.
+- **Postpone** changes the date on the record that owns it (a submission's follow-up date, a decision's revision deadline, or a reminder's date). There is no separate snooze field, so the Deadlines page and the manuscript page cannot disagree.
+- Publication-check results (possible and ignored matches) are remembered. This is v0.7's only storage change: **Schema 7**, with the same conservative migration and backup/restore coverage as Schema 6.
+
+Planned slices, tracked in the v0.7 integration PR:
+
+1. **Obligations in the engine (#28).** Revision rows carry reviewer-response progress from the decision that set the deadline. Undated work appears in a **No date** group: a revision without a deadline, a prepared packet with open checklist items, and possible publications to review. Every item links to the record that owns it; status is deterministic and tested. The journal name is filled for revision deadlines.
+2. **The Deadlines page (#28).** Overdue, Today, Next 7 days, Later, No date, and Done groups; kind filters and search; Open, Postpone, Done, and Clear on each row; calendar export; a rail badge for overdue and due-today items; and a link from the board's Needs Attention.
+3. **Publication check and fill blanks (#61).** User-initiated Crossref checks by DOI and title, optional ORCID works, review with Mark Published, Ignore, or Review later, and a previewed fill of empty fields only. Schema 7.
+4. **Carry-over:** [#76](https://github.com/JUhalt/PaperRoute-Tracker/issues/76).
+5. **Certification and release.** Preview, then Stable, using the v0.6 procedure: in-app updater only, an unlocked host for VM checks, and snapshots before each VM step.
 
 ---
 
