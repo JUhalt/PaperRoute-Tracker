@@ -3,6 +3,7 @@ Imports System.Drawing
 Imports System.IO
 Imports System.Linq
 Imports System.Windows.Forms
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
@@ -85,7 +86,7 @@ Namespace Forms
             Next
             root.Controls.Add(metadata, 0, 1)
 
-            Dim tabs As New TabControl With {.Dock = DockStyle.Fill, .AccessibleName = "Reviewer response fields"}
+            Dim tabs As New UnderlineTabControl With {.Dock = DockStyle.Fill, .AccessibleName = "Reviewer response fields"}
             Dim commentTab As New TabPage("Comment && action")
             commentTab.Controls.Add(CreateTextPair("Reviewer comment (enter a comment or action)", txtComment,
                                                   "Planned or completed action", txtAction))

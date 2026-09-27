@@ -412,7 +412,7 @@ Choose **Save Comment** to accept an item into the matrix. Use **Show status** t
 
 ### Export an editable response draft
 
-Choose **Export Markdown...**, review or edit the preview, then choose **Save Markdown...** to save a file. The export includes the submission context, decision and revision round, reviewer labels, comments, actions, statuses, responses, locations, and working notes in stored order. The status filter does not limit the export: it includes the complete matrix. Review the notes before sharing the draft with a journal.
+Choose **Export Markdown...**, review or edit the preview, then choose **Save Markdown...** to save a file. The preview opens with the cursor at the start, so typing never replaces the draft. The Markdown reads as plain text: only characters that would change how it renders, such as a leading "#" or "-", or asterisks, are escaped with a backslash. The export includes the submission context, decision and revision round, reviewer labels, comments, actions, statuses, responses, locations, and working notes in stored order. The status filter does not limit the export: it includes the complete matrix. Review the notes before sharing the draft with a journal.
 
 Preview edits and the exported file are independent of the matrix. Exporting does not save matrix edits or change item status or manuscript history. An export can therefore include work that you later cancel in PaperRoute. Subsequent matrix changes do not update a previously exported file.
 

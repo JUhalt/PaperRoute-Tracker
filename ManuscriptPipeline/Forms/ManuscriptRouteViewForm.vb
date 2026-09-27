@@ -160,6 +160,7 @@ Namespace Forms
             Next
 
             Dim lblEyebrow As New Label With {
+                .UseMnemonic = False,
                 .Text = "MANUSCRIPT ROUTE",
                 .AutoSize = True,
                 .Margin = New Padding(0),
@@ -172,6 +173,7 @@ Namespace Forms
             }
 
             Dim lblTitle As New Label With {
+                .UseMnemonic = False,
                 .Text =
                     If(
                         String.IsNullOrWhiteSpace(_manuscript.Title),
@@ -190,6 +192,7 @@ Namespace Forms
             }
 
             Dim lblSummary As New Label With {
+                .UseMnemonic = False,
                 .Text = BuildSummaryText(),
                 .AutoSize = True,
                 .MaximumSize = New Size(640, 0),
@@ -198,6 +201,7 @@ Namespace Forms
             }
 
             Dim lblHint As New Label With {
+                .UseMnemonic = False,
                 .Text =
                     "Double-click a route card—or use Open in Manuscript—to inspect the authoritative record.",
                 .AutoSize = True,
@@ -366,6 +370,7 @@ Namespace Forms
                 )
 
                 Dim emptyLabel As New Label With {
+                    .UseMnemonic = False,
                     .Text = "No route data is available for this manuscript.",
                     .AutoSize = True,
                     .Padding = New Padding(12),
@@ -543,6 +548,7 @@ Namespace Forms
             ' scholarly-history timestamps, and therefore stay out of the
             ' normal timeline display.
             Return New Label With {
+                .UseMnemonic = False,
                 .Text =
                     waypoint.EventDate.ToString(
                         "MMM d, yyyy"
@@ -623,6 +629,7 @@ Namespace Forms
             }
 
             Dim lblKind As New Label With {
+                .UseMnemonic = False,
                 .Text = WaypointKindText(waypoint),
                 .AutoSize = True,
                 .Margin = New Padding(0, 2, 10, 0),
@@ -644,6 +651,7 @@ Namespace Forms
             )
 
             Dim lblOpenDetails As New Label With {
+                .UseMnemonic = False,
                 .Text = "Open in Manuscript →",
                 .AutoSize = True,
                 .Margin = New Padding(8, 2, 0, 0),
@@ -667,6 +675,7 @@ Namespace Forms
             )
 
             Dim lblTitle As New Label With {
+                .UseMnemonic = False,
                 .Text = WaypointTitle(waypoint),
                 .AutoSize = True,
                 .MaximumSize = New Size(420, 0),
@@ -685,6 +694,7 @@ Namespace Forms
                 )
 
             Dim lblDetail As New Label With {
+                .UseMnemonic = False,
                 .Text = detailText,
                 .AutoSize = True,
                 .MaximumSize = New Size(420, 0),
@@ -703,6 +713,7 @@ Namespace Forms
                 )
 
             Dim lblResultingState As New Label With {
+                .UseMnemonic = False,
                 .Text = resultingStateText,
                 .AutoSize = True,
                 .MaximumSize = New Size(420, 0),
@@ -725,6 +736,7 @@ Namespace Forms
                 )
 
             Dim lblVersions As New Label With {
+                .UseMnemonic = False,
                 .Text = versionsText,
                 .AutoSize = True,
                 .MaximumSize = New Size(420, 0),
@@ -929,6 +941,7 @@ Namespace Forms
         ) As Label
 
             Return New Label With {
+                .UseMnemonic = False,
                 .Text = text,
                 .AutoSize = True,
                 .Padding = New Padding(7, 2, 7, 2),

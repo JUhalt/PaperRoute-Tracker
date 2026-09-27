@@ -1,7 +1,9 @@
 ﻿Imports System
 Imports System.Collections.Generic
 Imports System.Drawing
+Imports System.Text.RegularExpressions
 Imports System.Windows.Forms
+Imports ManuscriptPipeline.Controls
 
 Namespace Services
 
@@ -160,7 +162,7 @@ Namespace Services
         )
 
             ' Theme-painted buttons already follow the tokens.
-            If TypeOf control Is Global.ManuscriptPipeline.Controls.ActionButton Then
+            If TypeOf control Is ActionButton Then
                 Return
             End If
 
@@ -213,6 +215,10 @@ Namespace Services
                 textBox.BorderStyle =
                     BorderStyle.FixedSingle
 
+                ThemedBorder.Attach(
+                    textBox
+                )
+
                 Return
 
             End If
@@ -235,6 +241,10 @@ Namespace Services
                 richText.BorderStyle =
                     BorderStyle.FixedSingle
 
+                ThemedBorder.Attach(
+                    richText
+                )
+
                 Return
 
             End If
@@ -256,6 +266,10 @@ Namespace Services
 
                 listBox.BorderStyle =
                     BorderStyle.FixedSingle
+
+                ThemedBorder.Attach(
+                    listBox
+                )
 
                 Return
 
@@ -349,7 +363,8 @@ Namespace Services
                TypeOf control Is RadioButton Then
 
                 control.ForeColor = UiTheme.PrimaryText()
-                control.BackColor = UiTheme.BoardBackground()
+                control.BackColor = SectionCard.SurfaceBehind(control)
+                ShowLiteralAmpersands(DirectCast(control, ButtonBase))
 
                 Return
 
@@ -373,12 +388,51 @@ Namespace Services
             End If
 
 
+            ' Sections are cards; what they contain sits on the card.
+            If TypeOf control Is SectionCard Then
+
+                control.BackColor =
+                    UiTheme.CardBackground()
+
+                control.ForeColor =
+                    UiTheme.PrimaryText()
+
+                Return
+
+            End If
+
+
             If TypeOf control Is GroupBox Then
 
                 control.BackColor =
-                    UiTheme.BoardBackground()
+                    SectionCard.SurfaceBehind(control)
 
                 control.ForeColor =
+                    UiTheme.PrimaryText()
+
+                Return
+
+            End If
+
+
+            ' A tab page continues the surface around its tabs.
+            If TypeOf control Is TabPage Then
+
+                Dim page As TabPage =
+                    DirectCast(
+                        control,
+                        TabPage
+                    )
+
+                page.UseVisualStyleBackColor =
+                    False
+
+                page.BackColor =
+                    If(page.Parent Is Nothing,
+                       UiTheme.BoardBackground(),
+                       SectionCard.SurfaceBehind(page.Parent))
+
+                page.ForeColor =
                     UiTheme.PrimaryText()
 
                 Return
@@ -390,7 +444,7 @@ Namespace Services
                TypeOf control Is FlowLayoutPanel Then
 
                 control.BackColor =
-                    UiTheme.BoardBackground()
+                    SectionCard.SurfaceBehind(control)
 
                 Return
 
@@ -404,6 +458,10 @@ Namespace Services
                         control,
                         Label
                     )
+
+                If label.UseMnemonic AndAlso Not UsesAcceleratorSyntax(label.Text) Then
+                    label.UseMnemonic = False
+                End If
 
                 If label.ForeColor =
                     SystemColors.GrayText Then
@@ -425,6 +483,27 @@ Namespace Services
 
             End If
 
+        End Sub
+
+
+        ' =====================================================
+        ' Literal ampersands (#71)
+        ' =====================================================
+
+        ' A label or option shows "&" literally unless its text uses
+        ' accelerator syntax ("&s" or "&&"). Names filled in later, such as
+        ' "Memory & Cognition", keep their ampersand, while deliberate
+        ' accelerators such as "Show &status" keep working.
+        Private Shared ReadOnly AcceleratorSyntax As New Regex("&(&|[\p{L}\p{N}])")
+
+        Friend Shared Function UsesAcceleratorSyntax(text As String) As Boolean
+            Return Not String.IsNullOrEmpty(text) AndAlso AcceleratorSyntax.IsMatch(text)
+        End Function
+
+        Private Shared Sub ShowLiteralAmpersands(button As ButtonBase)
+            If button.UseMnemonic AndAlso Not UsesAcceleratorSyntax(button.Text) Then
+                button.UseMnemonic = False
+            End If
         End Sub
 
 

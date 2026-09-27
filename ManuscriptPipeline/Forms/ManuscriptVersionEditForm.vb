@@ -4,6 +4,7 @@ Imports System.Drawing
 Imports System.IO
 Imports System.Linq
 Imports System.Windows.Forms
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
@@ -417,7 +418,7 @@ Namespace Forms
                 8
             )
 
-            Dim notesGroup As New GroupBox With {
+            Dim notesGroup As New SectionCard With {
                 .Text = "Version Notes",
                 .Dock = DockStyle.Fill,
                 .Padding = New Padding(10)

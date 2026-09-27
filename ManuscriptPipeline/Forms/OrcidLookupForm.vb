@@ -5,6 +5,7 @@ Imports System.Drawing
 Imports System.Linq
 Imports System.Threading.Tasks
 Imports System.Windows.Forms
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
@@ -170,7 +171,7 @@ Namespace Forms
                 "PaperRoute reads ORCID public data only. A successful lookup checks that the iD exists; it does not authenticate ownership and never writes back to ORCID."
             lblStatus.Margin = New Padding(0, 0, 0, 10)
 
-            Dim tabs As New TabControl With {
+            Dim tabs As New UnderlineTabControl With {
                 .Dock = DockStyle.Fill
             }
 

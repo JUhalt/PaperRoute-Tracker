@@ -3,6 +3,7 @@ Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.Linq
 Imports System.Windows.Forms
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
@@ -100,7 +101,7 @@ Namespace Forms
             shell.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
             shell.RowStyles.Add(New RowStyle(SizeType.AutoSize))
 
-            Dim tabs As New TabControl With {
+            Dim tabs As New UnderlineTabControl With {
                 .Dock = DockStyle.Fill
             }
 

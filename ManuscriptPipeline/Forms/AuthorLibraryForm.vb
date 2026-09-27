@@ -126,7 +126,7 @@ Namespace Forms
                 .Margin = New Padding(3, 3, 3, 12)
             }
 
-            Dim tabs As New TabControl With {
+            Dim tabs As New UnderlineTabControl With {
                 .Dock = DockStyle.Fill
             }
 

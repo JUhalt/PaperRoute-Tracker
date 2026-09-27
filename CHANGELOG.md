@@ -25,6 +25,9 @@ Development is tracked in [draft PR #69](https://github.com/JUhalt/PaperRoute-Tr
 
 ### Changed
 
+- Sections in dialogs and on the manuscript page are cards, tabs are underlined text like the board's, and text boxes and lists have a quiet border that turns to the accent color while focused ([#57](https://github.com/JUhalt/PaperRoute-Tracker/issues/57)).
+- Reviewer comments are listed with a status pill, the reviewer and round, and the start of the comment; the whole comment is in the details.
+- **Export Markdown...** opens with the caret at the start instead of the whole draft selected, and the Markdown escapes only what would change the rendered result, so plain-text readers see `p. 6, lines 112-118` rather than `p\. 6, lines 112\-118`. The raw file differs from v0.5; the rendered result is the same ([#73](https://github.com/JUhalt/PaperRoute-Tracker/issues/73)).
 - Reviewer comments are edited on the Submissions tab and join the manuscript's unsaved changes, so the Save Comment, Save & Close, Close, and Save & Close chain is now Save Comment, then Save. Export output is unchanged.
 - One save step per manuscript: an **Unsaved changes** bar with **Save** (Ctrl+S) and **Discard** replaces Manuscript Details' Save & Close and Cancel. Leaving the page, opening another manuscript, or closing PaperRoute with unsaved changes asks to save, discard, or stay. What a save stores, including managed-file copies and deletions, is unchanged.
 - The **Data** menu is gone and its commands have moved to pages; **Backup Library** and **Restore Backup** are under **Settings** in the rail and on the Import & Export page. The User Guide has a relocation table.
@@ -34,6 +37,8 @@ Development is tracked in [draft PR #69](https://github.com/JUhalt/PaperRoute-Tr
 - Two-word field labels such as *Revision deadline* no longer lose their second line at 150% scaling.
 - A stale border line no longer remains inside a manuscript card after the window is widened or maximized.
 - Muted text such as counts, card metadata, and the status line meets 4.5:1 contrast on the board and on cards, in Light and Dark.
+- Names that contain an ampersand, such as *Memory & Cognition*, keep it in every dialog, including Route View and Submission Details. Deliberate keyboard accelerators such as **Show &status** still work ([#71](https://github.com/JUhalt/PaperRoute-Tracker/issues/71)).
+- Version History no longer refers to Save & Close or to Journal Submissions "below".
 
 ## [0.5.0] - 2026-09-26
 

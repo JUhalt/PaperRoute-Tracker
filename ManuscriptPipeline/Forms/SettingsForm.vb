@@ -1,6 +1,7 @@
 Imports System
 Imports System.Drawing
 Imports System.Windows.Forms
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
@@ -214,7 +215,7 @@ Namespace Forms
 
         Private Function BuildAppearanceGroup() As GroupBox
 
-            Dim group As New GroupBox With {
+            Dim group As New SectionCard With {
                 .Text = "Appearance",
                 .Dock = DockStyle.Top,
                 .AutoSize = True,
@@ -265,7 +266,7 @@ Namespace Forms
 
         Private Function BuildAttentionGroup() As GroupBox
 
-            Dim group As New GroupBox With {
+            Dim group As New SectionCard With {
                 .Text = "Needs Attention",
                 .Dock = DockStyle.Top,
                 .AutoSize = True,
@@ -324,7 +325,7 @@ Namespace Forms
 
         Private Function BuildRemindersGroup() As GroupBox
 
-            Dim group As New GroupBox With {
+            Dim group As New SectionCard With {
                 .Text = "Reminders && Windows Notifications",
                 .Dock = DockStyle.Top,
                 .AutoSize = True,
@@ -435,7 +436,7 @@ Namespace Forms
 
         Private Function BuildFileDrawerGroup() As GroupBox
 
-            Dim group As New GroupBox With {
+            Dim group As New SectionCard With {
                 .Text = "File Drawer",
                 .Dock = DockStyle.Top,
                 .AutoSize = True,
@@ -497,7 +498,7 @@ Namespace Forms
 
         Private Function BuildUpdatesGroup() As GroupBox
 
-            Dim group As New GroupBox With {
+            Dim group As New SectionCard With {
                 .Text = "Updates",
                 .Dock = DockStyle.Top,
                 .AutoSize = True,

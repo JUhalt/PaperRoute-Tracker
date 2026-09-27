@@ -32,7 +32,7 @@ Namespace Forms
 
         Private ReadOnly _sectionTabs As New List(Of ShelfTabButton)()
         Private ReadOnly lblReadinessSummary As New Label()
-        Private ReadOnly journalNotesGroup As New GroupBox()
+        Private ReadOnly journalNotesGroup As New SectionCard()
         Private ReadOnly lblJournalNotes As New Label()
 
         ' Raised in page mode after the user confirms Delete Manuscript.
@@ -47,7 +47,7 @@ Namespace Forms
         Private ReadOnly btnRevisionDeadline As New Button()
         Private _authorLibraryDirty As Boolean = False
 
-        Private ReadOnly fileDrawerGroup As New GroupBox()
+        Private ReadOnly fileDrawerGroup As New SectionCard()
         Private ReadOnly lblFileDrawerDateValue As New Label()
         Private ReadOnly txtFileDrawerReason As New TextBox()
 
@@ -214,7 +214,7 @@ Namespace Forms
                     " in the Journal Library; open Submission Readiness on the Readiness & Packets tab to work through them.")
             End If
 
-            journalNotesGroup.Text = "Notes for " & journal.Name
+            journalNotesGroup.Text = "Notes for " & journal.Name.Replace("&", "&&")
             lblJournalNotes.Text = String.Join(Environment.NewLine & Environment.NewLine, lines)
             journalNotesGroup.Visible = True
 
@@ -633,7 +633,7 @@ Namespace Forms
             ' Manuscript metadata
             ' =================================================
 
-            Dim detailsGroup As New GroupBox With {
+            Dim detailsGroup As New SectionCard With {
                 .Text = "Manuscript",
                 .Dock = DockStyle.Fill,
                 .Padding = New Padding(14)
@@ -848,7 +848,7 @@ Namespace Forms
             ' Structured authors
             ' =================================================
 
-            Dim authorsGroup As New GroupBox With {
+            Dim authorsGroup As New SectionCard With {
                 .Text = "Authors",
                 .Dock = DockStyle.Fill,
                 .Padding = New Padding(14),

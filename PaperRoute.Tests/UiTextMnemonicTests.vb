@@ -1,10 +1,12 @@
 Imports System
 Imports System.Collections.Generic
+Imports System.Linq
 Imports System.Text.RegularExpressions
 Imports System.Windows.Forms
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
 Imports ManuscriptPipeline.Forms
 Imports ManuscriptPipeline.Models
+Imports ManuscriptPipeline.Services
 
 <TestClass>
 <DoNotParallelize>
@@ -40,6 +42,68 @@ Public Class UiTextMnemonicTests
 
     End Sub
 
+    ' #71: names typed by the user keep their ampersands in dialogs.
+    <TestMethod>
+    Public Sub DialogsShowUserDataWithLiteralAmpersands()
+
+        Dim manuscript As New Manuscript With {
+            .Title = "Attention & Memory in Synthetic Samples",
+            .TargetJournal = "Memory & Cognition",
+            .Location = ManuscriptLocation.Pipeline,
+            .CurrentStage = PaperStage.Revision
+        }
+        Dim submission As New JournalSubmission With {
+            .JournalName = "Memory & Cognition",
+            .SubmittedDate = New DateTime(2026, 3, 1),
+            .ManuscriptNumber = "MC-2026-001"
+        }
+        submission.Decisions.Add(New EditorialDecisionEvent With {
+            .Decision = EditorialDecision.MajorRevision,
+            .DecisionDate = New DateTime(2026, 4, 2)
+        })
+        manuscript.Submissions.Add(submission)
+
+        Using details As New SubmissionDetailsForm(manuscript, submission)
+            AssertNoLostAmpersands(details)
+            AssertShowsLiterally(details, "Memory & Cognition")
+        End Using
+
+        Using route As New ManuscriptRouteViewForm(manuscript)
+            AssertNoLostAmpersands(route)
+            AssertShowsLiterally(route, "Memory & Cognition")
+        End Using
+
+        Using confirm As New DeleteManuscriptForm(manuscript.Title)
+            AssertNoLostAmpersands(confirm)
+        End Using
+
+    End Sub
+
+    ' #71: styling keeps the accelerators the reviewer-response dialogs rely on.
+    <TestMethod>
+    Public Sub DeliberateLabelAcceleratorsKeepWorking()
+
+        Using item As New ReviewerResponseItemForm(New JournalSubmission With {.JournalName = "Memory & Cognition"})
+            For Each text As String In {"Editorial &decision", "Revision &round", "Re&viewer (required)"}
+                Dim label As Label = Descendants(item).OfType(Of Label)().Single(Function(candidate) candidate.Text = text)
+                Assert.IsTrue(label.UseMnemonic, text & " keeps its accelerator.")
+            Next
+        End Using
+
+        Assert.IsTrue(UiPolish.UsesAcceleratorSyntax("Show &status"))
+        Assert.IsTrue(UiPolish.UsesAcceleratorSyntax("Save && Close"))
+        Assert.IsFalse(UiPolish.UsesAcceleratorSyntax("Memory & Cognition"))
+        Assert.IsFalse(UiPolish.UsesAcceleratorSyntax("Trailing &"))
+        Assert.IsFalse(UiPolish.UsesAcceleratorSyntax(String.Empty))
+
+    End Sub
+
+    Private Shared Sub AssertShowsLiterally(root As Control, text As String)
+        Assert.IsTrue(
+            Descendants(root).OfType(Of Label)().Any(Function(label) label.Text.Contains(text) AndAlso Not label.UseMnemonic),
+            "Expected a label showing " & text & " literally.")
+    End Sub
+
     Private Shared Sub AssertNoLostAmpersands(root As Control)
 
         For Each control As Control In Descendants(root)
@@ -47,7 +111,8 @@ Public Class UiTextMnemonicTests
             Dim button As ButtonBase = TryCast(control, ButtonBase)
             Dim usesMnemonic As Boolean =
                 (label IsNot Nothing AndAlso label.UseMnemonic) OrElse
-                (button IsNot Nothing AndAlso button.UseMnemonic)
+                (button IsNot Nothing AndAlso button.UseMnemonic) OrElse
+                TypeOf control Is GroupBox
 
             If usesMnemonic Then
                 Assert.IsFalse(

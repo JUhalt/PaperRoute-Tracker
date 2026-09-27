@@ -191,7 +191,7 @@ Namespace Forms
             ' Submission summary
             ' =================================================
 
-            Dim summaryGroup As New GroupBox With {
+            Dim summaryGroup As New SectionCard With {
                 .Text = "Submission",
                 .Dock = DockStyle.Fill,
                 .Padding = New Padding(14)
@@ -278,6 +278,7 @@ Namespace Forms
             portalPanel.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
 
             Dim lblPortal As New Label With {
+                .UseMnemonic = False,
                 .Dock = DockStyle.Fill,
                 .AutoEllipsis = True,
                 .TextAlign = ContentAlignment.MiddleLeft
@@ -314,7 +315,7 @@ Namespace Forms
             ' Submission notes
             ' =================================================
 
-            Dim notesGroup As New GroupBox With {
+            Dim notesGroup As New SectionCard With {
                 .Text = "Submission Notes",
                 .Dock = DockStyle.Fill,
                 .Padding = New Padding(14)
@@ -341,7 +342,7 @@ Namespace Forms
             ' Tabs
             ' =================================================
 
-            Dim tabs As New TabControl With {
+            Dim tabs As New UnderlineTabControl With {
                 .Dock = DockStyle.Fill
             }
 
@@ -556,6 +557,7 @@ Namespace Forms
         Private Function CreateFieldLabel(text As String) As Label
 
             Return New Label With {
+                .UseMnemonic = False,
                 .Text = text,
                 .AutoSize = True,
                 .Anchor = AnchorStyles.Left,
@@ -568,6 +570,7 @@ Namespace Forms
         Private Function CreateValueLabel(text As String) As Label
 
             Return New Label With {
+                .UseMnemonic = False,
                 .Text = text,
                 .Dock = DockStyle.Fill,
                 .AutoEllipsis = True,

@@ -595,8 +595,10 @@ Public Class ManuscriptPageTests
 
     Private Shared Sub RunOnStaThread(action As Action)
         Dim failure As Exception = Nothing
+        Dim nativeThreadId As Integer = 0
         Dim thread As New Thread(
             Sub()
+                nativeThreadId = GetCurrentThreadId()
                 Try
                     action()
                 Catch ex As Exception
@@ -605,8 +607,47 @@ Public Class ManuscriptPageTests
             End Sub) With {.IsBackground = True}
         thread.SetApartmentState(ApartmentState.STA)
         thread.Start()
-        Assert.IsTrue(thread.Join(TimeSpan.FromSeconds(90)), "Manuscript page test timed out.")
+        If Not thread.Join(TimeSpan.FromSeconds(90)) Then
+            ' A modal message box would block the test silently; name what is open.
+            Assert.Fail("Manuscript page test timed out. Windows open on its thread: " & DescribeThreadWindows(nativeThreadId))
+        End If
         If failure IsNot Nothing Then ExceptionDispatchInfo.Capture(failure).Throw()
     End Sub
+
+    Private Shared Function DescribeThreadWindows(threadId As Integer) As String
+        Dim windows As New List(Of String)()
+        EnumThreadWindows(threadId,
+            Function(handle, parameter)
+                Dim title As New System.Text.StringBuilder(256)
+                Dim className As New System.Text.StringBuilder(256)
+                GetWindowText(handle, title, title.Capacity)
+                GetClassName(handle, className, className.Capacity)
+                windows.Add($"'{title}' ({className}{If(IsWindowVisible(handle), ", visible", "")})")
+                Return True
+            End Function, IntPtr.Zero)
+        Return If(windows.Count = 0, "none", String.Join("; ", windows))
+    End Function
+
+    Private Delegate Function EnumWindowsCallback(handle As IntPtr, parameter As IntPtr) As Boolean
+
+    <System.Runtime.InteropServices.DllImport("kernel32.dll")>
+    Private Shared Function GetCurrentThreadId() As Integer
+    End Function
+
+    <System.Runtime.InteropServices.DllImport("user32.dll")>
+    Private Shared Function EnumThreadWindows(threadId As Integer, callback As EnumWindowsCallback, parameter As IntPtr) As Boolean
+    End Function
+
+    <System.Runtime.InteropServices.DllImport("user32.dll", CharSet:=System.Runtime.InteropServices.CharSet.Unicode)>
+    Private Shared Function GetWindowText(handle As IntPtr, text As System.Text.StringBuilder, capacity As Integer) As Integer
+    End Function
+
+    <System.Runtime.InteropServices.DllImport("user32.dll", CharSet:=System.Runtime.InteropServices.CharSet.Unicode)>
+    Private Shared Function GetClassName(handle As IntPtr, text As System.Text.StringBuilder, capacity As Integer) As Integer
+    End Function
+
+    <System.Runtime.InteropServices.DllImport("user32.dll")>
+    Private Shared Function IsWindowVisible(handle As IntPtr) As Boolean
+    End Function
 
 End Class

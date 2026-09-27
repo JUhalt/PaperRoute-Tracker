@@ -37,6 +37,9 @@ Namespace Forms
             txtMarkdown.WordWrap = False
             txtMarkdown.Dock = DockStyle.Fill
             txtMarkdown.AccessibleName = "Editable Markdown export"
+            ' Open with the caret at the start rather than the whole draft
+            ' selected, so typing never replaces it (#73).
+            txtMarkdown.Select(0, 0)
             root.Controls.Add(txtMarkdown, 0, 1)
             Dim footer As New FlowLayoutPanel With {
                 .Dock = DockStyle.Fill, .AutoSize = True, .FlowDirection = FlowDirection.RightToLeft,

@@ -58,7 +58,7 @@ Namespace Forms
             Me.Margin =
                 New Padding(3, 8, 3, 8)
 
-            Dim group As New GroupBox With {
+            Dim group As New SectionCard With {
                 .Text = "Version History",
                 .Dock = DockStyle.Fill,
                 .Padding = New Padding(14)
@@ -386,17 +386,18 @@ Namespace Forms
 
             If _displayedVersions.Count = 0 Then
 
+                ' The list's own hint says how to add the first version.
                 lblInfo.Text =
-                    "No versions tracked yet. Add a working, submitted, or revised snapshot."
+                    "Version records are optional; a manuscript is complete without them."
 
                 txtDetails.Text =
-                    "Version records are optional. Existing manuscripts remain valid without version history."
+                    String.Empty
 
             Else
 
                 lblInfo.Text =
                     _displayedVersions.Count.ToString() &
-                    " version(s), oldest to newest. Library copies are immutable after Save & Close. Journal Submissions continue below ↓"
+                    " version(s), oldest to newest. Library copies are immutable once the manuscript is saved."
 
                 Dim selectedIndex As Integer =
                     FindDisplayedVersionIndex(
