@@ -5,6 +5,7 @@ Imports System.Runtime.ExceptionServices
 Imports System.Threading
 Imports System.Windows.Forms
 Imports ManuscriptPipeline
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Models
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
 
@@ -240,15 +241,22 @@ Public Class DashboardShelfLayoutTests
                 Using board As New LayoutOnlyBoard()
                     board.Prepare(1.0F)
                     board.Show()
+                    Dim previousColumns As Integer = 0
+                    ' Windows limits a window to the screen, so the expected column
+                    ' count follows the shelf width actually reached.
                     For Each width As Integer In {900, 1400, 2200}
                         board.Size = New Size(width, 900)
                         Application.DoEvents()
-                        Dim shelf As FlowLayoutPanel = board.Shelves.First()
+                        Dim shelf As ManuscriptShelfPanel = DirectCast(board.Shelves.First(), ManuscriptShelfPanel)
                         Dim cards As List(Of Control) = shelf.Controls.Cast(Of Control)().ToList()
                         Dim columns As Integer = cards.Select(Function(card) card.Left).Distinct().Count()
-                        Dim diagnostic As String = $"window width {width}, shelf {shelf.ClientSize}, columns {columns}"
+                        Dim available As Integer = shelf.ClientSize.Width - shelf.Padding.Horizontal
+                        Dim fits As Integer = Math.Max(1, (available + shelf.CardGap) \ (shelf.MinimumCardWidth + shelf.CardGap))
+                        Dim diagnostic As String = $"window width {board.Width}, shelf {shelf.ClientSize}, columns {columns}"
 
-                        Assert.IsTrue(columns >= If(width >= 1400, 3, 2), "Wider windows show more columns: " & diagnostic)
+                        Assert.AreEqual(Math.Min(fits, cards.Count), columns, "The shelf shows as many columns as fit: " & diagnostic)
+                        Assert.IsTrue(columns >= previousColumns, "Wider windows never show fewer columns: " & diagnostic)
+                        previousColumns = columns
                         Assert.AreEqual(1, cards.Select(Function(card) card.Width).Distinct().Count(), "Columns share one width: " & diagnostic)
                         For Each row In cards.GroupBy(Function(card) card.Top)
                             Assert.IsTrue(row.Count() <= columns, "Rows never exceed the column count: " & diagnostic)
