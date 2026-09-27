@@ -112,6 +112,25 @@ internal static class BoardDemo
         var revision = manuscripts.Single(item => item.CurrentStage == PaperStage.Revision);
         revision.TargetJournalId = openPsychology.Id;
 
+        // Fictional reviewer comments on the major-revision decision, so the
+        // Submissions tab shows the inline response matrix.
+        var revisionSubmission = revision.Submissions.Last();
+        var majorRevision = revisionSubmission.Decisions.Single();
+        revisionSubmission.ReviewerResponses.AddRange(new[]
+        {
+            Response(majorRevision, "Reviewer 1", ReviewerResponseStatus.Unresolved,
+                "Explain how the sample size was determined and report the smallest effect size of interest.", "", "Method, p. 7"),
+            Response(majorRevision, "Reviewer 1", ReviewerResponseStatus.InProgress,
+                "Report the anchoring effect separately for high- and low-numeracy clinicians.",
+                "We now report the effect separately by numeracy group in Table 2 and Figure 3.", "Results, Table 2"),
+            Response(majorRevision, "Reviewer 2", ReviewerResponseStatus.Addressed,
+                "Add a data availability statement and link the preregistration.",
+                "Added under Open Practices, with the preregistration link.", "Open Practices"),
+            Response(majorRevision, "Editor", ReviewerResponseStatus.NotApplicable,
+                "Consider a Bayesian reanalysis of Study 2.",
+                "We explain why the preregistered analysis is retained.", "Study 2")
+        });
+
         var library = new AuthorLibraryData();
         library.Journals.Add(openPsychology);
         new AuthorLibraryRepository().Save(library);
@@ -149,4 +168,16 @@ internal static class BoardDemo
             submission.Decisions.Add(new EditorialDecisionEvent { Decision = decision.Decision, DecisionDate = decision.Date, RevisionDeadline = decision.RevisionDeadline });
         return submission;
     }
+
+    private static ReviewerResponseItem Response(EditorialDecisionEvent decision, string reviewer, ReviewerResponseStatus status,
+        string comment, string response, string location) => new()
+    {
+        DecisionId = decision.Id,
+        RevisionRoundNumber = 1,
+        ReviewerLabel = reviewer,
+        Status = status,
+        CommentText = comment,
+        ResponseText = response,
+        ManuscriptLocation = location
+    };
 }

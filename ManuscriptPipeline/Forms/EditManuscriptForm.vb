@@ -60,11 +60,16 @@ Namespace Forms
 
         Private ReadOnly lstSubmissions As New ListBox()
 
-        Private ReadOnly btnViewSubmission As New Button()
         Private ReadOnly btnEditSubmission As New Button()
         Private ReadOnly btnDeleteSubmission As New Button()
 
         Private ReadOnly lblSubmissionInfo As New Label()
+
+        ' The Submissions tab: the list beside the selected submission's
+        ' details, decisions, reviewer responses, and correspondence.
+        Private _submissionsSection As Control = Nothing
+        Private ReadOnly _submissionDetailHost As New Panel()
+        Private _submissionDetail As SubmissionDetailsForm = Nothing
 
         Private versionHistoryControl As ManuscriptVersionHistoryControl = Nothing
 
@@ -396,10 +401,7 @@ Namespace Forms
                     End If
 
                     ScrollControlIntoDetailsView(
-                        FindGroupBoxByText(
-                            Me,
-                            "Journal Submissions"
-                        )
+                        _submissionsSection
                     )
 
                 Case Else
@@ -990,92 +992,67 @@ Namespace Forms
             ' Submissions
             ' =================================================
 
-            Dim submissionsGroup As New GroupBox With {
-                .Text = "Journal Submissions",
+            Dim submissionsGroup As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
-                .Padding = New Padding(14)
+                .ColumnCount = 2,
+                .RowCount = 1,
+                .Margin = New Padding(0),
+                .Padding = New Padding(0),
+                .AccessibleName = "Journal Submissions"
             }
 
-            Dim submissionsLayout As New TableLayoutPanel With {
+            ' Runtime-built column widths are not rescaled with the form, so
+            ' scale the list's width for the display.
+            Dim listWidth As Integer = CInt(Math.Round(330 * DeviceDpi / 96.0))
+            submissionsGroup.ColumnStyles.Add(New ColumnStyle(SizeType.Absolute, listWidth))
+            submissionsGroup.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
+            submissionsGroup.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
+
+            Dim submissionsList As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .ColumnCount = 1,
-                .RowCount = 2
-            }
-
-            submissionsLayout.RowStyles.Add(
-                New RowStyle(SizeType.Absolute, 92)
-            )
-
-            submissionsLayout.RowStyles.Add(
-                New RowStyle(SizeType.Percent, 100)
-            )
-
-            Dim submissionToolbar As New TableLayoutPanel With {
-                .Dock = DockStyle.Fill,
-                .AutoSize = False,
-                .ColumnCount = 1,
-                .RowCount = 2,
-                .Padding = New Padding(0, 2, 0, 4),
-                .Margin = New Padding(0)
-            }
-
-            submissionToolbar.ColumnStyles.Add(
-                New ColumnStyle(
-                    SizeType.Percent,
-                    100
-                )
-            )
-
-            submissionToolbar.RowStyles.Add(
-                New RowStyle(
-                    SizeType.Absolute,
-                    34
-                )
-            )
-
-            submissionToolbar.RowStyles.Add(
-                New RowStyle(
-                    SizeType.Absolute,
-                    48
-                )
-            )
-
-            lblSubmissionInfo.AutoSize = True
-            lblSubmissionInfo.Anchor = AnchorStyles.Left
-            lblSubmissionInfo.ForeColor = SystemColors.GrayText
-
-            Dim submissionButtons As New FlowLayoutPanel With {
-                .Dock = DockStyle.Fill,
-                .AutoSize = False,
-                .FlowDirection = FlowDirection.LeftToRight,
-                .WrapContents = False,
-                .Margin = New Padding(0, 4, 0, 0),
+                .RowCount = 3,
+                .Margin = New Padding(0, 0, 14, 0),
                 .Padding = New Padding(0)
             }
 
-            btnViewSubmission.Text = "View"
-            btnViewSubmission.AutoSize = True
-            btnViewSubmission.Height = 36
-            btnViewSubmission.Enabled = False
+            submissionsList.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+            submissionsList.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+            submissionsList.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
 
-            btnEditSubmission.Text = "Edit Submission"
-            btnEditSubmission.AutoSize = True
-            btnEditSubmission.Height = 36
-            btnEditSubmission.Enabled = False
+            lblSubmissionInfo.AutoSize = True
+            lblSubmissionInfo.MaximumSize = New Size(CInt(Math.Round(310 * DeviceDpi / 96.0)), 0)
+            lblSubmissionInfo.ForeColor = SystemColors.GrayText
+            lblSubmissionInfo.Margin = New Padding(0, 0, 0, 6)
 
-            btnDeleteSubmission.Text = "Delete Submission"
-            btnDeleteSubmission.AutoSize = True
-            btnDeleteSubmission.Height = 36
-            btnDeleteSubmission.Enabled = False
-
-            Dim btnAddSubmission As New Button With {
-                .Text = "Add Submission",
+            Dim submissionButtons As New FlowLayoutPanel With {
+                .Dock = DockStyle.Fill,
                 .AutoSize = True,
-                .Height = 36
+                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                .FlowDirection = FlowDirection.LeftToRight,
+                .WrapContents = True,
+                .Margin = New Padding(0, 0, 0, 6),
+                .Padding = New Padding(0)
             }
 
-            AddHandler btnViewSubmission.Click,
-                AddressOf ViewSelectedSubmission
+            ' Recording a submission stays an explicit action.
+            Dim btnAddSubmission As New Button With {
+                .Text = "Record Submission...",
+                .AutoSize = True,
+                .Height = 34
+            }
+
+            btnEditSubmission.Text = "Edit"
+            btnEditSubmission.AutoSize = True
+            btnEditSubmission.Height = 34
+            btnEditSubmission.Enabled = False
+            btnEditSubmission.AccessibleName = "Edit the selected submission's journal, dates, and portal"
+
+            btnDeleteSubmission.Text = "Delete"
+            btnDeleteSubmission.AutoSize = True
+            btnDeleteSubmission.Height = 34
+            btnDeleteSubmission.Enabled = False
+            btnDeleteSubmission.AccessibleName = "Delete the selected submission"
 
             AddHandler btnEditSubmission.Click,
                 AddressOf EditSelectedSubmission
@@ -1086,27 +1063,33 @@ Namespace Forms
             AddHandler btnAddSubmission.Click,
                 AddressOf AddSubmission
 
-            submissionButtons.Controls.Add(btnViewSubmission)
+            submissionButtons.Controls.Add(btnAddSubmission)
             submissionButtons.Controls.Add(btnEditSubmission)
             submissionButtons.Controls.Add(btnDeleteSubmission)
-            submissionButtons.Controls.Add(btnAddSubmission)
-
-            submissionToolbar.Controls.Add(lblSubmissionInfo, 0, 0)
-            submissionToolbar.Controls.Add(submissionButtons, 0, 1)
 
             lstSubmissions.Dock = DockStyle.Fill
             lstSubmissions.IntegralHeight = False
+            lstSubmissions.DrawMode = DrawMode.OwnerDrawVariable
+            lstSubmissions.AccessibleName = "Journal submissions"
+
+            AddHandler lstSubmissions.MeasureItem, AddressOf MeasureSubmissionItem
+            AddHandler lstSubmissions.DrawItem, AddressOf DrawSubmissionItem
 
             AddHandler lstSubmissions.SelectedIndexChanged,
                 AddressOf SubmissionSelectionChanged
 
-            AddHandler lstSubmissions.DoubleClick,
-                AddressOf ViewSelectedSubmission
+            submissionsList.Controls.Add(submissionButtons, 0, 0)
+            submissionsList.Controls.Add(lblSubmissionInfo, 0, 1)
+            submissionsList.Controls.Add(lstSubmissions, 0, 2)
 
-            submissionsLayout.Controls.Add(submissionToolbar, 0, 0)
-            submissionsLayout.Controls.Add(lstSubmissions, 0, 1)
+            _submissionDetailHost.Dock = DockStyle.Fill
+            _submissionDetailHost.Margin = New Padding(0)
+            _submissionDetailHost.Padding = New Padding(0)
 
-            submissionsGroup.Controls.Add(submissionsLayout)
+            submissionsGroup.Controls.Add(submissionsList, 0, 0)
+            submissionsGroup.Controls.Add(_submissionDetailHost, 1, 0)
+
+            _submissionsSection = submissionsGroup
 
             ' =================================================
             ' Footer
@@ -2139,31 +2122,58 @@ Namespace Forms
 
         Private Sub RefreshSubmissionList()
 
-            lstSubmissions.Items.Clear()
-            _displayedSubmissions.Clear()
+            Dim selectedId As Guid? = GetSelectedSubmission()?.Id
 
-            For Each submission As JournalSubmission In
-                _workingManuscript.Submissions
+            _refreshingSubmissions = True
 
-                _displayedSubmissions.Add(submission)
+            Try
 
-                lstSubmissions.Items.Add(
-                    FormatSubmission(submission)
-                )
+                lstSubmissions.Items.Clear()
+                _displayedSubmissions.Clear()
 
-            Next
+                For Each submission As JournalSubmission In
+                    _workingManuscript.Submissions
+
+                    _displayedSubmissions.Add(submission)
+
+                    lstSubmissions.Items.Add(
+                        FormatSubmission(submission)
+                    )
+
+                Next
+
+                ' Keep the selection; otherwise show the most recent submission.
+                Dim index As Integer =
+                    If(selectedId.HasValue,
+                       _displayedSubmissions.FindIndex(Function(item) item.Id = selectedId.Value),
+                       -1)
+
+                If index < 0 AndAlso _displayedSubmissions.Count > 0 Then
+                    index = _displayedSubmissions.
+                        Select(Function(item, position) New With {item, position}).
+                        OrderBy(Function(entry) entry.item.SubmittedDate).
+                        Last().position
+                End If
+
+                lstSubmissions.SelectedIndex = index
+
+            Finally
+                _refreshingSubmissions = False
+            End Try
 
             If _displayedSubmissions.Count = 0 Then
 
                 lblSubmissionInfo.Text =
-                    "No journal submissions recorded. Add one to begin."
+                    "No journal submissions recorded. Record one when you send the manuscript to a journal."
 
             Else
 
                 lblSubmissionInfo.Text =
-                    "Select a submission to view, edit, or delete it."
+                    "Select a submission to see its decisions, reviewer responses, and correspondence."
 
             End If
+
+            ShowSubmissionDetail(GetSelectedSubmission())
 
             UpdateSubmissionButtons()
             RefreshRevisionDeadlineDisplay()
@@ -2263,12 +2273,206 @@ Namespace Forms
         End Function
 
 
+        Private _refreshingSubmissions As Boolean = False
+
+
         Private Sub SubmissionSelectionChanged(
             sender As Object,
             e As EventArgs
         )
 
             UpdateSubmissionButtons()
+
+            If Not _refreshingSubmissions Then
+                ShowSubmissionDetail(GetSelectedSubmission())
+            End If
+
+        End Sub
+
+
+        ' Shows one submission in the detail pane. Its edits change the working
+        ' copy directly and join the manuscript's unsaved changes.
+        Private Sub ShowSubmissionDetail(
+            submission As JournalSubmission
+        )
+
+            _submissionDetailHost.SuspendLayout()
+
+            Try
+
+                For Each child As Control In _submissionDetailHost.Controls.Cast(Of Control)().ToList()
+                    _submissionDetailHost.Controls.Remove(child)
+                    child.Dispose()
+                Next
+
+                _submissionDetail = Nothing
+
+                If submission Is Nothing Then
+
+                    _submissionDetailHost.Controls.Add(
+                        New Label With {
+                            .Text = "Record a submission when you send this manuscript to a journal. " &
+                                    "Its editorial decisions, reviewer responses, and correspondence then appear here.",
+                            .Dock = DockStyle.Top,
+                            .AutoSize = True,
+                            .MaximumSize = New Size(560, 0),
+                            .UseMnemonic = False,
+                            .ForeColor = SystemColors.GrayText,
+                            .Padding = New Padding(4, 8, 4, 4)
+                        })
+
+                    Return
+
+                End If
+
+                Dim detail As New SubmissionDetailsForm(
+                    _workingManuscript,
+                    submission,
+                    workflowNavigationEnabled:=True,
+                    inline:=True
+                ) With {
+                    .TopLevel = False,
+                    .FormBorderStyle = FormBorderStyle.None,
+                    .Dock = DockStyle.Fill,
+                    .MinimumSize = Size.Empty
+                }
+
+                AddHandler detail.Changed, AddressOf SubmissionDetailChanged
+
+                ' Open the requested window after the detail's own click handler
+                ' has returned, since it may select another submission.
+                AddHandler detail.NavigationRequested,
+                    Sub(request)
+                        If IsHandleCreated Then
+                            BeginInvoke(New Action(Sub() RunSubmissionWorkflow(request)))
+                        Else
+                            RunSubmissionWorkflow(request)
+                        End If
+                    End Sub
+
+                detail.Visible = True
+                _submissionDetailHost.Controls.Add(detail)
+                _submissionDetail = detail
+
+            Finally
+                _submissionDetailHost.ResumeLayout()
+            End Try
+
+        End Sub
+
+
+        ' A decision, correspondence, or reviewer-response edit in the detail
+        ' pane: bring the stage, deadline, versions, and list up to date without
+        ' rebuilding the pane being edited.
+        Private Sub SubmissionDetailChanged(
+            sender As Object,
+            e As EventArgs
+        )
+
+            If cmbStage.SelectedItem Is Nothing OrElse
+               CType(cmbStage.SelectedItem, PaperStage) <> _workingManuscript.CurrentStage Then
+                cmbStage.SelectedItem = _workingManuscript.CurrentStage
+            End If
+
+            RefreshRevisionDeadlineDisplay()
+
+            ' Update the list's accessible text without re-selecting, which
+            ' would rebuild the pane being edited.
+            _refreshingSubmissions = True
+            Try
+                For index As Integer = 0 To _displayedSubmissions.Count - 1
+                    lstSubmissions.Items(index) = FormatSubmission(_displayedSubmissions(index))
+                Next
+            Finally
+                _refreshingSubmissions = False
+            End Try
+            lstSubmissions.Invalidate()
+
+            If versionHistoryControl IsNot Nothing Then
+                versionHistoryControl.RefreshVersions()
+            End If
+
+        End Sub
+
+
+        Private Sub MeasureSubmissionItem(
+            sender As Object,
+            e As MeasureItemEventArgs
+        )
+
+            e.ItemHeight = lstSubmissions.Font.Height * 3 + 20
+
+        End Sub
+
+
+        ' Journal, submitted date and ID, and the latest decision.
+        Private Sub DrawSubmissionItem(
+            sender As Object,
+            e As DrawItemEventArgs
+        )
+
+            If e.Index < 0 OrElse e.Index >= _displayedSubmissions.Count Then
+                Return
+            End If
+
+            Dim submission As JournalSubmission = _displayedSubmissions(e.Index)
+            Dim selected As Boolean = (e.State And DrawItemState.Selected) = DrawItemState.Selected
+            Dim bounds As Rectangle = e.Bounds
+
+            Using background As New SolidBrush(If(selected, UiTheme.AccentMutedBackground(), UiTheme.CardBackground()))
+                e.Graphics.FillRectangle(background, bounds)
+            End Using
+
+            If selected Then
+                Using accent As New SolidBrush(UiTheme.AccentColor())
+                    e.Graphics.FillRectangle(accent, bounds.Left, bounds.Top, 3, bounds.Height)
+                End Using
+            End If
+
+            Using divider As New Pen(UiTheme.SubtleBorder())
+                e.Graphics.DrawLine(divider, bounds.Left, bounds.Bottom - 1, bounds.Right, bounds.Bottom - 1)
+            End Using
+
+            Dim lineHeight As Integer = lstSubmissions.Font.Height
+            Dim left As Integer = bounds.Left + 12
+            Dim width As Integer = bounds.Width - 20
+            Dim flags As TextFormatFlags = TextFormatFlags.NoPrefix Or TextFormatFlags.EndEllipsis Or TextFormatFlags.SingleLine
+
+            Using bold As New Font(lstSubmissions.Font, FontStyle.Bold)
+                TextRenderer.DrawText(e.Graphics, submission.JournalName, bold,
+                    New Rectangle(left, bounds.Top + 8, width, lineHeight), UiTheme.PrimaryText(), flags)
+            End Using
+
+            Dim submitted As String = "Submitted " & submission.SubmittedDate.ToString("MMM d, yyyy")
+            If Not String.IsNullOrWhiteSpace(submission.ManuscriptNumber) Then
+                submitted &= "  " & ChrW(&HB7) & "  " & submission.ManuscriptNumber
+            End If
+
+            TextRenderer.DrawText(e.Graphics, submitted, lstSubmissions.Font,
+                New Rectangle(left, bounds.Top + 8 + lineHeight, width, lineHeight), UiTheme.SecondaryText(), flags)
+
+            Dim latest As EditorialDecisionEvent = ManuscriptAttentionService.GetLatestDecision(submission)
+            Dim outcome As String
+            Dim outcomeColor As Color
+
+            If latest Is Nothing Then
+                outcome = If(submission.FollowUpDate.HasValue,
+                             "Awaiting decision  " & ChrW(&HB7) & "  follow up " & submission.FollowUpDate.Value.ToString("MMM d"),
+                             "Awaiting decision")
+                outcomeColor = UiTheme.MutedText()
+            Else
+                outcome = EditorialDecisionDisplayService.Format(latest.Decision) & "  " & ChrW(&HB7) & "  " & latest.DecisionDate.ToString("MMM d, yyyy")
+                outcomeColor =
+                    If(ManuscriptAttentionService.IsRejectionDecision(latest.Decision), UiTheme.MutedText(),
+                       If(latest.Decision = EditorialDecision.Accepted, UiTheme.SuccessColor(), UiTheme.WarningColor()))
+            End If
+
+            Using semibold As New Font(lstSubmissions.Font, FontStyle.Bold)
+                TextRenderer.DrawText(e.Graphics, outcome, semibold,
+                    New Rectangle(left, bounds.Top + 8 + lineHeight * 2, width, lineHeight), outcomeColor, flags)
+            End Using
+
+            e.DrawFocusRectangle()
 
         End Sub
 
@@ -2278,37 +2482,11 @@ Namespace Forms
             Dim hasSelection As Boolean =
                 GetSelectedSubmission() IsNot Nothing
 
-            btnViewSubmission.Enabled =
-                hasSelection
-
             btnEditSubmission.Enabled =
                 hasSelection
 
             btnDeleteSubmission.Enabled =
                 hasSelection
-
-        End Sub
-
-
-        ' =====================================================
-        ' View submission
-        ' =====================================================
-
-        Private Sub ViewSelectedSubmission(
-            sender As Object,
-            e As EventArgs
-        )
-
-            Dim submission As JournalSubmission =
-                GetSelectedSubmission()
-
-            If submission Is Nothing Then
-                Return
-            End If
-
-            RunSubmissionWorkflow(New SubmissionWorkflowRequest With {
-                .Target = SubmissionWorkflowTarget.Submission, .SubmissionId = submission.Id
-            })
 
         End Sub
 

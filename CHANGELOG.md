@@ -18,8 +18,11 @@ Development is tracked in [draft PR #69](https://github.com/JUhalt/PaperRoute-Tr
 
 - A manuscript opens as a page in the main window, with **Overview**, **Authors**, **Versions**, **Submissions**, and **Readiness & Packets** tabs. The header shows the stage, journal, and route, with **Copy Citation**, **View Route**, and **Delete Manuscript...**. Overview shows the linked journal's notes and checklist from the Journal Library ([#55](https://github.com/JUhalt/PaperRoute-Tracker/issues/55)).
 
+- The **Submissions** tab lists each journal submission (journal, submitted date, and latest decision) beside the selected one, whose **Editorial History**, **Reviewer Responses**, and **Correspondence & Files** tabs are edited in place. **Record Submission...** and **Add Decision** remain explicit actions ([#56](https://github.com/JUhalt/PaperRoute-Tracker/issues/56)).
+
 ### Changed
 
+- Reviewer comments are edited on the Submissions tab and join the manuscript's unsaved changes, so the Save Comment, Save & Close, Close, and Save & Close chain is now Save Comment, then Save. Export output is unchanged.
 - One save step per manuscript: an **Unsaved changes** bar with **Save** (Ctrl+S) and **Discard** replaces Manuscript Details' Save & Close and Cancel. Leaving the page, opening another manuscript, or closing PaperRoute with unsaved changes asks to save, discard, or stay. What a save stores, including managed-file copies and deletions, is unchanged.
 - The **Data** menu is gone and its commands have moved to pages; **Backup Library** and **Restore Backup** are under **Settings** in the rail and on the Import & Export page. The User Guide has a relocation table.
 

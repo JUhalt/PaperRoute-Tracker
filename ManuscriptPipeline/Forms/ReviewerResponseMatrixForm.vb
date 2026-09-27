@@ -24,11 +24,24 @@ Namespace Forms
         Private ReadOnly btnUp As New Button()
         Private ReadOnly btnDown As New Button()
 
+        ' Inline, the matrix is a tab of the manuscript page's submission detail:
+        ' it edits the submission (itself part of the page's working copy)
+        ' directly, and the page's Save or Discard decides what is kept.
+        Private ReadOnly _inline As Boolean
+
+        ' Raised inline after comments are added, edited, removed, or reordered.
+        Friend Event Changed As EventHandler
+
         Public Sub New(manuscript As Manuscript, submission As JournalSubmission)
+            Me.New(manuscript, submission, inline:=False)
+        End Sub
+
+        Friend Sub New(manuscript As Manuscript, submission As JournalSubmission, inline As Boolean)
             If submission Is Nothing Then Throw New ArgumentNullException(NameOf(submission))
+            _inline = inline
             _manuscript = manuscript
             _source = submission
-            _working = ManuscriptCloneService.CloneSubmission(submission)
+            _working = If(inline, submission, ManuscriptCloneService.CloneSubmission(submission))
             Text = "Reviewer Response Matrix"
             Font = New Font("Segoe UI", 10.0F)
             AutoScaleMode = AutoScaleMode.Dpi
@@ -42,7 +55,7 @@ Namespace Forms
 
         Private Sub BuildInterface()
             Dim root As New TableLayoutPanel With {
-                .Dock = DockStyle.Fill, .ColumnCount = 1, .RowCount = 6, .Padding = New Padding(18)
+                .Dock = DockStyle.Fill, .ColumnCount = 1, .RowCount = 6, .Padding = If(_inline, New Padding(8), New Padding(18))
             }
             root.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
@@ -55,7 +68,8 @@ Namespace Forms
                 .Text = "Track reviewer comments, revision actions, and response drafts for this submission.",
                 .Dock = DockStyle.Fill, .AutoSize = True, .Margin = New Padding(0, 0, 0, 10)
             }
-            root.Controls.Add(intro, 0, 0)
+            ' Inline, the Submissions tab already says what this is.
+            If Not _inline Then root.Controls.Add(intro, 0, 0)
 
             Dim filters As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill, .ColumnCount = 3, .RowCount = 1, .AutoSize = True,
@@ -82,17 +96,25 @@ Namespace Forms
             filters.Controls.Add(lblCount, 2, 0)
             root.Controls.Add(filters, 0, 1)
 
+            ' Inline, the list sits above the details so both use the pane's full
+            ' width; in the dialog they sit side by side.
             Dim body As New TableLayoutPanel With {
-                .Dock = DockStyle.Fill, .ColumnCount = 2, .RowCount = 1, .Margin = New Padding(0)
+                .Dock = DockStyle.Fill, .ColumnCount = If(_inline, 1, 2), .RowCount = If(_inline, 2, 1), .Margin = New Padding(0)
             }
-            body.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 42))
-            body.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 58))
-            body.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
+            If _inline Then
+                body.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
+                body.RowStyles.Add(New RowStyle(SizeType.Percent, 42))
+                body.RowStyles.Add(New RowStyle(SizeType.Percent, 58))
+            Else
+                body.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 42))
+                body.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 58))
+                body.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
+            End If
             lstResponses.Dock = DockStyle.Fill
             lstResponses.IntegralHeight = False
             lstResponses.HorizontalScrollbar = True
             lstResponses.AccessibleName = "Reviewer comments"
-            lstResponses.Margin = New Padding(0, 0, 10, 0)
+            lstResponses.Margin = If(_inline, New Padding(0, 0, 0, 8), New Padding(0, 0, 10, 0))
             AddHandler lstResponses.SelectedIndexChanged, Sub() RefreshSelection()
             AddHandler lstResponses.DoubleClick, AddressOf EditItem
             txtDetails.Dock = DockStyle.Fill
@@ -102,7 +124,11 @@ Namespace Forms
             txtDetails.AccessibleName = "Selected reviewer comment details"
             txtDetails.Margin = New Padding(0)
             body.Controls.Add(lstResponses, 0, 0)
-            body.Controls.Add(txtDetails, 1, 0)
+            If _inline Then
+                body.Controls.Add(txtDetails, 0, 1)
+            Else
+                body.Controls.Add(txtDetails, 1, 0)
+            End If
             root.Controls.Add(body, 0, 2)
 
             Dim actions As New FlowLayoutPanel With {
@@ -117,7 +143,9 @@ Namespace Forms
             actions.Controls.AddRange({btnAdd, btnEdit, btnRemove, btnUp, btnDown})
             root.Controls.Add(actions, 0, 3)
             Dim saveNote As New Label With {
-                .Text = "Save & Close keeps these edits with the manuscript's unsaved changes. Save the manuscript to store them permanently.",
+                .Text = If(_inline,
+                    "Changes here join the manuscript's unsaved changes. Save the manuscript to store them.",
+                    "Save & Close keeps these edits with the manuscript's unsaved changes. Save the manuscript to store them permanently."),
                 .UseMnemonic = False, .Dock = DockStyle.Fill, .AutoSize = True,
                 .Margin = New Padding(0, 0, 0, 6)
             }
@@ -131,10 +159,17 @@ Namespace Forms
             Dim export As New Button With {.Text = "E&xport Markdown...", .AutoSize = True}
             AddHandler save.Click, AddressOf SaveChanges
             AddHandler export.Click, AddressOf ExportResponses
-            footer.Controls.AddRange({save, cancel, export})
+            If _inline Then
+                footer.FlowDirection = FlowDirection.LeftToRight
+                footer.Controls.Add(export)
+                save.Dispose()
+                cancel.Dispose()
+            Else
+                footer.Controls.AddRange({save, cancel, export})
+                AcceptButton = save
+                CancelButton = cancel
+            End If
             root.Controls.Add(footer, 0, 5)
-            AcceptButton = save
-            CancelButton = cancel
             Controls.Add(root)
         End Sub
 
@@ -143,6 +178,16 @@ Namespace Forms
             button.AccessibleName = accessibleLabel
             button.AutoSize = True
             AddHandler button.Click, handler
+        End Sub
+
+        ' Shows the submission's current comments and decisions after a change
+        ' made elsewhere on the manuscript page.
+        Friend Sub RefreshFromSubmission()
+            RefreshItems(SelectedId())
+        End Sub
+
+        Private Sub NotifyChanged()
+            If _inline Then RaiseEvent Changed(Me, EventArgs.Empty)
         End Sub
 
         Private Function SelectedItem() As ReviewerResponseItem
@@ -184,7 +229,7 @@ Namespace Forms
             btnDown.Enabled = cmbStatus.SelectedIndex = 0 AndAlso index >= 0 AndAlso index < _working.ReviewerResponses.Count - 1
             If item Is Nothing Then
                 txtDetails.Text = If(Not btnAdd.Enabled,
-                    "Record an editorial decision in Submission Details before adding reviewer comments.",
+                    "Record an editorial decision under Editorial History before adding reviewer comments.",
                     If(_working.ReviewerResponses.Count = 0, "No reviewer comments yet. Choose Add Comment to begin.",
                        "No comments match this status. Choose All statuses to see the complete matrix."))
                 Return
@@ -217,6 +262,7 @@ Namespace Forms
                 Dim added As ReviewerResponseItem = ReviewerResponseService.AddItem(_working, editor.EditedItem)
                 cmbStatus.SelectedIndex = 0
                 RefreshItems(added.Id)
+                NotifyChanged()
             End Using
         End Sub
 
@@ -227,6 +273,7 @@ Namespace Forms
                 If editor.ShowDialog(Me) <> DialogResult.OK Then Return
                 Dim updated As ReviewerResponseItem = ReviewerResponseService.UpdateItem(_working, item.Id, editor.EditedItem)
                 RefreshItems(updated.Id)
+                NotifyChanged()
             End Using
         End Sub
 
@@ -237,6 +284,7 @@ Namespace Forms
                                MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) <> DialogResult.Yes Then Return
             ReviewerResponseService.RemoveItem(_working, item.Id)
             RefreshItems()
+            NotifyChanged()
         End Sub
 
         Private Sub MoveItem(offset As Integer)
@@ -244,6 +292,7 @@ Namespace Forms
             If item Is Nothing OrElse cmbStatus.SelectedIndex <> 0 Then Return
             ReviewerResponseService.MoveItem(_working, item.Id, offset)
             RefreshItems(item.Id)
+            NotifyChanged()
         End Sub
 
         Private Sub SaveChanges(sender As Object, e As EventArgs)

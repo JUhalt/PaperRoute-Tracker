@@ -238,6 +238,100 @@ Public Class ManuscriptPageTests
             End Sub)
     End Sub
 
+    <TestMethod>
+    Public Sub SubmissionsShowTheListBesideTheSelectedSubmission()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard()
+                    Dim manuscript As Manuscript = WithRoute()
+                    board.Prepare(manuscript)
+                    board.Open(manuscript)
+
+                    Dim list As ListBox = Descendants(board.Editor).OfType(Of ListBox)().Single(Function(box) box.AccessibleName = "Journal submissions")
+                    Assert.AreEqual(2, list.Items.Count)
+                    Assert.AreEqual(1, list.SelectedIndex, "The most recent submission is selected.")
+
+                    Dim detail As SubmissionDetailsForm = Descendants(board.Editor).OfType(Of SubmissionDetailsForm)().Single()
+                    CollectionAssert.AreEqual(
+                        {"Editorial History", "Reviewer Responses", "Correspondence & Files"},
+                        Descendants(detail).OfType(Of TabPage)().Select(Function(page) page.Text.Replace("&&", "&")).ToList())
+                    Assert.IsFalse(Descendants(detail).OfType(Of Button)().Any(Function(button) button.Text = "Close" OrElse button.Text = "Reviewer Responses..."),
+                        "Inline, there is no Close button and responses are a tab.")
+                    Dim matrix As ReviewerResponseMatrixForm = Descendants(detail).OfType(Of ReviewerResponseMatrixForm)().Single()
+                    Assert.AreEqual(2, Descendants(matrix).OfType(Of ListBox)().Single().Items.Count, "The matrix lists the submission's comments.")
+
+                    list.SelectedIndex = 0
+                    Application.DoEvents()
+                    Dim first As SubmissionDetailsForm = Descendants(board.Editor).OfType(Of SubmissionDetailsForm)().Single()
+                    Assert.AreNotSame(detail, first, "Selecting another submission shows it.")
+                    Assert.IsTrue(Descendants(first).OfType(Of Label)().Any(Function(label) label.Text = "First Journal"))
+
+                    Assert.IsFalse(board.Editor.HasUnsavedChanges(), "Viewing submissions changes nothing.")
+                    Assert.AreEqual(2, manuscript.Submissions.Count)
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    <TestMethod>
+    Public Sub InlineReviewerResponsesAreSavedOrDiscardedWithThePage()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard()
+                    Dim manuscript As Manuscript = WithRoute()
+                    Dim responses As List(Of ReviewerResponseItem) = manuscript.Submissions(1).ReviewerResponses
+                    Dim originalOrder As List(Of String) = responses.Select(Function(item) item.ReviewerLabel).ToList()
+                    board.Prepare(manuscript)
+                    board.Open(manuscript)
+
+                    MoveFirstResponseDown(board)
+                    Assert.IsTrue(board.Editor.HasUnsavedChanges(), "Reordering inline is an unsaved change.")
+                    CollectionAssert.AreEqual(originalOrder, manuscript.Submissions(1).ReviewerResponses.Select(Function(item) item.ReviewerLabel).ToList(),
+                        "The stored manuscript is unchanged until Save.")
+
+                    board.Discard()
+                    CollectionAssert.AreEqual(originalOrder, manuscript.Submissions(1).ReviewerResponses.Select(Function(item) item.ReviewerLabel).ToList())
+                    Assert.AreEqual(0, board.SaveCount)
+
+                    MoveFirstResponseDown(board)
+                    board.PressCommandKey(Keys.Control Or Keys.S)
+                    CollectionAssert.AreEqual({"Reviewer 2", "Reviewer 1"}, manuscript.Submissions(1).ReviewerResponses.Select(Function(item) item.ReviewerLabel).ToList(),
+                        "Save stores the new order.")
+                    Assert.AreEqual(1, board.SaveCount)
+                    Assert.IsTrue(manuscript.Submissions(1).ReviewerResponses.All(Function(item) item.DecisionId = manuscript.Submissions(1).Decisions(0).Id AndAlso item.RevisionRoundNumber = 1),
+                        "Items keep their decision and explicit round.")
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    Private Shared Sub MoveFirstResponseDown(board As PageBoard)
+        Dim matrix As ReviewerResponseMatrixForm = Descendants(board.Editor).OfType(Of ReviewerResponseMatrixForm)().Single()
+        Dim list As ListBox = DirectCast(GetType(ReviewerResponseMatrixForm).GetField("lstResponses", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(matrix), ListBox)
+        list.SelectedIndex = 0
+        GetType(ReviewerResponseMatrixForm).GetMethod("MoveItem", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(matrix, New Object() {1})
+        Application.DoEvents()
+    End Sub
+
+    ' Two submissions: a desk rejection, then a major revision with two
+    ' reviewer comments.
+    Private Shared Function WithRoute() As Manuscript
+        Dim manuscript As Manuscript = Sample("Routed manuscript")
+        manuscript.CurrentStage = PaperStage.Revision
+        Dim first As New JournalSubmission With {.JournalName = "First Journal", .SubmittedDate = New DateTime(2026, 1, 5)}
+        first.Decisions.Add(New EditorialDecisionEvent With {.Decision = EditorialDecision.DeskRejected, .DecisionDate = New DateTime(2026, 1, 12)})
+        Dim second As New JournalSubmission With {.JournalName = "Second Journal", .SubmittedDate = New DateTime(2026, 3, 1)}
+        Dim decision As New EditorialDecisionEvent With {.Decision = EditorialDecision.MajorRevision, .DecisionDate = New DateTime(2026, 4, 2)}
+        second.Decisions.Add(decision)
+        second.ReviewerResponses.Add(New ReviewerResponseItem With {.DecisionId = decision.Id, .RevisionRoundNumber = 1, .ReviewerLabel = "Reviewer 1", .CommentText = "Clarify the sample."})
+        second.ReviewerResponses.Add(New ReviewerResponseItem With {.DecisionId = decision.Id, .RevisionRoundNumber = 1, .ReviewerLabel = "Reviewer 2", .CommentText = "Share the data."})
+        manuscript.Submissions.Add(first)
+        manuscript.Submissions.Add(second)
+        Return manuscript
+    End Function
+
     ' Children report Visible only while their form is shown.
     Private Shared Sub ShowOffscreen(form As Form)
         form.StartPosition = FormStartPosition.Manual

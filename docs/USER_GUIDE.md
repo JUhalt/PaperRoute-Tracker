@@ -15,7 +15,7 @@ If you only read one section, read this one.
 5. When you actually submit the paper, use the packet's **Record Submission...** action or add a **Journal Submission** with the journal, date, Journal manuscript ID if available, portal URL, and optional follow-up date.
 6. Save each focused window, then choose **Save** in the manuscript page's **Unsaved changes** bar (or press **Ctrl+S**) to keep the complete workflow.
 7. When the journal responds, open that submission and record the **Editorial Decision**. Revision decisions can carry a revision deadline.
-8. Open **Reviewer Responses...** in that submission to track individual comments, actions, and response drafts. Save the matrix, close Submission Details, then choose **Save** on the manuscript page. Keep original letters and revised files under the submission's correspondence.
+8. Select that submission on the **Submissions** tab and open its **Reviewer Responses** tab to track individual comments, actions, and response drafts, then choose **Save** on the manuscript page. Keep original letters and revised files under the submission's correspondence.
 9. Open **Reminders** in the left rail to see revision deadlines, journal follow-ups, and custom reminders in one place.
 10. Use **Settings > Backup Library...** before major changes or moving PaperRoute to another computer.
 
@@ -154,7 +154,7 @@ Open **Submission Packets...** to assemble file records tied to an exact **Versi
 
 In readiness, **Save & Go To... > Save & View Packets** opens the packets linked to the selected profile. **Open Submission Portal** uses that profile's linked journal when it has a web portal recorded.
 
-In the vault, **Save & Go To...** can return to the manuscript page, select the packet's exact version, or open its linked readiness profile or actual submission. **Submission Packets...** in Version History shows packets for the selected version; **View Submission Packets...** in Submission Details shows packets for that submission. The vault explains which records it is showing, and **Show all packets** removes that filter. New packets inherit the selected context, with choices visible in the packet editor.
+In the vault, **Save & Go To...** can return to the manuscript page, select the packet's exact version, or open its linked readiness profile or actual submission. **Submission Packets...** in Version History shows packets for the selected version; **View Submission Packets...** under a selected submission shows packets for that submission. The vault explains which records it is showing, and **Show all packets** removes that filter. New packets inherit the selected context, with choices visible in the packet editor.
 
 For an unlinked preparation packet, choose **Save & Go To... > Record Submission...** and complete **Record Journal Submission**. Cancel returns to the prepared packet without recording an event. Adding the submission associates that packet with the new record and applies the usual manuscript-stage rules. Unresolved readiness and an empty file list do not prevent recording what actually happened. For a revision round of an existing submission, edit the packet and select the existing submission and round instead of recording a duplicate submission.
 
@@ -382,7 +382,7 @@ For discoverability, the manuscript's **Overview** tab also shows a **Revision d
 
 ## Reviewer Response Matrix
 
-Open an existing journal submission on the manuscript's **Submissions** tab, record its editorial decision, then choose **Reviewer Responses...** in Submission Details. Keep a normal revision within the existing journal submission; create a new submission attempt only when that is what happened.
+On the manuscript's **Submissions** tab, the list of journal submissions sits beside the selected submission. Its **Editorial History**, **Reviewer Responses**, and **Correspondence & Files** tabs show everything that belongs to it. Record the editorial decision under **Editorial History**, then track the reviewers' requests under **Reviewer Responses**. Keep a normal revision within the existing journal submission; use **Record Submission...** only when you actually send the manuscript to a journal again.
 
 ### Record and track comments
 
@@ -403,12 +403,10 @@ Choose **Save Comment** to accept an item into the matrix. Use **Show status** t
 
 ### Save the complete workflow
 
-1. Choose **Save Comment** in the item editor.
-2. Choose **Save & Close** in the matrix to accept its edits into the manuscript working copy.
-3. Choose **Close** in Submission Details. This window has no additional save/cancel boundary.
-4. Choose **Save** in the manuscript page's **Unsaved changes** bar (or press **Ctrl+S**) to store the manuscript permanently.
+1. Choose **Save Comment** in the item editor. The comment joins the manuscript's unsaved changes.
+2. Choose **Save** in the manuscript page's **Unsaved changes** bar (or press **Ctrl+S**) to store the manuscript permanently.
 
-**Cancel** in the item editor or matrix discards that window's edits. **Discard** on the manuscript page drops all its unsaved changes, including changes already accepted from the matrix. Reopen the manuscript to confirm saved work.
+**Cancel** in the item editor discards that comment's edits. **Discard** on the manuscript page drops all its unsaved changes, including added, edited, removed, and reordered comments.
 
 ### Export an editable response draft
 
@@ -663,7 +661,7 @@ For a manual record:
 ## How do I record a new journal submission?
 
 1. Open the manuscript.
-2. On the **Submissions** tab, choose **Add Submission**.
+2. On the **Submissions** tab, choose **Record Submission...**.
 3. Enter the journal or choose **Use Library...**.
 4. Enter the submission date and Journal manuscript ID if known.
 5. Save the publisher portal URL if useful.
@@ -705,13 +703,13 @@ The deadline will then appear on the Reminders page and in the Needs Attention w
 
 ## How do I record reviewer comments and my response?
 
-1. Open the existing journal submission and record the relevant editorial decision.
-2. Choose **Reviewer Responses...**, then **Add Comment...**.
+1. Select the journal submission on the manuscript's **Submissions** tab and record the relevant editorial decision under **Editorial History**.
+2. Open its **Reviewer Responses** tab and choose **Add Comment...**.
 3. Select that decision, enter the revision round and reviewer label, and record a comment or action.
 4. Add a draft response, manuscript location, notes, and the appropriate status, then choose **Save Comment**.
-5. Choose **Save & Close** in the matrix, **Close** in Submission Details, and **Save** on the manuscript page.
+5. Choose **Save** on the manuscript page.
 
-Use **Export Markdown...** in the matrix for an editable response draft. Keep the original reviewer/editor letters and revised manuscript files as correspondence under the same submission. See [Reviewer Response Matrix](#reviewer-response-matrix) for ordering, export, and save behavior.
+Use **Export Markdown...** on the Reviewer Responses tab for an editable response draft. Keep the original reviewer/editor letters and revised manuscript files as correspondence under the same submission. See [Reviewer Response Matrix](#reviewer-response-matrix) for ordering, export, and save behavior.
 
 ## How do I move a rejected paper to another journal?
 
