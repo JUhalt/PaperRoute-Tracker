@@ -37,6 +37,10 @@ Namespace Models
         Public Property CheckForUpdatesAutomatically As Boolean =
             True
 
+        ' The left rail shows only icons.
+        Public Property NavigationCollapsed As Boolean =
+            False
+
     End Class
 
 End Namespace

@@ -14,6 +14,8 @@ Namespace Controls
         ImportExport
         Settings
         Help
+        CollapseRail
+        ExpandRail
     End Enum
 
     ' Paints one left-rail item: an icon, its label, and an optional count.
@@ -59,6 +61,21 @@ Namespace Controls
             Dim icon As Single = UiTheme.Px(16, dpi)
             Dim left As Single = UiTheme.Px(10, dpi)
             Dim top As Single = (control.Height - icon) / 2.0F
+
+            ' A collapsed rail shows only the icon; the name stays in the
+            ' tooltip and in what assistive technology reads.
+            If control.Width < UiTheme.Px(80, dpi) Then
+                left = (control.Width - icon) / 2.0F
+                DrawGlyph(g, glyph, New RectangleF(left, top, icon, icon), ink, Math.Max(1.4F, UiTheme.Px(2, dpi) * 0.75F))
+                If badge > 0 Then
+                    Dim dot As Single = UiTheme.Px(7, dpi)
+                    Using fill As New SolidBrush(UiTheme.WarningColor())
+                        g.FillEllipse(fill, left + icon - dot / 2.0F, top - dot / 3.0F, dot, dot)
+                    End Using
+                End If
+                Return
+            End If
+
             DrawGlyph(g, glyph, New RectangleF(left, top, icon, icon), ink, Math.Max(1.4F, UiTheme.Px(2, dpi) * 0.75F))
 
             Dim textLeft As Integer = CInt(left + icon + UiTheme.Px(10, dpi))
@@ -126,6 +143,12 @@ Namespace Controls
                                 p(CSng(8 + 4.4 * Math.Cos(angle)), CSng(8 + 4.4 * Math.Sin(angle))),
                                 p(CSng(8 + 6.2 * Math.Cos(angle)), CSng(8 + 6.2 * Math.Sin(angle))))
                         Next
+                    Case RailGlyph.CollapseRail
+                        g.DrawLines(pen, {p(8.5F, 4), p(4.5F, 8), p(8.5F, 12)})
+                        g.DrawLines(pen, {p(12.5F, 4), p(8.5F, 8), p(12.5F, 12)})
+                    Case RailGlyph.ExpandRail
+                        g.DrawLines(pen, {p(3.5F, 4), p(7.5F, 8), p(3.5F, 12)})
+                        g.DrawLines(pen, {p(7.5F, 4), p(11.5F, 8), p(7.5F, 12)})
                     Case RailGlyph.Help
                         g.DrawEllipse(pen, r(2, 2, 12, 12))
                         g.DrawBezier(pen, p(6.4F, 6.3F), p(6.4F, 4.3F), p(9.8F, 4.3F), p(9.6F, 6.6F))
@@ -247,6 +270,44 @@ Namespace Controls
 
         Protected Overrides Sub OnPaint(e As PaintEventArgs)
             RailPainter.Paint(Me, e.Graphics, Glyph, Text, False, _hover, Focused AndAlso ShowFocusCues, 0)
+        End Sub
+
+    End Class
+
+    ' The PaperRoute mark at the top of the rail, drawn from the embedded
+    ' 256-pixel logo so it stays sharp at every scale.
+    Friend Class RailLogo
+        Inherits Control
+
+        Private Shared _logo As Image
+
+        Public Sub New()
+            SetStyle(ControlStyles.UserPaint Or ControlStyles.AllPaintingInWmPaint Or ControlStyles.OptimizedDoubleBuffer Or ControlStyles.ResizeRedraw, True)
+            TabStop = False
+            Cursor = Cursors.Hand
+            AccessibleRole = AccessibleRole.Graphic
+        End Sub
+
+        Friend Shared Function Logo() As Image
+            If _logo Is Nothing Then
+                Using stream As IO.Stream = GetType(RailLogo).Assembly.GetManifestResourceStream("PaperRoute.Logo.png")
+                    If stream IsNot Nothing Then
+                        Using original As Image = Image.FromStream(stream)
+                            _logo = New Bitmap(original)
+                        End Using
+                    End If
+                End Using
+            End If
+            Return _logo
+        End Function
+
+        Protected Overrides Sub OnPaint(e As PaintEventArgs)
+            e.Graphics.Clear(If(Parent IsNot Nothing, Parent.BackColor, UiTheme.HeaderBackground()))
+            Dim image As Image = Logo()
+            If image Is Nothing Then Return
+            e.Graphics.InterpolationMode = InterpolationMode.HighQualityBicubic
+            e.Graphics.PixelOffsetMode = PixelOffsetMode.HighQuality
+            e.Graphics.DrawImage(image, ClientRectangle)
         End Sub
 
     End Class

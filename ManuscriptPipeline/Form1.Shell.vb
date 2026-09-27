@@ -29,6 +29,13 @@ Partial Public Class Form1
     Private ReadOnly boardPage As New Panel()
     Private ReadOnly railButtons As New Dictionary(Of WorkspacePage, RailButton)()
     Private ReadOnly lblRailSummary As New Label()
+    Private ReadOnly railItems As New List(Of Control)()
+    Private railColumn As ColumnStyle = Nothing
+    Private railBrand As TableLayoutPanel = Nothing
+    Private railLogo As RailLogo = Nothing
+    Private lblRailBrand As Label = Nothing
+    Private btnRailToggle As RailCommandButton = Nothing
+    Private navigationCollapsed As Boolean = False
     Private ReadOnly backHistory As New Stack(Of PageRequest)()
     Private ReadOnly forwardHistory As New Stack(Of PageRequest)()
     Private currentPage As WorkspacePage = WorkspacePage.Board
@@ -53,6 +60,11 @@ Partial Public Class Form1
 
     Private Function RailWidth() As Integer
         Return UiTheme.Px(208, DeviceDpi)
+    End Function
+
+    ' Collapsed, the rail shows only icons.
+    Private Function CompactRailWidth() As Integer
+        Return UiTheme.Px(60, DeviceDpi)
     End Function
 
 
@@ -84,15 +96,32 @@ Partial Public Class Form1
                 End Using
             End Sub
 
-        ' Brand
-        Dim brand As New FlowLayoutPanel With {
+        ' Brand: the logo, the name, and the library summary, beside the
+        ' control that collapses the rail to icons.
+        Dim brand As New TableLayoutPanel With {
             .AutoSize = True,
             .AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            .FlowDirection = FlowDirection.TopDown,
-            .WrapContents = False,
-            .Margin = New Padding(UiTheme.Px(10, dpi), 0, 0, UiTheme.Px(18, dpi)),
+            .Dock = DockStyle.Top,
+            .ColumnCount = 3,
+            .RowCount = 2,
+            .Margin = New Padding(0, 0, 0, UiTheme.Px(18, dpi)),
             .BackColor = UiTheme.HeaderBackground()
         }
+
+        brand.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
+        brand.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100.0F))
+        brand.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
+        brand.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+        brand.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+
+        railLogo = New RailLogo With {
+            .Size = New Size(UiTheme.Px(30, dpi), UiTheme.Px(30, dpi)),
+            .Anchor = AnchorStyles.Left,
+            .AccessibleName = "PaperRoute logo. Double-click for About PaperRoute."
+        }
+
+        AddHandler railLogo.DoubleClick, AddressOf OpenAbout
+        cardToolTip.SetToolTip(railLogo, "Double-click for About PaperRoute")
 
         Dim lblBrand As New Label With {
             .Text = "PaperRoute",
@@ -105,9 +134,10 @@ Partial Public Class Form1
         }
 
         AddHandler lblBrand.DoubleClick, AddressOf OpenAbout
+        lblRailBrand = lblBrand
 
         lblRailSummary.AutoSize = True
-        lblRailSummary.MaximumSize = New Size(itemWidth - UiTheme.Px(10, dpi), 0)
+        lblRailSummary.MaximumSize = New Size(itemWidth - UiTheme.Px(43, dpi), 0)
         lblRailSummary.Margin = New Padding(0, 2, 0, 0)
         lblRailSummary.Font = New Font(Me.Font.FontFamily, Me.Font.SizeInPoints * 0.85F)
         lblRailSummary.ForeColor = UiTheme.MutedText()
@@ -115,8 +145,23 @@ Partial Public Class Form1
         lblRailSummary.Text =
             If(StorageEnvironment.IsDevelopmentProfile(), "Development profile", "Local library")
 
-        brand.Controls.Add(lblBrand)
-        brand.Controls.Add(lblRailSummary)
+        btnRailToggle = New RailCommandButton(RailGlyph.CollapseRail, "Collapse navigation") With {
+            .Size = New Size(UiTheme.Px(28, dpi), UiTheme.Px(28, dpi)),
+            .Anchor = AnchorStyles.Top Or AnchorStyles.Left
+        }
+
+        AddHandler btnRailToggle.Click,
+            Sub(sender, e)
+                ApplyNavigationCollapsed(Not navigationCollapsed, persist:=True)
+            End Sub
+
+        brand.Controls.Add(railLogo, 0, 0)
+        brand.Controls.Add(lblBrand, 1, 0)
+        brand.Controls.Add(btnRailToggle, 2, 0)
+        brand.Controls.Add(lblRailSummary, 1, 1)
+        brand.SetColumnSpan(lblRailSummary, 2)
+        railBrand = brand
+        railItems.Clear()
 
         ' Pages
         Dim pages As New FlowLayoutPanel With {
@@ -152,6 +197,7 @@ Partial Public Class Form1
                 End Sub
             cardToolTip.SetToolTip(button, entry.Item3 & " (Ctrl+" & (CInt(page) + 1).ToString() & ")")
             railButtons(page) = button
+            railItems.Add(button)
             pages.Controls.Add(button)
         Next
 
@@ -192,6 +238,9 @@ Partial Public Class Form1
 
         AddHandler btnHelp.Click, AddressOf OpenUserGuide
         cardToolTip.SetToolTip(btnHelp, "User Guide (F1)")
+        cardToolTip.SetToolTip(btnSettings, "Settings")
+        railItems.Add(btnSettings)
+        railItems.Add(btnHelp)
 
         commands.Controls.Add(btnSettings)
         commands.Controls.Add(btnHelp)
@@ -203,6 +252,58 @@ Partial Public Class Form1
         Return rail
 
     End Function
+
+
+    ' Collapses the rail to icons for more room, or expands it again. The
+    ' choice is remembered once settings have been loaded.
+    Private Sub ApplyNavigationCollapsed(collapsed As Boolean, persist As Boolean)
+
+        If railColumn Is Nothing OrElse railBrand Is Nothing Then
+            Return
+        End If
+
+        navigationCollapsed = collapsed
+
+        Dim dpi As Integer = DeviceDpi
+        Dim width As Integer = If(collapsed, CompactRailWidth(), RailWidth())
+
+        SuspendLayout()
+
+        railColumn.Width = width
+
+        For Each item As Control In railItems
+            item.Width = width - UiTheme.Px(20, dpi)
+        Next
+
+        lblRailBrand.Visible = Not collapsed
+        lblRailSummary.Visible = Not collapsed
+
+        ' Collapsed, the toggle sits under the logo.
+        railBrand.SetRowSpan(railLogo, If(collapsed, 1, 2))
+        railBrand.SetCellPosition(btnRailToggle, New TableLayoutPanelCellPosition(If(collapsed, 0, 2), If(collapsed, 1, 0)))
+        railLogo.Margin = If(collapsed,
+                             New Padding(UiTheme.Px(5, dpi), 0, 0, UiTheme.Px(8, dpi)),
+                             New Padding(UiTheme.Px(5, dpi), 0, UiTheme.Px(8, dpi), 0))
+        btnRailToggle.Margin = New Padding(If(collapsed, UiTheme.Px(6, dpi), 0), 0, 0, 0)
+
+        btnRailToggle.Glyph = If(collapsed, RailGlyph.ExpandRail, RailGlyph.CollapseRail)
+        btnRailToggle.Text = If(collapsed, "Expand navigation", "Collapse navigation")
+        btnRailToggle.AccessibleName = btnRailToggle.Text
+        cardToolTip.SetToolTip(btnRailToggle, btnRailToggle.Text)
+        btnRailToggle.Invalidate()
+
+        ResumeLayout(True)
+
+        If persist AndAlso uiInitialized Then
+            appSettings.NavigationCollapsed = collapsed
+            Try
+                settingsService.Save(appSettings)
+            Catch
+                ' A layout preference never blocks work.
+            End Try
+        End If
+
+    End Sub
 
 
     ' Preferences, updates, diagnostics, and backup. Backup and Restore stay
@@ -256,7 +357,7 @@ Partial Public Class Form1
 
         lblRailSummary.Text =
             If(StorageEnvironment.IsDevelopmentProfile(), "Development profile", "Local library") &
-            " " & ChrW(&HB7) & " " &
+            Environment.NewLine &
             count.ToString() & If(count = 1, " manuscript", " manuscripts")
 
         Dim reminders As RailButton = Nothing

@@ -54,6 +54,8 @@ The stage describes the manuscript's current lifecycle position. Submission hist
 
 PaperRoute opens in one window. The left rail lists its pages: **Board**, **Library**, **Journals**, **Reminders**, and **Import & Export**, with **Settings** and **Help** at the bottom. Press **Ctrl+1** to **Ctrl+5** to open the pages in that order, **Alt+Left** and **Alt+Right** to go back and forward, and **F1** for this guide.
 
+For more room, choose the **«** button beside the PaperRoute name to collapse the rail to icons; hover over an icon to see its page, and choose **»** to expand the rail again. PaperRoute remembers your choice. Double-click the logo for **About PaperRoute**.
+
 Earlier versions reached these places through menus. Every command is still available:
 
 | Earlier location | Now |

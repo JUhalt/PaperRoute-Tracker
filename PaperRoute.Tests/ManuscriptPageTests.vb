@@ -395,6 +395,39 @@ Public Class ManuscriptPageTests
             End Sub)
     End Sub
 
+    ' The rail collapses to icons for more room and expands again.
+    <TestMethod>
+    Public Sub TheRailCollapsesToIconsAndExpandsAgain()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard()
+                    board.Prepare(Sample("First manuscript"))
+                    Dim toggle As Button = Descendants(board).OfType(Of Button)().Single(Function(button) button.AccessibleName = "Collapse navigation")
+                    Dim expandedWidth As Integer = board.RailPage("Board").Width
+                    Dim logo As RailLogo = Descendants(board).OfType(Of RailLogo)().Single()
+                    StringAssert.Contains(logo.AccessibleName, "About PaperRoute")
+
+                    toggle.PerformClick()
+                    Application.DoEvents()
+                    Assert.AreEqual("Expand navigation", toggle.AccessibleName)
+                    Assert.IsTrue(board.RailPage("Board").Width * 2 < expandedWidth, "Collapsed, the rail shows only icons.")
+                    Assert.AreEqual("Library", board.RailPage("Library").Text, "Pages keep their names for tooltips and assistive technology.")
+                    Assert.IsTrue(logo.Visible, "The logo remains when collapsed.")
+                    board.PressCommandKey(Keys.Control Or Keys.D2)
+                    Assert.AreEqual("Library", board.PageName, "Navigation works while collapsed.")
+
+                    toggle.PerformClick()
+                    Application.DoEvents()
+                    Assert.AreEqual("Collapse navigation", toggle.AccessibleName)
+                    Assert.AreEqual(expandedWidth, board.RailPage("Board").Width)
+                    Dim settings = DirectCast(GetType(Form1).GetField("appSettings", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(board), AppSettings)
+                    Assert.IsFalse(settings.NavigationCollapsed, "Settings that were never loaded are never saved.")
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
     Private Shared Sub MoveFirstResponseDown(board As PageBoard)
         Dim matrix As ReviewerResponseMatrixForm = Descendants(board.Editor).OfType(Of ReviewerResponseMatrixForm)().Single()
         Dim list As ListBox = DirectCast(GetType(ReviewerResponseMatrixForm).GetField("lstResponses", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(matrix), ListBox)

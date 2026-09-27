@@ -219,7 +219,8 @@ Public Class Form1
             .BackColor = UiTheme.BoardBackground()
         }
 
-        shell.ColumnStyles.Add(New ColumnStyle(SizeType.Absolute, RailWidth()))
+        railColumn = New ColumnStyle(SizeType.Absolute, RailWidth())
+        shell.ColumnStyles.Add(railColumn)
         shell.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100.0F))
         shell.RowStyles.Add(New RowStyle(SizeType.Percent, 100.0F))
 
@@ -505,6 +506,7 @@ Public Class Form1
 
         shell.Controls.Add(BuildRail(), 0, 0)
         shell.Controls.Add(content, 1, 0)
+        ApplyNavigationCollapsed(appSettings.NavigationCollapsed, persist:=False)
 
         Me.Controls.Add(shell)
 

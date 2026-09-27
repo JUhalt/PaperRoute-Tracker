@@ -47,6 +47,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Assets\PaperRoute.png" LogicalName="PaperRoute.Logo.png" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Include="..\docs\USER_GUIDE.md" Link="docs\USER_GUIDE.md">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
