@@ -16,12 +16,16 @@ Development is tracked in [draft PR #69](https://github.com/JUhalt/PaperRoute-Tr
 - One main window with a left rail of pages: **Board**, **Library** (every manuscript in a sortable table, plus Authors & Affiliations), **Journals**, **Reminders**, and **Import & Export**, with Settings and Help at the bottom. **Ctrl+1** to **Ctrl+5** open the pages, **Alt+Left** and **Alt+Right** go back and forward, and **F1** opens the User Guide ([#54](https://github.com/JUhalt/PaperRoute-Tracker/issues/54)).
 - The **Import & Export** page lists every way of bringing work in or taking it out, with a sentence on what each keeps ([#58](https://github.com/JUhalt/PaperRoute-Tracker/issues/58)).
 
+- A manuscript opens as a page in the main window, with **Overview**, **Authors**, **Versions**, **Submissions**, and **Readiness & Packets** tabs. The header shows the stage, journal, and route, with **Copy Citation**, **View Route**, and **Delete Manuscript...**. Overview shows the linked journal's notes and checklist from the Journal Library ([#55](https://github.com/JUhalt/PaperRoute-Tracker/issues/55)).
+
 ### Changed
 
+- One save step per manuscript: an **Unsaved changes** bar with **Save** (Ctrl+S) and **Discard** replaces Manuscript Details' Save & Close and Cancel. Leaving the page, opening another manuscript, or closing PaperRoute with unsaved changes asks to save, discard, or stay. What a save stores, including managed-file copies and deletions, is unchanged.
 - The **Data** menu is gone and its commands have moved to pages; **Backup Library** and **Restore Backup** are under **Settings** in the rail and on the Import & Export page. The User Guide has a relocation table.
 
 ### Fixed
 
+- Two-word field labels such as *Revision deadline* no longer lose their second line at 150% scaling.
 - A stale border line no longer remains inside a manuscript card after the window is widened or maximized.
 
 ## [0.5.0] - 2026-09-26

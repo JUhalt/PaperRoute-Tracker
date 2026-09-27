@@ -1209,7 +1209,8 @@ Public Class Form1
     End Function
 
 
-    Private Function LoadAuthorLibrary() As Boolean
+    ' Overridable so tests never read a real library.
+    Protected Overridable Function LoadAuthorLibrary() As Boolean
 
         Try
 
@@ -1274,7 +1275,8 @@ Public Class Form1
     End Function
 
 
-    Private Function SaveManuscripts() As Boolean
+    ' Overridable so tests never write a real library.
+    Protected Overridable Function SaveManuscripts() As Boolean
 
         Try
 
@@ -2138,6 +2140,13 @@ Public Class Form1
 
         Select Case keyData
 
+            ' Ctrl+S saves an open manuscript.
+            Case Keys.Control Or Keys.S
+                If currentPage = WorkspacePage.Manuscript Then
+                    SaveManuscriptPage()
+                    Return True
+                End If
+
             ' Ctrl+F jumps to the board search.
             Case Keys.Control Or Keys.F
                 NavigateTo(WorkspacePage.Board)
@@ -2191,6 +2200,8 @@ Public Class Form1
 
         boardSearchDebounceTimer.Stop()
         boardSearchDebounceTimer.Dispose()
+        manuscriptDirtyTimer.Stop()
+        manuscriptDirtyTimer.Dispose()
         cardToolTip.Dispose()
         DisposeSharedDashboardFonts()
 
@@ -2948,57 +2959,6 @@ Public Class Form1
                 manuscripts.Add(
                     dialog.CreatedManuscript
                 )
-
-                SaveManuscripts()
-                RenderManuscripts()
-
-            End If
-
-        End Using
-
-    End Sub
-
-
-    Private Sub OpenManuscript(
-        manuscript As Manuscript,
-        Optional routeWaypoint As ManuscriptRouteWaypoint = Nothing
-    )
-
-        Using dialog As New EditManuscriptForm(
-            manuscript,
-            manuscripts
-        )
-
-            If routeWaypoint IsNot Nothing Then
-
-                dialog.NavigateToRouteWaypoint(
-                    routeWaypoint
-                )
-
-            End If
-
-            Dim result As DialogResult =
-                dialog.ShowDialog(Me)
-
-            If Not LoadAuthorLibrary() Then
-                Return
-            End If
-
-            If dialog.DeleteRequested Then
-
-                manuscripts.Remove(
-                    manuscript
-                )
-
-                SaveManuscripts()
-                RenderManuscripts()
-
-                Return
-
-            End If
-
-            If result =
-                DialogResult.OK Then
 
                 SaveManuscripts()
                 RenderManuscripts()

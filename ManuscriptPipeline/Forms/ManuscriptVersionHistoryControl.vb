@@ -1135,7 +1135,7 @@ Namespace Forms
                ) Then
 
                 message &=
-                    "Its PaperRoute Library snapshot will be removed only when you Save & Close Manuscript Details."
+                    "Its PaperRoute Library snapshot will be removed only when you save the manuscript."
 
             ElseIf Not String.IsNullOrWhiteSpace(
                 selected.LocalFilePath
@@ -1154,7 +1154,7 @@ Namespace Forms
             message &=
                 Environment.NewLine &
                 Environment.NewLine &
-                "Canceling Manuscript Details before Save & Close leaves the saved library unchanged."
+                "Discarding the manuscript's unsaved changes leaves the saved library unchanged."
 
             If _manuscript.CurrentVersionId.HasValue AndAlso
                _manuscript.CurrentVersionId.Value =

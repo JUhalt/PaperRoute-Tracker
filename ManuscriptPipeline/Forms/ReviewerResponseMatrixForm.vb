@@ -117,7 +117,7 @@ Namespace Forms
             actions.Controls.AddRange({btnAdd, btnEdit, btnRemove, btnUp, btnDown})
             root.Controls.Add(actions, 0, 3)
             Dim saveNote As New Label With {
-                .Text = "Save & Close keeps these edits in Manuscript Details. Save there to store them permanently.",
+                .Text = "Save & Close keeps these edits with the manuscript's unsaved changes. Save the manuscript to store them permanently.",
                 .UseMnemonic = False, .Dock = DockStyle.Fill, .AutoSize = True,
                 .Margin = New Padding(0, 0, 0, 6)
             }

@@ -199,7 +199,7 @@ Namespace Forms
 
             Dim lblHint As New Label With {
                 .Text =
-                    "Double-click a route card—or use Open in Manuscript Details—to inspect the authoritative record.",
+                    "Double-click a route card—or use Open in Manuscript—to inspect the authoritative record.",
                 .AutoSize = True,
                 .MaximumSize = New Size(640, 0),
                 .Margin = New Padding(0, 10, 0, 0),
@@ -644,7 +644,7 @@ Namespace Forms
             )
 
             Dim lblOpenDetails As New Label With {
-                .Text = "Open in Manuscript Details →",
+                .Text = "Open in Manuscript →",
                 .AutoSize = True,
                 .Margin = New Padding(8, 2, 0, 0),
                 .ForeColor = UiTheme.AccentSecondaryColor(),

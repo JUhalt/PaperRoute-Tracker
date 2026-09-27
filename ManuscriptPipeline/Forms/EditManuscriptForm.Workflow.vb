@@ -46,6 +46,7 @@ Namespace Forms
                 End Select
                 request = nextRequest
             End While
+            RefreshReadinessSummary()
         End Sub
 
         Private Function RecordPreparedPacketSubmission(request As SubmissionWorkflowRequest) As SubmissionWorkflowRequest

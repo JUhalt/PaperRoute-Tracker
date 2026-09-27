@@ -21,14 +21,16 @@ Partial Public Class Form1
         Journals
         Reminders
         ImportExport
+        ' Not in the rail: a manuscript opened from another page.
+        Manuscript
     End Enum
 
     Private ReadOnly contentHost As New Panel()
     Private ReadOnly boardPage As New Panel()
     Private ReadOnly railButtons As New Dictionary(Of WorkspacePage, RailButton)()
     Private ReadOnly lblRailSummary As New Label()
-    Private ReadOnly backHistory As New Stack(Of WorkspacePage)()
-    Private ReadOnly forwardHistory As New Stack(Of WorkspacePage)()
+    Private ReadOnly backHistory As New Stack(Of PageRequest)()
+    Private ReadOnly forwardHistory As New Stack(Of PageRequest)()
     Private currentPage As WorkspacePage = WorkspacePage.Board
     Private currentPageView As Control = Nothing
     Private syncingRail As Boolean = False
@@ -229,11 +231,15 @@ Partial Public Class Form1
 
     Private Sub SyncRail()
 
+        ' A manuscript page belongs to the page it was opened from.
+        Dim highlighted As WorkspacePage =
+            If(currentPage = WorkspacePage.Manuscript, manuscriptOrigin, currentPage)
+
         syncingRail = True
 
         Try
             For Each pair In railButtons
-                pair.Value.Checked = pair.Key = currentPage
+                pair.Value.Checked = pair.Key = highlighted
             Next
         Finally
             syncingRail = False
@@ -270,9 +276,29 @@ Partial Public Class Form1
     ' Navigation
     ' =====================================================
 
+    ' One entry in the back/forward history: a page, and for a manuscript
+    ' page, which manuscript.
+    Friend Structure PageRequest
+        Public Page As WorkspacePage
+        Public ManuscriptId As Guid
+
+        Public Sub New(page As WorkspacePage, Optional manuscriptId As Guid = Nothing)
+            Me.Page = page
+            Me.ManuscriptId = manuscriptId
+        End Sub
+    End Structure
+
+
     Friend ReadOnly Property ActivePage As WorkspacePage
         Get
             Return currentPage
+        End Get
+    End Property
+
+
+    Private ReadOnly Property CurrentRequest As PageRequest
+        Get
+            Return New PageRequest(currentPage, If(currentPage = WorkspacePage.Manuscript, currentManuscriptId, Guid.Empty))
         End Get
     End Property
 
@@ -282,12 +308,30 @@ Partial Public Class Form1
         Optional recordHistory As Boolean = True
     )
 
-        If page = currentPage Then
+        NavigateToRequest(New PageRequest(page), recordHistory)
+
+    End Sub
+
+
+    ' Returns False when the user chose to stay on a manuscript with unsaved
+    ' changes.
+    Private Function NavigateToRequest(
+        request As PageRequest,
+        recordHistory As Boolean
+    ) As Boolean
+
+        If request.Page = currentPage AndAlso
+           (request.Page <> WorkspacePage.Manuscript OrElse request.ManuscriptId = currentManuscriptId) Then
             SyncRail()
-            Return
+            Return True
         End If
 
-        Dim previous As WorkspacePage = currentPage
+        If Not ConfirmLeaveManuscript() Then
+            SyncRail()
+            Return False
+        End If
+
+        Dim previous As PageRequest = CurrentRequest
 
         LeaveCurrentPage()
 
@@ -296,34 +340,78 @@ Partial Public Class Form1
             forwardHistory.Clear()
         End If
 
-        currentPage = page
-        ShowPage(page)
-        SyncRail()
+        If request.Page = WorkspacePage.Manuscript Then
+            If previous.Page <> WorkspacePage.Manuscript Then
+                manuscriptOrigin = previous.Page
+            End If
+            currentManuscriptId = request.ManuscriptId
+        End If
 
-    End Sub
+        currentPage = request.Page
+        ShowPage(request)
+        SyncRail()
+        Return True
+
+    End Function
 
 
     Private Sub GoBack()
 
-        If backHistory.Count = 0 Then Return
+        Dim target As PageRequest? = PopExisting(backHistory)
+        If Not target.HasValue Then Return
 
-        forwardHistory.Push(currentPage)
-        NavigateTo(backHistory.Pop(), recordHistory:=False)
+        Dim here As PageRequest = CurrentRequest
+
+        If NavigateToRequest(target.Value, recordHistory:=False) Then
+            forwardHistory.Push(here)
+        Else
+            backHistory.Push(target.Value)
+        End If
 
     End Sub
 
 
     Private Sub GoForward()
 
-        If forwardHistory.Count = 0 Then Return
+        Dim target As PageRequest? = PopExisting(forwardHistory)
+        If Not target.HasValue Then Return
 
-        backHistory.Push(currentPage)
-        NavigateTo(forwardHistory.Pop(), recordHistory:=False)
+        Dim here As PageRequest = CurrentRequest
+
+        If NavigateToRequest(target.Value, recordHistory:=False) Then
+            backHistory.Push(here)
+        Else
+            forwardHistory.Push(target.Value)
+        End If
 
     End Sub
 
 
+    ' Skips history entries for manuscripts that have since been deleted.
+    Private Function PopExisting(history As Stack(Of PageRequest)) As PageRequest?
+
+        While history.Count > 0
+            Dim entry As PageRequest = history.Pop()
+            If entry.Page <> WorkspacePage.Manuscript OrElse FindManuscript(entry.ManuscriptId) IsNot Nothing Then
+                Return entry
+            End If
+        End While
+
+        Return Nothing
+
+    End Function
+
+
+    Private Function FindManuscript(id As Guid) As Manuscript
+        Return manuscripts.FirstOrDefault(Function(item) item IsNot Nothing AndAlso item.Id = id)
+    End Function
+
+
     Private Sub LeaveCurrentPage()
+
+        manuscriptDirtyTimer.Stop()
+        manuscriptEditor = Nothing
+        manuscriptSaveBar = Nothing
 
         If currentPageView Is Nothing Then
             Return
@@ -348,9 +436,9 @@ Partial Public Class Form1
     End Sub
 
 
-    Private Sub ShowPage(page As WorkspacePage)
+    Private Sub ShowPage(request As PageRequest)
 
-        If page = WorkspacePage.Board Then
+        If request.Page = WorkspacePage.Board Then
             boardPage.Visible = True
             boardPage.BringToFront()
             Return
@@ -358,7 +446,9 @@ Partial Public Class Form1
 
         Dim view As Control
 
-        Select Case page
+        Select Case request.Page
+            Case WorkspacePage.Manuscript
+                view = BuildManuscriptPage(FindManuscript(request.ManuscriptId))
             Case WorkspacePage.Library
                 view = BuildLibraryPage()
             Case WorkspacePage.Journals
@@ -380,6 +470,10 @@ Partial Public Class Form1
         contentHost.Controls.Add(view)
         view.BringToFront()
         boardPage.Visible = False
+
+        If request.Page = WorkspacePage.Manuscript Then
+            manuscriptDirtyTimer.Start()
+        End If
 
     End Sub
 
@@ -470,13 +564,7 @@ Partial Public Class Form1
     ' hidden: leaving the page closes it.
     Private Function HostEditor(editor As Form) As Form
 
-        editor.TopLevel = False
-        editor.FormBorderStyle = FormBorderStyle.None
-        editor.MinimumSize = Size.Empty
-        editor.Dock = DockStyle.Fill
-        editor.AcceptButton = Nothing
-        editor.CancelButton = Nothing
-        editor.ShowInTaskbar = False
+        EmbedForm(editor)
 
         For Each button As Button In DescendantControls(editor).OfType(Of Button)().ToList()
             If button.DialogResult <> DialogResult.None AndAlso
@@ -490,6 +578,21 @@ Partial Public Class Form1
         Return editor
 
     End Function
+
+
+    ' Shows a form as a child control that fills its place in a page.
+    Private Shared Sub EmbedForm(form As Form)
+
+        form.TopLevel = False
+        form.FormBorderStyle = FormBorderStyle.None
+        form.MinimumSize = Size.Empty
+        form.Dock = DockStyle.Fill
+        form.AcceptButton = Nothing
+        form.CancelButton = Nothing
+        form.ShowInTaskbar = False
+        form.Visible = True
+
+    End Sub
 
 
     Private Function BuildHostedPage(

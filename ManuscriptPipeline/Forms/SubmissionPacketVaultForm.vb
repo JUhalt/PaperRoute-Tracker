@@ -197,7 +197,7 @@ Namespace Forms
                 .UseMnemonic = False,
                 .ForeColor = SystemColors.GrayText,
                 .Text =
-                    "Choose Save & Close here, then Save & Close in Manuscript Details to keep these changes. " &
+                    "Choose Save & Close here, then save the manuscript to keep these changes. " &
                     "Linked external files are never deleted.",
                 .Margin = New Padding(0, 10, 0, 0)
             }
@@ -1155,7 +1155,7 @@ Namespace Forms
                     Environment.NewLine &
                     Environment.NewLine &
                     managedCount.ToString() &
-                    " managed file(s) will be staged for physical deletion only when Manuscript Details is also saved. Canceling the outer manuscript edit leaves the stored files intact."
+                    " managed file(s) will be staged for physical deletion only when the manuscript is also saved. Discarding the manuscript's changes leaves the stored files intact."
 
             End If
 
@@ -1328,7 +1328,7 @@ Namespace Forms
                 message &=
                     Environment.NewLine &
                     Environment.NewLine &
-                    "Its PaperRoute Library snapshot will be staged for deletion only when Manuscript Details is also saved. The original source file, if one still exists elsewhere, is never deleted."
+                    "Its PaperRoute Library snapshot will be staged for deletion only when the manuscript is also saved. The original source file, if one still exists elsewhere, is never deleted."
 
             ElseIf packetFile.StorageMode =
                    SubmissionPacketFileStorageMode.LinkedExternal Then

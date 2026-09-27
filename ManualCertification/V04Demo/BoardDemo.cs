@@ -95,7 +95,26 @@ internal static class BoardDemo
                 Submission("Fictional Motivation Science", today.AddDays(-320), (EditorialDecision.Rejected, today.AddDays(-280), null))),
             Sample(ManuscriptLocation.FileDrawer, PaperStage.Draft, "DEMO File Drawer 5: An unfinished scale-development project", "Fictional Assessment Quarterly", today.AddDays(-700))
         };
-        new AuthorLibraryRepository().Save(new AuthorLibraryData());
+        // One fictional Journal Library record, linked from the Revision sample,
+        // so the manuscript page shows its notes and checklist.
+        var openPsychology = new JournalRecord
+        {
+            Name = "Fictional Open Psychology",
+            Publisher = "Fictional Society Press",
+            Notes = "Fictional sample notes: results sections must report exact p values and effect sizes with confidence intervals. The response letter is uploaded as a separate file.",
+            ReadinessChecklistTemplate = new List<JournalChecklistTemplateItem>
+            {
+                new() { Title = "Data availability statement", SortOrder = 1 },
+                new() { Title = "Preregistration link", SortOrder = 2 },
+                new() { Title = "Response letter as a separate file", SortOrder = 3 }
+            }
+        };
+        var revision = manuscripts.Single(item => item.CurrentStage == PaperStage.Revision);
+        revision.TargetJournalId = openPsychology.Id;
+
+        var library = new AuthorLibraryData();
+        library.Journals.Add(openPsychology);
+        new AuthorLibraryRepository().Save(library);
         new ManuscriptRepository().Save(manuscripts);
     }
 
