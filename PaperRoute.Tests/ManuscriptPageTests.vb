@@ -413,6 +413,8 @@ Public Class ManuscriptPageTests
                     Assert.IsTrue(board.RailPage("Board").Width * 2 < expandedWidth, "Collapsed, the rail shows only icons.")
                     Assert.AreEqual("Library", board.RailPage("Library").Text, "Pages keep their names for tooltips and assistive technology.")
                     Assert.IsTrue(logo.Visible, "The logo remains when collapsed.")
+                    Assert.IsFalse(Descendants(board).OfType(Of Label)().Single(Function(label) label.Text = ProductInfo.Tagline).Visible,
+                        "The tagline folds away with the name.")
                     board.PressCommandKey(Keys.Control Or Keys.D2)
                     Assert.AreEqual("Library", board.PageName, "Navigation works while collapsed.")
 

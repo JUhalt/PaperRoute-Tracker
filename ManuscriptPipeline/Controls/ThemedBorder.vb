@@ -13,6 +13,7 @@ Namespace Controls
         Inherits NativeWindow
 
         Private Const WM_NCPAINT As Integer = &H85
+        Private Const WM_PAINT As Integer = &HF
         Private Const WM_SETFOCUS As Integer = &H7
         Private Const WM_KILLFOCUS As Integer = &H8
         Private Const WM_PRINT As Integer = &H317
@@ -41,7 +42,9 @@ Namespace Controls
             MyBase.WndProc(m)
 
             Select Case m.Msg
-                Case WM_NCPAINT
+                ' A themed text box redraws its frame while painting its text,
+                ' so the border is repainted after both.
+                Case WM_NCPAINT, WM_PAINT
                     PaintBorder()
                 Case WM_PRINT
                     If (m.LParam.ToInt64() And PRF_NONCLIENT) <> 0 Then

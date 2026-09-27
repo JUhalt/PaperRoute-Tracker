@@ -99,7 +99,7 @@ Namespace Forms
             }
 
             Dim btnInstall As New Button With {
-                .Text = "Download & Restart",
+                .Text = "Download && Restart",
                 .Width = 165,
                 .Height = 38,
                 .DialogResult = DialogResult.OK

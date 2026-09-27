@@ -21,7 +21,7 @@ Use **Settings → Backup Library...** to create a portable backup. In v0.5 and 
 
 ## Moving from v0.5 to v0.6
 
-PaperRoute v0.6 changes where things live and how they look. It does **not** migrate your data: the library stays on **Schema 6**, so v0.5 can still open a library that v0.6 has used, and portable backups made by either version restore in both. A backup before upgrading is still a sensible precaution.
+PaperRoute v0.6 changes where things live and how they look. **v0.6.0 is the current Stable release.** It does **not** migrate your data: the library stays on **Schema 6**, so v0.5 can still open a library that v0.6 has used, and portable backups made by either version restore in both. A backup before upgrading is still a sensible precaution.
 
 What to expect after upgrading:
 
@@ -32,7 +32,7 @@ What to expect after upgrading:
 
 ## Moving from v0.4 to v0.5
 
-PaperRoute v0.5 adds the Reviewer Response Matrix and uses storage **Schema 6**. **v0.5.0 is the current Stable release.** Installed v0.4-to-v0.5 migration, clean installation, and portable backup/restore were certified before Stable publication.
+PaperRoute v0.5 adds the Reviewer Response Matrix and uses storage **Schema 6**. Installed v0.4-to-v0.5 migration, clean installation, and portable backup/restore were certified before Stable publication.
 
 Before upgrading, create a portable ZIP backup with v0.4 and retain it separately. The Schema 5-to-6 migration validates the existing library, retains the original manuscript and author data bytes and previous schema marker, and preserves existing histories, readiness profiles, packets, managed files, and external links. It does not invent reviewer comments, editorial decisions, or revision rounds.
 
