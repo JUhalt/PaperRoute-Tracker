@@ -4,7 +4,7 @@ All notable changes to PaperRoute Tracker will be documented here.
 
 ## [Unreleased] — v0.6 Workspace UI
 
-Development is tracked in [draft PR #69](https://github.com/JUhalt/PaperRoute-Tracker/pull/69) and the [v0.6 milestone](https://github.com/JUhalt/PaperRoute-Tracker/milestone/8).
+Development is tracked in [draft PR #69](https://github.com/JUhalt/PaperRoute-Tracker/pull/69) and the [v0.6 milestone](https://github.com/JUhalt/PaperRoute-Tracker/milestone/8). The v0.6.0-rc.1 Preview candidate ([release notes](docs/releases/0.6.0-rc.1.md)) is certified in [#74](https://github.com/JUhalt/PaperRoute-Tracker/issues/74); v0.5.0 remains the current Stable release until then. v0.6 uses the same Schema 6 library as v0.5 and migrates no data.
 
 ### Added
 

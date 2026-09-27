@@ -17,7 +17,7 @@ PaperRoute Tracker helps researchers manage manuscripts from idea through submis
 ## Current status
 
 - **Stable:** [v0.5.0 — Reviewer Response Workflow](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v0.5.0) adds a manual response matrix within each journal submission, explicit decision and revision-round links, response drafting, and editable Markdown export, plus the shelf scrolling and ampersand fixes. See the [release notes](docs/releases/0.5.0.md) and the [user guide](docs/USER_GUIDE.md).
-- **Next:** [v0.6 — Workspace UI](https://github.com/JUhalt/PaperRoute-Tracker/milestone/8) brings PaperRoute into one main window with pages instead of stacked dialogs, a tabbed page for each manuscript with a single save step, and a calmer card-based design.
+- **Preview:** [v0.6.0-rc.1 — Workspace](docs/releases/0.6.0-rc.1.md) brings PaperRoute into one main window with pages instead of stacked dialogs, a tabbed page for each manuscript with a single save step, and a calmer card-based design. It uses the same Schema 6 library as v0.5. Certification is tracked in [#74](https://github.com/JUhalt/PaperRoute-Tracker/issues/74).
 
 v0.5 uses Schema 6. Upgrading from v0.4? Keep a separate v0.4 backup first, and restore v0.5 backups only with v0.5 or later because older restore code may ignore reviewer-response fields. The [upgrade notes](UPGRADE_NOTES.md) explain the save and compatibility boundaries.
 
