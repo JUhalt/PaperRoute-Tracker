@@ -2,9 +2,9 @@
 
 All notable changes to PaperRoute Tracker will be documented here.
 
-## [Unreleased] — v0.6 Workspace UI
+## [0.6.0] - 2026-09-27
 
-Development is tracked in [draft PR #69](https://github.com/JUhalt/PaperRoute-Tracker/pull/69) and the [v0.6 milestone](https://github.com/JUhalt/PaperRoute-Tracker/milestone/8). The v0.6.0-rc.1 Preview candidate ([release notes](docs/releases/0.6.0-rc.1.md)) is certified in [#74](https://github.com/JUhalt/PaperRoute-Tracker/issues/74); v0.5.0 remains the current Stable release until then. v0.6 uses the same Schema 6 library as v0.5 and migrates no data.
+PaperRoute v0.6.0 — **Workspace** — was released on September 27, 2026 from [PR #69](https://github.com/JUhalt/PaperRoute-Tracker/pull/69), after the v0.6.0-rc.1 Preview. Certification is recorded in [#74](https://github.com/JUhalt/PaperRoute-Tracker/issues/74). v0.6 uses the same Schema 6 library as v0.5 and migrates no data.
 
 ### Added
 
@@ -14,7 +14,7 @@ Development is tracked in [draft PR #69](https://github.com/JUhalt/PaperRoute-Tr
 - Needs Attention items are chips that filter the board and can be used from the keyboard. **Ctrl+F** jumps to search.
 - A shared visual system: rounded controls, one filled primary action per window, and quiet outlines for the rest, in Light and Dark.
 - One main window with a left rail of pages: **Board**, **Library** (every manuscript in a sortable table, plus Authors & Affiliations), **Journals**, **Reminders**, and **Import & Export**, with Settings and Help at the bottom. **Ctrl+1** to **Ctrl+5** open the pages, **Alt+Left** and **Alt+Right** go back and forward, and **F1** opens the User Guide ([#54](https://github.com/JUhalt/PaperRoute-Tracker/issues/54)).
-- The rail can collapse to icons for more room and remembers that choice. The PaperRoute logo heads the rail; double-click it for About.
+- The rail can collapse to icons for more room and remembers that choice. The PaperRoute logo and the "Track • Submit • Publish" tagline head the rail; double-click the logo for About.
 - The **Import & Export** page lists every way of bringing work in or taking it out, with a sentence on what each keeps. **ORCID Works...** opens the author the works belong to ([#58](https://github.com/JUhalt/PaperRoute-Tracker/issues/58)).
 - An empty library opens on a welcome instead of empty shelves: **+ Add Manuscript**, **Import Existing Work**, the four ways in (a pasted title page, ORCID works, BibTeX or RIS, a spreadsheet), and a plain statement that the library stays on this computer. It never adds sample data ([#59](https://github.com/JUhalt/PaperRoute-Tracker/issues/59)).
 - Empty lists and tables say what belongs there and how to add the first item, and disappear with it.
@@ -40,6 +40,8 @@ Development is tracked in [draft PR #69](https://github.com/JUhalt/PaperRoute-Tr
 - Muted text such as counts, card metadata, and the status line meets 4.5:1 contrast on the board and on cards, in Light and Dark.
 - Names that contain an ampersand, such as *Memory & Cognition*, keep it in every dialog, including Route View and Submission Details. Deliberate keyboard accelerators such as **Show &status** still work ([#71](https://github.com/JUhalt/PaperRoute-Tracker/issues/71)).
 - Version History no longer refers to Save & Close or to Journal Submissions "below".
+- Text-box borders now use the theme color on screen, not only in printed or captured images (found in v0.6.0-rc.1).
+- The update prompt's **Download & Restart** keeps its ampersand.
 
 ## [0.5.0] - 2026-09-26
 

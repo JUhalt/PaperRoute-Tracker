@@ -16,12 +16,12 @@ PaperRoute Tracker helps researchers manage manuscripts from idea through submis
 
 ## Current status
 
-- **Stable:** [v0.5.0 — Reviewer Response Workflow](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v0.5.0) adds a manual response matrix within each journal submission, explicit decision and revision-round links, response drafting, and editable Markdown export, plus the shelf scrolling and ampersand fixes. See the [release notes](docs/releases/0.5.0.md) and the [user guide](docs/USER_GUIDE.md).
-- **Preview:** [v0.6.0-rc.1 — Workspace](docs/releases/0.6.0-rc.1.md) brings PaperRoute into one main window with pages instead of stacked dialogs, a tabbed page for each manuscript with a single save step, and a calmer card-based design. It uses the same Schema 6 library as v0.5. Certification is tracked in [#74](https://github.com/JUhalt/PaperRoute-Tracker/issues/74).
+- **Stable:** [v0.6.0 — Workspace](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v0.6.0) brings PaperRoute into one main window with pages, a tabbed page for each manuscript with a single save step, and a calmer card-based design, with no change to your library. See the [release notes](docs/releases/0.6.0.md) and the [user guide](docs/USER_GUIDE.md).
+- **Next:** [v0.7 — Deadline Center](https://github.com/JUhalt/PaperRoute-Tracker/milestone/9) puts everything that needs action, and when, on one page.
 
-v0.5 uses Schema 6. Upgrading from v0.4? Keep a separate v0.4 backup first, and restore v0.5 backups only with v0.5 or later because older restore code may ignore reviewer-response fields. The [upgrade notes](UPGRADE_NOTES.md) explain the save and compatibility boundaries.
+v0.6 uses the same Schema 6 library as v0.5, so upgrading from v0.5 changes no data. Upgrading from v0.4? Keep a separate v0.4 backup first, and restore v0.5 backups only with v0.5 or later because older restore code may ignore reviewer-response fields. The [upgrade notes](UPGRADE_NOTES.md) explain the save and compatibility boundaries.
 
-**New to PaperRoute?** Start with the [PaperRoute User Guide](https://github.com/JUhalt/PaperRoute-Tracker/blob/v0.5.0/docs/USER_GUIDE.md) for a Quick Start, feature tour, and task-oriented "How do I...?" reference.
+**New to PaperRoute?** Start with the [PaperRoute User Guide](https://github.com/JUhalt/PaperRoute-Tracker/blob/v0.6.0/docs/USER_GUIDE.md) for a Quick Start, feature tour, and task-oriented "How do I...?" reference.
 
 ## What PaperRoute does
 
@@ -188,9 +188,9 @@ The implementation, local-first data model, import/export system, backup workflo
 | | Release | Focus |
 | --- | --- | --- |
 | **Released** | v0.5 — Reviewer Response Workflow | Response matrix, drafting, and Markdown export |
-| **Now** | [v0.6 — Workspace UI](https://github.com/JUhalt/PaperRoute-Tracker/milestone/8) | One window, manuscript pages, one save step, calmer design |
-| **Then** | [v0.7 — Deadline Center](https://github.com/JUhalt/PaperRoute-Tracker/milestone/9) | Everything that needs action, and when |
-| | [v0.8 — Route Analytics & Reports](https://github.com/JUhalt/PaperRoute-Tracker/milestone/10) | Your own turnaround data, route and status reports, types and tags |
+| **Released** | v0.6 — Workspace | One window, manuscript pages, one save step, calmer design |
+| **Now** | [v0.7 — Deadline Center](https://github.com/JUhalt/PaperRoute-Tracker/milestone/9) | Everything that needs action, and when |
+| **Then** | [v0.8 — Route Analytics & Reports](https://github.com/JUhalt/PaperRoute-Tracker/milestone/10) | Your own turnaround data, route and status reports, types and tags |
 | | [v0.9 — 1.0 Hardening](https://github.com/JUhalt/PaperRoute-Tracker/milestone/11) | Onboarding, accessibility, recovery, certification |
 | **Goal** | [v1.0 — Trusted Research Workflow](https://github.com/JUhalt/PaperRoute-Tracker/milestone/12) | "I trust this application with my research workflow." |
 

@@ -29,6 +29,7 @@ Partial Public Class Form1
     Private ReadOnly boardPage As New Panel()
     Private ReadOnly railButtons As New Dictionary(Of WorkspacePage, RailButton)()
     Private ReadOnly lblRailSummary As New Label()
+    Private ReadOnly lblRailTagline As New Label()
     Private ReadOnly railItems As New List(Of Control)()
     Private railColumn As ColumnStyle = Nothing
     Private railBrand As TableLayoutPanel = Nothing
@@ -103,7 +104,7 @@ Partial Public Class Form1
             .AutoSizeMode = AutoSizeMode.GrowAndShrink,
             .Dock = DockStyle.Top,
             .ColumnCount = 3,
-            .RowCount = 2,
+            .RowCount = 3,
             .Margin = New Padding(0, 0, 0, UiTheme.Px(18, dpi)),
             .BackColor = UiTheme.HeaderBackground()
         }
@@ -111,6 +112,7 @@ Partial Public Class Form1
         brand.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
         brand.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100.0F))
         brand.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
+        brand.RowStyles.Add(New RowStyle(SizeType.AutoSize))
         brand.RowStyles.Add(New RowStyle(SizeType.AutoSize))
         brand.RowStyles.Add(New RowStyle(SizeType.AutoSize))
 
@@ -136,6 +138,13 @@ Partial Public Class Form1
         AddHandler lblBrand.DoubleClick, AddressOf OpenAbout
         lblRailBrand = lblBrand
 
+        lblRailTagline.AutoSize = True
+        lblRailTagline.Margin = New Padding(0, 1, 0, 0)
+        lblRailTagline.Font = New Font(Me.Font.FontFamily, Me.Font.SizeInPoints * 0.85F)
+        lblRailTagline.ForeColor = UiTheme.SecondaryText()
+        lblRailTagline.UseMnemonic = False
+        lblRailTagline.Text = ProductInfo.Tagline
+
         lblRailSummary.AutoSize = True
         lblRailSummary.MaximumSize = New Size(itemWidth - UiTheme.Px(43, dpi), 0)
         lblRailSummary.Margin = New Padding(0, 2, 0, 0)
@@ -143,7 +152,7 @@ Partial Public Class Form1
         lblRailSummary.ForeColor = UiTheme.MutedText()
         lblRailSummary.UseMnemonic = False
         lblRailSummary.Text =
-            If(StorageEnvironment.IsDevelopmentProfile(), "Development profile", "Local library")
+            If(StorageEnvironment.IsDevelopmentProfile(), "Development profile", String.Empty)
 
         btnRailToggle = New RailCommandButton(RailGlyph.CollapseRail, "Collapse navigation") With {
             .Size = New Size(UiTheme.Px(28, dpi), UiTheme.Px(28, dpi)),
@@ -158,7 +167,9 @@ Partial Public Class Form1
         brand.Controls.Add(railLogo, 0, 0)
         brand.Controls.Add(lblBrand, 1, 0)
         brand.Controls.Add(btnRailToggle, 2, 0)
-        brand.Controls.Add(lblRailSummary, 1, 1)
+        brand.Controls.Add(lblRailTagline, 1, 1)
+        brand.SetColumnSpan(lblRailTagline, 2)
+        brand.Controls.Add(lblRailSummary, 1, 2)
         brand.SetColumnSpan(lblRailSummary, 2)
         railBrand = brand
         railItems.Clear()
@@ -276,10 +287,11 @@ Partial Public Class Form1
         Next
 
         lblRailBrand.Visible = Not collapsed
+        lblRailTagline.Visible = Not collapsed
         lblRailSummary.Visible = Not collapsed
 
         ' Collapsed, the toggle sits under the logo.
-        railBrand.SetRowSpan(railLogo, If(collapsed, 1, 2))
+        railBrand.SetRowSpan(railLogo, If(collapsed, 1, 3))
         railBrand.SetCellPosition(btnRailToggle, New TableLayoutPanelCellPosition(If(collapsed, 0, 2), If(collapsed, 1, 0)))
         railLogo.Margin = If(collapsed,
                              New Padding(UiTheme.Px(5, dpi), 0, 0, UiTheme.Px(8, dpi)),
@@ -356,8 +368,7 @@ Partial Public Class Form1
         Dim count As Integer = manuscripts.Count
 
         lblRailSummary.Text =
-            If(StorageEnvironment.IsDevelopmentProfile(), "Development profile", "Local library") &
-            Environment.NewLine &
+            If(StorageEnvironment.IsDevelopmentProfile(), "Development profile" & Environment.NewLine, String.Empty) &
             count.ToString() & If(count = 1, " manuscript", " manuscripts")
 
         Dim reminders As RailButton = Nothing

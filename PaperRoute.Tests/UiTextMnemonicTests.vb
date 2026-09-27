@@ -42,6 +42,17 @@ Public Class UiTextMnemonicTests
 
     End Sub
 
+    ' Found while certifying v0.6.0-rc.1: the update prompt read "Download  Restart".
+    <TestMethod>
+    Public Sub UpdatePrompt_ShowsLiteralAmpersands()
+
+        Using prompt As New UpdatePromptForm("0.6.0", "0.6.1", "Stable", "Notes & fixes")
+            AssertNoLostAmpersands(prompt)
+            Assert.IsTrue(Descendants(prompt).OfType(Of Button)().Any(Function(button) button.Text = "Download && Restart"))
+        End Using
+
+    End Sub
+
     ' #71: names typed by the user keep their ampersands in dialogs.
     <TestMethod>
     Public Sub DialogsShowUserDataWithLiteralAmpersands()
