@@ -53,11 +53,14 @@ Targets are directional rather than promises. Data integrity, migrations, backup
 | **v0.5** | Reviewer Response Workflow ✅ | What did the journal ask me to change, and how am I responding? |
 | **v0.6** | Workspace UI ✅ | Can I find and act on everything from one calm, uncluttered workspace? |
 | **v0.7** | Deadline Center ✅ | What requires action, and when? |
-| **v0.8** | **Route Analytics & Reports — next** | What does this publication journey show me—and how can I communicate it? |
-| **v0.9** | 1.0 Hardening | Is the entire workflow polished, resilient, and certifiable? |
+| **v0.8** | **Route Analytics & Reports — Preview** | What does this publication journey show me—and how can I communicate it? |
+| **v0.9** | Journal Choice & Guidance | Where should this manuscript go, what will that journal ask of me, and how does someone new learn the route? |
+| **v0.9.1** | 1.0 Hardening | Is the entire workflow polished, resilient, and certifiable? |
 | **v1.0** | Trusted Research Workflow | Would I trust this with my real publication pipeline? |
 
 On September 26, 2026, the train was re-sequenced so the interface can catch up with the depth of the data model: v0.6 became **Workspace UI**, Deadline Center moved to v0.7, Route Analytics & Reports moved to v0.8, and optional AI assistance became a proposal for after 1.0. Deadlines and Analytics arrive as pages in the new workspace rather than as additional dialogs.
+
+On September 28, 2026, the proposals awaiting scope review moved into **v0.9 — Journal Choice & Guidance**, and 1.0 hardening moved to **v0.9.1**. Optional AI assistance returns before 1.0, and every online feature is grouped under one local-first rule rather than added piecemeal.
 
 ---
 
@@ -314,10 +317,37 @@ Derive transparent local analytics and print-friendly route reports from the sam
 - **[#62 Your history with each journal](https://github.com/JUhalt/PaperRoute-Tracker/issues/62)** — submissions, outcomes, and turnaround from the researcher's own records, shown on the Journals page.
 - **[#63 Shareable pipeline status report](https://github.com/JUhalt/PaperRoute-Tracker/issues/63)** — a local HTML snapshot for a supervisor or coauthor that excludes notes, correspondence, reviewer comments, and file paths by default.
 - **[#64 Work types and colored tags](https://github.com/JUhalt/PaperRoute-Tracker/issues/64)** — the dimensions reports, CV exports, and the board can filter and group by. Existing records migrate with an unspecified type rather than an inferred one.
+- **[#82 Route map](https://github.com/JUhalt/PaperRoute-Tracker/issues/82)** — each route drawn to scale, colored by who held it (the journal, the author, or production), with every event numbered and explained, and every route side by side on Insights. It shows a student, or a researcher looking back, how much of publishing is waiting and how much is work.
+
+Every slice is complete in [PR #80](https://github.com/JUhalt/PaperRoute-Tracker/pull/80). v0.8.0-rc.1 is the Preview candidate; certification is tracked in [#85](https://github.com/JUhalt/PaperRoute-Tracker/issues/85).
 
 ---
 
-# v0.9 1.0 Hardening
+# v0.9 Journal Choice & Guidance
+
+Milestone: **[v0.9.0 — Journal Choice & Guidance](https://github.com/JUhalt/PaperRoute-Tracker/milestone/13)**
+
+Help researchers decide where a manuscript should go and what that journal will ask of them, and let anyone new learn the route, before the 1.0 hardening pass. Offline guidance comes first; connected help adds facts and suggestions without making the library depend on the network.
+
+**Connected, but local-first.** Every online feature follows the rules the Crossref publication check already keeps: the user starts it, lookups are read-only, results are previewed before anything is applied, and anything stored records its source and the date it was retrieved. One settings page lists every service and exactly what it sends, and **Work offline** turns them all off. PaperRoute stays complete without them.
+
+Offline:
+
+- **[#65 Per-manuscript journal shortlist](https://github.com/JUhalt/PaperRoute-Tracker/issues/65)** — Considering, Preferred, Backup, and Ruled out, with the reasons kept on the manuscript and offered again when it is rerouted.
+- **[#89 Choosing a journal](https://github.com/JUhalt/PaperRoute-Tracker/issues/89)** — a one-page guide adapted, with attribution, from the Think. Check. Submit. checklist (CC BY 4.0), plus fit questions and your own history with each journal.
+- **[#83 Example library for teaching](https://github.com/JUhalt/PaperRoute-Tracker/issues/83)** — a fictional research group's routes to explore, edit, and discard without touching your library.
+- **[#45 RO-Crate export for submission packets](https://github.com/JUhalt/PaperRoute-Tracker/issues/45)** — the documented adopt, defer, or reject decision.
+
+Connected, optional, and started by the user:
+
+- **[#86 Online services](https://github.com/JUhalt/PaperRoute-Tracker/issues/86)** — one local-first rule, one settings page, and a **Work offline** switch.
+- **[#87 Journal facts from open indexes](https://github.com/JUhalt/PaperRoute-Tracker/issues/87)** — DOAJ (CC0), OpenAlex, and sharing-policy records: publisher, fees, review type, typical turnaround, and links to the journal's aims and scope, author instructions, and editorial board.
+- **[#88 Journals that publish work like yours](https://github.com/JUhalt/PaperRoute-Tracker/issues/88)** — suggestions backed by recently published papers that match keywords you review; never scores or predictions.
+- **[#84 Optional AI assistant](https://github.com/JUhalt/PaperRoute-Tracker/issues/84)** (with [#29](https://github.com/JUhalt/PaperRoute-Tracker/issues/29)) — off by default, with your own key or a local model: decision letters to reviewer comments, author guidelines to readiness checklists, drafting help, and fit summaries grounded in #88's evidence.
+
+---
+
+# v0.9.1 1.0 Hardening
 
 **Scope and evidence tracker:** [#43](https://github.com/JUhalt/PaperRoute-Tracker/issues/43). Create or link bounded work before implementation and record explicit decisions for sharing/signing.
 
@@ -331,7 +361,7 @@ Systematic burn-down before 1.0:
 - retain regression coverage for the shelf scrolling fix completed for v0.5 ([#37](https://github.com/JUhalt/PaperRoute-Tracker/issues/37), [PR #51](https://github.com/JUhalt/PaperRoute-Tracker/pull/51)) during the whole-application hardening pass
 - consistency audit of every workflow against the v0.6 workspace patterns
 - guided onboarding/tutorial using the shared contextual-help catalog, building on the v0.6 welcome and empty states
-- File Drawer revival/rerouting polish, including a decision on the per-manuscript journal shortlist proposal ([#65](https://github.com/JUhalt/PaperRoute-Tracker/issues/65))
+- File Drawer revival/rerouting polish, building on the v0.9 journal shortlist ([#65](https://github.com/JUhalt/PaperRoute-Tracker/issues/65))
 - test-suite redundancy/obsolescence audit
 - manual certification fixtures for major workflows
 - portable project-sharing decision
@@ -341,7 +371,7 @@ Systematic burn-down before 1.0:
 
 # v1.0 Trusted Research Workflow
 
-**Future release-readiness tracker:** [#44](https://github.com/JUhalt/PaperRoute-Tracker/issues/44). Detailed scope and certification procedures follow the v0.9 review; the milestone is a planning placeholder with no release date.
+**Future release-readiness tracker:** [#44](https://github.com/JUhalt/PaperRoute-Tracker/issues/44). Detailed scope and certification procedures follow the v0.9.1 review; the milestone is a planning placeholder with no release date.
 
 PaperRoute 1.0 is not defined by feature count.
 
@@ -355,8 +385,6 @@ PaperRoute does not trade trustworthiness for cadence.
 
 # Proposals awaiting scope review
 
-- [#29 — Optional AI-assisted reviewer action extraction (after 1.0)](https://github.com/JUhalt/PaperRoute-Tracker/issues/29): moved out of the pre-1.0 train on September 26, 2026. AI extraction is most valuable once the Reviewer Response Matrix is comfortable to use inline (v0.6). Its safeguards are retained: opt-in, preview-before-apply, non-authoritative, never required, and no manuscript or reviewer content silently transmitted.
-- [#65 — Per-manuscript journal shortlist](https://github.com/JUhalt/PaperRoute-Tracker/issues/65): an ordered list of candidate journals per manuscript (Considering, Preferred, Backup, Ruled out) that can offer the next reroute target. Reviewed with v0.9 rerouting polish.
-- [#45 — Evaluate an optional RO-Crate export for submission packets](https://github.com/JUhalt/PaperRoute-Tracker/issues/45): explore whether self-describing, locally exported packets help preserve selected files and version context outside PaperRoute. The issue cites the research paper and official specification, defines a synthetic evaluation, and requires a documented adopt/defer/reject decision. It is not assigned to a release and does not replace backup/restore.
+None at present: the proposals reviewed on September 28, 2026 are scoped into v0.9.
 
 New research-informed ideas remain proposals until scoped. Every accepted finding or development path must have a linked issue and a roadmap disposition before implementation.

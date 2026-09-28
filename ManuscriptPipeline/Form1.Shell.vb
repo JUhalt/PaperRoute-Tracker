@@ -20,6 +20,7 @@ Partial Public Class Form1
         Library
         Journals
         Deadlines
+        Insights
         ImportExport
         ' Not in the rail: a manuscript opened from another page.
         Manuscript
@@ -193,6 +194,7 @@ Partial Public Class Form1
             (WorkspacePage.Library, RailGlyph.Library, "Library"),
             (WorkspacePage.Journals, RailGlyph.Journals, "Journals"),
             (WorkspacePage.Deadlines, RailGlyph.Deadlines, "Deadlines"),
+            (WorkspacePage.Insights, RailGlyph.Insights, "Insights"),
             (WorkspacePage.ImportExport, RailGlyph.ImportExport, "Import & Export")
         }
             Dim page As WorkspacePage = entry.Item1
@@ -535,6 +537,8 @@ Partial Public Class Form1
         libraryFilter = Nothing
         deadlinesList = Nothing
         deadlinesFilter = Nothing
+        insightsContent = Nothing
+        insightsGrid = Nothing
 
         ' Hosted editors save as they go. Refresh the board's copies, as the
         ' board did after their dialogs closed.
@@ -570,6 +574,8 @@ Partial Public Class Form1
                     New JournalLibraryForm(manuscripts))
             Case WorkspacePage.Deadlines
                 view = BuildDeadlinesPage()
+            Case WorkspacePage.Insights
+                view = BuildInsightsPage()
             Case Else
                 view = BuildImportExportPage()
         End Select
@@ -734,7 +740,7 @@ Partial Public Class Form1
     Private Function BuildLibraryPage() As Control
 
         libraryFilter = New TextBox With {
-            .PlaceholderText = "Filter by title, journal, stage, or route",
+            .PlaceholderText = "Filter by title, journal, stage, route, type, or tag",
             .BorderStyle = BorderStyle.None,
             .BackColor = UiTheme.CardBackground(),
             .ForeColor = UiTheme.PrimaryText(),
@@ -861,9 +867,9 @@ Partial Public Class Form1
     End Function
 
 
-    Private Sub ShowLibraryManuscripts()
-
-        ClearLibraryContent()
+    ' A read-only, sortable table in the page style, shared by the Library
+    ' and Insights pages.
+    Private Function CreatePageGrid(accessibleName As String) As DataGridView
 
         Dim grid As New DataGridView With {
             .Dock = DockStyle.Fill,
@@ -881,7 +887,7 @@ Partial Public Class Form1
             .StandardTab = True,
             .BackgroundColor = UiTheme.CardBackground(),
             .GridColor = UiTheme.SubtleBorder(),
-            .AccessibleName = "All manuscripts. Press Enter to open the selected manuscript.",
+            .AccessibleName = accessibleName,
             .ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize
         }
 
@@ -897,11 +903,24 @@ Partial Public Class Form1
         grid.ColumnHeadersDefaultCellStyle.Padding = New Padding(UiTheme.Px(6, DeviceDpi), UiTheme.Px(6, DeviceDpi), UiTheme.Px(6, DeviceDpi), UiTheme.Px(6, DeviceDpi))
         grid.RowTemplate.Height = TextRenderer.MeasureText("Ag", Me.Font).Height + UiTheme.Px(14, DeviceDpi)
 
+        Return grid
+
+    End Function
+
+
+    Private Sub ShowLibraryManuscripts()
+
+        ClearLibraryContent()
+
+        Dim grid As DataGridView = CreatePageGrid("All manuscripts. Press Enter to open the selected manuscript.")
+
         grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Title", .HeaderText = "Title", .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = 220, .MinimumWidth = UiTheme.Px(220, DeviceDpi)})
         grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Stage", .HeaderText = "Stage", .AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells})
         grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Shelf", .HeaderText = "Shelf", .AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells})
         grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Journal", .HeaderText = "Target journal", .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = 55})
         grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Route", .HeaderText = "Route", .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = 70})
+        grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Type", .HeaderText = "Type", .AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells})
+        grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Tags", .HeaderText = "Tags", .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = 45})
         grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Days", .HeaderText = "Days in stage", .AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells, .ValueType = GetType(Integer)})
         grid.Columns("Days").DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight
 
@@ -951,9 +970,11 @@ Partial Public Class Form1
 
         For Each manuscript As Manuscript In manuscripts
             Dim route As String = RouteSummaryService.Describe(manuscript).Text
+            Dim type As String = If(manuscript.WorkType = WorkType.Unspecified, String.Empty, WorkTypeService.DisplayName(manuscript.WorkType))
+            Dim tags As String = String.Join(", ", If(manuscript.Tags, New List(Of String)()))
 
             If filter.Length > 0 AndAlso
-               Not {manuscript.Title, manuscript.TargetJournal, FormatStage(manuscript.CurrentStage), FormatShelf(manuscript.Location), route}.
+               Not {manuscript.Title, manuscript.TargetJournal, FormatStage(manuscript.CurrentStage), FormatShelf(manuscript.Location), route, type, tags}.
                    Any(Function(value) If(value, String.Empty).IndexOf(filter, StringComparison.CurrentCultureIgnoreCase) >= 0) Then
                 Continue For
             End If
@@ -970,6 +991,8 @@ Partial Public Class Form1
                 FormatShelf(manuscript.Location),
                 manuscript.TargetJournal,
                 route,
+                type,
+                tags,
                 days)
 
             libraryGrid.Rows(index).Tag = manuscript
@@ -1023,6 +1046,8 @@ Partial Public Class Form1
                 FillLibraryGrid()
             Case WorkspacePage.Deadlines
                 FillDeadlines()
+            Case WorkspacePage.Insights
+                FillInsights()
         End Select
 
     End Sub

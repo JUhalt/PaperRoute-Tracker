@@ -116,9 +116,9 @@ Public Class Schema6MigrationTests
 
     <TestMethod>
     Public Sub FutureSchema_IsRejectedBeforeAnyStorageMigration()
-        File.WriteAllText(_schema, "{""SchemaVersion"":8}")
+        File.WriteAllText(_schema, "{""SchemaVersion"":9}")
         Assert.ThrowsExactly(Of InvalidOperationException)(Sub() EnsureStorage())
-        Assert.AreEqual(8, StorageMigrationService.ReadSchemaVersion(_schema))
+        Assert.AreEqual(9, StorageMigrationService.ReadSchemaVersion(_schema))
         Assert.IsFalse(Directory.Exists(Path.Combine(_root, "library")))
     End Sub
 

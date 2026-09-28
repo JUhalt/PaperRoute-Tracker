@@ -159,6 +159,15 @@ internal static class BoardDemo
         draft.Versions.Add(draftVersion);
         draft.SubmissionPackets.Add(new SubmissionPacket { ReadinessProfileId = readiness.Id, JournalName = readiness.JournalName, Label = "Initial submission", ManuscriptVersionId = draftVersion.Id });
         manuscripts[0].Reminders.Add(new ManuscriptReminder { Title = "Outline the introduction", DueDate = today.AddDays(12) });
+        // Types and tags (#64) on a few cards.
+        manuscripts[0].Tags.Add("grant");
+        manuscripts[3].WorkType = WorkType.JournalArticle;
+        manuscripts[3].Tags.AddRange(new[] { "preregistered", "lab project" });
+        manuscripts[4].WorkType = WorkType.JournalArticle;
+        manuscripts[4].Tags.AddRange(new[] { "teaching", "mixed methods", "nursing" });
+        manuscripts[5].WorkType = WorkType.JournalArticle;
+        manuscripts[6].WorkType = WorkType.JournalArticle;
+        manuscripts[8].WorkType = WorkType.ConferencePaper;
 
         var library = new AuthorLibraryData();
         library.Journals.Add(openPsychology);

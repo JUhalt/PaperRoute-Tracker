@@ -48,6 +48,12 @@ Namespace Forms
         Private _authorLibraryDirty As Boolean = False
 
         Private ReadOnly fileDrawerGroup As New SectionCard()
+
+        ' The kind of work and its tags (#64), edited in the working copy.
+        Private ReadOnly classificationGroup As New SectionCard()
+        Private ReadOnly cmbWorkType As New ComboBox()
+        Private ReadOnly tagEditor As New TagEditor()
+
         Private ReadOnly lblFileDrawerDateValue As New Label()
         Private ReadOnly txtFileDrawerReason As New TextBox()
 
@@ -627,13 +633,16 @@ Namespace Forms
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 .ColumnCount = 1,
-                .RowCount = 3,
+                .RowCount = 4,
                 .Padding = New Padding(0)
             }
 
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 330))
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+            root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+
+            BuildClassificationGroup()
 
             ' The linked Journal Library record's notes and checklist, so its
             ' requirements are in view while editing.
@@ -1189,8 +1198,9 @@ Namespace Forms
             footer.Controls.Add(rightButtons, 1, 0)
 
             root.Controls.Add(detailsGroup, 0, 0)
-            root.Controls.Add(fileDrawerGroup, 0, 1)
-            root.Controls.Add(journalNotesGroup, 0, 2)
+            root.Controls.Add(classificationGroup, 0, 1)
+            root.Controls.Add(fileDrawerGroup, 0, 2)
+            root.Controls.Add(journalNotesGroup, 0, 3)
 
             scrollHost.Controls.Add(root)
 
@@ -1290,6 +1300,58 @@ Namespace Forms
         End Sub
 
 
+        Private Sub BuildClassificationGroup()
+
+            classificationGroup.Text = "Type and tags"
+            classificationGroup.Dock = DockStyle.Top
+            classificationGroup.AutoSize = True
+            classificationGroup.AutoSizeMode = AutoSizeMode.GrowAndShrink
+            classificationGroup.Padding = New Padding(14, 8, 14, 12)
+            classificationGroup.Margin = New Padding(3, 8, 3, 8)
+
+            Dim layout As New TableLayoutPanel With {
+                .Dock = DockStyle.Top,
+                .AutoSize = True,
+                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                .ColumnCount = 2,
+                .RowCount = 2,
+                .Margin = New Padding(0)
+            }
+            layout.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
+            layout.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
+            layout.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+            layout.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+
+            cmbWorkType.DropDownStyle = ComboBoxStyle.DropDownList
+            cmbWorkType.AccessibleName = "Type of work"
+            cmbWorkType.Width = 240
+            cmbWorkType.Anchor = AnchorStyles.Left
+            cmbWorkType.Margin = New Padding(3, 4, 3, 6)
+            For Each type As WorkType In [Enum].GetValues(GetType(WorkType))
+                cmbWorkType.Items.Add(WorkTypeService.DisplayName(type))
+            Next
+            AddHandler cmbWorkType.SelectedIndexChanged,
+                Sub(sender, e)
+                    If cmbWorkType.SelectedIndex >= 0 Then _workingManuscript.WorkType = CType(cmbWorkType.SelectedIndex, WorkType)
+                End Sub
+
+            tagEditor.Anchor = AnchorStyles.Left Or AnchorStyles.Right
+            tagEditor.Margin = New Padding(3, 2, 3, 2)
+            AddHandler tagEditor.ColorChanged, Sub(sender, e) _authorLibraryDirty = True
+
+            Dim typeLabel As Label = CreateFieldLabel("Type")
+            Dim tagsLabel As Label = CreateFieldLabel("Tags")
+            typeLabel.Margin = New Padding(3, 4, 16, 6)
+            layout.Controls.Add(typeLabel, 0, 0)
+            layout.Controls.Add(cmbWorkType, 1, 0)
+            layout.Controls.Add(tagsLabel, 0, 1)
+            layout.Controls.Add(tagEditor, 1, 1)
+
+            classificationGroup.Controls.Add(layout)
+
+        End Sub
+
+
         Private Function CreateFieldLabel(text As String) As Label
 
             Return New Label With {
@@ -1345,6 +1407,11 @@ Namespace Forms
                     _workingManuscript.FileDrawerReason,
                     String.Empty
                 )
+
+            If _workingManuscript.Tags Is Nothing Then _workingManuscript.Tags = New List(Of String)()
+            cmbWorkType.SelectedIndex = CInt(_workingManuscript.WorkType)
+            ' Tags already used in the library are suggested while typing.
+            tagEditor.Bind(_workingManuscript.Tags, _authorLibrary, WorkTypeService.AllTags(_allManuscripts))
 
             RefreshAuthorsList()
             RefreshSubmissionList()
@@ -3373,6 +3440,12 @@ Namespace Forms
 
             _originalManuscript.Metadata =
                 committed.Metadata
+
+            _originalManuscript.WorkType =
+                committed.WorkType
+
+            _originalManuscript.Tags =
+                committed.Tags
 
             _originalManuscript.RelatedLinks =
                 committed.RelatedLinks

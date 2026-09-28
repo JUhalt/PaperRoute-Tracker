@@ -43,8 +43,9 @@ Public Class Schema7MigrationTests
 
         EnsureStorage()
 
-        Assert.AreEqual(7, StorageMigrationService.ReadSchemaVersion(_schema))
+        Assert.AreEqual(StorageMigrationService.CurrentSchemaVersion, StorageMigrationService.ReadSchemaVersion(_schema))
         Assert.AreEqual("{""SchemaVersion"":6}", File.ReadAllText(Path.Combine(_data, "schema.v6.bak")))
+        StringAssert.Contains(File.ReadAllText(Path.Combine(_data, "schema.v7.bak")), """SchemaVersion"": 7", "Schema 7, then Schema 8: each step keeps the marker it replaced.")
         Assert.AreEqual(original, File.ReadAllText(Path.Combine(_data, "manuscripts.json")))
         Assert.AreEqual("preserve existing automatic backup", File.ReadAllText(Path.Combine(_data, "manuscripts.bak")))
         Dim repository As New ManuscriptRepository(_data, Path.Combine(_root, "library"))

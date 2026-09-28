@@ -18,6 +18,7 @@ Namespace Forms
         Private ReadOnly cmbScope As New ComboBox()
         Private ReadOnly cmbStyle As New ComboBox()
         Private ReadOnly cmbFormat As New ComboBox()
+        Private ReadOnly chkGroupByType As New CheckBox()
         Private ReadOnly lstItems As New CheckedListBox()
         Private ReadOnly txtPreview As New TextBox()
 
@@ -210,6 +211,13 @@ Namespace Forms
             options.Controls.Add(
                 cmbFormat
             )
+
+            ' Sections such as Journal articles and Conference papers (#64).
+            chkGroupByType.Text = "Group by type"
+            chkGroupByType.AutoSize = True
+            chkGroupByType.Margin = New Padding(12, 6, 3, 3)
+            AddHandler chkGroupByType.CheckedChanged, Sub(sender, e) RefreshPreview()
+            options.Controls.Add(chkGroupByType)
 
             Dim btnAll As New Button With {
                 .Text = "Select All",
@@ -525,7 +533,8 @@ Namespace Forms
                         OptionItem
                     ).Value,
                     PublicationExportStyle
-                )
+                ),
+                chkGroupByType.Checked
             )
 
         End Function

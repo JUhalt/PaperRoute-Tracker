@@ -7,16 +7,18 @@ Imports ManuscriptPipeline.Models
 
 Namespace Services
 
-    Friend NotInheritable Class Schema7MigrationService
+    ' Schemas 7 and 8 add fields that default to empty: remembered
+    ' publication matches (#61), then work types, tags, and tag colors
+    ' (#64). Upgrading validates the whole library with the current rules
+    ' and then advances only the marker, keeping the old one as
+    ' schema.vN.bak. The older JSON, managed files, and backups stay
+    ' byte-for-byte, and the new marker keeps an older build from opening
+    ' the library and silently dropping the new fields.
+    Friend NotInheritable Class MarkerOnlyMigration
         Private Sub New()
         End Sub
 
-        Friend Shared Sub Migrate(currentRoot As String, schemaPath As String)
-            ' Schema 7 adds remembered publication matches (#61), which default
-            ' to empty. As in Schema 6, the older JSON, managed files, and
-            ' backups stay byte-for-byte; only the marker advances, after all
-            ' existing data validates. The marker keeps an older build from
-            ' opening the library and silently dropping ignored matches.
+        Friend Shared Sub Migrate(currentRoot As String, schemaPath As String, fromVersion As Integer)
             Dim options As New JsonSerializerOptions With {.PropertyNameCaseInsensitive = True}
             options.Converters.Add(New JsonStringEnumConverter())
             Try
@@ -29,6 +31,7 @@ Namespace Services
                         SubmissionReadinessValidationService.NormalizeAndValidateManuscript(manuscript)
                         ReviewerResponseService.NormalizeAndValidateManuscript(manuscript)
                         PublicationMatchService.NormalizeAndValidateManuscript(manuscript)
+                        WorkTypeService.NormalizeAndValidateManuscript(manuscript)
                     Next
                 End If
                 Dim authorsPath = Path.Combine(currentRoot, "data", "authors.json")
@@ -37,18 +40,19 @@ Namespace Services
                     If library Is Nothing Then Throw New InvalidDataException("The reusable metadata library cannot be null.")
                 End If
             Catch ex As Exception When TypeOf ex Is JsonException OrElse TypeOf ex Is InvalidDataException
-                Throw New InvalidDataException("PaperRoute cannot migrate storage schema 6 because existing data is invalid. The existing schema and data were left unchanged. " & ex.Message, ex)
+                Throw New InvalidDataException("PaperRoute cannot migrate storage schema " & fromVersion.ToString() &
+                    " because existing data is invalid. The existing schema and data were left unchanged. " & ex.Message, ex)
             End Try
 
             Dim payload As New Dictionary(Of String, Object) From {
-                {"SchemaVersion", 7}, {"UpdatedAtUtc", DateTime.UtcNow.ToString("O")}
+                {"SchemaVersion", fromVersion + 1}, {"UpdatedAtUtc", DateTime.UtcNow.ToString("O")}
             }
             Dim temporaryPath = schemaPath & ".tmp-" & Guid.NewGuid().ToString("N")
             Try
                 File.WriteAllText(temporaryPath, JsonSerializer.Serialize(payload, New JsonSerializerOptions With {.WriteIndented = True}))
                 ' Replacing atomically also preserves any existing backup if
                 ' the marker is locked. Never remove that backup beforehand.
-                File.Replace(temporaryPath, schemaPath, Path.Combine(Path.GetDirectoryName(schemaPath), "schema.v6.bak"), True)
+                File.Replace(temporaryPath, schemaPath, Path.Combine(Path.GetDirectoryName(schemaPath), "schema.v" & fromVersion.ToString() & ".bak"), True)
             Finally
                 If File.Exists(temporaryPath) Then
                     Try

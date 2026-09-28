@@ -241,8 +241,18 @@ Namespace Services
                     "FILEDRAWERREASON"
                 )
 
+                ' Type and tags (#64): a type is kept only when it is one
+                ' PaperRoute knows; otherwise the row imports without one.
+                Dim typeText As String = ReadOptionalText(worksheet, rowNumber, headers, "WORKTYPE")
+                Dim workType As WorkType = WorkTypeService.Parse(typeText)
+                If workType = WorkType.Unspecified AndAlso Not String.IsNullOrWhiteSpace(typeText) Then
+                    result.Warnings.Add("Manuscripts row " & rowNumber.ToString() & ": unrecognized WorkType '" & typeText & "'. Imported without a type.")
+                End If
+                Dim tagText As String = ReadOptionalText(worksheet, rowNumber, headers, "TAGS")
+
                 Dim manuscript As New Manuscript With {
                     .Id = Guid.NewGuid(),
+                    .WorkType = workType,
                     .Title = title,
                     .TargetJournal = targetJournal,
                     .CurrentStage = stage,
@@ -251,6 +261,10 @@ Namespace Services
                     .FileDrawerDate = fileDrawerDate,
                     .FileDrawerReason = fileDrawerReason
                 }
+
+                For Each tag As String In If(tagText, String.Empty).Split({";"c, ","c}, StringSplitOptions.RemoveEmptyEntries)
+                    WorkTypeService.AddTag(manuscript, tag)
+                Next
 
                 manuscript.History.Add(
                     New HistoryEvent With {

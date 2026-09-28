@@ -402,6 +402,7 @@ Namespace Services
                 work.PublishedDate.HasValue
 
             Dim manuscript As New Manuscript With {
+                .WorkType = WorkTypeService.FromRegistry(work.WorkType),
                 .Title = work.Title.Trim(),
                 .Metadata = metadata,
                 .CurrentStage =

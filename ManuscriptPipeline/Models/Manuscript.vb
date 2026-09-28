@@ -64,6 +64,12 @@ Namespace Models
         Public Property Submissions As List(Of JournalSubmission) =
             New List(Of JournalSubmission)()
 
+        ' The kind of work and the user's own tags (Schema 8).
+        Public Property WorkType As WorkType = WorkType.Unspecified
+
+        Public Property Tags As List(Of String) =
+            New List(Of String)()
+
         ' Possible publications found by a publication check (Schema 7).
         Public Property PublicationMatches As List(Of PublicationMatch) =
             New List(Of PublicationMatch)()

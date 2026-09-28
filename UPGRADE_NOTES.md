@@ -19,6 +19,20 @@ PaperRoute upgrades are designed not to overwrite the manuscript database, setti
 
 Use **Settings → Backup Library...** to create a portable backup. In v0.5 and earlier, it is **Data → Backup Library...**.
 
+## Moving from v0.7 to v0.8
+
+PaperRoute v0.8 adds route maps, the Insights page, shareable reports, and work types and tags. **v0.8.0-rc.1 is a Preview; v0.7.0 remains the current Stable release.** v0.8 upgrades the library to **Schema 8**, which adds work types, tags, and tag colors.
+
+Before upgrading, create a portable ZIP backup with v0.7 (**Settings → Backup Library...**) and keep it separately.
+
+The Schema 7-to-8 upgrade validates the existing library first and then changes only the schema marker, keeping the previous marker as `schema.v7.bak`. Manuscript and author data, managed files, and automatic backups stay byte-for-byte, and every manuscript starts with no type and no tags; nothing is inferred. If validation fails, nothing changes and PaperRoute says why.
+
+After upgrading:
+
+- Open **Insights** (Ctrl+5). Import & Export moves to Ctrl+6.
+- Open any submitted manuscript's Route to see its route map. A revision stretch shows as "not recorded" when the return to review was never entered; add an Under Review history entry with that date to split it.
+- v0.7 refuses to open a Schema 8 library. To go back, restore the backup you made with v0.7; changes made in v0.8 are not in it. Restore v0.8 backups with v0.8 or later.
+
 ## Moving from v0.6 to v0.7
 
 PaperRoute v0.7 replaces the Reminders page with **Deadlines** and adds the publication check. **v0.7.0 is the current Stable release.** It upgrades the library to **Schema 7**, which remembers possible publications you have reviewed.

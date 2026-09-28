@@ -174,6 +174,11 @@ Namespace Services
 
             End If
 
+            ' Crossref names the kind of work; it fills only an unset type.
+            If manuscript.WorkType = WorkType.Unspecified Then
+                manuscript.WorkType = WorkTypeService.FromRegistry(suggestion.WorkType)
+            End If
+
             RecordProvenance(
                 manuscript.Metadata,
                 suggestion

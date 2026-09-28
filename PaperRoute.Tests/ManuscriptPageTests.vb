@@ -109,7 +109,7 @@ Public Class ManuscriptPageTests
                     board.Open(manuscript)
                     board.Field("Title").Text = "Kept title"
                     board.SetPrompt(Function(title) DialogResult.Yes)
-                    board.PressCommandKey(Keys.Control Or Keys.D5)
+                    board.PressCommandKey(Keys.Control Or Keys.D6)
                     Assert.AreEqual("ImportExport", board.PageName)
                     Assert.AreEqual("Kept title", manuscript.Title, "Yes saves before leaving.")
                     Assert.AreEqual(1, board.SaveCount)
@@ -651,6 +651,186 @@ Public Class ManuscriptPageTests
             Return Task.FromResult(New List(Of OrcidWorkSuggestion)())
         End Function
     End Class
+
+    ' Insights (#30, #62): your journals and routes, from recorded dates.
+    <TestMethod>
+    Public Sub InsightsSummarizeJournalsAndRoutesFromTheLibrary()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard()
+                    Dim routed As Manuscript = WithRoute()
+                    board.Prepare(routed, Sample("Unsubmitted idea"))
+
+                    board.PressCommandKey(Keys.Control Or Keys.D5)
+                    Assert.AreEqual("Insights", board.PageName)
+                    Dim tiles As List(Of String) = Descendants(board).OfType(Of RoundedPanel)().Select(Function(tile) tile.AccessibleName).Where(Function(name) name IsNot Nothing).ToList()
+                    Assert.IsTrue(tiles.Contains("2 submissions  ·  0 accepted"), String.Join(" | ", tiles))
+                    Assert.IsTrue(tiles.Contains("19.5 days median to a first decision (of 2)"), "The median of 7 and 32 days.")
+                    Assert.IsTrue(tiles.Contains("— median from first submission to acceptance (not recorded yet)"), "Nothing is estimated.")
+
+                    Dim journals As DataGridView = Descendants(board).OfType(Of DataGridView)().Single()
+                    CollectionAssert.AreEquivalent({"First Journal", "Second Journal"}, journals.Rows.Cast(Of DataGridViewRow)().Select(Function(row) CStr(row.Cells("Journal").Value)).ToList())
+                    Dim second As DataGridViewRow = journals.Rows.Cast(Of DataGridViewRow)().Single(Function(row) CStr(row.Cells("Journal").Value) = "Second Journal")
+                    Assert.AreEqual(1.0, CDbl(second.Cells("Revisions").Value))
+                    Assert.AreEqual(32.0, CDbl(second.Cells("FirstDecision").Value))
+
+                    journals.CurrentCell = second.Cells(0)
+                    GetType(Control).GetMethod("OnKeyDown", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(journals, New Object() {New KeyEventArgs(Keys.Enter)})
+                    Application.DoEvents()
+                    Dim routes As DataGridView = Descendants(board).OfType(Of DataGridView)().Single()
+                    Assert.AreEqual(1, routes.Rows.Count, "Enter on a journal shows the routes that went through it.")
+                    Assert.AreEqual("Routed manuscript", CStr(routes.Rows(0).Cells("Title").Value))
+                    Assert.IsTrue(Descendants(board).OfType(Of LinkLabel)().Any(Function(link) link.Visible AndAlso link.Text.StartsWith("Showing manuscripts sent to Second Journal")))
+
+                    routes.CurrentCell = routes.Rows(0).Cells(0)
+                    GetType(Control).GetMethod("OnKeyDown", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(routes, New Object() {New KeyEventArgs(Keys.Enter)})
+                    Application.DoEvents()
+                    Assert.AreEqual("Manuscript", board.PageName, "Enter on a route opens the manuscript.")
+                    Assert.AreEqual(0, board.SaveCount, "Insights never save.")
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    ' The route map (#82): every route side by side on Insights, each one
+    ' opening its own route view.
+    <TestMethod>
+    Public Sub TheRouteMapLinesUpRoutesAndOpensTheChosenOne()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard()
+                    Dim published As Manuscript = RouteMapServiceTests.Anchoring()
+                    Dim routed As Manuscript = WithRoute()
+                    board.Prepare(published, routed, Sample("Unsubmitted idea"))
+                    Dim opened As New List(Of Manuscript)()
+                    board.routeViewOpener = Sub(item) opened.Add(item)
+
+                    board.PressCommandKey(Keys.Control Or Keys.D5)
+                    Descendants(board).OfType(Of ShelfTabButton)().Single(Function(item) item.Text = "Route Map").Checked = True
+                    Application.DoEvents()
+                    Dim chart As RouteMapChart = Descendants(board).OfType(Of RouteMapChart)().Single()
+                    CollectionAssert.AreEqual({published}, chart.Routes.Select(Function(item) item.Manuscript).ToList(), "Published routes by default.")
+                    Assert.IsTrue(Descendants(board).OfType(Of Label)().Any(Function(label) label.Text = "1 published route lined up at day 0. Median 264 days from first submission to publication."))
+                    Assert.IsTrue(Descendants(board).OfType(Of RouteMapLegend)().Single().AccessibleName.StartsWith("With a journal  ·  40%"), "105 of 264 days.")
+
+                    Dim toggle As LinkLabel = Descendants(board).OfType(Of LinkLabel)().Single(Function(link) link.Text = "Include work not yet published")
+                    GetType(LinkLabel).GetMethod("OnLinkClicked", BindingFlags.Instance Or BindingFlags.NonPublic).
+                        Invoke(toggle, New Object() {New LinkLabelLinkClickedEventArgs(toggle.Links(0))})
+                    Application.DoEvents()
+                    chart = Descendants(board).OfType(Of RouteMapChart)().Single()
+                    CollectionAssert.AreEquivalent({published, routed}, chart.Routes.Select(Function(item) item.Manuscript).ToList(), "Work in progress runs to today; an idea has no route.")
+                    Assert.IsTrue(chart.Routes.Single(Function(item) item.Manuscript Is routed).Map.Ongoing)
+
+                    chart.SelectedIndex = chart.Routes.FindIndex(Function(item) item.Manuscript Is routed)
+                    GetType(Control).GetMethod("OnKeyDown", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(chart, New Object() {New KeyEventArgs(Keys.Enter)})
+                    CollectionAssert.AreEqual({routed}, opened, "Enter opens the selected route.")
+                    Assert.AreEqual(0, board.SaveCount, "The route map never saves.")
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    <TestMethod>
+    Public Sub TheRouteViewOpensOnItsRouteDrawnToScale()
+        RunOnStaThread(
+            Sub()
+                Using view As New ManuscriptRouteViewForm(RouteMapServiceTests.Anchoring())
+                    ShowOffscreen(view)
+                    Dim bar As RouteMapBar = Descendants(view).OfType(Of RouteMapBar)().Single()
+                    Assert.AreEqual("Route drawn to scale. 264 days from first submission to publication: 105 days with the journals, 131 days with you, 28 days in production.", bar.AccessibleName)
+                    Assert.AreEqual(8, bar.Steps.Count)
+                    StringAssert.StartsWith(bar.AccessibleDescription, "1: Desk rejected, Jan 12, 7 days after submission")
+                    Assert.IsTrue(bar.Height > 0 AndAlso bar.Width > 0)
+                    Dim onScreen As Rectangle = view.RectangleToClient(bar.RectangleToScreen(bar.ClientRectangle))
+                    Assert.IsTrue(onScreen.Right <= view.ClientSize.Width, "The map fits the window's width.")
+                    view.Close()
+                End Using
+
+                Using view As New ManuscriptRouteViewForm(Sample("Unsubmitted idea"))
+                    ShowOffscreen(view)
+                    Assert.IsFalse(Descendants(view).OfType(Of RouteMapBar)().Any(), "No route map before a first submission.")
+                    view.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    <TestMethod>
+    Public Sub ReportsPreviewAndSaveWhatIsChosen()
+        RunOnStaThread(
+            Sub()
+                Dim path As String = IO.Path.Combine(IO.Path.GetTempPath(), "PaperRoute-Report-" & Guid.NewGuid().ToString("N") & ".html")
+                Try
+                    Dim pipeline As Manuscript = Sample("In the pipeline")
+                    Dim drawer As Manuscript = Sample("In the drawer")
+                    drawer.Location = ManuscriptLocation.FileDrawer
+                    Using dialog As New ReportForm("Pipeline Report", "report.html", New List(Of Manuscript) From {pipeline, drawer},
+                                                   Function(chosen, deadlines) ReportService.PipelineReport(chosen, DateTime.Today))
+                        dialog.SavePathPrompt = Function() path
+                        ShowOffscreen(dialog)
+                        CollectionAssert.AreEqual({pipeline}, dialog.Chosen, "Pipeline work is included by default; the File Drawer is not.")
+                        dialog.SaveReport(Nothing, EventArgs.Empty)
+                        Assert.AreEqual(path, dialog.SavedPath)
+                    End Using
+                    Dim saved As String = IO.File.ReadAllText(path)
+                    StringAssert.Contains(saved, "In the pipeline")
+                    Assert.IsFalse(saved.Contains("In the drawer"))
+                Finally
+                    If IO.File.Exists(path) Then IO.File.Delete(path)
+                End Try
+            End Sub)
+    End Sub
+
+    ' Work types and tags (#64): edited on the page, saved with it, shown on
+    ' the card, and found by board search.
+    <TestMethod>
+    Public Sub TypesAndTagsAreEditedOnThePageAndShownOnTheBoard()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard()
+                    Dim manuscript As Manuscript = Sample("Tagged manuscript")
+                    Dim other As Manuscript = Sample("Other manuscript")
+                    other.Tags.Add("grant")
+                    board.Prepare(manuscript, other)
+                    board.Open(manuscript)
+
+                    Dim type As ComboBox = Descendants(board.Editor).OfType(Of ComboBox)().Single(Function(box) box.AccessibleName = "Type of work")
+                    Assert.AreEqual("Not specified", type.Text, "No type is inferred.")
+                    type.SelectedIndex = CInt(WorkType.Poster)
+                    Dim tags As TagEditor = Descendants(board.Editor).OfType(Of TagEditor)().Single()
+                    CollectionAssert.Contains(tags.Input.AutoCompleteCustomSource.Cast(Of String)().ToList(), "grant", "Tags already in the library are suggested.")
+                    tags.Input.Text = "teaching"
+                    tags.Commit()
+                    tags.Input.Text = " Teaching "
+                    tags.Commit()
+                    Assert.AreEqual(1, Descendants(tags).OfType(Of TagChipButton)().Count(), "A tag is added once.")
+                    Assert.IsTrue(board.Editor.HasUnsavedChanges())
+                    Assert.AreEqual(WorkType.Unspecified, manuscript.WorkType, "Edits stay in the working copy until saved.")
+
+                    board.PressCommandKey(Keys.Control Or Keys.S)
+                    Assert.AreEqual(WorkType.Poster, manuscript.WorkType)
+                    CollectionAssert.AreEqual({"teaching"}, manuscript.Tags)
+                    Assert.AreEqual(1, board.SaveCount)
+
+                    board.PressCommandKey(Keys.Alt Or Keys.Left)
+                    Assert.AreEqual("Board", board.PageName)
+                    Dim strip As TagStrip = Descendants(board).OfType(Of TagStrip)().Single(Function(item) item.AccessibleName = "Tags: teaching")
+                    Assert.IsTrue(strip.Width > 0, "The card shows the tag on its journal line.")
+
+                    Dim search As TextBox = DirectCast(GetType(Form1).GetField("txtBoardSearch", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(board), TextBox)
+                    Dim matches = GetType(Form1).GetMethod("ManuscriptMatchesBoardFilters", BindingFlags.Instance Or BindingFlags.NonPublic)
+                    search.Text = "#teaching"
+                    Assert.IsTrue(CBool(matches.Invoke(board, New Object() {manuscript})))
+                    Assert.IsFalse(CBool(matches.Invoke(board, New Object() {other})))
+                    search.Text = "poster"
+                    Assert.IsTrue(CBool(matches.Invoke(board, New Object() {manuscript})), "The type is searchable too.")
+                    search.Text = String.Empty
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
 
     Private Shared Function DeadlineRows(board As PageBoard) As List(Of DeadlineRow)
         Return Descendants(board).OfType(Of DeadlineRow)().ToList()

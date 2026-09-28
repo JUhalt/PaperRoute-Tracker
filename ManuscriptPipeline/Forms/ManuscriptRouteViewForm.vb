@@ -300,7 +300,7 @@ Namespace Forms
                 .ColumnCount = 3,
                 .RowCount = Math.Max(
                     1,
-                    _route.Waypoints.Count
+                    _route.Waypoints.Count + 1
                 ),
                 .Margin = New Padding(0),
                 .BackColor = UiTheme.BoardBackground()
@@ -393,7 +393,35 @@ Namespace Forms
 
             End If
 
+            ' The route drawn to scale (#82), above the waypoints.
+            timeline.RowStyles.Add(
+                New RowStyle(
+                    SizeType.AutoSize
+                )
+            )
+
+            Dim mapCard As Control =
+                BuildRouteMapCard()
+
+            If mapCard IsNot Nothing Then
+
+                timeline.Controls.Add(
+                    mapCard,
+                    0,
+                    0
+                )
+
+                timeline.SetColumnSpan(
+                    mapCard,
+                    3
+                )
+
+            End If
+
             For index As Integer = 0 To _route.Waypoints.Count - 1
+
+                Dim row As Integer =
+                    index + 1
 
                 timeline.RowStyles.Add(
                     New RowStyle(
@@ -426,19 +454,19 @@ Namespace Forms
                 timeline.Controls.Add(
                     dateLabel,
                     0,
-                    index
+                    row
                 )
 
                 timeline.Controls.Add(
                     marker,
                     1,
-                    index
+                    row
                 )
 
                 timeline.Controls.Add(
                     card,
                     2,
-                    index
+                    row
                 )
 
             Next
@@ -450,6 +478,123 @@ Namespace Forms
             fitTimelineToViewport()
 
             Return scrollHost
+
+        End Function
+
+
+        ' The whole route to scale: who held it and for how long, with each
+        ' event numbered and explained. Nothing when no submission is
+        ' recorded yet.
+        Private Function BuildRouteMapCard() As Control
+
+            Dim map As RouteMap =
+                RouteMapService.Build(
+                    _manuscript,
+                    DateTime.Today
+                )
+
+            If map.IsEmpty Then
+                Return Nothing
+            End If
+
+            Dim section As New SectionCard With {
+                .Dock = DockStyle.Fill,
+                .AutoSize = True,
+                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                .Padding = New Padding(18, 14, 18, 16),
+                .Margin = New Padding(0, 0, 0, 16),
+                .BackColor = UiTheme.CardBackground(),
+                .AccessibleName = "Route map"
+            }
+
+            Dim card As New TableLayoutPanel With {
+                .Dock = DockStyle.Top,
+                .AutoSize = True,
+                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                .ColumnCount = 1,
+                .RowCount = 3,
+                .Padding = New Padding(0),
+                .Margin = New Padding(0),
+                .BackColor = UiTheme.CardBackground()
+            }
+
+            card.ColumnStyles.Add(
+                New ColumnStyle(
+                    SizeType.Percent,
+                    100
+                )
+            )
+
+            For index As Integer = 0 To 2
+                card.RowStyles.Add(
+                    New RowStyle(
+                        SizeType.AutoSize
+                    )
+                )
+            Next
+
+            Dim lblTitle As New Label With {
+                .UseMnemonic = False,
+                .AutoSize = True,
+                .Text =
+                    map.TotalDays.ToString(Globalization.CultureInfo.CurrentCulture) &
+                    " days from first submission to " &
+                    If(
+                        map.Ongoing,
+                        "today, and counting",
+                        If(
+                            map.Markers.Any(Function(item) item.Kind = RouteMarkerKind.Published),
+                            "publication",
+                            "the last decision"
+                        )
+                    ),
+                .Margin = New Padding(0),
+                .Font = New Font(
+                    Me.Font.FontFamily,
+                    11.5F,
+                    FontStyle.Bold
+                ),
+                .ForeColor = UiTheme.PrimaryText(),
+                .BackColor = UiTheme.CardBackground()
+            }
+
+            Dim legend As New RouteMapLegend With {
+                .Anchor = AnchorStyles.Left Or AnchorStyles.Right Or AnchorStyles.Top,
+                .Margin = New Padding(0, 8, 0, 0),
+                .BackColor = UiTheme.CardBackground(),
+                .Items = RouteMapStyle.DayTotals(map)
+            }
+
+            Dim bar As New RouteMapBar With {
+                .Anchor = AnchorStyles.Left Or AnchorStyles.Right Or AnchorStyles.Top,
+                .Margin = New Padding(0, 14, 0, 0),
+                .BackColor = UiTheme.CardBackground(),
+                .Map = map
+            }
+
+            card.Controls.Add(
+                lblTitle,
+                0,
+                0
+            )
+
+            card.Controls.Add(
+                legend,
+                0,
+                1
+            )
+
+            card.Controls.Add(
+                bar,
+                0,
+                2
+            )
+
+            section.Controls.Add(
+                card
+            )
+
+            Return section
 
         End Function
 

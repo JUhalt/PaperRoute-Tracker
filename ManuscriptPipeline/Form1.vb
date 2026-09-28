@@ -1748,7 +1748,9 @@ Public Class Form1
                     manuscript
                 ),
                 query
-            )
+            ) OrElse
+            If(manuscript.Tags, New List(Of String)()).Any(Function(tag) ContainsSearchText(tag, query.TrimStart("#"c))) OrElse
+            (manuscript.WorkType <> WorkType.Unspecified AndAlso ContainsSearchText(WorkTypeService.DisplayName(manuscript.WorkType), query))
 
             If Not matchesSearch Then
                 Return False
@@ -2179,7 +2181,7 @@ Public Class Form1
                 End If
                 Return True
 
-            ' Ctrl+1 to Ctrl+5 open the rail's pages in order.
+            ' Ctrl+1 to Ctrl+6 open the rail's pages in order.
             Case Keys.Control Or Keys.D1, Keys.Control Or Keys.NumPad1
                 NavigateTo(WorkspacePage.Board)
                 Return True
@@ -2193,6 +2195,9 @@ Public Class Form1
                 NavigateTo(WorkspacePage.Deadlines)
                 Return True
             Case Keys.Control Or Keys.D5, Keys.Control Or Keys.NumPad5
+                NavigateTo(WorkspacePage.Insights)
+                Return True
+            Case Keys.Control Or Keys.D6, Keys.Control Or Keys.NumPad6
                 NavigateTo(WorkspacePage.ImportExport)
                 Return True
 
@@ -2641,6 +2646,26 @@ Public Class Form1
         }
         If hasJournal Then cardToolTip.SetToolTip(lblJournal, manuscript.TargetJournal)
 
+        ' Tags share the journal line, right-aligned, so every card keeps the
+        ' same height. Clicking one searches the board for it.
+        Dim tagStrip As TagStrip = Nothing
+        If manuscript.Tags IsNot Nothing AndAlso manuscript.Tags.Count > 0 Then
+            tagStrip = New TagStrip With {
+                .Tags = manuscript.Tags.ToList(),
+                .Library = authorLibrary,
+                .Font = cardMetaFont,
+                .Top = journalTop,
+                .Height = metaLine + 2,
+                .BackColor = UiTheme.CardBackground(),
+                .Cursor = Cursors.Hand
+            }
+            cardToolTip.SetToolTip(tagStrip, String.Join(", ", manuscript.Tags) & " (click to search the board)")
+            AddHandler tagStrip.MouseClick,
+                Sub(sender, e)
+                    If e.Button = MouseButtons.Left Then txtBoardSearch.Text = manuscript.Tags(0)
+                End Sub
+        End If
+
         ' =================================================
         ' Route footer
         ' =================================================
@@ -2735,6 +2760,7 @@ Public Class Form1
         card.Controls.Add(stageBadge)
         If lblStatusLine IsNot Nothing Then card.Controls.Add(lblStatusLine)
         card.Controls.Add(lblJournal)
+        If tagStrip IsNot Nothing Then card.Controls.Add(tagStrip)
         card.Controls.Add(divider)
         card.Controls.Add(dots)
         card.Controls.Add(lblRouteSummary)
@@ -2752,7 +2778,7 @@ Public Class Form1
             child.ContextMenuStrip = cardMenu
             AddHandler child.MouseEnter, refreshHover
             AddHandler child.MouseLeave, refreshHover
-            If Not TypeOf child Is LinkLabel AndAlso Not TypeOf child Is ButtonBase Then
+            If Not TypeOf child Is LinkLabel AndAlso Not TypeOf child Is ButtonBase AndAlso Not TypeOf child Is TagStrip Then
                 AddHandler child.MouseClick, openOnLeftClick
             End If
         Next
@@ -2774,6 +2800,12 @@ Public Class Form1
 
                 lblTitle.Width = contentWidth
                 lblJournal.Width = contentWidth
+                If tagStrip IsNot Nothing Then
+                    ' Tags take at most half the line; the journal keeps the rest.
+                    tagStrip.Width = tagStrip.PreferredWidth(contentWidth \ 2)
+                    tagStrip.Left = right - tagStrip.Width
+                    lblJournal.Width = Math.Max(1, contentWidth - tagStrip.Width - If(tagStrip.Width > 0, UiTheme.Px(8, dpi), 0))
+                End If
                 divider.Width = contentWidth
 
                 lblRoute.Left = Math.Max(pad, right - routeLinkWidth)

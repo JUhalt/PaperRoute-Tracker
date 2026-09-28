@@ -554,6 +554,8 @@ Namespace Services
 
             End If
 
+            WorkTypeService.NormalizeTagColors(library)
+
             Dim authorIds As New HashSet(Of Guid)()
 
             For Each author As AuthorRecord In library.Authors

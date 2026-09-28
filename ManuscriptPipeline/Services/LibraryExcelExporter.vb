@@ -86,6 +86,14 @@ Namespace Services
                     manuscriptsSheet.Cell(manuscriptRow, 8).Value =
                         manuscript.FileDrawerReason
 
+                    If manuscript.WorkType <> WorkType.Unspecified Then
+                        manuscriptsSheet.Cell(manuscriptRow, 9).Value =
+                            WorkTypeService.DisplayName(manuscript.WorkType)
+                    End If
+
+                    manuscriptsSheet.Cell(manuscriptRow, 10).Value =
+                        String.Join("; ", If(manuscript.Tags, New List(Of String)()))
+
                     manuscriptRow += 1
 
                     ' =========================================

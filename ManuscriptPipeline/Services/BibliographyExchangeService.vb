@@ -252,6 +252,12 @@ Namespace Services
                 record.LooksPublished
 
             Dim manuscript As New Manuscript With {
+                .WorkType =
+                    If(
+                        record.SourceFormat = BibliographyFormat.BibTeX,
+                        WorkTypeService.FromBibTeX(record.SourceType),
+                        WorkTypeService.FromRis(record.SourceType)
+                    ),
                 .Title =
                     If(
                         String.IsNullOrWhiteSpace(record.Title),

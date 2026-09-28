@@ -1,4 +1,4 @@
-﻿# PaperRoute User Guide
+﻿﻿# PaperRoute User Guide
 
 PaperRoute is a local-first academic manuscript tracker for researchers. It is designed to keep the complete route of a paper understandable: idea, writing, submission, peer review, revision, publication, or the File Drawer.
 
@@ -52,7 +52,7 @@ The stage describes the manuscript's current lifecycle position. Submission hist
 
 ### Finding your way around
 
-PaperRoute opens in one window. The left rail lists its pages: **Board**, **Library**, **Journals**, **Deadlines**, and **Import & Export**, with **Settings** and **Help** at the bottom. Press **Ctrl+1** to **Ctrl+5** to open the pages in that order, **Alt+Left** and **Alt+Right** to go back and forward, and **F1** for this guide.
+PaperRoute opens in one window. The left rail lists its pages: **Board**, **Library**, **Journals**, **Deadlines**, **Insights**, and **Import & Export**, with **Settings** and **Help** at the bottom. Press **Ctrl+1** to **Ctrl+6** to open the pages in that order, **Alt+Left** and **Alt+Right** to go back and forward, and **F1** for this guide.
 
 For more room, choose the **«** button beside the PaperRoute name to collapse the rail to icons; hover over an icon to see its page, and choose **»** to expand the rail again. PaperRoute remembers your choice. Double-click the logo for **About PaperRoute**.
 
@@ -142,6 +142,15 @@ A version can be associated with the journal submission for which that exact fil
 **Current Version** means the manuscript snapshot you currently consider your active working version. This is different from **Current State**, which means the manuscript's lifecycle position such as Submitted, Revision, Accepted, or Draft.
 
 Use **View route →** from the main board to see the manuscript's deterministic publication history. The Route is read-only: double-clicking or opening a Route waypoint returns you to the authoritative record on the manuscript page rather than creating a second editing pathway. **View Route** in the page header opens the same view.
+
+Once a manuscript has a recorded submission, the Route opens on its **route map**: the whole route drawn to scale, from the first submission to publication (or to today, while it is under way). Each stretch is colored by who held it:
+
+- **With the journal** (teal): from a submission or resubmission to the journal's decision.
+- **With you** (amber): revising, from a revision request to the recorded return to review, and rerouting, from a rejection to the next submission.
+- **In production** (slate): from acceptance to the publication date.
+- **Not recorded** (hatched): time the record does not assign, such as a revision whose resubmission date was never entered. It is shown as such, never estimated. To split it, record the return to review in the manuscript's history.
+
+The journals are named above their stretches, and every event after the first submission is numbered on the route and explained underneath: "Desk rejected, Jan 12: 7 days after submission", "Resubmitted, Jun 10: after 69 days of revising". Totals across the top say how many days the route spent with journals, with you, and in production. The same map is useful for teaching: it shows at a glance how much of publishing is waiting and how much is work.
 
 Deleting a Version History record is also working-copy based. If the version owns an immutable PaperRoute Library snapshot, the snapshot is removed only when **Save** succeeds. Choosing **Discard** leaves the saved version history and managed snapshot intact. Deleting a linked-file version never deletes the original external file.
 
@@ -523,6 +532,43 @@ The Deadlines page is the authoritative view.
 
 ---
 
+## Work Types and Tags
+
+Every manuscript can have a **type** and any number of **tags**, on the **Type and tags** card of its Overview tab.
+
+- **Type** says what kind of work it is: journal article, preprint, conference paper, conference abstract, poster, book chapter, thesis or dissertation, or other. A new manuscript has no type until you choose one; PaperRoute never guesses. Imports set the type when the source says it (a BibTeX entry type, an RIS `TY` line, an ORCID work type, or a Crossref record), and Crossref never replaces a type you chose.
+- **Tags** are your own words, such as a grant, a lab project, or a student. Type a tag and press **Enter** (or a comma); tags already used in the library are suggested. Remove one with its **×**, or select it and press **Delete**. Right-click a tag to choose its color; otherwise its color comes from its name, so the same tag always looks the same.
+
+Tags appear on board cards beside the journal, and in the Library's **Type** and **Tags** columns. Search the board or filter the Library by a tag or type; clicking a card's tags searches the board for the first one. **Publication & CV Export** can **Group by type**, with sections such as Journal articles and Conference papers. The Excel workbook keeps both in its **WorkType** and **Tags** columns.
+
+Types and tags never change a manuscript's stage, shelf, or route.
+
+## Insights and Reports
+
+Open **Insights** in the left rail (Ctrl+5) to see how your work has moved through journals. Everything is calculated on this computer from your own PaperRoute records, each time you open the page. Nothing is sent anywhere, and nothing is changed.
+
+Across the top: how many manuscripts and submissions you have, the median time to a first decision, and the median time from first submission to acceptance. Each median says how many records it is based on.
+
+**Your Journals** lists every journal you have submitted to, with submissions, acceptances, requests to revise, rejections after review, desk rejections, the median days to a first decision, the median days in review (leaving out desk rejections), and when you last submitted. Press **Enter** or double-click a journal to see the manuscripts you sent there. A journal selected on the **Journals** page shows the same history in one line.
+
+**Your Routes** lists every manuscript that has been submitted: its route, how many journals and revision rounds it took, and the days from first submission to acceptance and to publication. Press **Enter** or double-click to open the manuscript.
+
+**Route Map** lines up every published route at day 0 on one scale, shortest first, colored as in a manuscript's route map. Above it: the median days from first submission to publication, and the share of all those days spent with a journal, with you (revising or rerouting), and in production. **Include work not yet published** adds manuscripts still under way (drawn to today, with a dotted end and a + on their day count) and filed ones (drawn to their last decision). Click a route, or select it with the arrow keys and press **Enter**, to open its route map. With a journal chosen on **Your Journals**, the map shows only the manuscripts sent there.
+
+How the numbers work:
+
+- Days are calendar days between dates recorded in PaperRoute. A first decision is the earliest decision recorded for a submission.
+- A missing or inconsistent date (a decision dated before its submission, for example) leaves that value out. Nothing is estimated.
+- On the route maps, time with you after a revision request ends at the next recorded Submitted or Under Review history entry. Without one, that stretch is drawn as not recorded.
+- Submissions count under a Journal Library record when they are linked to it or use exactly its name (ignoring capitals and spacing). A different spelling is shown on its own line rather than merged by guess.
+
+### Reports to share
+
+- **Pipeline Report...** on the Insights page makes a read-only summary for a supervisor, mentor, or coauthor: each chosen manuscript's title, stage, journal, route, time in stage, and next deadline. Choose the manuscripts (pipeline work is chosen by default), preview the report, and save it.
+- **Route Report...** in a manuscript page's **⋯** menu shows one manuscript's full route: every submission, its decisions and dates, and the durations between them, with the definitions used.
+
+Reports are saved as a single web page that opens in any browser, where you can print it or save it as PDF. They never include notes, correspondence, reviewer comments or responses, file paths, or contact details, and a reminder appears only as "Reminder", never by its title.
+
 ## Publication and CV Export
 
 Choose **Import & Export > Publication & CV Export...**.
@@ -866,8 +912,8 @@ PaperRoute ships a local copy of this guide. Open it with **Help** at the bottom
 
 The Route, Version History, readiness profiles, submission packets, reviewer responses, and Deadlines form one connected manuscript record. Later releases build on that record:
 
-- **v0.8 — Route Analytics & Reports:** your own history with each journal, route statistics from recorded dates, printable route and pipeline-status reports, and work types and tags.
-- **v0.9 — 1.0 Hardening:** guided onboarding, accessibility, consistency, recovery, and release certification.
+- **v0.9 — Journal Choice & Guidance:** a journal shortlist for each manuscript, an offline guide to choosing a journal, journal facts from open indexes, a teaching example library, and an optional AI assistant, with every online feature listed in one place and a switch to work offline.
+- **v0.9.1 — 1.0 Hardening:** guided onboarding, accessibility, consistency, recovery, and release certification.
 
 Planned releases are directional and may change; see the [roadmap](https://github.com/JUhalt/PaperRoute-Tracker/blob/master/ROADMAP.md).
 

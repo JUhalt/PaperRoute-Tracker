@@ -2,6 +2,31 @@
 
 All notable changes to PaperRoute Tracker will be documented here.
 
+## [Unreleased] — v0.8 Insights & Reports
+
+v0.8.0-rc.1 is available on the Preview channel. Development is tracked in [PR #80](https://github.com/JUhalt/PaperRoute-Tracker/pull/80) and the [v0.8 milestone](https://github.com/JUhalt/PaperRoute-Tracker/milestone/10); certification in [#85](https://github.com/JUhalt/PaperRoute-Tracker/issues/85).
+
+### Added
+
+- An **Insights** page (Ctrl+5) with route statistics from your own records ([#30](https://github.com/JUhalt/PaperRoute-Tracker/issues/30)): median time to a first decision and from first submission to acceptance, each with its sample size, and **Your Routes**: journals, revision rounds, and days to acceptance and publication for every submitted manuscript. Missing dates are left out, never estimated.
+- **Your Journals** ([#62](https://github.com/JUhalt/PaperRoute-Tracker/issues/62)): submissions, outcomes, and median days to a first decision and in review for each journal you have used, grouped by Journal Library record or exact name, never by guess. The Journals page shows the same history for the selected journal.
+- **Pipeline Report...** and **Route Report...** ([#63](https://github.com/JUhalt/PaperRoute-Tracker/issues/63), [#30](https://github.com/JUhalt/PaperRoute-Tracker/issues/30)): self-contained web pages to print or save as PDF, previewed before saving. They never include notes, correspondence, reviewer comments, file paths, or contact details.
+
+- **Route maps** ([#82](https://github.com/JUhalt/PaperRoute-Tracker/issues/82)): a manuscript's Route opens on its whole route drawn to scale, each stretch colored by who held it (the journal, you, or production), journals named above, and every event numbered and explained ("after 48 days of rerouting"). Insights gains **Route Map**, every published route lined up at day 0 with the median time to publication and the share spent waiting on journals versus revising; work not yet published can be included, drawn to today. Time the record does not assign is hatched as not recorded, never estimated.
+- **Work types and tags** ([#64](https://github.com/JUhalt/PaperRoute-Tracker/issues/64)): a type (journal article, preprint, conference paper or abstract, poster, book chapter, thesis, other) and your own colored tags on each manuscript's Overview. Tags show on board cards and in the Library, and both are searchable. Imports set the type when the source states it; nothing is inferred. CV export can group by type, and the Excel workbook keeps both.
+
+### Changed
+
+- Import & Export moves to **Ctrl+6**; Insights takes Ctrl+5.
+
+### Fixed
+
+- A second launch of PaperRoute brings the open window forward instead of opening another window on the same library, where a save in one could overwrite the other ([#77](https://github.com/JUhalt/PaperRoute-Tracker/issues/77)).
+
+### Storage
+
+- **Schema 8** adds work types, tags, and tag colors. As with Schema 7, the upgrade validates the library and changes only the schema marker; records start with no type and no tags.
+
 ## [0.7.0] - 2026-09-28
 
 PaperRoute v0.7.0 — **Deadline Center** — was released on September 28, 2026 from [PR #78](https://github.com/JUhalt/PaperRoute-Tracker/pull/78), after the v0.7.0-rc.1 Preview. Certification is recorded in [#79](https://github.com/JUhalt/PaperRoute-Tracker/issues/79). v0.7 upgrades the library to Schema 7.
