@@ -341,7 +341,7 @@ Public Class DashboardShelfLayoutTests
                     Application.DoEvents()
 
                     CollectionAssert.AreEqual(
-                        {"Board", "Library", "Journals", "Reminders", "Import & Export"},
+                        {"Board", "Library", "Journals", "Deadlines", "Import & Export"},
                         board.RailPages.Select(Function(page) page.Text).ToList())
                     Assert.AreEqual("Board", board.ActivePageName)
                     Assert.IsFalse(Descendants(board).OfType(Of Button)().Any(Function(button) button.Text.StartsWith("Data")),

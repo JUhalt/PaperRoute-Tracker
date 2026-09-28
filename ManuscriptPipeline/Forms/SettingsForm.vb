@@ -408,7 +408,7 @@ Namespace Forms
 
             Dim help As New Label With {
                 .Text =
-                    "Notifications are optional. The Reminders page remains available even if Windows suppresses notifications.",
+                    "Notifications are optional. The Deadlines page remains available even if Windows suppresses notifications.",
                 .AutoSize = True,
                 .UseMnemonic = False,
                 .MaximumSize = New Size(680, 0),

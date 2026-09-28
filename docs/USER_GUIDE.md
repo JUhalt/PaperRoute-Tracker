@@ -16,7 +16,7 @@ If you only read one section, read this one.
 6. Save each focused window, then choose **Save** in the manuscript page's **Unsaved changes** bar (or press **Ctrl+S**) to keep the complete workflow.
 7. When the journal responds, open that submission and record the **Editorial Decision**. Revision decisions can carry a revision deadline.
 8. Select that submission on the **Submissions** tab and open its **Reviewer Responses** tab to track individual comments, actions, and response drafts, then choose **Save** on the manuscript page. Keep original letters and revised files under the submission's correspondence.
-9. Open **Reminders** in the left rail to see revision deadlines, journal follow-ups, and custom reminders in one place.
+9. Open **Deadlines** in the left rail to see revision deadlines, journal follow-ups, your reminders, and unfinished submission preparation in one place.
 10. Use **Settings > Backup Library...** before major changes or moving PaperRoute to another computer.
 
 PaperRoute does not require an account for its core workflow, and the manuscript-tracking database is stored locally.
@@ -52,7 +52,7 @@ The stage describes the manuscript's current lifecycle position. Submission hist
 
 ### Finding your way around
 
-PaperRoute opens in one window. The left rail lists its pages: **Board**, **Library**, **Journals**, **Reminders**, and **Import & Export**, with **Settings** and **Help** at the bottom. Press **Ctrl+1** to **Ctrl+5** to open the pages in that order, **Alt+Left** and **Alt+Right** to go back and forward, and **F1** for this guide.
+PaperRoute opens in one window. The left rail lists its pages: **Board**, **Library**, **Journals**, **Deadlines**, and **Import & Export**, with **Settings** and **Help** at the bottom. Press **Ctrl+1** to **Ctrl+5** to open the pages in that order, **Alt+Left** and **Alt+Right** to go back and forward, and **F1** for this guide.
 
 For more room, choose the **«** button beside the PaperRoute name to collapse the rail to icons; hover over an icon to see its page, and choose **»** to expand the rail again. PaperRoute remembers your choice. Double-click the logo for **About PaperRoute**.
 
@@ -65,7 +65,8 @@ Earlier versions reached these places through menus. Every command is still avai
 | Data > Backup Library..., Restore Backup... | **Settings** in the rail, and the **Import & Export** page |
 | Data > Authors & Affiliations... | **Library** page, **Authors & Affiliations** |
 | Data > Journal Library... | **Journals** page |
-| Settings > Reminders & Calendar... | **Reminders** page |
+| Settings > Reminders & Calendar... | **Deadlines** page |
+| The **Reminders** page (v0.6) | **Deadlines** page |
 | Settings > Preferences..., Check for Updates..., Diagnostics..., About | **Settings** in the rail |
 | Settings > User Guide... and the Help button | **Help** in the rail, or **F1** |
 
@@ -360,7 +361,7 @@ Each submission can contain:
 - optional follow-up date; and
 - notes.
 
-The follow-up date appears on the **Reminders** page whenever it is explicitly set. PaperRoute treats it as a user-owned reminder, so recording an editorial decision does not silently remove it; clear or change the follow-up date when it is no longer useful.
+The follow-up date appears on the **Deadlines** page whenever it is explicitly set. PaperRoute treats it as a user-owned reminder, so recording an editorial decision does not silently remove it; clear or change the follow-up date when it is no longer useful.
 
 ### Reusing the Journal Library
 
@@ -439,43 +440,45 @@ Externally linked files remain references to their original paths. If those file
 
 ---
 
-## Reminders and Calendar
+## Deadlines
 
-Open **Reminders** in the left rail.
+Open **Deadlines** in the left rail, press **Ctrl+4**, or choose **View in Deadlines →** beside Needs Attention on the Board. The rail shows how many items are overdue or due today.
 
-PaperRoute combines three reminder sources:
+Deadlines lists everything that needs action, grouped by when:
 
-1. **Revision deadlines** recorded in the manuscript workflow.
-2. **Submission follow-up dates** explicitly recorded on journal submissions; these remain active until you clear or change them.
-3. **Custom reminders** that you create yourself.
+- **Overdue**, **Today**, **Next 7 days** (counted from today), and **Later** for dated items;
+- **No date** for work that is under way without a date, such as a revision whose decision records no deadline, or a submission packet whose checklist still has required items open;
+- **Done in the last 30 days**, folded away until you choose **Show**.
 
-The reminder list shows due date, status, type, manuscript, reminder title, and journal where relevant.
+Four kinds of item appear, each from the record that owns it:
 
-### Reminder status
+1. **Revisions**: the deadline on the latest editorial decision. A revision with reviewer comments shows how many are addressed.
+2. **Follow-ups**: follow-up dates recorded on journal submissions. They remain until you clear or change them; recording a decision does not remove them.
+3. **Reminders**: your own reminders.
+4. **Preparation**: a submission packet not yet linked to a submission whose readiness checklist has required items open.
 
-PaperRoute uses the local calendar date to classify reminders as:
+The counts across the top ignore the filters. Use the chips to show one kind, or type in the filter box to narrow by manuscript, journal, or title. Clicking the active chip shows everything again.
 
-- Overdue
-- Due today
-- Upcoming
+### Acting on an item
 
-The calculation is deterministic: the same stored dates and same "today" date produce the same status.
+Each row has its main action as a button and the rest under **⋯**. With a row selected, **Enter** runs its first action and **Up**/**Down** move between rows.
 
-### Custom reminders
+| Item | Actions |
+| --- | --- |
+| Revision | **Open** (lands on the submission's reviewer responses), **Postpone...**; without a deadline, **Set Deadline...** |
+| Follow-up | **Open** (lands on the submission), **Postpone...**, **Clear Follow-up...** |
+| Reminder | **Done**, **Postpone...**, **Edit Reminder...**, **Open Manuscript** |
+| Preparation | **Open Readiness** (the manuscript's Readiness & Packets tab) |
 
-Use **Add Reminder...** on the Reminders page to create a manuscript-specific reminder.
+**Postpone** offers tomorrow, one week, two weeks, or any date, and its button says exactly what will happen, for example **Postpone to Oct 4**. It changes the date on the record that owns the item (the editorial decision, the journal submission, or the reminder) and saves, so the manuscript page always shows the same date. Nothing is copied: Deadlines is a view of your records, not a second list to keep in sync.
 
-Custom reminders can be edited or marked complete from the same window.
-
-Revision and follow-up reminders come from their source records. To change one of those dates, edit the editorial decision or journal submission that owns it.
+**Add Reminder** creates a manuscript-specific reminder.
 
 ### Calendar export
 
-Choose **Export Calendar (.ics)...** to create a portable iCalendar file containing active PaperRoute reminders.
+Choose **Export Calendar...** to save the dated items as a portable iCalendar (`.ics`) file. Undated work has no calendar date and is left out.
 
-The `.ics` file can be imported into calendar software that supports iCalendar, including Outlook, Google Calendar, and Apple Calendar.
-
-Calendar export does not change manuscript or reminder data.
+The `.ics` file can be imported into calendar software that supports iCalendar, including Outlook, Google Calendar, and Apple Calendar. Export does not change your library.
 
 ### Windows notifications
 
@@ -492,9 +495,9 @@ Important limitations:
 - PaperRoute does not run a hidden cloud reminder service.
 - If PaperRoute is not running, it cannot perform its startup reminder check.
 - Windows may suppress or change how notification balloons are displayed.
-- A Windows notification failure never prevents PaperRoute from opening or using the Reminders page.
+- A Windows notification failure never prevents PaperRoute from opening or using the Deadlines page.
 
-The in-app reminder list is the authoritative reminder view.
+The Deadlines page is the authoritative view.
 
 ---
 
@@ -637,7 +640,7 @@ Use **Settings > Diagnostics...** when troubleshooting storage, environment, or 
 1. Choose **Add Manuscript**.
 2. Enter the title, or choose **Paste a Title Page...** (see below).
 3. Use Draft as the stage if active writing has begun.
-4. Optionally check **Remind me** and name a first deadline. It becomes an ordinary custom reminder on the **Reminders** page.
+4. Optionally check **Remind me** and name a first deadline. It becomes an ordinary reminder on the **Deadlines** page.
 5. Choose **Add Manuscript**, then open the manuscript to add or adjust structured authors and a target journal.
 
 ### Paste a title page
@@ -690,7 +693,7 @@ This records preparation only. Record the journal submission after it actually o
 Use either method:
 
 - Edit the journal submission and set a follow-up date; or
-- open **Reminders** and add a custom reminder.
+- open **Deadlines** and choose **Add Reminder**.
 
 An explicitly saved submission follow-up remains active until you clear or change it, even if an editorial decision is later recorded.
 
@@ -703,7 +706,7 @@ An explicitly saved submission follow-up remains active until you clear or chang
 5. Save.
 6. Confirm the manuscript is in the Revision stage.
 
-The deadline will then appear on the Reminders page and in the Needs Attention workflow as appropriate.
+The deadline will then appear on the Deadlines page and in the Needs Attention workflow as appropriate.
 
 ## How do I record reviewer comments and my response?
 
@@ -821,7 +824,7 @@ https://example.org/path
 
 ### A reminder notification did not appear
 
-Open **Reminders** first. If the reminder is present there, the stored reminder data is working.
+Open **Deadlines** first. If the reminder is present there, the stored reminder data is working.
 
 Then check:
 
@@ -841,7 +844,7 @@ PaperRoute ships a local copy of this guide. Open it with **Help** at the bottom
 
 The Route, Version History, readiness profiles, submission packets, and reviewer responses form one connected manuscript record. Later releases build on that record:
 
-- **v0.6 — Workspace UI:** one main window with pages for the Board, Library, Journals, Reminders, and Import & Export; each manuscript opens as a tabbed page with a single Save / Discard step; a calmer card-based design; and faster Add Manuscript from a pasted title page.
+- **v0.6 — Workspace UI:** one main window with pages for the Board, Library, Journals, Reminders (now Deadlines), and Import & Export; each manuscript opens as a tabbed page with a single Save / Discard step; a calmer card-based design; and faster Add Manuscript from a pasted title page.
 - **v0.7 — Deadline Center:** richer action and deadline management, plus user-initiated checks for publications and missing metadata.
 - **v0.8 — Route Analytics & Reports:** timing analytics, your history with each journal, printable route and pipeline-status reports, and work types and tags.
 - **v0.9 — 1.0 Hardening:** guided onboarding, accessibility, consistency, recovery, and release certification.

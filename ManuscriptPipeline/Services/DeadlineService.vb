@@ -56,6 +56,22 @@ Namespace Services
         End Function
 
 
+        ' Overdue and due today: the rail badge. Undated work never counts.
+        Public Shared Function CountDueNow(
+            manuscripts As IEnumerable(Of Manuscript),
+            asOfDate As DateTime
+        ) As Integer
+
+            If manuscripts Is Nothing Then
+                Throw New ArgumentNullException(NameOf(manuscripts))
+            End If
+
+            Return ReminderService.BuildOccurrences(manuscripts.Where(Function(item) item IsNot Nothing).ToList(), asOfDate.Date).
+                Where(Function(occurrence) occurrence.DueDate.Date <= asOfDate.Date).Count()
+
+        End Function
+
+
         Public Shared Function GroupFor(dueDate As DateTime, asOfDate As DateTime) As DeadlineGroup
 
             Dim days As Integer = (dueDate.Date - asOfDate.Date).Days
@@ -228,6 +244,92 @@ Namespace Services
             Next
 
         End Sub
+
+
+        ' Postpone, Set deadline, and Clear change the date on the record that
+        ' owns the item, so Deadlines and the manuscript page always agree.
+        ' Returns the previous date so a failed save can put it back.
+        Public Shared Function SetDate(manuscript As Manuscript, item As DeadlineItem, newDate As DateTime?) As DateTime?
+
+            If manuscript Is Nothing Then Throw New ArgumentNullException(NameOf(manuscript))
+            If item Is Nothing Then Throw New ArgumentNullException(NameOf(item))
+
+            Dim value As DateTime? = If(newDate.HasValue, newDate.Value.Date, CType(Nothing, DateTime?))
+            Dim previous As DateTime?
+
+            Select Case item.Kind
+
+                Case DeadlineKind.FollowUp
+                    Dim submission As JournalSubmission = FindSubmission(manuscript, item.SubmissionId)
+                    If submission Is Nothing Then Throw New InvalidOperationException("The submission for this follow-up no longer exists.")
+                    previous = submission.FollowUpDate
+                    submission.FollowUpDate = value
+
+                Case DeadlineKind.Revision
+                    ' The deadline lives on the decision, unless an older record
+                    ' keeps it on the manuscript.
+                    Dim decision As EditorialDecisionEvent = FindDecision(manuscript, item.DecisionId)
+                    If decision IsNot Nothing AndAlso (decision.RevisionDeadline.HasValue OrElse Not manuscript.RevisionDeadline.HasValue) Then
+                        previous = decision.RevisionDeadline
+                        decision.RevisionDeadline = value
+                    Else
+                        previous = manuscript.RevisionDeadline
+                        manuscript.RevisionDeadline = value
+                    End If
+
+                Case DeadlineKind.Reminder
+                    Dim reminder As ManuscriptReminder = FindReminder(manuscript, item.ReminderId)
+                    If reminder Is Nothing Then Throw New InvalidOperationException("This reminder no longer exists.")
+                    If Not value.HasValue Then Throw New ArgumentException("A reminder always has a date.", NameOf(newDate))
+                    previous = reminder.DueDate
+                    reminder.DueDate = value.Value
+
+                Case Else
+                    Throw New InvalidOperationException("This item has no date to change.")
+
+            End Select
+
+            Return previous
+
+        End Function
+
+
+        ' Done applies to your own reminders. Returns the reminder so a failed
+        ' save can reopen it.
+        Public Shared Function Complete(manuscript As Manuscript, item As DeadlineItem, asOfDate As DateTime) As ManuscriptReminder
+
+            If manuscript Is Nothing Then Throw New ArgumentNullException(NameOf(manuscript))
+            If item Is Nothing OrElse item.Kind <> DeadlineKind.Reminder Then Throw New InvalidOperationException("Only reminders are marked done.")
+
+            Dim reminder As ManuscriptReminder = FindReminder(manuscript, item.ReminderId)
+            If reminder Is Nothing Then Throw New InvalidOperationException("This reminder no longer exists.")
+
+            reminder.IsCompleted = True
+            reminder.CompletedDate = asOfDate.Date
+            Return reminder
+
+        End Function
+
+
+        Private Shared Function FindSubmission(manuscript As Manuscript, submissionId As Guid?) As JournalSubmission
+            If Not submissionId.HasValue OrElse manuscript.Submissions Is Nothing Then Return Nothing
+            Return manuscript.Submissions.FirstOrDefault(Function(candidate) candidate IsNot Nothing AndAlso candidate.Id = submissionId.Value)
+        End Function
+
+
+        Private Shared Function FindDecision(manuscript As Manuscript, decisionId As Guid?) As EditorialDecisionEvent
+            If Not decisionId.HasValue OrElse manuscript.Submissions Is Nothing Then Return Nothing
+            Return manuscript.Submissions.
+                Where(Function(candidate) candidate IsNot Nothing AndAlso candidate.Decisions IsNot Nothing).
+                SelectMany(Function(candidate) candidate.Decisions).
+                FirstOrDefault(Function(candidate) candidate IsNot Nothing AndAlso candidate.Id = decisionId.Value)
+        End Function
+
+
+        Private Shared Function FindReminder(manuscript As Manuscript, reminderId As Guid?) As ManuscriptReminder
+            If Not reminderId.HasValue OrElse manuscript.Reminders Is Nothing Then Return Nothing
+            Return manuscript.Reminders.FirstOrDefault(Function(candidate) candidate IsNot Nothing AndAlso candidate.Id = reminderId.Value)
+        End Function
 
 
         ' Addressed and not-applicable comments count as done.

@@ -89,7 +89,7 @@ Partial Public Class Form1
         Select Case page
             Case WorkspacePage.Library : Return "Library"
             Case WorkspacePage.Journals : Return "Journals"
-            Case WorkspacePage.Reminders : Return "Reminders"
+            Case WorkspacePage.Deadlines : Return "Deadlines"
             Case WorkspacePage.ImportExport : Return "Import & Export"
             Case Else : Return "Board"
         End Select

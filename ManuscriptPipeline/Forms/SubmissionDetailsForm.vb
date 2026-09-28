@@ -28,6 +28,20 @@ Namespace Forms
         ' Raised after a decision, correspondence, or reviewer-response change.
         Friend Event Changed As EventHandler
 
+
+        ' Brings the inline Reviewer Responses tab forward, for a revision
+        ' deadline opened from the Deadlines page.
+        Friend Sub ShowReviewerResponses()
+
+            Dim page = TryCast(_responsesMatrix?.Parent, TabPage)
+            Dim tabs = TryCast(page?.Parent, TabControl)
+
+            If tabs IsNot Nothing Then
+                tabs.SelectedTab = page
+            End If
+
+        End Sub
+
         ' Raised inline instead of closing when another workflow window is requested.
         Friend Event NavigationRequested(request As SubmissionWorkflowRequest)
         Public ReadOnly Property RequestedNavigation As SubmissionWorkflowRequest

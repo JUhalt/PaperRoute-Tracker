@@ -162,6 +162,74 @@ Public Class DeadlineServiceTests
             DeadlineService.Build(library, Today).Select(Function(item) item.Group).ToList())
     End Sub
 
+    <TestMethod>
+    Public Sub PostponeChangesTheRecordThatOwnsTheDate()
+        Dim dated As Manuscript = Revision("Anchoring replication", Today.AddDays(2))
+        Dim datedItem As DeadlineItem = DeadlineService.Build({dated}, Today).Single()
+        Assert.AreEqual(Today.AddDays(2), DeadlineService.SetDate(dated, datedItem, Today.AddDays(9).AddHours(15)).Value, "The previous date comes back for undo.")
+        Assert.AreEqual(Today.AddDays(9), dated.Submissions.Single().Decisions.Single().RevisionDeadline.Value, "Revision deadlines live on the decision, as dates.")
+        Assert.IsFalse(dated.RevisionDeadline.HasValue)
+
+        Dim undated As Manuscript = Revision("Sleep and emotion", Nothing)
+        Dim setDeadline As DeadlineItem = DeadlineService.Build({undated}, Today).Single()
+        Assert.IsFalse(DeadlineService.SetDate(undated, setDeadline, Today.AddDays(14)).HasValue)
+        Assert.AreEqual(Today.AddDays(14), undated.Submissions.Single().Decisions.Single().RevisionDeadline.Value, "Set deadline writes the latest decision.")
+        Assert.AreEqual(DeadlineGroup.Later, DeadlineService.Build({undated}, Today).Single().Group, "The item now has its date.")
+
+        ' An older record keeps the deadline on the manuscript itself.
+        Dim legacy As Manuscript = Revision("Older record", Nothing)
+        legacy.RevisionDeadline = Today.AddDays(-1)
+        Dim legacyItem As DeadlineItem = DeadlineService.Build({legacy}, Today).Single()
+        DeadlineService.SetDate(legacy, legacyItem, Today.AddDays(6))
+        Assert.AreEqual(Today.AddDays(6), legacy.RevisionDeadline.Value)
+        Assert.IsFalse(legacy.Submissions.Single().Decisions.Single().RevisionDeadline.HasValue)
+
+        Dim waiting As New Manuscript With {.Title = "Grit scale", .CurrentStage = PaperStage.Submitted}
+        Dim submission As New JournalSubmission With {.JournalName = "Assessment", .FollowUpDate = Today.AddDays(-3)}
+        waiting.Submissions.Add(submission)
+        Dim reminder As New ManuscriptReminder With {.Title = "Send draft", .DueDate = Today}
+        waiting.Reminders.Add(reminder)
+        Dim items As List(Of DeadlineItem) = DeadlineService.Build({waiting}, Today)
+
+        DeadlineService.SetDate(waiting, items.Single(Function(item) item.Kind = DeadlineKind.FollowUp), Today.AddDays(7))
+        Assert.AreEqual(Today.AddDays(7), submission.FollowUpDate.Value)
+        DeadlineService.SetDate(waiting, items.Single(Function(item) item.Kind = DeadlineKind.FollowUp), Nothing)
+        Assert.IsFalse(submission.FollowUpDate.HasValue, "Clear removes only the follow-up date.")
+        Assert.AreEqual(1, waiting.Submissions.Count)
+
+        DeadlineService.SetDate(waiting, items.Single(Function(item) item.Kind = DeadlineKind.Reminder), Today.AddDays(1))
+        Assert.AreEqual(Today.AddDays(1), reminder.DueDate)
+        Assert.ThrowsExactly(Of ArgumentException)(
+            Sub() DeadlineService.SetDate(waiting, items.Single(Function(item) item.Kind = DeadlineKind.Reminder), Nothing))
+    End Sub
+
+    <TestMethod>
+    Public Sub DoneCompletesOnlyReminders()
+        Dim manuscript As New Manuscript With {.Title = "Registered report"}
+        Dim reminder As New ManuscriptReminder With {.Title = "Upload preregistration", .DueDate = Today.AddDays(-1)}
+        manuscript.Reminders.Add(reminder)
+        Dim item As DeadlineItem = DeadlineService.Build({manuscript}, Today).Single()
+
+        Assert.AreSame(reminder, DeadlineService.Complete(manuscript, item, Today.AddHours(10)))
+        Assert.IsTrue(reminder.IsCompleted)
+        Assert.AreEqual(Today, reminder.CompletedDate.Value)
+        Assert.AreEqual(DeadlineGroup.Done, DeadlineService.Build({manuscript}, Today).Single().Group)
+
+        Dim revisionItem As DeadlineItem = DeadlineService.Build({Revision("Anchoring replication", Today)}, Today).Single()
+        Assert.ThrowsExactly(Of InvalidOperationException)(Sub() DeadlineService.Complete(manuscript, revisionItem, Today))
+    End Sub
+
+    <TestMethod>
+    Public Sub TheRailCountsOnlyWhatIsDueNow()
+        Dim library As New List(Of Manuscript) From {
+            Revision("Overdue", Today.AddDays(-2)),
+            Revision("Today", Today),
+            Revision("Soon", Today.AddDays(1)),
+            Revision("Undated", Nothing)
+        }
+        Assert.AreEqual(2, DeadlineService.CountDueNow(library, Today))
+    End Sub
+
     Private Shared Function Revision(title As String, deadline As DateTime?) As Manuscript
         Dim manuscript As New Manuscript With {.Title = title, .CurrentStage = PaperStage.Revision, .Location = ManuscriptLocation.Pipeline}
         Dim submission As New JournalSubmission With {.JournalName = "Collabra: Psychology", .SubmittedDate = Today.AddDays(-60)}

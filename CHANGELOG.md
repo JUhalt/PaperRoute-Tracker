@@ -8,7 +8,9 @@ Development is tracked in [draft PR #78](https://github.com/JUhalt/PaperRoute-Tr
 
 ### Added
 
-- The groundwork for the **Deadlines** page ([#28](https://github.com/JUhalt/PaperRoute-Tracker/issues/28)): one list of what needs action, grouped as Overdue, Today, Next 7 days, Later, No date, and Done. Dated items still come from the existing reminders. Revisions carry progress from the reviewer comments on their decision. Work without a date stays visible: a revision with no deadline, and an unsubmitted packet whose checklist has required items open. Building the list never changes the library.
+- The **Deadlines** page replaces Reminders ([#28](https://github.com/JUhalt/PaperRoute-Tracker/issues/28)): one list of what needs action, grouped as Overdue, Today, Next 7 days, Later, No date, and Done (folded away). Counts across the top; chips for Revisions, Follow-ups, Reminders, and Preparation; and a filter box. Revisions show progress from the reviewer comments on their decision. Work without a date stays visible: a revision with no deadline, and an unsubmitted packet whose checklist has required items open.
+- Each row acts on the record that owns it: **Open** lands on the submission (at its reviewer responses for a revision), **Postpone...** offers tomorrow, a week, two weeks, or any date, **Done** completes a reminder, **Clear Follow-up...** removes only the follow-up date, and **Open Readiness** opens Readiness & Packets. Enter runs a row's first action. Nothing is copied, so Deadlines and the manuscript page always agree.
+- The rail's Deadlines badge counts what is overdue or due today, and **View in Deadlines →** sits beside Needs Attention on the Board. **Ctrl+4** opens Deadlines.
 
 ### Fixed
 

@@ -363,6 +363,22 @@ Public Class Form1
         attentionBar.Controls.Add(lblMissingJournal)
         attentionBar.Controls.Add(lblRecentRejections)
 
+        ' The chips filter the board; the dates themselves live on Deadlines.
+        Dim lnkDeadlines As New LinkLabel With {
+            .Text = "View in Deadlines →",
+            .AutoSize = True,
+            .UseMnemonic = False,
+            .LinkBehavior = LinkBehavior.HoverUnderline,
+            .LinkColor = UiTheme.AccentColor(),
+            .ActiveLinkColor = UiTheme.AccentSecondaryColor(),
+            .VisitedLinkColor = UiTheme.AccentColor(),
+            .Margin = New Padding(UiTheme.Px(4, DeviceDpi), 5, 0, 0),
+            .AccessibleName = "View in Deadlines",
+            .AccessibleDescription = "Opens the Deadlines page (Ctrl+4)."
+        }
+        AddHandler lnkDeadlines.LinkClicked, Sub(sender, e) NavigateTo(WorkspacePage.Deadlines)
+        attentionBar.Controls.Add(lnkDeadlines)
+
         body.Controls.Add(attentionBar, 0, 1)
 
         ' Shelf tabs with the stage filter and sort beside them.
@@ -2174,7 +2190,7 @@ Public Class Form1
                 NavigateTo(WorkspacePage.Journals)
                 Return True
             Case Keys.Control Or Keys.D4, Keys.Control Or Keys.NumPad4
-                NavigateTo(WorkspacePage.Reminders)
+                NavigateTo(WorkspacePage.Deadlines)
                 Return True
             Case Keys.Control Or Keys.D5, Keys.Control Or Keys.NumPad5
                 NavigateTo(WorkspacePage.ImportExport)
