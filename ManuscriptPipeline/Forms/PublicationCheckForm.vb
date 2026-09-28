@@ -197,7 +197,9 @@ Namespace Forms
 
             If _eligible.Count = 0 Then
                 lstManuscripts.Enabled = False
-                lblSelected.Text = "Every manuscript is already on the Published shelf."
+                lblSelected.Text = If(_library.Count = 0,
+                                      "Add a manuscript first; there is nothing to check yet.",
+                                      "Every manuscript is already on the Published shelf.")
             End If
 
             UpdateSelection()

@@ -52,8 +52,8 @@ Targets are directional rather than promises. Data integrity, migrations, backup
 | **v0.4** | Submission Readiness ✅ | What exactly am I preparing and sending to this journal? |
 | **v0.5** | Reviewer Response Workflow ✅ | What did the journal ask me to change, and how am I responding? |
 | **v0.6** | Workspace UI ✅ | Can I find and act on everything from one calm, uncluttered workspace? |
-| **v0.7** | **Deadline Center — active** | What requires action, and when? |
-| **v0.8** | Route Analytics & Reports | What does this publication journey show me—and how can I communicate it? |
+| **v0.7** | Deadline Center ✅ | What requires action, and when? |
+| **v0.8** | **Route Analytics & Reports — next** | What does this publication journey show me—and how can I communicate it? |
 | **v0.9** | 1.0 Hardening | Is the entire workflow polished, resilient, and certifiable? |
 | **v1.0** | Trusted Research Workflow | Would I trust this with my real publication pipeline? |
 
@@ -275,7 +275,7 @@ PaperRoute v0.6.0 was released on September 27, 2026 from [PR #75](https://githu
 
 ---
 
-# ACTIVE — v0.7 Deadline Center
+## COMPLETE — v0.7 Deadline Center
 
 Milestone: **[v0.7.0 — Deadline Center](https://github.com/JUhalt/PaperRoute-Tracker/milestone/9)**
 
@@ -299,7 +299,7 @@ Planned slices, tracked in the v0.7 integration PR:
 4. **Carry-over:** [#76](https://github.com/JUhalt/PaperRoute-Tracker/issues/76).
 5. **Certification and release.** Preview, then Stable, using the v0.6 procedure: in-app updater only, an unlocked host for VM checks, and snapshots before each VM step.
 
-Slices 1–4 are complete in [PR #78](https://github.com/JUhalt/PaperRoute-Tracker/pull/78). v0.7.0-rc.1 is the Preview candidate; certification is tracked in the v0.7 release-certification issue.
+PaperRoute v0.7.0 was released on September 28, 2026 from [PR #78](https://github.com/JUhalt/PaperRoute-Tracker/pull/78), after the v0.7.0-rc.1 Preview. It moved the library to Schema 7 with a marker-only upgrade. Certification (published-asset verification, an installed v0.6.0 upgraded through the live Preview updater with byte-identical data files, clean installation, and the live Stable updater) is recorded in [#79](https://github.com/JUhalt/PaperRoute-Tracker/issues/79).
 
 ---
 
