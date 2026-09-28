@@ -30,6 +30,8 @@ Namespace Models
 
         Public Property ReminderId As Guid? = Nothing
 
+        Public Property PublicationMatchId As Guid? = Nothing
+
         ' Progress, when the item has parts: reviewer comments for a revision
         ' (addressed or not applicable count as done) or required checklist
         ' items for a packet. A total of zero means no progress is shown.

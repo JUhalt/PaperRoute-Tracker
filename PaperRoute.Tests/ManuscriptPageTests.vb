@@ -4,6 +4,7 @@ Imports System.Linq
 Imports System.Reflection
 Imports System.Runtime.ExceptionServices
 Imports System.Threading
+Imports System.Threading.Tasks
 Imports System.Windows.Forms
 Imports ManuscriptPipeline
 Imports ManuscriptPipeline.Controls
@@ -538,6 +539,118 @@ Public Class ManuscriptPageTests
                 End Using
             End Sub)
     End Sub
+
+    ' Possible publications (#61) wait on Deadlines until Mark Published or
+    ' Ignore; each choice is saved.
+    <TestMethod>
+    Public Sub PossiblePublicationsAreReviewedOnDeadlines()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard()
+                    Dim first As Manuscript = Sample("Anchoring effects in clinical risk estimates")
+                    first.CurrentStage = PaperStage.UnderReview
+                    first.PublicationMatches.Add(New PublicationMatch With {.Doi = "10.5555/anchoring", .Journal = "Collabra: Psychology", .PublishedDate = DateTime.Today.AddDays(-3)})
+                    Dim second As Manuscript = Sample("Grit across four countries")
+                    second.CurrentStage = PaperStage.Submitted
+                    second.PublicationMatches.Add(New PublicationMatch With {.Doi = "10.5555/grit", .Journal = "Assessment"})
+                    board.Prepare(first, second)
+                    board.markPublishedPrompt = Function(manuscript, match) True
+
+                    board.PressCommandKey(Keys.Control Or Keys.D4)
+                    Dim chip As FilterChip = Descendants(board).OfType(Of FilterChip)().Single(Function(candidate) candidate.Text.StartsWith("Publications"))
+                    Assert.AreEqual("Publications  2", chip.Text)
+                    Assert.IsTrue(chip.Visible)
+                    Dim row As DeadlineRow = DeadlineRows(board).First(Function(candidate) candidate.Item.ManuscriptId = first.Id)
+                    Assert.AreEqual("May have been published in Collabra: Psychology", row.Item.Title)
+                    CollectionAssert.AreEqual({"Review Match", "Mark Published...", "Ignore Match", "Open Manuscript"}, row.ActionTexts.ToList())
+
+                    row.RunAction("Mark Published...")
+                    Application.DoEvents()
+                    Assert.AreEqual(PaperStage.Published, board.Library(0).CurrentStage)
+                    Assert.AreEqual(ManuscriptLocation.Published, board.Library(0).Location)
+                    Assert.AreEqual("10.5555/anchoring", board.Library(0).Metadata.Doi)
+                    Assert.AreEqual(1, board.SaveCount)
+
+                    DeadlineRows(board).Single(Function(candidate) candidate.Item.Kind = DeadlineKind.Publication).RunAction("Ignore Match")
+                    Application.DoEvents()
+                    Assert.AreEqual(PublicationMatchStatus.Ignored, second.PublicationMatches.Single().Status)
+                    Assert.AreEqual(PaperStage.Submitted, second.CurrentStage, "Ignore changes nothing else.")
+                    Assert.AreEqual(2, board.SaveCount)
+                    Assert.IsFalse(Descendants(board).OfType(Of FilterChip)().Single(Function(candidate) candidate.Text.StartsWith("Publications")).Visible,
+                        "The Publications chip appears only while there is something to review.")
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    <TestMethod>
+    Public Sub PublicationCheckFindsKeepsAndMarksPublished()
+        RunOnStaThread(
+            Sub()
+                Dim tracked As Manuscript = Sample("Measurement invariance of a short grit scale across four countries")
+                tracked.CurrentStage = PaperStage.UnderReview
+                tracked.Submissions.Add(New JournalSubmission With {.JournalName = "Assessment", .SubmittedDate = DateTime.Today.AddDays(-120)})
+                Dim idea As Manuscript = Sample("An idea that has not been submitted anywhere yet")
+                Dim library As New List(Of Manuscript) From {tracked, idea}
+                Dim saves As Integer = 0
+                Dim source As New OneTitleSource(tracked.Title, New CrossrefMetadataSuggestion With {
+                    .Doi = "10.5555/grit", .Title = tracked.Title, .Journal = "Assessment", .WorkType = "journal-article", .PublishedDate = DateTime.Today.AddDays(-2)})
+
+                Using dialog As New PublicationCheckForm(library, Nothing, String.Empty, source, Function()
+                                                                                                   saves += 1
+                                                                                                   Return True
+                                                                                               End Function, DateTime.Today)
+                    dialog.Pause = TimeSpan.Zero
+                    dialog.ConfirmMarkPublished = Function(manuscript, match) True
+                    ShowOffscreen(dialog)
+                    CollectionAssert.AreEqual({tracked}, dialog.SelectedManuscripts, "Work that has gone to a journal is checked by default.")
+
+                    Dim check As Task = dialog.CheckAsync()
+                    While Not check.IsCompleted
+                        Application.DoEvents()
+                    End While
+                    check.GetAwaiter().GetResult()
+
+                    Assert.AreEqual(PublicationMatchStatus.Pending, tracked.PublicationMatches.Single().Status, "A found match is kept for later review.")
+                    Assert.AreEqual(1, saves)
+                    Assert.AreEqual(PaperStage.UnderReview, tracked.CurrentStage, "Finding a match changes nothing else.")
+                    Assert.IsTrue(Descendants(dialog).OfType(Of Label)().Any(Function(label) label.Text = "A publication matching this manuscript may have appeared."))
+
+                    Descendants(dialog).OfType(Of Button)().Single(Function(button) button.Text = "Mark Published...").PerformClick()
+                    Application.DoEvents()
+                    Assert.AreEqual(PaperStage.Published, tracked.CurrentStage)
+                    Assert.AreEqual(2, saves)
+                    Assert.IsTrue(dialog.Changed)
+                    Assert.IsTrue(Descendants(dialog).OfType(Of Label)().Any(Function(label) label.Text.StartsWith("Marked published.") AndAlso label.Visible))
+                    dialog.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    Private NotInheritable Class OneTitleSource
+        Implements IPublicationSource
+
+        Private ReadOnly _title As String
+        Private ReadOnly _work As CrossrefMetadataSuggestion
+
+        Public Sub New(title As String, work As CrossrefMetadataSuggestion)
+            _title = title
+            _work = work
+        End Sub
+
+        Public Function LookupDoiAsync(doi As String, cancellationToken As Threading.CancellationToken) As Task(Of CrossrefMetadataSuggestion) Implements IPublicationSource.LookupDoiAsync
+            Return Task.FromResult(Of CrossrefMetadataSuggestion)(Nothing)
+        End Function
+
+        Public Function SearchTitleAsync(title As String, cancellationToken As Threading.CancellationToken) As Task(Of List(Of CrossrefMetadataSuggestion)) Implements IPublicationSource.SearchTitleAsync
+            Return Task.FromResult(If(title = _title, New List(Of CrossrefMetadataSuggestion) From {_work}, New List(Of CrossrefMetadataSuggestion)()))
+        End Function
+
+        Public Function OrcidWorksAsync(orcid As String, cancellationToken As Threading.CancellationToken) As Task(Of List(Of OrcidWorkSuggestion)) Implements IPublicationSource.OrcidWorksAsync
+            Return Task.FromResult(New List(Of OrcidWorkSuggestion)())
+        End Function
+    End Class
 
     Private Shared Function DeadlineRows(board As PageBoard) As List(Of DeadlineRow)
         Return Descendants(board).OfType(Of DeadlineRow)().ToList()

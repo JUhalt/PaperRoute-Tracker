@@ -64,6 +64,10 @@ Namespace Models
         Public Property Submissions As List(Of JournalSubmission) =
             New List(Of JournalSubmission)()
 
+        ' Possible publications found by a publication check (Schema 7).
+        Public Property PublicationMatches As List(Of PublicationMatch) =
+            New List(Of PublicationMatch)()
+
 
         Public ReadOnly Property SubmissionCount As Integer
             Get

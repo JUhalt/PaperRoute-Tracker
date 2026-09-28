@@ -137,6 +137,11 @@ internal static class BoardDemo
         submitted.Submissions.Single().FollowUpDate = today.AddDays(24);
         var underReview = manuscripts[2];
         underReview.Submissions.Last().FollowUpDate = today.AddDays(-4);
+        underReview.PublicationMatches.Add(new PublicationMatch
+        {
+            Doi = "10.5555/demo.attention", Title = "Attention capture by salient distractors under working-memory load",
+            Journal = "Fictional Journal of Perception & Performance", PublishedDate = today.AddDays(-2), Source = PublicationMatchSource.Title
+        });
         var draft = manuscripts[4];
         draft.Reminders.Add(new ManuscriptReminder { Title = "Send the revised draft to coauthors", DueDate = today });
         draft.Reminders.Add(new ManuscriptReminder { Title = "Ask the librarian about the search strategy", DueDate = today.AddDays(5) });

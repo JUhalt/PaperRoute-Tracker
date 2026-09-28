@@ -239,6 +239,28 @@ Crossref enrichment does **not** silently change manuscript stage, shelf/locatio
 
 External metadata should help fill a record, not take control of the research workflow.
 
+### Check for publications
+
+Papers are sometimes published before you update PaperRoute. Choose **Check for Publications...** on the **Import & Export** page, or **⋯ > Check for Publication...** on a manuscript page, to ask whether work you are tracking has appeared.
+
+Manuscripts that have gone to a journal are checked by default; check or uncheck any others. PaperRoute then looks, one manuscript at a time:
+
+1. by the manuscript's **DOI**, when it now resolves to a published article;
+2. by its **preprint DOI**, when Crossref links the preprint to its published version;
+3. by **title**, in Crossref, allowing for case, punctuation, and an added subtitle; and
+4. optionally, in an **ORCID record**: the iD of the author marked "This is me" is filled in for you.
+
+Each result reads "A publication matching this manuscript may have appeared" with **Review Match** (opens the article's page), **Mark Published...**, and **Ignore**. Results you leave stay on the **Deadlines** page under **No date** until you choose.
+
+- **Mark Published...** shows exactly what will change, then moves the manuscript to the Published shelf with the stage Published from the publication date, adds a history entry naming the journal and DOI, updates the journal if it differs, and fills empty publication fields. Fields that have a value, and your recorded submissions and decisions, are left as they are.
+- **Ignore** remembers the answer, so later checks never show that match again.
+
+Nothing is checked in the background. If you are offline or Crossref asks PaperRoute to slow down, the check says which manuscripts it could not check and changes nothing.
+
+### Fill blanks from Crossref
+
+**Fill Blanks from Crossref...** on the **Import & Export** page looks up every manuscript that has a DOI and lists the empty fields Crossref can fill: journal, publisher, date, volume, issue, pages, URL, abstract, and keywords. Uncheck anything you do not want, then choose **Fill**. A field that already has a value is never listed or changed.
+
 ---
 
 ## ORCID Public-Profile Import
@@ -790,7 +812,7 @@ Visual Studio debugger sessions use the isolated development profile:
 
 Development managed-file copies are stored separately from the stable managed library.
 
-External services are used only for explicit features such as Crossref metadata lookup, public ORCID lookup, GitHub update checks, or links you choose to open.
+External services are used only for explicit features such as Crossref metadata lookup, a publication check you start, public ORCID lookup, GitHub update checks, or links you choose to open. A publication check sends Crossref the titles and DOIs of the manuscripts you check, and nothing else.
 
 PaperRoute does not require a PaperRoute account for the core manuscript library.
 

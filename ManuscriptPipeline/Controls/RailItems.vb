@@ -20,6 +20,7 @@ Namespace Controls
         Revision
         FollowUp
         Checklist
+        Publication
     End Enum
 
     ' Paints one left-rail item: an icon, its label, and an optional count.
@@ -161,6 +162,11 @@ Namespace Controls
                     Case RailGlyph.Checklist
                         g.DrawRectangle(pen, Rectangle.Round(r(3, 3, 10, 10)))
                         g.DrawLines(pen, {p(5.5F, 8.2F), p(7.3F, 10), p(10.7F, 6)})
+                    Case RailGlyph.Publication
+                        ' An open book.
+                        g.DrawLines(pen, {p(8, 4.5F), p(3, 3.5F), p(3, 12), p(8, 13)})
+                        g.DrawLines(pen, {p(8, 4.5F), p(13, 3.5F), p(13, 12), p(8, 13)})
+                        g.DrawLine(pen, p(8, 4.5F), p(8, 13))
                     Case RailGlyph.CollapseRail
                         g.DrawLines(pen, {p(8.5F, 4), p(4.5F, 8), p(8.5F, 12)})
                         g.DrawLines(pen, {p(12.5F, 4), p(8.5F, 8), p(12.5F, 12)})

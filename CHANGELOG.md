@@ -11,6 +11,13 @@ Development is tracked in [draft PR #78](https://github.com/JUhalt/PaperRoute-Tr
 - The **Deadlines** page replaces Reminders ([#28](https://github.com/JUhalt/PaperRoute-Tracker/issues/28)): one list of what needs action, grouped as Overdue, Today, Next 7 days, Later, No date, and Done (folded away). Counts across the top; chips for Revisions, Follow-ups, Reminders, and Preparation; and a filter box. Revisions show progress from the reviewer comments on their decision. Work without a date stays visible: a revision with no deadline, and an unsubmitted packet whose checklist has required items open.
 - Each row acts on the record that owns it: **Open** lands on the submission (at its reviewer responses for a revision), **Postpone...** offers tomorrow, a week, two weeks, or any date, **Done** completes a reminder, **Clear Follow-up...** removes only the follow-up date, and **Open Readiness** opens Readiness & Packets. Enter runs a row's first action. Nothing is copied, so Deadlines and the manuscript page always agree.
 - The rail's Deadlines badge counts what is overdue or due today, and **View in Deadlines →** sits beside Needs Attention on the Board. **Ctrl+4** opens Deadlines.
+- **Check for Publications...** ([#61](https://github.com/JUhalt/PaperRoute-Tracker/issues/61)) asks Crossref, only when you choose, whether manuscripts you are tracking have been published: by DOI, by a preprint's link to its published version, by title, and optionally in an ORCID record. Each possible match offers **Review Match**, **Mark Published...**, and **Ignore**; unreviewed matches wait on the Deadlines page. From Import & Export, or a manuscript page's **⋯** menu.
+- **Mark Published...** lists exactly what it will change, then records a normal lifecycle event: the Published shelf and stage from the publication date, a history entry with the journal and DOI, and empty publication fields filled. Submissions and decisions are left as recorded.
+- **Fill Blanks from Crossref...** fills empty publication fields for manuscripts with a DOI after a preview of every change. It never replaces a value.
+
+### Storage
+
+- **Schema 7** remembers publication matches, so an ignored match stays ignored. The upgrade validates the library and changes only the schema marker; manuscript data, managed files, and backups are left byte-for-byte. v0.6 cannot open a library after v0.7 has used it; keep a backup made before upgrading.
 
 ### Fixed
 

@@ -65,7 +65,7 @@ Partial Public Class Form1
         Dim frame As TableLayoutPanel = CreatePageFrame(
             "Deadlines",
             DateTime.Today.ToString("dddd, MMMM d, yyyy", CultureInfo.CurrentCulture) &
-                ". Revision deadlines, journal follow-ups, your reminders, and unfinished preparation.",
+                ". Revision deadlines, journal follow-ups, your reminders, unfinished preparation, and possible publications.",
             CreateSearchField(deadlinesFilter), btnExport, btnAdd)
 
         Dim body As New TableLayoutPanel With {
@@ -190,7 +190,8 @@ Partial Public Class Form1
             ("Revisions", CType(DeadlineKind.Revision, DeadlineKind?)),
             ("Follow-ups", CType(DeadlineKind.FollowUp, DeadlineKind?)),
             ("Reminders", CType(DeadlineKind.Reminder, DeadlineKind?)),
-            ("Preparation", CType(DeadlineKind.Preparation, DeadlineKind?))
+            ("Preparation", CType(DeadlineKind.Preparation, DeadlineKind?)),
+            ("Publications", CType(DeadlineKind.Publication, DeadlineKind?))
         }
             Dim kind As DeadlineKind? = entry.Item2
             Dim chip As New FilterChip With {
@@ -230,6 +231,8 @@ Partial Public Class Form1
             Dim count As Integer = open.Where(Function(item) Not kind.HasValue OrElse item.Kind = kind.Value).Count()
             chip.Value.Text = chip.Key & "  " & count.ToString(CultureInfo.CurrentCulture)
             chip.Value.Tone = If(Nullable.Equals(deadlinesKind, kind), FilterChipTone.Active, FilterChipTone.Neutral)
+            ' Possible publications exist only after a publication check.
+            If kind = DeadlineKind.Publication Then chip.Value.Visible = count > 0 OrElse Nullable.Equals(deadlinesKind, kind)
         Next
 
         Dim filter As String = If(deadlinesFilter?.Text, String.Empty).Trim()
@@ -298,6 +301,7 @@ Partial Public Class Form1
             Case "Follow-ups" : Return DeadlineKind.FollowUp
             Case "Reminders" : Return DeadlineKind.Reminder
             Case "Preparation" : Return DeadlineKind.Preparation
+            Case "Publications" : Return DeadlineKind.Publication
             Case Else : Return Nothing
         End Select
     End Function
@@ -390,6 +394,12 @@ Partial Public Class Form1
                 row.AddAction("Done", Sub() CompleteDeadlineReminder(item))
                 row.AddAction("Postpone...", Sub() PostponeDeadline(item))
                 row.AddAction("Edit Reminder...", Sub() EditDeadlineReminder(item), menuOnly:=True)
+                row.AddAction("Open Manuscript", Sub() OpenDeadline(item), menuOnly:=True)
+
+            Case item.Kind = DeadlineKind.Publication
+                row.AddAction("Review Match", Sub() ReviewDeadlineMatch(item))
+                row.AddAction("Mark Published...", Sub() MarkDeadlinePublished(item))
+                row.AddAction("Ignore Match", Sub() IgnoreDeadlineMatch(item), menuOnly:=True)
                 row.AddAction("Open Manuscript", Sub() OpenDeadline(item), menuOnly:=True)
 
             Case Else

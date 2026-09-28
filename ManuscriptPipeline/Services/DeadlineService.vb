@@ -44,6 +44,7 @@ Namespace Services
                 AddRevisionWithoutDeadline(items, manuscript)
                 AddPacketPreparation(items, manuscript)
                 AddCompletedReminders(items, manuscript, today)
+                AddPossiblePublications(items, manuscript)
             Next
 
             Return items.
@@ -167,6 +168,25 @@ Namespace Services
 
             SetCommentProgress(item, submission, decision)
             items.Add(item)
+
+        End Sub
+
+
+        ' A possible publication found by a publication check and not yet
+        ' reviewed. It has no date; the choice is Mark Published or Ignore.
+        Private Shared Sub AddPossiblePublications(items As List(Of DeadlineItem), manuscript As Manuscript)
+
+            For Each match As PublicationMatch In PublicationMatchService.PendingMatches(manuscript)
+                items.Add(New DeadlineItem With {
+                    .Kind = DeadlineKind.Publication,
+                    .Group = DeadlineGroup.NoDate,
+                    .Title = If(String.IsNullOrWhiteSpace(match.Journal), "May have been published", "May have been published in " & match.Journal.Trim()),
+                    .ManuscriptId = manuscript.Id,
+                    .ManuscriptTitle = ReminderService.SafeManuscriptTitle(manuscript),
+                    .JournalName = match.Journal,
+                    .PublicationMatchId = match.Id
+                })
+            Next
 
         End Sub
 

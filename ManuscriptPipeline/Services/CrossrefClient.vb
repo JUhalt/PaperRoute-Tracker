@@ -69,17 +69,13 @@ Namespace Services
                 If response.StatusCode =
                    HttpStatusCode.NotFound Then
 
-                    Throw New InvalidOperationException(
-                        "Crossref did not find a work for that DOI."
-                    )
+                    Throw New CrossrefNotFoundException()
 
                 End If
 
                 If CInt(response.StatusCode) = 429 Then
 
-                    Throw New InvalidOperationException(
-                        "Crossref is temporarily rate-limiting requests. Please wait a moment and try again."
-                    )
+                    Throw New CrossrefRateLimitException()
 
                 End If
 
@@ -142,33 +138,7 @@ Namespace Services
 
                 End If
 
-                Dim suggestion As New CrossrefMetadataSuggestion With {
-                    .Doi = ReadString(message, "DOI"),
-                    .Title = ReadFirstString(message, "title"),
-                    .Journal = ReadFirstString(message, "container-title"),
-                    .Publisher = ReadString(message, "publisher"),
-                    .Volume = ReadString(message, "volume"),
-                    .Issue = ReadString(message, "issue"),
-                    .Pages = ReadString(message, "page"),
-                    .Url = ReadString(message, "URL"),
-                    .AbstractText = CleanAbstract(ReadString(message, "abstract"))
-                }
-
-                suggestion.PublishedDate =
-                    ReadPublishedDate(
-                        message
-                    )
-
-                suggestion.Keywords =
-                    ReadStringArray(
-                        message,
-                        "subject"
-                    )
-
-                suggestion.Authors =
-                    ReadAuthors(
-                        message
-                    )
+                Dim suggestion As CrossrefMetadataSuggestion = ParseWork(message)
 
                 If String.IsNullOrWhiteSpace(
                     suggestion.Doi
@@ -183,6 +153,126 @@ Namespace Services
                 Return suggestion
 
             End Using
+
+        End Function
+
+
+        ' One work from /works/{doi} or one item of a search.
+        Private Shared Function ParseWork(message As JsonElement) As CrossrefMetadataSuggestion
+
+            Dim suggestion As New CrossrefMetadataSuggestion With {
+                .Doi = ReadString(message, "DOI"),
+                .Title = ReadFirstString(message, "title"),
+                .Journal = ReadFirstString(message, "container-title"),
+                .Publisher = ReadString(message, "publisher"),
+                .Volume = ReadString(message, "volume"),
+                .Issue = ReadString(message, "issue"),
+                .Pages = ReadString(message, "page"),
+                .Url = ReadString(message, "URL"),
+                .WorkType = ReadString(message, "type"),
+                .AbstractText = CleanAbstract(ReadString(message, "abstract"))
+            }
+
+            suggestion.PublishedDate = ReadPublishedDate(message)
+            suggestion.Keywords = ReadStringArray(message, "subject")
+            suggestion.Authors = ReadAuthors(message)
+            suggestion.PublishedVersionDois = ReadRelatedDois(message, "is-preprint-of")
+
+            Return suggestion
+
+        End Function
+
+
+        ' Works found by title, for the publication check (#61). Crossref's
+        ' bibliographic query ranks by relevance; the caller decides what
+        ' counts as a match.
+        Public Async Function SearchByTitleAsync(
+            title As String,
+            Optional cancellationToken As CancellationToken = Nothing
+        ) As Task(Of List(Of CrossrefMetadataSuggestion))
+
+            If String.IsNullOrWhiteSpace(title) Then
+                Throw New ArgumentException("A title is required.", NameOf(title))
+            End If
+
+            Dim requestUri As String =
+                "https://api.crossref.org/works?rows=5" &
+                "&select=DOI,title,container-title,publisher,volume,issue,page,published-print,published-online,published,issued,type,URL" &
+                "&query.bibliographic=" & Uri.EscapeDataString(title.Trim())
+
+            Using response As HttpResponseMessage = Await SharedHttpClient.GetAsync(requestUri, cancellationToken)
+
+                If CInt(response.StatusCode) = 429 Then
+                    Throw New CrossrefRateLimitException()
+                End If
+
+                If Not response.IsSuccessStatusCode Then
+                    Throw New InvalidOperationException(
+                        "Crossref returned HTTP " & CInt(response.StatusCode).ToString() & ". Please try again later.")
+                End If
+
+                Return ParseSearchJson(Await response.Content.ReadAsStringAsync(cancellationToken))
+
+            End Using
+
+        End Function
+
+
+        Friend Shared Function ParseSearchJson(json As String) As List(Of CrossrefMetadataSuggestion)
+
+            If String.IsNullOrWhiteSpace(json) Then
+                Throw New InvalidOperationException("Crossref returned an empty response.")
+            End If
+
+            Dim results As New List(Of CrossrefMetadataSuggestion)()
+
+            Using document As JsonDocument = JsonDocument.Parse(json)
+
+                Dim message As JsonElement
+                Dim items As JsonElement
+
+                If Not document.RootElement.TryGetProperty("message", message) OrElse
+                   message.ValueKind <> JsonValueKind.Object OrElse
+                   Not message.TryGetProperty("items", items) OrElse
+                   items.ValueKind <> JsonValueKind.Array Then
+                    Throw New InvalidOperationException("Crossref returned an unexpected response.")
+                End If
+
+                For Each item As JsonElement In items.EnumerateArray()
+                    If item.ValueKind <> JsonValueKind.Object Then Continue For
+                    Dim work As CrossrefMetadataSuggestion = ParseWork(item)
+                    If Not String.IsNullOrWhiteSpace(work.Doi) Then results.Add(work)
+                Next
+
+            End Using
+
+            Return results
+
+        End Function
+
+
+        ' DOIs under relation.{name}, such as a preprint's published version.
+        Private Shared Function ReadRelatedDois(message As JsonElement, relationName As String) As List(Of String)
+
+            Dim dois As New List(Of String)()
+            Dim relation As JsonElement
+            Dim entries As JsonElement
+
+            If Not message.TryGetProperty("relation", relation) OrElse
+               relation.ValueKind <> JsonValueKind.Object OrElse
+               Not relation.TryGetProperty(relationName, entries) OrElse
+               entries.ValueKind <> JsonValueKind.Array Then
+                Return dois
+            End If
+
+            For Each entry As JsonElement In entries.EnumerateArray()
+                If entry.ValueKind <> JsonValueKind.Object Then Continue For
+                If Not String.Equals(ReadString(entry, "id-type"), "doi", StringComparison.OrdinalIgnoreCase) Then Continue For
+                Dim doi As String = DoiNormalizer.Normalize(ReadString(entry, "id"))
+                If DoiNormalizer.IsValid(doi) AndAlso Not dois.Contains(doi, StringComparer.OrdinalIgnoreCase) Then dois.Add(doi)
+            Next
+
+            Return dois
 
         End Function
 
@@ -539,6 +629,28 @@ Namespace Services
             ).Trim()
 
         End Function
+
+    End Class
+
+
+    Public Class CrossrefNotFoundException
+        Inherits InvalidOperationException
+
+        Public Sub New()
+            MyBase.New("Crossref did not find a work for that DOI.")
+        End Sub
+
+    End Class
+
+
+    ' Crossref asked PaperRoute to slow down. A publication check stops and
+    ' keeps what it found so far.
+    Public Class CrossrefRateLimitException
+        Inherits InvalidOperationException
+
+        Public Sub New()
+            MyBase.New("Crossref is temporarily rate-limiting requests. Please wait a moment and try again.")
+        End Sub
 
     End Class
 

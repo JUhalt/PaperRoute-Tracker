@@ -1120,6 +1120,10 @@ Partial Public Class Form1
         addCommand("Export Library as RIS...", "The same, in RIS format.", AddressOf ExportRis)
         addCommand("Publication & CV Export...", "Formatted lists of your work for a CV or report.", AddressOf OpenPublicationExport)
 
+        addSection("Keep records current")
+        addCommand("Check for Publications...", "Asks Crossref, and your ORCID record if you like, whether manuscripts you are tracking have been published. Only when you ask; nothing changes until you choose Mark Published.", AddressOf CheckForPublications)
+        addCommand("Fill Blanks from Crossref...", "For manuscripts with a DOI: fills empty fields such as the journal, date, volume, and pages, after showing every change. It never replaces a value.", AddressOf FillBlanksFromCrossref)
+
         addSection("Keep it safe")
         addCommand("Backup Library...", "A ZIP of the complete library, including files PaperRoute manages. The only format that keeps everything.", AddressOf BackupLibrary)
         addCommand("Restore Backup...", "Replaces the current library with a backup after showing what it contains. A safety backup of the current library is made first.", AddressOf RestoreLibraryBackup)

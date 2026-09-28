@@ -526,7 +526,7 @@ Namespace Services
         End Function
 
 
-        Private Shared Sub RecordProvenance(
+        Friend Shared Sub RecordProvenance(
             metadata As ManuscriptMetadata,
             suggestion As CrossrefMetadataSuggestion
         )

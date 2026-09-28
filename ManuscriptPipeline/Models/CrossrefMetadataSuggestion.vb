@@ -23,6 +23,13 @@ Namespace Models
 
         Public Property Url As String = String.Empty
 
+        ' Crossref's work type, such as journal-article or posted-content.
+        Public Property WorkType As String = String.Empty
+
+        ' For a preprint, the DOIs of its published versions.
+        Public Property PublishedVersionDois As List(Of String) =
+            New List(Of String)()
+
         Public Property AbstractText As String = String.Empty
 
         Public Property Keywords As List(Of String) =

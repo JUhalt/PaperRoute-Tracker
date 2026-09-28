@@ -361,6 +361,7 @@ Namespace Controls
                 Case DeadlineKind.Revision : Return PaperStage.Revision
                 Case DeadlineKind.FollowUp : Return PaperStage.Submitted
                 Case DeadlineKind.Preparation : Return PaperStage.UnderReview
+                Case DeadlineKind.Publication : Return PaperStage.Published
                 Case Else : Return PaperStage.Draft
             End Select
         End Function
@@ -370,6 +371,7 @@ Namespace Controls
                 Case DeadlineKind.Revision : Return RailGlyph.Revision
                 Case DeadlineKind.FollowUp : Return RailGlyph.FollowUp
                 Case DeadlineKind.Preparation : Return RailGlyph.Checklist
+                Case DeadlineKind.Publication : Return RailGlyph.Publication
                 Case Else : Return RailGlyph.Reminders
             End Select
         End Function
