@@ -2,6 +2,18 @@
 
 All notable changes to PaperRoute Tracker will be documented here.
 
+## [Unreleased] — v0.7 Deadline Center
+
+Development is tracked in [draft PR #78](https://github.com/JUhalt/PaperRoute-Tracker/pull/78) and the [v0.7 milestone](https://github.com/JUhalt/PaperRoute-Tracker/milestone/9).
+
+### Added
+
+- The groundwork for the **Deadlines** page ([#28](https://github.com/JUhalt/PaperRoute-Tracker/issues/28)): one list of what needs action, grouped as Overdue, Today, Next 7 days, Later, No date, and Done. Dated items still come from the existing reminders. Revisions carry progress from the reviewer comments on their decision. Work without a date stays visible: a revision with no deadline, and an unsubmitted packet whose checklist has required items open. Building the list never changes the library.
+
+### Fixed
+
+- Revision deadlines now name their journal on the Reminders page and in calendar exports.
+
 ## [0.6.0] - 2026-09-27
 
 PaperRoute v0.6.0 — **Workspace** — was released on September 27, 2026 from [PR #69](https://github.com/JUhalt/PaperRoute-Tracker/pull/69), after the v0.6.0-rc.1 Preview. Certification is recorded in [#74](https://github.com/JUhalt/PaperRoute-Tracker/issues/74). v0.6 uses the same Schema 6 library as v0.5 and migrates no data.
