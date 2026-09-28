@@ -18,6 +18,10 @@ Development is tracked in the [v0.8 milestone](https://github.com/JUhalt/PaperRo
 
 - Import & Export moves to **Ctrl+6**; Insights takes Ctrl+5.
 
+### Fixed
+
+- A second launch of PaperRoute brings the open window forward instead of opening another window on the same library, where a save in one could overwrite the other ([#77](https://github.com/JUhalt/PaperRoute-Tracker/issues/77)).
+
 ### Storage
 
 - **Schema 8** adds work types, tags, and tag colors. As with Schema 7, the upgrade validates the library and changes only the schema marker; records start with no type and no tags.
