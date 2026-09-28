@@ -4,7 +4,7 @@ All notable changes to PaperRoute Tracker will be documented here.
 
 ## [Unreleased] — v0.8 Insights & Reports
 
-Development is tracked in the [v0.8 milestone](https://github.com/JUhalt/PaperRoute-Tracker/milestone/10).
+v0.8.0-rc.1 is available on the Preview channel. Development is tracked in [PR #80](https://github.com/JUhalt/PaperRoute-Tracker/pull/80) and the [v0.8 milestone](https://github.com/JUhalt/PaperRoute-Tracker/milestone/10); certification in [#85](https://github.com/JUhalt/PaperRoute-Tracker/issues/85).
 
 ### Added
 

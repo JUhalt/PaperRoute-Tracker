@@ -53,7 +53,7 @@ Targets are directional rather than promises. Data integrity, migrations, backup
 | **v0.5** | Reviewer Response Workflow ✅ | What did the journal ask me to change, and how am I responding? |
 | **v0.6** | Workspace UI ✅ | Can I find and act on everything from one calm, uncluttered workspace? |
 | **v0.7** | Deadline Center ✅ | What requires action, and when? |
-| **v0.8** | **Route Analytics & Reports — next** | What does this publication journey show me—and how can I communicate it? |
+| **v0.8** | **Route Analytics & Reports — Preview** | What does this publication journey show me—and how can I communicate it? |
 | **v0.9** | 1.0 Hardening | Is the entire workflow polished, resilient, and certifiable? |
 | **v1.0** | Trusted Research Workflow | Would I trust this with my real publication pipeline? |
 
@@ -315,6 +315,8 @@ Derive transparent local analytics and print-friendly route reports from the sam
 - **[#63 Shareable pipeline status report](https://github.com/JUhalt/PaperRoute-Tracker/issues/63)** — a local HTML snapshot for a supervisor or coauthor that excludes notes, correspondence, reviewer comments, and file paths by default.
 - **[#64 Work types and colored tags](https://github.com/JUhalt/PaperRoute-Tracker/issues/64)** — the dimensions reports, CV exports, and the board can filter and group by. Existing records migrate with an unspecified type rather than an inferred one.
 - **[#82 Route map](https://github.com/JUhalt/PaperRoute-Tracker/issues/82)** — each route drawn to scale, colored by who held it (the journal, the author, or production), with every event numbered and explained, and every route side by side on Insights. It shows a student, or a researcher looking back, how much of publishing is waiting and how much is work.
+
+Every slice is complete in [PR #80](https://github.com/JUhalt/PaperRoute-Tracker/pull/80). v0.8.0-rc.1 is the Preview candidate; certification is tracked in [#85](https://github.com/JUhalt/PaperRoute-Tracker/issues/85).
 
 ---
 
