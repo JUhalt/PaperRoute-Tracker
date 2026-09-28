@@ -299,6 +299,8 @@ Planned slices, tracked in the v0.7 integration PR:
 4. **Carry-over:** [#76](https://github.com/JUhalt/PaperRoute-Tracker/issues/76).
 5. **Certification and release.** Preview, then Stable, using the v0.6 procedure: in-app updater only, an unlocked host for VM checks, and snapshots before each VM step.
 
+Slices 1–4 are complete in [PR #78](https://github.com/JUhalt/PaperRoute-Tracker/pull/78). v0.7.0-rc.1 is the Preview candidate; certification is tracked in the v0.7 release-certification issue.
+
 ---
 
 # v0.8 Route Analytics & Reports

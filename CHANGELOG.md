@@ -4,7 +4,7 @@ All notable changes to PaperRoute Tracker will be documented here.
 
 ## [Unreleased] — v0.7 Deadline Center
 
-Development is tracked in [draft PR #78](https://github.com/JUhalt/PaperRoute-Tracker/pull/78) and the [v0.7 milestone](https://github.com/JUhalt/PaperRoute-Tracker/milestone/9).
+v0.7.0-rc.1 is available on the Preview channel. Development is tracked in [PR #78](https://github.com/JUhalt/PaperRoute-Tracker/pull/78) and the [v0.7 milestone](https://github.com/JUhalt/PaperRoute-Tracker/milestone/9).
 
 ### Added
 
