@@ -157,6 +157,22 @@ Public Class TitlePageApplyTests
 
     End Sub
 
+    ' #76: the first-deadline date showed "10/11/202…" at 150% scaling.
+    <TestMethod>
+    Public Sub AddManuscript_FirstDeadlineShowsTheWholeDate()
+
+        Using dialog As New AddManuscriptForm()
+            dialog.SetFirstDeadline("Send draft to coauthors", New DateTime(2026, 12, 28))
+            dialog.SizeDeadlinePicker()
+
+            Dim picker As DateTimePicker = DirectCast(GetField(dialog, "dtpDeadline"), DateTimePicker)
+            Dim text As Integer = TextRenderer.MeasureText(picker.Value.ToString("d"), picker.Font).Width
+            Assert.IsTrue(picker.Width - SystemInformation.GetVerticalScrollBarWidthForDpi(dialog.DeviceDpi) >= text,
+                          "The date and its drop-down button fit at this display's scaling.")
+        End Using
+
+    End Sub
+
     <TestMethod>
     Public Sub AddManuscript_WithoutALibrary_StillAddsATitleOnlyManuscript()
 

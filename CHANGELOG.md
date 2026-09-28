@@ -21,7 +21,8 @@ Development is tracked in [draft PR #78](https://github.com/JUhalt/PaperRoute-Tr
 
 ### Fixed
 
-- Revision deadlines now name their journal on the Reminders page and in calendar exports.
+- Revision deadlines now name their journal on the Deadlines page and in calendar exports.
+- The **First deadline** date in Add Manuscript shows in full at 150% display scaling ([#76](https://github.com/JUhalt/PaperRoute-Tracker/issues/76)).
 
 ## [0.6.0] - 2026-09-27
 
