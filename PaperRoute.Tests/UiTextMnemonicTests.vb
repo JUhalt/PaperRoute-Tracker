@@ -53,6 +53,37 @@ Public Class UiTextMnemonicTests
 
     End Sub
 
+    ' Found while certifying v0.7.0-rc.1: the update prompt opened with its
+    ' release notes all selected.
+    <TestMethod>
+    Public Sub UpdatePrompt_OpensOnItsDefaultButtonWithNothingSelected()
+
+        Dim failure As Exception = Nothing
+        Dim thread As New Threading.Thread(
+            Sub()
+                Try
+                    Using prompt As New UpdatePromptForm("0.6.0", "0.7.0", "Stable", "First line." & Environment.NewLine & "Second line.")
+                        prompt.StartPosition = FormStartPosition.Manual
+                        prompt.Location = New Drawing.Point(-20000, -20000)
+                        prompt.ShowInTaskbar = False
+                        prompt.Show()
+                        Application.DoEvents()
+                        Dim notes As TextBox = Descendants(prompt).OfType(Of TextBox)().Single()
+                        Assert.AreEqual(0, notes.SelectionLength, "No text is selected.")
+                        Assert.AreEqual("Download & Restart", prompt.ActiveControl.Text.Replace("&&", "&"))
+                        prompt.Close()
+                    End Using
+                Catch ex As Exception
+                    failure = ex
+                End Try
+            End Sub)
+        thread.SetApartmentState(Threading.ApartmentState.STA)
+        thread.Start()
+        thread.Join()
+        If failure IsNot Nothing Then Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw()
+
+    End Sub
+
     ' #71: names typed by the user keep their ampersands in dialogs.
     <TestMethod>
     Public Sub DialogsShowUserDataWithLiteralAmpersands()
