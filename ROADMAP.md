@@ -341,8 +341,9 @@ Offline:
 Connected, optional, and started by the user:
 
 - **[#86 Online services](https://github.com/JUhalt/PaperRoute-Tracker/issues/86)** — one local-first rule, one settings page, and a **Work offline** switch.
-- **[#87 Journal facts from open indexes](https://github.com/JUhalt/PaperRoute-Tracker/issues/87)** — DOAJ (CC0), OpenAlex, and sharing-policy records: publisher, fees, review type, typical turnaround, and links to the journal's aims and scope, author instructions, and editorial board.
+- **[#87 Journal facts from open indexes](https://github.com/JUhalt/PaperRoute-Tracker/issues/87)** — DOAJ (CC0), OpenAlex, and sharing-policy records: publisher, fees, review type, typical turnaround, and links to the journal's aims and scope, author instructions, and editorial board; open citation metrics (2-year mean citedness, h-index, i10-index) fetched from OpenAlex, and proprietary ones (Impact Factor, CiteScore, SJR, SNIP) recorded by the researcher with source and year. Never a combined prestige score.
 - **[#88 Journals that publish work like yours](https://github.com/JUhalt/PaperRoute-Tracker/issues/88)** — suggestions backed by recently published papers that match keywords you review; never scores or predictions.
+- **[#91 Your citations](https://github.com/JUhalt/PaperRoute-Tracker/issues/91)** — the researcher's own citation record from open data, on request: citations, h-index, i10-index, g-index, m-quotient, and field-weighted citation impact per published manuscript, each with its source, date, and definition.
 - **[#84 Optional AI assistant](https://github.com/JUhalt/PaperRoute-Tracker/issues/84)** (with [#29](https://github.com/JUhalt/PaperRoute-Tracker/issues/29)) — off by default, with your own key or a local model: decision letters to reviewer comments, author guidelines to readiness checklists, drafting help, and fit summaries grounded in #88's evidence.
 
 ---
