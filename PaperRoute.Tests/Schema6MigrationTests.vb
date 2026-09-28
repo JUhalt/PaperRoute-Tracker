@@ -38,8 +38,10 @@ Public Class Schema6MigrationTests
         File.WriteAllText(Path.Combine(_data, "manuscripts.bak"), "preserve existing automatic backup")
         File.WriteAllText(Path.Combine(_data, "authors.json"), "{""Journals"":[]}")
         EnsureStorage()
-        Assert.AreEqual(6, StorageMigrationService.ReadSchemaVersion(_schema))
+        ' Schema 6 then Schema 7: each step keeps the marker it replaced.
+        Assert.AreEqual(StorageMigrationService.CurrentSchemaVersion, StorageMigrationService.ReadSchemaVersion(_schema))
         Assert.AreEqual("{""SchemaVersion"":5}", File.ReadAllText(Path.Combine(_data, "schema.v5.bak")))
+        StringAssert.Contains(File.ReadAllText(Path.Combine(_data, "schema.v6.bak")), """SchemaVersion"": 6")
         Assert.AreEqual(original, File.ReadAllText(Path.Combine(_data, "manuscripts.json")))
         Assert.AreEqual("preserve existing automatic backup", File.ReadAllText(Path.Combine(_data, "manuscripts.bak")))
         Assert.AreEqual("{""Journals"":[]}", File.ReadAllText(Path.Combine(_data, "authors.json")))
@@ -114,9 +116,9 @@ Public Class Schema6MigrationTests
 
     <TestMethod>
     Public Sub FutureSchema_IsRejectedBeforeAnyStorageMigration()
-        File.WriteAllText(_schema, "{""SchemaVersion"":7}")
+        File.WriteAllText(_schema, "{""SchemaVersion"":8}")
         Assert.ThrowsExactly(Of InvalidOperationException)(Sub() EnsureStorage())
-        Assert.AreEqual(7, StorageMigrationService.ReadSchemaVersion(_schema))
+        Assert.AreEqual(8, StorageMigrationService.ReadSchemaVersion(_schema))
         Assert.IsFalse(Directory.Exists(Path.Combine(_root, "library")))
     End Sub
 

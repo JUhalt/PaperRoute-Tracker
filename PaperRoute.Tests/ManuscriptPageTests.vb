@@ -4,6 +4,7 @@ Imports System.Linq
 Imports System.Reflection
 Imports System.Runtime.ExceptionServices
 Imports System.Threading
+Imports System.Threading.Tasks
 Imports System.Windows.Forms
 Imports ManuscriptPipeline
 Imports ManuscriptPipeline.Controls
@@ -430,6 +431,243 @@ Public Class ManuscriptPageTests
             End Sub)
     End Sub
 
+    ' Deadlines (#28): grouped by when, filtered by kind or text, and every
+    ' action changes the record that owns the date.
+    <TestMethod>
+    Public Sub DeadlinesGroupFilterAndChangeTheOwningRecord()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard()
+                    Dim today As DateTime = DateTime.Today
+                    Dim revision As Manuscript = WithRoute()
+                    Dim decision As EditorialDecisionEvent = revision.Submissions(1).Decisions.Single()
+                    decision.RevisionDeadline = today.AddDays(-2)
+                    Dim waiting As Manuscript = Sample("Grit scale")
+                    waiting.CurrentStage = PaperStage.Submitted
+                    Dim submission As New JournalSubmission With {.JournalName = "Assessment", .SubmittedDate = today.AddDays(-30), .FollowUpDate = today.AddDays(3)}
+                    waiting.Submissions.Add(submission)
+                    Dim reminder As New ManuscriptReminder With {.Title = "Send draft to coauthors", .DueDate = today}
+                    waiting.Reminders.Add(reminder)
+                    waiting.Reminders.Add(New ManuscriptReminder With {.Title = "Upload preregistration", .DueDate = today.AddDays(-4), .IsCompleted = True, .CompletedDate = today.AddDays(-1)})
+                    board.Prepare(revision, waiting)
+
+                    Dim rail As RailButton = DirectCast(board.RailPage("Deadlines"), RailButton)
+                    Assert.AreEqual(2, rail.Badge, "The rail counts what is overdue or due today.")
+
+                    board.PressCommandKey(Keys.Control Or Keys.D4)
+                    Assert.AreEqual("Deadlines", board.PageName)
+                    Assert.IsTrue(rail.Checked)
+                    CollectionAssert.AreEqual({"OVERDUE  1", "TODAY  1", "NEXT 7 DAYS  1"},
+                        Descendants(board).OfType(Of Label)().Where(Function(label) label.Text.StartsWith("OVERDUE") OrElse label.Text.StartsWith("TODAY") OrElse
+                                                                              label.Text.StartsWith("NEXT") OrElse label.Text.StartsWith("LATER") OrElse
+                                                                              label.Text.StartsWith("NO DATE")).Select(Function(label) label.Text).ToList())
+                    CollectionAssert.AreEqual({"Revision due", "Send draft to coauthors", "Follow up with Assessment"},
+                        DeadlineRows(board).Select(Function(row) row.Item.Title).ToList(), "Done stays folded away.")
+                    Dim revisionRow As DeadlineRow = DeadlineRows(board).First()
+                    StringAssert.Contains(revisionRow.AccessibleName, "Overdue")
+                    StringAssert.Contains(revisionRow.AccessibleName, "0 of 2 comments", "A revision shows its reviewer-comment progress.")
+                    CollectionAssert.AreEqual({"Open", "Postpone..."}, revisionRow.ActionTexts.ToList())
+
+                    Descendants(board).OfType(Of LinkLabel)().Single(Function(link) link.Text.StartsWith("Done in the last")).Links(0).Enabled = True
+                    ClickDoneLink(board)
+                    Assert.AreEqual(4, DeadlineRows(board).Count, "Show lists recently completed reminders.")
+                    ClickDoneLink(board)
+
+                    ClickControl(Descendants(board).OfType(Of FilterChip)().Single(Function(chip) chip.Text.StartsWith("Follow-ups")))
+                    CollectionAssert.AreEqual({"Follow up with Assessment"}, DeadlineRows(board).Select(Function(row) row.Item.Title).ToList())
+                    ClickControl(Descendants(board).OfType(Of FilterChip)().Single(Function(chip) chip.Text.StartsWith("Follow-ups")))
+                    Assert.AreEqual(3, DeadlineRows(board).Count, "Clicking the active chip shows everything again.")
+
+                    Dim filter As TextBox = Descendants(board).OfType(Of TextBox)().Single(Function(box) box.AccessibleName = "Filter deadlines")
+                    filter.Text = "grit"
+                    Application.DoEvents()
+                    Assert.IsTrue(DeadlineRows(board).All(Function(row) row.Item.ManuscriptTitle = "Grit scale"))
+                    filter.Text = String.Empty
+                    Application.DoEvents()
+
+                    ' Postpone asks for a date and writes the submission's follow-up.
+                    board.SetDeadlinePrompts(Function(item) today.AddDays(10), Function(question) True)
+                    DeadlineRows(board).Single(Function(row) row.Item.Kind = DeadlineKind.FollowUp).RunAction("Postpone...")
+                    Application.DoEvents()
+                    Assert.AreEqual(today.AddDays(10), submission.FollowUpDate.Value)
+                    Assert.AreEqual(1, board.SaveCount)
+                    Assert.AreEqual(DeadlineGroup.Later, DeadlineRows(board).Single(Function(row) row.Item.Kind = DeadlineKind.FollowUp).Item.Group)
+
+                    DeadlineRows(board).Single(Function(row) row.Item.Kind = DeadlineKind.Reminder).RunAction("Done")
+                    Application.DoEvents()
+                    Assert.IsTrue(reminder.IsCompleted)
+                    Assert.AreEqual(2, board.SaveCount)
+                    Assert.AreEqual(1, rail.Badge, "The badge follows the change.")
+
+                    DeadlineRows(board).Single(Function(row) row.Item.Kind = DeadlineKind.FollowUp).RunAction("Clear Follow-up...")
+                    Application.DoEvents()
+                    Assert.IsFalse(submission.FollowUpDate.HasValue)
+                    Assert.AreEqual(1, waiting.Submissions.Count, "Clearing leaves the submission as it was.")
+                    Assert.AreEqual(3, board.SaveCount)
+
+                    ' Open lands on the revision's reviewer responses.
+                    DeadlineRows(board).Single().RunAction("Open")
+                    Application.DoEvents()
+                    Assert.AreEqual("Manuscript", board.PageName)
+                    Assert.IsTrue(Descendants(board.Editor).OfType(Of RadioButton)().Single(Function(tab) tab.Text = "Submissions").Checked)
+                    Dim detail As SubmissionDetailsForm = Descendants(board.Editor).OfType(Of SubmissionDetailsForm)().Single()
+                    Assert.AreEqual("Second Journal", DirectCast(GetType(SubmissionDetailsForm).GetField("_submission", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(detail), JournalSubmission).JournalName)
+                    Assert.AreEqual("Reviewer Responses", Descendants(detail).OfType(Of TabControl)().First().SelectedTab.Text)
+
+                    board.PressCommandKey(Keys.Alt Or Keys.Left)
+                    Assert.AreEqual("Deadlines", board.PageName, "Back returns to Deadlines.")
+                    Assert.AreEqual(3, board.SaveCount, "Opening and returning save nothing.")
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    ' Nothing to act on: a sentence, not an empty list.
+    <TestMethod>
+    Public Sub DeadlinesExplainAnEmptyList()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard()
+                    board.Prepare(Sample("Draft only"))
+                    Descendants(board).OfType(Of LinkLabel)().Single(Function(link) link.Text = "View in Deadlines →").Links(0).Enabled = True
+                    board.PressCommandKey(Keys.Control Or Keys.D4)
+                    Assert.AreEqual(0, DeadlineRows(board).Count)
+                    Assert.IsTrue(Descendants(board).OfType(Of Label)().Any(Function(label) label.Text.StartsWith("Nothing needs action right now.")))
+                    Assert.AreEqual(0, DirectCast(board.RailPage("Deadlines"), RailButton).Badge)
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    ' Possible publications (#61) wait on Deadlines until Mark Published or
+    ' Ignore; each choice is saved.
+    <TestMethod>
+    Public Sub PossiblePublicationsAreReviewedOnDeadlines()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard()
+                    Dim first As Manuscript = Sample("Anchoring effects in clinical risk estimates")
+                    first.CurrentStage = PaperStage.UnderReview
+                    first.PublicationMatches.Add(New PublicationMatch With {.Doi = "10.5555/anchoring", .Journal = "Collabra: Psychology", .PublishedDate = DateTime.Today.AddDays(-3)})
+                    Dim second As Manuscript = Sample("Grit across four countries")
+                    second.CurrentStage = PaperStage.Submitted
+                    second.PublicationMatches.Add(New PublicationMatch With {.Doi = "10.5555/grit", .Journal = "Assessment"})
+                    board.Prepare(first, second)
+                    board.markPublishedPrompt = Function(manuscript, match) True
+
+                    board.PressCommandKey(Keys.Control Or Keys.D4)
+                    Dim chip As FilterChip = Descendants(board).OfType(Of FilterChip)().Single(Function(candidate) candidate.Text.StartsWith("Publications"))
+                    Assert.AreEqual("Publications  2", chip.Text)
+                    Assert.IsTrue(chip.Visible)
+                    Dim row As DeadlineRow = DeadlineRows(board).First(Function(candidate) candidate.Item.ManuscriptId = first.Id)
+                    Assert.AreEqual("May have been published in Collabra: Psychology", row.Item.Title)
+                    CollectionAssert.AreEqual({"Review Match", "Mark Published...", "Ignore Match", "Open Manuscript"}, row.ActionTexts.ToList())
+
+                    row.RunAction("Mark Published...")
+                    Application.DoEvents()
+                    Assert.AreEqual(PaperStage.Published, board.Library(0).CurrentStage)
+                    Assert.AreEqual(ManuscriptLocation.Published, board.Library(0).Location)
+                    Assert.AreEqual("10.5555/anchoring", board.Library(0).Metadata.Doi)
+                    Assert.AreEqual(1, board.SaveCount)
+
+                    DeadlineRows(board).Single(Function(candidate) candidate.Item.Kind = DeadlineKind.Publication).RunAction("Ignore Match")
+                    Application.DoEvents()
+                    Assert.AreEqual(PublicationMatchStatus.Ignored, second.PublicationMatches.Single().Status)
+                    Assert.AreEqual(PaperStage.Submitted, second.CurrentStage, "Ignore changes nothing else.")
+                    Assert.AreEqual(2, board.SaveCount)
+                    Assert.IsFalse(Descendants(board).OfType(Of FilterChip)().Single(Function(candidate) candidate.Text.StartsWith("Publications")).Visible,
+                        "The Publications chip appears only while there is something to review.")
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    <TestMethod>
+    Public Sub PublicationCheckFindsKeepsAndMarksPublished()
+        RunOnStaThread(
+            Sub()
+                Dim tracked As Manuscript = Sample("Measurement invariance of a short grit scale across four countries")
+                tracked.CurrentStage = PaperStage.UnderReview
+                tracked.Submissions.Add(New JournalSubmission With {.JournalName = "Assessment", .SubmittedDate = DateTime.Today.AddDays(-120)})
+                Dim idea As Manuscript = Sample("An idea that has not been submitted anywhere yet")
+                Dim library As New List(Of Manuscript) From {tracked, idea}
+                Dim saves As Integer = 0
+                Dim source As New OneTitleSource(tracked.Title, New CrossrefMetadataSuggestion With {
+                    .Doi = "10.5555/grit", .Title = tracked.Title, .Journal = "Assessment", .WorkType = "journal-article", .PublishedDate = DateTime.Today.AddDays(-2)})
+
+                Using dialog As New PublicationCheckForm(library, Nothing, String.Empty, source, Function()
+                                                                                                   saves += 1
+                                                                                                   Return True
+                                                                                               End Function, DateTime.Today)
+                    dialog.Pause = TimeSpan.Zero
+                    dialog.ConfirmMarkPublished = Function(manuscript, match) True
+                    ShowOffscreen(dialog)
+                    CollectionAssert.AreEqual({tracked}, dialog.SelectedManuscripts, "Work that has gone to a journal is checked by default.")
+
+                    Dim check As Task = dialog.CheckAsync()
+                    While Not check.IsCompleted
+                        Application.DoEvents()
+                    End While
+                    check.GetAwaiter().GetResult()
+
+                    Assert.AreEqual(PublicationMatchStatus.Pending, tracked.PublicationMatches.Single().Status, "A found match is kept for later review.")
+                    Assert.AreEqual(1, saves)
+                    Assert.AreEqual(PaperStage.UnderReview, tracked.CurrentStage, "Finding a match changes nothing else.")
+                    Assert.IsTrue(Descendants(dialog).OfType(Of Label)().Any(Function(label) label.Text = "A publication matching this manuscript may have appeared."))
+
+                    Descendants(dialog).OfType(Of Button)().Single(Function(button) button.Text = "Mark Published...").PerformClick()
+                    Application.DoEvents()
+                    Assert.AreEqual(PaperStage.Published, tracked.CurrentStage)
+                    Assert.AreEqual(2, saves)
+                    Assert.IsTrue(dialog.Changed)
+                    Assert.IsTrue(Descendants(dialog).OfType(Of Label)().Any(Function(label) label.Text.StartsWith("Marked published.") AndAlso label.Visible))
+                    dialog.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    Private NotInheritable Class OneTitleSource
+        Implements IPublicationSource
+
+        Private ReadOnly _title As String
+        Private ReadOnly _work As CrossrefMetadataSuggestion
+
+        Public Sub New(title As String, work As CrossrefMetadataSuggestion)
+            _title = title
+            _work = work
+        End Sub
+
+        Public Function LookupDoiAsync(doi As String, cancellationToken As Threading.CancellationToken) As Task(Of CrossrefMetadataSuggestion) Implements IPublicationSource.LookupDoiAsync
+            Return Task.FromResult(Of CrossrefMetadataSuggestion)(Nothing)
+        End Function
+
+        Public Function SearchTitleAsync(title As String, cancellationToken As Threading.CancellationToken) As Task(Of List(Of CrossrefMetadataSuggestion)) Implements IPublicationSource.SearchTitleAsync
+            Return Task.FromResult(If(title = _title, New List(Of CrossrefMetadataSuggestion) From {_work}, New List(Of CrossrefMetadataSuggestion)()))
+        End Function
+
+        Public Function OrcidWorksAsync(orcid As String, cancellationToken As Threading.CancellationToken) As Task(Of List(Of OrcidWorkSuggestion)) Implements IPublicationSource.OrcidWorksAsync
+            Return Task.FromResult(New List(Of OrcidWorkSuggestion)())
+        End Function
+    End Class
+
+    Private Shared Function DeadlineRows(board As PageBoard) As List(Of DeadlineRow)
+        Return Descendants(board).OfType(Of DeadlineRow)().ToList()
+    End Function
+
+    Private Shared Sub ClickDoneLink(board As PageBoard)
+        Dim link As LinkLabel = Descendants(board).OfType(Of LinkLabel)().Single(Function(candidate) candidate.Text.StartsWith("Done in the last"))
+        GetType(LinkLabel).GetMethod("OnLinkClicked", BindingFlags.Instance Or BindingFlags.NonPublic).
+            Invoke(link, New Object() {New LinkLabelLinkClickedEventArgs(link.Links(0))})
+        Application.DoEvents()
+    End Sub
+
+    Private Shared Sub ClickControl(control As Control)
+        GetType(Control).GetMethod("OnClick", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(control, New Object() {EventArgs.Empty})
+        Application.DoEvents()
+    End Sub
+
     Private Shared Sub MoveFirstResponseDown(board As PageBoard)
         Dim matrix As ReviewerResponseMatrixForm = Descendants(board.Editor).OfType(Of ReviewerResponseMatrixForm)().Single()
         Dim list As ListBox = DirectCast(GetType(ReviewerResponseMatrixForm).GetField("lstResponses", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(matrix), ListBox)
@@ -582,6 +820,11 @@ Public Class ManuscriptPageTests
             Dim buttons = DirectCast(GetType(Form1).GetField("railButtons", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me), System.Collections.IDictionary)
             Return buttons.Values.Cast(Of RadioButton)().Single(Function(button) button.Text = text)
         End Function
+
+        Public Sub SetDeadlinePrompts(datePrompt As Func(Of DeadlineItem, DateTime?), confirmPrompt As Func(Of String, Boolean))
+            deadlineDatePrompt = datePrompt
+            deadlineConfirmPrompt = confirmPrompt
+        End Sub
 
         ' A method rather than a property, which WinForms would try to serialize.
         Public Sub SetPrompt(value As Func(Of String, DialogResult))

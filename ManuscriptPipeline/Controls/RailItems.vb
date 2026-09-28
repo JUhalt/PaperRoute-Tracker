@@ -16,6 +16,11 @@ Namespace Controls
         Help
         CollapseRail
         ExpandRail
+        Deadlines
+        Revision
+        FollowUp
+        Checklist
+        Publication
     End Enum
 
     ' Paints one left-rail item: an icon, its label, and an optional count.
@@ -106,7 +111,7 @@ Namespace Controls
         End Sub
 
         ' Simple line icons on a 16-unit grid, after the Workspace mockup.
-        Private Shared Sub DrawGlyph(g As Graphics, glyph As RailGlyph, box As RectangleF, ink As Color, stroke As Single)
+        Friend Shared Sub DrawGlyph(g As Graphics, glyph As RailGlyph, box As RectangleF, ink As Color, stroke As Single)
 
             Dim u As Single = box.Width / 16.0F
             Dim x0 As Single = box.X
@@ -143,6 +148,25 @@ Namespace Controls
                                 p(CSng(8 + 4.4 * Math.Cos(angle)), CSng(8 + 4.4 * Math.Sin(angle))),
                                 p(CSng(8 + 6.2 * Math.Cos(angle)), CSng(8 + 6.2 * Math.Sin(angle))))
                         Next
+                    Case RailGlyph.Deadlines
+                        g.DrawRectangle(pen, Rectangle.Round(r(2, 3, 12, 11)))
+                        g.DrawLine(pen, p(2, 6.5F), p(14, 6.5F))
+                        g.DrawLine(pen, p(5.5F, 1.5F), p(5.5F, 4.5F))
+                        g.DrawLine(pen, p(10.5F, 1.5F), p(10.5F, 4.5F))
+                    Case RailGlyph.Revision
+                        g.DrawLines(pen, {p(3, 13), p(3, 10.5F), p(10.5F, 3), p(13, 5.5F), p(5.5F, 13), p(3, 13)})
+                        g.DrawLine(pen, p(9, 4.5F), p(11.5F, 7))
+                    Case RailGlyph.FollowUp
+                        g.DrawRectangle(pen, Rectangle.Round(r(2.5F, 4, 11, 8)))
+                        g.DrawLines(pen, {p(2.5F, 4), p(8, 8.5F), p(13.5F, 4)})
+                    Case RailGlyph.Checklist
+                        g.DrawRectangle(pen, Rectangle.Round(r(3, 3, 10, 10)))
+                        g.DrawLines(pen, {p(5.5F, 8.2F), p(7.3F, 10), p(10.7F, 6)})
+                    Case RailGlyph.Publication
+                        ' An open book.
+                        g.DrawLines(pen, {p(8, 4.5F), p(3, 3.5F), p(3, 12), p(8, 13)})
+                        g.DrawLines(pen, {p(8, 4.5F), p(13, 3.5F), p(13, 12), p(8, 13)})
+                        g.DrawLine(pen, p(8, 4.5F), p(8, 13))
                     Case RailGlyph.CollapseRail
                         g.DrawLines(pen, {p(8.5F, 4), p(4.5F, 8), p(8.5F, 12)})
                         g.DrawLines(pen, {p(12.5F, 4), p(8.5F, 8), p(12.5F, 12)})

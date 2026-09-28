@@ -89,7 +89,7 @@ Partial Public Class Form1
         Select Case page
             Case WorkspacePage.Library : Return "Library"
             Case WorkspacePage.Journals : Return "Journals"
-            Case WorkspacePage.Reminders : Return "Reminders"
+            Case WorkspacePage.Deadlines : Return "Deadlines"
             Case WorkspacePage.ImportExport : Return "Import & Export"
             Case Else : Return "Board"
         End Select
@@ -260,6 +260,8 @@ Partial Public Class Form1
             End Sub
 
         Dim pageMenu As New ContextMenuStrip()
+        pageMenu.Items.Add("Check for Publication...", Nothing, Sub(sender, e) CheckOpenManuscriptForPublication())
+        pageMenu.Items.Add(New ToolStripSeparator())
         Dim deleteItem As ToolStripItem =
             pageMenu.Items.Add(
                 "Delete Manuscript...",
@@ -580,6 +582,29 @@ Partial Public Class Form1
         ShowPage(request)
 
         lblStatus.Text = "Unsaved changes discarded."
+
+    End Sub
+
+
+    ' A check can mark the saved manuscript published, so the page must
+    ' match the library first; afterwards it shows the saved version.
+    Private Sub CheckOpenManuscriptForPublication()
+
+        If manuscriptEditor Is Nothing OrElse manuscriptEditor.IsDisposed Then Return
+
+        If manuscriptEditor.HasUnsavedChanges() Then
+            MessageBox.Show(Me, "Save or discard your changes to this manuscript first, then check for a publication.",
+                            "Check for Publication", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            Return
+        End If
+
+        Dim request As PageRequest = CurrentRequest
+        CheckForPublications({currentManuscriptId})
+
+        If currentPage = WorkspacePage.Manuscript AndAlso FindManuscript(currentManuscriptId) IsNot Nothing Then
+            LeaveCurrentPage()
+            ShowPage(request)
+        End If
 
     End Sub
 

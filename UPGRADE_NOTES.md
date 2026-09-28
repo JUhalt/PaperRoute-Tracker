@@ -19,6 +19,20 @@ PaperRoute upgrades are designed not to overwrite the manuscript database, setti
 
 Use **Settings → Backup Library...** to create a portable backup. In v0.5 and earlier, it is **Data → Backup Library...**.
 
+## Moving from v0.6 to v0.7
+
+PaperRoute v0.7 replaces the Reminders page with **Deadlines** and adds the publication check. It upgrades the library to **Schema 7**, which remembers possible publications you have reviewed.
+
+Before upgrading, create a portable ZIP backup with v0.6 (**Settings → Backup Library...**) and keep it separately.
+
+The Schema 6-to-7 upgrade validates the existing library first and then changes only the schema marker, keeping the previous marker as `schema.v6.bak`. Manuscript and author data, managed files, and automatic backups stay byte-for-byte. If validation fails, nothing changes and PaperRoute says why.
+
+After upgrading:
+
+- Open **Deadlines** (Ctrl+4). Your revision deadlines, follow-ups, and reminders are all there, with work that has no date yet under **No date**.
+- **Postpone** changes the date on the record that owns it, so the manuscript page shows the same date.
+- v0.6 refuses to open a Schema 7 library. To go back, restore the backup you made with v0.6; changes made in v0.7 are not in it. Restore v0.7 backups with v0.7 or later.
+
 ## Moving from v0.5 to v0.6
 
 PaperRoute v0.6 changes where things live and how they look. **v0.6.0 is the current Stable release.** It does **not** migrate your data: the library stays on **Schema 6**, so v0.5 can still open a library that v0.6 has used, and portable backups made by either version restore in both. A backup before upgrading is still a sensible precaution.

@@ -19,7 +19,7 @@ Partial Public Class Form1
         Board
         Library
         Journals
-        Reminders
+        Deadlines
         ImportExport
         ' Not in the rail: a manuscript opened from another page.
         Manuscript
@@ -192,7 +192,7 @@ Partial Public Class Form1
             (WorkspacePage.Board, RailGlyph.Board, "Board"),
             (WorkspacePage.Library, RailGlyph.Library, "Library"),
             (WorkspacePage.Journals, RailGlyph.Journals, "Journals"),
-            (WorkspacePage.Reminders, RailGlyph.Reminders, "Reminders"),
+            (WorkspacePage.Deadlines, RailGlyph.Deadlines, "Deadlines"),
             (WorkspacePage.ImportExport, RailGlyph.ImportExport, "Import & Export")
         }
             Dim page As WorkspacePage = entry.Item1
@@ -362,7 +362,7 @@ Partial Public Class Form1
     End Sub
 
 
-    ' Library size and due reminders, refreshed with the board.
+    ' Library size and deadlines due now, refreshed with the board.
     Private Sub UpdateRailCounts()
 
         Dim count As Integer = manuscripts.Count
@@ -371,15 +371,11 @@ Partial Public Class Form1
             If(StorageEnvironment.IsDevelopmentProfile(), "Development profile" & Environment.NewLine, String.Empty) &
             count.ToString() & If(count = 1, " manuscript", " manuscripts")
 
-        Dim reminders As RailButton = Nothing
+        ' Overdue and due-today items: the ones to act on now.
+        Dim deadlines As RailButton = Nothing
 
-        If railButtons.TryGetValue(WorkspacePage.Reminders, reminders) Then
-            reminders.Badge =
-                ReminderService.NotificationCandidates(
-                    manuscripts,
-                    DateTime.Today,
-                    appSettings.ReminderNotificationDaysAhead
-                ).Count
+        If railButtons.TryGetValue(WorkspacePage.Deadlines, deadlines) Then
+            deadlines.Badge = DeadlineService.CountDueNow(manuscripts, DateTime.Today)
         End If
 
     End Sub
@@ -537,6 +533,8 @@ Partial Public Class Form1
         libraryContent = Nothing
         libraryAuthorsForm = Nothing
         libraryFilter = Nothing
+        deadlinesList = Nothing
+        deadlinesFilter = Nothing
 
         ' Hosted editors save as they go. Refresh the board's copies, as the
         ' board did after their dialogs closed.
@@ -570,11 +568,8 @@ Partial Public Class Form1
                     "Journals",
                     "Your reusable journal records and their submission checklists. Changes are saved as you make them.",
                     New JournalLibraryForm(manuscripts))
-            Case WorkspacePage.Reminders
-                view = BuildHostedPage(
-                    "Reminders",
-                    "Revision deadlines, follow-ups, and your own reminders, with calendar export. Changes are saved as you make them.",
-                    New RemindersForm(manuscripts, repository))
+            Case WorkspacePage.Deadlines
+                view = BuildDeadlinesPage()
             Case Else
                 view = BuildImportExportPage()
         End Select
@@ -1023,9 +1018,12 @@ Partial Public Class Form1
     ' Keeps an open Library page in step with the board after edits.
     Private Sub RefreshOpenPage()
 
-        If currentPage = WorkspacePage.Library Then
-            FillLibraryGrid()
-        End If
+        Select Case currentPage
+            Case WorkspacePage.Library
+                FillLibraryGrid()
+            Case WorkspacePage.Deadlines
+                FillDeadlines()
+        End Select
 
     End Sub
 
@@ -1121,6 +1119,10 @@ Partial Public Class Form1
         addCommand("Export Library as BibTeX...", "Your manuscripts as references for a reference manager.", AddressOf ExportBibTeX)
         addCommand("Export Library as RIS...", "The same, in RIS format.", AddressOf ExportRis)
         addCommand("Publication & CV Export...", "Formatted lists of your work for a CV or report.", AddressOf OpenPublicationExport)
+
+        addSection("Keep records current")
+        addCommand("Check for Publications...", "Asks Crossref, and your ORCID record if you like, whether manuscripts you are tracking have been published. Only when you ask; nothing changes until you choose Mark Published.", AddressOf CheckForPublications)
+        addCommand("Fill Blanks from Crossref...", "For manuscripts with a DOI: fills empty fields such as the journal, date, volume, and pages, after showing every change. It never replaces a value.", AddressOf FillBlanksFromCrossref)
 
         addSection("Keep it safe")
         addCommand("Backup Library...", "A ZIP of the complete library, including files PaperRoute manages. The only format that keeps everything.", AddressOf BackupLibrary)

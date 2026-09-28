@@ -131,6 +131,35 @@ internal static class BoardDemo
                 "We explain why the preregistered analysis is retained.", "Study 2")
         });
 
+        // Deadlines: follow-ups, reminders (one done), and an unsubmitted
+        // packet whose checklist is still open.
+        var submitted = manuscripts[1];
+        submitted.Submissions.Single().FollowUpDate = today.AddDays(24);
+        var underReview = manuscripts[2];
+        underReview.Submissions.Last().FollowUpDate = today.AddDays(-4);
+        underReview.PublicationMatches.Add(new PublicationMatch
+        {
+            Doi = "10.5555/demo.attention", Title = "Attention capture by salient distractors under working-memory load",
+            Journal = "Fictional Journal of Perception & Performance", PublishedDate = today.AddDays(-2), Source = PublicationMatchSource.Title
+        });
+        var draft = manuscripts[4];
+        draft.Reminders.Add(new ManuscriptReminder { Title = "Send the revised draft to coauthors", DueDate = today });
+        draft.Reminders.Add(new ManuscriptReminder { Title = "Ask the librarian about the search strategy", DueDate = today.AddDays(5) });
+        draft.Reminders.Add(new ManuscriptReminder { Title = "Book the ethics amendment", DueDate = today.AddDays(-6), IsCompleted = true, CompletedDate = today.AddDays(-2) });
+        var readiness = new ManuscriptReadiness { JournalName = "Fictional Nurse Education Review" };
+        readiness.Items.AddRange(new[]
+        {
+            new ReadinessItemState { Title = "Cover letter", IsRequired = true, Status = ReadinessItemStatus.Complete },
+            new ReadinessItemState { Title = "Ethics statement", IsRequired = true, Status = ReadinessItemStatus.Complete },
+            new ReadinessItemState { Title = "Data availability statement", IsRequired = true, Status = ReadinessItemStatus.Unresolved },
+            new ReadinessItemState { Title = "Structured abstract", IsRequired = true, Status = ReadinessItemStatus.Unresolved }
+        });
+        draft.ReadinessProfiles.Add(readiness);
+        var draftVersion = new ManuscriptVersion { Label = "Submission draft", CreatedDate = today.AddDays(-3), Notes = "Fictional version with no file." };
+        draft.Versions.Add(draftVersion);
+        draft.SubmissionPackets.Add(new SubmissionPacket { ReadinessProfileId = readiness.Id, JournalName = readiness.JournalName, Label = "Initial submission", ManuscriptVersionId = draftVersion.Id });
+        manuscripts[0].Reminders.Add(new ManuscriptReminder { Title = "Outline the introduction", DueDate = today.AddDays(12) });
+
         var library = new AuthorLibraryData();
         library.Journals.Add(openPsychology);
         new AuthorLibraryRepository().Save(empty ? new AuthorLibraryData() : library);

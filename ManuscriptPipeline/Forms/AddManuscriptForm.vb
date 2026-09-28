@@ -312,6 +312,30 @@ Namespace Forms
 
         End Function
 
+        ' The date picker fits the longest short date in this culture, plus
+        ' its drop-down button, at the display's scaling (#76). A fixed width
+        ' clipped the year at 150%.
+        Friend Sub SizeDeadlinePicker()
+
+            Dim longest As String = New DateTime(2026, 12, 28).ToString("d", Globalization.CultureInfo.CurrentCulture)
+            Dim textWidth As Integer = TextRenderer.MeasureText(longest, dtpDeadline.Font).Width
+
+            dtpDeadline.Width = textWidth +
+                SystemInformation.GetVerticalScrollBarWidthForDpi(DeviceDpi) +
+                LogicalToDeviceUnits(18)
+
+        End Sub
+
+        Protected Overrides Sub OnLoad(e As EventArgs)
+            MyBase.OnLoad(e)
+            SizeDeadlinePicker()
+        End Sub
+
+        Protected Overrides Sub OnDpiChanged(e As DpiChangedEventArgs)
+            MyBase.OnDpiChanged(e)
+            SizeDeadlinePicker()
+        End Sub
+
         Private Sub OpenTitlePage(
             sender As Object,
             e As EventArgs

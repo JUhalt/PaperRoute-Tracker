@@ -188,7 +188,7 @@ Namespace Services
                 ", ",
                 parts
             ) &
-                ". Open Reminders in PaperRoute for details."
+                ". Open Deadlines in PaperRoute for details."
 
         End Function
 
@@ -270,6 +270,11 @@ Namespace Services
                     .Title = "Revision deadline",
                     .Notes =
                         "Revision deadline recorded in the manuscript's editorial history.",
+                    .JournalName =
+                        JournalFor(
+                            manuscript,
+                            latestSubmission
+                        ),
                     .SubmissionId =
                         submissionId,
                     .IsEditableReminder = False
@@ -426,7 +431,35 @@ Namespace Services
         End Function
 
 
-        Private Shared Function SafeManuscriptTitle(
+        ' The journal handling the latest submission, or the target journal
+        ' when nothing has been submitted yet.
+        Friend Shared Function JournalFor(
+            manuscript As Manuscript,
+            submission As JournalSubmission
+        ) As String
+
+            If submission IsNot Nothing AndAlso
+               Not String.IsNullOrWhiteSpace(
+                   submission.JournalName
+               ) Then
+
+                Return submission.JournalName.Trim()
+
+            End If
+
+            If manuscript Is Nothing Then
+                Return String.Empty
+            End If
+
+            Return If(
+                manuscript.TargetJournal,
+                String.Empty
+            ).Trim()
+
+        End Function
+
+
+        Friend Shared Function SafeManuscriptTitle(
             manuscript As Manuscript
         ) As String
 

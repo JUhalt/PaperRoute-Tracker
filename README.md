@@ -17,9 +17,9 @@ PaperRoute Tracker helps researchers manage manuscripts from idea through submis
 ## Current status
 
 - **Stable:** [v0.6.0 — Workspace](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v0.6.0) brings PaperRoute into one main window with pages, a tabbed page for each manuscript with a single save step, and a calmer card-based design, with no change to your library. See the [release notes](docs/releases/0.6.0.md) and the [user guide](docs/USER_GUIDE.md).
-- **Next:** [v0.7 — Deadline Center](https://github.com/JUhalt/PaperRoute-Tracker/milestone/9) puts everything that needs action, and when, on one page.
+- **Preview:** [v0.7.0-rc.1 — Deadline Center](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v0.7.0-rc.1) replaces Reminders with a **Deadlines** page for everything that needs action, and when, and adds a user-initiated **publication check**. It upgrades the library to Schema 7; read the [release notes](docs/releases/0.7.0-rc.1.md) and [upgrade notes](UPGRADE_NOTES.md) before trying it.
 
-v0.6 uses the same Schema 6 library as v0.5, so upgrading from v0.5 changes no data. Upgrading from v0.4? Keep a separate v0.4 backup first, and restore v0.5 backups only with v0.5 or later because older restore code may ignore reviewer-response fields. The [upgrade notes](UPGRADE_NOTES.md) explain the save and compatibility boundaries.
+v0.6 uses the same Schema 6 library as v0.5, so upgrading from v0.5 changes no data. v0.7 moves the library to Schema 7, which v0.6 cannot open, so keep a backup made with v0.6 first. The [upgrade notes](UPGRADE_NOTES.md) explain the save and compatibility boundaries.
 
 **New to PaperRoute?** Start with the [PaperRoute User Guide](https://github.com/JUhalt/PaperRoute-Tracker/blob/v0.6.0/docs/USER_GUIDE.md) for a Quick Start, feature tour, and task-oriented "How do I...?" reference.
 
@@ -45,11 +45,12 @@ v0.6 uses the same Schema 6 library as v0.5, so upgrading from v0.5 changes no d
 - **Editorial decisions** including desk rejection, revision requests, acceptance, and revision deadlines.
 - **Reviewer Response Matrix** for reviewer and editor comments, statuses, draft responses, manuscript locations, and an editable response-to-reviewers export.
 - **Correspondence and local-file tracking** for decision letters, reviewer comments, response letters, and revised manuscripts.
-- **Local reminders and calendar export** for revision deadlines, submission follow-ups, and custom reminders, with optional Windows notifications and portable `.ics` events.
+- **Deadlines** for everything that needs action, grouped Overdue, Today, Next 7 days, Later, and No date: revision deadlines with reviewer-comment progress, journal follow-ups, your reminders, and unfinished submission preparation. **Postpone** changes the date where it lives. Optional Windows notifications and portable `.ics` calendar export.
 
 ### Describe and publish
 
 - **DOI & Crossref enrichment** with a preview; only selected fields are applied, and Crossref never changes stage, shelf, or target journal.
+- **Publication check**, only when you ask: has a tracked manuscript appeared, by its DOI, its preprint's published version, its title, or your ORCID works? **Mark Published** records it after showing exactly what will change; **Fill Blanks** completes empty publication fields and never replaces a value.
 - **ORCID public-profile import** of names, affiliations, and works, with explicit control over whether dated works go to Published.
 - **Reusable authors and affiliations** with manuscript-specific order, corresponding-author designation, and optional ORCID iDs.
 - **BibTeX and RIS** import with review-before-import and duplicate detection, plus export of selected records.
@@ -177,11 +178,9 @@ The internal project/folder name remains `ManuscriptPipeline` for compatibility 
 - GitHub Actions for Windows CI and release builds
 - Velopack for Windows installation and automatic updates
 
-## Inspiration and independence
+## Independence
 
-PaperRoute was inspired by the broader idea of academic manuscript pipeline tools, including the workflow concepts presented by PaperTrek. PaperRoute is an independent open-source project and is not affiliated with or endorsed by PaperTrek.
-
-The implementation, local-first data model, import/export system, backup workflow, and interface are independently developed for PaperRoute.
+PaperRoute is an independent, open-source project. Its implementation, local-first data model, import/export system, backup workflow, and interface are developed for PaperRoute, and it is not affiliated with any commercial manuscript-tracking service.
 
 ## Roadmap
 
@@ -189,7 +188,7 @@ The implementation, local-first data model, import/export system, backup workflo
 | --- | --- | --- |
 | **Released** | v0.5 — Reviewer Response Workflow | Response matrix, drafting, and Markdown export |
 | **Released** | v0.6 — Workspace | One window, manuscript pages, one save step, calmer design |
-| **Now** | [v0.7 — Deadline Center](https://github.com/JUhalt/PaperRoute-Tracker/milestone/9) | Everything that needs action, and when |
+| **Preview** | [v0.7 — Deadline Center](https://github.com/JUhalt/PaperRoute-Tracker/milestone/9) | Everything that needs action, and when; the publication check |
 | **Then** | [v0.8 — Route Analytics & Reports](https://github.com/JUhalt/PaperRoute-Tracker/milestone/10) | Your own turnaround data, route and status reports, types and tags |
 | | [v0.9 — 1.0 Hardening](https://github.com/JUhalt/PaperRoute-Tracker/milestone/11) | Onboarding, accessibility, recovery, certification |
 | **Goal** | [v1.0 — Trusted Research Workflow](https://github.com/JUhalt/PaperRoute-Tracker/milestone/12) | "I trust this application with my research workflow." |

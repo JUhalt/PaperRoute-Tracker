@@ -239,6 +239,36 @@ Namespace Forms
         End Sub
 
 
+        ' Opens the Submissions tab on one submission, for a deadline opened
+        ' from the Deadlines page; a revision with comments lands on its
+        ' reviewer responses.
+        Friend Sub ShowSubmission(
+            submissionId As Guid,
+            showResponses As Boolean
+        )
+
+            ShowSection(_submissionsSection)
+            SelectSubmissionById(submissionId)
+
+            If showResponses Then
+                _submissionDetail?.ShowReviewerResponses()
+            End If
+
+        End Sub
+
+
+        Friend Sub ShowReadinessAndPackets()
+
+            For Each tab As ShelfTabButton In _sectionTabs
+                If tab.Text = "Readiness & Packets" Then
+                    ShowSection(DirectCast(tab.Tag, Control))
+                    Return
+                End If
+            Next
+
+        End Sub
+
+
         Friend Sub ConfirmDeleteFromPage()
 
             RequestDelete(
