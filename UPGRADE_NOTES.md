@@ -21,7 +21,7 @@ Use **Settings → Backup Library...** to create a portable backup. In v0.5 and 
 
 ## Moving from v0.6 to v0.7
 
-PaperRoute v0.7 replaces the Reminders page with **Deadlines** and adds the publication check. It upgrades the library to **Schema 7**, which remembers possible publications you have reviewed.
+PaperRoute v0.7 replaces the Reminders page with **Deadlines** and adds the publication check. **v0.7.0 is the current Stable release.** It upgrades the library to **Schema 7**, which remembers possible publications you have reviewed.
 
 Before upgrading, create a portable ZIP backup with v0.6 (**Settings → Backup Library...**) and keep it separately.
 
@@ -35,7 +35,7 @@ After upgrading:
 
 ## Moving from v0.5 to v0.6
 
-PaperRoute v0.6 changes where things live and how they look. **v0.6.0 is the current Stable release.** It does **not** migrate your data: the library stays on **Schema 6**, so v0.5 can still open a library that v0.6 has used, and portable backups made by either version restore in both. A backup before upgrading is still a sensible precaution.
+PaperRoute v0.6 changes where things live and how they look. It does **not** migrate your data: the library stays on **Schema 6**, so v0.5 can still open a library that v0.6 has used, and portable backups made by either version restore in both. A backup before upgrading is still a sensible precaution.
 
 What to expect after upgrading:
 

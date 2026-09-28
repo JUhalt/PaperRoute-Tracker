@@ -26,9 +26,9 @@ Development is tracked in the [v0.8 milestone](https://github.com/JUhalt/PaperRo
 
 - **Schema 8** adds work types, tags, and tag colors. As with Schema 7, the upgrade validates the library and changes only the schema marker; records start with no type and no tags.
 
-## [Unreleased] — v0.7 Deadline Center
+## [0.7.0] - 2026-09-28
 
-v0.7.0-rc.1 is available on the Preview channel. Development is tracked in [PR #78](https://github.com/JUhalt/PaperRoute-Tracker/pull/78) and the [v0.7 milestone](https://github.com/JUhalt/PaperRoute-Tracker/milestone/9).
+PaperRoute v0.7.0 — **Deadline Center** — was released on September 28, 2026 from [PR #78](https://github.com/JUhalt/PaperRoute-Tracker/pull/78), after the v0.7.0-rc.1 Preview. Certification is recorded in [#79](https://github.com/JUhalt/PaperRoute-Tracker/issues/79). v0.7 upgrades the library to Schema 7.
 
 ### Added
 
@@ -47,6 +47,9 @@ v0.7.0-rc.1 is available on the Preview channel. Development is tracked in [PR #
 
 - Revision deadlines now name their journal on the Deadlines page and in calendar exports.
 - The **First deadline** date in Add Manuscript shows in full at 150% display scaling ([#76](https://github.com/JUhalt/PaperRoute-Tracker/issues/76)).
+- The update prompt opens on **Download & Restart** instead of with its release notes selected.
+- About PaperRoute scales with the display instead of clipping its text at 150%, and describes PaperRoute in its one-line description.
+- Check for Publications says there is nothing to check yet when the library is empty, instead of that everything is already published.
 
 ## [0.6.0] - 2026-09-27
 

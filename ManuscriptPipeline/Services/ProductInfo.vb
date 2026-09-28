@@ -8,7 +8,7 @@ Namespace Services
         Public Const DisplayName As String = "PaperRoute"
         Public Const ProductName As String = "PaperRoute Tracker"
         Public Const Tagline As String = "Track • Submit • Publish"
-        Public Const Description As String = "Local-first academic manuscript tracking for researchers."
+        Public Const Description As String = "Local-first, privacy-focused app for tracking academic manuscripts from draft through submission, revision, and publication."
 
         ' Current PaperRoute storage names.
         Public Const DataFolderName As String = "PaperRoute"

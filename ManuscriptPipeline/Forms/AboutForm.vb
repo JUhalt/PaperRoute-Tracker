@@ -23,6 +23,9 @@ Namespace Forms
             Me.FormBorderStyle = FormBorderStyle.FixedDialog
             Me.MaximizeBox = False
             Me.MinimizeBox = False
+            ' Sizes below are at 96 DPI and scale with the display; without the
+            ' base dimensions the text grew at 150% but the dialog did not.
+            Me.AutoScaleDimensions = New SizeF(96.0F, 96.0F)
             Me.ClientSize = New Size(640, 410)
             Me.Font = New Font("Segoe UI", 10.0F)
             Me.AutoScaleMode = AutoScaleMode.Dpi
@@ -92,7 +95,7 @@ Namespace Forms
 
             Dim lblDescription As New Label With {
                 .Text =
-                    "Track manuscripts from idea through submission, peer review, revision, publication—or the File Drawer—while keeping your workflow data on your own computer." &
+                    ProductInfo.Description &
                     Environment.NewLine & Environment.NewLine &
                     "Open source • Local first • Built for academic publishing workflows.",
                 .Dock = DockStyle.Fill,

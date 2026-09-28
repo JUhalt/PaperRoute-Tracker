@@ -27,7 +27,7 @@ internal static class Program
             return;
         }
 
-        var surfaces = new[] { "vault", "readiness", "packet", "packet-new", "file", "file-new", "notes", "submission", "responses", "workflow", "board", "publications", "fill" };
+        var surfaces = new[] { "vault", "readiness", "packet", "packet-new", "file", "file-new", "notes", "submission", "responses", "workflow", "board", "publications", "fill", "about" };
         var positional = args.Where(argument => !argument.StartsWith("--")).ToArray();
         var surface = positional.FirstOrDefault()?.ToLowerInvariant() ?? "vault";
         var minimum = args.Contains("--minimum", StringComparer.OrdinalIgnoreCase);
@@ -75,6 +75,14 @@ internal static class Program
                 };
                 ConfigureDisplayEvidence(board, primary);
                 board.ShowDialog();
+                return;
+            }
+
+            if (surface == "about")
+            {
+                using var about = new AboutForm();
+                ConfigureDisplayEvidence(about, primary);
+                about.ShowDialog();
                 return;
             }
 

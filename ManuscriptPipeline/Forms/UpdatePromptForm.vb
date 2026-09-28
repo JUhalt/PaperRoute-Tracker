@@ -123,6 +123,15 @@ Namespace Forms
 
             Me.AcceptButton = btnInstall
             Me.CancelButton = btnLater
+
+            ' The notes box is first in tab order, and a text box that takes
+            ' focus on opening selects all its text. Start on the default
+            ' button instead, with nothing selected.
+            AddHandler Me.Shown,
+                Sub(sender, e)
+                    Me.ActiveControl = btnInstall
+                    txtNotes.Select(0, 0)
+                End Sub
             Me.Controls.Add(root)
 
         End Sub

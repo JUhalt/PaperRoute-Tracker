@@ -8,7 +8,7 @@
 [![Latest Release](https://img.shields.io/github/v/release/JUhalt/PaperRoute-Tracker)](https://github.com/JUhalt/PaperRoute-Tracker/releases/latest)
 [![License: GPL-3.0-only](https://img.shields.io/badge/License-GPL--3.0--only-blue.svg)](LICENSE.txt)
 
-**A local-first academic manuscript tracker for researchers.**
+**Local-first, privacy-focused app for tracking academic manuscripts from draft through submission, revision, and publication.**
 
 > **Track • Submit • Publish**
 
@@ -16,12 +16,16 @@ PaperRoute Tracker helps researchers manage manuscripts from idea through submis
 
 ## Current status
 
-- **Stable:** [v0.6.0 — Workspace](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v0.6.0) brings PaperRoute into one main window with pages, a tabbed page for each manuscript with a single save step, and a calmer card-based design, with no change to your library. See the [release notes](docs/releases/0.6.0.md) and the [user guide](docs/USER_GUIDE.md).
-- **Preview:** [v0.7.0-rc.1 — Deadline Center](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v0.7.0-rc.1) replaces Reminders with a **Deadlines** page for everything that needs action, and when, and adds a user-initiated **publication check**. It upgrades the library to Schema 7; read the [release notes](docs/releases/0.7.0-rc.1.md) and [upgrade notes](UPGRADE_NOTES.md) before trying it.
+- **Stable:** [v0.7.0 — Deadline Center](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v0.7.0) puts everything that needs action, and when, on one **Deadlines** page, and adds a **publication check** that runs only when you ask. See the [release notes](docs/releases/0.7.0.md) and the [user guide](docs/USER_GUIDE.md).
+- **Next:** [v0.8 — Route Analytics & Reports](https://github.com/JUhalt/PaperRoute-Tracker/milestone/10): your own journal history, route statistics, shareable reports, and work types and tags.
 
-v0.6 uses the same Schema 6 library as v0.5, so upgrading from v0.5 changes no data. v0.7 moves the library to Schema 7, which v0.6 cannot open, so keep a backup made with v0.6 first. The [upgrade notes](UPGRADE_NOTES.md) explain the save and compatibility boundaries.
+v0.7 moves the library to Schema 7, which v0.6 cannot open, so keep a backup made with v0.6 before upgrading. The [upgrade notes](UPGRADE_NOTES.md) explain the save and compatibility boundaries.
 
-**New to PaperRoute?** Start with the [PaperRoute User Guide](https://github.com/JUhalt/PaperRoute-Tracker/blob/v0.6.0/docs/USER_GUIDE.md) for a Quick Start, feature tour, and task-oriented "How do I...?" reference.
+**New to PaperRoute?** Start with the [PaperRoute User Guide](https://github.com/JUhalt/PaperRoute-Tracker/blob/v0.7.0/docs/USER_GUIDE.md) for a Quick Start, feature tour, and task-oriented "How do I...?" reference.
+
+<p align="center">
+  <img src="docs/images/board.png" width="860" alt="The PaperRoute board: pipeline cards with stage, what needs attention, target journal, and each manuscript's route so far (fictional sample data)">
+</p>
 
 ## What PaperRoute does
 
@@ -32,6 +36,10 @@ v0.6 uses the same Schema 6 library as v0.5, so upgrading from v0.5 changes no d
 - **Search, stage filtering, and sorting** across the manuscript library.
 - **Visual Route View** showing submissions, decisions, revisions, and reroutes in order.
 - **Version History** with immutable managed snapshots, linked files, or metadata-only versions associated with submissions, decisions, and revision rounds.
+
+<p align="center">
+  <img src="docs/images/deadlines.png" width="860" alt="The Deadlines page: overdue, today, next 7 days, later, and undated items, each with its own actions (fictional sample data)">
+</p>
 
 ### Prepare and submit
 
@@ -188,8 +196,8 @@ PaperRoute is an independent, open-source project. Its implementation, local-fir
 | --- | --- | --- |
 | **Released** | v0.5 — Reviewer Response Workflow | Response matrix, drafting, and Markdown export |
 | **Released** | v0.6 — Workspace | One window, manuscript pages, one save step, calmer design |
-| **Preview** | [v0.7 — Deadline Center](https://github.com/JUhalt/PaperRoute-Tracker/milestone/9) | Everything that needs action, and when; the publication check |
-| **Then** | [v0.8 — Route Analytics & Reports](https://github.com/JUhalt/PaperRoute-Tracker/milestone/10) | Your own turnaround data, route and status reports, types and tags |
+| **Released** | v0.7 — Deadline Center | Everything that needs action, and when; the publication check |
+| **Now** | [v0.8 — Route Analytics & Reports](https://github.com/JUhalt/PaperRoute-Tracker/milestone/10) | Your own turnaround data, route and status reports, types and tags |
 | | [v0.9 — 1.0 Hardening](https://github.com/JUhalt/PaperRoute-Tracker/milestone/11) | Onboarding, accessibility, recovery, certification |
 | **Goal** | [v1.0 — Trusted Research Workflow](https://github.com/JUhalt/PaperRoute-Tracker/milestone/12) | "I trust this application with my research workflow." |
 
