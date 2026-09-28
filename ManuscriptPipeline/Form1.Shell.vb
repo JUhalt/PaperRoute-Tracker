@@ -740,7 +740,7 @@ Partial Public Class Form1
     Private Function BuildLibraryPage() As Control
 
         libraryFilter = New TextBox With {
-            .PlaceholderText = "Filter by title, journal, stage, or route",
+            .PlaceholderText = "Filter by title, journal, stage, route, type, or tag",
             .BorderStyle = BorderStyle.None,
             .BackColor = UiTheme.CardBackground(),
             .ForeColor = UiTheme.PrimaryText(),
@@ -919,6 +919,8 @@ Partial Public Class Form1
         grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Shelf", .HeaderText = "Shelf", .AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells})
         grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Journal", .HeaderText = "Target journal", .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = 55})
         grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Route", .HeaderText = "Route", .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = 70})
+        grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Type", .HeaderText = "Type", .AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells})
+        grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Tags", .HeaderText = "Tags", .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = 45})
         grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Days", .HeaderText = "Days in stage", .AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells, .ValueType = GetType(Integer)})
         grid.Columns("Days").DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight
 
@@ -968,9 +970,11 @@ Partial Public Class Form1
 
         For Each manuscript As Manuscript In manuscripts
             Dim route As String = RouteSummaryService.Describe(manuscript).Text
+            Dim type As String = If(manuscript.WorkType = WorkType.Unspecified, String.Empty, WorkTypeService.DisplayName(manuscript.WorkType))
+            Dim tags As String = String.Join(", ", If(manuscript.Tags, New List(Of String)()))
 
             If filter.Length > 0 AndAlso
-               Not {manuscript.Title, manuscript.TargetJournal, FormatStage(manuscript.CurrentStage), FormatShelf(manuscript.Location), route}.
+               Not {manuscript.Title, manuscript.TargetJournal, FormatStage(manuscript.CurrentStage), FormatShelf(manuscript.Location), route, type, tags}.
                    Any(Function(value) If(value, String.Empty).IndexOf(filter, StringComparison.CurrentCultureIgnoreCase) >= 0) Then
                 Continue For
             End If
@@ -987,6 +991,8 @@ Partial Public Class Form1
                 FormatShelf(manuscript.Location),
                 manuscript.TargetJournal,
                 route,
+                type,
+                tags,
                 days)
 
             libraryGrid.Rows(index).Tag = manuscript

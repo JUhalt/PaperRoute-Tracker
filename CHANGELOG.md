@@ -12,9 +12,15 @@ Development is tracked in the [v0.8 milestone](https://github.com/JUhalt/PaperRo
 - **Your Journals** ([#62](https://github.com/JUhalt/PaperRoute-Tracker/issues/62)): submissions, outcomes, and median days to a first decision and in review for each journal you have used, grouped by Journal Library record or exact name, never by guess. The Journals page shows the same history for the selected journal.
 - **Pipeline Report...** and **Route Report...** ([#63](https://github.com/JUhalt/PaperRoute-Tracker/issues/63), [#30](https://github.com/JUhalt/PaperRoute-Tracker/issues/30)): self-contained web pages to print or save as PDF, previewed before saving. They never include notes, correspondence, reviewer comments, file paths, or contact details.
 
+- **Work types and tags** ([#64](https://github.com/JUhalt/PaperRoute-Tracker/issues/64)): a type (journal article, preprint, conference paper or abstract, poster, book chapter, thesis, other) and your own colored tags on each manuscript's Overview. Tags show on board cards and in the Library, and both are searchable. Imports set the type when the source states it; nothing is inferred. CV export can group by type, and the Excel workbook keeps both.
+
 ### Changed
 
 - Import & Export moves to **Ctrl+6**; Insights takes Ctrl+5.
+
+### Storage
+
+- **Schema 8** adds work types, tags, and tag colors. As with Schema 7, the upgrade validates the library and changes only the schema marker; records start with no type and no tags.
 
 ## [Unreleased] — v0.7 Deadline Center
 

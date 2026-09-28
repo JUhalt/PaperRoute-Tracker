@@ -719,6 +719,56 @@ Public Class ManuscriptPageTests
             End Sub)
     End Sub
 
+    ' Work types and tags (#64): edited on the page, saved with it, shown on
+    ' the card, and found by board search.
+    <TestMethod>
+    Public Sub TypesAndTagsAreEditedOnThePageAndShownOnTheBoard()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard()
+                    Dim manuscript As Manuscript = Sample("Tagged manuscript")
+                    Dim other As Manuscript = Sample("Other manuscript")
+                    other.Tags.Add("grant")
+                    board.Prepare(manuscript, other)
+                    board.Open(manuscript)
+
+                    Dim type As ComboBox = Descendants(board.Editor).OfType(Of ComboBox)().Single(Function(box) box.AccessibleName = "Type of work")
+                    Assert.AreEqual("Not specified", type.Text, "No type is inferred.")
+                    type.SelectedIndex = CInt(WorkType.Poster)
+                    Dim tags As TagEditor = Descendants(board.Editor).OfType(Of TagEditor)().Single()
+                    CollectionAssert.Contains(tags.Input.AutoCompleteCustomSource.Cast(Of String)().ToList(), "grant", "Tags already in the library are suggested.")
+                    tags.Input.Text = "teaching"
+                    tags.Commit()
+                    tags.Input.Text = " Teaching "
+                    tags.Commit()
+                    Assert.AreEqual(1, Descendants(tags).OfType(Of TagChipButton)().Count(), "A tag is added once.")
+                    Assert.IsTrue(board.Editor.HasUnsavedChanges())
+                    Assert.AreEqual(WorkType.Unspecified, manuscript.WorkType, "Edits stay in the working copy until saved.")
+
+                    board.PressCommandKey(Keys.Control Or Keys.S)
+                    Assert.AreEqual(WorkType.Poster, manuscript.WorkType)
+                    CollectionAssert.AreEqual({"teaching"}, manuscript.Tags)
+                    Assert.AreEqual(1, board.SaveCount)
+
+                    board.PressCommandKey(Keys.Alt Or Keys.Left)
+                    Assert.AreEqual("Board", board.PageName)
+                    Dim strip As TagStrip = Descendants(board).OfType(Of TagStrip)().Single(Function(item) item.AccessibleName = "Tags: teaching")
+                    Assert.IsTrue(strip.Width > 0, "The card shows the tag on its journal line.")
+
+                    Dim search As TextBox = DirectCast(GetType(Form1).GetField("txtBoardSearch", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(board), TextBox)
+                    Dim matches = GetType(Form1).GetMethod("ManuscriptMatchesBoardFilters", BindingFlags.Instance Or BindingFlags.NonPublic)
+                    search.Text = "#teaching"
+                    Assert.IsTrue(CBool(matches.Invoke(board, New Object() {manuscript})))
+                    Assert.IsFalse(CBool(matches.Invoke(board, New Object() {other})))
+                    search.Text = "poster"
+                    Assert.IsTrue(CBool(matches.Invoke(board, New Object() {manuscript})), "The type is searchable too.")
+                    search.Text = String.Empty
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
     Private Shared Function DeadlineRows(board As PageBoard) As List(Of DeadlineRow)
         Return Descendants(board).OfType(Of DeadlineRow)().ToList()
     End Function

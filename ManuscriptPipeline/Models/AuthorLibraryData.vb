@@ -16,6 +16,11 @@ Namespace Models
         Public Property Journals As List(Of JournalRecord) =
             New List(Of JournalRecord)()
 
+        ' Colors chosen for tags (#64). A tag without one gets its color from
+        ' its name.
+        Public Property TagColors As List(Of TagColor) =
+            New List(Of TagColor)()
+
     End Class
 
 End Namespace

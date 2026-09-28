@@ -523,6 +523,17 @@ The Deadlines page is the authoritative view.
 
 ---
 
+## Work Types and Tags
+
+Every manuscript can have a **type** and any number of **tags**, on the **Type and tags** card of its Overview tab.
+
+- **Type** says what kind of work it is: journal article, preprint, conference paper, conference abstract, poster, book chapter, thesis or dissertation, or other. A new manuscript has no type until you choose one; PaperRoute never guesses. Imports set the type when the source says it (a BibTeX entry type, an RIS `TY` line, an ORCID work type, or a Crossref record), and Crossref never replaces a type you chose.
+- **Tags** are your own words, such as a grant, a lab project, or a student. Type a tag and press **Enter** (or a comma); tags already used in the library are suggested. Remove one with its **×**, or select it and press **Delete**. Right-click a tag to choose its color; otherwise its color comes from its name, so the same tag always looks the same.
+
+Tags appear on board cards beside the journal, and in the Library's **Type** and **Tags** columns. Search the board or filter the Library by a tag or type; clicking a card's tags searches the board for the first one. **Publication & CV Export** can **Group by type**, with sections such as Journal articles and Conference papers. The Excel workbook keeps both in its **WorkType** and **Tags** columns.
+
+Types and tags never change a manuscript's stage, shelf, or route.
+
 ## Insights and Reports
 
 Open **Insights** in the left rail (Ctrl+5) to see how your work has moved through journals. Everything is calculated on this computer from your own PaperRoute records, each time you open the page. Nothing is sent anywhere, and nothing is changed.

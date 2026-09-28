@@ -79,7 +79,8 @@ Namespace Services
             manuscripts As IEnumerable(Of Manuscript),
             authorLibrary As AuthorLibraryData,
             format As PublicationExportFormat,
-            style As PublicationExportStyle
+            style As PublicationExportStyle,
+            Optional groupByType As Boolean = False
         ) As String
 
             If manuscripts Is Nothing Then
@@ -109,6 +110,10 @@ Namespace Services
                         StringComparer.CurrentCultureIgnoreCase
                     ).
                     ToList()
+
+            If groupByType Then
+                Return ExportGrouped(items, authorLibrary, format, style)
+            End If
 
             Select Case format
 
@@ -141,6 +146,76 @@ Namespace Services
                     Throw New ArgumentOutOfRangeException(
                         NameOf(format)
                     )
+
+            End Select
+
+        End Function
+
+
+        ' One section per kind of work (#64), in a fixed order; work without
+        ' a type, or of another type, comes last as "Other work".
+        Public Shared Function GroupHeading(type As WorkType) As String
+            Select Case type
+                Case WorkType.JournalArticle : Return "Journal articles"
+                Case WorkType.Preprint : Return "Preprints"
+                Case WorkType.ConferencePaper : Return "Conference papers"
+                Case WorkType.ConferenceAbstract : Return "Conference abstracts"
+                Case WorkType.Poster : Return "Posters"
+                Case WorkType.BookChapter : Return "Book chapters"
+                Case WorkType.Thesis : Return "Theses and dissertations"
+                Case Else : Return "Other work"
+            End Select
+        End Function
+
+
+        Private Shared Function ExportGrouped(
+            items As List(Of Manuscript),
+            authorLibrary As AuthorLibraryData,
+            format As PublicationExportFormat,
+            style As PublicationExportStyle
+        ) As String
+
+            Dim sections = items.
+                GroupBy(Function(item) If(item.WorkType = WorkType.Unspecified, WorkType.Other, item.WorkType)).
+                OrderBy(Function(group) CInt(group.Key)).ToList()
+
+            Dim builder As New StringBuilder()
+
+            Select Case format
+
+                Case PublicationExportFormat.PlainText
+                    If style = PublicationExportStyle.CvSection Then builder.AppendLine("PUBLICATIONS").AppendLine()
+                    For Each section In sections
+                        builder.AppendLine(GroupHeading(section.Key).ToUpperInvariant()).AppendLine()
+                        builder.AppendLine(ExportPlainText(section.ToList(), authorLibrary, PublicationExportStyle.PublicationList)).AppendLine()
+                    Next
+                    Return builder.ToString().TrimEnd()
+
+                Case PublicationExportFormat.Markdown
+                    If style = PublicationExportStyle.CvSection Then builder.AppendLine("## Publications").AppendLine()
+                    For Each section In sections
+                        builder.AppendLine("### " & GroupHeading(section.Key)).AppendLine()
+                        builder.AppendLine(ExportMarkdown(section.ToList(), authorLibrary, PublicationExportStyle.PublicationList)).AppendLine()
+                    Next
+                    Return builder.ToString().TrimEnd()
+
+                Case PublicationExportFormat.Html
+                    builder.AppendLine("<!doctype html>")
+                    builder.AppendLine("<html><head><meta charset=""utf-8""><title>PaperRoute Publications</title></head><body>")
+                    If style = PublicationExportStyle.CvSection Then builder.AppendLine("<h2>Publications</h2>")
+                    For Each section In sections
+                        builder.AppendLine("<h3>" & WebUtility.HtmlEncode(GroupHeading(section.Key)) & "</h3>")
+                        builder.AppendLine("<ul>")
+                        For Each manuscript As Manuscript In section
+                            builder.Append("<li>").Append(WebUtility.HtmlEncode(FormatCitation(manuscript, authorLibrary))).AppendLine("</li>")
+                        Next
+                        builder.AppendLine("</ul>")
+                    Next
+                    builder.AppendLine("</body></html>")
+                    Return builder.ToString()
+
+                Case Else
+                    Throw New ArgumentOutOfRangeException(NameOf(format))
 
             End Select
 

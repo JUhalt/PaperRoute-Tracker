@@ -171,13 +171,16 @@ Namespace Services
                 End If
 
                 Dim recordType As String =
-                    If(
-                        manuscript.Metadata IsNot Nothing AndAlso
-                        Not String.IsNullOrWhiteSpace(
-                            manuscript.Metadata.PublicationJournal
-                        ),
-                        "JOUR",
-                        "GEN"
+                    WorkTypeService.ToRis(
+                        manuscript.WorkType,
+                        If(
+                            manuscript.Metadata IsNot Nothing AndAlso
+                            Not String.IsNullOrWhiteSpace(
+                                manuscript.Metadata.PublicationJournal
+                            ),
+                            "JOUR",
+                            "GEN"
+                        )
                     )
 
                 AddLine(builder, "TY", recordType)

@@ -193,7 +193,9 @@ Namespace Services
                 "TargetJournal",
                 "StageEnteredDate",
                 "FileDrawerDate",
-                "FileDrawerReason"
+                "FileDrawerReason",
+                "WorkType",
+                "Tags"
             }
 
             WriteHeaders(
@@ -211,6 +213,8 @@ Namespace Services
             worksheet.Column("F").Width = 18
             worksheet.Column("G").Width = 18
             worksheet.Column("H").Width = 42
+            worksheet.Column("I").Width = 22
+            worksheet.Column("J").Width = 30
 
             worksheet.Range("F2:G500").Style.NumberFormat.Format =
                 "yyyy-mm-dd"

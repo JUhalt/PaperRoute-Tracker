@@ -32,7 +32,9 @@ Namespace Services
                 .StageEnteredDate = source.StageEnteredDate,
                 .RevisionDeadline = source.RevisionDeadline,
                 .FileDrawerDate = source.FileDrawerDate,
-                .FileDrawerReason = source.FileDrawerReason
+                .FileDrawerReason = source.FileDrawerReason,
+                .WorkType = source.WorkType,
+                .Tags = If(source.Tags, New List(Of String)()).ToList()
             }
 
             If source.Authors IsNot Nothing Then

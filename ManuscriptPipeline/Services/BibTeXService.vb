@@ -84,13 +84,16 @@ Namespace Services
                 End If
 
                 Dim entryType As String =
-                    If(
-                        manuscript.Metadata IsNot Nothing AndAlso
-                        Not String.IsNullOrWhiteSpace(
-                            manuscript.Metadata.PublicationJournal
-                        ),
-                        "article",
-                        "misc"
+                    WorkTypeService.ToBibTeX(
+                        manuscript.WorkType,
+                        If(
+                            manuscript.Metadata IsNot Nothing AndAlso
+                            Not String.IsNullOrWhiteSpace(
+                                manuscript.Metadata.PublicationJournal
+                            ),
+                            "article",
+                            "misc"
+                        )
                     )
 
                 Dim key As String =
