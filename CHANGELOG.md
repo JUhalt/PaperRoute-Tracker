@@ -24,6 +24,8 @@ PaperRoute v0.7.0 — **Deadline Center** — was released on September 28, 2026
 - Revision deadlines now name their journal on the Deadlines page and in calendar exports.
 - The **First deadline** date in Add Manuscript shows in full at 150% display scaling ([#76](https://github.com/JUhalt/PaperRoute-Tracker/issues/76)).
 - The update prompt opens on **Download & Restart** instead of with its release notes selected.
+- About PaperRoute scales with the display instead of clipping its text at 150%, and describes PaperRoute in its one-line description.
+- Check for Publications says there is nothing to check yet when the library is empty, instead of that everything is already published.
 
 ## [0.6.0] - 2026-09-27
 

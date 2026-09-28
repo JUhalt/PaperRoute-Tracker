@@ -9,7 +9,7 @@
     <Product>PaperRoute Tracker</Product>
     <Title>PaperRoute Tracker</Title>
     <Authors>Joshua Uhalt</Authors>
-    <Description>Local-first academic manuscript tracking for researchers.</Description>
+    <Description>Local-first, privacy-focused app for tracking academic manuscripts from draft through submission, revision, and publication.</Description>
     <ApplicationIcon>Assets\PaperRoute.ico</ApplicationIcon>
     <Company>PaperRoute</Company>
     <Copyright>Copyright © Joshua Uhalt 2026</Copyright>
