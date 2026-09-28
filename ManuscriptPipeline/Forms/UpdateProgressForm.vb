@@ -29,6 +29,8 @@ Namespace Forms
             Me.StartPosition = FormStartPosition.CenterParent
             Me.FormBorderStyle = FormBorderStyle.FixedDialog
             Me.ControlBox = False
+            ' Sizes below are at 96 DPI and scale with the display.
+            Me.AutoScaleDimensions = New SizeF(96.0F, 96.0F)
             Me.ClientSize = New Size(500, 165)
             Me.Font = New Font("Segoe UI", 10.0F)
             Me.AutoScaleMode = AutoScaleMode.Dpi

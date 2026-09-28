@@ -22,6 +22,7 @@ v0.8.0-rc.1 is available on the Preview channel. Development is tracked in [PR #
 ### Fixed
 
 - A second launch of PaperRoute brings the open window forward instead of opening another window on the same library, where a save in one could overwrite the other ([#77](https://github.com/JUhalt/PaperRoute-Tracker/issues/77)).
+- The update prompt and its progress window scale with the display, so **Download & Restart** shows its full label at 125% and 150% (found during v0.8.0-rc.1 certification, [#85](https://github.com/JUhalt/PaperRoute-Tracker/issues/85)). The prompt comes from the installed version, so the fix applies to updates offered from v0.8 onward.
 
 ### Storage
 
