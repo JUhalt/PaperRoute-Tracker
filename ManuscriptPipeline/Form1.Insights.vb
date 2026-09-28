@@ -18,6 +18,11 @@ Partial Public Class Form1
     Private insightsJournal As JournalHistory = Nothing
     Private tabInsightsJournals As ShelfTabButton = Nothing
     Private tabInsightsRoutes As ShelfTabButton = Nothing
+    Private tabInsightsMap As ShelfTabButton = Nothing
+    ' The Route Map shows published routes unless asked for all of them.
+    Private insightsMapAll As Boolean = False
+    ' Opens a route from the Route Map; tests replace the dialog.
+    Friend routeViewOpener As Action(Of Manuscript) = Nothing
     Private insightsTiles As FlowLayoutPanel = Nothing
     Private insightsScope As LinkLabel = Nothing
 
@@ -81,8 +86,10 @@ Partial Public Class Form1
             End Sub
         tabInsightsJournals = New ShelfTabButton() With {.Text = "Your Journals"}
         tabInsightsRoutes = New ShelfTabButton() With {.Text = "Your Routes"}
+        tabInsightsMap = New ShelfTabButton() With {.Text = "Route Map"}
         views.Controls.Add(tabInsightsJournals)
         views.Controls.Add(tabInsightsRoutes)
+        views.Controls.Add(tabInsightsMap)
         body.Controls.Add(views, 0, 1)
 
         ' "Showing manuscripts sent to X · Show all" while a journal is chosen.
@@ -126,6 +133,7 @@ Partial Public Class Form1
         tabInsightsJournals.Checked = True
         AddHandler tabInsightsJournals.CheckedChanged, Sub(sender, e) If tabInsightsJournals.Checked Then FillInsights()
         AddHandler tabInsightsRoutes.CheckedChanged, Sub(sender, e) If tabInsightsRoutes.Checked Then FillInsights()
+        AddHandler tabInsightsMap.CheckedChanged, Sub(sender, e) If tabInsightsMap.Checked Then FillInsights()
 
         FillInsights()
         Return frame
@@ -160,18 +168,19 @@ Partial Public Class Form1
             child.Dispose()
         Next
 
-        If tabInsightsRoutes.Checked Then
-            insightsGrid = CreateRoutesGrid(statistics)
-            insightsScope.Visible = insightsJournal IsNot Nothing
-            If insightsJournal IsNot Nothing Then
-                insightsScope.Text = "Showing manuscripts sent to " & insightsJournal.JournalName & "  ·  Show all"
-                insightsScope.LinkArea = New LinkArea(insightsScope.Text.Length - 8, 8)
-            End If
-        Else
-            insightsGrid = CreateJournalsGrid(statistics)
-            insightsScope.Visible = False
+        insightsScope.Visible = insightsJournal IsNot Nothing AndAlso Not tabInsightsJournals.Checked
+        If insightsScope.Visible Then
+            insightsScope.Text = "Showing manuscripts sent to " & insightsJournal.JournalName & "  ·  Show all"
+            insightsScope.LinkArea = New LinkArea(insightsScope.Text.Length - 8, 8)
         End If
 
+        If tabInsightsMap.Checked Then
+            insightsGrid = Nothing
+            insightsContent.Controls.Add(CreateRouteMapView())
+            Return
+        End If
+
+        insightsGrid = If(tabInsightsRoutes.Checked, CreateRoutesGrid(statistics), CreateJournalsGrid(statistics))
         insightsContent.Controls.Add(insightsGrid)
 
     End Sub
@@ -355,6 +364,155 @@ Partial Public Class Form1
 
         EmptyHint.Attach(grid, Function() "No routes yet. A manuscript's route begins with its first recorded submission.")
         Return grid
+
+    End Function
+
+
+    ' Every route lined up at day 0 on one scale (#82): how long each took,
+    ' and how much of that was waiting on journals versus the author's own
+    ' turns. Published routes by default, so the lengths compare like with
+    ' like.
+    Private Function CreateRouteMapView() As Control
+
+        Dim dpi As Integer = DeviceDpi
+        Dim scoped As IEnumerable(Of Manuscript) = manuscripts
+        If insightsJournal IsNot Nothing Then scoped = insightsJournal.Submissions.Select(Function(item) item.Manuscript).Distinct()
+        Dim library As RouteMapLibrary = RouteMapService.Library(scoped, DateTime.Today, insightsMapAll)
+
+        Dim host As New Panel With {.Dock = DockStyle.Fill, .AutoScroll = True, .BackColor = UiTheme.BoardBackground()}
+        Dim section As New SectionCard With {
+            .Location = New Point(0, 0),
+            .AutoSize = True,
+            .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            .Padding = New Padding(UiTheme.Px(16, dpi), UiTheme.Px(12, dpi), UiTheme.Px(16, dpi), UiTheme.Px(14, dpi)),
+            .Margin = New Padding(0),
+            .BackColor = UiTheme.CardBackground(),
+            .ForeColor = UiTheme.PrimaryText(),
+            .AccessibleName = "Route Map"
+        }
+        Dim card As New TableLayoutPanel With {
+            .Dock = DockStyle.Top,
+            .AutoSize = True,
+            .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            .ColumnCount = 1,
+            .RowCount = 4,
+            .Padding = New Padding(0),
+            .Margin = New Padding(0),
+            .BackColor = UiTheme.CardBackground()
+        }
+        card.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100.0F))
+        For index As Integer = 0 To 3
+            card.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+        Next
+        section.Controls.Add(card)
+
+        Dim count As Integer = library.Routes.Count
+        Dim median As Median = library.MedianDaysToPublication
+        Dim summary As String
+        If insightsMapAll Then
+            Dim unfinished As Integer = library.Routes.Where(Function(item) Not item.IsPublished).Count()
+            summary = count.ToString(CultureInfo.CurrentCulture) & If(count = 1, " route", " routes") & " lined up at day 0; " &
+                      unfinished.ToString(CultureInfo.CurrentCulture) & " not yet published, drawn to today or to the last decision." &
+                      If(median.HasValue, " Published: median " & DaysText(median) & " from first submission to publication.", String.Empty)
+        ElseIf count = 0 Then
+            summary = "No published routes yet. A route is drawn from a manuscript's first recorded submission to its publication date."
+        Else
+            summary = count.ToString(CultureInfo.CurrentCulture) & If(count = 1, " published route", " published routes") & " lined up at day 0." &
+                      If(median.HasValue, " Median " & DaysText(median) & " from first submission to publication.", String.Empty)
+        End If
+
+        Dim header As New FlowLayoutPanel With {
+            .AutoSize = True,
+            .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            .WrapContents = True,
+            .Anchor = AnchorStyles.Left Or AnchorStyles.Top,
+            .Margin = New Padding(0),
+            .BackColor = UiTheme.CardBackground()
+        }
+        Dim lblSummary As New Label With {
+            .AutoSize = True,
+            .UseMnemonic = False,
+            .Text = summary,
+            .Font = New Font(Me.Font, FontStyle.Bold),
+            .ForeColor = UiTheme.PrimaryText(),
+            .BackColor = UiTheme.CardBackground(),
+            .Margin = New Padding(0, 0, UiTheme.Px(12, dpi), 0)
+        }
+        Dim toggle As New LinkLabel With {
+            .AutoSize = True,
+            .UseMnemonic = False,
+            .Text = If(insightsMapAll, "Show published routes only", "Include work not yet published"),
+            .LinkColor = UiTheme.AccentColor(),
+            .ActiveLinkColor = UiTheme.AccentColor(),
+            .VisitedLinkColor = UiTheme.AccentColor(),
+            .BackColor = UiTheme.CardBackground(),
+            .Margin = New Padding(0)
+        }
+        AddHandler toggle.LinkClicked,
+            Sub(sender, e)
+                insightsMapAll = Not insightsMapAll
+                FillInsights()
+            End Sub
+        header.Controls.Add(lblSummary)
+        header.Controls.Add(toggle)
+        card.Controls.Add(header, 0, 0)
+
+        Dim shares As New List(Of (Kind As RouteSegmentKind, Text As String))()
+        For Each item In {(RouteSegmentKind.Journal, "With a journal"), (RouteSegmentKind.Author, "With you, revising or rerouting"),
+                          (RouteSegmentKind.Production, "In production"), (RouteSegmentKind.NotRecorded, "Not recorded")}
+            Dim share As Double = library.Share(item.Item1)
+            If share > 0 Then shares.Add((item.Item1, item.Item2 & "  ·  " & share.ToString("0%", CultureInfo.CurrentCulture)))
+        Next
+        card.Controls.Add(New RouteMapLegend With {
+            .Anchor = AnchorStyles.Left Or AnchorStyles.Right Or AnchorStyles.Top,
+            .Margin = New Padding(0, UiTheme.Px(10, dpi), 0, 0),
+            .BackColor = UiTheme.CardBackground(),
+            .Items = shares
+        }, 0, 1)
+
+        Dim chart As New RouteMapChart With {
+            .Anchor = AnchorStyles.Left Or AnchorStyles.Right Or AnchorStyles.Top,
+            .Margin = New Padding(0, UiTheme.Px(12, dpi), 0, 0),
+            .BackColor = UiTheme.CardBackground(),
+            .Routes = library.Routes
+        }
+        AddHandler chart.RouteOpened,
+            Sub(sender, entry)
+                If routeViewOpener IsNot Nothing Then
+                    routeViewOpener(entry.Manuscript)
+                Else
+                    OpenRouteView(entry.Manuscript)
+                End If
+            End Sub
+        card.Controls.Add(chart, 0, 2)
+
+        card.Controls.Add(New Label With {
+            .AutoSize = True,
+            .UseMnemonic = False,
+            .Text = "Percentages are shares of all " & library.TotalDays.ToString("N0", CultureInfo.CurrentCulture) & " days drawn. " &
+                    "Click a route, or select it and press Enter, to open its route map." &
+                    If(insightsMapAll, " A dotted end and + mark a route still under way today.", String.Empty),
+            .ForeColor = UiTheme.SecondaryText(),
+            .BackColor = UiTheme.CardBackground(),
+            .Margin = New Padding(0, UiTheme.Px(10, dpi), 0, 0)
+        }, 0, 3)
+
+        host.Controls.Add(section)
+        Dim fit As Action =
+            Sub()
+                Dim width As Integer = Math.Max(UiTheme.Px(420, dpi), host.ClientSize.Width - If(host.VerticalScroll.Visible, 0, SystemInformation.VerticalScrollBarWidth) - UiTheme.Px(2, dpi))
+                section.MinimumSize = New Size(width, 0)
+                section.MaximumSize = New Size(width, 0)
+                Dim inner As Integer = width - section.Padding.Horizontal
+                For Each label As Label In card.Controls.OfType(Of Label)()
+                    label.MaximumSize = New Size(inner, 0)
+                Next
+                header.MaximumSize = New Size(inner, 0)
+                lblSummary.MaximumSize = New Size(inner, 0)
+            End Sub
+        AddHandler host.ClientSizeChanged, Sub(sender, e) fit()
+        fit()
+        Return host
 
     End Function
 

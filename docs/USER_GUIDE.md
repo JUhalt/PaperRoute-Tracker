@@ -1,4 +1,4 @@
-﻿# PaperRoute User Guide
+﻿﻿# PaperRoute User Guide
 
 PaperRoute is a local-first academic manuscript tracker for researchers. It is designed to keep the complete route of a paper understandable: idea, writing, submission, peer review, revision, publication, or the File Drawer.
 
@@ -142,6 +142,15 @@ A version can be associated with the journal submission for which that exact fil
 **Current Version** means the manuscript snapshot you currently consider your active working version. This is different from **Current State**, which means the manuscript's lifecycle position such as Submitted, Revision, Accepted, or Draft.
 
 Use **View route →** from the main board to see the manuscript's deterministic publication history. The Route is read-only: double-clicking or opening a Route waypoint returns you to the authoritative record on the manuscript page rather than creating a second editing pathway. **View Route** in the page header opens the same view.
+
+Once a manuscript has a recorded submission, the Route opens on its **route map**: the whole route drawn to scale, from the first submission to publication (or to today, while it is under way). Each stretch is colored by who held it:
+
+- **With the journal** (teal): from a submission or resubmission to the journal's decision.
+- **With you** (amber): revising, from a revision request to the recorded return to review, and rerouting, from a rejection to the next submission.
+- **In production** (slate): from acceptance to the publication date.
+- **Not recorded** (hatched): time the record does not assign, such as a revision whose resubmission date was never entered. It is shown as such, never estimated. To split it, record the return to review in the manuscript's history.
+
+The journals are named above their stretches, and every event after the first submission is numbered on the route and explained underneath: "Desk rejected, Jan 12: 7 days after submission", "Resubmitted, Jun 10: after 69 days of revising". Totals across the top say how many days the route spent with journals, with you, and in production. The same map is useful for teaching: it shows at a glance how much of publishing is waiting and how much is work.
 
 Deleting a Version History record is also working-copy based. If the version owns an immutable PaperRoute Library snapshot, the snapshot is removed only when **Save** succeeds. Choosing **Discard** leaves the saved version history and managed snapshot intact. Deleting a linked-file version never deletes the original external file.
 
@@ -544,10 +553,13 @@ Across the top: how many manuscripts and submissions you have, the median time t
 
 **Your Routes** lists every manuscript that has been submitted: its route, how many journals and revision rounds it took, and the days from first submission to acceptance and to publication. Press **Enter** or double-click to open the manuscript.
 
+**Route Map** lines up every published route at day 0 on one scale, shortest first, colored as in a manuscript's route map. Above it: the median days from first submission to publication, and the share of all those days spent with a journal, with you (revising or rerouting), and in production. **Include work not yet published** adds manuscripts still under way (drawn to today, with a dotted end and a + on their day count) and filed ones (drawn to their last decision). Click a route, or select it with the arrow keys and press **Enter**, to open its route map. With a journal chosen on **Your Journals**, the map shows only the manuscripts sent there.
+
 How the numbers work:
 
 - Days are calendar days between dates recorded in PaperRoute. A first decision is the earliest decision recorded for a submission.
 - A missing or inconsistent date (a decision dated before its submission, for example) leaves that value out. Nothing is estimated.
+- On the route maps, time with you after a revision request ends at the next recorded Submitted or Under Review history entry. Without one, that stretch is drawn as not recorded.
 - Submissions count under a Journal Library record when they are linked to it or use exactly its name (ignoring capitals and spacing). A different spelling is shown on its own line rather than merged by guess.
 
 ### Reports to share

@@ -314,6 +314,7 @@ Derive transparent local analytics and print-friendly route reports from the sam
 - **[#62 Your history with each journal](https://github.com/JUhalt/PaperRoute-Tracker/issues/62)** — submissions, outcomes, and turnaround from the researcher's own records, shown on the Journals page.
 - **[#63 Shareable pipeline status report](https://github.com/JUhalt/PaperRoute-Tracker/issues/63)** — a local HTML snapshot for a supervisor or coauthor that excludes notes, correspondence, reviewer comments, and file paths by default.
 - **[#64 Work types and colored tags](https://github.com/JUhalt/PaperRoute-Tracker/issues/64)** — the dimensions reports, CV exports, and the board can filter and group by. Existing records migrate with an unspecified type rather than an inferred one.
+- **[#82 Route map](https://github.com/JUhalt/PaperRoute-Tracker/issues/82)** — each route drawn to scale, colored by who held it (the journal, the author, or production), with every event numbered and explained, and every route side by side on Insights. It shows a student, or a researcher looking back, how much of publishing is waiting and how much is work.
 
 ---
 

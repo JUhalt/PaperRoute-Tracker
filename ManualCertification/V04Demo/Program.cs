@@ -8,7 +8,7 @@ namespace PaperRoute.V04Demo;
 internal static class Program
 {
     private const string Usage = "PaperRoute workflow manual demo\n\n" +
-        "Surfaces: vault (default), readiness, packet, packet-new, file, file-new, notes, submission, responses, workflow, board, publications, fill\n" +
+        "Surfaces: vault (default), readiness, packet, packet-new, file, file-new, notes, submission, responses, workflow, board, publications, fill, about, route\n" +
         "Options: --minimum, --primary, --empty (vault/readiness/board), --integrity (populated vault only), --dark or --system, --help\n\n" +
         "Default surfaces discard manuscript changes when the window closes.\n" +
         "workflow and board save only in a new disposable temporary session.\n" +
@@ -27,7 +27,7 @@ internal static class Program
             return;
         }
 
-        var surfaces = new[] { "vault", "readiness", "packet", "packet-new", "file", "file-new", "notes", "submission", "responses", "workflow", "board", "publications", "fill", "about" };
+        var surfaces = new[] { "vault", "readiness", "packet", "packet-new", "file", "file-new", "notes", "submission", "responses", "workflow", "board", "publications", "fill", "about", "route" };
         var positional = args.Where(argument => !argument.StartsWith("--")).ToArray();
         var surface = positional.FirstOrDefault()?.ToLowerInvariant() ?? "vault";
         var minimum = args.Contains("--minimum", StringComparer.OrdinalIgnoreCase);
@@ -83,6 +83,15 @@ internal static class Program
                 using var about = new AboutForm();
                 ConfigureDisplayEvidence(about, primary);
                 about.ShowDialog();
+                return;
+            }
+
+            if (surface == "route")
+            {
+                using var route = RouteMapDemo.Create();
+                route.Text += " [DEMO - fictional route; nothing saved]";
+                ConfigureDisplayEvidence(route, primary);
+                route.ShowDialog();
                 return;
             }
 

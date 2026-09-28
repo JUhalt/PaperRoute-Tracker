@@ -693,6 +693,69 @@ Public Class ManuscriptPageTests
             End Sub)
     End Sub
 
+    ' The route map (#82): every route side by side on Insights, each one
+    ' opening its own route view.
+    <TestMethod>
+    Public Sub TheRouteMapLinesUpRoutesAndOpensTheChosenOne()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard()
+                    Dim published As Manuscript = RouteMapServiceTests.Anchoring()
+                    Dim routed As Manuscript = WithRoute()
+                    board.Prepare(published, routed, Sample("Unsubmitted idea"))
+                    Dim opened As New List(Of Manuscript)()
+                    board.routeViewOpener = Sub(item) opened.Add(item)
+
+                    board.PressCommandKey(Keys.Control Or Keys.D5)
+                    Descendants(board).OfType(Of ShelfTabButton)().Single(Function(item) item.Text = "Route Map").Checked = True
+                    Application.DoEvents()
+                    Dim chart As RouteMapChart = Descendants(board).OfType(Of RouteMapChart)().Single()
+                    CollectionAssert.AreEqual({published}, chart.Routes.Select(Function(item) item.Manuscript).ToList(), "Published routes by default.")
+                    Assert.IsTrue(Descendants(board).OfType(Of Label)().Any(Function(label) label.Text = "1 published route lined up at day 0. Median 264 days from first submission to publication."))
+                    Assert.IsTrue(Descendants(board).OfType(Of RouteMapLegend)().Single().AccessibleName.StartsWith("With a journal  ·  40%"), "105 of 264 days.")
+
+                    Dim toggle As LinkLabel = Descendants(board).OfType(Of LinkLabel)().Single(Function(link) link.Text = "Include work not yet published")
+                    GetType(LinkLabel).GetMethod("OnLinkClicked", BindingFlags.Instance Or BindingFlags.NonPublic).
+                        Invoke(toggle, New Object() {New LinkLabelLinkClickedEventArgs(toggle.Links(0))})
+                    Application.DoEvents()
+                    chart = Descendants(board).OfType(Of RouteMapChart)().Single()
+                    CollectionAssert.AreEquivalent({published, routed}, chart.Routes.Select(Function(item) item.Manuscript).ToList(), "Work in progress runs to today; an idea has no route.")
+                    Assert.IsTrue(chart.Routes.Single(Function(item) item.Manuscript Is routed).Map.Ongoing)
+
+                    chart.SelectedIndex = chart.Routes.FindIndex(Function(item) item.Manuscript Is routed)
+                    GetType(Control).GetMethod("OnKeyDown", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(chart, New Object() {New KeyEventArgs(Keys.Enter)})
+                    CollectionAssert.AreEqual({routed}, opened, "Enter opens the selected route.")
+                    Assert.AreEqual(0, board.SaveCount, "The route map never saves.")
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    <TestMethod>
+    Public Sub TheRouteViewOpensOnItsRouteDrawnToScale()
+        RunOnStaThread(
+            Sub()
+                Using view As New ManuscriptRouteViewForm(RouteMapServiceTests.Anchoring())
+                    ShowOffscreen(view)
+                    Dim bar As RouteMapBar = Descendants(view).OfType(Of RouteMapBar)().Single()
+                    Assert.AreEqual("Route drawn to scale. 264 days from first submission to publication: 105 days with the journals, 131 days with you, 28 days in production.", bar.AccessibleName)
+                    Assert.AreEqual(8, bar.Steps.Count)
+                    StringAssert.StartsWith(bar.AccessibleDescription, "1: Desk rejected, Jan 12, 7 days after submission")
+                    Assert.IsTrue(bar.Height > 0 AndAlso bar.Width > 0)
+                    Dim onScreen As Rectangle = view.RectangleToClient(bar.RectangleToScreen(bar.ClientRectangle))
+                    Assert.IsTrue(onScreen.Right <= view.ClientSize.Width, "The map fits the window's width.")
+                    view.Close()
+                End Using
+
+                Using view As New ManuscriptRouteViewForm(Sample("Unsubmitted idea"))
+                    ShowOffscreen(view)
+                    Assert.IsFalse(Descendants(view).OfType(Of RouteMapBar)().Any(), "No route map before a first submission.")
+                    view.Close()
+                End Using
+            End Sub)
+    End Sub
+
     <TestMethod>
     Public Sub ReportsPreviewAndSaveWhatIsChosen()
         RunOnStaThread(

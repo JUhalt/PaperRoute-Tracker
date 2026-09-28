@@ -73,7 +73,7 @@ Namespace Controls
         End Property
 
         ' The chips that fit in a width, with "+N" when some do not.
-        Private Function Layout(width As Integer) As List(Of (Text As String, Bounds As Rectangle, Palette As TagPalette))
+        Private Function PlaceChips(width As Integer) As List(Of (Text As String, Bounds As Rectangle, Palette As TagPalette))
 
             Dim result As New List(Of (Text As String, Bounds As Rectangle, Palette As TagPalette))()
             Dim gap As Integer = UiTheme.Px(4, DeviceDpi)
@@ -99,7 +99,7 @@ Namespace Controls
 
         ' The width the chips need, up to a limit.
         Public Function PreferredWidth(maximum As Integer) As Integer
-            Dim chips = Layout(maximum)
+            Dim chips = PlaceChips(maximum)
             Return If(chips.Count = 0, 0, chips.Last().Bounds.Right)
         End Function
 
@@ -109,7 +109,7 @@ Namespace Controls
         End Function
 
         Protected Overrides Sub OnPaint(e As PaintEventArgs)
-            For Each chip In Layout(Width)
+            For Each chip In PlaceChips(Width)
                 Dim bounds As Rectangle = chip.Bounds
                 bounds.Offset(0, (Height - bounds.Height) \ 2)
                 TagChipPainter.Draw(e.Graphics, bounds, chip.Text, chip.Palette, Font)
