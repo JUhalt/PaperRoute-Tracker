@@ -209,7 +209,8 @@ PaperRoute is an independent, open-source project. Its implementation, local-fir
 | **Released** | v0.6 — Workspace | One window, manuscript pages, one save step, calmer design |
 | **Released** | v0.7 — Deadline Center | Everything that needs action, and when; the publication check |
 | **Preview** | [v0.8 — Route Analytics & Reports](https://github.com/JUhalt/PaperRoute-Tracker/milestone/10) | Route maps, your own turnaround data, reports, types and tags |
-| | [v0.9 — 1.0 Hardening](https://github.com/JUhalt/PaperRoute-Tracker/milestone/11) | Onboarding, accessibility, recovery, certification |
+| | [v0.9 — Journal Choice & Guidance](https://github.com/JUhalt/PaperRoute-Tracker/milestone/13) | Choosing a journal, journal facts, a teaching example, optional AI help |
+| | [v0.9.1 — 1.0 Hardening](https://github.com/JUhalt/PaperRoute-Tracker/milestone/11) | Onboarding, accessibility, recovery, certification |
 | **Goal** | [v1.0 — Trusted Research Workflow](https://github.com/JUhalt/PaperRoute-Tracker/milestone/12) | "I trust this application with my research workflow." |
 
 See [`ROADMAP.md`](ROADMAP.md) for the reasoning behind each release. GitHub milestones and issues are the live source of truth for active release work.

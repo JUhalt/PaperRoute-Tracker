@@ -912,8 +912,8 @@ PaperRoute ships a local copy of this guide. Open it with **Help** at the bottom
 
 The Route, Version History, readiness profiles, submission packets, reviewer responses, and Deadlines form one connected manuscript record. Later releases build on that record:
 
-- **v0.8 — Route Analytics & Reports:** your own history with each journal, route statistics from recorded dates, printable route and pipeline-status reports, and work types and tags.
-- **v0.9 — 1.0 Hardening:** guided onboarding, accessibility, consistency, recovery, and release certification.
+- **v0.9 — Journal Choice & Guidance:** a journal shortlist for each manuscript, an offline guide to choosing a journal, journal facts from open indexes, a teaching example library, and an optional AI assistant, with every online feature listed in one place and a switch to work offline.
+- **v0.9.1 — 1.0 Hardening:** guided onboarding, accessibility, consistency, recovery, and release certification.
 
 Planned releases are directional and may change; see the [roadmap](https://github.com/JUhalt/PaperRoute-Tracker/blob/master/ROADMAP.md).
 
