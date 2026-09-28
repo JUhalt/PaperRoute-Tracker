@@ -21,6 +21,7 @@ Namespace Controls
         FollowUp
         Checklist
         Publication
+        Insights
     End Enum
 
     ' Paints one left-rail item: an icon, its label, and an optional count.
@@ -162,6 +163,12 @@ Namespace Controls
                     Case RailGlyph.Checklist
                         g.DrawRectangle(pen, Rectangle.Round(r(3, 3, 10, 10)))
                         g.DrawLines(pen, {p(5.5F, 8.2F), p(7.3F, 10), p(10.7F, 6)})
+                    Case RailGlyph.Insights
+                        ' Three bars on a baseline.
+                        g.DrawLine(pen, p(2, 13.5F), p(14, 13.5F))
+                        g.DrawRectangle(pen, Rectangle.Round(r(3.5F, 8, 2, 5)))
+                        g.DrawRectangle(pen, Rectangle.Round(r(7, 3, 2, 10)))
+                        g.DrawRectangle(pen, Rectangle.Round(r(10.5F, 6, 2, 7)))
                     Case RailGlyph.Publication
                         ' An open book.
                         g.DrawLines(pen, {p(8, 4.5F), p(3, 3.5F), p(3, 12), p(8, 13)})

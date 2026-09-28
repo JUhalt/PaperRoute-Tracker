@@ -20,6 +20,7 @@ Partial Public Class Form1
         Library
         Journals
         Deadlines
+        Insights
         ImportExport
         ' Not in the rail: a manuscript opened from another page.
         Manuscript
@@ -193,6 +194,7 @@ Partial Public Class Form1
             (WorkspacePage.Library, RailGlyph.Library, "Library"),
             (WorkspacePage.Journals, RailGlyph.Journals, "Journals"),
             (WorkspacePage.Deadlines, RailGlyph.Deadlines, "Deadlines"),
+            (WorkspacePage.Insights, RailGlyph.Insights, "Insights"),
             (WorkspacePage.ImportExport, RailGlyph.ImportExport, "Import & Export")
         }
             Dim page As WorkspacePage = entry.Item1
@@ -535,6 +537,8 @@ Partial Public Class Form1
         libraryFilter = Nothing
         deadlinesList = Nothing
         deadlinesFilter = Nothing
+        insightsContent = Nothing
+        insightsGrid = Nothing
 
         ' Hosted editors save as they go. Refresh the board's copies, as the
         ' board did after their dialogs closed.
@@ -570,6 +574,8 @@ Partial Public Class Form1
                     New JournalLibraryForm(manuscripts))
             Case WorkspacePage.Deadlines
                 view = BuildDeadlinesPage()
+            Case WorkspacePage.Insights
+                view = BuildInsightsPage()
             Case Else
                 view = BuildImportExportPage()
         End Select
@@ -861,9 +867,9 @@ Partial Public Class Form1
     End Function
 
 
-    Private Sub ShowLibraryManuscripts()
-
-        ClearLibraryContent()
+    ' A read-only, sortable table in the page style, shared by the Library
+    ' and Insights pages.
+    Private Function CreatePageGrid(accessibleName As String) As DataGridView
 
         Dim grid As New DataGridView With {
             .Dock = DockStyle.Fill,
@@ -881,7 +887,7 @@ Partial Public Class Form1
             .StandardTab = True,
             .BackgroundColor = UiTheme.CardBackground(),
             .GridColor = UiTheme.SubtleBorder(),
-            .AccessibleName = "All manuscripts. Press Enter to open the selected manuscript.",
+            .AccessibleName = accessibleName,
             .ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize
         }
 
@@ -896,6 +902,17 @@ Partial Public Class Form1
         grid.ColumnHeadersDefaultCellStyle.Font = New Font(Me.Font, FontStyle.Bold)
         grid.ColumnHeadersDefaultCellStyle.Padding = New Padding(UiTheme.Px(6, DeviceDpi), UiTheme.Px(6, DeviceDpi), UiTheme.Px(6, DeviceDpi), UiTheme.Px(6, DeviceDpi))
         grid.RowTemplate.Height = TextRenderer.MeasureText("Ag", Me.Font).Height + UiTheme.Px(14, DeviceDpi)
+
+        Return grid
+
+    End Function
+
+
+    Private Sub ShowLibraryManuscripts()
+
+        ClearLibraryContent()
+
+        Dim grid As DataGridView = CreatePageGrid("All manuscripts. Press Enter to open the selected manuscript.")
 
         grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Title", .HeaderText = "Title", .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = 220, .MinimumWidth = UiTheme.Px(220, DeviceDpi)})
         grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Stage", .HeaderText = "Stage", .AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells})
@@ -1023,6 +1040,8 @@ Partial Public Class Form1
                 FillLibraryGrid()
             Case WorkspacePage.Deadlines
                 FillDeadlines()
+            Case WorkspacePage.Insights
+                FillInsights()
         End Select
 
     End Sub

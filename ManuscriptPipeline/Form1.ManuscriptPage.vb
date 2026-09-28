@@ -90,6 +90,7 @@ Partial Public Class Form1
             Case WorkspacePage.Library : Return "Library"
             Case WorkspacePage.Journals : Return "Journals"
             Case WorkspacePage.Deadlines : Return "Deadlines"
+            Case WorkspacePage.Insights : Return "Insights"
             Case WorkspacePage.ImportExport : Return "Import & Export"
             Case Else : Return "Board"
         End Select
@@ -260,6 +261,7 @@ Partial Public Class Form1
             End Sub
 
         Dim pageMenu As New ContextMenuStrip()
+        pageMenu.Items.Add("Route Report...", Nothing, Sub(sender, e) SaveRouteReport(FindManuscript(currentManuscriptId)))
         pageMenu.Items.Add("Check for Publication...", Nothing, Sub(sender, e) CheckOpenManuscriptForPublication())
         pageMenu.Items.Add(New ToolStripSeparator())
         Dim deleteItem As ToolStripItem =

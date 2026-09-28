@@ -2179,7 +2179,7 @@ Public Class Form1
                 End If
                 Return True
 
-            ' Ctrl+1 to Ctrl+5 open the rail's pages in order.
+            ' Ctrl+1 to Ctrl+6 open the rail's pages in order.
             Case Keys.Control Or Keys.D1, Keys.Control Or Keys.NumPad1
                 NavigateTo(WorkspacePage.Board)
                 Return True
@@ -2193,6 +2193,9 @@ Public Class Form1
                 NavigateTo(WorkspacePage.Deadlines)
                 Return True
             Case Keys.Control Or Keys.D5, Keys.Control Or Keys.NumPad5
+                NavigateTo(WorkspacePage.Insights)
+                Return True
+            Case Keys.Control Or Keys.D6, Keys.Control Or Keys.NumPad6
                 NavigateTo(WorkspacePage.ImportExport)
                 Return True
 

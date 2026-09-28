@@ -363,34 +363,33 @@ Namespace Forms
                     ).
                     Count()
 
-            Dim submissionCount As Integer =
-                _manuscripts.Sum(
-                    Function(item)
+            ' Your own history with the journal (#62), from recorded
+            ' submissions only: linked ones, and exact name matches.
+            Dim history As JournalHistory =
+                RouteAnalyticsService.ForLibrary(_manuscripts, DateTime.Today, _library.Journals).Journals.
+                    FirstOrDefault(Function(item) item.JournalId.HasValue AndAlso item.JournalId.Value = selected.Id)
 
-                        If item.Submissions Is Nothing Then
-                            Return 0
-                        End If
+            Dim parts As New List(Of String) From {
+                selected.Name & " — target on " & targetCount.ToString() & If(targetCount = 1, " manuscript", " manuscripts")
+            }
 
-                        Return item.Submissions.
-                            Where(
-                                Function(submission)
-                                    Return submission IsNot Nothing AndAlso
-                                        submission.JournalId.HasValue AndAlso
-                                        submission.JournalId.Value = selected.Id
-                                End Function
-                            ).
-                            Count()
+            If history Is Nothing Then
+                parts.Add("no submissions recorded yet.")
+            Else
+                parts.Add(history.Count.ToString() & If(history.Count = 1, " submission", " submissions"))
+                For Each outcome In {(history.CountOutcome(SubmissionOutcome.Accepted), "accepted"),
+                                     (history.WithRevisions, "asked to revise"),
+                                     (history.CountOutcome(SubmissionOutcome.RejectedAfterReview) + history.CountOutcome(SubmissionOutcome.Rejected), "rejected"),
+                                     (history.CountOutcome(SubmissionOutcome.DeskRejected), "desk rejected")}
+                    If outcome.Item1 > 0 Then parts.Add(outcome.Item1.ToString() & " " & outcome.Item2)
+                Next
+                If history.MedianDaysToFirstDecision.HasValue Then
+                    parts.Add("median " & history.MedianDaysToFirstDecision.Value.Value.ToString("0.#", Globalization.CultureInfo.CurrentCulture) & " days to a first decision")
+                End If
+                parts.Add("last submitted " & history.LastSubmitted.ToString("MMM d, yyyy", Globalization.CultureInfo.CurrentCulture) & ".")
+            End If
 
-                    End Function
-                )
-
-            lblInfo.Text =
-                selected.Name &
-                " — target on " &
-                targetCount.ToString() &
-                " manuscript(s); used by " &
-                submissionCount.ToString() &
-                " submission(s)."
+            lblInfo.Text = String.Join(" · ", parts)
 
         End Sub
 

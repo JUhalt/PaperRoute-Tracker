@@ -2,6 +2,20 @@
 
 All notable changes to PaperRoute Tracker will be documented here.
 
+## [Unreleased] — v0.8 Insights & Reports
+
+Development is tracked in the [v0.8 milestone](https://github.com/JUhalt/PaperRoute-Tracker/milestone/10).
+
+### Added
+
+- An **Insights** page (Ctrl+5) with route statistics from your own records ([#30](https://github.com/JUhalt/PaperRoute-Tracker/issues/30)): median time to a first decision and from first submission to acceptance, each with its sample size, and **Your Routes**: journals, revision rounds, and days to acceptance and publication for every submitted manuscript. Missing dates are left out, never estimated.
+- **Your Journals** ([#62](https://github.com/JUhalt/PaperRoute-Tracker/issues/62)): submissions, outcomes, and median days to a first decision and in review for each journal you have used, grouped by Journal Library record or exact name, never by guess. The Journals page shows the same history for the selected journal.
+- **Pipeline Report...** and **Route Report...** ([#63](https://github.com/JUhalt/PaperRoute-Tracker/issues/63), [#30](https://github.com/JUhalt/PaperRoute-Tracker/issues/30)): self-contained web pages to print or save as PDF, previewed before saving. They never include notes, correspondence, reviewer comments, file paths, or contact details.
+
+### Changed
+
+- Import & Export moves to **Ctrl+6**; Insights takes Ctrl+5.
+
 ## [Unreleased] — v0.7 Deadline Center
 
 v0.7.0-rc.1 is available on the Preview channel. Development is tracked in [PR #78](https://github.com/JUhalt/PaperRoute-Tracker/pull/78) and the [v0.7 milestone](https://github.com/JUhalt/PaperRoute-Tracker/milestone/9).

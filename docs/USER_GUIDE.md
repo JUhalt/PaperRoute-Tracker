@@ -52,7 +52,7 @@ The stage describes the manuscript's current lifecycle position. Submission hist
 
 ### Finding your way around
 
-PaperRoute opens in one window. The left rail lists its pages: **Board**, **Library**, **Journals**, **Deadlines**, and **Import & Export**, with **Settings** and **Help** at the bottom. Press **Ctrl+1** to **Ctrl+5** to open the pages in that order, **Alt+Left** and **Alt+Right** to go back and forward, and **F1** for this guide.
+PaperRoute opens in one window. The left rail lists its pages: **Board**, **Library**, **Journals**, **Deadlines**, **Insights**, and **Import & Export**, with **Settings** and **Help** at the bottom. Press **Ctrl+1** to **Ctrl+6** to open the pages in that order, **Alt+Left** and **Alt+Right** to go back and forward, and **F1** for this guide.
 
 For more room, choose the **«** button beside the PaperRoute name to collapse the rail to icons; hover over an icon to see its page, and choose **»** to expand the rail again. PaperRoute remembers your choice. Double-click the logo for **About PaperRoute**.
 
@@ -522,6 +522,29 @@ Important limitations:
 The Deadlines page is the authoritative view.
 
 ---
+
+## Insights and Reports
+
+Open **Insights** in the left rail (Ctrl+5) to see how your work has moved through journals. Everything is calculated on this computer from your own PaperRoute records, each time you open the page. Nothing is sent anywhere, and nothing is changed.
+
+Across the top: how many manuscripts and submissions you have, the median time to a first decision, and the median time from first submission to acceptance. Each median says how many records it is based on.
+
+**Your Journals** lists every journal you have submitted to, with submissions, acceptances, requests to revise, rejections after review, desk rejections, the median days to a first decision, the median days in review (leaving out desk rejections), and when you last submitted. Press **Enter** or double-click a journal to see the manuscripts you sent there. A journal selected on the **Journals** page shows the same history in one line.
+
+**Your Routes** lists every manuscript that has been submitted: its route, how many journals and revision rounds it took, and the days from first submission to acceptance and to publication. Press **Enter** or double-click to open the manuscript.
+
+How the numbers work:
+
+- Days are calendar days between dates recorded in PaperRoute. A first decision is the earliest decision recorded for a submission.
+- A missing or inconsistent date (a decision dated before its submission, for example) leaves that value out. Nothing is estimated.
+- Submissions count under a Journal Library record when they are linked to it or use exactly its name (ignoring capitals and spacing). A different spelling is shown on its own line rather than merged by guess.
+
+### Reports to share
+
+- **Pipeline Report...** on the Insights page makes a read-only summary for a supervisor, mentor, or coauthor: each chosen manuscript's title, stage, journal, route, time in stage, and next deadline. Choose the manuscripts (pipeline work is chosen by default), preview the report, and save it.
+- **Route Report...** in a manuscript page's **⋯** menu shows one manuscript's full route: every submission, its decisions and dates, and the durations between them, with the definitions used.
+
+Reports are saved as a single web page that opens in any browser, where you can print it or save it as PDF. They never include notes, correspondence, reviewer comments or responses, file paths, or contact details, and a reminder appears only as "Reminder", never by its title.
 
 ## Publication and CV Export
 

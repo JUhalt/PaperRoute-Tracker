@@ -341,7 +341,7 @@ Public Class DashboardShelfLayoutTests
                     Application.DoEvents()
 
                     CollectionAssert.AreEqual(
-                        {"Board", "Library", "Journals", "Deadlines", "Import & Export"},
+                        {"Board", "Library", "Journals", "Deadlines", "Insights", "Import & Export"},
                         board.RailPages.Select(Function(page) page.Text).ToList())
                     Assert.AreEqual("Board", board.ActivePageName)
                     Assert.IsFalse(Descendants(board).OfType(Of Button)().Any(Function(button) button.Text.StartsWith("Data")),
@@ -355,7 +355,7 @@ Public Class DashboardShelfLayoutTests
                     Dim grid As DataGridView = Descendants(board).OfType(Of DataGridView)().Single()
                     Assert.AreEqual(90, grid.Rows.Count, "The Library lists every manuscript on every shelf.")
 
-                    board.PressCommandKey(Keys.Control Or Keys.D5)
+                    board.PressCommandKey(Keys.Control Or Keys.D6)
                     Application.DoEvents()
                     Assert.AreEqual("ImportExport", board.ActivePageName)
 
@@ -384,7 +384,7 @@ Public Class DashboardShelfLayoutTests
                     board.Show()
                     Application.DoEvents()
 
-                    board.PressCommandKey(Keys.Control Or Keys.D5)
+                    board.PressCommandKey(Keys.Control Or Keys.D6)
                     Application.DoEvents()
                     Dim commands As List(Of String) = Descendants(board).OfType(Of Button)().Select(Function(button) button.Text).ToList()
                     For Each command As String In {
