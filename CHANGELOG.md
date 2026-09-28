@@ -2,9 +2,9 @@
 
 All notable changes to PaperRoute Tracker will be documented here.
 
-## [Unreleased] — v0.8 Insights & Reports
+## [0.8.0] - 2026-09-28
 
-v0.8.0-rc.1 is available on the Preview channel. Development is tracked in [PR #80](https://github.com/JUhalt/PaperRoute-Tracker/pull/80) and the [v0.8 milestone](https://github.com/JUhalt/PaperRoute-Tracker/milestone/10); certification in [#85](https://github.com/JUhalt/PaperRoute-Tracker/issues/85).
+PaperRoute v0.8.0 — **Route Analytics & Reports** — was released on September 28, 2026 from [PR #80](https://github.com/JUhalt/PaperRoute-Tracker/pull/80) and [PR #90](https://github.com/JUhalt/PaperRoute-Tracker/pull/90), after the v0.8.0-rc.1 Preview. Certification is recorded in [#85](https://github.com/JUhalt/PaperRoute-Tracker/issues/85). v0.8 upgrades the library to Schema 8.
 
 ### Added
 
