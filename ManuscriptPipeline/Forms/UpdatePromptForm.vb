@@ -39,6 +39,10 @@ Namespace Forms
             Me.FormBorderStyle = FormBorderStyle.FixedDialog
             Me.MaximizeBox = False
             Me.MinimizeBox = False
+            ' Sizes below are at 96 DPI and scale with the display; without the
+            ' base dimensions the text grew at 125% and 150% but the dialog and
+            ' its buttons did not, cutting off "Download & Restart".
+            Me.AutoScaleDimensions = New SizeF(96.0F, 96.0F)
             Me.ClientSize = New Size(620, 500)
             Me.Font = New Font("Segoe UI", 10.0F)
             Me.AutoScaleMode = AutoScaleMode.Dpi
@@ -100,15 +104,18 @@ Namespace Forms
 
             Dim btnInstall As New Button With {
                 .Text = "Download && Restart",
-                .Width = 165,
-                .Height = 38,
+                .AutoSize = True,
+                .AutoSizeMode = AutoSizeMode.GrowOnly,
+                .MinimumSize = New Size(165, 38),
+                .Padding = New Padding(10, 0, 10, 0),
                 .DialogResult = DialogResult.OK
             }
 
             Dim btnLater As New Button With {
                 .Text = "Later",
-                .Width = 95,
-                .Height = 38,
+                .AutoSize = True,
+                .AutoSizeMode = AutoSizeMode.GrowOnly,
+                .MinimumSize = New Size(95, 38),
                 .DialogResult = DialogResult.Cancel
             }
 

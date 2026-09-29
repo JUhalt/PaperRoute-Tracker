@@ -53,8 +53,8 @@ Targets are directional rather than promises. Data integrity, migrations, backup
 | **v0.5** | Reviewer Response Workflow ✅ | What did the journal ask me to change, and how am I responding? |
 | **v0.6** | Workspace UI ✅ | Can I find and act on everything from one calm, uncluttered workspace? |
 | **v0.7** | Deadline Center ✅ | What requires action, and when? |
-| **v0.8** | **Route Analytics & Reports — Preview** | What does this publication journey show me—and how can I communicate it? |
-| **v0.9** | Journal Choice & Guidance | Where should this manuscript go, what will that journal ask of me, and how does someone new learn the route? |
+| **v0.8** | Route Analytics & Reports ✅ | What does this publication journey show me—and how can I communicate it? |
+| **v0.9** | **Journal Choice & Guidance — next** | Where should this manuscript go, what will that journal ask of me, and how does someone new learn the route? |
 | **v0.9.1** | 1.0 Hardening | Is the entire workflow polished, resilient, and certifiable? |
 | **v1.0** | Trusted Research Workflow | Would I trust this with my real publication pipeline? |
 
@@ -306,7 +306,7 @@ PaperRoute v0.7.0 was released on September 28, 2026 from [PR #78](https://githu
 
 ---
 
-# v0.8 Route Analytics & Reports
+## COMPLETE — v0.8 Route Analytics & Reports
 
 Milestone: **[v0.8.0 — Route Analytics & Reports](https://github.com/JUhalt/PaperRoute-Tracker/milestone/10)**
 
@@ -319,7 +319,7 @@ Derive transparent local analytics and print-friendly route reports from the sam
 - **[#64 Work types and colored tags](https://github.com/JUhalt/PaperRoute-Tracker/issues/64)** — the dimensions reports, CV exports, and the board can filter and group by. Existing records migrate with an unspecified type rather than an inferred one.
 - **[#82 Route map](https://github.com/JUhalt/PaperRoute-Tracker/issues/82)** — each route drawn to scale, colored by who held it (the journal, the author, or production), with every event numbered and explained, and every route side by side on Insights. It shows a student, or a researcher looking back, how much of publishing is waiting and how much is work.
 
-Every slice is complete in [PR #80](https://github.com/JUhalt/PaperRoute-Tracker/pull/80). v0.8.0-rc.1 is the Preview candidate; certification is tracked in [#85](https://github.com/JUhalt/PaperRoute-Tracker/issues/85).
+PaperRoute v0.8.0 was released on September 28, 2026 from [PR #80](https://github.com/JUhalt/PaperRoute-Tracker/pull/80) and [PR #90](https://github.com/JUhalt/PaperRoute-Tracker/pull/90), after the v0.8.0-rc.1 Preview. It moved the library to Schema 8 with a marker-only upgrade. Certification (published assets, the live updater from v0.7.0, the installed Schema 8 upgrade, a clean install, and native display checks) is recorded in [#85](https://github.com/JUhalt/PaperRoute-Tracker/issues/85).
 
 ---
 
@@ -341,8 +341,9 @@ Offline:
 Connected, optional, and started by the user:
 
 - **[#86 Online services](https://github.com/JUhalt/PaperRoute-Tracker/issues/86)** — one local-first rule, one settings page, and a **Work offline** switch.
-- **[#87 Journal facts from open indexes](https://github.com/JUhalt/PaperRoute-Tracker/issues/87)** — DOAJ (CC0), OpenAlex, and sharing-policy records: publisher, fees, review type, typical turnaround, and links to the journal's aims and scope, author instructions, and editorial board.
+- **[#87 Journal facts from open indexes](https://github.com/JUhalt/PaperRoute-Tracker/issues/87)** — DOAJ (CC0), OpenAlex, and sharing-policy records: publisher, fees, review type, typical turnaround, and links to the journal's aims and scope, author instructions, and editorial board; open citation metrics (2-year mean citedness, h-index, i10-index) fetched from OpenAlex, and proprietary ones (Impact Factor, CiteScore, SJR, SNIP) recorded by the researcher with source and year. Never a combined prestige score.
 - **[#88 Journals that publish work like yours](https://github.com/JUhalt/PaperRoute-Tracker/issues/88)** — suggestions backed by recently published papers that match keywords you review; never scores or predictions.
+- **[#91 Your citations](https://github.com/JUhalt/PaperRoute-Tracker/issues/91)** — the researcher's own citation record from open data, on request: citations, h-index, i10-index, g-index, m-quotient, and field-weighted citation impact per published manuscript, each with its source, date, and definition.
 - **[#84 Optional AI assistant](https://github.com/JUhalt/PaperRoute-Tracker/issues/84)** (with [#29](https://github.com/JUhalt/PaperRoute-Tracker/issues/29)) — off by default, with your own key or a local model: decision letters to reviewer comments, author guidelines to readiness checklists, drafting help, and fit summaries grounded in #88's evidence.
 
 ---

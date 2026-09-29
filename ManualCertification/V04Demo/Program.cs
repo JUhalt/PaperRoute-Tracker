@@ -8,7 +8,7 @@ namespace PaperRoute.V04Demo;
 internal static class Program
 {
     private const string Usage = "PaperRoute workflow manual demo\n\n" +
-        "Surfaces: vault (default), readiness, packet, packet-new, file, file-new, notes, submission, responses, workflow, board, publications, fill, about, route\n" +
+        "Surfaces: vault (default), readiness, packet, packet-new, file, file-new, notes, submission, responses, workflow, board, publications, fill, about, route, update, report\n" +
         "Options: --minimum, --primary, --empty (vault/readiness/board), --integrity (populated vault only), --dark or --system, --help\n\n" +
         "Default surfaces discard manuscript changes when the window closes.\n" +
         "workflow and board save only in a new disposable temporary session.\n" +
@@ -27,7 +27,7 @@ internal static class Program
             return;
         }
 
-        var surfaces = new[] { "vault", "readiness", "packet", "packet-new", "file", "file-new", "notes", "submission", "responses", "workflow", "board", "publications", "fill", "about", "route" };
+        var surfaces = new[] { "vault", "readiness", "packet", "packet-new", "file", "file-new", "notes", "submission", "responses", "workflow", "board", "publications", "fill", "about", "route", "update", "report" };
         var positional = args.Where(argument => !argument.StartsWith("--")).ToArray();
         var surface = positional.FirstOrDefault()?.ToLowerInvariant() ?? "vault";
         var minimum = args.Contains("--minimum", StringComparer.OrdinalIgnoreCase);
@@ -83,6 +83,37 @@ internal static class Program
                 using var about = new AboutForm();
                 ConfigureDisplayEvidence(about, primary);
                 about.ShowDialog();
+                return;
+            }
+
+            if (surface == "report")
+            {
+                // The real Pipeline Report dialog on the fictional board library;
+                // Save Report writes %TEMP%\PaperRoute-Report-Demo.html.
+                var sessionRoot = Path.Combine(Path.GetTempPath(),
+                    "PaperRoute-Report-Demo-" + Guid.NewGuid().ToString("N"));
+                StorageEnvironment.ConfigureIsolatedSessionRoot(sessionRoot);
+                BoardDemo.CreateSamples(sessionRoot);
+                var library = new ManuscriptRepository().Load();
+                var today = DateTime.Today;
+                using var report = new ReportForm("Pipeline Report", "PaperRoute-Pipeline-demo.html", library,
+                    (chosen, deadlines) => ReportService.PipelineReport(chosen, today, "DEMO Research Group", deadlines));
+                var saved = Path.Combine(Path.GetTempPath(), "PaperRoute-Report-Demo.html");
+                report.SavePathPrompt = () => saved;
+                report.Text += " [DEMO - fictional library]";
+                ConfigureDisplayEvidence(report, primary);
+                report.ShowDialog();
+                return;
+            }
+
+            if (surface == "update")
+            {
+                var notes = "# PaperRoute Tracker v0.8.1 (fictional)\n\nA fictional update for display checks; nothing is downloaded.\n\n" +
+                    "## Fixed\n\n- The update prompt scales with the display, so its buttons show their full labels at 125% and 150%.";
+                using var prompt = new UpdatePromptForm("0.8.0", "0.8.1", "Stable", notes);
+                prompt.Text += " [DEMO - nothing is downloaded]";
+                ConfigureDisplayEvidence(prompt, primary);
+                prompt.ShowDialog();
                 return;
             }
 

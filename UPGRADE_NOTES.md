@@ -21,7 +21,7 @@ Use **Settings → Backup Library...** to create a portable backup. In v0.5 and 
 
 ## Moving from v0.7 to v0.8
 
-PaperRoute v0.8 adds route maps, the Insights page, shareable reports, and work types and tags. **v0.8.0-rc.1 is a Preview; v0.7.0 remains the current Stable release.** v0.8 upgrades the library to **Schema 8**, which adds work types, tags, and tag colors.
+PaperRoute v0.8 adds route maps, the Insights page, shareable reports, and work types and tags. **v0.8.0 is the current Stable release.** v0.8 upgrades the library to **Schema 8**, which adds work types, tags, and tag colors.
 
 Before upgrading, create a portable ZIP backup with v0.7 (**Settings → Backup Library...**) and keep it separately.
 
@@ -35,7 +35,7 @@ After upgrading:
 
 ## Moving from v0.6 to v0.7
 
-PaperRoute v0.7 replaces the Reminders page with **Deadlines** and adds the publication check. **v0.7.0 is the current Stable release.** It upgrades the library to **Schema 7**, which remembers possible publications you have reviewed.
+PaperRoute v0.7 replaces the Reminders page with **Deadlines** and adds the publication check. It upgrades the library to **Schema 7**, which remembers possible publications you have reviewed.
 
 Before upgrading, create a portable ZIP backup with v0.6 (**Settings → Backup Library...**) and keep it separately.
 
