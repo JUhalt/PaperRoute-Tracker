@@ -756,6 +756,46 @@ Public Class ManuscriptPageTests
             End Sub)
     End Sub
 
+    ' The journal shortlist (#65) on the Overview: added with its reasons,
+    ' offered after a rejection, and saved with the page.
+    <TestMethod>
+    Public Sub TheShortlistOffersTheNextJournalAfterARejectionAndSavesWithThePage()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard()
+                    Dim manuscript As Manuscript = Sample("Rerouted manuscript")
+                    manuscript.TargetJournal = "First Journal"
+                    Dim first As New JournalSubmission With {.JournalName = "First Journal", .SubmittedDate = New DateTime(2026, 1, 5)}
+                    first.Decisions.Add(New EditorialDecisionEvent With {.Decision = EditorialDecision.DeskRejected, .DecisionDate = New DateTime(2026, 1, 12)})
+                    manuscript.Submissions.Add(first)
+                    board.Prepare(manuscript)
+                    board.Open(manuscript)
+
+                    Assert.AreEqual(String.Empty, board.Editor.ShortlistOfferText, "Nothing to offer before a journal is shortlisted.")
+                    board.Editor.candidatePrompt =
+                        Function(existing) New JournalCandidate With {.JournalName = "Open Psychology", .Status = CandidateStatus.Preferred,
+                                                                     .Notes = "Publishes replications", .Checks = New List(Of String) From {"trust.known", "fit.scope"}}
+                    board.Editor.AddShortlistCandidateForTest()
+
+                    Assert.AreEqual("Desk rejected by First Journal on Jan 12, 2026. Next on your shortlist: Open Psychology (Preferred).", board.Editor.ShortlistOfferText)
+                    Assert.IsTrue(board.Editor.HasUnsavedChanges(), "The shortlist waits for Save like any change.")
+                    Assert.AreEqual(0, manuscript.JournalShortlist.Count, "The saved record is untouched until Save.")
+
+                    board.Editor.ShortlistOfferButton.PerformClick()
+                    Assert.AreEqual(String.Empty, board.Editor.ShortlistOfferText, "Once it is the target journal, there is nothing more to offer.")
+
+                    board.PressCommandKey(Keys.Control Or Keys.S)
+                    Assert.AreEqual("Open Psychology", manuscript.TargetJournal)
+                    Dim saved As JournalCandidate = manuscript.JournalShortlist.Single()
+                    Assert.AreEqual("Publishes replications", saved.Notes)
+                    CollectionAssert.AreEquivalent({"trust.known", "fit.scope"}, saved.Checks)
+                    Assert.AreEqual(1, board.SaveCount)
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
     <TestMethod>
     Public Sub ReportsPreviewAndSaveWhatIsChosen()
         RunOnStaThread(

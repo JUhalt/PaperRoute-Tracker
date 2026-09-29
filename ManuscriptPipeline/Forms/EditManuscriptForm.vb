@@ -51,6 +51,16 @@ Namespace Forms
 
         ' The kind of work and its tags (#64), edited in the working copy.
         Private ReadOnly classificationGroup As New SectionCard()
+        Private ReadOnly shortlistGroup As New SectionCard()
+        Private ReadOnly shortlistRows As New TableLayoutPanel()
+        Private ReadOnly shortlistOffer As New TableLayoutPanel()
+        Private ReadOnly lblShortlistOffer As New Label()
+        Private ReadOnly btnShortlistOffer As New Button()
+        Private ReadOnly lblShortlistEmpty As New Label()
+
+        ' Adds or edits a shortlisted journal; returns the edited values, or
+        ' Nothing when cancelled. Tests replace the dialog.
+        Friend candidatePrompt As Func(Of JournalCandidate, JournalCandidate) = Nothing
         Private ReadOnly cmbWorkType As New ComboBox()
         Private ReadOnly tagEditor As New TagEditor()
 
@@ -633,7 +643,7 @@ Namespace Forms
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 .ColumnCount = 1,
-                .RowCount = 4,
+                .RowCount = 5,
                 .Padding = New Padding(0)
             }
 
@@ -641,7 +651,9 @@ Namespace Forms
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+            root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
 
+            BuildShortlistGroup()
             BuildClassificationGroup()
 
             ' The linked Journal Library record's notes and checklist, so its
@@ -1198,9 +1210,10 @@ Namespace Forms
             footer.Controls.Add(rightButtons, 1, 0)
 
             root.Controls.Add(detailsGroup, 0, 0)
-            root.Controls.Add(classificationGroup, 0, 1)
-            root.Controls.Add(fileDrawerGroup, 0, 2)
-            root.Controls.Add(journalNotesGroup, 0, 3)
+            root.Controls.Add(shortlistGroup, 0, 1)
+            root.Controls.Add(classificationGroup, 0, 2)
+            root.Controls.Add(fileDrawerGroup, 0, 3)
+            root.Controls.Add(journalNotesGroup, 0, 4)
 
             scrollHost.Controls.Add(root)
 
@@ -1298,6 +1311,333 @@ Namespace Forms
             )
 
         End Sub
+
+
+        ' =================================================
+        ' Journal shortlist (#65) and choosing a journal (#89)
+        ' =================================================
+
+        Private Sub BuildShortlistGroup()
+
+            shortlistGroup.Text = "Journal shortlist"
+            shortlistGroup.Dock = DockStyle.Top
+            shortlistGroup.AutoSize = True
+            shortlistGroup.AutoSizeMode = AutoSizeMode.GrowAndShrink
+            shortlistGroup.Padding = New Padding(14, 8, 14, 12)
+            shortlistGroup.Margin = New Padding(3, 8, 3, 8)
+
+            Dim layout As New TableLayoutPanel With {
+                .Dock = DockStyle.Top,
+                .AutoSize = True,
+                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                .ColumnCount = 1,
+                .RowCount = 4,
+                .Margin = New Padding(0)
+            }
+            layout.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
+            For index As Integer = 0 To 3
+                layout.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+            Next
+
+            ' After a rejection: the next shortlisted journal, as an offer.
+            shortlistOffer.Dock = DockStyle.Top
+            shortlistOffer.AutoSize = True
+            shortlistOffer.AutoSizeMode = AutoSizeMode.GrowAndShrink
+            shortlistOffer.ColumnCount = 2
+            shortlistOffer.RowCount = 1
+            shortlistOffer.Padding = New Padding(10, 8, 10, 8)
+            shortlistOffer.Margin = New Padding(0, 2, 0, 8)
+            shortlistOffer.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
+            shortlistOffer.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
+            lblShortlistOffer.AutoSize = True
+            lblShortlistOffer.UseMnemonic = False
+            lblShortlistOffer.Anchor = AnchorStyles.Left
+            lblShortlistOffer.Margin = New Padding(0, 4, 12, 4)
+            btnShortlistOffer.AutoSize = True
+            btnShortlistOffer.UseMnemonic = False
+            btnShortlistOffer.Anchor = AnchorStyles.Right
+            AddHandler btnShortlistOffer.Click,
+                Sub(sender, e)
+                    Dim candidate As JournalCandidate = TryCast(btnShortlistOffer.Tag, JournalCandidate)
+                    If candidate IsNot Nothing Then MakeShortlistTarget(candidate)
+                End Sub
+            shortlistOffer.Controls.Add(lblShortlistOffer, 0, 0)
+            shortlistOffer.Controls.Add(btnShortlistOffer, 1, 0)
+            shortlistOffer.Visible = False
+            AddHandler shortlistOffer.Paint,
+                Sub(sender, e)
+                    Using fill As New SolidBrush(UiTheme.AccentMutedBackground())
+                        e.Graphics.FillRectangle(fill, shortlistOffer.ClientRectangle)
+                    End Using
+                End Sub
+            layout.Controls.Add(shortlistOffer, 0, 0)
+
+            shortlistRows.Dock = DockStyle.Top
+            shortlistRows.AutoSize = True
+            shortlistRows.AutoSizeMode = AutoSizeMode.GrowAndShrink
+            shortlistRows.ColumnCount = 1
+            shortlistRows.Margin = New Padding(0)
+            shortlistRows.AccessibleName = "Shortlisted journals"
+            shortlistRows.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
+            layout.Controls.Add(shortlistRows, 0, 1)
+
+            lblShortlistEmpty.Text = "Add the journals you are considering for this manuscript, in your order of preference, with your reasons. " &
+                                     "If a submission is rejected, PaperRoute offers the next one."
+            lblShortlistEmpty.AutoSize = True
+            lblShortlistEmpty.UseMnemonic = False
+            lblShortlistEmpty.Margin = New Padding(3, 2, 3, 6)
+            layout.Controls.Add(lblShortlistEmpty, 0, 2)
+
+            Dim actions As New FlowLayoutPanel With {
+                .AutoSize = True,
+                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                .WrapContents = False,
+                .Margin = New Padding(0, 4, 0, 0)
+            }
+            Dim btnAdd As New Button With {.Text = "Add Journal...", .AutoSize = True, .Margin = New Padding(3, 0, 12, 0)}
+            AddHandler btnAdd.Click, Sub(sender, e) AddShortlistCandidate()
+            Dim guide As New LinkLabel With {.Text = "How to choose a journal", .AutoSize = True, .Margin = New Padding(3, 7, 3, 0)}
+            AddHandler guide.LinkClicked,
+                Sub(sender, e)
+                    Using help As New HelpForm("Choosing a Journal")
+                        help.ShowDialog(Me.FindForm())
+                    End Using
+                End Sub
+            actions.Controls.Add(btnAdd)
+            actions.Controls.Add(guide)
+            layout.Controls.Add(actions, 0, 3)
+
+            AddHandler shortlistGroup.Resize,
+                Sub(sender, e)
+                    Dim width As Integer = Math.Max(240, shortlistGroup.ClientSize.Width - shortlistGroup.Padding.Horizontal - 6)
+                    lblShortlistEmpty.MaximumSize = New Size(width, 0)
+                    lblShortlistOffer.MaximumSize = New Size(Math.Max(200, width - btnShortlistOffer.Width - 40), 0)
+                End Sub
+
+            shortlistGroup.Controls.Add(layout)
+
+        End Sub
+
+
+        Private Sub RefreshShortlist()
+
+            If _workingManuscript.JournalShortlist Is Nothing Then _workingManuscript.JournalShortlist = New List(Of JournalCandidate)()
+            Dim list As List(Of JournalCandidate) = _workingManuscript.JournalShortlist
+
+            shortlistRows.SuspendLayout()
+            For Each child As Control In shortlistRows.Controls.Cast(Of Control)().ToList()
+                shortlistRows.Controls.Remove(child)
+                child.Dispose()
+            Next
+            shortlistRows.RowStyles.Clear()
+            shortlistRows.RowCount = Math.Max(1, list.Count)
+            For index As Integer = 0 To list.Count - 1
+                shortlistRows.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+                shortlistRows.Controls.Add(CreateShortlistRow(list(index), index, list.Count), 0, index)
+            Next
+            shortlistRows.ResumeLayout(True)
+            shortlistRows.Visible = list.Count > 0
+            lblShortlistEmpty.Visible = list.Count = 0
+
+            Dim offer As RerouteOffer = JournalShortlistService.RerouteOfferFor(_workingManuscript, DateTime.Today)
+            shortlistOffer.Visible = offer IsNot Nothing
+            If offer IsNot Nothing Then
+                Dim outcome As String
+                Select Case offer.Outcome
+                    Case SubmissionOutcome.DeskRejected : outcome = "Desk rejected by "
+                    Case SubmissionOutcome.Withdrawn : outcome = "Withdrawn from "
+                    Case Else : outcome = "Rejected by "
+                End Select
+                lblShortlistOffer.Text = outcome & offer.ClosedSubmission.JournalName &
+                    If(offer.ClosedDate.HasValue, " on " & offer.ClosedDate.Value.ToString("MMM d, yyyy", Globalization.CultureInfo.CurrentCulture), String.Empty) &
+                    ". Next on your shortlist: " & offer.NextCandidate.JournalName & " (" & JournalShortlistService.StatusName(offer.NextCandidate.Status) & ")."
+                btnShortlistOffer.Text = "Make It the Target Journal"
+                btnShortlistOffer.Tag = offer.NextCandidate
+                lblShortlistOffer.BackColor = UiTheme.AccentMutedBackground()
+                lblShortlistOffer.ForeColor = UiTheme.PrimaryText()
+                shortlistOffer.Invalidate()
+            End If
+
+        End Sub
+
+
+        Private Function CreateShortlistRow(candidate As JournalCandidate, index As Integer, count As Integer) As Control
+
+            Dim isTarget As Boolean = RouteAnalyticsService.NameKey(candidate.JournalName) = RouteAnalyticsService.NameKey(txtTargetJournal.Text)
+            Dim row As New TableLayoutPanel With {
+                .Dock = DockStyle.Top,
+                .AutoSize = True,
+                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                .ColumnCount = 4,
+                .RowCount = 1,
+                .Margin = New Padding(0, 0, 0, 6),
+                .AccessibleName = candidate.JournalName,
+                .AccessibleRole = AccessibleRole.ListItem
+            }
+            Dim statusWidth As Integer
+            Using bold As New Font(Me.Font, FontStyle.Bold)
+                statusWidth = TextRenderer.MeasureText(count.ToString(Globalization.CultureInfo.CurrentCulture) & ".  Considering", bold).Width + 12
+            End Using
+            row.ColumnStyles.Add(New ColumnStyle(SizeType.Absolute, statusWidth))
+            row.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
+            row.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
+            row.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
+
+            Dim statusColor As Color
+            Select Case candidate.Status
+                Case CandidateStatus.Preferred : statusColor = UiTheme.AccentColor()
+                Case CandidateStatus.RuledOut : statusColor = UiTheme.MutedText()
+                Case Else : statusColor = UiTheme.SecondaryText()
+            End Select
+            Dim lblStatus As New Label With {
+                .Text = (index + 1).ToString(Globalization.CultureInfo.CurrentCulture) & ".  " & JournalShortlistService.StatusName(candidate.Status),
+                .AutoSize = True,
+                .UseMnemonic = False,
+                .ForeColor = statusColor,
+                .Font = New Font(Me.Font, FontStyle.Bold),
+                .Margin = New Padding(0, 3, 6, 0)
+            }
+
+            Dim details As New List(Of String)
+            If isTarget Then details.Add("Target journal")
+            Dim submitted As String = JournalShortlistService.SubmissionText(_workingManuscript, candidate, DateTime.Today)
+            If submitted.Length > 0 Then details.Add(submitted)
+            Dim note As String = If(candidate.Notes, String.Empty).Trim().Replace(Environment.NewLine, " ")
+            If note.Length > 90 Then note = note.Substring(0, 90).TrimEnd() & ChrW(&H2026)
+            If note.Length > 0 Then details.Add(note)
+            Dim checks As String = JournalChoiceGuide.Summary(candidate)
+            If checks.Length > 0 Then details.Add(checks)
+
+            Dim text As New Label With {
+                .AutoSize = True,
+                .UseMnemonic = False,
+                .Text = candidate.JournalName & If(details.Count > 0, Environment.NewLine & String.Join("  ·  ", details), String.Empty),
+                .Margin = New Padding(0, 3, 8, 0),
+                .Font = If(candidate.Status = CandidateStatus.RuledOut, New Font(Me.Font, FontStyle.Strikeout), Me.Font)
+            }
+
+            Dim btnEdit As New Button With {.Text = "Edit...", .AutoSize = True, .AccessibleName = "Edit " & candidate.JournalName, .Margin = New Padding(3, 0, 3, 0)}
+            AddHandler btnEdit.Click, Sub(sender, e) EditShortlistCandidate(candidate)
+
+            Dim menu As New ContextMenuStrip()
+            Dim makeTarget As ToolStripItem = menu.Items.Add("Make Target Journal", Nothing, Sub(sender, e) MakeShortlistTarget(candidate))
+            makeTarget.Enabled = Not isTarget
+            Dim moveUp As ToolStripItem = menu.Items.Add("Move Up", Nothing, Sub(sender, e) MoveShortlistCandidate(candidate, -1))
+            moveUp.Enabled = index > 0
+            Dim moveDown As ToolStripItem = menu.Items.Add("Move Down", Nothing, Sub(sender, e) MoveShortlistCandidate(candidate, 1))
+            moveDown.Enabled = index < count - 1
+            menu.Items.Add(New ToolStripSeparator())
+            menu.Items.Add("Remove from Shortlist", Nothing, Sub(sender, e) RemoveShortlistCandidate(candidate))
+            Dim btnMore As New Button With {.Text = ChrW(&H22EF), .AutoSize = True, .AccessibleName = "More actions for " & candidate.JournalName, .Margin = New Padding(3, 0, 0, 0)}
+            AddHandler btnMore.Click, Sub(sender, e) menu.Show(btnMore, New Point(0, btnMore.Height))
+            AddHandler row.Disposed, Sub(sender, e) menu.Dispose()
+            AddHandler row.Resize, Sub(sender, e) text.MaximumSize = New Size(Math.Max(200, row.ClientSize.Width - statusWidth - btnEdit.Width - btnMore.Width - 24), 0)
+
+            row.Controls.Add(lblStatus, 0, 0)
+            row.Controls.Add(text, 1, 0)
+            row.Controls.Add(btnEdit, 2, 0)
+            row.Controls.Add(btnMore, 3, 0)
+            Return row
+
+        End Function
+
+
+        Private Function PromptCandidate(existing As JournalCandidate) As JournalCandidate
+
+            If candidatePrompt IsNot Nothing Then Return candidatePrompt(existing)
+
+            Dim library As List(Of JournalRecord) = If(_authorLibrary?.Journals, New List(Of JournalRecord)())
+            Dim names As New List(Of String)(library.Where(Function(item) item IsNot Nothing).Select(Function(item) item.Name))
+            For Each manuscript As Manuscript In If(_allManuscripts, New List(Of Manuscript)())
+                If manuscript Is Nothing Then Continue For
+                If Not String.IsNullOrWhiteSpace(manuscript.TargetJournal) Then names.Add(manuscript.TargetJournal)
+                names.AddRange(If(manuscript.Submissions, New List(Of JournalSubmission)()).Where(Function(item) item IsNot Nothing).Select(Function(item) item.JournalName))
+            Next
+
+            Dim statistics As LibraryStatistics = RouteAnalyticsService.ForLibrary(If(_allManuscripts, New List(Of Manuscript)()), DateTime.Today, library)
+            Dim history As Func(Of String, String) =
+                Function(name)
+                    Dim key As String = RouteAnalyticsService.NameKey(name)
+                    Dim record As JournalRecord = library.FirstOrDefault(Function(item) item IsNot Nothing AndAlso RouteAnalyticsService.NameKey(item.Name) = key)
+                    Return RouteAnalyticsService.DescribeHistory(RouteAnalyticsService.FindHistory(statistics, name, record?.Id))
+                End Function
+
+            Using dialog As New JournalCandidateForm(existing, names, history)
+                If dialog.ShowDialog(Me.FindForm()) <> DialogResult.OK Then Return Nothing
+                Return New JournalCandidate With {.JournalName = dialog.JournalName, .Status = dialog.Status, .Notes = dialog.Notes, .Checks = dialog.Checks}
+            End Using
+
+        End Function
+
+
+        Private Sub AddShortlistCandidate()
+            Dim result As JournalCandidate = PromptCandidate(Nothing)
+            If result Is Nothing OrElse String.IsNullOrWhiteSpace(result.JournalName) Then Return
+            Dim candidate As JournalCandidate = JournalShortlistService.Add(_workingManuscript, result.JournalName, _authorLibrary?.Journals, result.Status)
+            candidate.Status = result.Status
+            candidate.Notes = result.Notes
+            candidate.Checks = result.Checks
+            RefreshShortlist()
+        End Sub
+
+
+        Private Sub EditShortlistCandidate(candidate As JournalCandidate)
+            Dim result As JournalCandidate = PromptCandidate(candidate)
+            If result Is Nothing OrElse String.IsNullOrWhiteSpace(result.JournalName) Then Return
+            If RouteAnalyticsService.NameKey(result.JournalName) <> RouteAnalyticsService.NameKey(candidate.JournalName) Then
+                Dim key As String = RouteAnalyticsService.NameKey(result.JournalName)
+                Dim record As JournalRecord = If(_authorLibrary?.Journals, New List(Of JournalRecord)()).FirstOrDefault(Function(item) item IsNot Nothing AndAlso RouteAnalyticsService.NameKey(item.Name) = key)
+                candidate.JournalName = If(record IsNot Nothing, record.Name, result.JournalName.Trim())
+                candidate.JournalId = If(record IsNot Nothing, CType(record.Id, Guid?), Nothing)
+            End If
+            candidate.Status = result.Status
+            candidate.Notes = result.Notes
+            candidate.Checks = result.Checks
+            RefreshShortlist()
+        End Sub
+
+
+        Private Sub MoveShortlistCandidate(candidate As JournalCandidate, offset As Integer)
+            JournalShortlistService.Move(_workingManuscript, candidate, offset)
+            RefreshShortlist()
+        End Sub
+
+
+        Private Sub RemoveShortlistCandidate(candidate As JournalCandidate)
+            _workingManuscript.JournalShortlist.Remove(candidate)
+            RefreshShortlist()
+        End Sub
+
+
+        ' The target journal box is what Save reads, so it changes too.
+        Private Sub MakeShortlistTarget(candidate As JournalCandidate)
+            JournalShortlistService.MakeTarget(_workingManuscript, candidate)
+            txtTargetJournal.Text = candidate.JournalName
+            RefreshJournalNotes()
+            RefreshShortlist()
+        End Sub
+
+
+        ' For tests.
+        Friend Sub AddShortlistCandidateForTest()
+            AddShortlistCandidate()
+        End Sub
+
+        Friend Sub MakeShortlistTargetForTest(candidate As JournalCandidate)
+            MakeShortlistTarget(candidate)
+        End Sub
+
+        Friend ReadOnly Property ShortlistOfferText As String
+            Get
+                Return If(shortlistOffer.Visible, lblShortlistOffer.Text, String.Empty)
+            End Get
+        End Property
+
+        Friend ReadOnly Property ShortlistOfferButton As Button
+            Get
+                Return btnShortlistOffer
+            End Get
+        End Property
 
 
         Private Sub BuildClassificationGroup()
@@ -2280,6 +2620,9 @@ Namespace Forms
             If versionHistoryControl IsNot Nothing Then
                 versionHistoryControl.RefreshVersions()
             End If
+
+            ' A new decision can change what the shortlist offers.
+            RefreshShortlist()
 
         End Sub
 
@@ -3446,6 +3789,9 @@ Namespace Forms
 
             _originalManuscript.Tags =
                 committed.Tags
+
+            _originalManuscript.JournalShortlist =
+                committed.JournalShortlist
 
             _originalManuscript.RelatedLinks =
                 committed.RelatedLinks

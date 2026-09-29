@@ -38,7 +38,7 @@ Public Class Schema8MigrationTests
 
         EnsureStorage()
 
-        Assert.AreEqual(8, StorageMigrationService.ReadSchemaVersion(_schema))
+        Assert.AreEqual(StorageMigrationService.CurrentSchemaVersion, StorageMigrationService.ReadSchemaVersion(_schema))
         Assert.AreEqual("{""SchemaVersion"":7}", File.ReadAllText(Path.Combine(_data, "schema.v7.bak")))
         Assert.AreEqual(original, File.ReadAllText(Path.Combine(_data, "manuscripts.json")))
         Assert.AreEqual(authors, File.ReadAllText(Path.Combine(_data, "authors.json")))
@@ -59,9 +59,9 @@ Public Class Schema8MigrationTests
 
     <TestMethod>
     Public Sub FutureSchema_IsRejected()
-        File.WriteAllText(_schema, "{""SchemaVersion"":9}")
+        File.WriteAllText(_schema, "{""SchemaVersion"":10}")
         Assert.ThrowsExactly(Of InvalidOperationException)(Sub() EnsureStorage())
-        Assert.AreEqual(9, StorageMigrationService.ReadSchemaVersion(_schema))
+        Assert.AreEqual(10, StorageMigrationService.ReadSchemaVersion(_schema))
     End Sub
 
     Private Sub EnsureStorage()

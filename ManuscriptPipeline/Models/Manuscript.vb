@@ -70,6 +70,11 @@ Namespace Models
         Public Property Tags As List(Of String) =
             New List(Of String)()
 
+        ' Journals being considered for this manuscript, in the order the
+        ' researcher ranks them (#65, Schema 9).
+        Public Property JournalShortlist As List(Of JournalCandidate) =
+            New List(Of JournalCandidate)()
+
         ' Possible publications found by a publication check (Schema 7).
         Public Property PublicationMatches As List(Of PublicationMatch) =
             New List(Of PublicationMatch)()

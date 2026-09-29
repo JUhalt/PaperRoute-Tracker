@@ -373,21 +373,7 @@ Namespace Forms
                 selected.Name & " — target on " & targetCount.ToString() & If(targetCount = 1, " manuscript", " manuscripts")
             }
 
-            If history Is Nothing Then
-                parts.Add("no submissions recorded yet.")
-            Else
-                parts.Add(history.Count.ToString() & If(history.Count = 1, " submission", " submissions"))
-                For Each outcome In {(history.CountOutcome(SubmissionOutcome.Accepted), "accepted"),
-                                     (history.WithRevisions, "asked to revise"),
-                                     (history.CountOutcome(SubmissionOutcome.RejectedAfterReview) + history.CountOutcome(SubmissionOutcome.Rejected), "rejected"),
-                                     (history.CountOutcome(SubmissionOutcome.DeskRejected), "desk rejected")}
-                    If outcome.Item1 > 0 Then parts.Add(outcome.Item1.ToString() & " " & outcome.Item2)
-                Next
-                If history.MedianDaysToFirstDecision.HasValue Then
-                    parts.Add("median " & history.MedianDaysToFirstDecision.Value.Value.ToString("0.#", Globalization.CultureInfo.CurrentCulture) & " days to a first decision")
-                End If
-                parts.Add("last submitted " & history.LastSubmitted.ToString("MMM d, yyyy", Globalization.CultureInfo.CurrentCulture) & ".")
-            End If
+            parts.Add(RouteAnalyticsService.DescribeHistory(history))
 
             lblInfo.Text = String.Join(" · ", parts)
 

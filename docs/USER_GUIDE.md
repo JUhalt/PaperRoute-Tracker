@@ -378,6 +378,46 @@ For safety, PaperRoute opens only valid `http://` or `https://` URLs.
 
 ---
 
+## Choosing a Journal
+
+Each manuscript keeps a **journal shortlist** on its Overview: the journals you are considering, in your order of preference, with your reasons.
+
+### Your shortlist
+
+- **Add Journal...** asks for the journal (suggested from your Journal Library and past submissions), its status (**Considering**, **Preferred**, **Backup**, or **Ruled out**), and why you are considering it. Your own history with the journal, from the Insights page, appears as you choose it.
+- Use **⋯** beside a journal to move it up or down, make it the target journal, or remove it. The number beside each status is its place in your order.
+- Each journal shows whether you have submitted to it and how that ended, read from the manuscript's own submissions.
+- When a submission is rejected or withdrawn while the manuscript is still in the Pipeline, the shortlist offers the next journal: your first **Preferred** journal not yet tried, then **Considering**, then **Backup**. **Make It the Target Journal** changes only the target journal; nothing else changes until you record the next submission.
+
+The shortlist is saved with the rest of the manuscript page, and like any change it waits for **Save**.
+
+### Is it a trusted journal?
+
+Before submitting, check that the journal is one you can trust. These questions are adapted from the Think. Check. Submit. checklist for journals, a cross-industry initiative (https://thinkchecksubmit.org/journals/), licensed CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/):
+
+- Do you or your colleagues know the journal, and have you read its articles?
+- Can you easily identify and contact the publisher?
+- Is the journal clear about the type of peer review it uses?
+- Are its articles indexed and archived in services you use?
+- Is it clear what fees will be charged, and for what?
+- Does it give clear guidelines for authors?
+- Does the publisher belong to recognized industry initiatives, such as COPE, DOAJ, or OASPA?
+
+Think. Check. Submit. suggests submitting only if you can answer yes to most of these questions.
+
+### Is it a good fit?
+
+Then ask whether the journal suits this manuscript:
+
+- Do its aims and scope cover this work?
+- Does it publish this type of article, within its length limits?
+- Does it reach the readers you want to reach?
+- Do its open-access options and fees work for you and any funder requirement?
+- Does its preprint and sharing policy suit your plans?
+- Does its time to decision and publication suit your timeline? Your own history with the journal, on the Insights page, helps here.
+
+Each shortlisted journal keeps your answers as checks, so the reasons for your choice stay with the manuscript and carry over if it is rerouted. PaperRoute never scores or ranks journals for you; the judgment stays yours.
+
 ## Journal Submissions
 
 A manuscript can have multiple journal submissions over time.

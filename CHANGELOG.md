@@ -2,6 +2,19 @@
 
 All notable changes to PaperRoute Tracker will be documented here.
 
+## [Unreleased] — v0.9 Journal Choice & Guidance
+
+Development is tracked in the [v0.9 milestone](https://github.com/JUhalt/PaperRoute-Tracker/milestone/13).
+
+### Added
+
+- **Journal shortlist** ([#65](https://github.com/JUhalt/PaperRoute-Tracker/issues/65)) on each manuscript's Overview: the journals you are considering, in your order of preference, each with a status (Considering, Preferred, Backup, Ruled out), your reasons, and whether and how a submission to it ended. After a rejection or withdrawal, the shortlist offers the next journal as the target, an offer that changes nothing until you accept it.
+- **Choosing a journal** ([#89](https://github.com/JUhalt/PaperRoute-Tracker/issues/89)): each shortlisted journal has trust questions, adapted with attribution from the Think. Check. Submit. checklist (CC BY 4.0), and fit questions for the manuscript, with your own history with the journal beside them. The User Guide's new **Choosing a Journal** section explains both, and **How to choose a journal** opens Help at that section.
+
+### Storage
+
+- **Schema 9** adds journal shortlists. As with Schemas 7 and 8, the upgrade validates the library and changes only the schema marker.
+
 ## [0.8.0] - 2026-09-28
 
 PaperRoute v0.8.0 — **Route Analytics & Reports** — was released on September 28, 2026 from [PR #80](https://github.com/JUhalt/PaperRoute-Tracker/pull/80) and [PR #90](https://github.com/JUhalt/PaperRoute-Tracker/pull/90), after the v0.8.0-rc.1 Preview. Certification is recorded in [#85](https://github.com/JUhalt/PaperRoute-Tracker/issues/85). v0.8 upgrades the library to Schema 8.

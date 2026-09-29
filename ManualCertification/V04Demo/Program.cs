@@ -8,7 +8,7 @@ namespace PaperRoute.V04Demo;
 internal static class Program
 {
     private const string Usage = "PaperRoute workflow manual demo\n\n" +
-        "Surfaces: vault (default), readiness, packet, packet-new, file, file-new, notes, submission, responses, workflow, board, publications, fill, about, route, update, report\n" +
+        "Surfaces: vault (default), readiness, packet, packet-new, file, file-new, notes, submission, responses, workflow, board, publications, fill, about, route, update, report, candidate\n" +
         "Options: --minimum, --primary, --empty (vault/readiness/board), --integrity (populated vault only), --dark or --system, --help\n\n" +
         "Default surfaces discard manuscript changes when the window closes.\n" +
         "workflow and board save only in a new disposable temporary session.\n" +
@@ -27,7 +27,7 @@ internal static class Program
             return;
         }
 
-        var surfaces = new[] { "vault", "readiness", "packet", "packet-new", "file", "file-new", "notes", "submission", "responses", "workflow", "board", "publications", "fill", "about", "route", "update", "report" };
+        var surfaces = new[] { "vault", "readiness", "packet", "packet-new", "file", "file-new", "notes", "submission", "responses", "workflow", "board", "publications", "fill", "about", "route", "update", "report", "candidate" };
         var positional = args.Where(argument => !argument.StartsWith("--")).ToArray();
         var surface = positional.FirstOrDefault()?.ToLowerInvariant() ?? "vault";
         var minimum = args.Contains("--minimum", StringComparer.OrdinalIgnoreCase);
@@ -83,6 +83,22 @@ internal static class Program
                 using var about = new AboutForm();
                 ConfigureDisplayEvidence(about, primary);
                 about.ShowDialog();
+                return;
+            }
+
+            if (surface == "candidate")
+            {
+                var candidate = new JournalCandidate
+                {
+                    JournalName = "Fictional Journal of Nursing Scholarship", Status = CandidateStatus.Preferred,
+                    Notes = "Publishes mixed-methods evaluations of teaching; open access with a fee waiver for our funder.",
+                    Checks = { "trust.known", "trust.publisher", "trust.review", "trust.indexed", "trust.fees", "trust.guidelines", "fit.scope", "fit.type", "fit.audience" }
+                };
+                using var dialog = new JournalCandidateForm(candidate, new[] { "Fictional Journal of Nursing Scholarship", "Fictional Nurse Education Review" },
+                    name => "2 submissions · 1 accepted · median 41 days to a first decision · last submitted Mar 4, 2026.");
+                dialog.Text += " [DEMO - nothing saved]";
+                ConfigureDisplayEvidence(dialog, primary);
+                dialog.ShowDialog();
                 return;
             }
 

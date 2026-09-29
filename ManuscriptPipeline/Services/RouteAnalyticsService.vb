@@ -399,6 +399,40 @@ Namespace Services
         End Function
 
 
+        ' "2 submissions · 1 accepted · median 45 days to a first decision ·
+        ' last submitted Mar 1, 2026." for one journal (#62).
+        Public Shared Function DescribeHistory(history As JournalHistory) As String
+
+            If history Is Nothing OrElse history.Count = 0 Then Return "no submissions recorded yet."
+
+            Dim parts As New List(Of String) From {history.Count.ToString(Globalization.CultureInfo.CurrentCulture) & If(history.Count = 1, " submission", " submissions")}
+            For Each outcome In {(history.CountOutcome(SubmissionOutcome.Accepted), "accepted"),
+                                 (history.WithRevisions, "asked to revise"),
+                                 (history.CountOutcome(SubmissionOutcome.RejectedAfterReview) + history.CountOutcome(SubmissionOutcome.Rejected), "rejected"),
+                                 (history.CountOutcome(SubmissionOutcome.DeskRejected), "desk rejected")}
+                If outcome.Item1 > 0 Then parts.Add(outcome.Item1.ToString(Globalization.CultureInfo.CurrentCulture) & " " & outcome.Item2)
+            Next
+            If history.MedianDaysToFirstDecision.HasValue Then
+                parts.Add("median " & history.MedianDaysToFirstDecision.Value.Value.ToString("0.#", Globalization.CultureInfo.CurrentCulture) & " days to a first decision")
+            End If
+            parts.Add("last submitted " & history.LastSubmitted.ToString("MMM d, yyyy", Globalization.CultureInfo.CurrentCulture) & ".")
+            Return String.Join(" · ", parts)
+
+        End Function
+
+
+        ' A journal's history by Journal Library record, or else by exact name.
+        Public Shared Function FindHistory(statistics As LibraryStatistics, journalName As String, journalId As Guid?) As JournalHistory
+            If statistics Is Nothing Then Return Nothing
+            If journalId.HasValue Then
+                Dim linked As JournalHistory = statistics.Journals.FirstOrDefault(Function(item) item.JournalId.HasValue AndAlso item.JournalId.Value = journalId.Value)
+                If linked IsNot Nothing Then Return linked
+            End If
+            Dim key As String = NameKey(journalName)
+            Return statistics.Journals.FirstOrDefault(Function(item) NameKey(item.JournalName) = key)
+        End Function
+
+
         Friend Shared Function NameKey(name As String) As String
             Return Regex.Replace(If(name, String.Empty).Trim(), "\s+", " ").ToUpperInvariant()
         End Function

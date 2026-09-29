@@ -10,7 +10,7 @@ Namespace Services
 
     Public NotInheritable Class StorageMigrationService
 
-        Public Const CurrentSchemaVersion As Integer = 8
+        Public Const CurrentSchemaVersion As Integer = 9
 
         Private Const MinimumMigratableSchemaVersion As Integer = 1
 
@@ -377,6 +377,11 @@ Namespace Services
                     Case 7
 
                         MarkerOnlyMigration.Migrate(currentRoot, schemaPath, 7)
+
+                    Case 8
+
+                        ' Schema 9 adds per-manuscript journal shortlists (#65).
+                        MarkerOnlyMigration.Migrate(currentRoot, schemaPath, 8)
 
                     Case Else
 

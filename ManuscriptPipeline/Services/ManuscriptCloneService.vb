@@ -37,6 +37,21 @@ Namespace Services
                 .Tags = If(source.Tags, New List(Of String)()).ToList()
             }
 
+            If source.JournalShortlist IsNot Nothing Then
+                For Each candidate As JournalCandidate In source.JournalShortlist
+                    If candidate Is Nothing Then Continue For
+                    clone.JournalShortlist.Add(New JournalCandidate With {
+                        .Id = candidate.Id,
+                        .JournalName = candidate.JournalName,
+                        .JournalId = candidate.JournalId,
+                        .Status = candidate.Status,
+                        .Notes = candidate.Notes,
+                        .Checks = If(candidate.Checks, New List(Of String)()).ToList(),
+                        .AddedDate = candidate.AddedDate
+                    })
+                Next
+            End If
+
             If source.Authors IsNot Nothing Then
                 For Each authorLink As ManuscriptAuthor In source.Authors
                     clone.Authors.Add(

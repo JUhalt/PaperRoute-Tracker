@@ -14,13 +14,45 @@ Namespace Forms
         Private _searchStart As Integer = 0
 
 
-        Public Sub New()
+        Public Sub New(Optional startAt As String = Nothing)
 
             BuildInterface()
             LoadGuide()
             UiPolish.ApplyDialog(Me)
 
+            ' Open at a section, such as "Choosing a Journal", with its
+            ' heading at the top of the view.
+            If Not String.IsNullOrWhiteSpace(startAt) Then
+                AddHandler Me.Shown,
+                    Sub(sender, e)
+                        ' The heading on a line of its own, else any mention.
+                        Dim index As Integer = txtGuide.Text.IndexOf(ChrW(10) & startAt & ChrW(10), StringComparison.Ordinal)
+                        index = If(index >= 0, index + 1, txtGuide.Text.IndexOf(startAt, StringComparison.Ordinal))
+                        If index < 0 Then Return
+                        txtGuide.SelectionStart = txtGuide.TextLength
+                        txtGuide.ScrollToCaret()
+                        txtGuide.SelectionStart = index
+                        txtGuide.SelectionLength = 0
+                        txtGuide.ScrollToCaret()
+                        _searchStart = index
+                    End Sub
+            End If
+
         End Sub
+
+
+        ' Where the guide is showing, for tests.
+        Friend ReadOnly Property GuideSelectionStart As Integer
+            Get
+                Return txtGuide.SelectionStart
+            End Get
+        End Property
+
+        Friend ReadOnly Property GuideText As String
+            Get
+                Return txtGuide.Text
+            End Get
+        End Property
 
 
         Private Sub BuildInterface()
