@@ -259,6 +259,42 @@ Namespace Services
         End Function
 
 
+        ' A quiet green behind SuccessColor, such as the rail's Online status.
+        Public Shared Function SuccessMutedBackground() As Color
+
+            If IsDark() Then
+                Return Color.FromArgb(21, 59, 43)
+            End If
+
+            Return Color.FromArgb(220, 247, 232)
+
+        End Function
+
+
+        ' A calm state rather than a warning, such as Working offline. The
+        ' blues match the Submitted stage badge.
+        Public Shared Function InfoColor() As Color
+
+            If IsDark() Then
+                Return Color.FromArgb(147, 197, 253)
+            End If
+
+            Return Color.FromArgb(29, 78, 216)
+
+        End Function
+
+
+        Public Shared Function InfoMutedBackground() As Color
+
+            If IsDark() Then
+                Return Color.FromArgb(30, 58, 100)
+            End If
+
+            Return Color.FromArgb(219, 234, 254)
+
+        End Function
+
+
         Public Shared Function StageBackground(
             stage As PaperStage
         ) As Color

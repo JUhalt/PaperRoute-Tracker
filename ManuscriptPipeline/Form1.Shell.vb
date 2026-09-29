@@ -232,7 +232,7 @@ Partial Public Class Form1
                 End Using
             End Sub
 
-        Dim btnOffline As RailCommandButton = CreateWorkingOfflineButton(itemWidth, itemHeight)
+        Dim btnOnline As RailCommandButton = CreateOnlineStatusButton(itemWidth, itemHeight)
 
         Dim btnSettings As New RailCommandButton(RailGlyph.Settings, "Settings") With {
             .Width = itemWidth,
@@ -254,11 +254,11 @@ Partial Public Class Form1
         AddHandler btnHelp.Click, AddressOf OpenUserGuide
         cardToolTip.SetToolTip(btnHelp, "User Guide (F1)")
         cardToolTip.SetToolTip(btnSettings, "Settings")
-        railItems.Add(btnOffline)
+        railItems.Add(btnOnline)
         railItems.Add(btnSettings)
         railItems.Add(btnHelp)
 
-        commands.Controls.Add(btnOffline)
+        commands.Controls.Add(btnOnline)
         commands.Controls.Add(btnSettings)
         commands.Controls.Add(btnHelp)
 

@@ -1,13 +1,15 @@
 Imports System
+Imports System.Linq
 Imports System.Windows.Forms
 Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Services
 
 ' Online services and Work offline (#86): the settings reach the gate every
-' request passes through, and the rail says when PaperRoute is offline.
+' request passes through, and the rail shows Online in green or Working
+' offline in blue.
 Partial Public Class Form1
 
-    Private btnWorkingOffline As RailCommandButton = Nothing
+    Private btnOnlineStatus As RailCommandButton = Nothing
     Private mnuWorkOffline As ToolStripMenuItem = Nothing
 
 
@@ -24,27 +26,43 @@ Partial Public Class Form1
 
         Dim offline As Boolean = OnlineAccess.IsWorkingOffline
 
-        If btnWorkingOffline IsNot Nothing Then btnWorkingOffline.Visible = offline
         If mnuWorkOffline IsNot Nothing Then mnuWorkOffline.Checked = offline
+        If btnOnlineStatus Is Nothing Then Return
+
+        Dim turnedOff As String = String.Join(", ",
+            OnlineServiceCatalog.Services.
+                Where(Function(service) appSettings.OnlineServices.TurnedOff.Contains(service.Id)).
+                Select(Function(service) service.Name))
+
+        Dim description As String =
+            If(offline,
+               "Working offline: PaperRoute contacts no online service.",
+               "Online: PaperRoute goes online only when you use a feature listed in Online services" &
+               If(turnedOff.Length = 0, ".", " (turned off: " & turnedOff & ")."))
+
+        btnOnlineStatus.Glyph = If(offline, RailGlyph.Offline, RailGlyph.Online)
+        btnOnlineStatus.Tone = If(offline, RailTone.Info, RailTone.Success)
+        btnOnlineStatus.Text = If(offline, "Working offline", "Online")
+        btnOnlineStatus.AccessibleName = btnOnlineStatus.Text
+        btnOnlineStatus.AccessibleDescription = description & " Opens Online services in Preferences."
+        cardToolTip.SetToolTip(btnOnlineStatus, description & " Choose to review Online services.")
+        btnOnlineStatus.Invalidate()
 
     End Sub
 
 
-    ' Shown above Settings only while Work offline is on.
-    Private Function CreateWorkingOfflineButton(width As Integer, height As Integer) As RailCommandButton
+    ' Above Settings: Online or Working offline, opening Online services.
+    Private Function CreateOnlineStatusButton(width As Integer, height As Integer) As RailCommandButton
 
-        Dim button As New RailCommandButton(RailGlyph.Offline, "Working offline") With {
+        Dim button As New RailCommandButton(RailGlyph.Online, "Online") With {
             .Width = width,
             .Height = height,
-            .Attention = True,
-            .Visible = False,
-            .AccessibleDescription = "Work offline is on. Opens Online services in Preferences."
+            .Tone = RailTone.Success
         }
 
         AddHandler button.Click, Sub(sender, e) OpenSettingsAt(showOnlineServices:=True)
-        cardToolTip.SetToolTip(button, "Work offline is on: PaperRoute contacts no online service. Choose to review Online services.")
 
-        btnWorkingOffline = button
+        btnOnlineStatus = button
         Return button
 
     End Function

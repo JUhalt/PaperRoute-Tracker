@@ -9,7 +9,7 @@ internal static class Program
 {
     private const string Usage = "PaperRoute workflow manual demo\n\n" +
         "Surfaces: vault (default), readiness, packet, packet-new, file, file-new, notes, submission, responses, workflow, board, publications, fill, about, route, update, report, candidate, online, key\n" +
-        "Options: --minimum, --primary, --empty (vault/readiness/board), --offline (board), --integrity (populated vault only), --dark or --system, --help\n\n" +
+        "Options: --minimum, --primary, --empty (vault/readiness/board), --offline and --collapsed (board), --integrity (populated vault only), --dark or --system, --help\n\n" +
         "Default surfaces discard manuscript changes when the window closes.\n" +
         "workflow and board save only in a new disposable temporary session.\n" +
         "--integrity creates and retains disposable files in a unique temporary directory.";
@@ -37,6 +37,7 @@ internal static class Program
         var dark = args.Contains("--dark", StringComparer.OrdinalIgnoreCase);
         var system = args.Contains("--system", StringComparer.OrdinalIgnoreCase);
         var offline = args.Contains("--offline", StringComparer.OrdinalIgnoreCase);
+        var collapsed = args.Contains("--collapsed", StringComparer.OrdinalIgnoreCase);
         var invalidOption = args.Any(argument => argument.StartsWith("--") &&
             !argument.Equals("--minimum", StringComparison.OrdinalIgnoreCase) &&
             !argument.Equals("--primary", StringComparison.OrdinalIgnoreCase) &&
@@ -44,11 +45,12 @@ internal static class Program
             !argument.Equals("--integrity", StringComparison.OrdinalIgnoreCase) &&
             !argument.Equals("--dark", StringComparison.OrdinalIgnoreCase) &&
             !argument.Equals("--system", StringComparison.OrdinalIgnoreCase) &&
-            !argument.Equals("--offline", StringComparison.OrdinalIgnoreCase));
+            !argument.Equals("--offline", StringComparison.OrdinalIgnoreCase) &&
+            !argument.Equals("--collapsed", StringComparison.OrdinalIgnoreCase));
 
         if (positional.Length > 1 || !surfaces.Contains(surface) || invalidOption ||
             (dark && system) ||
-            (offline && surface != "board") ||
+            ((offline || collapsed) && surface != "board") ||
             (empty && surface != "vault" && surface != "readiness" && surface != "board") ||
             (integrity && (surface != "vault" || empty)))
         {
@@ -69,8 +71,8 @@ internal static class Program
                     "PaperRoute-Board-Demo-" + Guid.NewGuid().ToString("N"));
                 StorageEnvironment.ConfigureIsolatedSessionRoot(sessionRoot);
                 BoardDemo.CreateSamples(sessionRoot, empty);
-                if (offline)
-                    new AppSettingsService().Save(new AppSettings { OnlineServices = new OnlineServicesSettings { WorkOffline = true } });
+                if (offline || collapsed)
+                    new AppSettingsService().Save(new AppSettings { NavigationCollapsed = collapsed, OnlineServices = new OnlineServicesSettings { WorkOffline = offline } });
                 using var board = new ManuscriptPipeline.Form1();
                 BoardDemo.RecordLayoutEvidence(board, sessionRoot);
                 board.Shown += (_, _) =>

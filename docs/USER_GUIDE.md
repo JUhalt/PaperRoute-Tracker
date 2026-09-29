@@ -760,7 +760,8 @@ Use **Settings > Diagnostics...** when troubleshooting storage, environment, or 
 
 PaperRoute keeps your library on this computer and works without the internet. A few features contact an online service, and only when you use them. Choose **Settings > Preferences... > Online services** to see each service, what it sends, and when, and to turn any of them off.
 
-- **Work offline** stops every online service, update checks included, until you turn it off. Choose **Settings > Work Offline**, or check it in Online services. While it's on, **Working offline** appears above **Settings** in the rail; choose it to review Online services.
+- **Work offline** stops every online service, update checks included, until you turn it off. Choose **Settings > Work Offline**, or check it in Online services.
+- Above **Settings**, the rail shows **Online** in green, or **Working offline** in blue. Choose it to review Online services.
 - Turning off one service stops only its feature, which then explains why it didn't go online. Your choices for each service are kept while Work offline is on.
 - If PaperRoute can't read its settings file, it works offline until you review Online services and choose **Save**.
 - A service added in a later version starts on, and appears in Online services with what it sends.
