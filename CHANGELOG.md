@@ -16,6 +16,10 @@ Development is tracked in the [v0.9 milestone](https://github.com/JUhalt/PaperRo
 - **Online services and Work offline** ([#86](https://github.com/JUhalt/PaperRoute-Tracker/issues/86)): **Settings > Preferences... > Online services** lists every service PaperRoute can contact, with the hosts it contacts, what it sends, and when, and lets you turn each off. **Work offline** (also **Settings > Work Offline**) stops them all, update checks included. The rail shows **Online** in green or **Working offline** in blue, and either opens Online services. Every request passes one gate that refuses it before anything is sent, follows redirects itself so each hop is checked, and reaches only the hosts listed for its service. The User Guide's **What PaperRoute sends, and when** table is checked against the app by the tests.
 - **Optional OpenAlex key** ([#86](https://github.com/JUhalt/PaperRoute-Tracker/issues/86)): paste a free personal key to raise OpenAlex's daily allowance for PaperRoute's OpenAlex features. It is encrypted for your Windows account, kept out of backups, exports, and Diagnostics, and sent only to api.openalex.org in a header. PaperRoute includes no key of its own.
 
+- **Journal facts and metrics** ([#87](https://github.com/JUhalt/PaperRoute-Tracker/issues/87)): the Journals page shows the selected journal's facts, links, and metrics beside the list. **Look Up Facts...** looks the journal up by ISSN, or finds it by name, in DOAJ and OpenAlex, two open indexes (both CC0): publication fee, license and copyright, peer review, typical time to publication, plagiarism screening, open-access status, topics, and links to its aims and scope, author instructions, editorial board, and sharing policy in Open Policy Finder (linked, never fetched). A preview shows everything found first; only blank fields are filled, and nothing you typed is replaced. Facts carry their source and the date checked, and older than a year they are marked as possibly out of date.
+- **Journal metrics** ([#87](https://github.com/JUhalt/PaperRoute-Tracker/issues/87)): OpenAlex's open metrics (2-year mean citedness, h-index, i10-index), and metrics you enter with their source and year, such as the Journal Impact Factor, CiteScore, SJR, SNIP, h5-index, or an acceptance rate. Each shows its definition and where it is published. Metrics are never combined into a score or used to sort journals, and a note explains why (DORA).
+- Shortlisted journals show their facts in one line, and the journal-choice questions show what's known beside them, with links. Nothing is ticked for you.
+
 ### Changed
 
 - Settings are saved by writing a new file and swapping it in, keeping the previous one as settings.bak. If the settings can't be read, PaperRoute works offline until you review Online services ([#86](https://github.com/JUhalt/PaperRoute-Tracker/issues/86)).
@@ -23,7 +27,7 @@ Development is tracked in the [v0.9 milestone](https://github.com/JUhalt/PaperRo
 
 ### Storage
 
-- **Schema 9** adds journal shortlists. As with Schemas 7 and 8, the upgrade validates the library and changes only the schema marker.
+- **Schema 9** adds journal shortlists, and journal ISSNs, links, facts, and metrics. As with Schemas 7 and 8, the upgrade validates the library and changes only the schema marker.
 
 ## [0.8.0] - 2026-09-28
 

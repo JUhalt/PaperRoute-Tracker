@@ -12,18 +12,39 @@ Namespace Forms
     Public Class JournalLibraryForm
         Inherits Form
 
-        Private ReadOnly _repository As New AuthorLibraryRepository()
+        Private ReadOnly _repository As AuthorLibraryRepository
+        Private ReadOnly _factsSource As IJournalFactsSource
         Private ReadOnly _manuscripts As List(Of Manuscript)
 
         Private _library As AuthorLibraryData
 
         Private ReadOnly lstJournals As New ListBox()
         Private ReadOnly lblInfo As New Label()
+        Private ReadOnly factsCard As New JournalFactsCard()
+
+        ' Runs Look Up Facts on a copy and returns it changed, or Nothing;
+        ' tests replace it.
+        Friend lookupPrompt As Func(Of JournalRecord, JournalRecord) = Nothing
 
 
         Public Sub New(
             Optional manuscripts As IEnumerable(Of Manuscript) = Nothing
         )
+
+            Me.New(manuscripts, New AuthorLibraryRepository(), Nothing)
+
+        End Sub
+
+
+        ' For tests: a library in its own folder, and recorded index answers.
+        Friend Sub New(
+            manuscripts As IEnumerable(Of Manuscript),
+            repository As AuthorLibraryRepository,
+            factsSource As IJournalFactsSource
+        )
+
+            _repository = repository
+            _factsSource = factsSource
 
             _manuscripts =
                 If(
@@ -130,38 +151,43 @@ Namespace Forms
             lstJournals.Dock =
                 DockStyle.Fill
 
+            lstJournals.IntegralHeight =
+                False
+
+            ' The list beside the selected journal's facts (#87).
+            factsCard.Dock = DockStyle.Fill
+            factsCard.Margin = New Padding(12, 0, 0, 0)
+            AddHandler factsCard.LookUpRequested, AddressOf LookUpFacts
+            AddHandler factsCard.EditRequested, AddressOf EditSelected
+
+            Dim split As New TableLayoutPanel With {
+                .Dock = DockStyle.Fill,
+                .ColumnCount = 2,
+                .RowCount = 1,
+                .Margin = New Padding(0)
+            }
+
+            split.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 38))
+            split.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 62))
+            split.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
+            split.Controls.Add(lstJournals, 0, 0)
+            split.Controls.Add(factsCard, 1, 0)
+
             AddHandler lstJournals.SelectedIndexChanged,
                 AddressOf SelectionChanged
 
             AddHandler lstJournals.DoubleClick,
                 AddressOf EditSelected
 
-            Dim footer As New TableLayoutPanel With {
-                .Dock = DockStyle.Fill,
-                .AutoSize = True,
-                .ColumnCount = 2,
-                .RowCount = 1,
-                .Padding = New Padding(0, 10, 0, 0)
-            }
-
-            footer.ColumnStyles.Add(
-                New ColumnStyle(
-                    SizeType.Percent,
-                    100
-                )
-            )
-
-            footer.ColumnStyles.Add(
-                New ColumnStyle(
-                    SizeType.AutoSize
-                )
-            )
-
+            ' One wrapping row: a wrapping panel nested in an auto-sized table
+            ' reserves the height of its narrowest layout, leaving a gap.
             Dim leftButtons As New FlowLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .AutoSize = True,
+                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 .FlowDirection = FlowDirection.LeftToRight,
-                .WrapContents = True
+                .WrapContents = True,
+                .Padding = New Padding(0, 10, 0, 0)
             }
 
             Dim btnAdd As New Button With {
@@ -230,13 +256,12 @@ Namespace Forms
                 .DialogResult = DialogResult.OK
             }
 
-            footer.Controls.Add(leftButtons, 0, 0)
-            footer.Controls.Add(btnClose, 1, 0)
+            leftButtons.Controls.Add(btnClose)
 
             root.Controls.Add(intro, 0, 0)
             root.Controls.Add(lblInfo, 0, 1)
-            root.Controls.Add(lstJournals, 0, 2)
-            root.Controls.Add(footer, 0, 3)
+            root.Controls.Add(split, 0, 2)
+            root.Controls.Add(leftButtons, 0, 3)
 
             Me.AcceptButton =
                 btnClose
@@ -343,11 +368,16 @@ Namespace Forms
                     JournalRecord
                 )
 
+            lblInfo.Text =
+                _library.Journals.Count.ToString() &
+                If(_library.Journals.Count = 1, " reusable journal.", " reusable journals.")
+
             If selected Is Nothing Then
 
-                lblInfo.Text =
-                    _library.Journals.Count.ToString() &
-                    " reusable journal(s)."
+                factsCard.ShowNothing(
+                    If(_library.Journals.Count = 0,
+                       "Add a journal to keep its links, checklist, and facts in one place.",
+                       "Select a journal to see its facts, links, and metrics."))
 
                 Return
 
@@ -370,12 +400,19 @@ Namespace Forms
                     FirstOrDefault(Function(item) item.JournalId.HasValue AndAlso item.JournalId.Value = selected.Id)
 
             Dim parts As New List(Of String) From {
-                selected.Name & " — target on " & targetCount.ToString() & If(targetCount = 1, " manuscript", " manuscripts")
+                "Target of " & targetCount.ToString() & If(targetCount = 1, " manuscript", " manuscripts")
             }
 
             parts.Add(RouteAnalyticsService.DescribeHistory(history))
 
-            lblInfo.Text = String.Join(" · ", parts)
+            Dim blocked As OnlineBlockReason? = OnlineAccess.BlockReason(OnlineServiceCatalog.JournalFacts)
+
+            factsCard.ShowJournal(
+                selected,
+                String.Join(" · ", parts),
+                If(blocked.HasValue,
+                   OnlineAccess.BlockedMessage(OnlineServiceCatalog.Find(OnlineServiceCatalog.JournalFacts), blocked.Value),
+                   String.Empty))
 
         End Sub
 
@@ -599,17 +636,146 @@ Namespace Forms
         End Sub
 
 
+        ' Look Up Facts (#87) on a copy of the selected journal; the library
+        ' changes only when the dialog's Save is chosen and the file is saved.
+        Private Sub LookUpFacts(
+            sender As Object,
+            e As EventArgs
+        )
+
+            Dim selected As JournalRecord =
+                TryCast(
+                    lstJournals.SelectedItem,
+                    JournalRecord
+                )
+
+            If selected Is Nothing Then
+                Return
+            End If
+
+            If ExampleLibraryService.IsActive AndAlso
+               selected.Facts.Any(Function(item) item.Source = JournalFactCatalog.ExampleSource) Then
+
+                MessageBox.Show(
+                    Me,
+                    "Fictional journals aren't in any index. Add a real journal to try this.",
+                    "Look Up Journal Facts",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information
+                )
+
+                Return
+
+            End If
+
+            Dim blocked As OnlineBlockReason? = OnlineAccess.BlockReason(OnlineServiceCatalog.JournalFacts)
+            If blocked.HasValue Then
+
+                MessageBox.Show(
+                    Me,
+                    OnlineAccess.BlockedMessage(OnlineServiceCatalog.Find(OnlineServiceCatalog.JournalFacts), blocked.Value),
+                    "Look Up Journal Facts",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information
+                )
+
+                SelectionChanged(Nothing, EventArgs.Empty)
+                Return
+
+            End If
+
+            Dim updated As JournalRecord
+
+            If lookupPrompt IsNot Nothing Then
+                updated = lookupPrompt(JournalFactsService.Clone(selected))
+            Else
+                Using dialog As New JournalFactsForm(JournalFactsService.Clone(selected), If(_factsSource, New OnlineJournalFactsSource()))
+                    updated = If(dialog.ShowDialog(Me) = DialogResult.OK, dialog.Result, Nothing)
+                End Using
+            End If
+
+            If updated Is Nothing Then
+                Return
+            End If
+
+            Dim index As Integer =
+                _library.Journals.FindIndex(
+                    Function(item)
+                        Return item.Id = selected.Id
+                    End Function
+                )
+
+            If index < 0 Then
+                Return
+            End If
+
+            _library.Journals(index) = updated
+            SaveAndRefresh()
+
+        End Sub
+
+
+        ' On failure the library is read back from disk, so nothing unsaved
+        ' stays on screen as if it were kept.
         Private Sub SaveAndRefresh()
 
-            _repository.Save(
-                _library
-            )
+            Try
 
-            _library =
-                _repository.Load()
+                _repository.Save(
+                    _library
+                )
+
+            Catch ex As Exception When TypeOf ex Is IO.IOException OrElse
+                                       TypeOf ex Is UnauthorizedAccessException OrElse
+                                       TypeOf ex Is IO.InvalidDataException
+
+                MessageBox.Show(
+                    Me,
+                    "PaperRoute couldn't save the journal library, so the change wasn't kept." &
+                    Environment.NewLine &
+                    Environment.NewLine &
+                    ex.Message,
+                    "Journal Library",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                )
+
+            End Try
+
+            Try
+
+                _library =
+                    _repository.Load()
+
+            Catch ex As Exception When TypeOf ex Is IO.IOException OrElse
+                                       TypeOf ex Is UnauthorizedAccessException OrElse
+                                       TypeOf ex Is IO.InvalidDataException
+                ' Keep what is on screen; the next save tries again.
+            End Try
 
             RefreshList()
 
+        End Sub
+
+
+        ' For tests.
+        Friend ReadOnly Property Card As JournalFactsCard
+            Get
+                Return factsCard
+            End Get
+        End Property
+
+        Friend Sub SelectJournal(id As Guid)
+            For index As Integer = 0 To lstJournals.Items.Count - 1
+                If DirectCast(lstJournals.Items(index), JournalRecord).Id = id Then
+                    lstJournals.SelectedIndex = index
+                    Exit For
+                End If
+            Next
+        End Sub
+
+        Friend Sub LookUpFactsForTest()
+            LookUpFacts(Me, EventArgs.Empty)
         End Sub
 
     End Class

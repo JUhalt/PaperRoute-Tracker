@@ -380,7 +380,8 @@ Namespace Services
 
                     Case 8
 
-                        ' Schema 9 adds per-manuscript journal shortlists (#65).
+                        ' Schema 9 adds per-manuscript journal shortlists (#65), and
+                        ' journal ISSNs, links, facts, and metrics (#87).
                         MarkerOnlyMigration.Migrate(currentRoot, schemaPath, 8)
 
                     Case Else

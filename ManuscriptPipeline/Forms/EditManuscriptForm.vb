@@ -1516,6 +1516,27 @@ Namespace Forms
                 .Font = If(candidate.Status = CandidateStatus.RuledOut, New Font(Me.Font, FontStyle.Strikeout), Me.Font)
             }
 
+            ' One line of the journal's facts from the Journals page (#87).
+            Dim linked As JournalRecord = ShortlistRecord(candidate)
+            Dim factsLine As String = JournalFactsService.OneLine(linked)
+            Dim facts As New Label With {
+                .AutoSize = True,
+                .UseMnemonic = False,
+                .Text = factsLine,
+                .Visible = factsLine.Length > 0,
+                .ForeColor = UiTheme.MutedText(),
+                .Margin = New Padding(0, 2, 8, 0)
+            }
+            Dim textStack As New FlowLayoutPanel With {
+                .AutoSize = True,
+                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                .FlowDirection = FlowDirection.TopDown,
+                .WrapContents = False,
+                .Margin = New Padding(0)
+            }
+            textStack.Controls.Add(text)
+            textStack.Controls.Add(facts)
+
             Dim btnEdit As New Button With {.Text = "Edit...", .AutoSize = True, .AccessibleName = "Edit " & candidate.JournalName, .Margin = New Padding(3, 0, 3, 0)}
             AddHandler btnEdit.Click, Sub(sender, e) EditShortlistCandidate(candidate)
 
@@ -1531,14 +1552,31 @@ Namespace Forms
             Dim btnMore As New Button With {.Text = ChrW(&H22EF), .AutoSize = True, .AccessibleName = "More actions for " & candidate.JournalName, .Margin = New Padding(3, 0, 0, 0)}
             AddHandler btnMore.Click, Sub(sender, e) menu.Show(btnMore, New Point(0, btnMore.Height))
             AddHandler row.Disposed, Sub(sender, e) menu.Dispose()
-            AddHandler row.Resize, Sub(sender, e) text.MaximumSize = New Size(Math.Max(200, row.ClientSize.Width - statusWidth - btnEdit.Width - btnMore.Width - 24), 0)
+            AddHandler row.Resize,
+                Sub(sender, e)
+                    Dim width As Integer = Math.Max(200, row.ClientSize.Width - statusWidth - btnEdit.Width - btnMore.Width - 24)
+                    text.MaximumSize = New Size(width, 0)
+                    facts.MaximumSize = New Size(width, 0)
+                End Sub
 
             row.Controls.Add(lblStatus, 0, 0)
-            row.Controls.Add(text, 1, 0)
+            row.Controls.Add(textStack, 1, 0)
             row.Controls.Add(btnEdit, 2, 0)
             row.Controls.Add(btnMore, 3, 0)
             Return row
 
+        End Function
+
+
+        ' The candidate's Journal Library record: by link, else by name.
+        Private Function ShortlistRecord(candidate As JournalCandidate) As JournalRecord
+            Dim library As List(Of JournalRecord) = If(_authorLibrary?.Journals, New List(Of JournalRecord)())
+            If candidate.JournalId.HasValue Then
+                Dim byId As JournalRecord = library.FirstOrDefault(Function(item) item IsNot Nothing AndAlso item.Id = candidate.JournalId.Value)
+                If byId IsNot Nothing Then Return byId
+            End If
+            Dim key As String = RouteAnalyticsService.NameKey(candidate.JournalName)
+            Return library.FirstOrDefault(Function(item) item IsNot Nothing AndAlso RouteAnalyticsService.NameKey(item.Name) = key)
         End Function
 
 
@@ -1562,7 +1600,14 @@ Namespace Forms
                     Return RouteAnalyticsService.DescribeHistory(RouteAnalyticsService.FindHistory(statistics, name, record?.Id))
                 End Function
 
-            Using dialog As New JournalCandidateForm(existing, names, history)
+            ' The journal's facts from the Journals page, beside the questions (#87).
+            Dim factsFor As Func(Of String, JournalRecord) =
+                Function(name)
+                    Dim key As String = RouteAnalyticsService.NameKey(name)
+                    Return library.FirstOrDefault(Function(item) item IsNot Nothing AndAlso RouteAnalyticsService.NameKey(item.Name) = key)
+                End Function
+
+            Using dialog As New JournalCandidateForm(existing, names, history, factsFor)
                 If dialog.ShowDialog(Me.FindForm()) <> DialogResult.OK Then Return Nothing
                 Return New JournalCandidate With {.JournalName = dialog.JournalName, .Status = dialog.Status, .Notes = dialog.Notes, .Checks = dialog.Checks}
             End Using
@@ -3640,7 +3685,8 @@ Namespace Forms
 
             If _authorLibraryDirty Then
 
-                _authorRepository.Save(
+                ' Tags and people only; journals stay as the Journals page saved them.
+                _authorRepository.SaveKeepingJournals(
                     _authorLibrary
                 )
 

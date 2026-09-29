@@ -133,6 +133,30 @@ Namespace Services
             Dim assessment As New JournalRecord With {.Name = "Fictional Assessment Quarterly", .Publisher = "Fictional Society Publications", .Notes = "Fictional journal."}
             library.Journals.AddRange({letters, openPsychology, methods, assessment})
 
+            ' Fictional facts and metrics (#87), so the Journals page shows what
+            ' a looked-up journal looks like. They name no real index.
+            Dim checkedUtc As DateTime = DateTime.SpecifyKind(day.AddDays(-12), DateTimeKind.Utc)
+            Dim fact As Func(Of String, String, JournalFact) =
+                Function(key, value) New JournalFact With {.Key = key, .Value = value, .Source = JournalFactCatalog.ExampleSource, .CheckedUtc = checkedUtc}
+            openPsychology.AimsScopeUrl = "https://example.org/fictional-open-psychology/aims"
+            openPsychology.AuthorInstructionsUrl = "https://example.org/fictional-open-psychology/authors"
+            openPsychology.EditorialBoardUrl = "https://example.org/fictional-open-psychology/board"
+            openPsychology.Facts.AddRange({
+                fact(JournalFactCatalog.OpenAccess, "Fully open access"),
+                fact(JournalFactCatalog.Apc, "No publication fee"),
+                fact(JournalFactCatalog.License, "CC BY"),
+                fact(JournalFactCatalog.Copyright, "Authors keep copyright"),
+                fact(JournalFactCatalog.Review, "Double anonymous peer review"),
+                fact(JournalFactCatalog.Weeks, "About 14 weeks from submission to publication"),
+                New JournalFact With {.Key = JournalFactCatalog.CiteScore, .Value = "3.1", .Year = day.Year - 1, .Source = JournalFactCatalog.ExampleSource, .CheckedUtc = checkedUtc, .EnteredByYou = True},
+                New JournalFact With {.Key = JournalFactCatalog.AcceptanceRate, .Value = "About 30%", .Year = day.Year - 1, .Source = JournalFactCatalog.ExampleSource, .CheckedUtc = checkedUtc, .EnteredByYou = True}
+            })
+            letters.Facts.AddRange({
+                fact(JournalFactCatalog.OpenAccess, "Not fully open access (subscription or hybrid)"),
+                fact(JournalFactCatalog.Review, "Single anonymous peer review"),
+                New JournalFact With {.Key = JournalFactCatalog.DecisionTime, .Value = "About 1 week for a desk decision", .Year = day.Year - 1, .Source = JournalFactCatalog.ExampleSource, .CheckedUtc = checkedUtc, .EnteredByYou = True}
+            })
+
             Dim manuscripts As New List(Of Manuscript)()
 
             ' 1. Published: a desk rejection, rerouting, two revision rounds with

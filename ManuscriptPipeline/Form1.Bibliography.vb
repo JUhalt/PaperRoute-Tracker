@@ -110,7 +110,7 @@ Partial Public Class Form1
                     ' fails, the worst case is an unused reusable author record;
                     ' PaperRoute never persists a manuscript that references an
                     ' author record that failed to save.
-                    authorRepository.Save(authorLibrary)
+                    authorRepository.SaveKeepingJournals(authorLibrary)
                     repository.Save(manuscripts)
                     RenderManuscripts()
 

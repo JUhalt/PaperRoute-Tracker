@@ -25,6 +25,10 @@ Namespace Forms
         Private ReadOnly btnOk As New Button()
         Private ReadOnly _checkBoxes As New List(Of CheckBox)()
 
+        ' The journal's stored facts beside the questions (#87); never ticks.
+        Private ReadOnly _factsFor As Func(Of String, JournalRecord)
+        Private ReadOnly _hints As New Dictionary(Of String, LinkLabel)(StringComparer.Ordinal)
+
         ' Opens Help at "Choosing a Journal"; tests replace it.
         Friend GuidePrompt As Action = Nothing
 
@@ -42,9 +46,10 @@ Namespace Forms
         Public Property Checks As New List(Of String)()
 
 
-        Public Sub New(candidate As JournalCandidate, journalNames As IEnumerable(Of String), history As Func(Of String, String))
+        Public Sub New(candidate As JournalCandidate, journalNames As IEnumerable(Of String), history As Func(Of String, String), Optional factsFor As Func(Of String, JournalRecord) = Nothing)
 
             _history = history
+            _factsFor = factsFor
             If candidate IsNot Nothing Then
                 JournalName = If(candidate.JournalName, String.Empty)
                 Status = candidate.Status
@@ -220,6 +225,20 @@ Namespace Forms
                 }
                 _checkBoxes.Add(box)
                 list.Controls.Add(box)
+
+                Dim hint As New LinkLabel With {
+                    .AutoSize = True,
+                    .UseMnemonic = False,
+                    .Visible = False,
+                    .ForeColor = UiTheme.MutedText(),
+                    .LinkColor = UiTheme.AccentColor(),
+                    .ActiveLinkColor = UiTheme.AccentSecondaryColor(),
+                    .VisitedLinkColor = UiTheme.AccentColor(),
+                    .Margin = New Padding(CInt(Math.Ceiling(16 * DeviceDpi / 96.0)) + 8, 0, 0, 6)
+                }
+                AddHandler hint.LinkClicked, AddressOf OpenHint
+                _hints(check.Id) = hint
+                list.Controls.Add(hint)
             Next
             AddHandler list.Resize,
                 Sub(sender, e)
@@ -228,6 +247,9 @@ Namespace Forms
                     For Each box As CheckBox In list.Controls.OfType(Of CheckBox)()
                         box.Width = width
                         box.Height = TextRenderer.MeasureText(box.Text, box.Font, New Size(width - glyph, 0), TextFormatFlags.WordBreak).Height + 6
+                    Next
+                    For Each hint As LinkLabel In list.Controls.OfType(Of LinkLabel)()
+                        hint.MaximumSize = New Size(Math.Max(120, width - glyph), 0)
                     Next
                 End Sub
             card.Controls.Add(list)
@@ -245,7 +267,40 @@ Namespace Forms
             Dim name As String = cmbJournal.Text.Trim()
             btnOk.Enabled = name.Length > 0
             lblHistory.Text = If(name.Length = 0 OrElse _history Is Nothing, "Choose or type a journal.", "Your history with this journal: " & _history(name))
+            RefreshHints(If(name.Length = 0 OrElse _factsFor Is Nothing, Nothing, _factsFor(name)))
         End Sub
+
+
+        ' A fact or link from the Journals page under the question it helps
+        ' answer; a link opens in the browser.
+        Private Sub RefreshHints(record As JournalRecord)
+            For Each pair As KeyValuePair(Of String, LinkLabel) In _hints
+                Dim hint = JournalFactsService.HintFor(pair.Key, record)
+                pair.Value.Text = hint.Text
+                pair.Value.Tag = hint.Url
+                pair.Value.LinkArea = If(hint.Url.Length > 0, New LinkArea(0, hint.Text.Length), New LinkArea(0, 0))
+                pair.Value.Visible = hint.Text.Length > 0
+            Next
+        End Sub
+
+
+        Private Sub OpenHint(sender As Object, e As LinkLabelLinkClickedEventArgs)
+            Dim url As String = TryCast(DirectCast(sender, LinkLabel).Tag, String)
+            If String.IsNullOrEmpty(url) Then Return
+            Try
+                UrlSafetyService.OpenInBrowser(url)
+            Catch ex As Exception
+                MessageBox.Show(Me, ex.Message, "Open Link", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            End Try
+        End Sub
+
+
+        ' For tests: the hint shown under each question.
+        Friend ReadOnly Property Hints As IReadOnlyDictionary(Of String, LinkLabel)
+            Get
+                Return _hints
+            End Get
+        End Property
 
 
         Private Sub Accept()

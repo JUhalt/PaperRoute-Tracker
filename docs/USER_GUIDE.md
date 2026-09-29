@@ -331,8 +331,11 @@ Journal records can include:
 
 - journal name;
 - publisher;
+- ISSNs;
 - journal homepage;
+- aims and scope, author instructions, and editorial board links;
 - submission portal;
+- facts and metrics (see **Journal Facts and Metrics**);
 - notes;
 - Favorite status;
 - Shortlist status; and
@@ -378,6 +381,54 @@ For safety, PaperRoute opens only valid `http://` or `https://` URLs.
 
 ---
 
+## Journal Facts and Metrics
+
+The **Journals** page shows the selected journal beside the list: its facts, links, and metrics, each with where it came from.
+
+### Looking up a journal
+
+Choose **Look Up Facts...** to look the journal up in two open indexes:
+
+- **DOAJ** (the Directory of Open Access Journals, doaj.org), which lists fully open-access journals: the publication fee, license and copyright, peer review type, typical weeks from submission to publication, plagiarism screening, and links to the journal's aims and scope, author instructions, and editorial board.
+- **OpenAlex** (openalex.org), an open index of scholarly works that covers most journals, open access or not: publisher, ISSNs, whether the journal is fully open access, its main topics, and three open citation metrics.
+
+PaperRoute sends the journal's ISSN, and nothing else. A journal without an ISSN is first found by name: type the name, choose **Find**, and pick the journal from the list. You see everything that was found before anything is saved:
+
+- a blank field is filled;
+- a field you typed is never replaced (**Yours is kept**);
+- a fact from an index is updated when the index changed it; and
+- a fact an index no longer gives is offered for removal, unchecked.
+
+Choose **Refresh Facts...** later to check again. Facts checked more than a year ago are marked as possibly out of date. While **Work offline** is on, or Journal facts is turned off in Online services, the page shows what was saved last time, with its date.
+
+A subscription journal isn't listed in DOAJ, which is expected. For such a journal, a fee from OpenAlex is shown as optional, for making an article open access.
+
+The facts are data from DOAJ and OpenAlex, both public domain (CC0). OpenAlex asks to be cited as: Priem, J., Piwowar, H., & Orr, R. (2022). OpenAlex: A fully-open index of scholarly works, authors, venues, institutions, and concepts. ArXiv. https://arxiv.org/abs/2205.01833. PaperRoute isn't affiliated with or endorsed by either index.
+
+### Links and sharing policies
+
+The card links to the journal's homepage, aims and scope, author instructions, editorial board, and submission portal, and to its sharing policy in **Open Policy Finder** (openpolicyfinder.jisc.ac.uk), which says whether and where you may share a preprint or accepted manuscript. Links open in your web browser; PaperRoute itself reads nothing from those pages. Editors and detailed submission requirements change often, so record what you need in the journal's notes or its checklist.
+
+### Journal metrics
+
+Metrics appear in two groups, always with their name, source, and year:
+
+- **From open data (OpenAlex):** 2-year mean citedness (citations received last year by works the journal published in the two years before, divided by the number of those works; similar in idea to the Journal Impact Factor, but not the same number), and the journal's h-index and i10-index across all years.
+- **Entered by you:** metrics that have no open source, such as the Journal Impact Factor, CiteScore, SJR, SNIP, or h5-index, and acceptance rates or decision times a journal publishes. Open **Edit... > Facts and Metrics** and choose **Add Metric...**; each metric shows its definition and where it is published. PaperRoute doesn't look these up.
+
+| Metric | Published by | What it measures |
+| --- | --- | --- |
+| Journal Impact Factor | Clarivate, Journal Citation Reports | Citations in one year to items from the two years before, per item |
+| 5-year Journal Impact Factor | Clarivate, Journal Citation Reports | The same over five years |
+| CiteScore | Elsevier, Scopus | Citations over four years to documents from those four years, per document |
+| SJR | SCImago | Weighted citations in one year to documents from the three years before, per document |
+| SNIP | CWTS, Leiden University | Citations per paper over three years, weighted for how much each field cites |
+| h5-index | Google Scholar Metrics | The largest h with h articles from the last five years cited h times each |
+
+Journal metrics describe a journal as a whole, not the quality of any single article or the work of any author, as the San Francisco Declaration on Research Assessment (https://sfdora.org/read/) explains. PaperRoute never combines metrics into one score, and never sorts or colors journals by them.
+
+---
+
 ## Choosing a Journal
 
 Each manuscript keeps a **journal shortlist** on its Overview: the journals you are considering, in your order of preference, with your reasons.
@@ -417,6 +468,8 @@ Then ask whether the journal suits this manuscript:
 - Does its time to decision and publication suit your timeline? Your own history with the journal, on the Insights page, helps here.
 
 Each shortlisted journal keeps your answers as checks, so the reasons for your choice stay with the manuscript and carry over if it is rerouted. PaperRoute never scores or ranks journals for you; the judgment stays yours.
+
+When a shortlisted journal has facts on the **Journals** page, its row shows them in one line, and the questions show what's known beside them, such as its peer review type beside the peer review question, with links to its aims and scope, author instructions, and sharing policy. The questions are never answered for you.
 
 ## Journal Submissions
 
@@ -782,6 +835,7 @@ PaperRoute keeps the key encrypted for your Windows account on this computer, se
 | DOI lookup (Crossref) | api.crossref.org | A DOI. | DOI & Crossref Metadata on a manuscript page, and Fill Blanks from Crossref. |
 | Publication check | api.crossref.org, orcid.org, pub.orcid.org | The DOIs and titles of the manuscripts you check, and your ORCID iD if you include it. | Check for Publications. |
 | ORCID import | orcid.org, pub.orcid.org | An ORCID iD. | ORCID... in Library > Authors & Affiliations. |
+| Journal facts (DOAJ and OpenAlex) | doaj.org, api.openalex.org | A journal's ISSN, or the name you type to find a journal. | Look Up Facts... on the Journals page. |
 
 ---
 

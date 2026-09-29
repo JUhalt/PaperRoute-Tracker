@@ -254,7 +254,9 @@ Namespace Services
                 Return Color.FromArgb(110, 231, 183)
             End If
 
-            Return Color.FromArgb(22, 130, 80)
+            ' At least 4.5:1 on white, the hover background, and its own
+            ' muted background.
+            Return Color.FromArgb(21, 121, 74)
 
         End Function
 
