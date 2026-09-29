@@ -22,6 +22,7 @@ Namespace Controls
         Checklist
         Publication
         Insights
+        Offline
     End Enum
 
     ' Paints one left-rail item: an icon, its label, and an optional count.
@@ -38,7 +39,8 @@ Namespace Controls
             selected As Boolean,
             hover As Boolean,
             focusCue As Boolean,
-            badge As Integer)
+            badge As Integer,
+            Optional attention As Boolean = False)
 
             Dim dpi As Integer = control.DeviceDpi
             g.Clear(If(control.Parent IsNot Nothing, control.Parent.BackColor, UiTheme.HeaderBackground()))
@@ -47,9 +49,10 @@ Namespace Controls
             Dim bounds As New RectangleF(0.5F, 0.5F, control.Width - 1.0F, control.Height - 1.0F)
             Dim radius As Single = UiTheme.Px(7, dpi)
 
-            If selected OrElse hover Then
+            ' A state to notice, such as Working offline, sits on a tint.
+            If selected OrElse hover OrElse attention Then
                 Using path As GraphicsPath = RoundedShapes.Create(bounds, radius)
-                    Using fill As New SolidBrush(If(selected, UiTheme.AccentMutedBackground(), UiTheme.HoverBackground()))
+                    Using fill As New SolidBrush(If(attention, UiTheme.WarningMutedBackground(), If(selected, UiTheme.AccentMutedBackground(), UiTheme.HoverBackground())))
                         g.FillPath(fill, path)
                     End Using
                 End Using
@@ -63,7 +66,7 @@ Namespace Controls
                 End Using
             End If
 
-            Dim ink As Color = If(selected, UiTheme.AccentColor(), UiTheme.SecondaryText())
+            Dim ink As Color = If(attention, UiTheme.WarningColor(), If(selected, UiTheme.AccentColor(), UiTheme.SecondaryText()))
             Dim icon As Single = UiTheme.Px(16, dpi)
             Dim left As Single = UiTheme.Px(10, dpi)
             Dim top As Single = (control.Height - icon) / 2.0F
@@ -180,6 +183,13 @@ Namespace Controls
                     Case RailGlyph.ExpandRail
                         g.DrawLines(pen, {p(3.5F, 4), p(7.5F, 8), p(3.5F, 12)})
                         g.DrawLines(pen, {p(7.5F, 4), p(11.5F, 8), p(7.5F, 12)})
+                    Case RailGlyph.Offline
+                        ' A cloud, struck through.
+                        g.DrawArc(pen, r(1.5F, 7, 6, 6), 90, 180)
+                        g.DrawArc(pen, r(4, 3.5F, 8, 8), 180, 180)
+                        g.DrawArc(pen, r(9.5F, 6.5F, 5, 6.5F), 270, 180)
+                        g.DrawLine(pen, p(4.5F, 13), p(12, 13))
+                        g.DrawLine(pen, p(2, 2), p(14, 14))
                     Case RailGlyph.Help
                         g.DrawEllipse(pen, r(2, 2, 12, 12))
                         g.DrawBezier(pen, p(6.4F, 6.3F), p(6.4F, 4.3F), p(9.8F, 4.3F), p(9.6F, 6.6F))
@@ -277,6 +287,10 @@ Namespace Controls
         <DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)>
         Public Property Glyph As RailGlyph
 
+        ' Drawn on a warning tint, for a state rather than a command.
+        <DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)>
+        Public Property Attention As Boolean
+
         Protected Overrides Sub OnMouseEnter(e As EventArgs)
             MyBase.OnMouseEnter(e)
             _hover = True
@@ -300,7 +314,7 @@ Namespace Controls
         End Sub
 
         Protected Overrides Sub OnPaint(e As PaintEventArgs)
-            RailPainter.Paint(Me, e.Graphics, Glyph, Text, False, _hover, Focused AndAlso ShowFocusCues, 0)
+            RailPainter.Paint(Me, e.Graphics, Glyph, Text, False, _hover, Focused AndAlso ShowFocusCues, 0, Attention)
         End Sub
 
     End Class

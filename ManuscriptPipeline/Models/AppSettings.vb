@@ -37,6 +37,10 @@ Namespace Models
         Public Property CheckForUpdatesAutomatically As Boolean =
             True
 
+        ' Online services and Work offline (#86).
+        Public Property OnlineServices As OnlineServicesSettings =
+            New OnlineServicesSettings()
+
         ' The left rail shows only icons.
         Public Property NavigationCollapsed As Boolean =
             False

@@ -17,6 +17,8 @@ Namespace Services
         End Sub
 
         Public Const Argument As String = "--example"
+        Public Const WorkOfflineArgument As String = "--work-offline"
+        Public Const ServicesOffArgument As String = "--services-off="
 
         Private Shared _sessionRoot As String
 
@@ -33,12 +35,44 @@ Namespace Services
         End Function
 
 
-        ' Opens the example in a new PaperRoute process.
-        Public Shared Sub Launch()
+        ' Opens the example in a new PaperRoute process, which keeps the
+        ' user's Online services choices (#86).
+        Public Shared Sub Launch(Optional online As OnlineServicesSettings = Nothing)
             Dim start As New ProcessStartInfo(Environment.ProcessPath) With {.UseShellExecute = False}
             start.ArgumentList.Add(Argument)
+            For Each item As String In OnlineArguments(online)
+                start.ArgumentList.Add(item)
+            Next
             Process.Start(start)?.Dispose()
         End Sub
+
+
+        Friend Shared Function OnlineArguments(online As OnlineServicesSettings) As List(Of String)
+            Dim result As New List(Of String)()
+            If online Is Nothing Then Return result
+            If online.WorkOffline Then result.Add(WorkOfflineArgument)
+            Dim off As List(Of String) = If(online.TurnedOff, New List(Of String)()).Where(AddressOf IsServiceId).ToList()
+            If off.Count > 0 Then result.Add(ServicesOffArgument & String.Join(",", off))
+            Return result
+        End Function
+
+
+        Friend Shared Function OnlineSettingsFrom(args As String()) As OnlineServicesSettings
+            Dim settings As New OnlineServicesSettings()
+            For Each item As String In If(args, Array.Empty(Of String)())
+                If String.Equals(item, WorkOfflineArgument, StringComparison.OrdinalIgnoreCase) Then settings.WorkOffline = True
+                If item IsNot Nothing AndAlso item.StartsWith(ServicesOffArgument, StringComparison.OrdinalIgnoreCase) Then
+                    settings.TurnedOff.AddRange(item.Substring(ServicesOffArgument.Length).Split(","c).Where(AddressOf IsServiceId))
+                End If
+            Next
+            Return settings
+        End Function
+
+
+        Private Shared Function IsServiceId(value As String) As Boolean
+            Return Not String.IsNullOrEmpty(value) AndAlso value.Length <= 40 AndAlso
+                value.All(Function(character) (character >= "a"c AndAlso character <= "z"c) OrElse (character >= "0"c AndAlso character <= "9"c) OrElse character = "-"c)
+        End Function
 
 
         ' Must run before any storage root is resolved: every PaperRoute
@@ -50,14 +84,17 @@ Namespace Services
         End Sub
 
 
-        ' Writes the example into the session's fresh storage.
-        Friend Shared Sub Seed(today As DateTime)
+        ' Writes the example, and the Online services choices it was opened
+        ' with, into the session's fresh storage.
+        Friend Shared Sub Seed(today As DateTime, Optional online As OnlineServicesSettings = Nothing)
             If Not IsActive Then Throw New InvalidOperationException("The example library is written only into its own session.")
             Dim example = Create(today)
             Dim authors As New AuthorLibraryRepository()
             authors.Save(example.Library)
             Dim manuscripts As New ManuscriptRepository()
             manuscripts.Save(example.Manuscripts)
+            Dim settings As New AppSettingsService()
+            settings.Save(New AppSettings With {.OnlineServices = If(online, New OnlineServicesSettings())})
         End Sub
 
 

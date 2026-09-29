@@ -200,7 +200,7 @@ Public Class PublicationCheckTests
 
         Assert.AreEqual(1, result.Matches.Count, "What was found before stopping is kept.")
         Assert.AreSame(broken, result.Failures.Single().Manuscript)
-        StringAssert.Contains(result.Failures.Single().Reason, "No connection")
+        Assert.AreEqual("PaperRoute couldn't reach Crossref. Check your internet connection, then try again.", result.Failures.Single().Reason, "In plain words (#86).")
         StringAssert.Contains(result.StoppedReason, "rate-limiting")
         Assert.IsFalse(source.Searched.Contains(never.Title), "Nothing more is asked after Crossref asks PaperRoute to slow down.")
     End Sub

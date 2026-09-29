@@ -232,6 +232,8 @@ Partial Public Class Form1
                 End Using
             End Sub
 
+        Dim btnOffline As RailCommandButton = CreateWorkingOfflineButton(itemWidth, itemHeight)
+
         Dim btnSettings As New RailCommandButton(RailGlyph.Settings, "Settings") With {
             .Width = itemWidth,
             .Height = itemHeight
@@ -252,9 +254,11 @@ Partial Public Class Form1
         AddHandler btnHelp.Click, AddressOf OpenUserGuide
         cardToolTip.SetToolTip(btnHelp, "User Guide (F1)")
         cardToolTip.SetToolTip(btnSettings, "Settings")
+        railItems.Add(btnOffline)
         railItems.Add(btnSettings)
         railItems.Add(btnHelp)
 
+        commands.Controls.Add(btnOffline)
         commands.Controls.Add(btnSettings)
         commands.Controls.Add(btnHelp)
 
@@ -327,6 +331,7 @@ Partial Public Class Form1
         Dim menu As New ContextMenuStrip()
 
         menu.Items.Add("Preferences...", Nothing, AddressOf OpenSettings)
+        menu.Items.Add(CreateWorkOfflineMenuItem())
         menu.Items.Add("Check for Updates...", Nothing, AddressOf CheckForUpdatesNow)
         menu.Items.Add("Diagnostics...", Nothing, AddressOf OpenDiagnostics)
         menu.Items.Add(New ToolStripSeparator())
@@ -334,6 +339,8 @@ Partial Public Class Form1
         menu.Items.Add("Restore Backup...", Nothing, AddressOf RestoreLibraryBackup)
         menu.Items.Add(New ToolStripSeparator())
         menu.Items.Add("About PaperRoute", Nothing, AddressOf OpenAbout)
+
+        AddHandler menu.Opening, Sub(sender, e) RefreshOnlineIndicators()
 
         AddHandler Me.FormClosed,
             Sub(sender, e)

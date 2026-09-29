@@ -20,7 +20,7 @@ Partial Public Class Form1
             If exampleLauncher IsNot Nothing Then
                 exampleLauncher()
             Else
-                ExampleLibraryService.Launch()
+                ExampleLibraryService.Launch(appSettings.OnlineServices)
             End If
             lblStatus.Text = "The example library opens in a separate window. Your own library stays here, unchanged."
         Catch ex As Exception When TypeOf ex Is Win32Exception OrElse TypeOf ex Is InvalidOperationException OrElse TypeOf ex Is PlatformNotSupportedException

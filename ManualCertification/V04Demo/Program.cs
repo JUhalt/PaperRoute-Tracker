@@ -8,8 +8,8 @@ namespace PaperRoute.V04Demo;
 internal static class Program
 {
     private const string Usage = "PaperRoute workflow manual demo\n\n" +
-        "Surfaces: vault (default), readiness, packet, packet-new, file, file-new, notes, submission, responses, workflow, board, publications, fill, about, route, update, report, candidate\n" +
-        "Options: --minimum, --primary, --empty (vault/readiness/board), --integrity (populated vault only), --dark or --system, --help\n\n" +
+        "Surfaces: vault (default), readiness, packet, packet-new, file, file-new, notes, submission, responses, workflow, board, publications, fill, about, route, update, report, candidate, online, key\n" +
+        "Options: --minimum, --primary, --empty (vault/readiness/board), --offline (board), --integrity (populated vault only), --dark or --system, --help\n\n" +
         "Default surfaces discard manuscript changes when the window closes.\n" +
         "workflow and board save only in a new disposable temporary session.\n" +
         "--integrity creates and retains disposable files in a unique temporary directory.";
@@ -27,7 +27,7 @@ internal static class Program
             return;
         }
 
-        var surfaces = new[] { "vault", "readiness", "packet", "packet-new", "file", "file-new", "notes", "submission", "responses", "workflow", "board", "publications", "fill", "about", "route", "update", "report", "candidate" };
+        var surfaces = new[] { "vault", "readiness", "packet", "packet-new", "file", "file-new", "notes", "submission", "responses", "workflow", "board", "publications", "fill", "about", "route", "update", "report", "candidate", "online", "key" };
         var positional = args.Where(argument => !argument.StartsWith("--")).ToArray();
         var surface = positional.FirstOrDefault()?.ToLowerInvariant() ?? "vault";
         var minimum = args.Contains("--minimum", StringComparer.OrdinalIgnoreCase);
@@ -36,16 +36,19 @@ internal static class Program
         var integrity = args.Contains("--integrity", StringComparer.OrdinalIgnoreCase);
         var dark = args.Contains("--dark", StringComparer.OrdinalIgnoreCase);
         var system = args.Contains("--system", StringComparer.OrdinalIgnoreCase);
+        var offline = args.Contains("--offline", StringComparer.OrdinalIgnoreCase);
         var invalidOption = args.Any(argument => argument.StartsWith("--") &&
             !argument.Equals("--minimum", StringComparison.OrdinalIgnoreCase) &&
             !argument.Equals("--primary", StringComparison.OrdinalIgnoreCase) &&
             !argument.Equals("--empty", StringComparison.OrdinalIgnoreCase) &&
             !argument.Equals("--integrity", StringComparison.OrdinalIgnoreCase) &&
             !argument.Equals("--dark", StringComparison.OrdinalIgnoreCase) &&
-            !argument.Equals("--system", StringComparison.OrdinalIgnoreCase));
+            !argument.Equals("--system", StringComparison.OrdinalIgnoreCase) &&
+            !argument.Equals("--offline", StringComparison.OrdinalIgnoreCase));
 
         if (positional.Length > 1 || !surfaces.Contains(surface) || invalidOption ||
             (dark && system) ||
+            (offline && surface != "board") ||
             (empty && surface != "vault" && surface != "readiness" && surface != "board") ||
             (integrity && (surface != "vault" || empty)))
         {
@@ -66,6 +69,8 @@ internal static class Program
                     "PaperRoute-Board-Demo-" + Guid.NewGuid().ToString("N"));
                 StorageEnvironment.ConfigureIsolatedSessionRoot(sessionRoot);
                 BoardDemo.CreateSamples(sessionRoot, empty);
+                if (offline)
+                    new AppSettingsService().Save(new AppSettings { OnlineServices = new OnlineServicesSettings { WorkOffline = true } });
                 using var board = new ManuscriptPipeline.Form1();
                 BoardDemo.RecordLayoutEvidence(board, sessionRoot);
                 board.Shown += (_, _) =>
@@ -75,6 +80,30 @@ internal static class Program
                 };
                 ConfigureDisplayEvidence(board, primary);
                 board.ShowDialog();
+                return;
+            }
+
+            if (surface == "online")
+            {
+                // Preferences opened at Online services, with the ORCID import
+                // switched off, in a disposable session: nothing is contacted.
+                var sessionRoot = Path.Combine(Path.GetTempPath(),
+                    "PaperRoute-Online-Demo-" + Guid.NewGuid().ToString("N"));
+                StorageEnvironment.ConfigureIsolatedSessionRoot(sessionRoot);
+                var settings = new AppSettings { OnlineServices = new OnlineServicesSettings { TurnedOff = { OnlineServiceCatalog.OrcidImport } } };
+                using var preferences = new SettingsForm(settings, new AppSettingsService(), true);
+                preferences.Text += " [DEMO - disposable settings]";
+                ConfigureDisplayEvidence(preferences, primary);
+                preferences.ShowDialog();
+                return;
+            }
+
+            if (surface == "key")
+            {
+                using var key = new OpenAlexKeyForm();
+                key.Text += " [DEMO - nothing saved]";
+                ConfigureDisplayEvidence(key, primary);
+                key.ShowDialog();
                 return;
             }
 

@@ -13,6 +13,14 @@ Development is tracked in the [v0.9 milestone](https://github.com/JUhalt/PaperRo
 
 - **Example library for teaching** ([#83](https://github.com/JUhalt/PaperRoute-Tracker/issues/83)): the fictional Example Lab's manuscripts, opened in a separate window from the welcome or Import & Export. It covers a desk rejection and rerouting, revision rounds with reviewer comments at every stage, a publication, a preprint, and the File Drawer, with dates relative to today. The example has its own temporary storage: your library is never opened, and the example is discarded when its window closes. The User Guide's **Teaching with PaperRoute** section suggests a 15-minute walk through it.
 
+- **Online services and Work offline** ([#86](https://github.com/JUhalt/PaperRoute-Tracker/issues/86)): **Settings > Preferences... > Online services** lists every service PaperRoute can contact, with the hosts it contacts, what it sends, and when, and lets you turn each off. **Work offline** (also **Settings > Work Offline**) stops them all, update checks included; while it's on, **Working offline** shows in the rail. Every request passes one gate that refuses it before anything is sent, follows redirects itself so each hop is checked, and reaches only the hosts listed for its service. The User Guide's **What PaperRoute sends, and when** table is checked against the app by the tests.
+- **Optional OpenAlex key** ([#86](https://github.com/JUhalt/PaperRoute-Tracker/issues/86)): paste a free personal key to raise OpenAlex's daily allowance for PaperRoute's OpenAlex features. It is encrypted for your Windows account, kept out of backups, exports, and Diagnostics, and sent only to api.openalex.org in a header. PaperRoute includes no key of its own.
+
+### Changed
+
+- Settings are saved by writing a new file and swapping it in, keeping the previous one as settings.bak. If the settings can't be read, PaperRoute works offline until you review Online services ([#86](https://github.com/JUhalt/PaperRoute-Tracker/issues/86)).
+- Network problems are explained in plain words (no connection, a timeout, a busy service) instead of the system's message, and a publication check or Fill Blanks run stops once, with the reason, when a service is turned off.
+
 ### Storage
 
 - **Schema 9** adds journal shortlists. As with Schemas 7 and 8, the upgrade validates the library and changes only the schema marker.

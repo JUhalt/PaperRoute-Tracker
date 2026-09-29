@@ -1,4 +1,5 @@
 Imports System
+Imports System.Collections.Generic
 Imports System.Diagnostics
 Imports System.Drawing
 Imports System.IO
@@ -147,6 +148,20 @@ Namespace Forms
         End Sub
 
 
+        Private Function TurnedOffServices() As String
+
+            Dim turnedOff As List(Of String) = If(_settings.OnlineServices?.TurnedOff, New List(Of String)())
+            Dim names As New List(Of String)()
+
+            For Each service As OnlineService In OnlineServiceCatalog.Services
+                If turnedOff.Contains(service.Id) Then names.Add(service.Name)
+            Next
+
+            Return If(names.Count = 0, "None", String.Join(", ", names))
+
+        End Function
+
+
         Private Function BuildDiagnosticReport() As String
 
             Dim builder As New StringBuilder()
@@ -159,6 +174,10 @@ Namespace Forms
             builder.AppendLine("Installed build: " & If(UpdateService.IsInstalledBuild(_settings.UpdateChannel), "Yes", "No (developer/portable)"))
             builder.AppendLine("Storage profile: " & StorageEnvironment.ProfileDisplayName())
             builder.AppendLine("Automatic update checks: " & If(_settings.CheckForUpdatesAutomatically, "On", "Off"))
+            builder.AppendLine("Work offline: " & If(OnlineAccess.IsWorkingOffline, "On", "Off"))
+            builder.AppendLine("Online services turned off: " & TurnedOffServices())
+            ' Whether a key is stored, never the key.
+            builder.AppendLine("OpenAlex key: " & If(OnlineAccess.KeyStore().HasKey(ProtectedKeyStore.OpenAlex), "Added", "Not added"))
             builder.AppendLine("Storage schema: " & StorageMigrationService.ReadSchemaVersion().ToString())
             builder.AppendLine()
             builder.AppendLine("OS: " & RuntimeInformation.OSDescription)

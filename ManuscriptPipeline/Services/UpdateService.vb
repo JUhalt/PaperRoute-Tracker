@@ -1,4 +1,7 @@
 ﻿Imports System
+Imports System.Collections.Generic
+Imports System.Net.Http
+Imports System.Threading
 Imports System.Threading.Tasks
 Imports System.Windows.Forms
 Imports ManuscriptPipeline.Forms
@@ -73,6 +76,22 @@ Namespace Services
             channel As AppUpdateChannel,
             interactive As Boolean
         ) As Task(Of Boolean)
+
+            ' Work offline, or the update check switched off (#86): nothing is
+            ' contacted, and only a check the user asked for explains why.
+            Dim blocked As OnlineBlockReason? = OnlineAccess.BlockReason(OnlineServiceCatalog.Updates)
+            If blocked.HasValue Then
+                If interactive Then
+                    MessageBox.Show(
+                        owner,
+                        OnlineAccess.BlockedMessage(OnlineServiceCatalog.Find(OnlineServiceCatalog.Updates), blocked.Value),
+                        "PaperRoute Updates",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information
+                    )
+                End If
+                Return False
+            End If
 
             Try
 
@@ -191,7 +210,7 @@ Namespace Services
                         owner,
                         "PaperRoute could not complete the update check." &
                         Environment.NewLine & Environment.NewLine &
-                        ex.Message,
+                        OnlineAccess.Describe(ex, "GitHub"),
                         "Update Error",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Error
@@ -213,10 +232,12 @@ Namespace Services
             Dim includePrereleases As Boolean =
                 channel = AppUpdateChannel.Preview
 
+            ' Velopack downloads through the Online services gate (#86).
             Dim source As New GithubSource(
                 RepositoryUrl,
                 Nothing,
-                includePrereleases
+                includePrereleases,
+                New GatedDownloader()
             )
 
             Dim options As New UpdateOptions With {
@@ -256,6 +277,51 @@ Namespace Services
             Return CurrentVersionText()
 
         End Function
+
+    End Class
+
+
+    ' Velopack's downloader behind the Online services gate (#86): each
+    ' update request, and each redirect GitHub sends it through, is refused
+    ' while Work offline is on or the update check is switched off, and only
+    ' GitHub's listed hosts are reached.
+    Friend NotInheritable Class GatedDownloader
+        Inherits HttpClientFileDownloader
+
+        Public Overrides Function DownloadBytes(url As String, headers As IDictionary(Of String, String), timeout As Double) As Task(Of Byte())
+            Allow(url)
+            Return MyBase.DownloadBytes(url, headers, timeout)
+        End Function
+
+        Public Overrides Function DownloadFile(url As String, targetFile As String, progress As Action(Of Integer), headers As IDictionary(Of String, String), timeout As Double, Optional cancelToken As CancellationToken = Nothing) As Task
+            Allow(url)
+            Return MyBase.DownloadFile(url, targetFile, progress, headers, timeout, cancelToken)
+        End Function
+
+        Public Overrides Function DownloadString(url As String, headers As IDictionary(Of String, String), timeout As Double) As Task(Of String)
+            Allow(url)
+            Return MyBase.DownloadString(url, headers, timeout)
+        End Function
+
+        ' Velopack's timeout is in minutes. The gate follows redirects, so
+        ' every hop is checked.
+        Protected Overrides Function CreateHttpClient(headers As IDictionary(Of String, String), timeout As Double) As HttpClient
+            Dim client As HttpClient = OnlineAccess.CreateClient(OnlineServiceCatalog.Updates, TimeSpan.FromMinutes(timeout))
+            If headers IsNot Nothing Then
+                For Each header As KeyValuePair(Of String, String) In headers
+                    client.DefaultRequestHeaders.TryAddWithoutValidation(header.Key, header.Value)
+                Next
+            End If
+            Return client
+        End Function
+
+        ' Refused before Velopack starts, with the plain message.
+        Private Shared Sub Allow(url As String)
+            OnlineAccess.Check(OnlineServiceCatalog.Updates)
+            Dim target As Uri = Nothing
+            Uri.TryCreate(url, UriKind.Absolute, target)
+            OnlineAccess.CheckHost(OnlineServiceCatalog.Find(OnlineServiceCatalog.Updates), target)
+        End Sub
 
     End Class
 

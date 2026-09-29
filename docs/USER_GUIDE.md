@@ -738,8 +738,9 @@ Choose **Settings > Preferences...** to configure:
 - Needs Attention thresholds;
 - File Drawer suggestion threshold;
 - reminder notification preferences;
-- Stable or Preview update channel; and
-- automatic update checking.
+- Stable or Preview update channel;
+- automatic update checking; and
+- online services, Work offline, and an optional OpenAlex key (see **Online Services and Working Offline**).
 
 Theme changes currently take effect after restarting PaperRoute.
 
@@ -754,6 +755,32 @@ Portable/developer builds are intended for development and smoke testing and do 
 ### Diagnostics
 
 Use **Settings > Diagnostics...** when troubleshooting storage, environment, or application-state problems.
+
+## Online Services and Working Offline
+
+PaperRoute keeps your library on this computer and works without the internet. A few features contact an online service, and only when you use them. Choose **Settings > Preferences... > Online services** to see each service, what it sends, and when, and to turn any of them off.
+
+- **Work offline** stops every online service, update checks included, until you turn it off. Choose **Settings > Work Offline**, or check it in Online services. While it's on, **Working offline** appears above **Settings** in the rail; choose it to review Online services.
+- Turning off one service stops only its feature, which then explains why it didn't go online. Your choices for each service are kept while Work offline is on.
+- If PaperRoute can't read its settings file, it works offline until you review Online services and choose **Save**.
+- A service added in a later version starts on, and appears in Online services with what it sends.
+- Requests identify PaperRoute and its version, and nothing about you. Beyond what the table below lists, PaperRoute sends nothing: not your library, your files, or your notes.
+- Links you choose to open, such as a journal's website, open in your web browser. They aren't PaperRoute requests, so Work offline doesn't stop them.
+
+### OpenAlex key
+
+OpenAlex, an open catalog of scholarly works and journals, gives everyone a small free daily allowance, and a free personal key raises it. To add one, sign in at openalex.org, copy your key from its API settings, and choose **Add Key...** under Online services.
+
+PaperRoute keeps the key encrypted for your Windows account on this computer, sends it only to api.openalex.org, in a request header, and never puts it in backups, exports, or Diagnostics. PaperRoute doesn't include a key of its own. After moving to another computer, add your key again.
+
+### What PaperRoute sends, and when
+
+| Service | Contacts | Sends | When |
+| --- | --- | --- | --- |
+| Update check | api.github.com, github.com, objects.githubusercontent.com, release-assets.githubusercontent.com | Nothing about you or your library; it reads the list of PaperRoute releases. | At startup, if automatic checks are on, and Check for Updates. |
+| DOI lookup (Crossref) | api.crossref.org | A DOI. | DOI & Crossref Metadata on a manuscript page, and Fill Blanks from Crossref. |
+| Publication check | api.crossref.org, orcid.org, pub.orcid.org | The DOIs and titles of the manuscripts you check, and your ORCID iD if you include it. | Check for Publications. |
+| ORCID import | orcid.org, pub.orcid.org | An ORCID iD. | ORCID... in Library > Authors & Affiliations. |
 
 ---
 
@@ -888,6 +915,8 @@ The safest approach is:
 3. use **Settings > Restore Backup...**;
 4. confirm manuscript counts and managed files before retiring the old installation.
 
+Backups hold your library and its files, not your preferences or OpenAlex key. On the new computer, review **Settings > Preferences...** and add the key again.
+
 ## How do I recover from a bad import or restore?
 
 PaperRoute creates safety backups around high-risk operations.
@@ -914,7 +943,7 @@ Visual Studio debugger sessions use the isolated development profile:
 
 Development managed-file copies are stored separately from the stable managed library.
 
-External services are used only for explicit features such as Crossref metadata lookup, a publication check you start, public ORCID lookup, GitHub update checks, or links you choose to open. A publication check sends Crossref the titles and DOIs of the manuscripts you check, and nothing else.
+External services are used only for the features listed in **What PaperRoute sends, and when**, and for links you choose to open. You can turn each service off, or work offline; see **Online Services and Working Offline**. A publication check sends Crossref the titles and DOIs of the manuscripts you check, and nothing else.
 
 PaperRoute does not require a PaperRoute account for the core manuscript library.
 

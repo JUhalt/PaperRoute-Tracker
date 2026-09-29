@@ -74,7 +74,7 @@ Friend Module Program
 
         End Try
 
-        If ExampleLibraryService.IsActive Then ExampleLibraryService.Seed(DateTime.Today)
+        If ExampleLibraryService.IsActive Then ExampleLibraryService.Seed(DateTime.Today, ExampleLibraryService.OnlineSettingsFrom(args))
 
         Dim application As New My.MyApplication()
 

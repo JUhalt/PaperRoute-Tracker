@@ -138,9 +138,13 @@ Public Class Form1
         appSettings =
         settingsService.Load()
 
+        ' Before anything can go online (#86).
+        OnlineAccess.Configure(appSettings.OnlineServices)
+
         UiPolish.InstallGlobalDialogStyling()
 
         BuildInterface()
+        RefreshOnlineIndicators()
 
         If Not LoadManuscripts() Then
 
@@ -173,6 +177,10 @@ Public Class Form1
         End If
 
         RenderManuscripts()
+
+        If settingsService.LoadFailed Then
+            lblStatus.Text = "PaperRoute couldn't read your settings, so it's working offline until you review Settings > Preferences > Online services."
+        End If
 
         ' The example window neither notifies nor checks for updates.
         If Not ExampleLibraryService.IsActive Then
@@ -4072,8 +4080,17 @@ Public Class Form1
     e As EventArgs
 )
 
+        OpenSettingsAt(showOnlineServices:=False)
+
+    End Sub
+
+
+    Private Sub OpenSettingsAt(showOnlineServices As Boolean)
+
         Using dialog As New SettingsForm(
-        appSettings
+        appSettings,
+        settingsService,
+        showOnlineServices
     )
 
             If dialog.ShowDialog(Me) <>
@@ -4083,6 +4100,7 @@ Public Class Form1
 
             End If
 
+            ApplyOnlineSettings()
             RenderManuscripts()
 
             If dialog.AppearanceChanged Then
