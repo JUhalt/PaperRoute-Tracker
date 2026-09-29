@@ -11,6 +11,8 @@ Development is tracked in the [v0.9 milestone](https://github.com/JUhalt/PaperRo
 - **Journal shortlist** ([#65](https://github.com/JUhalt/PaperRoute-Tracker/issues/65)) on each manuscript's Overview: the journals you are considering, in your order of preference, each with a status (Considering, Preferred, Backup, Ruled out), your reasons, and whether and how a submission to it ended. After a rejection or withdrawal, the shortlist offers the next journal as the target, an offer that changes nothing until you accept it.
 - **Choosing a journal** ([#89](https://github.com/JUhalt/PaperRoute-Tracker/issues/89)): each shortlisted journal has trust questions, adapted with attribution from the Think. Check. Submit. checklist (CC BY 4.0), and fit questions for the manuscript, with your own history with the journal beside them. The User Guide's new **Choosing a Journal** section explains both, and **How to choose a journal** opens Help at that section.
 
+- **Example library for teaching** ([#83](https://github.com/JUhalt/PaperRoute-Tracker/issues/83)): the fictional Example Lab's manuscripts, opened in a separate window from the welcome or Import & Export. It covers a desk rejection and rerouting, revision rounds with reviewer comments at every stage, a publication, a preprint, and the File Drawer, with dates relative to today. The example has its own temporary storage: your library is never opened, and the example is discarded when its window closes. The User Guide's **Teaching with PaperRoute** section suggests a 15-minute walk through it.
+
 ### Storage
 
 - **Schema 9** adds journal shortlists. As with Schemas 7 and 8, the upgrade validates the library and changes only the schema marker.

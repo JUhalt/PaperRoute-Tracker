@@ -163,6 +163,26 @@ Partial Public Class Form1
         column.Controls.Add(actions)
         column.Controls.Add(ways)
         column.Controls.Add(privacy)
+
+        ' New to PaperRoute, or teaching with it: see a whole library first.
+        Dim exampleText As String = "New to PaperRoute, or teaching with it? Explore an example library"
+        Dim lnkExample As New LinkLabel With {
+            .Text = exampleText,
+            .AutoSize = True,
+            .UseMnemonic = False,
+            .MaximumSize = New Size(textWidth, 0),
+            .Margin = New Padding(0, UiTheme.Px(16, dpi), 0, 0),
+            .BackColor = UiTheme.BoardBackground(),
+            .ForeColor = UiTheme.SecondaryText(),
+            .LinkColor = UiTheme.AccentColor(),
+            .ActiveLinkColor = UiTheme.AccentColor(),
+            .VisitedLinkColor = UiTheme.AccentColor(),
+            .LinkArea = New LinkArea(exampleText.IndexOf("Explore", StringComparison.Ordinal), "Explore an example library".Length),
+            .AccessibleDescription = "Opens a fictional research group's library in a separate window. Your library is not changed."
+        }
+        AddHandler lnkExample.LinkClicked, Sub(sender, e) OpenExampleLibrary()
+        If Not ExampleLibraryService.IsActive Then column.Controls.Add(lnkExample)
+
         page.Controls.Add(column)
 
         Return page

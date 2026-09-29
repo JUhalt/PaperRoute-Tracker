@@ -324,6 +324,20 @@ Public Class ManuscriptPageTests
                         {"Paste a title page", "ORCID works", "BibTeX or RIS", "Spreadsheet"},
                         Descendants(board.Welcome).OfType(Of FilterChip)().Select(Function(chip) chip.Text).ToList())
 
+                    ' #83: the example library opens from the welcome and from
+                    ' Import & Export, in its own window; nothing here changes.
+                    Dim launches As Integer = 0
+                    board.exampleLauncher = Sub() launches += 1
+                    Dim example As LinkLabel = Descendants(board.Welcome).OfType(Of LinkLabel)().Single(Function(link) link.Text.EndsWith("Explore an example library", StringComparison.Ordinal))
+                    GetType(LinkLabel).GetMethod("OnLinkClicked", BindingFlags.Instance Or BindingFlags.NonPublic).
+                        Invoke(example, New Object() {New LinkLabelLinkClickedEventArgs(example.Links(0))})
+                    board.PressCommandKey(Keys.Control Or Keys.D6)
+                    Descendants(board).OfType(Of ActionButton)().Single(Function(button) button.Text = "Explore an Example Library...").PerformClick()
+                    Assert.AreEqual(2, launches)
+                    Assert.AreEqual(0, board.Library.Count, "Opening the example adds nothing to this library.")
+                    Assert.AreEqual(0, board.SaveCount)
+                    board.PressCommandKey(Keys.Control Or Keys.D1)
+
                     board.Library.Add(Sample("The first manuscript"))
                     board.Render()
                     Assert.IsFalse(board.Welcome.Visible, "The shelves replace the welcome.")

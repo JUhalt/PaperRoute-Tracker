@@ -174,10 +174,15 @@ Public Class Form1
 
         RenderManuscripts()
 
-        TryShowStartupReminderNotification()
+        ' The example window neither notifies nor checks for updates.
+        If Not ExampleLibraryService.IsActive Then
 
-        If appSettings.CheckForUpdatesAutomatically Then
-            BeginAutomaticUpdateCheck()
+            TryShowStartupReminderNotification()
+
+            If appSettings.CheckForUpdatesAutomatically Then
+                BeginAutomaticUpdateCheck()
+            End If
+
         End If
 
     End Sub
@@ -192,9 +197,13 @@ Public Class Form1
 
         Me.Text =
             If(
-                StorageEnvironment.IsDevelopmentProfile(),
-                "PaperRoute Tracker [Development]",
-                "PaperRoute Tracker"
+                ExampleLibraryService.IsActive,
+                "PaperRoute Tracker - Example Library",
+                If(
+                    StorageEnvironment.IsDevelopmentProfile(),
+                    "PaperRoute Tracker [Development]",
+                    "PaperRoute Tracker"
+                )
             )
         Me.StartPosition = FormStartPosition.CenterScreen
         Me.Size = New Size(1280, 840)
@@ -525,6 +534,10 @@ Public Class Form1
         ApplyNavigationCollapsed(appSettings.NavigationCollapsed, persist:=False)
 
         Me.Controls.Add(shell)
+
+        If ExampleLibraryService.IsActive Then
+            Me.Controls.Add(CreateExampleBanner())
+        End If
 
         currentPage = WorkspacePage.Board
         SyncRail()

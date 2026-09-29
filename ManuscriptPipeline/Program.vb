@@ -15,6 +15,12 @@ Friend Module Program
         ' existing VB application framework continues as usual.
         VelopackApp.Build().Run()
 
+        ' The example library for teaching (#83) opens in its own disposable
+        ' session, configured before any storage folder is resolved, so the
+        ' user's library is never opened.
+        Dim isExample As Boolean = ExampleLibraryService.IsExampleLaunch(args)
+        If isExample Then ExampleLibraryService.StartSession()
+
         ' One window per library (#77): a second launch brings the running
         ' window forward and exits before touching storage.
         Dim instanceKey As String = SingleInstanceService.KeyFor(StorageMigrationService.CurrentDataRoot())
@@ -25,9 +31,13 @@ Friend Module Program
             Return
         End If
 
-        Using instance
-            Run(args, instance)
-        End Using
+        Try
+            Using instance
+                Run(args, instance)
+            End Using
+        Finally
+            If isExample Then ExampleLibraryService.EndSession()
+        End Try
 
     End Sub
 
@@ -63,6 +73,8 @@ Friend Module Program
             Return
 
         End Try
+
+        If ExampleLibraryService.IsActive Then ExampleLibraryService.Seed(DateTime.Today)
 
         Dim application As New My.MyApplication()
 
