@@ -137,16 +137,24 @@ Namespace Services
         End Function
 
 
-        ' Called under StateLock. Redirects are never followed below the gate.
+        ' Called under StateLock.
         Private Shared Function SharedInner() As HttpMessageHandler
             If _inner Is Nothing Then
-                _inner = If(InnerHandlerFactory IsNot Nothing, InnerHandlerFactory(), New SocketsHttpHandler With {
-                    .AllowAutoRedirect = False,
-                    .AutomaticDecompression = DecompressionMethods.All,
-                    .PooledConnectionLifetime = TimeSpan.FromMinutes(5)
-                })
+                _inner = If(InnerHandlerFactory IsNot Nothing, InnerHandlerFactory(), DefaultInnerHandler())
             End If
             Return _inner
+        End Function
+
+
+        ' Redirects are never followed below the gate, and no cookies are
+        ' kept, so one service's requests can't be linked to another's.
+        Friend Shared Function DefaultInnerHandler() As SocketsHttpHandler
+            Return New SocketsHttpHandler With {
+                .AllowAutoRedirect = False,
+                .UseCookies = False,
+                .AutomaticDecompression = DecompressionMethods.All,
+                .PooledConnectionLifetime = TimeSpan.FromMinutes(5)
+            }
         End Function
 
 
@@ -186,7 +194,7 @@ Namespace Services
             If TypeOf ex Is OnlineServiceBlockedException Then Return ex.Message
 
             If TypeOf ex Is TaskCanceledException AndAlso TypeOf ex.InnerException Is TimeoutException Then
-                Return serviceName & " didn't answer within " & TimeoutSeconds.ToString(Globalization.CultureInfo.CurrentCulture) & " seconds. Try again later."
+                Return serviceName & " didn't answer in time. Try again later."
             End If
 
             Dim request As HttpRequestException = TryCast(ex, HttpRequestException)

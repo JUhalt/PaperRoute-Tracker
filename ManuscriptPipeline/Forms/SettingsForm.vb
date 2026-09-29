@@ -2,6 +2,7 @@ Imports System
 Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.Linq
+Imports System.Text.Json
 Imports System.Windows.Forms
 Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Models
@@ -1024,9 +1025,9 @@ Namespace Forms
         End Function
 
 
-        Private Sub SaveSettings(
-            sender As Object,
-            e As EventArgs
+        ' Writes the form's choices into a settings object.
+        Private Sub ApplyTo(
+            target As AppSettings
         )
 
             Dim newAppearance As AppAppearance
@@ -1039,69 +1040,73 @@ Namespace Forms
                 newAppearance = AppAppearance.System
             End If
 
-            _appearanceChanged =
-                newAppearance <>
-                _settings.Appearance
-
-            _settings.Appearance =
+            target.Appearance =
                 newAppearance
 
-            _settings.FileDrawerSuggestionThreshold =
+            target.FileDrawerSuggestionThreshold =
                 CInt(
                     numFileDrawerThreshold.Value
                 )
 
-            _settings.LongReviewThresholdDays =
+            target.LongReviewThresholdDays =
                 CInt(
                     numLongReview.Value
                 )
 
-            _settings.RevisionWarningDays =
+            target.RevisionWarningDays =
                 CInt(
                     numRevisionWarning.Value
                 )
 
-            _settings.RecentRejectionThresholdDays =
+            target.RecentRejectionThresholdDays =
                 CInt(
                     numRecentRejection.Value
                 )
 
-            _settings.ReminderNotificationsEnabled =
+            target.ReminderNotificationsEnabled =
                 chkReminderNotifications.Checked
 
-            _settings.ReminderNotificationDaysAhead =
+            target.ReminderNotificationDaysAhead =
                 CInt(
                     numReminderNotificationDays.Value
                 )
 
-            _settings.UpdateChannel =
+            target.UpdateChannel =
                 SelectedUpdateChannel()
 
-            _settings.CheckForUpdatesAutomatically =
+            target.CheckForUpdatesAutomatically =
                 chkAutomaticUpdates.Checked
 
             ' Ids this version doesn't know are kept, so a newer version's
             ' choices survive a visit to this page.
-            If _settings.OnlineServices Is Nothing Then _settings.OnlineServices = New OnlineServicesSettings()
+            If target.OnlineServices Is Nothing Then target.OnlineServices = New OnlineServicesSettings()
             Dim turnedOff As List(Of String) =
-                _settings.OnlineServices.TurnedOff.
+                target.OnlineServices.TurnedOff.
                     Where(Function(id) Not serviceChecks.ContainsKey(id)).
                     ToList()
             turnedOff.AddRange(serviceChecks.Where(Function(pair) Not pair.Value.Checked).Select(Function(pair) pair.Key))
-            _settings.OnlineServices.WorkOffline = chkWorkOffline.Checked
-            _settings.OnlineServices.TurnedOff = turnedOff
+            target.OnlineServices.WorkOffline = chkWorkOffline.Checked
+            target.OnlineServices.TurnedOff = turnedOff
+
+        End Sub
+
+
+        Private Sub SaveSettings(
+            sender As Object,
+            e As EventArgs
+        )
+
+            ' Saved from a copy, so a failed save changes nothing PaperRoute is
+            ' using, even if the dialog is then cancelled.
+            Dim candidate As AppSettings =
+                JsonSerializer.Deserialize(Of AppSettings)(JsonSerializer.Serialize(_settings))
+
+            ApplyTo(candidate)
 
             Try
 
-                Dim keys As ProtectedKeyStore = OnlineAccess.KeyStore()
-                If _pendingKey IsNot Nothing Then
-                    keys.Save(ProtectedKeyStore.OpenAlex, _pendingKey)
-                ElseIf _removeKey Then
-                    keys.Remove(ProtectedKeyStore.OpenAlex)
-                End If
-
                 _settingsService.Save(
-                    _settings
+                    candidate
                 )
 
             Catch ex As Exception
@@ -1118,6 +1123,42 @@ Namespace Forms
                 )
 
                 Return
+
+            End Try
+
+            _appearanceChanged =
+                candidate.Appearance <>
+                _settings.Appearance
+
+            ApplyTo(_settings)
+
+            ' The key changes only once the preferences are saved.
+            Try
+
+                Dim keys As ProtectedKeyStore = OnlineAccess.KeyStore()
+                If _pendingKey IsNot Nothing Then
+                    keys.Save(ProtectedKeyStore.OpenAlex, _pendingKey)
+                ElseIf _removeKey Then
+                    keys.Remove(ProtectedKeyStore.OpenAlex)
+                End If
+
+            Catch ex As Exception When TypeOf ex Is IO.IOException OrElse
+                                       TypeOf ex Is UnauthorizedAccessException OrElse
+                                       TypeOf ex Is Security.Cryptography.CryptographicException OrElse
+                                       TypeOf ex Is ArgumentException
+
+                MessageBox.Show(
+                    Me,
+                    "PaperRoute saved your preferences, but couldn't " &
+                    If(_pendingKey IsNot Nothing, "add", "remove") &
+                    " the OpenAlex key." &
+                    Environment.NewLine &
+                    Environment.NewLine &
+                    ex.Message,
+                    "OpenAlex Key",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                )
 
             End Try
 

@@ -1,5 +1,6 @@
 Imports System
 Imports System.Drawing
+Imports System.Linq
 Imports System.Windows.Forms
 Imports ManuscriptPipeline.Services
 
@@ -15,6 +16,7 @@ Namespace Forms
         Private ReadOnly chkShow As New CheckBox()
         Private ReadOnly btnOk As New Button()
         Private ReadOnly lblHint As New Label()
+        Private ReadOnly root As New TableLayoutPanel()
 
         Public Const KeyPage As String = "https://openalex.org/settings/api"
 
@@ -33,7 +35,19 @@ Namespace Forms
         End Property
 
 
+        ' Sized to its content once scaled, so nothing is clipped at any scale.
+        Protected Overrides Sub OnLoad(e As EventArgs)
+            MyBase.OnLoad(e)
+            Me.ClientSize = New Size(Me.ClientSize.Width, root.GetPreferredSize(New Size(Me.ClientSize.Width, 0)).Height)
+            Me.ActiveControl = txtKey
+        End Sub
+
+
         Private Sub BuildInterface()
+
+            ' Laid out once, after every control exists, so the scale for
+            ' the display reaches all of them.
+            Me.SuspendLayout()
 
             Me.Text = "Add OpenAlex Key"
             Me.StartPosition = FormStartPosition.CenterParent
@@ -43,16 +57,18 @@ Namespace Forms
             Me.ShowInTaskbar = False
             ' Sizes below are at 96 DPI and scale with the display.
             Me.AutoScaleDimensions = New SizeF(96.0F, 96.0F)
-            Me.ClientSize = New Size(560, 262)
+            Me.ClientSize = New Size(560, 280)
             Me.Font = New Font("Segoe UI", 10.0F)
             Me.AutoScaleMode = AutoScaleMode.Dpi
 
-            Dim root As New TableLayoutPanel With {.Dock = DockStyle.Fill, .ColumnCount = 1, .RowCount = 5, .Padding = New Padding(20, 16, 20, 12)}
+            root.Dock = DockStyle.Fill
+            root.ColumnCount = 1
+            root.RowCount = 5
+            root.Padding = New Padding(20, 16, 20, 12)
             root.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
-            For index As Integer = 0 To 3
+            For index As Integer = 0 To 4
                 root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
             Next
-            root.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
 
             Dim lblIntro As New Label With {
                 .Text = "A free OpenAlex key raises OpenAlex's daily allowance tenfold. Sign in at openalex.org, copy your key from Settings > API, and paste it here." &
@@ -89,7 +105,7 @@ Namespace Forms
             lblHint.ForeColor = UiTheme.SecondaryText()
             lblHint.Margin = New Padding(0, 6, 0, 0)
 
-            Dim buttons As New FlowLayoutPanel With {.Dock = DockStyle.Bottom, .AutoSize = True, .FlowDirection = FlowDirection.RightToLeft, .WrapContents = False}
+            Dim buttons As New FlowLayoutPanel With {.Dock = DockStyle.Fill, .AutoSize = True, .FlowDirection = FlowDirection.RightToLeft, .WrapContents = False, .Margin = New Padding(0, 12, 0, 0)}
             btnOk.Text = "Add Key"
             btnOk.AutoSize = True
             btnOk.MinimumSize = New Size(96, 34)
@@ -109,6 +125,9 @@ Namespace Forms
             Me.Controls.Add(root)
             RefreshState()
 
+            Me.ResumeLayout(False)
+            Me.PerformLayout()
+
         End Sub
 
 
@@ -124,8 +143,18 @@ Namespace Forms
         Private Sub RefreshState()
             Dim value As String = txtKey.Text.Trim()
             btnOk.Enabled = ProtectedKeyStore.IsPlausibleKey(value)
-            lblHint.Text = If(value.Length = 0 OrElse btnOk.Enabled, String.Empty, "A key is one word of letters and numbers, without spaces.")
+            lblHint.Text = HintFor(value)
         End Sub
+
+
+        ' Why a pasted value isn't accepted; nothing while a short key is
+        ' still being typed.
+        Friend Shared Function HintFor(value As String) As String
+            If String.IsNullOrEmpty(value) OrElse ProtectedKeyStore.IsPlausibleKey(value) Then Return String.Empty
+            If value.Any(Function(character) character <= " "c OrElse character > "~"c) Then Return "A key is one word, without spaces, line breaks, or accented letters."
+            If value.Length > 200 Then Return "That's longer than an OpenAlex key. Copy just the key."
+            Return String.Empty
+        End Function
 
 
         ' For tests.

@@ -45,9 +45,10 @@ Namespace Services
         End Sub
 
 
-        ' True when a settings file existed but neither it nor its backup
-        ' could be read. PaperRoute then works offline for the session (#86),
-        ' so a saved Work offline choice is never lost to a damaged file.
+        ' True when settings.json existed but couldn't be read, or was missing
+        ' beside its backup. The backup's other preferences are used, but
+        ' PaperRoute works offline until the settings are saved again (#86): the
+        ' backup is one save older, so it may predate a Work offline choice.
         Public ReadOnly Property LoadFailed As Boolean
             Get
                 Return _loadFailed
@@ -64,13 +65,13 @@ Namespace Services
             End If
 
             Dim settings As AppSettings = TryRead(_settingsPath)
-            If settings Is Nothing Then settings = TryRead(_backupPath)
 
             If settings Is Nothing Then
                 _loadFailed = True
-                Dim offline As New AppSettings()
-                offline.OnlineServices.WorkOffline = True
-                Return offline
+                settings = If(TryRead(_backupPath), New AppSettings())
+                Normalize(settings)
+                settings.OnlineServices.WorkOffline = True
+                Return settings
             End If
 
             Normalize(settings)

@@ -166,8 +166,16 @@ Public Class OnlineServicesTests
     End Sub
 
     <TestMethod>
+    Public Sub TheNetworkBelowTheGateNeitherRedirectsNorKeepsCookies()
+        Using handler As SocketsHttpHandler = OnlineAccess.DefaultInnerHandler()
+            Assert.IsFalse(handler.AllowAutoRedirect, "Only the gate follows redirects, so every hop is checked.")
+            Assert.IsFalse(handler.UseCookies, "No cookie links one service's requests to another's.")
+        End Using
+    End Sub
+
+    <TestMethod>
     Public Sub FailuresAreDescribedInPlainWords()
-        Assert.AreEqual("Crossref didn't answer within 20 seconds. Try again later.",
+        Assert.AreEqual("Crossref didn't answer in time. Try again later.",
                         OnlineAccess.Describe(New TaskCanceledException("x", New TimeoutException()), "Crossref"))
         Assert.AreEqual("PaperRoute couldn't reach Crossref. Check your internet connection, then try again.",
                         OnlineAccess.Describe(New HttpRequestException("No such host is known."), "Crossref"))
@@ -287,26 +295,37 @@ Public Class OnlineServicesTests
     End Sub
 
     <TestMethod>
-    Public Sub ADamagedSettingsFileFallsBackToTheBackupOrWorksOffline()
+    Public Sub ADamagedSettingsFileMeansWorkingOfflineWithTheBackupsOtherPreferences()
+        ' The backup is one save older: here, from before Work offline was
+        ' turned on. Damage to the latest file must not turn it back off.
         Dim service As New AppSettingsService(_directory)
-        service.Save(New AppSettings With {.OnlineServices = New OnlineServicesSettings With {.WorkOffline = True}})
+        service.Save(New AppSettings With {.RevisionWarningDays = 21})
         service.Save(New AppSettings With {.RevisionWarningDays = 21, .OnlineServices = New OnlineServicesSettings With {.WorkOffline = True}})
         IO.File.WriteAllText(Path.Combine(_directory, "settings.json"), "{ not json")
 
         Dim fromBackup As New AppSettingsService(_directory)
-        Assert.IsTrue(fromBackup.Load().OnlineServices.WorkOffline, "The backup's Work offline choice holds.")
-        Assert.IsFalse(fromBackup.LoadFailed)
+        Dim settings As AppSettings = fromBackup.Load()
+        Assert.IsTrue(settings.OnlineServices.WorkOffline, "An unreadable settings file never turns online services on.")
+        Assert.IsTrue(fromBackup.LoadFailed, "The damage is reported.")
+        Assert.AreEqual(21, settings.RevisionWarningDays, "Other preferences come from the backup.")
 
+        fromBackup.Save(settings)
+        Assert.IsFalse(fromBackup.LoadFailed)
+        Assert.AreEqual("{ not json", IO.File.ReadAllText(Path.Combine(_directory, "settings.unreadable.json")), "The damaged file is set aside, not kept as the backup.")
+        StringAssert.Contains(IO.File.ReadAllText(Path.Combine(_directory, "settings.bak")), """RevisionWarningDays"": 21", "The good backup is kept.")
+        Assert.IsTrue(New AppSettingsService(_directory).Load().OnlineServices.WorkOffline)
+
+        IO.File.WriteAllText(Path.Combine(_directory, "settings.json"), "{ not json")
         IO.File.WriteAllText(Path.Combine(_directory, "settings.bak"), String.Empty)
         Dim unreadable As New AppSettingsService(_directory)
-        Dim settings As AppSettings = unreadable.Load()
+        Assert.IsTrue(unreadable.Load().OnlineServices.WorkOffline, "Neither file readable: offline, with defaults.")
         Assert.IsTrue(unreadable.LoadFailed)
-        Assert.IsTrue(settings.OnlineServices.WorkOffline, "Unreadable settings never turn online services on.")
 
-        unreadable.Save(settings)
-        Assert.IsFalse(unreadable.LoadFailed)
-        Assert.AreEqual("{ not json", IO.File.ReadAllText(Path.Combine(_directory, "settings.unreadable.json")), "The damaged file is set aside, not kept as the backup.")
-        Assert.IsTrue(New AppSettingsService(_directory).Load().OnlineServices.WorkOffline)
+        IO.File.Delete(Path.Combine(_directory, "settings.json"))
+        IO.File.WriteAllText(Path.Combine(_directory, "settings.bak"), "{""RevisionWarningDays"":21}")
+        Dim orphaned As New AppSettingsService(_directory)
+        Assert.IsTrue(orphaned.Load().OnlineServices.WorkOffline, "A backup without its settings file is treated as damage too.")
+        Assert.IsTrue(orphaned.LoadFailed)
 
         Dim missing As New AppSettingsService(Path.Combine(_directory, "fresh"))
         Assert.IsFalse(missing.Load().OnlineServices.WorkOffline, "A first run is online.")
@@ -347,6 +366,16 @@ Public Class OnlineServicesTests
         Next
         Assert.ThrowsExactly(Of ArgumentException)(Sub() keys.Save(ProtectedKeyStore.OpenAlex, "has a space in it"))
         Assert.ThrowsExactly(Of ArgumentException)(Sub() keys.Save("..\escape", "openalex-test-key-789"))
+    End Sub
+
+    <TestMethod>
+    Public Sub TheKeyDialogSaysWhyAPastedValueIsNotAKey()
+        Assert.AreEqual(String.Empty, OpenAlexKeyForm.HintFor(""))
+        Assert.AreEqual(String.Empty, OpenAlexKeyForm.HintFor("abc"), "Nothing while a key is still being typed.")
+        Assert.AreEqual(String.Empty, OpenAlexKeyForm.HintFor("openalex-test-key-123"))
+        StringAssert.Contains(OpenAlexKeyForm.HintFor("openalex test key"), "without spaces")
+        StringAssert.Contains(OpenAlexKeyForm.HintFor("openalex-key" & vbCrLf & "second-line"), "line breaks")
+        StringAssert.Contains(OpenAlexKeyForm.HintFor(New String("k"c, 201)), "longer than an OpenAlex key")
     End Sub
 
     <TestMethod>
@@ -435,6 +464,10 @@ Public Class OnlineServicesTests
 
                 Using keyDialog As New OpenAlexKeyForm()
                     ShowOffscreen(keyDialog)
+                    Assert.IsTrue(keyDialog.KeyBox.Focused, "Ready to paste.")
+                    Assert.IsTrue(keyDialog.AddButton.Bottom <= keyDialog.AddButton.Parent.ClientSize.Height AndAlso
+                                  keyDialog.RectangleToScreen(keyDialog.ClientRectangle).Contains(keyDialog.AddButton.RectangleToScreen(keyDialog.AddButton.ClientRectangle)),
+                                  "Add Key is fully inside the dialog.")
                     Assert.IsTrue(keyDialog.KeyBox.UseSystemPasswordChar)
                     Assert.IsFalse(keyDialog.AddButton.Enabled)
                     keyDialog.KeyBox.Text = "has a space"
@@ -443,6 +476,13 @@ Public Class OnlineServicesTests
                     Assert.IsTrue(keyDialog.AddButton.Enabled)
                     Assert.AreEqual("openalex-test-key-123", keyDialog.Key)
                     keyDialog.Close()
+                End Using
+
+                Using help As New HelpForm("What PaperRoute sends, and when")
+                    ShowOffscreen(help)
+                    Application.DoEvents()
+                    StringAssert.StartsWith(help.GuideText.Substring(help.GuideSelectionStart), "What PaperRoute sends, and when", "The card's link opens Help at the table.")
+                    help.Close()
                 End Using
             End Sub)
     End Sub
