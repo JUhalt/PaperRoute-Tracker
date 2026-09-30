@@ -474,7 +474,7 @@ Each shortlisted journal keeps your answers as checks, so the reasons for your c
 Not sure where to start? **Find Journals...** on the shortlist looks for journals that recently published articles like this one, using OpenAlex, an open index of published research.
 
 1. **Review the keywords.** PaperRoute proposes the manuscript's keywords (checked) and phrases from its title (unchecked). Check the ones that describe the work, or add your own. Choose whether articles must match every keyword or any keyword, and how many years back to look.
-2. **See what will be sent.** Before searching, the window shows the exact request: the keywords you checked and a start date, and nothing else. Your title, abstract, notes, and files are never sent. **Show the exact web address** shows the address itself.
+2. **See what will be sent.** Before searching, the window shows the exact request: the keywords you checked and a start date, and nothing else. A phrase from the title is sent only if you check it; the abstract, notes, and files are never sent. **Show the exact web address** shows the address itself.
 3. **Read the evidence.** Each journal found shows how many matching articles it published, out of all its articles in those years, whether it is open access and its listed fee, your own history with it, and up to three recent matching articles, linked by DOI.
 4. **Add the ones worth a look.** **Add Checked to Shortlist** adds them as **Considering**, with the evidence, and nothing else changes. Journals already on the shortlist can't be added twice. Save the manuscript page to keep them.
 

@@ -88,6 +88,15 @@ Partial Public Class Form1
         Dim orcid As String = OwnOrcidNormalized()
         Dim blocked As OnlineBlockReason? = OnlineAccess.BlockReason(OnlineServiceCatalog.Citations)
 
+        ' Why Update is off, when a setting turned it off.
+        Dim addBlocked As Action =
+            Sub()
+                If Not blocked.HasValue OrElse isExample Then Return
+                addText(If(blocked.Value = OnlineBlockReason.WorkOffline,
+                           "You're working offline, so updating is off. Turn off Work offline in Settings to update.",
+                           "Your citations is turned off in Settings > Preferences... > Online services, so updating is off."), UiTheme.InfoColor())
+            End Sub
+
         Dim updateButton As New Button With {.Text = "Update from OpenAlex...", .AutoSize = True, .MinimumSize = New Size(UiTheme.Px(96, dpi), UiTheme.Px(34, dpi)), .Margin = New Padding(0, UiTheme.Px(8, dpi), 0, 0)}
         AddHandler updateButton.Click, Sub(sender, e) UpdateCitations()
         updateButton.Enabled = Not isExample AndAlso orcid.Length > 0 AndAlso Not blocked.HasValue
@@ -105,6 +114,7 @@ Partial Public Class Form1
 
             addText("See how your published work has been cited, from OpenAlex, an open index of scholarly works. Update from OpenAlex reads the works on your public ORCID record (" & orcid & ") and looks them up, with your published manuscripts' DOIs, in OpenAlex. You confirm which works are yours before anything is saved.", UiTheme.PrimaryText())
             If isExample Then addText("The example library has no citations to show.", UiTheme.SecondaryText())
+            addBlocked()
             AddRow(card, updateButton)
 
         Else
@@ -146,16 +156,18 @@ Partial Public Class Form1
             addText("Citations by year: " & String.Join("  ·  ", years.Select(Function(item) item.Year.ToString(CultureInfo.InvariantCulture) & " " & item.Count.ToString("N0", culture) &
                     If(item.Year = retrievalYear, " so far", String.Empty))), UiTheme.PrimaryText())
 
-            If blocked.HasValue AndAlso Not isExample Then
-                addText(If(blocked.Value = OnlineBlockReason.WorkOffline,
-                           "You're working offline, so updating is off. Turn off Work offline in Settings to update.",
-                           "Your citations is turned off in Settings > Preferences... > Online services, so updating is off."), UiTheme.InfoColor())
-            End If
+            addBlocked()
             If isExample Then addText("Updating is off in the example library.", UiTheme.SecondaryText())
             AddRow(card, updateButton)
 
             ' The researcher's manuscripts in PaperRoute, joined by DOI.
-            Dim byDoi As Dictionary(Of String, CitedWork) = snapshot.Works.Where(Function(item) item.Doi.Length > 0).GroupBy(Function(item) item.Doi).ToDictionary(Function(group) group.Key, Function(group) group.First())
+            ' Any version's DOI finds the work (the preprint may stand for the article).
+            Dim byDoi As New Dictionary(Of String, CitedWork)(StringComparer.Ordinal)
+            For Each work As CitedWork In snapshot.Works
+                For Each doi As String In work.VersionDois.Prepend(work.Doi).Where(Function(item) item.Length > 0)
+                    If Not byDoi.ContainsKey(doi) Then byDoi(doi) = work
+                Next
+            Next
             Dim tracked As List(Of (Manuscript As Manuscript, Work As CitedWork)) = manuscripts.
                 Where(Function(item) item IsNot Nothing).
                 Select(Function(item) (item, If(byDoi.ContainsKey(CitationKeys.Doi(If(item.Metadata?.Doi, String.Empty))), byDoi(CitationKeys.Doi(If(item.Metadata?.Doi, String.Empty))), Nothing))).

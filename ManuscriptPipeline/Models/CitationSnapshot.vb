@@ -36,6 +36,10 @@ Namespace Models
         ' Lower-case, without https://doi.org/; may be blank.
         Public Property Doi As String = String.Empty
 
+        ' The other DOIs of the same work on the ORCID record (a preprint and
+        ' the article, say), counted once under this one.
+        Public Property VersionDois As List(Of String) = New List(Of String)()
+
         Public Property Title As String = String.Empty
 
         ' OpenAlex's publication year.

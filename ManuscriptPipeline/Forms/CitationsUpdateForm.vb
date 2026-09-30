@@ -50,6 +50,8 @@ Namespace Forms
             _source = source
             BuildInterface()
             ShowReady()
+            ' Set once: a stopped or failed lookup keeps the researcher's choice.
+            chkLinked.Checked = previous IsNot Nothing AndAlso previous.IncludeOpenAlexLinked
             UiPolish.ApplyDialog(Me)
         End Sub
 
@@ -166,7 +168,6 @@ Namespace Forms
                 "• look up those works" & If(count > 0, ", and your " & count.ToString(CultureInfo.CurrentCulture) & If(count = 1, " published manuscript", " published manuscripts") & " with a DOI,", String.Empty) &
                 " in OpenAlex (sends their DOIs)." & Environment.NewLine & Environment.NewLine &
                 "Unpublished titles and abstracts are never sent. You confirm which works are yours before anything is saved."
-            chkLinked.Checked = _previous IsNot Nothing AndAlso _previous.IncludeOpenAlexLinked
             chkLinked.Visible = True
             lblSummary.Text = String.Empty
             lblStatus.Text = If(_previous?.RetrievedUtc.HasValue = True,
@@ -221,6 +222,7 @@ Namespace Forms
         Private Sub ShowConfirm(lookup As CitationLookup)
 
             _lookup = lookup
+            CitationsService.KeepConfirmed(lookup, _previous)
             _stage = Stage.Confirm
             chkLinked.Visible = False
             body.Controls.Clear()

@@ -116,6 +116,11 @@ Namespace Services
             For Each work As CitedWork In snapshot.Works
                 work.OpenAlexId = If(Regex.IsMatch(If(work.OpenAlexId, String.Empty).Trim(), "^W\d{1,15}$"), work.OpenAlexId.Trim(), String.Empty)
                 work.Doi = CitationKeys.Doi(work.Doi)
+                work.VersionDois = If(work.VersionDois, New List(Of String)()).
+                    Select(AddressOf CitationKeys.Doi).
+                    Where(Function(item) item.Length > 0 AndAlso item <> work.Doi).
+                    Distinct().
+                    ToList()
                 work.Title = Truncate(If(work.Title, String.Empty).Trim(), 400)
                 work.Journal = Truncate(If(work.Journal, String.Empty).Trim(), 200)
                 work.FoundBy = If(work.FoundBy, String.Empty).Trim()
@@ -152,6 +157,17 @@ Namespace Services
         Public Shared Function Doi(value As String) As String
             Dim normalized As String = DoiNormalizer.Normalize(If(value, String.Empty)).Trim().ToLowerInvariant()
             Return If(DoiNormalizer.IsValid(normalized), normalized, String.Empty)
+        End Function
+
+        ' Every key the work goes by: each of its DOIs, and its OpenAlex id.
+        Public Shared Function AllForWork(work As CitedWork) As List(Of String)
+            If work Is Nothing Then Return New List(Of String)()
+            Dim keys As List(Of String) = If(work.VersionDois, New List(Of String)()).Prepend(work.Doi).
+                Where(Function(item) Not String.IsNullOrEmpty(item)).
+                Select(Function(item) "doi:" & item).
+                ToList()
+            If Not String.IsNullOrEmpty(work.OpenAlexId) Then keys.Add("openalex:" & work.OpenAlexId)
+            Return keys
         End Function
 
         ' "doi:…" when the work has a DOI, else "openalex:W…".

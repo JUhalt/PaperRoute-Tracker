@@ -28,6 +28,8 @@ Namespace Services
         Public Property Selected As Boolean
         ' The researcher left it out last time.
         Public Property ExcludedBefore As Boolean
+        ' The researcher confirmed it last time.
+        Public Property ConfirmedBefore As Boolean
 
         Public ReadOnly Property Key As String
             Get
@@ -259,38 +261,48 @@ Namespace Services
             Dim left As New HashSet(Of String)(If(excluded, Enumerable.Empty(Of String)()), StringComparer.OrdinalIgnoreCase)
             Dim seenIds As New HashSet(Of String)(StringComparer.Ordinal)
             Dim seenDois As New HashSet(Of String)(StringComparer.Ordinal)
+            Dim groupList As List(Of OrcidWorkGroup) = If(groups, Enumerable.Empty(Of OrcidWorkGroup)()).Where(Function(item) item IsNot Nothing).ToList()
+            Dim recordDois As New HashSet(Of String)(groupList.SelectMany(Function(item) item.Dois), StringComparer.Ordinal)
 
+            ' A work is offered once, however many of its versions or DOIs
+            ' turn up; leaving out any version leaves out the work.
             Dim offer As Action(Of CitedWork, CitationSection, String) =
                 Sub(work, section, foundBy)
-                    If seenIds.Contains(work.OpenAlexId) OrElse (work.Doi.Length > 0 AndAlso seenDois.Contains(work.Doi)) Then Return
+                    Dim dois As List(Of String) = work.VersionDois.Prepend(work.Doi).Where(Function(item) item.Length > 0).ToList()
+                    If seenIds.Contains(work.OpenAlexId) OrElse dois.Any(AddressOf seenDois.Contains) Then Return
                     seenIds.Add(work.OpenAlexId)
-                    If work.Doi.Length > 0 Then seenDois.Add(work.Doi)
+                    dois.ForEach(Sub(item) seenDois.Add(item))
                     work.FoundBy = foundBy
-                    Dim wasLeft As Boolean = left.Contains(CitationKeys.ForWork(work))
+                    Dim wasLeft As Boolean = CitationKeys.AllForWork(work).Any(AddressOf left.Contains)
                     lookup.Candidates.Add(New CitationCandidate With {
                         .Work = work, .Section = section, .ExcludedBefore = wasLeft,
                         .Selected = section <> CitationSection.OpenAlexOnly AndAlso Not wasLeft
                     })
                 End Sub
 
-            For Each group As OrcidWorkGroup In If(groups, Enumerable.Empty(Of OrcidWorkGroup)())
+            For Each group As OrcidWorkGroup In groupList
                 If group.Dois.Count = 0 Then
                     lookup.OrcidWithoutDoi += 1
                     Continue For
                 End If
-                Dim versions As List(Of CitedWork) = group.Dois.Where(Function(doi) found.ContainsKey(doi)).Select(Function(doi) found(doi)).ToList()
+                Dim versions As List(Of CitedWork) = group.Dois.Where(Function(doi) found.ContainsKey(doi)).Select(Function(doi) found(doi)).Distinct().ToList()
                 If versions.Count = 0 Then
                     lookup.NotFound.Add(If(group.Title.Length > 0, group.Title, group.Dois(0)))
                     Continue For
                 End If
-                offer(versions.OrderByDescending(Function(item) item.CitedByCount).ThenBy(Function(item) group.Dois.IndexOf(item.Doi)).First(), CitationSection.OrcidRecord, "orcid")
+                ' The most-cited version stands for the work, carrying the others' DOIs.
+                Dim chosen As CitedWork = versions.OrderByDescending(Function(item) item.CitedByCount).ThenBy(Function(item) group.Dois.IndexOf(item.Doi)).First()
+                chosen.VersionDois = chosen.VersionDois.Union(group.Dois.Where(Function(doi) doi <> chosen.Doi)).ToList()
+                offer(chosen, CitationSection.OrcidRecord, "orcid")
+                versions.ForEach(Sub(item) seenIds.Add(item.OpenAlexId))
             Next
 
             For Each manuscript In If(manuscripts, Enumerable.Empty(Of (Doi As String, Title As String))())
                 Dim work As CitedWork = Nothing
                 If found.TryGetValue(manuscript.Doi, work) Then
                     offer(work, CitationSection.PaperRouteManuscripts, "paperroute")
-                ElseIf Not seenDois.Contains(manuscript.Doi) Then
+                ElseIf Not recordDois.Contains(manuscript.Doi) Then
+                    ' A DOI on the ORCID record is already listed with its work.
                     lookup.NotFound.Add(If(manuscript.Title.Length > 0, manuscript.Title, manuscript.Doi))
                 End If
             Next
@@ -315,7 +327,7 @@ Namespace Services
             Dim excluded As List(Of String) = If(previousExcluded, Enumerable.Empty(Of String)()).
                 Where(Function(item) Not offered.Contains(item)).
                 Concat(lookup.Candidates.Where(Function(item) Not item.Selected AndAlso item.Section <> CitationSection.OpenAlexOnly).Select(Function(item) item.Key)).
-                Concat(lookup.Candidates.Where(Function(item) Not item.Selected AndAlso item.Section = CitationSection.OpenAlexOnly AndAlso item.ExcludedBefore).Select(Function(item) item.Key)).
+                Concat(lookup.Candidates.Where(Function(item) Not item.Selected AndAlso item.Section = CitationSection.OpenAlexOnly AndAlso (item.ExcludedBefore OrElse item.ConfirmedBefore)).Select(Function(item) item.Key)).
                 Distinct(StringComparer.OrdinalIgnoreCase).
                 ToList()
             Return New CitationSnapshot With {
@@ -327,6 +339,20 @@ Namespace Services
                 .Works = lookup.Candidates.Where(Function(item) item.Selected).Select(Function(item) item.Work).ToList()
             }
         End Function
+
+
+        ' Works OpenAlex alone links to the iD start unchecked, except those
+        ' the researcher confirmed last time.
+        Public Shared Sub KeepConfirmed(lookup As CitationLookup, previous As CitationSnapshot)
+            If lookup Is Nothing OrElse previous Is Nothing Then Return
+            Dim confirmed As New HashSet(Of String)(previous.Works.Where(Function(item) item IsNot Nothing).SelectMany(AddressOf CitationKeys.AllForWork), StringComparer.OrdinalIgnoreCase)
+            For Each candidate As CitationCandidate In lookup.Candidates
+                If CitationKeys.AllForWork(candidate.Work).Any(AddressOf confirmed.Contains) Then
+                    candidate.ConfirmedBefore = True
+                    If candidate.Section = CitationSection.OpenAlexOnly AndAlso Not candidate.ExcludedBefore Then candidate.Selected = True
+                End If
+            Next
+        End Sub
 
 
         ' Published manuscripts with a DOI: (DOI, title), never a preprint DOI.

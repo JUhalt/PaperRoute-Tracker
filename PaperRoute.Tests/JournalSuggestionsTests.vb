@@ -346,6 +346,108 @@ Public Class JournalSuggestionsTests
     End Sub
 
 
+    ' Review fixes (#88).
+    <TestMethod>
+    Public Sub ExamplesLeftOutOfTheNewestHundredAreFetchedLater()
+        UseNetwork(
+            Function(uri)
+                If uri.AbsoluteUri.Contains("sort=publication_date", StringComparison.Ordinal) Then
+                    Return Answer(HttpStatusCode.OK, Fixture("examples.json").Replace("{""meta"": {""count"": 10,", "{""meta"": {""count"": 500,"))
+                End If
+                Return Recorded(uri)
+            End Function)
+        Dim result As JournalSuggestionsResult = New OnlineJournalSuggestionsSource().SearchAsync(AnchoringRequest(), CancellationToken.None).GetAwaiter().GetResult()
+        Assert.IsTrue(result.Journals.Any(Function(item) Not item.ExamplesLoaded) AndAlso result.Journals.Where(Function(item) item.Examples.Count < 3).All(Function(item) Not item.ExamplesLoaded),
+                      "A journal the newest 100 may have missed is looked up on its own when shown.")
+        Assert.IsTrue(result.Journals.Where(Function(item) item.Examples.Count >= 3).All(Function(item) item.ExamplesLoaded))
+    End Sub
+
+    <TestMethod>
+    Public Sub TypographicApostrophesKeepWordsWhole()
+        Dim proposals As List(Of KeywordProposal) = JournalSuggestionService.ProposeKeywords("Children" & ChrW(&H2019) & "s sleep quality and reading", Nothing)
+        Assert.IsFalse(proposals.Any(Function(item) item.Text.StartsWith("s ", StringComparison.Ordinal)), String.Join(" | ", proposals.Select(Function(item) item.Text)))
+    End Sub
+
+    <TestMethod>
+    Public Sub TheKeyHintIsOnlyForResearchersWithoutAKey()
+        Dim busy As New OnlineServiceBusyException("OpenAlex", TimeSpan.FromSeconds(30), False)
+        StringAssert.Contains(OnlineAccess.Describe(busy, "OpenAlex"), "A free OpenAlex key")
+        OnlineAccess.KeyStore().Save(ProtectedKeyStore.OpenAlex, "test-key-for-this-test-only")
+        Assert.IsFalse(OnlineAccess.Describe(busy, "OpenAlex").Contains("A free OpenAlex key"), "A researcher with a key isn't told to add one.")
+    End Sub
+
+    <TestMethod>
+    Public Sub AJournalShownAsAddableIsAdded()
+        ' The shortlist has the journal under OpenAlex's name; the library knows it, by ISSN, under another.
+        Dim manuscript As New Manuscript With {.Title = "A manuscript"}
+        manuscript.JournalShortlist.Add(New JournalCandidate With {.JournalName = "Scientific Reports", .Status = CandidateStatus.Considering})
+        Dim library As New List(Of JournalRecord) From {New JournalRecord With {.Name = "Sci Rep", .Issns = New List(Of String) From {"2045-2322"}}}
+        Dim shown As JournalCandidate = JournalShortlistService.FindFound(manuscript, "Scientific Reports", {"2045-2322"}, "S196734849", library)
+        Assert.IsNotNull(shown, "The window says it is on the shortlist...")
+        Dim added = JournalShortlistService.AddFound(manuscript, "Scientific Reports", {"2045-2322"}, "S196734849", library)
+        Assert.AreSame(shown, added.Candidate, "...because adding it finds the same candidate.")
+        Assert.IsFalse(added.Created)
+    End Sub
+
+    <TestMethod>
+    Public Sub EnterInTheKeywordBoxAddsTheKeywordWithoutSearching()
+        RunOnStaThread(
+            Sub()
+                Dim source As New RecordedSuggestions(New JournalSuggestionsResult())
+                Using dialog As New JournalSuggestionsForm("Anchoring", {"anchoring effects"}, source, Nothing, Nothing, Today)
+                    ShowOffscreen(dialog)
+                    GetType(Control).GetMethod("OnEnter", Reflection.BindingFlags.Instance Or Reflection.BindingFlags.NonPublic).Invoke(dialog.AddKeywordBox, New Object() {EventArgs.Empty})
+                    Assert.AreNotSame(dialog.PrimaryButton, dialog.AcceptButton, "Enter belongs to Add while typing a keyword.")
+                    dialog.AddKeywordBox.Text = "risk perception"
+                    DirectCast(dialog.AcceptButton, Button).PerformClick()
+                    Application.DoEvents()
+                    Assert.IsTrue(dialog.KeywordsList.Items.Cast(Of String)().Contains("risk perception"))
+                    Assert.IsNull(source.Request, "Nothing was searched.")
+                    GetType(Control).GetMethod("OnLeave", Reflection.BindingFlags.Instance Or Reflection.BindingFlags.NonPublic).Invoke(dialog.AddKeywordBox, New Object() {EventArgs.Empty})
+                    Assert.AreSame(dialog.PrimaryButton, dialog.AcceptButton)
+                    dialog.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    <TestMethod>
+    Public Sub ABusyAnswerForExamplesIsRespected()
+        RunOnStaThread(
+            Sub()
+                Dim result As JournalSuggestionsResult = RecordedResult()
+                result.Journals.ForEach(Sub(item) item.ExamplesLoaded = False)
+                Dim source As New RecordedSuggestions(result, examplesFailure:=New OnlineServiceBusyException("OpenAlex", TimeSpan.FromSeconds(36), False))
+                Using dialog As New JournalSuggestionsForm("Anchoring", {"anchoring effects"}, source, Nothing, Nothing, Today)
+                    ShowOffscreen(dialog)
+                    dialog.SearchAsync().GetAwaiter().GetResult()
+                    Application.DoEvents()
+                    Dim first As Integer = source.ExampleRequests
+                    Assert.AreEqual(1, first, "The first journal shown asks once.")
+                    StringAssert.StartsWith(dialog.ExampleTexts(1), "Examples couldn't be loaded: OpenAlex is busy")
+                    dialog.JournalsList.Items(1).Selected = True
+                    dialog.ShowExamplesForTest().GetAwaiter().GetResult()
+                    Assert.AreEqual(first, source.ExampleRequests, "No request while OpenAlex asked PaperRoute to wait.")
+                    StringAssert.StartsWith(dialog.ExampleTexts(1), "Examples couldn't be loaded: OpenAlex is busy")
+                    Assert.IsTrue(dialog.CancelButtonForTest.Enabled, "Cancel still works.")
+                    dialog.Close()
+                End Using
+
+                ' A busy answer during the search holds the examples too.
+                Dim held As JournalSuggestionsResult = RecordedResult()
+                held.Journals.ForEach(Sub(item) item.ExamplesLoaded = False)
+                held.ExamplesBusy = New OnlineServiceBusyException("OpenAlex", TimeSpan.FromSeconds(36), False)
+                Dim quiet As New RecordedSuggestions(held)
+                Using dialog As New JournalSuggestionsForm("Anchoring", {"anchoring effects"}, quiet, Nothing, Nothing, Today)
+                    ShowOffscreen(dialog)
+                    dialog.SearchAsync().GetAwaiter().GetResult()
+                    Application.DoEvents()
+                    Assert.AreEqual(0, quiet.ExampleRequests, "No examples request right after OpenAlex asked PaperRoute to wait.")
+                    dialog.Close()
+                End Using
+            End Sub)
+    End Sub
+
+
     ' ---------------------------------------------------------------
     ' Helpers
     ' ---------------------------------------------------------------
@@ -423,11 +525,15 @@ Public Class JournalSuggestionsTests
 
         Private ReadOnly _result As JournalSuggestionsResult
         Private ReadOnly _failure As Exception
+        Private ReadOnly _examplesFailure As Exception
 
-        Public Sub New(result As JournalSuggestionsResult, Optional failure As Exception = Nothing)
+        Public Sub New(result As JournalSuggestionsResult, Optional failure As Exception = Nothing, Optional examplesFailure As Exception = Nothing)
             _result = result
             _failure = failure
+            _examplesFailure = examplesFailure
         End Sub
+
+        Public Property ExampleRequests As Integer
 
         Public Property Request As JournalSuggestionRequest
 
@@ -439,6 +545,8 @@ Public Class JournalSuggestionsTests
         End Function
 
         Public Function ExamplesAsync(request As JournalSuggestionRequest, openAlexId As String, cancellationToken As CancellationToken) As Task(Of List(Of EvidenceExample)) Implements IJournalSuggestionsSource.ExamplesAsync
+            ExampleRequests += 1
+            If _examplesFailure IsNot Nothing Then Return Task.FromException(Of List(Of EvidenceExample))(_examplesFailure)
             Return Task.FromResult(New List(Of EvidenceExample))
         End Function
     End Class

@@ -31,6 +31,10 @@ Namespace Forms
         Private ReadOnly _today As DateTime
         Private _stage As Stage = Stage.Keywords
         Private _cancellation As CancellationTokenSource
+        ' The on-demand examples fetch: never blocks Cancel or closing.
+        Private _examplesCancellation As CancellationTokenSource
+        Private _examplesBusy As OnlineServiceBusyException
+        Private _examplesBusyUntil As DateTime
         Private _result As JournalSuggestionsResult
         Private _allowCheck As Boolean
         Private _sortColumn As Integer = 1
@@ -208,13 +212,8 @@ Namespace Forms
             txtAdd.Dock = DockStyle.Fill
             txtAdd.MaxLength = JournalSuggestionService.MaximumKeywordLength
             txtAdd.Margin = New Padding(0, 4, 8, 4)
-            AddHandler txtAdd.KeyDown,
-                Sub(sender, e)
-                    If e.KeyCode = Keys.Enter Then
-                        e.SuppressKeyPress = True
-                        AddKeyword()
-                    End If
-                End Sub
+            AddHandler txtAdd.Enter, Sub(sender, e) AcceptButton = btnAdd
+            AddHandler txtAdd.Leave, Sub(sender, e) AcceptButton = btnPrimary
             btnAdd.Text = "Add"
             btnAdd.AutoSize = True
             btnAdd.MinimumSize = New Size(72, 32)
@@ -459,6 +458,8 @@ Namespace Forms
 
             _result = result
             _stage = Stage.Evidence
+            _sortColumn = 1
+            If result.ExamplesBusy IsNot Nothing Then NoteExamplesBusy(result.ExamplesBusy)
             body.Controls.Clear()
             body.Controls.Add(evidencePanel)
             btnBack.Visible = True
@@ -493,6 +494,9 @@ Namespace Forms
             lblFooter.Text = JournalSuggestionService.Footnote & " Data from OpenAlex (CC0), " &
                 result.RetrievedUtc.ToLocalTime().ToString("MMM d, yyyy", CultureInfo.CurrentCulture) & "."
 
+            For Each control As Control In examplesPanel.Controls.Cast(Of Control)().ToList()
+                control.Dispose()
+            Next
             examplesPanel.Controls.Clear()
             If lvJournals.Items.Count > 0 Then lvJournals.Items(0).Selected = True
             RefreshAddButton()
@@ -573,26 +577,51 @@ Namespace Forms
             If _stage <> Stage.Evidence OrElse lvJournals.SelectedItems.Count = 0 Then Return
             Dim journal As JournalSuggestion = DirectCast(lvJournals.SelectedItems(0).Tag, JournalSuggestion)
 
-            If Not journal.ExamplesLoaded AndAlso _result IsNot Nothing AndAlso _cancellation Is Nothing Then
+            If Not journal.ExamplesLoaded AndAlso _result IsNot Nothing Then
+                ' One fetch at a time; the journal selected when it ends is shown next.
+                If _examplesCancellation IsNot Nothing Then
+                    ShowExampleLinks(journal, "Loading recent matching articles...")
+                    Return
+                End If
+                ' OpenAlex asked PaperRoute to wait: no request until then.
+                If _examplesBusy IsNot Nothing AndAlso DateTime.UtcNow < _examplesBusyUntil Then
+                    ShowExampleLinks(journal, "Examples couldn't be loaded: " & OnlineAccess.Describe(_examplesBusy, "OpenAlex"))
+                    Return
+                End If
                 ShowExampleLinks(journal, "Loading recent matching articles...")
-                _cancellation = New CancellationTokenSource()
+                _examplesCancellation = New CancellationTokenSource()
                 Try
-                    journal.Examples = Await _source.ExamplesAsync(_result.Request, journal.OpenAlexId, _cancellation.Token)
+                    journal.Examples = Await _source.ExamplesAsync(_result.Request, journal.OpenAlexId, _examplesCancellation.Token)
                     journal.ExamplesLoaded = True
+                Catch ex As OperationCanceledException When _examplesCancellation.IsCancellationRequested
+                    Return
                 Catch ex As Exception When TypeOf ex Is OnlineServiceBlockedException OrElse TypeOf ex Is Net.Http.HttpRequestException OrElse
                                            TypeOf ex Is TaskCanceledException OrElse TypeOf ex Is InvalidOperationException
-                    ShowExampleLinks(journal, "Examples couldn't be loaded: " & OnlineAccess.Describe(ex, "OpenAlex"))
+                    Dim busy As OnlineServiceBusyException = TryCast(ex, OnlineServiceBusyException)
+                    If busy IsNot Nothing Then NoteExamplesBusy(busy)
+                    If Not IsDisposed Then ShowExampleLinks(journal, "Examples couldn't be loaded: " & OnlineAccess.Describe(ex, "OpenAlex"))
                     Return
                 Finally
-                    _cancellation?.Dispose()
-                    _cancellation = Nothing
+                    _examplesCancellation?.Dispose()
+                    _examplesCancellation = Nothing
                 End Try
-                If lvJournals.SelectedItems.Count = 0 OrElse lvJournals.SelectedItems(0).Tag IsNot journal Then Return
+                If IsDisposed OrElse _stage <> Stage.Evidence OrElse lvJournals.SelectedItems.Count = 0 Then Return
+                If lvJournals.SelectedItems(0).Tag IsNot journal Then
+                    Await ShowExamplesAsync()
+                    Return
+                End If
             End If
 
             ShowExampleLinks(journal, If(journal.Examples.Count = 0, "No example articles to show.", String.Empty))
 
         End Function
+
+
+        ' No examples request until OpenAlex's wait is over.
+        Private Sub NoteExamplesBusy(busy As OnlineServiceBusyException)
+            _examplesBusy = busy
+            _examplesBusyUntil = If(busy.DailyAllowanceUsed, DateTime.UtcNow.Date.AddDays(1), DateTime.UtcNow.Add(If(busy.RetryAfter, TimeSpan.FromMinutes(1))))
+        End Sub
 
 
         Private Sub ShowExampleLinks(journal As JournalSuggestion, message As String)
@@ -659,6 +688,7 @@ Namespace Forms
 
 
         Private Sub CancelClicked(sender As Object, e As EventArgs)
+            _examplesCancellation?.Cancel()
             If _cancellation IsNot Nothing Then
                 _cancellation.Cancel()
                 btnCancel.Enabled = False
@@ -670,6 +700,7 @@ Namespace Forms
 
 
         Protected Overrides Sub OnFormClosing(e As FormClosingEventArgs)
+            _examplesCancellation?.Cancel()
             If _cancellation IsNot Nothing Then
                 _cancellation.Cancel()
                 e.Cancel = True
@@ -688,6 +719,7 @@ Namespace Forms
                 waitTimer.Dispose()
                 toolTip.Dispose()
                 _cancellation?.Dispose()
+                _examplesCancellation?.Dispose()
             End If
             MyBase.Dispose(disposing)
         End Sub
@@ -739,6 +771,18 @@ Namespace Forms
         Friend ReadOnly Property PrimaryButton As Button
             Get
                 Return btnPrimary
+            End Get
+        End Property
+
+        Friend ReadOnly Property CancelButtonForTest As Button
+            Get
+                Return btnCancel
+            End Get
+        End Property
+
+        Friend ReadOnly Property AddKeywordBox As TextBox
+            Get
+                Return txtAdd
             End Get
         End Property
 

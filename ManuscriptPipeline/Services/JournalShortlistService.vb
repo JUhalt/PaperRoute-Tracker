@@ -165,15 +165,8 @@ Namespace Services
             If name.Length = 0 Then Throw New ArgumentException("A journal name is required.", NameOf(journalName))
             If manuscript.JournalShortlist Is Nothing Then manuscript.JournalShortlist = New List(Of JournalCandidate)()
 
-            Dim found As List(Of String) = IssnService.NormalizeList(issns)
-            Dim id As String = OpenAlexSourceClient.NormalizeId(openAlexId)
-            Dim records As List(Of JournalRecord) = If(library, Enumerable.Empty(Of JournalRecord)()).Where(Function(item) item IsNot Nothing).ToList()
-            Dim record As JournalRecord =
-                If(records.FirstOrDefault(Function(item) found.Count > 0 AndAlso IssnService.NormalizeList(item.Issns).Intersect(found).Any()),
-                   records.FirstOrDefault(Function(item) RouteAnalyticsService.NameKey(item.Name) = RouteAnalyticsService.NameKey(name)))
-
-            Dim existing As JournalCandidate = FindCandidate(manuscript, If(record?.Name, name), found, id, record?.Id)
-            If existing Is Nothing AndAlso record IsNot Nothing Then existing = FindCandidate(manuscript, name, found, id, Nothing)
+            Dim record As JournalRecord = LibraryRecordFor(name, issns, library)
+            Dim existing As JournalCandidate = FindFound(manuscript, name, issns, openAlexId, library)
             If existing IsNot Nothing Then Return (existing, False)
 
             Dim candidate As New JournalCandidate With {
@@ -185,6 +178,27 @@ Namespace Services
             manuscript.JournalShortlist.Add(candidate)
             Return (candidate, True)
 
+        End Function
+
+
+        ' The candidate a found journal would join, as AddFound decides it: by
+        ' its library record, its own name, ISSN, or OpenAlex id.
+        Public Shared Function FindFound(manuscript As Manuscript, journalName As String, issns As IEnumerable(Of String), openAlexId As String,
+                                         library As IEnumerable(Of JournalRecord)) As JournalCandidate
+            Dim name As String = If(journalName, String.Empty).Trim()
+            Dim record As JournalRecord = LibraryRecordFor(name, issns, library)
+            Dim existing As JournalCandidate = FindCandidate(manuscript, If(record?.Name, name), issns, openAlexId, record?.Id)
+            If existing Is Nothing AndAlso record IsNot Nothing Then existing = FindCandidate(manuscript, name, issns, openAlexId, Nothing)
+            Return existing
+        End Function
+
+
+        ' The Journal Library record for a found journal: by ISSN, then name.
+        Public Shared Function LibraryRecordFor(journalName As String, issns As IEnumerable(Of String), library As IEnumerable(Of JournalRecord)) As JournalRecord
+            Dim found As List(Of String) = IssnService.NormalizeList(issns)
+            Dim records As List(Of JournalRecord) = If(library, Enumerable.Empty(Of JournalRecord)()).Where(Function(item) item IsNot Nothing).ToList()
+            Return If(records.FirstOrDefault(Function(item) found.Count > 0 AndAlso IssnService.NormalizeList(item.Issns).Intersect(found).Any()),
+                      records.FirstOrDefault(Function(item) RouteAnalyticsService.NameKey(item.Name) = RouteAnalyticsService.NameKey(If(journalName, String.Empty).Trim())))
         End Function
 
 

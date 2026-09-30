@@ -231,6 +231,59 @@ Public Class CitationsTests
         Assert.IsTrue(snapshot.IncludeOpenAlexLinked)
     End Sub
 
+    ' Review (#91): a preprint cited more than the article stands for the
+    ' work, and the article's DOI, a manuscript's, finds it; nothing counts twice.
+    <TestMethod>
+    Public Sub VersionsCountOnceWhicheverIsMostCited()
+        Dim groups As New List(Of OrcidWorkGroup) From {
+            New OrcidWorkGroup With {.Dois = New List(Of String) From {"10.5555/article", "10.5555/preprint"}, .Title = "One work"},
+            New OrcidWorkGroup With {.Dois = New List(Of String) From {"10.5555/unindexed"}, .Title = "Unindexed work"}
+        }
+        Dim found As New Dictionary(Of String, CitedWork) From {
+            {"10.5555/article", Work("W2", "10.5555/article", 30)},
+            {"10.5555/preprint", Work("W1", "10.5555/preprint", 50)}
+        }
+        Dim manuscripts As New List(Of (Doi As String, Title As String)) From {("10.5555/article", "The article"), ("10.5555/unindexed", "Unindexed work")}
+        Dim linked As New List(Of CitedWork) From {Work("W2", "10.5555/article", 30)}
+
+        Dim lookup As CitationLookup = CitationsService.Assemble(Carberry, groups, manuscripts, found, linked, 1, Nothing)
+        Dim only As CitationCandidate = lookup.Candidates.Single()
+        Assert.AreEqual("W1", only.Work.OpenAlexId)
+        CollectionAssert.AreEqual({"10.5555/article"}, only.Work.VersionDois)
+        CollectionAssert.AreEqual({"Unindexed work"}, lookup.NotFound, "A DOI on the ORCID record isn't listed as not found twice.")
+        Assert.AreEqual(50L, CitationMetricsService.Summarize(CitationsService.BuildSnapshot(lookup, Nothing).Works, 2026).Citations)
+
+        ' Leaving out the article leaves out the work, whichever version stands for it.
+        Dim later As CitationLookup = CitationsService.Assemble(Carberry, groups, manuscripts, found, Nothing, Nothing, {"doi:10.5555/article"})
+        Assert.IsTrue(later.Candidates.Single().ExcludedBefore)
+        Assert.IsFalse(later.Candidates.Single().Selected)
+        CollectionAssert.AreEquivalent({"doi:10.5555/preprint", "doi:10.5555/article", "openalex:W1"}, CitationKeys.AllForWork(later.Candidates.Single().Work))
+
+        ' A saved version DOI survives the store, and the Insights join uses it.
+        Dim store As New CitationStore(Path.Combine(_directory, "versions"))
+        store.Save(CitationsService.BuildSnapshot(lookup, Nothing))
+        CollectionAssert.AreEqual({"10.5555/article"}, store.Load().Works.Single().VersionDois)
+    End Sub
+
+    <TestMethod>
+    Public Sub WorksConfirmedBeforeStayConfirmed()
+        Dim previous As New CitationSnapshot With {.Works = New List(Of CitedWork) From {Work("W9", "10.5555/mine", 12)}}
+        Dim fresh As Func(Of CitationLookup) =
+            Function() CitationsService.Assemble(Carberry, Nothing, Nothing, New Dictionary(Of String, CitedWork)(),
+                                                 New List(Of CitedWork) From {Work("W9", "10.5555/mine", 14), Work("W10", "10.5555/someone-else", 99)}, 2, Nothing)
+        Dim lookup As CitationLookup = fresh()
+        CitationsService.KeepConfirmed(lookup, previous)
+        CollectionAssert.AreEqual({True, False}, lookup.Candidates.Select(Function(item) item.Selected).ToList(), "Your own work stays checked; someone else's isn't.")
+        Assert.IsTrue(lookup.Candidates(0).ConfirmedBefore)
+
+        ' Unchecking it now is remembered.
+        lookup.Candidates(0).Selected = False
+        CollectionAssert.AreEqual({"doi:10.5555/mine"}, CitationsService.BuildSnapshot(lookup, Nothing).Excluded)
+        Dim unchanged As CitationLookup = fresh()
+        CitationsService.KeepConfirmed(unchanged, Nothing)
+        Assert.IsFalse(unchanged.Candidates(0).Selected, "Nothing saved before, nothing assumed.")
+    End Sub
+
     <TestMethod>
     Public Sub OnlyPublishedManuscriptDoisAreLookedUp()
         Dim published As New Manuscript With {.Title = "Published", .CurrentStage = PaperStage.Published}
@@ -468,10 +521,14 @@ Public Class CitationsTests
                     Assert.AreEqual(2, dialog.Result.Excluded.Count)
                 End Using
 
-                ' A failed lookup says why, and nothing is saved.
-                Using dialog As New CitationsUpdateForm(Carberry, Nothing, Nothing, New RecordedCitations(Nothing, New OnlineServiceBusyException("OpenAlex", TimeSpan.FromSeconds(35), False)))
+                ' A failed lookup says why, saves nothing, and keeps the researcher's opt-out.
+                Dim linkedBefore As New CitationSnapshot With {.Orcid = Carberry, .IncludeOpenAlexLinked = True}
+                Using dialog As New CitationsUpdateForm(Carberry, Nothing, linkedBefore, New RecordedCitations(Nothing, New OnlineServiceBusyException("OpenAlex", TimeSpan.FromSeconds(35), False)))
                     ShowOffscreen(dialog)
+                    Assert.IsTrue(dialog.LinkedBox.Checked, "Last time's choice is offered.")
+                    dialog.LinkedBox.Checked = False
                     dialog.LookUpAsync().GetAwaiter().GetResult()
+                    Assert.IsFalse(dialog.LinkedBox.Checked, "A retry won't send the iD the researcher chose not to send.")
                     StringAssert.StartsWith(dialog.StatusText, "OpenAlex is busy and asked PaperRoute to wait about 35 seconds.")
                     StringAssert.EndsWith(dialog.StatusText, "Nothing was changed.")
                     Assert.IsNull(dialog.Result)

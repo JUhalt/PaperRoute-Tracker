@@ -1726,12 +1726,10 @@ Namespace Forms
             Else
                 Dim statistics As LibraryStatistics = RouteAnalyticsService.ForLibrary(If(_allManuscripts, New List(Of Manuscript)()), DateTime.Today, library)
                 Dim recordFor As Func(Of JournalSuggestion, JournalRecord) =
-                    Function(journal)
-                        Return If(library.FirstOrDefault(Function(item) item IsNot Nothing AndAlso journal.Issns.Count > 0 AndAlso IssnService.NormalizeList(item.Issns).Intersect(journal.Issns).Any()),
-                                  library.FirstOrDefault(Function(item) item IsNot Nothing AndAlso RouteAnalyticsService.NameKey(item.Name) = RouteAnalyticsService.NameKey(journal.Name)))
-                    End Function
+                    Function(journal) JournalShortlistService.LibraryRecordFor(journal.Name, journal.Issns, library)
+                ' The same match Add to Shortlist makes, so an addable journal is added.
                 Dim onShortlist As Func(Of JournalSuggestion, Boolean) =
-                    Function(journal) JournalShortlistService.FindCandidate(_workingManuscript, If(recordFor(journal)?.Name, journal.Name), journal.Issns, journal.OpenAlexId, recordFor(journal)?.Id) IsNot Nothing
+                    Function(journal) JournalShortlistService.FindFound(_workingManuscript, journal.Name, journal.Issns, journal.OpenAlexId, library) IsNot Nothing
                 Dim yours As Func(Of JournalSuggestion, String) =
                     Function(journal)
                         Dim record As JournalRecord = recordFor(journal)

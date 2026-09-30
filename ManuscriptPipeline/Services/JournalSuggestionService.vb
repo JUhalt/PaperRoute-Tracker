@@ -64,6 +64,8 @@ Namespace Services
         Public Property TotalsError As String = String.Empty
         Public Property DetailsError As String = String.Empty
         Public Property ExamplesError As String = String.Empty
+        ' When OpenAlex asked PaperRoute to wait before more examples.
+        Public Property ExamplesBusy As OnlineServiceBusyException
 
     End Class
 
@@ -119,7 +121,8 @@ Namespace Services
                 proposals.Add(New KeywordProposal With {.Text = clean, .Checked = proposals.Count < MaximumKeywords})
             Next
 
-            Dim text As String = If(title, String.Empty).Trim()
+            ' A typographic apostrophe is an apostrophe, so "Children’s" stays whole.
+            Dim text As String = If(title, String.Empty).Trim().Replace("’"c, "'"c)
             If text.StartsWith("Example:", StringComparison.OrdinalIgnoreCase) Then text = text.Substring("Example:".Length)
 
             Dim titlePhrases As Integer = 0
@@ -422,14 +425,19 @@ Namespace Services
             ' else the ten with the most.
             Dim exampleIds As List(Of String) = If(top.Sum(Function(item) item.Count) <= 100, ids, ids.Take(10).ToList())
             Try
-                Dim examples = JournalSuggestionService.ParseExamples(Await GetAsync(JournalSuggestionService.ExamplesUrl(request, exampleIds, 100), cancellationToken).ConfigureAwait(False))
+                Dim body As String = Await GetAsync(JournalSuggestionService.ExamplesUrl(request, exampleIds, 100), cancellationToken).ConfigureAwait(False)
+                Dim examples = JournalSuggestionService.ParseExamples(body)
+                ' The 100 newest can leave a journal out; it is then fetched on its own when shown.
+                Dim matching As Long? = CitationsService.ParseMeta(body).Count
+                Dim complete As Boolean = matching.HasValue AndAlso matching.Value <= 100
                 For Each journal As JournalSuggestion In result.Journals.Where(Function(item) exampleIds.Contains(item.OpenAlexId))
                     Dim id As String = journal.OpenAlexId
                     journal.Examples = examples.Where(Function(item) item.SourceId = id).Select(Function(item) item.Example).Take(3).ToList()
-                    journal.ExamplesLoaded = True
+                    journal.ExamplesLoaded = complete OrElse journal.Examples.Count >= 3
                 Next
             Catch ex As Exception When IsPartialFailure(ex, cancellationToken)
                 result.ExamplesError = OnlineAccess.Describe(ex, "OpenAlex")
+                result.ExamplesBusy = TryCast(ex, OnlineServiceBusyException)
             End Try
 
             Return result

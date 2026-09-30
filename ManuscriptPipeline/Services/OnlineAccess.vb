@@ -228,6 +228,16 @@ Namespace Services
 
 
         ' A plain sentence for a failed request, instead of the raw exception.
+        ' Whether the researcher added an OpenAlex key; False if it can't be told.
+        Private Shared Function HasOpenAlexKey() As Boolean
+            Try
+                Return KeyStore().HasKey(ProtectedKeyStore.OpenAlex)
+            Catch ex As Exception When TypeOf ex Is IO.IOException OrElse TypeOf ex Is UnauthorizedAccessException OrElse TypeOf ex Is Security.Cryptography.CryptographicException
+                Return False
+            End Try
+        End Function
+
+
         Public Shared Function Describe(ex As Exception, serviceName As String) As String
 
             If ex Is Nothing Then Return String.Empty
@@ -239,16 +249,16 @@ Namespace Services
 
             Dim busy As OnlineServiceBusyException = TryCast(ex, OnlineServiceBusyException)
             If busy IsNot Nothing Then
-                Const KeyHint As String = " A free OpenAlex key, added in Settings > Preferences > Online services, raises the allowance."
+                Dim keyHint As String = If(HasOpenAlexKey(), String.Empty, " A free OpenAlex key, added in Settings > Preferences > Online services, raises the allowance.")
                 If busy.DailyAllowanceUsed Then
                     Dim reset As DateTime = DateTime.UtcNow.Date.AddDays(1)
                     Return serviceName & "'s free daily allowance is used up. It starts again at " &
                         reset.ToLocalTime().ToString("t", Globalization.CultureInfo.CurrentCulture) & "." &
-                        If(serviceName = "OpenAlex", KeyHint, String.Empty)
+                        If(serviceName = "OpenAlex", keyHint, String.Empty)
                 End If
                 Dim seconds As Integer = CInt(Math.Ceiling(If(busy.RetryAfter, TimeSpan.FromMinutes(1)).TotalSeconds))
                 Return serviceName & " is busy and asked PaperRoute to wait about " & seconds.ToString(Globalization.CultureInfo.CurrentCulture) &
-                    If(seconds = 1, " second.", " seconds.") & If(serviceName = "OpenAlex", KeyHint, String.Empty)
+                    If(seconds = 1, " second.", " seconds.") & If(serviceName = "OpenAlex", keyHint, String.Empty)
             End If
 
             Dim request As HttpRequestException = TryCast(ex, HttpRequestException)
