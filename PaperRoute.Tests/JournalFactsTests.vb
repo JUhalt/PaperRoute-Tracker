@@ -29,6 +29,13 @@ Public Class JournalFactsTests
     Public Sub Setup()
         OnlineAccess.ResetForTests()
         _directory = TestSupport.CreateTemporaryRoot()
+        IsolateKeys()
+    End Sub
+
+    ' Keys come from the test folder, never the machine's own profile.
+    Private Sub IsolateKeys()
+        Dim keys As New ProtectedKeyStore(Path.Combine(_directory, "keys"))
+        OnlineAccess.KeyStoreFactory = Function() keys
     End Sub
 
     <TestCleanup>
@@ -76,7 +83,7 @@ Public Class JournalFactsTests
         Assert.AreEqual("2fdf1470373343b7bd4f825179c685f5", plos.Id)
         Assert.AreEqual("Public Library of Science (PLoS)", plos.Publisher)
         Assert.AreEqual(True, plos.HasApc)
-        Assert.AreEqual("USD 2,477", plos.ApcPrices.Single().ToString())
+        Assert.AreEqual("USD 2477", plos.ApcPrices.Single().ToString())
         Assert.AreEqual("https://plos.org/publish/fees/", plos.ApcUrl)
         CollectionAssert.AreEqual({"Single anonymous peer review"}, plos.ReviewProcess)
         Assert.AreEqual(29, plos.PublicationTimeWeeks)
@@ -90,7 +97,7 @@ Public Class JournalFactsTests
         Assert.IsNull(plos.LastFullReview, "PLOS ONE's record has no last full review; last_updated is a site-wide reindex date and isn't used.")
 
         Dim bmc As DoajJournal = DoajClient.ParseSearch(Fixture("doaj_bmc_psychology.json"), "2050-7283")
-        CollectionAssert.AreEqual({"EUR 1,690", "USD 2,090", "GBP 1,390"}, bmc.ApcPrices.Select(Function(item) item.ToString()).ToList(), "Every currency as listed, never converted.")
+        CollectionAssert.AreEqual({"EUR 1690", "USD 2090", "GBP 1390"}, bmc.ApcPrices.Select(Function(item) item.ToString()).ToList(), "Every currency as listed, never converted.")
         CollectionAssert.AreEqual({"Open peer review"}, bmc.ReviewProcess)
         Assert.AreEqual(New DateTime(2026, 3, 17), bmc.LastFullReview.Value.Date)
 
@@ -121,14 +128,14 @@ Public Class JournalFactsTests
         Assert.AreEqual(605L, plos.HIndex)
         Assert.AreEqual(236858L, plos.I10Index)
         Assert.AreEqual(3, plos.Topics.Count)
-        Assert.AreEqual("USD 2,382", plos.ApcPrices.Single().ToString())
+        Assert.AreEqual("USD 2382", plos.ApcPrices.Single().ToString())
         Assert.AreEqual(DateTimeKind.Utc, plos.UpdatedUtc.Value.Kind, "OpenAlex dates carry no zone and are UTC.")
         Assert.AreEqual(New DateTime(2026, 9, 28, 10, 1, 26, DateTimeKind.Utc), plos.UpdatedUtc.Value)
 
         Dim science As OpenAlexSource = OpenAlexSourceClient.ParseSource(Fixture("openalex_psych_science.json"))
         Assert.AreEqual(False, science.IsOa)
         CollectionAssert.AreEqual({"0956-7976", "1467-9280"}, science.Issns)
-        CollectionAssert.AreEqual({"USD 3,900", "GBP 2,859"}, science.ApcPrices.Select(Function(item) item.ToString()).ToList())
+        CollectionAssert.AreEqual({"USD 3900", "GBP 2859"}, science.ApcPrices.Select(Function(item) item.ToString()).ToList())
 
         Dim sparse As OpenAlexSource = OpenAlexSourceClient.ParseSource(Fixture("openalex_sparse.json"))
         Assert.AreEqual(0, sparse.ApcPrices.Count, "A null price list is no price.")
@@ -193,7 +200,7 @@ Public Class JournalFactsTests
         Dim plan As JournalFactsPlan = JournalFactsService.Plan(New JournalRecord With {.Name = "Psychological Science"}, lookup)
         StringAssert.Contains(String.Join(" ", plan.Notes), "isn't listed in DOAJ")
         Dim fee As JournalFactChange = plan.Changes.Single(Function(item) item.Field = "Publication fee")
-        Assert.AreEqual("USD 3,900 · GBP 2,859 (optional, to make an article open access)", fee.Found, "A subscription journal's fee is optional.")
+        Assert.AreEqual("USD " & Money(3900) & " · GBP " & Money(2859) & " (optional, to make an article open access)", fee.Found, "A subscription journal's fee is optional.")
     End Sub
 
     <TestMethod>
@@ -277,7 +284,7 @@ Public Class JournalFactsTests
         Assert.AreEqual(JournalFactCatalog.DoajSource, record.FieldSources(JournalFactsService.HomepageField).Source)
         Assert.AreEqual("2fdf1470373343b7bd4f825179c685f5", record.DoajId)
         Assert.AreEqual("S202381698", record.OpenAlexId)
-        Assert.AreEqual("USD 2,477 (waivers available)", Fact(record, JournalFactCatalog.Apc, "DOAJ").Value, "DOAJ's fee, not OpenAlex's conversion.")
+        Assert.AreEqual("Up to USD 2477 (waivers available)", Fact(record, JournalFactCatalog.Apc, "DOAJ").Value, "DOAJ's highest fee as listed, not OpenAlex's conversion.")
         Assert.AreEqual("Listed in DOAJ", Fact(record, JournalFactCatalog.DoajListing, "DOAJ").Value)
         Assert.AreEqual("https://doaj.org/toc/1932-6203", Fact(record, JournalFactCatalog.DoajListing, "DOAJ").Url)
         Assert.AreEqual("About 29 weeks from submission to publication", Fact(record, JournalFactCatalog.Weeks, "DOAJ").Value)
@@ -307,13 +314,13 @@ Public Class JournalFactsTests
 
         Dim fee As JournalFactChange = plan.Changes.Single(Function(item) item.Field = "Publication fee")
         Assert.AreEqual(JournalFactChangeKind.Update, fee.Kind)
-        Assert.AreEqual("USD 2,477 (waivers available)", fee.Current)
+        Assert.AreEqual("Up to USD " & Money(2477) & " (waivers available)", fee.Current)
         Assert.AreEqual(JournalFactChangeKind.Update, plan.Changes.Single(Function(item) item.Field = "Homepage").Kind, "A value the lookup filled is refreshed.")
         Assert.AreEqual(JournalFactChangeKind.Keep, plan.Changes.Single(Function(item) item.Field = "Aims and scope").Kind)
         Assert.IsTrue(plan.Unchanged > 5)
 
         JournalFactsService.Apply(record, plan)
-        Assert.AreEqual("USD 2,600 (waivers available)", Fact(record, JournalFactCatalog.Apc, "DOAJ").Value)
+        Assert.AreEqual("Up to USD 2600 (waivers available)", Fact(record, JournalFactCatalog.Apc, "DOAJ").Value)
         Assert.AreEqual("https://example.org/my-notes-on-scope", record.AimsScopeUrl)
         Assert.AreEqual(Checked.AddDays(30), Fact(record, JournalFactCatalog.Review, "DOAJ").CheckedUtc.Value, "Unchanged facts are marked as checked again.")
         Assert.AreEqual(Checked.AddDays(30), JournalFactsService.LastChecked(record).Value)
@@ -323,11 +330,12 @@ Public Class JournalFactsTests
     Public Sub FactsASourceNoLongerGivesAreOfferedForRemovalUnchecked()
         Dim record As New JournalRecord With {.Name = "PLOS ONE", .Issns = New List(Of String) From {"1932-6203"}}
         JournalFactsService.Apply(record, JournalFactsService.Plan(record, PlosLookup()))
-        record.Facts.Add(New JournalFact With {.Key = JournalFactCatalog.CiteScore, .Value = "5.2", .Year = 2025, .Source = "Scopus", .EnteredByYou = True})
+        record.Facts.Add(New JournalFact With {.Key = JournalFactCatalog.Review, .Value = "My note from the editor: double anonymous", .Year = 2025, .Source = JournalFactCatalog.DoajSource, .EnteredByYou = True})
 
         Dim gone As JournalFactsLookup = PlosLookup(Checked.AddDays(1))
         gone.Doaj = Nothing
         Dim plan As JournalFactsPlan = JournalFactsService.Plan(record, gone)
+        Assert.IsFalse(plan.Changes.Any(Function(item) item.Current = "My note from the editor: double anonymous"), "Entered facts are never offered for removal, whatever their source.")
 
         Assert.AreEqual("Not listed in DOAJ", plan.Changes.Single(Function(item) item.Field = "DOAJ listing").Found)
         Dim removals As List(Of JournalFactChange) = plan.Changes.Where(Function(item) item.Kind = JournalFactChangeKind.Remove).ToList()
@@ -335,7 +343,20 @@ Public Class JournalFactsTests
 
         JournalFactsService.Apply(record, plan)
         Assert.IsNotNull(Fact(record, JournalFactCatalog.Review, "DOAJ"), "Unchecked removals keep the fact.")
-        Assert.IsTrue(record.Facts.Any(Function(item) item.EnteredByYou AndAlso item.Key = JournalFactCatalog.CiteScore), "Your metrics are never touched by a lookup.")
+
+        ' Kept, a delisted journal's DOAJ facts give way to current ones.
+        Assert.AreEqual(JournalFactCatalog.OpenAlexSource, JournalFactsService.BestFact(record, JournalFactCatalog.Apc).Source)
+        Assert.IsNull(JournalFactsService.BestFact(record, JournalFactCatalog.Review), "The old DOAJ review type isn't shown beside 'Not listed'.")
+        Assert.AreEqual(Checked.AddDays(1), JournalFactsService.OldestShownCheck(record).Value)
+
+        For Each removal As JournalFactChange In JournalFactsService.Plan(record, gone).Changes.Where(Function(item) item.Kind = JournalFactChangeKind.Remove)
+            removal.Selected = True
+        Next
+        Dim all As JournalFactsPlan = JournalFactsService.Plan(record, gone)
+        all.Changes.ForEach(Sub(item) item.Selected = item.CanApply)
+        JournalFactsService.Apply(record, all)
+        Assert.IsNull(Fact(record, JournalFactCatalog.Review, "DOAJ"))
+        Assert.IsTrue(record.Facts.Any(Function(item) item.EnteredByYou AndAlso item.Value = "My note from the editor: double anonymous"), "Your own entries survive even when every removal is chosen.")
     End Sub
 
     <TestMethod>
@@ -350,6 +371,59 @@ Public Class JournalFactsTests
         StringAssert.Contains(String.Join(" ", plan.Notes), "Aims and scope: DOAJ's link wasn't saved, because it isn't a web address.")
         JournalFactsService.Apply(record, plan)
         Assert.AreEqual("http://www.biomedcentral.com/about%20/board", record.EditorialBoardUrl, "A space is escaped, not stored raw.")
+    End Sub
+
+
+    <TestMethod>
+    Public Sub TheJournalsIssnsDecideWhichJournalIsLookedUp()
+        ' A wrong journal was once picked; its id stayed after the ISSN was corrected.
+        Dim network As FixtureNetwork = UseNetwork(
+            Function(uri)
+                If uri.Host = "api.openalex.org" Then Return Answer(HttpStatusCode.OK, Fixture("openalex_plos_one.json"))
+                Return Answer(HttpStatusCode.OK, Fixture("doaj_plos_one.json"))
+            End Function)
+
+        Dim lookup As JournalFactsLookup = New OnlineJournalFactsSource().LookupAsync({"1932-6203"}, "S58854535", CancellationToken.None).GetAwaiter().GetResult()
+        Assert.AreEqual("S202381698", lookup.OpenAlex.Id)
+        Assert.IsFalse(network.Requests.Any(Function(item) item.Uri.AbsoluteUri.Contains("S58854535", StringComparison.Ordinal)), "Only ISSNs are sent for a journal that has them.")
+
+        network.Requests.Clear()
+        Dim byId As JournalFactsLookup = New OnlineJournalFactsSource().LookupAsync({}, "S202381698", CancellationToken.None).GetAwaiter().GetResult()
+        Assert.AreEqual("S202381698", byId.OpenAlex.Id)
+        StringAssert.StartsWith(network.Requests(0).Uri.AbsoluteUri, "https://api.openalex.org/sources/S202381698?select=", "An id is used for a journal without an ISSN.")
+
+        RunOnStaThread(
+            Sub()
+                Dim record As New JournalRecord With {.Name = "PLOS ONE", .Issns = New List(Of String) From {"0956-7976"}, .OpenAlexId = "S58854535", .DoajId = "2fdf1470373343b7bd4f825179c685f5"}
+                Using editor As New JournalEditForm(record)
+                    ShowOffscreen(editor)
+                    editor.IssnsBox.Text = "1932-6203"
+                    editor.SaveForTest()
+                    Assert.AreEqual(String.Empty, editor.Result.OpenAlexId, "Correcting the ISSN retires the old index ids.")
+                    Assert.AreEqual(String.Empty, editor.Result.DoajId)
+                End Using
+                Using editor As New JournalEditForm(record)
+                    ShowOffscreen(editor)
+                    editor.NotesBox.Text = "Unrelated edit."
+                    editor.SaveForTest()
+                    Assert.AreEqual("S58854535", editor.Result.OpenAlexId, "Other edits keep them.")
+                End Using
+            End Sub)
+    End Sub
+
+    <TestMethod>
+    Public Sub FeesNameOtherChargesAndSharingNamesOnlyWhatDoajRecorded()
+        Dim lookup As JournalFactsLookup = PlosLookup()
+        lookup.Doaj.HasOtherCharges = True
+        lookup.Doaj.DepositPolicyServices = New List(Of String) From {"https://reseau-mirabel.info/revue/1"}
+        lookup.Doaj.DepositPolicyUrl = "https://example.org/policy"
+        Dim facts As List(Of JournalFact) = JournalFactsService.FactsFrom(lookup)
+
+        Assert.AreEqual("Up to USD 2477; other charges apply (waivers available)", facts.Single(Function(item) item.Key = JournalFactCatalog.Apc).Value)
+        Assert.IsFalse(facts.Any(Function(item) item.Key = JournalFactCatalog.Sharing), "A policy DOAJ gives only as another site's address isn't named as Open Policy Finder.")
+
+        Dim record As New JournalRecord With {.Issns = New List(Of String) From {"1932-6203"}}
+        Assert.AreEqual("https://openpolicyfinder.jisc.ac.uk/search?search=1932-6203", JournalFactCatalog.SharingPolicyUrl(record), "The link still searches Open Policy Finder by ISSN.")
     End Sub
 
 
@@ -431,9 +505,9 @@ Public Class JournalFactsTests
         Dim record As New JournalRecord With {.Name = "PLOS ONE", .Issns = New List(Of String) From {"1932-6203"}}
         JournalFactsService.Apply(record, JournalFactsService.Plan(record, PlosLookup()))
 
-        Assert.AreEqual("Open access (DOAJ) · USD 2,477 (waivers available) · Single anonymous peer review · about 29 weeks to publication", JournalFactsService.OneLine(record))
+        Assert.AreEqual("Open access (DOAJ) · Up to USD " & Money(2477) & " (waivers available) · Single anonymous peer review · about 29 weeks to publication", JournalFactsService.OneLine(record))
         Assert.AreEqual("Peer review: Single anonymous peer review (DOAJ)", JournalFactsService.HintFor("trust.review", record).Text)
-        Assert.AreEqual("Fee: USD 2,477 (waivers available) (DOAJ)", JournalFactsService.HintFor("fit.fees", record).Text)
+        Assert.AreEqual("Fee: Up to USD " & Money(2477) & " (waivers available) (DOAJ)", JournalFactsService.HintFor("fit.fees", record).Text)
         Assert.AreEqual(record.AuthorInstructionsUrl, JournalFactsService.HintFor("trust.guidelines", record).Url)
         Assert.AreEqual("https://openpolicyfinder.jisc.ac.uk/id/publication/17599", JournalFactsService.HintFor("fit.sharing", record).Url)
         Assert.AreEqual(String.Empty, JournalFactsService.HintFor("fit.audience", record).Text, "Only questions a fact helps with get a hint.")
@@ -468,6 +542,7 @@ Public Class JournalFactsTests
         Dim example = ExampleLibraryService.Create(New DateTime(2026, 9, 29))
         Dim facts As List(Of JournalFact) = example.Library.Journals.SelectMany(Function(item) item.Facts).ToList()
         Assert.IsTrue(facts.Count > 0 AndAlso facts.All(Function(item) item.Source = JournalFactCatalog.ExampleSource), "Example facts name no real index.")
+        Assert.IsTrue(example.Library.Journals.All(Function(item) item.Facts.Any(Function(fact) fact.Source = JournalFactCatalog.ExampleSource)), "Every fictional journal is known as one, so Look Up explains instead of searching.")
         Assert.IsTrue(example.Library.Journals.All(Function(item) item.Issns.Count = 0))
         Assert.IsTrue(example.Library.Journals.SelectMany(Function(item) {item.AimsScopeUrl, item.AuthorInstructionsUrl, item.EditorialBoardUrl}).
                       Where(Function(item) item.Length > 0).All(Function(item) New Uri(item).Host = "example.org"))
@@ -498,7 +573,15 @@ Public Class JournalFactsTests
 
                     page.lookupPrompt =
                         Function(copy)
-                            Assert.AreNotSame(plos, copy, "The lookup works on a copy.")
+                            Assert.AreNotSame(page.SelectedJournal, copy, "The lookup works on a copy.")
+                            copy.Name = "Changed, then cancelled"
+                            Return Nothing
+                        End Function
+                    page.LookUpFactsForTest()
+                    Assert.AreEqual("PLOS ONE", page.SelectedJournal.Name, "A cancelled lookup changes nothing.")
+
+                    page.lookupPrompt =
+                        Function(copy)
                             JournalFactsService.Apply(copy, JournalFactsService.Plan(copy, PlosLookup()))
                             Return copy
                         End Function
@@ -506,7 +589,7 @@ Public Class JournalFactsTests
                     Application.DoEvents()
 
                     Dim saved As JournalRecord = repository.Load().Journals.Single(Function(item) item.Id = plos.Id)
-                    Assert.AreEqual("USD 2,477 (waivers available)", Fact(saved, JournalFactCatalog.Apc, "DOAJ").Value, "Saved at once.")
+                    Assert.AreEqual("Up to USD 2477 (waivers available)", Fact(saved, JournalFactCatalog.Apc, "DOAJ").Value, "Saved at once.")
                     Assert.AreEqual("Refresh Facts...", page.Card.LookUpButton.Text)
                     Dim shown As String = page.Card.ShownText
                     For Each expected As String In {"Publishing", "Publication fee", "Single anonymous peer review", "Links", "Metrics", "From open data", "2-year mean citedness", "Facts from DOAJ and OpenAlex"}
@@ -516,7 +599,8 @@ Public Class JournalFactsTests
 
                     page.SelectJournal(ampersand.Id)
                     Application.DoEvents()
-                    StringAssert.Contains(page.Card.ShownText, "Memory & Cognition", "Names show their ampersands.")
+                    StringAssert.Contains(page.Card.ShownText, "Memory & Cognition")
+                    Assert.IsTrue(page.Card.Labels.Where(Function(item) item.Text.Contains("&"c)).All(Function(item) Not item.UseMnemonic), "Names show their ampersands.")
 
                     OnlineAccess.Configure(New OnlineServicesSettings With {.WorkOffline = True})
                     page.SelectJournal(plos.Id)
@@ -677,6 +761,11 @@ Public Class JournalFactsTests
         }
     End Function
 
+    ' An amount as the reader's culture shows it.
+    Private Shared Function Money(amount As Decimal) As String
+        Return amount.ToString("#,##0.##", Globalization.CultureInfo.CurrentCulture)
+    End Function
+
     Private Shared Function Fact(record As JournalRecord, key As String, source As String) As JournalFact
         Return record.Facts.FirstOrDefault(Function(item) item.Key = key AndAlso item.Source = source AndAlso Not item.EnteredByYou)
     End Function
@@ -685,8 +774,9 @@ Public Class JournalFactsTests
         Return New HttpResponseMessage(status) With {.Content = New StringContent(body, Encoding.UTF8, mediaType)}
     End Function
 
-    Private Shared Function UseNetwork(respond As Func(Of Uri, HttpResponseMessage)) As FixtureNetwork
+    Private Function UseNetwork(respond As Func(Of Uri, HttpResponseMessage)) As FixtureNetwork
         OnlineAccess.ResetForTests()
+        IsolateKeys()
         Dim network As New FixtureNetwork With {.Respond = respond}
         OnlineAccess.InnerHandlerFactory = Function() network
         Return network

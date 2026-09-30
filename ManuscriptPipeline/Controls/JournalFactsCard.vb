@@ -17,6 +17,8 @@ Namespace Controls
         Private ReadOnly content As New TableLayoutPanel()
         Private ReadOnly wrapping As New List(Of Control)()
         Private ReadOnly toolTip As New ToolTip()
+        Private _titleFont As Font
+        Private _headingFont As Font
 
         Public Event LookUpRequested As EventHandler
         Public Event EditRequested As EventHandler
@@ -44,6 +46,12 @@ Namespace Controls
         Friend ReadOnly Property LookUpButton As ActionButton
             Get
                 Return Descendants(content).OfType(Of ActionButton)().FirstOrDefault(Function(button) button.Text.EndsWith("Facts...", StringComparison.Ordinal))
+            End Get
+        End Property
+
+        Friend ReadOnly Property Labels As IEnumerable(Of Label)
+            Get
+                Return Descendants(content).OfType(Of Label)().ToList()
             End Get
         End Property
 
@@ -75,7 +83,8 @@ Namespace Controls
                 Sub()
                     Dim dpi As Integer = DeviceDpi
                     Dim title As Label = AddText(If(String.IsNullOrWhiteSpace(record.Name), "(Unnamed journal)", record.Name.Trim()), UiTheme.PrimaryText(), New Padding(0, 0, 0, 2))
-                    title.Font = New Font(Font.FontFamily, Font.SizeInPoints * 1.3F, FontStyle.Bold)
+                    If _titleFont Is Nothing Then _titleFont = New Font(Font.FontFamily, Font.SizeInPoints * 1.3F, FontStyle.Bold)
+                    title.Font = _titleFont
 
                     Dim identity As New List(Of String)()
                     If Not String.IsNullOrWhiteSpace(record.Publisher) Then identity.Add(record.Publisher.Trim())
@@ -181,7 +190,7 @@ Namespace Controls
                     ' Where the facts came from, and when.
                     Dim sources As String = JournalFactsService.SourcesLine(record)
                     If sources.Length > 0 Then AddText(sources, UiTheme.MutedText(), New Padding(0, 12, 0, 0))
-                    If JournalFactsService.IsStale(JournalFactsService.LastChecked(record), DateTime.UtcNow) Then
+                    If JournalFactsService.IsStale(JournalFactsService.OldestShownCheck(record), DateTime.UtcNow) Then
                         AddText("Checked over a year ago; it may be out of date. Refresh Facts... checks again.", UiTheme.InfoColor(), New Padding(0, 2, 0, 0))
                     End If
                 End Sub)
@@ -195,6 +204,7 @@ Namespace Controls
             SuspendLayout()
             content.SuspendLayout()
             Try
+                toolTip.RemoveAll()
                 For Each control As Control In content.Controls.Cast(Of Control)().ToList()
                     control.Dispose()
                 Next
@@ -239,7 +249,8 @@ Namespace Controls
 
         Private Sub AddHeading(text As String)
             Dim heading As Label = AddText(text, UiTheme.PrimaryText(), New Padding(0, UiTheme.Px(14, DeviceDpi), 0, 4))
-            heading.Font = New Font(Font, FontStyle.Bold)
+            If _headingFont Is Nothing Then _headingFont = New Font(Font, FontStyle.Bold)
+            heading.Font = _headingFont
         End Sub
 
 
@@ -339,7 +350,11 @@ Namespace Controls
 
 
         Protected Overrides Sub Dispose(disposing As Boolean)
-            If disposing Then toolTip.Dispose()
+            If disposing Then
+                toolTip.Dispose()
+                _titleFont?.Dispose()
+                _headingFont?.Dispose()
+            End If
             MyBase.Dispose(disposing)
         End Sub
 

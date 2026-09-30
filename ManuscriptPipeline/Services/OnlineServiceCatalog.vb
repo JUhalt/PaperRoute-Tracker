@@ -68,7 +68,7 @@ Namespace Services
                               "ORCID... in Library > Authors & Affiliations."),
             New OnlineService(JournalFacts, "Journal facts (DOAJ and OpenAlex)",
                               {"doaj.org", "api.openalex.org"},
-                              "A journal's ISSN, or the name you type to find a journal.",
+                              "A journal's ISSNs, or a name you type to find a journal and the id of the one you pick.",
                               "Look Up Facts... on the Journals page.")
         }
 

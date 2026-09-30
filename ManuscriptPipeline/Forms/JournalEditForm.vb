@@ -1003,6 +1003,11 @@ Namespace Forms
             _result.Publisher = txtPublisher.Text.Trim()
             _result.HomepageUrl = homepage
             _result.SubmissionPortalUrl = portal
+            If Not _result.Issns.SequenceEqual(issns.Valid) Then
+                ' Another journal's ids would no longer match.
+                _result.OpenAlexId = String.Empty
+                _result.DoajId = String.Empty
+            End If
             _result.Issns = issns.Valid
             _result.AimsScopeUrl = aimsScope
             _result.AuthorInstructionsUrl = instructions

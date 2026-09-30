@@ -151,6 +151,8 @@ Namespace Services
                 New JournalFact With {.Key = JournalFactCatalog.CiteScore, .Value = "3.1", .Year = day.Year - 1, .Source = JournalFactCatalog.ExampleSource, .CheckedUtc = checkedUtc, .EnteredByYou = True},
                 New JournalFact With {.Key = JournalFactCatalog.AcceptanceRate, .Value = "About 30%", .Year = day.Year - 1, .Source = JournalFactCatalog.ExampleSource, .CheckedUtc = checkedUtc, .EnteredByYou = True}
             })
+            methods.Facts.Add(fact(JournalFactCatalog.Review, "Double anonymous peer review"))
+            assessment.Facts.Add(fact(JournalFactCatalog.Review, "Single anonymous peer review"))
             letters.Facts.AddRange({
                 fact(JournalFactCatalog.OpenAccess, "Not fully open access (subscription or hybrid)"),
                 fact(JournalFactCatalog.Review, "Single anonymous peer review"),

@@ -1604,6 +1604,7 @@ Namespace Forms
             Dim factsFor As Func(Of String, JournalRecord) =
                 Function(name)
                     Dim key As String = RouteAnalyticsService.NameKey(name)
+                    If existing IsNot Nothing AndAlso RouteAnalyticsService.NameKey(existing.JournalName) = key Then Return ShortlistRecord(existing)
                     Return library.FirstOrDefault(Function(item) item IsNot Nothing AndAlso RouteAnalyticsService.NameKey(item.Name) = key)
                 End Function
 

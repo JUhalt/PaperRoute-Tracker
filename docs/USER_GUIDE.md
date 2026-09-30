@@ -389,10 +389,10 @@ The **Journals** page shows the selected journal beside the list: its facts, lin
 
 Choose **Look Up Facts...** to look the journal up in two open indexes:
 
-- **DOAJ** (the Directory of Open Access Journals, doaj.org), which lists fully open-access journals: the publication fee, license and copyright, peer review type, typical weeks from submission to publication, plagiarism screening, and links to the journal's aims and scope, author instructions, and editorial board.
+- **DOAJ** (the Directory of Open Access Journals, doaj.org), which lists fully open-access journals: the publication fee (the highest it lists), license and copyright, peer review type, typical weeks from submission to publication, plagiarism screening, and links to the journal's aims and scope, author instructions, and editorial board.
 - **OpenAlex** (openalex.org), an open index of scholarly works that covers most journals, open access or not: publisher, ISSNs, whether the journal is fully open access, its main topics, and three open citation metrics.
 
-PaperRoute sends the journal's ISSN, and nothing else. A journal without an ISSN is first found by name: type the name, choose **Find**, and pick the journal from the list. You see everything that was found before anything is saved:
+PaperRoute sends the journal's ISSNs (the ones you saved, and any other ISSN OpenAlex lists for the same journal), and nothing else. A journal without an ISSN is first found by name: type the name, choose **Find**, and pick the journal from the list; PaperRoute then sends that journal's ISSNs, or its OpenAlex id if it has none. You see everything that was found before anything is saved:
 
 - a blank field is filled;
 - a field you typed is never replaced (**Yours is kept**);
@@ -411,7 +411,7 @@ The card links to the journal's homepage, aims and scope, author instructions, e
 
 ### Journal metrics
 
-Metrics appear in two groups, always with their name, source, and year:
+Metrics appear in two groups, always with their name and source. Metrics you enter show their year; OpenAlex's are as of the date the card says they were checked.
 
 - **From open data (OpenAlex):** 2-year mean citedness (citations received last year by works the journal published in the two years before, divided by the number of those works; similar in idea to the Journal Impact Factor, but not the same number), and the journal's h-index and i10-index across all years.
 - **Entered by you:** metrics that have no open source, such as the Journal Impact Factor, CiteScore, SJR, SNIP, or h5-index, and acceptance rates or decision times a journal publishes. Open **Edit... > Facts and Metrics** and choose **Add Metric...**; each metric shows its definition and where it is published. PaperRoute doesn't look these up.
@@ -835,7 +835,7 @@ PaperRoute keeps the key encrypted for your Windows account on this computer, se
 | DOI lookup (Crossref) | api.crossref.org | A DOI. | DOI & Crossref Metadata on a manuscript page, and Fill Blanks from Crossref. |
 | Publication check | api.crossref.org, orcid.org, pub.orcid.org | The DOIs and titles of the manuscripts you check, and your ORCID iD if you include it. | Check for Publications. |
 | ORCID import | orcid.org, pub.orcid.org | An ORCID iD. | ORCID... in Library > Authors & Affiliations. |
-| Journal facts (DOAJ and OpenAlex) | doaj.org, api.openalex.org | A journal's ISSN, or the name you type to find a journal. | Look Up Facts... on the Journals page. |
+| Journal facts (DOAJ and OpenAlex) | doaj.org, api.openalex.org | A journal's ISSNs, or a name you type to find a journal and the id of the one you pick. | Look Up Facts... on the Journals page. |
 
 ---
 

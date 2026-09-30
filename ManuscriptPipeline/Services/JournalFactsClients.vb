@@ -35,7 +35,8 @@ Namespace Services
         Public ReadOnly Property Currency As String
 
         Public Overrides Function ToString() As String
-            Return Currency & " " & Amount.ToString("#,##0.##", CultureInfo.InvariantCulture)
+            ' Stored without grouping; shown in the reader's number format.
+            Return Currency & " " & Amount.ToString("0.##", CultureInfo.InvariantCulture)
         End Function
 
     End Structure

@@ -38,7 +38,9 @@ Namespace Services
 
     ' DOAJ and OpenAlex, through the Online services gate (#86, #87). At most
     ' four requests per lookup, all free: OpenAlex first, because it lists
-    ' every ISSN a journal has, then DOAJ by those ISSNs.
+    ' every ISSN a journal has, then DOAJ by those ISSNs. A journal's ISSNs
+    ' always decide which journal it is; an OpenAlex id is used only for a
+    ' journal without one, so a corrected ISSN is never overruled.
     Public Class OnlineJournalFactsSource
         Implements IJournalFactsSource
 
@@ -61,13 +63,13 @@ Namespace Services
             Dim id As String = OpenAlexSourceClient.NormalizeId(openAlexId)
 
             Try
-                If id.Length > 0 Then result.OpenAlex = Await _openAlex.GetAsync(id, cancellationToken).ConfigureAwait(False)
-                If result.OpenAlex Is Nothing Then
-                    For Each issn As String In known.Take(2)
-                        result.OpenAlex = Await _openAlex.FindByIssnAsync(issn, cancellationToken).ConfigureAwait(False)
-                        If result.OpenAlex IsNot Nothing Then Exit For
-                    Next
+                If known.Count = 0 AndAlso id.Length > 0 Then
+                    result.OpenAlex = Await _openAlex.GetAsync(id, cancellationToken).ConfigureAwait(False)
                 End If
+                For Each issn As String In known.Take(2)
+                    result.OpenAlex = Await _openAlex.FindByIssnAsync(issn, cancellationToken).ConfigureAwait(False)
+                    If result.OpenAlex IsNot Nothing Then Exit For
+                Next
                 result.OpenAlexChecked = id.Length > 0 OrElse known.Count > 0
             Catch ex As Exception When IsLookupFailure(ex, cancellationToken)
                 result.OpenAlexError = OnlineAccess.Describe(ex, "OpenAlex")
@@ -234,14 +236,14 @@ Namespace Services
                 Dim label As String = JournalFactCatalog.LabelOf(fact)
                 If existing Is Nothing Then
                     result.Changes.Add(New JournalFactChange With {
-                        .Field = label, .Found = fact.Value, .Source = fact.Source,
+                        .Field = label, .Found = DisplayValue(fact), .Source = fact.Source,
                         .Kind = JournalFactChangeKind.Add, .Selected = True,
                         .Apply = Sub(target) target.Facts.Add(CopyOf(fact))
                     })
                 ElseIf Not String.Equals(existing.Value, fact.Value, StringComparison.Ordinal) OrElse
                        Not String.Equals(existing.Url, fact.Url, StringComparison.Ordinal) Then
                     result.Changes.Add(New JournalFactChange With {
-                        .Field = label, .Found = fact.Value, .Current = existing.Value, .Source = fact.Source,
+                        .Field = label, .Found = DisplayValue(fact), .Current = DisplayValue(existing), .Source = fact.Source,
                         .Kind = JournalFactChangeKind.Update, .Selected = True,
                         .Apply = Sub(target)
                                      Dim stored As JournalFact = SourceFact(target, fact.Key, fact.Source)
@@ -262,7 +264,7 @@ Namespace Services
                 Dim fact As JournalFact = stored
                 If result.Found.Any(Function(item) item.Key = fact.Key AndAlso item.Source = fact.Source) Then Continue For
                 result.Changes.Add(New JournalFactChange With {
-                    .Field = JournalFactCatalog.LabelOf(fact), .Current = fact.Value, .Source = fact.Source,
+                    .Field = JournalFactCatalog.LabelOf(fact), .Current = DisplayValue(fact), .Source = fact.Source,
                     .Kind = JournalFactChangeKind.Remove, .Selected = False,
                     .Apply = Sub(target) target.Facts.RemoveAll(Function(item) Not item.EnteredByYou AndAlso item.Key = fact.Key AndAlso item.Source = fact.Source)
                 })
@@ -286,7 +288,9 @@ Namespace Services
 
             For Each found As JournalFact In plan.Found
                 Dim stored As JournalFact = SourceFact(record, found.Key, found.Source)
-                If stored Is Nothing OrElse Not String.Equals(stored.Value, found.Value, StringComparison.Ordinal) Then Continue For
+                If stored Is Nothing OrElse
+                   Not String.Equals(stored.Value, found.Value, StringComparison.Ordinal) OrElse
+                   Not String.Equals(stored.Url, found.Url, StringComparison.Ordinal) Then Continue For
                 stored.CheckedUtc = found.CheckedUtc
                 stored.SourceUpdatedUtc = found.SourceUpdatedUtc
             Next
@@ -322,8 +326,12 @@ Namespace Services
                 add(JournalFactCatalog.DoajListing, "Listed in DOAJ", If(issn Is Nothing, String.Empty, "https://doaj.org/toc/" & issn), d, reviewed)
 
                 If doaj.HasApc = True Then
-                    Dim prices As String = If(doaj.ApcPrices.Count = 0, "Charges a publication fee", String.Join(" · ", doaj.ApcPrices.Select(Function(item) item.ToString())))
-                    add(JournalFactCatalog.Apc, prices & If(doaj.HasWaiver = True, " (waivers available)", String.Empty), doaj.ApcUrl, d, reviewed)
+                    ' DOAJ gives the highest fee, in each currency listed.
+                    Dim prices As String = If(doaj.ApcPrices.Count = 0, "Charges a publication fee", "Up to " & String.Join(" · ", doaj.ApcPrices.Select(Function(item) item.ToString())))
+                    add(JournalFactCatalog.Apc, prices &
+                        If(doaj.HasOtherCharges = True, "; other charges apply", String.Empty) &
+                        If(doaj.HasWaiver = True, " (waivers available)", String.Empty),
+                        If(doaj.ApcUrl.Length > 0, doaj.ApcUrl, doaj.OtherChargesUrl), d, reviewed)
                 ElseIf doaj.HasApc = False Then
                     If doaj.HasOtherCharges = True Then
                         add(JournalFactCatalog.Apc, "No publication fee; other charges apply", If(doaj.OtherChargesUrl.Length > 0, doaj.OtherChargesUrl, doaj.ApcUrl), d, reviewed)
@@ -348,10 +356,11 @@ Namespace Services
                     add(JournalFactCatalog.Plagiarism, If(doaj.PlagiarismDetection.Value, "Screens submissions for plagiarism", "No plagiarism screening stated"), doaj.PlagiarismUrl, d, reviewed)
                 End If
 
-                If doaj.DepositPolicyServices.Count > 0 OrElse JournalFactCatalog.IsOpenPolicyFinderRecord(doaj.DepositPolicyUrl) Then
-                    Dim services As String = If(doaj.DepositPolicyServices.Count > 0, String.Join(", ", doaj.DepositPolicyServices.Where(Function(item) Not item.Contains("://", StringComparison.Ordinal))), String.Empty)
+                Dim services As String = String.Join(", ", doaj.DepositPolicyServices.Where(Function(item) Not item.Contains("://", StringComparison.Ordinal)))
+                Dim policyRecord As Boolean = JournalFactCatalog.IsOpenPolicyFinderRecord(doaj.DepositPolicyUrl)
+                If services.Length > 0 OrElse policyRecord Then
                     add(JournalFactCatalog.Sharing, If(services.Length > 0, "Recorded in " & services, "Recorded in Open Policy Finder"),
-                        If(JournalFactCatalog.IsOpenPolicyFinderRecord(doaj.DepositPolicyUrl), doaj.DepositPolicyUrl, String.Empty), d, reviewed)
+                        If(policyRecord, doaj.DepositPolicyUrl, String.Empty), d, reviewed)
                 End If
 
             ElseIf lookup.DoajChecked Then
@@ -398,6 +407,10 @@ Namespace Services
         ' A fact's value as shown: numbers from OpenAlex in the reader's format.
         Public Shared Function DisplayValue(fact As JournalFact) As String
             If fact Is Nothing Then Return String.Empty
+            If Not fact.EnteredByYou AndAlso fact.Key = JournalFactCatalog.Apc Then
+                Return Text.RegularExpressions.Regex.Replace(fact.Value, "\b([A-Z]{3}) (\d+(?:\.\d+)?)\b",
+                    Function(match) match.Groups(1).Value & " " & Decimal.Parse(match.Groups(2).Value, CultureInfo.InvariantCulture).ToString("#,##0.##", CultureInfo.CurrentCulture))
+            End If
             If Not fact.EnteredByYou AndAlso JournalFactCatalog.GroupOf(fact) = JournalFactGroup.OpenMetric Then
                 Dim number As Double
                 If Double.TryParse(fact.Value, NumberStyles.Float, CultureInfo.InvariantCulture, number) Then
@@ -405,6 +418,23 @@ Namespace Services
                 End If
             End If
             Return fact.Value
+        End Function
+
+
+        ' The oldest check among the index facts the card shows, so a fact a
+        ' later lookup didn't confirm is never presented as checked today.
+        Public Shared Function OldestShownCheck(record As JournalRecord) As DateTime?
+            Dim shown As New List(Of JournalFact)()
+            For Each definition As JournalFactDefinition In JournalFactCatalog.Definitions.Where(Function(item) item.Group = JournalFactGroup.Publishing)
+                Dim fact As JournalFact = BestFact(record, definition.Key)
+                If fact IsNot Nothing Then shown.Add(fact)
+            Next
+            shown.AddRange(If(record?.Facts, New List(Of JournalFact)()).Where(Function(item) Not item.EnteredByYou AndAlso JournalFactCatalog.GroupOf(item) = JournalFactGroup.OpenMetric))
+            Return shown.
+                Where(Function(item) Sources.Contains(item.Source) AndAlso item.CheckedUtc.HasValue).
+                Select(Function(item) item.CheckedUtc).
+                DefaultIfEmpty(Nothing).
+                Min()
         End Function
 
 
@@ -437,7 +467,7 @@ Namespace Services
             If facts.Any(Function(item) item.Source = JournalFactCatalog.ExampleSource) Then Return "Fictional facts for the example library."
             If names.Count = 0 Then Return String.Empty
 
-            Dim checkedUtc As DateTime? = LastChecked(record)
+            Dim checkedUtc As DateTime? = OldestShownCheck(record)
             Return "Facts from " & String.Join(" and ", names) & ", public domain (CC0)" &
                 If(checkedUtc.HasValue, ", checked " & checkedUtc.Value.ToLocalTime().ToString("MMM d, yyyy", CultureInfo.CurrentCulture), String.Empty) & "."
 
@@ -460,7 +490,7 @@ Namespace Services
             End If
 
             Dim fee As JournalFact = BestFact(record, JournalFactCatalog.Apc)
-            If fee IsNot Nothing Then parts.Add(fee.Value)
+            If fee IsNot Nothing Then parts.Add(DisplayValue(fee))
 
             Dim review As JournalFact = BestFact(record, JournalFactCatalog.Review)
             If review IsNot Nothing Then parts.Add(review.Value)
@@ -477,6 +507,9 @@ Namespace Services
         ' OpenAlex, then any other source.
         Public Shared Function BestFact(record As JournalRecord, key As String) As JournalFact
             Dim candidates As List(Of JournalFact) = If(record?.Facts, New List(Of JournalFact)()).Where(Function(item) item IsNot Nothing AndAlso item.Key = key AndAlso Not item.EnteredByYou).ToList()
+            ' Once DOAJ no longer lists the journal, its older facts give way.
+            Dim delisted As Boolean = If(record?.Facts, New List(Of JournalFact)()).Any(Function(item) item IsNot Nothing AndAlso item.Key = JournalFactCatalog.DoajListing AndAlso item.Source = JournalFactCatalog.DoajSource AndAlso item.Value = "Not listed in DOAJ")
+            If delisted AndAlso key <> JournalFactCatalog.DoajListing Then candidates.RemoveAll(Function(item) item.Source = JournalFactCatalog.DoajSource)
             Return If(candidates.FirstOrDefault(Function(item) item.Source = JournalFactCatalog.DoajSource),
                    If(candidates.FirstOrDefault(Function(item) item.Source = JournalFactCatalog.OpenAlexSource), candidates.FirstOrDefault()))
         End Function
@@ -493,7 +526,7 @@ Namespace Services
             Dim fact As Func(Of String, String, (String, String)) =
                 Function(key, prefix)
                     Dim found As JournalFact = BestFact(record, key)
-                    Return If(found Is Nothing, none, (prefix & found.Value & " (" & found.Source & ")", String.Empty))
+                    Return If(found Is Nothing, none, (prefix & DisplayValue(found) & " (" & found.Source & ")", String.Empty))
                 End Function
 
             Select Case checkId

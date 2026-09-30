@@ -167,6 +167,8 @@ Namespace Forms
             btnCancel.MinimumSize = New Size(96, 34)
             btnCancel.Margin = New Padding(0, 0, 8, 0)
             AddHandler btnCancel.Click, AddressOf CancelClicked
+            ' Esc stops a request, or closes; a running request vetoes the close.
+            CancelButton = btnCancel
             buttons.Controls.Add(btnPrimary)
             buttons.Controls.Add(btnCancel)
 
@@ -223,7 +225,7 @@ Namespace Forms
             If Issns.Count > 0 Then
                 searchRow.Visible = False
                 lblIntro.Text =
-                    "PaperRoute will look up " & name & " in OpenAlex and DOAJ, two open indexes, and send them only its ISSN (" & String.Join(", ", Issns.Take(2)) & ")." &
+                    "PaperRoute will look up " & name & " in OpenAlex and DOAJ, two open indexes, and send them only its ISSN (" & String.Join(", ", Issns.Take(2)) & "), and any other ISSN OpenAlex lists for it." &
                     Environment.NewLine & Environment.NewLine &
                     "You'll see what was found before anything is saved. Empty fields are filled; nothing you entered is replaced."
                 lblStatus.Text = String.Empty
@@ -231,7 +233,7 @@ Namespace Forms
                 searchRow.Visible = True
                 txtSearch.Text = If(_record.Name, String.Empty).Trim()
                 lblIntro.Text =
-                    name & " has no ISSN yet, so first find it in OpenAlex by name. PaperRoute sends only the name you type." &
+                    name & " has no ISSN yet, so first find it in OpenAlex by name. PaperRoute sends only the name you type, and then the ISSNs, or the OpenAlex id, of the journal you pick." &
                     Environment.NewLine & Environment.NewLine &
                     "Pick the journal from the list, then choose Look Up. You'll see what was found before anything is saved."
                 body.Controls.Add(lvMatches)
@@ -322,6 +324,7 @@ Namespace Forms
             lblStatus.Text = "Looking up in OpenAlex and DOAJ..."
 
             Dim issnsToSend As IEnumerable(Of String) = If(Issns.Count > 0, Issns, If(_picked?.Issns, New List(Of String)()))
+            ' An id matters only for a journal without an ISSN.
             Dim openAlexId As String = If(_picked IsNot Nothing, _picked.Id, _record.OpenAlexId)
 
             Try
@@ -438,6 +441,17 @@ Namespace Forms
                 Return
             End If
             MyBase.OnFormClosing(e)
+        End Sub
+
+
+        ' Either list may be out of the form's controls, so both are disposed here.
+        Protected Overrides Sub Dispose(disposing As Boolean)
+            If disposing Then
+                lvMatches.Dispose()
+                lvChanges.Dispose()
+                _cancellation?.Dispose()
+            End If
+            MyBase.Dispose(disposing)
         End Sub
 
 

@@ -765,6 +765,12 @@ Namespace Forms
             End Get
         End Property
 
+        Friend ReadOnly Property SelectedJournal As JournalRecord
+            Get
+                Return TryCast(lstJournals.SelectedItem, JournalRecord)
+            End Get
+        End Property
+
         Friend Sub SelectJournal(id As Guid)
             For index As Integer = 0 To lstJournals.Items.Count - 1
                 If DirectCast(lstJournals.Items(index), JournalRecord).Id = id Then
