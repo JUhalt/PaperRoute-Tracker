@@ -157,13 +157,14 @@ Choose **Settings → Backup Library...** (also on the Import & Export page) to 
 backup-info.txt
 manuscripts.json
 authors.json        (when reusable metadata exists)
+citations.json      (when citation figures are saved)
 library.xlsx
 files\
 ```
 
-The native JSON preserves manuscript history, readiness profiles, packet associations, and saved file fingerprints. Reusable authors, affiliations, journals, and journal checklist templates are included when present. Managed document copies, including version and packet snapshots, are included; externally linked files remain references to their original paths. The included Excel workbook is a convenient partial export, not a replacement for the ZIP backup.
+The native JSON preserves manuscript history, readiness profiles, packet associations, and saved file fingerprints. Reusable authors, affiliations, journals, and journal checklist templates are included when present, as are saved citation figures. Managed document copies, including version and packet snapshots, are included; externally linked files remain references to their original paths. The included Excel workbook is a convenient partial export, not a replacement for the ZIP backup.
 
-**Restore Backup...** validates the archive, previews record/file counts, asks for explicit confirmation, creates an emergency backup of the current library, and then restores the selected archive.
+**Restore Backup...** validates the archive, previews record/file counts, asks for explicit confirmation, creates an emergency backup of the current library, and then restores the selected archive. Restoring an archive with saved citation figures replaces yours.
 
 ## File Drawer
 

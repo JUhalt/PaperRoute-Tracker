@@ -778,11 +778,12 @@ A backup can contain:
 backup-info.txt
 manuscripts.json
 authors.json
+citations.json
 library.xlsx
 files\
 ```
 
-Depending on the library, `authors.json` contains reusable authors, affiliations, and journals, including journal checklist templates. `manuscripts.json` preserves manuscript histories, readiness profiles, packet associations, saved fingerprints, and reviewer-response items with their decisions, revision rounds, statuses, drafts, and order.
+Depending on the library, `authors.json` contains reusable authors, affiliations, and journals, including journal checklist templates, and `citations.json` your saved citation figures (see **Your Citations** under Insights). `manuscripts.json` preserves manuscript histories, readiness profiles, packet associations, saved fingerprints, and reviewer-response items with their decisions, revision rounds, statuses, drafts, and order.
 
 Managed document copies, including version and packet snapshots, are included. Externally linked files remain references; retain those originals separately. The included Excel workbook is a partial human-readable export, not a replacement for the native JSON and managed files in the ZIP.
 
@@ -795,6 +796,8 @@ Managed document copies, including version and packet snapshots, are included. E
 3. asks for confirmation;
 4. creates an emergency backup of the current library; and
 5. restores the selected backup.
+
+Restoring a backup that includes `citations.json` replaces your saved citation figures; a backup without it leaves them as they are.
 
 PaperRoute is intentionally conservative about restore operations because the manuscript library is the primary research-workflow record.
 

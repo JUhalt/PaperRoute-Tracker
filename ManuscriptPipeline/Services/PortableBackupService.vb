@@ -102,26 +102,34 @@ Namespace Services
 
                 End If
 
-                ' Saved citation figures (#91), when present.
-                Dim citationsSource As String =
-                    Path.Combine(
-                        Path.GetDirectoryName(
-                            repository.DataFilePath
-                        ),
-                        CitationStore.FileName
+                ' Saved citation figures (#91), when present: read and written
+                ' again, so a damaged file (or its readable citations.bak)
+                ' never makes the backup unrestorable. Unreadable, it is left out.
+                Dim savedCitations As CitationSnapshot = Nothing
+
+                Try
+
+                    savedCitations =
+                        New CitationStore(
+                            Path.GetDirectoryName(
+                                repository.DataFilePath
+                            )
+                        ).Load()
+
+                Catch ex As InvalidDataException
+
+                    savedCitations = Nothing
+
+                End Try
+
+                If savedCitations IsNot Nothing Then
+
+                    Dim stagedCitations As New CitationStore(
+                        stagingDirectory
                     )
 
-                If File.Exists(
-                    citationsSource
-                ) Then
-
-                    File.Copy(
-                        citationsSource,
-                        Path.Combine(
-                            stagingDirectory,
-                            CitationStore.FileName
-                        ),
-                        True
+                    stagedCitations.Save(
+                        savedCitations
                     )
 
                 End If

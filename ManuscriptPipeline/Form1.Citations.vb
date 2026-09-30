@@ -66,6 +66,9 @@ Partial Public Class Form1
         AddRow(stack, section)
 
         Dim wrapping As New List(Of Label)()
+        ' The form's tooltip forgets these when the view is rebuilt.
+        Dim withTips As New List(Of Control)()
+        AddHandler host.Disposed, Sub(sender, e) withTips.ForEach(Sub(item) cardToolTip.SetToolTip(item, Nothing))
         Dim tiles As FlowLayoutPanel = Nothing
         Dim grid As DataGridView = Nothing
         Dim addText As Func(Of String, Color, Label) =
@@ -133,9 +136,9 @@ Partial Public Class Form1
             }
                 Dim control As Control = CreateStatTile(tile.Item1, tile.Item2, UiTheme.PrimaryText())
                 control.AccessibleDescription = tile.Item3
-                cardToolTip.SetToolTip(control, tile.Item3)
-                For Each child As Control In control.Controls
-                    cardToolTip.SetToolTip(child, tile.Item3)
+                For Each target As Control In control.Controls.Cast(Of Control)().Prepend(control)
+                    cardToolTip.SetToolTip(target, tile.Item3)
+                    withTips.Add(target)
                 Next
                 tiles.Controls.Add(control)
             Next
@@ -158,6 +161,9 @@ Partial Public Class Form1
 
             addBlocked()
             If isExample Then addText("Updating is off in the example library.", UiTheme.SecondaryText())
+            If Not isExample AndAlso orcid.Length = 0 Then
+                addText("To update, mark yourself in Authors & Affiliations (Edit, then This is me) and add your ORCID iD.", UiTheme.SecondaryText())
+            End If
             AddRow(card, updateButton)
 
             ' The researcher's manuscripts in PaperRoute, joined by DOI.
@@ -255,6 +261,25 @@ Partial Public Class Form1
         For Each column As DataGridViewColumn In grid.Columns
             column.SortMode = DataGridViewColumnSortMode.Automatic
         Next
+        AddHandler grid.SortCompare,
+            Sub(sender, e)
+                If e.Column.Name <> "Fwci" AndAlso e.Column.Name <> "Percentile" Then Return
+                Dim numberAt As Func(Of Integer, Double?) =
+                    Function(row)
+                        Dim value As Object = grid.Rows(row).Cells(e.Column.Index).Tag
+                        Return If(TypeOf value Is Double, CType(DirectCast(value, Double), Double?), Nothing)
+                    End Function
+                Dim first As Double? = numberAt(e.RowIndex1)
+                Dim second As Double? = numberAt(e.RowIndex2)
+                ' Not available sorts last either way.
+                Dim descending As Boolean = grid.SortOrder = SortOrder.Descending
+                If Not first.HasValue OrElse Not second.HasValue Then
+                    e.SortResult = If(first.HasValue = second.HasValue, 0, If(first.HasValue, -1, 1) * If(descending, -1, 1))
+                Else
+                    e.SortResult = first.Value.CompareTo(second.Value)
+                End If
+                e.Handled = True
+            End Sub
 
         For Each entry In tracked.OrderByDescending(Function(item) RouteAnalyticsService.PublishedDateOf(item.Manuscript))
             Dim published As DateTime? = RouteAnalyticsService.PublishedDateOf(entry.Manuscript)
@@ -267,6 +292,8 @@ Partial Public Class Form1
                 CitationsService.PercentileText(entry.Work),
                 CDbl(RouteAnalyticsService.DescribeManuscript(entry.Manuscript, DateTime.Today).JournalCount))
             grid.Rows(index).Tag = entry.Manuscript
+            grid.Rows(index).Cells("Fwci").Tag = entry.Work.Fwci
+            grid.Rows(index).Cells("Percentile").Tag = entry.Work.Percentile
         Next
 
         AddHandler grid.CellDoubleClick, Sub(sender, e) If e.RowIndex >= 0 Then OpenInsightRoute(grid.Rows(e.RowIndex))

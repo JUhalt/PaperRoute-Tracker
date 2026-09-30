@@ -459,6 +459,42 @@ Public Class CitationsTests
         Assert.AreEqual(before, File.ReadAllText(Path.Combine(destinationData, "citations.json")))
     End Sub
 
+    ' Review (#91): a damaged citations.json never makes a backup unrestorable.
+    <TestMethod>
+    Public Sub ABackupCarriesOnlyReadableCitations()
+        Dim data As String = Path.Combine(_directory, "damaged-data")
+        Dim managed As String = Path.Combine(_directory, "damaged-managed")
+        Directory.CreateDirectory(data)
+        Directory.CreateDirectory(managed)
+        Dim repository As New ManuscriptRepository(data, managed)
+        Dim manuscripts As New List(Of Manuscript) From {New Manuscript With {.Title = "Source"}}
+        repository.Save(manuscripts)
+        Dim store As New CitationStore(data)
+        Dim older As New CitationSnapshot With {.Orcid = Carberry, .Source = JournalFactCatalog.OpenAlexSource}
+        older.Works.Add(Work("W1", "10.5555/one", 4))
+        store.Save(older)
+        store.Save(New CitationSnapshot With {.Orcid = Carberry, .Source = JournalFactCatalog.OpenAlexSource})
+        File.WriteAllText(store.DataFilePath, "{ damaged")
+
+        Dim backup As New PortableBackupService(managed)
+        Dim withPrevious As String = Path.Combine(_directory, "with-previous.zip")
+        backup.CreateBackup(withPrevious, manuscripts, repository)
+        Using archive As IO.Compression.ZipArchive = IO.Compression.ZipFile.OpenRead(withPrevious)
+            Using reader As New StreamReader(archive.GetEntry("citations.json").Open())
+                Assert.AreEqual(4, CitationStore.ReadJson(reader.ReadToEnd()).Works.Single().CitedByCount, "The readable previous copy is backed up.")
+            End Using
+        End Using
+
+        File.WriteAllText(Path.Combine(data, "citations.bak"), "")
+        Dim without As String = Path.Combine(_directory, "without.zip")
+        backup.CreateBackup(without, manuscripts, repository)
+        Using archive As IO.Compression.ZipArchive = IO.Compression.ZipFile.OpenRead(without)
+            Assert.IsNull(archive.GetEntry("citations.json"), "An unreadable file is left out.")
+        End Using
+        Dim restore As New PortableRestoreService(managed)
+        restore.InspectBackup(without)
+    End Sub
+
     <TestMethod>
     Public Sub TheExampleLibraryHasFictionalCitations()
         Dim example = ExampleLibraryService.Create(New DateTime(2026, 9, 30))

@@ -760,7 +760,10 @@ Public Class ManuscriptPageTests
                     Using board As New PageBoard()
                         Dim published As Manuscript = RouteMapServiceTests.Anchoring()
                         published.Metadata.Doi = "https://doi.org/10.5555/Example.Anchoring"
-                        board.Prepare(published, Sample("Unsubmitted idea"))
+                        Dim second As Manuscript = RouteMapServiceTests.Anchoring()
+                        second.Title = "A second published manuscript"
+                        second.Metadata.Doi = "10.5555/example.second"
+                        board.Prepare(published, second, Sample("Unsubmitted idea"))
                         Dim store As New CitationStore(folder)
                         board.citationStoreFactory = Function() store
                         Dim prompted As New List(Of CitationSnapshot)()
@@ -771,6 +774,7 @@ Public Class ManuscriptPageTests
                                 snapshot.Works.Add(New CitedWork With {.OpenAlexId = "W1", .Doi = "10.5555/example.anchoring", .Year = 2026, .CitedByCount = 12, .Fwci = 1.2, .Percentile = 0.8,
                                                                        .CountsByYear = New List(Of YearCount) From {New YearCount With {.Year = 2026, .Count = 12}}})
                                 snapshot.Works.Add(New CitedWork With {.OpenAlexId = "W2", .Doi = "10.5555/example.other", .Year = 2020, .CitedByCount = 3})
+                                snapshot.Works.Add(New CitedWork With {.OpenAlexId = "W3", .Doi = "10.5555/example.second", .Year = 2018, .CitedByCount = 40, .Fwci = 12.3, .Percentile = 0.07})
                                 Return snapshot
                             End Function
 
@@ -792,18 +796,23 @@ Public Class ManuscriptPageTests
                         ClickControl(update)
                         Assert.AreEqual(1, prompted.Count)
                         Assert.IsNull(prompted(0), "Nothing saved before.")
-                        Assert.AreEqual(2, store.Load().Works.Count, "The confirmed works are saved.")
+                        Assert.AreEqual(3, store.Load().Works.Count, "The confirmed works are saved.")
                         Dim labels As List(Of String) = Descendants(board).OfType(Of Label)().Select(Function(label) label.Text).ToList()
-                        CollectionAssert.IsSubsetOf({"Citations", "h-index", "i10-index", "g-index", "m-quotient", "15"}, labels)
-                        Assert.IsTrue(labels.Any(Function(text) text.StartsWith("From OpenAlex on Sep 30, 2026, for the 2 works you confirmed (ORCID iD 0000-0002-1825-0097).")))
+                        CollectionAssert.IsSubsetOf({"Citations", "h-index", "i10-index", "g-index", "m-quotient", "55"}, labels)
+                        Assert.IsTrue(labels.Any(Function(text) text.StartsWith("From OpenAlex on Sep 30, 2026, for the 3 works you confirmed (ORCID iD 0000-0002-1825-0097).")))
                         Assert.IsTrue(labels.Any(Function(text) text.Contains("2026 12 so far")))
                         Assert.IsTrue(labels.Contains("Other works on your record: 1 (not tracked in PaperRoute)."))
                         Dim grid As DataGridView = Descendants(board).OfType(Of DataGridView)().Single()
-                        Assert.AreEqual(1, grid.Rows.Count, "Your manuscripts, joined by DOI.")
+                        Assert.AreEqual(2, grid.Rows.Count, "Your manuscripts, joined by DOI.")
+                        Dim row As DataGridViewRow = grid.Rows.Cast(Of DataGridViewRow)().Single(Function(item) CStr(item.Cells("Title").Value) = published.Title)
+                        Assert.AreEqual(12.0, CDbl(row.Cells("Citations").Value))
+                        Assert.AreEqual("80th", CStr(row.Cells("Percentile").Value))
+                        StringAssert.EndsWith(CStr(row.Cells("Fwci").Value), "(provisional)")
+                        ' Numbers sort as numbers: 12.30 above 1.20, the 80th above the 7th.
+                        grid.Sort(grid.Columns("Fwci"), System.ComponentModel.ListSortDirection.Descending)
+                        Assert.AreEqual("A second published manuscript", CStr(grid.Rows(0).Cells("Title").Value))
+                        grid.Sort(grid.Columns("Percentile"), System.ComponentModel.ListSortDirection.Descending)
                         Assert.AreEqual(published.Title, CStr(grid.Rows(0).Cells("Title").Value))
-                        Assert.AreEqual(12.0, CDbl(grid.Rows(0).Cells("Citations").Value))
-                        Assert.AreEqual("80th", CStr(grid.Rows(0).Cells("Percentile").Value))
-                        StringAssert.EndsWith(CStr(grid.Rows(0).Cells("Fwci").Value), "(provisional)")
 
                         ' Working offline leaves the saved figures and turns Update off.
                         OnlineAccess.Configure(New OnlineServicesSettings With {.WorkOffline = True})
@@ -811,7 +820,8 @@ Public Class ManuscriptPageTests
                         Descendants(board).OfType(Of ShelfTabButton)().Single(Function(item) item.Text = "Your Citations").Checked = True
                         Application.DoEvents()
                         Assert.IsFalse(Descendants(board).OfType(Of Button)().Single(Function(button) button.Text = "Update from OpenAlex...").Enabled)
-                        Assert.AreEqual(1, Descendants(board).OfType(Of DataGridView)().Single().Rows.Count)
+                        Assert.AreEqual(2, Descendants(board).OfType(Of DataGridView)().Single().Rows.Count)
+                        Assert.IsTrue(Descendants(board).OfType(Of Label)().Any(Function(label) label.Text.StartsWith("You're working offline, so updating is off.")))
 
                         Assert.AreEqual(0, network.Requests, "Showing citations never sends anything.")
                         Assert.AreEqual(0, board.SaveCount, "Citations never save the library.")
