@@ -19,6 +19,9 @@ Partial Public Class Form1
         OnlineAccess.Configure(appSettings.OnlineServices)
         RefreshOnlineIndicators()
 
+        ' Your Citations shows whether it can update.
+        If currentPage = WorkspacePage.Insights AndAlso tabInsightsCitations IsNot Nothing AndAlso tabInsightsCitations.Checked Then FillInsights()
+
     End Sub
 
 

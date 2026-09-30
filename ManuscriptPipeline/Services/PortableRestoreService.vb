@@ -128,6 +128,13 @@ Namespace Services
 
                 End If
 
+                ReadCitationsJson(
+                    Path.Combine(
+                        extractionDirectory,
+                        CitationStore.FileName
+                    )
+                )
+
                 ValidateManagedFiles(
                     restoredManuscripts,
                     extractionDirectory
@@ -265,6 +272,24 @@ Namespace Services
                     "restore-rollback-" & restoreId & "-authors.json"
                 )
 
+            Dim citationsPath As String =
+                Path.Combine(
+                    dataDirectory,
+                    CitationStore.FileName
+                )
+
+            Dim stagedCitationsPath As String =
+                Path.Combine(
+                    dataDirectory,
+                    "restore-staging-" & restoreId & "-citations.json"
+                )
+
+            Dim rollbackCitationsPath As String =
+                Path.Combine(
+                    dataDirectory,
+                    "restore-rollback-" & restoreId & "-citations.json"
+                )
+
             Dim emergencyBackupPath As String =
                 String.Empty
 
@@ -323,6 +348,27 @@ Namespace Services
                     File.Copy(
                         extractedAuthorsPath,
                         stagedAuthorsPath,
+                        True
+                    )
+
+                End If
+
+                Dim extractedCitationsPath As String =
+                    Path.Combine(
+                        extractionDirectory,
+                        CitationStore.FileName
+                    )
+
+                Dim restoreCitations As Boolean =
+                    ReadCitationsJson(
+                        extractedCitationsPath
+                    )
+
+                If restoreCitations Then
+
+                    File.Copy(
+                        extractedCitationsPath,
+                        stagedCitationsPath,
                         True
                     )
 
@@ -425,6 +471,10 @@ Namespace Services
                     File.Exists(authorLibraryPath)
                 Dim authorsInstalled As Boolean =
                     False
+                Dim originalCitationsExisted As Boolean =
+                    File.Exists(citationsPath)
+                Dim citationsInstalled As Boolean =
+                    False
 
                 Try
 
@@ -495,7 +545,62 @@ Namespace Services
 
                     End If
 
+                    If restoreCitations Then
+
+                        If originalCitationsExisted Then
+
+                            File.Copy(
+                                citationsPath,
+                                rollbackCitationsPath,
+                                True
+                            )
+
+                        End If
+
+                        citationsInstalled =
+                            True
+
+                        File.Copy(
+                            stagedCitationsPath,
+                            citationsPath,
+                            True
+                        )
+
+                    End If
+
                 Catch
+
+                    ' =========================================
+                    ' Roll back saved citations.
+                    ' =========================================
+
+                    Try
+
+                        If citationsInstalled Then
+
+                            If originalCitationsExisted AndAlso
+                               File.Exists(rollbackCitationsPath) Then
+
+                                File.Copy(
+                                    rollbackCitationsPath,
+                                    citationsPath,
+                                    True
+                                )
+
+                            ElseIf Not originalCitationsExisted AndAlso
+                                   File.Exists(citationsPath) Then
+
+                                File.Delete(
+                                    citationsPath
+                                )
+
+                            End If
+
+                        End If
+
+                    Catch
+                        ' Best-effort rollback.
+                    End Try
 
                     ' =========================================
                     ' Roll back reusable author metadata.
@@ -609,6 +714,10 @@ Namespace Services
                     rollbackAuthorsPath
                 )
 
+                SafeDeleteFile(
+                    rollbackCitationsPath
+                )
+
                 Return New RestoreResult With {
                     .ManuscriptCount = restoredManuscripts.Count,
                     .EmergencyBackupPath = emergencyBackupPath
@@ -634,6 +743,14 @@ Namespace Services
 
                 SafeDeleteFile(
                     rollbackAuthorsPath
+                )
+
+                SafeDeleteFile(
+                    stagedCitationsPath
+                )
+
+                SafeDeleteFile(
+                    rollbackCitationsPath
                 )
 
             End Try
@@ -704,6 +821,24 @@ Namespace Services
         ' =====================================================
         ' JSON
         ' =====================================================
+
+        ' A backup's optional citations.json (#91): False when absent,
+        ' InvalidDataException when present but unreadable.
+        Private Function ReadCitationsJson(
+            citationsPath As String
+        ) As Boolean
+
+            If Not File.Exists(citationsPath) Then Return False
+
+            Try
+                CitationStore.ReadJson(File.ReadAllText(citationsPath))
+            Catch ex As InvalidDataException
+                Throw New InvalidDataException("The backup's saved citations (citations.json) could not be read.", ex)
+            End Try
+            Return True
+
+        End Function
+
 
         Private Function ReadAuthorLibraryJson(
             jsonPath As String

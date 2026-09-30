@@ -20,6 +20,7 @@ Development is tracked in the [v0.9 milestone](https://github.com/JUhalt/PaperRo
 - **Journal metrics** ([#87](https://github.com/JUhalt/PaperRoute-Tracker/issues/87)): OpenAlex's open metrics (2-year mean citedness, h-index, i10-index), and metrics you enter with their source and year, such as the Journal Impact Factor, CiteScore, SJR, SNIP, h5-index, or an acceptance rate. Each shows its definition and where it is published. Metrics are never combined into a score or used to sort journals, and a note explains why (DORA).
 - **Journals that publish work like yours** ([#88](https://github.com/JUhalt/PaperRoute-Tracker/issues/88)): **Find Journals...** on a manuscript's shortlist proposes keywords from its title and keywords, shows the exact request before anything is sent (never the abstract, notes, or files), and finds journals in OpenAlex that recently published articles mentioning them. Each journal shows its evidence: matching articles out of all its articles, open access and listed fee, your own history with it, and recent example articles linked by DOI. Checked journals join the shortlist as Considering with their evidence; nothing is scored or ranked. When OpenAlex asks PaperRoute to wait, it says how long.
 - Shortlisted journals show their facts in one line, and the journal-choice questions show what's known beside them, with links. Nothing is ticked for you.
+- **Your citations** ([#91](https://github.com/JUhalt/PaperRoute-Tracker/issues/91)): a **Your Citations** tab on Insights shows how your published work has been cited, from OpenAlex: citations, h-index, i10-index, g-index, and m-quotient, citations by year, and, for each of your published manuscripts with a DOI, its citations, field-weighted citation impact, and percentile. **Update from OpenAlex...** reads the works on your public ORCID record and looks up their DOIs, with your published manuscripts' DOIs; your iD goes to OpenAlex only if you choose. You check which works are yours before anything is saved. Opening the tab sends nothing. Each figure shows its definition, and a note says why databases disagree and what citations don't measure.
 
 ### Changed
 
@@ -29,6 +30,7 @@ Development is tracked in the [v0.9 milestone](https://github.com/JUhalt/PaperRo
 ### Storage
 
 - **Schema 9** adds journal shortlists (with the evidence behind a suggested journal), and journal ISSNs, links, facts, and metrics. As with Schemas 7 and 8, the upgrade validates the library and changes only the schema marker.
+- **citations.json** holds your saved citation figures, written only when you save an update and kept with the previous copy as citations.bak. Portable backups include it, and restoring a backup that has it replaces yours.
 
 ## [0.8.0] - 2026-09-28
 

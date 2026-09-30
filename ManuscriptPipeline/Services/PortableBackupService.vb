@@ -102,6 +102,30 @@ Namespace Services
 
                 End If
 
+                ' Saved citation figures (#91), when present.
+                Dim citationsSource As String =
+                    Path.Combine(
+                        Path.GetDirectoryName(
+                            repository.DataFilePath
+                        ),
+                        CitationStore.FileName
+                    )
+
+                If File.Exists(
+                    citationsSource
+                ) Then
+
+                    File.Copy(
+                        citationsSource,
+                        Path.Combine(
+                            stagingDirectory,
+                            CitationStore.FileName
+                        ),
+                        True
+                    )
+
+                End If
+
                 ' =============================================
                 ' Human-readable Excel export
                 ' =============================================
@@ -182,6 +206,8 @@ Namespace Services
                     "manuscripts.json is the native PaperRoute manuscript data file." &
                     Environment.NewLine &
                     "authors.json contains reusable authors, affiliations, and journals when present." &
+                    Environment.NewLine &
+                    "citations.json contains your saved citation figures when present." &
                     Environment.NewLine &
                     "library.xlsx is a human-readable export of the manuscript library." &
                     Environment.NewLine &

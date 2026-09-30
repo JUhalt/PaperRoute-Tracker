@@ -294,7 +294,7 @@ Namespace Services
                         Dim source As String = OpenAlexSourceClient.NormalizeId(JsonFacts.Text(JsonFacts.Child(JsonFacts.Child(work, "primary_location"), "source"), "id"))
                         Dim title As String = JsonFacts.Text(work, "title")
                         If source.Length = 0 OrElse title.Length = 0 Then Continue For
-                        Dim doi As String = DoiNormalizer.Normalize(JsonFacts.Text(work, "doi"))
+                        Dim doi As String = DoiNormalizer.Normalize(JsonFacts.RawText(work, "doi"))
                         examples.Add((source, New EvidenceExample With {
                             .Title = If(title.Length > 300, title.Substring(0, 300), title),
                             .Year = JsonFacts.Whole(work, "publication_year"),

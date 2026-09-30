@@ -511,7 +511,9 @@ Namespace Services
             Return Nothing
         End Function
 
-        Private Shared Function RawText(parent As JsonElement, name As String) As String
+        ' The string as sent, trimmed, for identifiers: a DOI may contain < and >
+        ' (10.1002/(sici)...64:2<122::aid-jso6>3.0.co;2-d), which Clean would strip.
+        Public Shared Function RawText(parent As JsonElement, name As String) As String
             Dim value As JsonElement = Child(parent, name)
             Return If(value.ValueKind = JsonValueKind.String, If(value.GetString(), String.Empty).Trim(), String.Empty)
         End Function

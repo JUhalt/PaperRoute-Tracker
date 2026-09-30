@@ -8,8 +8,8 @@ namespace PaperRoute.V04Demo;
 internal static class Program
 {
     private const string Usage = "PaperRoute workflow manual demo\n\n" +
-        "Surfaces: vault (default), readiness, packet, packet-new, file, file-new, notes, submission, responses, workflow, board, publications, fill, about, route, update, report, candidate, online, key, journals, lookup, suggest, suggest-results\n" +
-        "Options: --minimum, --primary, --empty (vault/readiness/board), --offline and --collapsed (board, journals), --integrity (populated vault only), --dark or --system, --help\n\n" +
+        "Surfaces: vault (default), readiness, packet, packet-new, file, file-new, notes, submission, responses, workflow, board, publications, fill, about, route, update, report, candidate, online, key, journals, lookup, suggest, suggest-results, citations, citations-update\n" +
+        "Options: --minimum, --primary, --empty (vault/readiness/board), --offline and --collapsed (board, journals, citations), --integrity (populated vault only), --dark or --system, --help\n\n" +
         "Default surfaces discard manuscript changes when the window closes.\n" +
         "workflow and board save only in a new disposable temporary session.\n" +
         "--integrity creates and retains disposable files in a unique temporary directory.";
@@ -27,7 +27,7 @@ internal static class Program
             return;
         }
 
-        var surfaces = new[] { "vault", "readiness", "packet", "packet-new", "file", "file-new", "notes", "submission", "responses", "workflow", "board", "publications", "fill", "about", "route", "update", "report", "candidate", "online", "key", "journals", "lookup", "suggest", "suggest-results" };
+        var surfaces = new[] { "vault", "readiness", "packet", "packet-new", "file", "file-new", "notes", "submission", "responses", "workflow", "board", "publications", "fill", "about", "route", "update", "report", "candidate", "online", "key", "journals", "lookup", "suggest", "suggest-results", "citations", "citations-update" };
         var positional = args.Where(argument => !argument.StartsWith("--")).ToArray();
         var surface = positional.FirstOrDefault()?.ToLowerInvariant() ?? "vault";
         var minimum = args.Contains("--minimum", StringComparer.OrdinalIgnoreCase);
@@ -50,7 +50,7 @@ internal static class Program
 
         if (positional.Length > 1 || !surfaces.Contains(surface) || invalidOption ||
             (dark && system) ||
-            ((offline || collapsed) && surface != "board" && surface != "journals") ||
+            ((offline || collapsed) && surface != "board" && surface != "journals" && surface != "citations") ||
             (empty && surface != "vault" && surface != "readiness" && surface != "board") ||
             (integrity && (surface != "vault" || empty)))
         {
@@ -85,6 +85,39 @@ internal static class Program
                 };
                 ConfigureDisplayEvidence(board, primary);
                 board.ShowDialog();
+                return;
+            }
+
+            if (surface == "citations")
+            {
+                // Insights > Your Citations with fictional saved figures (#91);
+                // nothing is looked up.
+                var sessionRoot = Path.Combine(Path.GetTempPath(),
+                    "PaperRoute-Citations-Demo-" + Guid.NewGuid().ToString("N"));
+                StorageEnvironment.ConfigureIsolatedSessionRoot(sessionRoot);
+                BoardDemo.CreateSamples(sessionRoot);
+                CitationsDemo.Prepare();
+                if (offline || collapsed)
+                    new AppSettingsService().Save(new AppSettings { NavigationCollapsed = collapsed, OnlineServices = new OnlineServicesSettings { WorkOffline = offline } });
+                using var board = new ManuscriptPipeline.Form1();
+                board.Shown += (_, _) =>
+                {
+                    board.Text += " [DEMO - fictional citation figures; nothing looked up]";
+                    board.NavigateTo(ManuscriptPipeline.Form1.WorkspacePage.Insights);
+                    var tab = CitationsDemo.Find<ManuscriptPipeline.Controls.ShelfTabButton>(board, item => item.Text == "Your Citations");
+                    if (tab is not null) tab.Checked = true;
+                };
+                ConfigureDisplayEvidence(board, primary);
+                board.ShowDialog();
+                return;
+            }
+
+            if (surface == "citations-update")
+            {
+                using var update = CitationsDemo.Dialog();
+                update.Text += " [DEMO - recorded answer]";
+                ConfigureDisplayEvidence(update, primary);
+                update.ShowDialog();
                 return;
             }
 

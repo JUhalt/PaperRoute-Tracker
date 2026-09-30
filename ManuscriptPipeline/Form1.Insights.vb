@@ -10,7 +10,8 @@ Imports ManuscriptPipeline.Services
 
 ' The Insights page (#30, #62): how your work has moved through journals,
 ' from your own records. Calculated on this computer each time the page is
-' shown; nothing here changes a record.
+' shown; nothing here changes a record. Your Citations (#91) adds figures
+' from OpenAlex, only when the researcher updates them.
 Partial Public Class Form1
 
     Private insightsContent As Panel = Nothing
@@ -41,7 +42,7 @@ Partial Public Class Form1
 
         Dim frame As TableLayoutPanel = CreatePageFrame(
             "Insights",
-            "How your work has moved through journals, from your own PaperRoute records. Calculated on this computer; missing dates are left out, never estimated.",
+            "How your work has moved through journals, from your own PaperRoute records. Calculated on this computer; missing dates are left out, never estimated. Your Citations adds figures from OpenAlex, only when you update them.",
             btnReport)
 
         Dim dpi As Integer = DeviceDpi
@@ -87,9 +88,11 @@ Partial Public Class Form1
         tabInsightsJournals = New ShelfTabButton() With {.Text = "Your Journals"}
         tabInsightsRoutes = New ShelfTabButton() With {.Text = "Your Routes"}
         tabInsightsMap = New ShelfTabButton() With {.Text = "Route Map"}
+        tabInsightsCitations = New ShelfTabButton() With {.Text = "Your Citations"}
         views.Controls.Add(tabInsightsJournals)
         views.Controls.Add(tabInsightsRoutes)
         views.Controls.Add(tabInsightsMap)
+        views.Controls.Add(tabInsightsCitations)
         body.Controls.Add(views, 0, 1)
 
         ' "Showing manuscripts sent to X · Show all" while a journal is chosen.
@@ -113,14 +116,15 @@ Partial Public Class Form1
         insightsContent = New Panel With {.Dock = DockStyle.Fill, .Margin = New Padding(0), .BackColor = UiTheme.BoardBackground()}
         body.Controls.Add(insightsContent, 0, 3)
 
-        body.Controls.Add(New Label With {
+        insightsFootnote = New Label With {
             .Text = "Days are calendar days between recorded dates. A first decision is the earliest decision recorded for a submission; " &
                     "review time leaves out desk rejections. Journals group by their Journal Library record or exact name, never by a guess.",
             .AutoSize = True,
             .UseMnemonic = False,
             .ForeColor = UiTheme.SecondaryText(),
             .Margin = New Padding(0, UiTheme.Px(8, dpi), 0, 0)
-        }, 0, 4)
+        }
+        body.Controls.Add(insightsFootnote, 0, 4)
         AddHandler body.SizeChanged,
             Sub(sender, e)
                 For Each note As Label In body.Controls.OfType(Of Label)()
@@ -134,6 +138,7 @@ Partial Public Class Form1
         AddHandler tabInsightsJournals.CheckedChanged, Sub(sender, e) If tabInsightsJournals.Checked Then FillInsights()
         AddHandler tabInsightsRoutes.CheckedChanged, Sub(sender, e) If tabInsightsRoutes.Checked Then FillInsights()
         AddHandler tabInsightsMap.CheckedChanged, Sub(sender, e) If tabInsightsMap.Checked Then FillInsights()
+        AddHandler tabInsightsCitations.CheckedChanged, Sub(sender, e) If tabInsightsCitations.Checked Then FillInsights()
 
         FillInsights()
         Return frame
@@ -168,10 +173,17 @@ Partial Public Class Form1
             child.Dispose()
         Next
 
-        insightsScope.Visible = insightsJournal IsNot Nothing AndAlso Not tabInsightsJournals.Checked
+        insightsScope.Visible = insightsJournal IsNot Nothing AndAlso Not tabInsightsJournals.Checked AndAlso Not tabInsightsCitations.Checked
+        insightsFootnote.Visible = Not tabInsightsCitations.Checked
         If insightsScope.Visible Then
             insightsScope.Text = "Showing manuscripts sent to " & insightsJournal.JournalName & "  ·  Show all"
             insightsScope.LinkArea = New LinkArea(insightsScope.Text.Length - 8, 8)
+        End If
+
+        If tabInsightsCitations.Checked Then
+            insightsGrid = Nothing
+            insightsContent.Controls.Add(CreateCitationsView())
+            Return
         End If
 
         If tabInsightsMap.Checked Then

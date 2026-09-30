@@ -934,6 +934,94 @@ Namespace Services
 
         End Function
 
+
+
+        ' The works on a public ORCID record, one per ORCID group (#91), from
+        ' pub.orcid.org's works summary. orcid.org/{iD}/works redirects to a
+        ' 404 page, so the API host is asked directly.
+        Public Async Function ReadWorkGroupsAsync(orcid As String, Optional cancellationToken As CancellationToken = Nothing) As Task(Of List(Of OrcidWorkGroup))
+
+            Dim normalized As String = OrcidIdentifierService.NormalizeAndValidate(orcid)
+
+            Using request As New HttpRequestMessage(HttpMethod.Get, "https://pub.orcid.org/v3.0/" & normalized & "/works")
+                request.Headers.Accept.Clear()
+                request.Headers.Accept.Add(New MediaTypeWithQualityHeaderValue("application/json"))
+                Using response As HttpResponseMessage = Await SharedHttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(False)
+                    If response.StatusCode = HttpStatusCode.NotFound Then Throw New InvalidOperationException("ORCID did not find a public record for that iD.")
+                    If Not response.IsSuccessStatusCode Then
+                        Throw New HttpRequestException("ORCID answered with HTTP " & CInt(response.StatusCode).ToString(CultureInfo.InvariantCulture) & ".", Nothing, response.StatusCode)
+                    End If
+                    Return ParseWorkGroups(Await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(False))
+                End Using
+            End Using
+
+        End Function
+
+
+        ' One entry per ORCID group: every self DOI in the group (normalized,
+        ' lower-case), and the preferred summary's title, type, and year. A
+        ' part-of DOI, such as a book's for a chapter, is left out.
+        Friend Shared Function ParseWorkGroups(json As String) As List(Of OrcidWorkGroup)
+
+            Try
+                Using document As JsonDocument = JsonDocument.Parse(json)
+                    Dim groups As JsonElement = JsonFacts.Child(document.RootElement, "group")
+                    If groups.ValueKind <> JsonValueKind.Array Then Throw New InvalidOperationException("ORCID sent an answer PaperRoute couldn't read. Try again later.")
+
+                    Dim result As New List(Of OrcidWorkGroup)()
+                    For Each group As JsonElement In groups.EnumerateArray()
+
+                        Dim dois As New List(Of String)()
+                        For Each holder As JsonElement In {group}.Concat(JsonFacts.Items(group, "work-summary"))
+                            For Each id As JsonElement In JsonFacts.Items(JsonFacts.Child(holder, "external-ids"), "external-id")
+                                If Not String.Equals(JsonFacts.Text(id, "external-id-type"), "doi", StringComparison.OrdinalIgnoreCase) Then Continue For
+                                Dim relationship As String = JsonFacts.Text(id, "external-id-relationship")
+                                If relationship.Length > 0 AndAlso Not String.Equals(relationship, "self", StringComparison.OrdinalIgnoreCase) Then Continue For
+                                Dim value As String = JsonFacts.RawText(JsonFacts.Child(id, "external-id-normalized"), "value")
+                                If value.Length = 0 Then value = JsonFacts.RawText(id, "external-id-value")
+                                Dim doi As String = CitationKeys.Doi(value)
+                                If doi.Length > 0 AndAlso Not dois.Contains(doi) Then dois.Add(doi)
+                            Next
+                        Next
+
+                        Dim summaries As List(Of JsonElement) = JsonFacts.Items(group, "work-summary")
+                        Dim preferred As JsonElement = summaries.
+                            OrderByDescending(Function(item) DisplayIndex(JsonFacts.Text(item, "display-index"))).
+                            FirstOrDefault()
+
+                        Dim yearText As String = JsonFacts.Text(JsonFacts.Child(JsonFacts.Child(preferred, "publication-date"), "year"), "value")
+                        Dim year As Integer
+                        result.Add(New OrcidWorkGroup With {
+                            .Dois = dois,
+                            .Title = JsonFacts.Text(JsonFacts.Child(JsonFacts.Child(preferred, "title"), "title"), "value"),
+                            .WorkType = JsonFacts.Text(preferred, "type"),
+                            .Year = If(Integer.TryParse(yearText, NumberStyles.Integer, CultureInfo.InvariantCulture, year), CType(year, Integer?), Nothing)
+                        })
+                    Next
+                    Return result
+                End Using
+            Catch ex As JsonException
+                Throw New InvalidOperationException("ORCID sent an answer PaperRoute couldn't read. Try again later.", ex)
+            End Try
+
+        End Function
+
+
+        Private Shared Function DisplayIndex(text As String) As Integer
+            Dim value As Integer
+            Return If(Integer.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, value), value, 0)
+        End Function
+
+    End Class
+
+    ' One work on an ORCID record: an ORCID group of versions (#91).
+    Public NotInheritable Class OrcidWorkGroup
+
+        Public Property Dois As New List(Of String)()
+        Public Property Title As String = String.Empty
+        Public Property WorkType As String = String.Empty
+        Public Property Year As Integer?
+
     End Class
 
 End Namespace

@@ -746,6 +746,84 @@ Public Class ManuscriptPageTests
             End Sub)
     End Sub
 
+    ' Your Citations (#91): saved figures on Insights, computed here; only
+    ' Update from OpenAlex... asks anything, and the tab never saves the library.
+    <TestMethod>
+    Public Sub YourCitationsShowSavedFiguresAndUpdateOnlyWhenAsked()
+        RunOnStaThread(
+            Sub()
+                Dim folder As String = Path.Combine(Path.GetTempPath(), "PaperRoute-Citations-" & Guid.NewGuid().ToString("N"))
+                Dim network As New NoNetwork()
+                OnlineAccess.ResetForTests()
+                OnlineAccess.InnerHandlerFactory = Function() network
+                Try
+                    Using board As New PageBoard()
+                        Dim published As Manuscript = RouteMapServiceTests.Anchoring()
+                        published.Metadata.Doi = "https://doi.org/10.5555/Example.Anchoring"
+                        board.Prepare(published, Sample("Unsubmitted idea"))
+                        Dim store As New CitationStore(folder)
+                        board.citationStoreFactory = Function() store
+                        Dim prompted As New List(Of CitationSnapshot)()
+                        board.citationsUpdatePrompt =
+                            Function(previous)
+                                prompted.Add(previous)
+                                Dim snapshot As New CitationSnapshot With {.Orcid = "0000-0002-1825-0097", .Source = JournalFactCatalog.OpenAlexSource, .RetrievedUtc = New DateTime(2026, 9, 30, 12, 0, 0, DateTimeKind.Utc)}
+                                snapshot.Works.Add(New CitedWork With {.OpenAlexId = "W1", .Doi = "10.5555/example.anchoring", .Year = 2026, .CitedByCount = 12, .Fwci = 1.2, .Percentile = 0.8,
+                                                                       .CountsByYear = New List(Of YearCount) From {New YearCount With {.Year = 2026, .Count = 12}}})
+                                snapshot.Works.Add(New CitedWork With {.OpenAlexId = "W2", .Doi = "10.5555/example.other", .Year = 2020, .CitedByCount = 3})
+                                Return snapshot
+                            End Function
+
+                        ' Without an ORCID iD, the tab says where to add one.
+                        board.PressCommandKey(Keys.Control Or Keys.D5)
+                        Descendants(board).OfType(Of ShelfTabButton)().Single(Function(item) item.Text = "Your Citations").Checked = True
+                        Application.DoEvents()
+                        Assert.IsTrue(Descendants(board).OfType(Of Button)().Any(Function(button) button.Text = "Open Authors && Affiliations"))
+                        Assert.IsFalse(Descendants(board).OfType(Of Label)().Single(Function(label) label.Text.StartsWith("Days are calendar days")).Visible, "The route footnote belongs to the other views.")
+
+                        board.SetAuthors(New AuthorRecord With {.GivenName = "Josiah", .FamilyName = "Carberry", .IsMe = True, .Orcid = "https://orcid.org/0000-0002-1825-0097"})
+                        Descendants(board).OfType(Of ShelfTabButton)().Single(Function(item) item.Text.StartsWith("Your Journals")).Checked = True
+                        Descendants(board).OfType(Of ShelfTabButton)().Single(Function(item) item.Text = "Your Citations").Checked = True
+                        Application.DoEvents()
+                        Assert.IsTrue(Descendants(board).OfType(Of Label)().Any(Function(label) label.Text.StartsWith("See how your published work has been cited, from OpenAlex") AndAlso label.Text.Contains("(0000-0002-1825-0097)")))
+                        Dim update As Button = Descendants(board).OfType(Of Button)().Single(Function(button) button.Text = "Update from OpenAlex...")
+                        Assert.IsTrue(update.Enabled)
+
+                        ClickControl(update)
+                        Assert.AreEqual(1, prompted.Count)
+                        Assert.IsNull(prompted(0), "Nothing saved before.")
+                        Assert.AreEqual(2, store.Load().Works.Count, "The confirmed works are saved.")
+                        Dim labels As List(Of String) = Descendants(board).OfType(Of Label)().Select(Function(label) label.Text).ToList()
+                        CollectionAssert.IsSubsetOf({"Citations", "h-index", "i10-index", "g-index", "m-quotient", "15"}, labels)
+                        Assert.IsTrue(labels.Any(Function(text) text.StartsWith("From OpenAlex on Sep 30, 2026, for the 2 works you confirmed (ORCID iD 0000-0002-1825-0097).")))
+                        Assert.IsTrue(labels.Any(Function(text) text.Contains("2026 12 so far")))
+                        Assert.IsTrue(labels.Contains("Other works on your record: 1 (not tracked in PaperRoute)."))
+                        Dim grid As DataGridView = Descendants(board).OfType(Of DataGridView)().Single()
+                        Assert.AreEqual(1, grid.Rows.Count, "Your manuscripts, joined by DOI.")
+                        Assert.AreEqual(published.Title, CStr(grid.Rows(0).Cells("Title").Value))
+                        Assert.AreEqual(12.0, CDbl(grid.Rows(0).Cells("Citations").Value))
+                        Assert.AreEqual("80th", CStr(grid.Rows(0).Cells("Percentile").Value))
+                        StringAssert.EndsWith(CStr(grid.Rows(0).Cells("Fwci").Value), "(provisional)")
+
+                        ' Working offline leaves the saved figures and turns Update off.
+                        OnlineAccess.Configure(New OnlineServicesSettings With {.WorkOffline = True})
+                        Descendants(board).OfType(Of ShelfTabButton)().Single(Function(item) item.Text.StartsWith("Your Routes")).Checked = True
+                        Descendants(board).OfType(Of ShelfTabButton)().Single(Function(item) item.Text = "Your Citations").Checked = True
+                        Application.DoEvents()
+                        Assert.IsFalse(Descendants(board).OfType(Of Button)().Single(Function(button) button.Text = "Update from OpenAlex...").Enabled)
+                        Assert.AreEqual(1, Descendants(board).OfType(Of DataGridView)().Single().Rows.Count)
+
+                        Assert.AreEqual(0, network.Requests, "Showing citations never sends anything.")
+                        Assert.AreEqual(0, board.SaveCount, "Citations never save the library.")
+                        board.Close()
+                    End Using
+                Finally
+                    OnlineAccess.ResetForTests()
+                    If Directory.Exists(folder) Then Directory.Delete(folder, True)
+                End Try
+            End Sub)
+    End Sub
+
     <TestMethod>
     Public Sub TheRouteViewOpensOnItsRouteDrawnToScale()
         RunOnStaThread(
@@ -997,6 +1075,17 @@ Public Class ManuscriptPageTests
     ' The real board and manuscript page, on in-memory samples. Saving is
     ' counted instead of written, and the reusable author library is a
     ' throwaway directory.
+    Private NotInheritable Class NoNetwork
+        Inherits Net.Http.HttpMessageHandler
+
+        Public Requests As Integer
+
+        Protected Overrides Function SendAsync(request As Net.Http.HttpRequestMessage, cancellationToken As CancellationToken) As Task(Of Net.Http.HttpResponseMessage)
+            Interlocked.Increment(Requests)
+            Throw New InvalidOperationException("No request was expected.")
+        End Function
+    End Class
+
     Private NotInheritable Class PageBoard
         Inherits Form1
 
@@ -1050,6 +1139,12 @@ Public Class ManuscriptPageTests
         Public Sub Render()
             CallPrivate("RenderManuscripts")
             Application.DoEvents()
+        End Sub
+
+        Public Sub SetAuthors(ParamArray authors As AuthorRecord())
+            Dim library As New AuthorLibraryData()
+            library.Authors.AddRange(authors)
+            GetType(Form1).GetField("authorLibrary", BindingFlags.Instance Or BindingFlags.NonPublic).SetValue(Me, library)
         End Sub
 
         Public Sub Prepare(ParamArray samples As Manuscript())

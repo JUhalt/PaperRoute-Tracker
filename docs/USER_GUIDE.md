@@ -651,7 +651,7 @@ Types and tags never change a manuscript's stage, shelf, or route.
 
 ## Insights and Reports
 
-Open **Insights** in the left rail (Ctrl+5) to see how your work has moved through journals. Everything is calculated on this computer from your own PaperRoute records, each time you open the page. Nothing is sent anywhere, and nothing is changed.
+Open **Insights** in the left rail (Ctrl+5) to see how your work has moved through journals. Everything is calculated on this computer from your own PaperRoute records, each time you open the page, and nothing is changed. Nothing is sent anywhere, except when you choose **Update from OpenAlex...** on **Your Citations**.
 
 Across the top: how many manuscripts and submissions you have, the median time to a first decision, and the median time from first submission to acceptance. Each median says how many records it is based on.
 
@@ -660,6 +660,22 @@ Across the top: how many manuscripts and submissions you have, the median time t
 **Your Routes** lists every manuscript that has been submitted: its route, how many journals and revision rounds it took, and the days from first submission to acceptance and to publication. Press **Enter** or double-click to open the manuscript.
 
 **Route Map** lines up every published route at day 0 on one scale, shortest first, colored as in a manuscript's route map. Above it: the median days from first submission to publication, and the share of all those days spent with a journal, with you (revising or rerouting), and in production. **Include work not yet published** adds manuscripts still under way (drawn to today, with a dotted end and a + on their day count) and filed ones (drawn to their last decision). Click a route, or select it with the arrow keys and press **Enter**, to open its route map. With a journal chosen on **Your Journals**, the map shows only the manuscripts sent there.
+
+**Your Citations** shows how your published work has been cited, from OpenAlex, an open index of scholarly works. It needs your ORCID iD: in **Library > Authors & Affiliations**, edit your own record, check **This is me**, and add your iD. Opening the tab sends nothing; it shows the figures you saved last time and when they are from.
+
+**Update from OpenAlex...** first says what will be sent. It reads the works on your public ORCID record from ORCID and looks their DOIs up in OpenAlex, with the DOIs of your published manuscripts. Titles and abstracts are never sent. The option to also ask OpenAlex which other works it links to your iD sends your iD to OpenAlex too; it can find works missing from your ORCID record, but some may be someone else's. Before anything is saved, you check the works that are yours, and the figures update as you check. Versions of one work on your ORCID record count once, and a work you leave unchecked stays unchecked next time.
+
+Each figure is shown on its own, with its definition, and never combined into a score:
+
+- **Citations**: the sum of your checked works' citations in OpenAlex.
+- **h-index**: you have h works cited at least h times each.
+- **i10-index**: the number of your works cited at least 10 times.
+- **g-index**: your most-cited g works together have at least g² citations.
+- **m-quotient**: your h-index divided by the years since your first publication, counting the first year.
+- **Citations by year**: the last ten years, with this year marked "so far". OpenAlex counts citations by year from 2012.
+- For each of your manuscripts in PaperRoute with a DOI: its citations, its field-weighted citation impact (FWCI; 1.0 is average for work of the same type, year, and field, and it is provisional for work under four years old), its citation percentile, and how many journals it went to. Press **Enter** or double-click to open the manuscript.
+
+Citation counts differ between databases: OpenAlex, Scopus, Web of Science, and Google Scholar will not agree. They count citations; they don't measure the quality of the work. Your saved citations are kept in citations.json in PaperRoute's data folder and included in portable backups.
 
 How the numbers work:
 
@@ -850,6 +866,7 @@ PaperRoute keeps the key encrypted for your Windows account on this computer, se
 | ORCID import | orcid.org, pub.orcid.org | An ORCID iD. | ORCID... in Library > Authors & Affiliations. |
 | Journal facts (DOAJ and OpenAlex) | doaj.org, api.openalex.org | A journal's ISSNs, or a name you type to find a journal and the id of the one you pick. | Look Up Facts... on the Journals page. |
 | Find journals (OpenAlex) | api.openalex.org | The keywords you review, a start date, and the ids of the journals found. | Find Journals... on a manuscript's journal shortlist. |
+| Your citations (ORCID and OpenAlex) | pub.orcid.org, api.openalex.org | Your ORCID iD to ORCID, and the DOIs of your works to OpenAlex; your iD to OpenAlex only if you choose. | Update from OpenAlex... on Insights > Your Citations. |
 
 ---
 

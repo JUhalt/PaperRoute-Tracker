@@ -93,6 +93,8 @@ Namespace Services
             authors.Save(example.Library)
             Dim manuscripts As New ManuscriptRepository()
             manuscripts.Save(example.Manuscripts)
+            Dim citations As New CitationStore()
+            citations.Save(CreateCitations(today, example.Manuscripts))
             Dim settings As New AppSettingsService()
             settings.Save(New AppSettings With {.OnlineServices = If(online, New OnlineServicesSettings())})
         End Sub
@@ -275,6 +277,45 @@ Namespace Services
             manuscripts.Add(idea)
 
             Return (manuscripts, library)
+
+        End Function
+
+
+        ' Fictional Your Citations figures (#91) for the example library:
+        ' the published example manuscript and five other works, with
+        ' 10.5555 example DOIs. Updating is off in the example.
+        Public Shared Function CreateCitations(today As DateTime, manuscripts As IEnumerable(Of Manuscript)) As CitationSnapshot
+
+            Dim year As Integer = today.Year
+            Dim anchoring As Manuscript = If(manuscripts, Enumerable.Empty(Of Manuscript)()).
+                FirstOrDefault(Function(item) item?.Metadata IsNot Nothing AndAlso item.Metadata.Doi = "10.5555/example.anchoring")
+            Dim anchoringYear As Integer = If(anchoring?.Metadata.PublishedDate?.Year, year)
+
+            Dim work As Func(Of String, String, String, Integer, Integer(), Double?, Double?, CitedWork) =
+                Function(doi, title, journal, published, perYear, fwci, percentile)
+                    Dim item As New CitedWork With {
+                        .Doi = doi, .Title = title, .Journal = journal, .Year = published,
+                        .Fwci = fwci, .Percentile = percentile, .InTop10Percent = percentile.HasValue AndAlso percentile.Value >= 0.9,
+                        .FoundBy = "Example"
+                    }
+                    ' perYear lists this year's citations first, then earlier years.
+                    For index As Integer = 0 To perYear.Length - 1
+                        If perYear(index) > 0 AndAlso year - index >= published Then item.CountsByYear.Add(New YearCount With {.Year = year - index, .Count = perYear(index)})
+                    Next
+                    item.CitedByCount = item.CountsByYear.Sum(Function(entry) entry.Count)
+                    Return item
+                End Function
+
+            Dim snapshot As New CitationSnapshot With {.Source = JournalFactCatalog.ExampleSource, .RetrievedUtc = today.ToUniversalTime()}
+            snapshot.Works.AddRange({
+                work("10.5555/example.anchoring", "Example: anchoring effects in clinical risk estimates, a preregistered replication", "Fictional Open Psychology", anchoringYear, {3, 4}, 1.8, 0.86),
+                work("10.5555/example.habits", "Example: study habits and exam performance across two semesters", "Fictional Journal of Research Methods", year - 6, {4, 7, 9, 8, 6, 5, 3}, 1.4, 0.81),
+                work("10.5555/example.measurement", "Example: a short measure of study planning", "Fictional Assessment Quarterly", year - 5, {3, 5, 6, 4, 2, 1}, 1.1, 0.72),
+                work("10.5555/example.replication", "Example: a registered replication of the testing effect", "Fictional Psychological Letters", year - 4, {2, 3, 3, 2, 1}, 0.9, 0.61),
+                work("10.5555/example.review", "Example: feedback timing in learning, a narrative review", "Fictional Journal of Research Methods", year - 8, {1, 2, 2, 3, 4, 5, 6, 4, 2}, 1.2, 0.77),
+                work("10.5555/example.commentary", "Example: a commentary on open materials", "Fictional Psychological Letters", year - 3, {0, 1, 0, 1}, Nothing, Nothing)
+            })
+            Return snapshot
 
         End Function
 
