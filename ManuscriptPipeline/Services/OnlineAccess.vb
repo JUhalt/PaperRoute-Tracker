@@ -36,6 +36,46 @@ Namespace Services
     End Class
 
 
+    ' A service asked PaperRoute to wait (HTTP 429), with how long if it
+    ' said. OpenAlex limits anonymous searches when it is busy, and ends a
+    ' free daily allowance at midnight UTC.
+    Public Class OnlineServiceBusyException
+        Inherits HttpRequestException
+
+        Public Sub New(serviceName As String, retryAfter As TimeSpan?, dailyAllowanceUsed As Boolean)
+            MyBase.New(serviceName & " asked PaperRoute to wait.", Nothing, CType(429, HttpStatusCode))
+            Me.RetryAfter = retryAfter
+            Me.DailyAllowanceUsed = dailyAllowanceUsed
+        End Sub
+
+        Public ReadOnly Property RetryAfter As TimeSpan?
+
+        Public ReadOnly Property DailyAllowanceUsed As Boolean
+
+        ' From the Retry-After header, else the body's retryAfter seconds;
+        ' a wait of more than five minutes means the daily allowance.
+        Public Shared Function FromResponse(serviceName As String, response As HttpResponseMessage, body As String) As OnlineServiceBusyException
+            Dim wait As TimeSpan? = Nothing
+            If response?.Headers.RetryAfter IsNot Nothing Then
+                If response.Headers.RetryAfter.Delta.HasValue Then
+                    wait = response.Headers.RetryAfter.Delta
+                ElseIf response.Headers.RetryAfter.Date.HasValue Then
+                    wait = response.Headers.RetryAfter.Date.Value - DateTimeOffset.UtcNow
+                End If
+            End If
+            If Not wait.HasValue AndAlso Not String.IsNullOrEmpty(body) Then
+                Dim match = Text.RegularExpressions.Regex.Match(body, """retryAfter""\s*:\s*(\d{1,6})")
+                If match.Success Then wait = TimeSpan.FromSeconds(Integer.Parse(match.Groups(1).Value, Globalization.CultureInfo.InvariantCulture))
+            End If
+            If wait.HasValue AndAlso wait.Value < TimeSpan.Zero Then wait = TimeSpan.Zero
+            Dim anonymousSearch As Boolean = If(body, String.Empty).IndexOf("Anonymous search", StringComparison.OrdinalIgnoreCase) >= 0
+            Dim daily As Boolean = Not anonymousSearch AndAlso (Not wait.HasValue OrElse wait.Value > TimeSpan.FromMinutes(5))
+            Return New OnlineServiceBusyException(serviceName, wait, daily)
+        End Function
+
+    End Class
+
+
     ' The one gate every PaperRoute request passes through (#86). A request
     ' is refused, before anything is sent, when Work offline is on, when its
     ' service is switched off, or when it would reach a host its service does
@@ -195,6 +235,20 @@ Namespace Services
 
             If TypeOf ex Is TaskCanceledException AndAlso TypeOf ex.InnerException Is TimeoutException Then
                 Return serviceName & " didn't answer in time. Try again later."
+            End If
+
+            Dim busy As OnlineServiceBusyException = TryCast(ex, OnlineServiceBusyException)
+            If busy IsNot Nothing Then
+                Const KeyHint As String = " A free OpenAlex key, added in Settings > Preferences > Online services, raises the allowance."
+                If busy.DailyAllowanceUsed Then
+                    Dim reset As DateTime = DateTime.UtcNow.Date.AddDays(1)
+                    Return serviceName & "'s free daily allowance is used up. It starts again at " &
+                        reset.ToLocalTime().ToString("t", Globalization.CultureInfo.CurrentCulture) & "." &
+                        If(serviceName = "OpenAlex", KeyHint, String.Empty)
+                End If
+                Dim seconds As Integer = CInt(Math.Ceiling(If(busy.RetryAfter, TimeSpan.FromMinutes(1)).TotalSeconds))
+                Return serviceName & " is busy and asked PaperRoute to wait about " & seconds.ToString(Globalization.CultureInfo.CurrentCulture) &
+                    If(seconds = 1, " second.", " seconds.") & If(serviceName = "OpenAlex", KeyHint, String.Empty)
             End If
 
             Dim request As HttpRequestException = TryCast(ex, HttpRequestException)

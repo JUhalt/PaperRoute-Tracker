@@ -18,6 +18,7 @@ Development is tracked in the [v0.9 milestone](https://github.com/JUhalt/PaperRo
 
 - **Journal facts and metrics** ([#87](https://github.com/JUhalt/PaperRoute-Tracker/issues/87)): the Journals page shows the selected journal's facts, links, and metrics beside the list. **Look Up Facts...** looks the journal up by ISSN, or finds it by name, in DOAJ and OpenAlex, two open indexes (both CC0): publication fee, license and copyright, peer review, typical time to publication, plagiarism screening, open-access status, topics, and links to its aims and scope, author instructions, editorial board, and sharing policy in Open Policy Finder (linked, never fetched). A preview shows everything found first; only blank fields are filled, and nothing you typed is replaced. Facts carry their source and the date checked, and older than a year they are marked as possibly out of date.
 - **Journal metrics** ([#87](https://github.com/JUhalt/PaperRoute-Tracker/issues/87)): OpenAlex's open metrics (2-year mean citedness, h-index, i10-index), and metrics you enter with their source and year, such as the Journal Impact Factor, CiteScore, SJR, SNIP, h5-index, or an acceptance rate. Each shows its definition and where it is published. Metrics are never combined into a score or used to sort journals, and a note explains why (DORA).
+- **Journals that publish work like yours** ([#88](https://github.com/JUhalt/PaperRoute-Tracker/issues/88)): **Find Journals...** on a manuscript's shortlist proposes keywords from its title and keywords, shows the exact request before anything is sent (never the abstract, notes, or files), and finds journals in OpenAlex that recently published articles mentioning them. Each journal shows its evidence: matching articles out of all its articles, open access and listed fee, your own history with it, and recent example articles linked by DOI. Checked journals join the shortlist as Considering with their evidence; nothing is scored or ranked. When OpenAlex asks PaperRoute to wait, it says how long.
 - Shortlisted journals show their facts in one line, and the journal-choice questions show what's known beside them, with links. Nothing is ticked for you.
 
 ### Changed
@@ -27,7 +28,7 @@ Development is tracked in the [v0.9 milestone](https://github.com/JUhalt/PaperRo
 
 ### Storage
 
-- **Schema 9** adds journal shortlists, and journal ISSNs, links, facts, and metrics. As with Schemas 7 and 8, the upgrade validates the library and changes only the schema marker.
+- **Schema 9** adds journal shortlists (with the evidence behind a suggested journal), and journal ISSNs, links, facts, and metrics. As with Schemas 7 and 8, the upgrade validates the library and changes only the schema marker.
 
 ## [0.8.0] - 2026-09-28
 

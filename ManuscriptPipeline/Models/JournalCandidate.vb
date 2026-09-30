@@ -34,6 +34,55 @@ Namespace Models
 
         Public Property AddedDate As DateTime = DateTime.Today
 
+        ' Why the journal was suggested (#88), when it came from Find
+        ' Journals; Nothing for a journal added by hand.
+        Public Property Evidence As CandidateEvidence = Nothing
+
+    End Class
+
+
+    ' The evidence behind a suggested journal (#88): how many recent articles
+    ' matching the researcher's keywords it published, with examples. Counts
+    ' are evidence to read, never a score or a prediction.
+    Public Class CandidateEvidence
+
+        ' "OpenAlex", or "Example" in the example library.
+        Public Property Source As String = String.Empty
+
+        ' The journal's OpenAlex id ("S…") and ISSNs.
+        Public Property OpenAlexId As String = String.Empty
+
+        Public Property Issns As List(Of String) = New List(Of String)()
+
+        ' The keywords searched, and whether articles had to match all.
+        Public Property Keywords As List(Of String) = New List(Of String)()
+
+        Public Property MatchAll As Boolean = True
+
+        Public Property SinceDate As DateTime?
+
+        Public Property MatchingArticles As Long
+
+        ' All of its articles in the same years, when known.
+        Public Property AllArticles As Long?
+
+        Public Property Examples As List(Of EvidenceExample) = New List(Of EvidenceExample)()
+
+        Public Property RetrievedUtc As DateTime?
+
+    End Class
+
+
+    ' One recent matching article, as an example.
+    Public Class EvidenceExample
+
+        Public Property Title As String = String.Empty
+
+        Public Property Year As Integer?
+
+        ' Without the https://doi.org/ prefix; may be blank.
+        Public Property Doi As String = String.Empty
+
     End Class
 
 End Namespace

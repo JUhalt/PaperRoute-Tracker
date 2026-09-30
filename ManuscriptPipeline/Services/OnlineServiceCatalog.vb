@@ -47,6 +47,7 @@ Namespace Services
         Public Const PublicationCheck As String = "publication-check"
         Public Const OrcidImport As String = "orcid-import"
         Public Const JournalFacts As String = "journal-facts"
+        Public Const JournalSuggestions As String = "journal-suggestions"
 
         ' In the order the Online services page lists them.
         Public Shared ReadOnly Property Services As IReadOnlyList(Of OnlineService) = {
@@ -69,7 +70,11 @@ Namespace Services
             New OnlineService(JournalFacts, "Journal facts (DOAJ and OpenAlex)",
                               {"doaj.org", "api.openalex.org"},
                               "A journal's ISSNs, or a name you type to find a journal and the id of the one you pick.",
-                              "Look Up Facts... on the Journals page.")
+                              "Look Up Facts... on the Journals page."),
+            New OnlineService(JournalSuggestions, "Find journals (OpenAlex)",
+                              {"api.openalex.org"},
+                              "The keywords you review, a start date, and the ids of the journals found.",
+                              "Find Journals... on a manuscript's journal shortlist.")
         }
 
 

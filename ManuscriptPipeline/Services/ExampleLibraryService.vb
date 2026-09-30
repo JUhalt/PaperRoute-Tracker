@@ -231,7 +231,20 @@ Namespace Services
                 New JournalCandidate With {.JournalName = assessment.Name, .JournalId = assessment.Id, .Status = CandidateStatus.Preferred, .Notes = "Publishes invariance studies; reviewers asked for exactly this.",
                                            .Checks = New List(Of String) From {"trust.known", "trust.publisher", "trust.review", "trust.indexed", "trust.fees", "trust.guidelines", "fit.scope", "fit.type", "fit.audience"}},
                 New JournalCandidate With {.JournalName = openPsychology.Name, .JournalId = openPsychology.Id, .Status = CandidateStatus.Backup, .Notes = "Broad readership; open access.",
-                                           .Checks = New List(Of String) From {"trust.known", "trust.fees", "fit.fees"}}
+                                           .Checks = New List(Of String) From {"trust.known", "trust.fees", "fit.fees"},
+                                           .Evidence = New CandidateEvidence With {
+                                               .Source = JournalFactCatalog.ExampleSource,
+                                               .Keywords = New List(Of String) From {"measurement invariance", "grit"},
+                                               .MatchAll = True,
+                                               .SinceDate = day.AddYears(-5),
+                                               .MatchingArticles = 6,
+                                               .AllArticles = 1840,
+                                               .Examples = New List(Of EvidenceExample) From {
+                                                   New EvidenceExample With {.Title = "Example: invariance of a brief self-control scale across age groups", .Year = day.Year - 1, .Doi = "10.5555/example.invariance"},
+                                                   New EvidenceExample With {.Title = "Example: grit and course persistence in first-year students", .Year = day.Year - 2, .Doi = "10.5555/example.grit"}
+                                               },
+                                               .RetrievedUtc = DateTime.SpecifyKind(day.AddDays(-30), DateTimeKind.Utc)
+                                           }}
             })
             manuscripts.Add(rerouting)
 

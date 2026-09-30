@@ -330,10 +330,24 @@ Namespace Services
 
             Try
                 Using document As JsonDocument = JsonDocument.Parse(json)
-                    Dim root As JsonElement = document.RootElement
-                    If root.ValueKind <> JsonValueKind.Object Then Throw New JournalFactsFormatException("OpenAlex")
+                    Dim source As OpenAlexSource = ParseSourceElement(document.RootElement)
+                    If source Is Nothing Then Throw New JournalFactsFormatException("OpenAlex")
+                    Return source
+                End Using
+            Catch ex As JsonException
+                Throw New JournalFactsFormatException("OpenAlex", ex)
+            End Try
+
+        End Function
+
+
+        ' One source object, as in a single lookup or a list's results;
+        ' Nothing when it has no valid id.
+        Friend Shared Function ParseSourceElement(root As JsonElement) As OpenAlexSource
+
+                    If root.ValueKind <> JsonValueKind.Object Then Return Nothing
                     Dim id As String = NormalizeId(JsonFacts.Text(root, "id"))
-                    If id.Length = 0 Then Throw New JournalFactsFormatException("OpenAlex")
+                    If id.Length = 0 Then Return Nothing
 
                     Dim source As New OpenAlexSource With {
                         .Id = id,
@@ -369,10 +383,6 @@ Namespace Services
                         ToList()
 
                     Return source
-                End Using
-            Catch ex As JsonException
-                Throw New JournalFactsFormatException("OpenAlex", ex)
-            End Try
 
         End Function
 

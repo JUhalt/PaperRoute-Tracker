@@ -38,6 +38,10 @@ Namespace Forms
         ' Raised in page mode after the user confirms Delete Manuscript.
         Friend Event DeleteConfirmed As EventHandler
 
+        ' A line for the main window's status bar, such as what Find Journals
+        ' added (#88).
+        Friend Event StatusMessage As EventHandler(Of String)
+
         Private ReadOnly txtTitle As New TextBox()
         Private ReadOnly txtTargetJournal As New TextBox()
         Private ReadOnly cmbStage As New ComboBox()
@@ -61,6 +65,11 @@ Namespace Forms
         ' Adds or edits a shortlisted journal; returns the edited values, or
         ' Nothing when cancelled. Tests replace the dialog.
         Friend candidatePrompt As Func(Of JournalCandidate, JournalCandidate) = Nothing
+
+        ' Runs Find Journals and returns the journals chosen with the search,
+        ' or Nothing; tests replace it (#88).
+        Friend journalSuggestionPrompt As Func(Of (Chosen As List(Of JournalSuggestion), Result As JournalSuggestionsResult)) = Nothing
+        Private ReadOnly shortlistToolTip As New ToolTip()
         Private ReadOnly cmbWorkType As New ComboBox()
         Private ReadOnly tagEditor As New TagEditor()
 
@@ -1382,7 +1391,8 @@ Namespace Forms
             layout.Controls.Add(shortlistRows, 0, 1)
 
             lblShortlistEmpty.Text = "Add the journals you are considering for this manuscript, in your order of preference, with your reasons. " &
-                                     "If a submission is rejected, PaperRoute offers the next one."
+                                     "If a submission is rejected, PaperRoute offers the next one. " &
+                                     "Not sure where to start? Find Journals... looks for journals that recently published work like this, using keywords you review first."
             lblShortlistEmpty.AutoSize = True
             lblShortlistEmpty.UseMnemonic = False
             lblShortlistEmpty.Margin = New Padding(3, 2, 3, 6)
@@ -1391,11 +1401,15 @@ Namespace Forms
             Dim actions As New FlowLayoutPanel With {
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                .WrapContents = False,
+                .WrapContents = True,
                 .Margin = New Padding(0, 4, 0, 0)
             }
-            Dim btnAdd As New Button With {.Text = "Add Journal...", .AutoSize = True, .Margin = New Padding(3, 0, 12, 0)}
+            Dim btnAdd As New Button With {.Text = "Add Journal...", .AutoSize = True, .Margin = New Padding(3, 0, 6, 0)}
             AddHandler btnAdd.Click, Sub(sender, e) AddShortlistCandidate()
+            Dim btnFind As New Button With {.Text = "Find Journals...", .AutoSize = True, .Margin = New Padding(3, 0, 12, 0)}
+            AddHandler btnFind.Click, Sub(sender, e) FindJournals()
+            shortlistToolTip.SetToolTip(btnFind, "Find journals that recently published articles mentioning keywords you review, using OpenAlex, an open index.")
+            AddHandler Me.Disposed, Sub(sender, e) shortlistToolTip.Dispose()
             Dim guide As New LinkLabel With {.Text = "How to choose a journal", .AutoSize = True, .Margin = New Padding(3, 7, 3, 0)}
             AddHandler guide.LinkClicked,
                 Sub(sender, e)
@@ -1404,6 +1418,7 @@ Namespace Forms
                     End Using
                 End Sub
             actions.Controls.Add(btnAdd)
+            actions.Controls.Add(btnFind)
             actions.Controls.Add(guide)
             layout.Controls.Add(actions, 0, 3)
 
@@ -1537,6 +1552,22 @@ Namespace Forms
             textStack.Controls.Add(text)
             textStack.Controls.Add(facts)
 
+            ' Why Find Journals suggested it (#88), with the keywords on hover.
+            Dim evidenceLine As String = JournalShortlistService.EvidenceLine(candidate.Evidence)
+            Dim evidence As New Label With {
+                .AutoSize = True,
+                .UseMnemonic = False,
+                .Text = evidenceLine,
+                .Visible = evidenceLine.Length > 0,
+                .ForeColor = UiTheme.MutedText(),
+                .Margin = New Padding(0, 2, 8, 0)
+            }
+            If candidate.Evidence IsNot Nothing Then
+                shortlistToolTip.SetToolTip(evidence, "Keywords: " & String.Join(If(candidate.Evidence.MatchAll, " AND ", " OR "), candidate.Evidence.Keywords.Select(Function(item) """" & item & """")) &
+                    If(candidate.Evidence.Examples.Count > 0, Environment.NewLine & "For example: " & candidate.Evidence.Examples(0).Title, String.Empty))
+            End If
+            textStack.Controls.Add(evidence)
+
             Dim btnEdit As New Button With {.Text = "Edit...", .AutoSize = True, .AccessibleName = "Edit " & candidate.JournalName, .Margin = New Padding(3, 0, 3, 0)}
             AddHandler btnEdit.Click, Sub(sender, e) EditShortlistCandidate(candidate)
 
@@ -1557,6 +1588,7 @@ Namespace Forms
                     Dim width As Integer = Math.Max(200, row.ClientSize.Width - statusWidth - btnEdit.Width - btnMore.Width - 24)
                     text.MaximumSize = New Size(width, 0)
                     facts.MaximumSize = New Size(width, 0)
+                    evidence.MaximumSize = New Size(width, 0)
                 End Sub
 
             row.Controls.Add(lblStatus, 0, 0)
@@ -1568,7 +1600,8 @@ Namespace Forms
         End Function
 
 
-        ' The candidate's Journal Library record: by link, else by name.
+        ' The candidate's Journal Library record: by link, by its evidence's
+        ' ISSNs, else by name.
         Private Function ShortlistRecord(candidate As JournalCandidate) As JournalRecord
             Dim library As List(Of JournalRecord) = If(_authorLibrary?.Journals, New List(Of JournalRecord)())
             If candidate.JournalId.HasValue Then
@@ -1576,6 +1609,10 @@ Namespace Forms
                 If byId IsNot Nothing Then Return byId
             End If
             Dim key As String = RouteAnalyticsService.NameKey(candidate.JournalName)
+            If candidate.Evidence IsNot Nothing AndAlso candidate.Evidence.Issns.Count > 0 Then
+                Dim byIssn As JournalRecord = library.FirstOrDefault(Function(item) item IsNot Nothing AndAlso IssnService.NormalizeList(item.Issns).Intersect(candidate.Evidence.Issns).Any())
+                If byIssn IsNot Nothing Then Return byIssn
+            End If
             Return library.FirstOrDefault(Function(item) item IsNot Nothing AndAlso RouteAnalyticsService.NameKey(item.Name) = key)
         End Function
 
@@ -1635,6 +1672,7 @@ Namespace Forms
                 Dim record As JournalRecord = If(_authorLibrary?.Journals, New List(Of JournalRecord)()).FirstOrDefault(Function(item) item IsNot Nothing AndAlso RouteAnalyticsService.NameKey(item.Name) = key)
                 candidate.JournalName = If(record IsNot Nothing, record.Name, result.JournalName.Trim())
                 candidate.JournalId = If(record IsNot Nothing, CType(record.Id, Guid?), Nothing)
+                candidate.Evidence = Nothing
             End If
             candidate.Status = result.Status
             candidate.Notes = result.Notes
@@ -1665,6 +1703,78 @@ Namespace Forms
 
 
         ' For tests.
+        ' Find Journals (#88): the researcher reviews keywords, OpenAlex finds
+        ' journals that published matching articles, and the checked ones join
+        ' the shortlist as Considering, with their evidence. Nothing else changes.
+        Private Sub FindJournals()
+
+            Dim blocked As OnlineBlockReason? = OnlineAccess.BlockReason(OnlineServiceCatalog.JournalSuggestions)
+            If blocked.HasValue AndAlso journalSuggestionPrompt Is Nothing Then
+                MessageBox.Show(Me.FindForm(), OnlineAccess.BlockedMessage(OnlineServiceCatalog.Find(OnlineServiceCatalog.JournalSuggestions), blocked.Value),
+                                "Find Journals", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                Return
+            End If
+
+            Dim library As List(Of JournalRecord) = If(_authorLibrary?.Journals, New List(Of JournalRecord)())
+            Dim chosen As List(Of JournalSuggestion) = Nothing
+            Dim result As JournalSuggestionsResult = Nothing
+
+            If journalSuggestionPrompt IsNot Nothing Then
+                Dim answer = journalSuggestionPrompt()
+                chosen = answer.Chosen
+                result = answer.Result
+            Else
+                Dim statistics As LibraryStatistics = RouteAnalyticsService.ForLibrary(If(_allManuscripts, New List(Of Manuscript)()), DateTime.Today, library)
+                Dim recordFor As Func(Of JournalSuggestion, JournalRecord) =
+                    Function(journal)
+                        Return If(library.FirstOrDefault(Function(item) item IsNot Nothing AndAlso journal.Issns.Count > 0 AndAlso IssnService.NormalizeList(item.Issns).Intersect(journal.Issns).Any()),
+                                  library.FirstOrDefault(Function(item) item IsNot Nothing AndAlso RouteAnalyticsService.NameKey(item.Name) = RouteAnalyticsService.NameKey(journal.Name)))
+                    End Function
+                Dim onShortlist As Func(Of JournalSuggestion, Boolean) =
+                    Function(journal) JournalShortlistService.FindCandidate(_workingManuscript, If(recordFor(journal)?.Name, journal.Name), journal.Issns, journal.OpenAlexId, recordFor(journal)?.Id) IsNot Nothing
+                Dim yours As Func(Of JournalSuggestion, String) =
+                    Function(journal)
+                        Dim record As JournalRecord = recordFor(journal)
+                        Dim history As JournalHistory = RouteAnalyticsService.FindHistory(statistics, If(record?.Name, journal.Name), record?.Id)
+                        If history IsNot Nothing AndAlso history.Count > 0 Then
+                            Return "Submitted " & history.Count.ToString(Globalization.CultureInfo.CurrentCulture) & ChrW(&HD7) & ", last " &
+                                   history.LastSubmitted.Year.ToString(Globalization.CultureInfo.InvariantCulture)
+                        End If
+                        Return If(record IsNot Nothing, "In your Journal Library", String.Empty)
+                    End Function
+                Using dialog As New JournalSuggestionsForm(txtTitle.Text, _workingManuscript.Metadata?.Keywords, New OnlineJournalSuggestionsSource(), onShortlist, yours)
+                    If dialog.ShowDialog(Me.FindForm()) = DialogResult.OK Then
+                        chosen = dialog.Chosen.ToList()
+                        result = dialog.Result
+                    End If
+                End Using
+            End If
+
+            If chosen Is Nothing OrElse result Is Nothing OrElse chosen.Count = 0 Then Return
+
+            Dim added As Integer = 0
+            For Each journal As JournalSuggestion In chosen
+                Dim entry = JournalShortlistService.AddFound(_workingManuscript, journal.Name, journal.Issns, journal.OpenAlexId, library)
+                If Not entry.Created Then Continue For
+                entry.Candidate.Evidence = JournalSuggestionService.EvidenceFor(journal, result)
+                added += 1
+            Next
+
+            RefreshShortlist()
+            If added > 0 Then
+                RaiseEvent StatusMessage(Me,
+                    If(added = 1, "Added 1 journal", "Added " & added.ToString(Globalization.CultureInfo.CurrentCulture) & " journals") &
+                    " to the shortlist as Considering. Save the manuscript page to keep them.")
+            End If
+
+        End Sub
+
+
+        Friend Sub FindJournalsForTest()
+            FindJournals()
+        End Sub
+
+
         Friend Sub AddShortlistCandidateForTest()
             AddShortlistCandidate()
         End Sub

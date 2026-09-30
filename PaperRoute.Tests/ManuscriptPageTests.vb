@@ -811,6 +811,46 @@ Public Class ManuscriptPageTests
     End Sub
 
     <TestMethod>
+    Public Sub FoundJournalsJoinTheShortlistWithTheirEvidenceAndWaitForSave()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard()
+                    Dim manuscript As Manuscript = Sample("Anchoring in clinical risk estimates")
+                    board.Prepare(manuscript)
+                    board.Open(manuscript)
+
+                    Dim messages As New List(Of String)()
+                    AddHandler board.Editor.StatusMessage, Sub(sender, message) messages.Add(message)
+                    Dim request As New JournalSuggestionRequest With {.Keywords = New List(Of String) From {"anchoring effects"}, .MatchAll = True, .SinceDate = New DateTime(2021, 9, 30)}
+                    Dim found As New List(Of JournalSuggestion) From {
+                        New JournalSuggestion With {.OpenAlexId = "S196734849", .Name = "Scientific Reports", .Issns = New List(Of String) From {"2045-2322"}, .MatchingArticles = 3, .AllArticles = 163365,
+                                                    .Examples = New List(Of EvidenceExample) From {New EvidenceExample With {.Title = "Anchoring in triage", .Year = 2026, .Doi = "10.1038/s41598-026-66155-3"}}},
+                        New JournalSuggestion With {.OpenAlexId = "S9692511", .Name = "Frontiers in Psychology", .Issns = New List(Of String) From {"1664-1078"}, .MatchingArticles = 2}
+                    }
+                    Dim result As New JournalSuggestionsResult With {.Request = request, .RetrievedUtc = New DateTime(2026, 9, 30, 12, 0, 0, DateTimeKind.Utc), .Journals = found}
+                    board.Editor.journalSuggestionPrompt = Function() (found, result)
+                    board.Editor.FindJournalsForTest()
+
+                    Assert.IsTrue(board.Editor.HasUnsavedChanges(), "Found journals wait for Save like any change.")
+                    Assert.AreEqual(0, manuscript.JournalShortlist.Count)
+                    CollectionAssert.AreEqual({"Added 2 journals to the shortlist as Considering. Save the manuscript page to keep them."}, messages)
+
+                    board.Editor.FindJournalsForTest()
+                    Assert.AreEqual(1, messages.Count, "Journals already on the shortlist aren't added again.")
+
+                    board.PressCommandKey(Keys.Control Or Keys.S)
+                    Assert.AreEqual(2, manuscript.JournalShortlist.Count)
+                    Dim saved As JournalCandidate = manuscript.JournalShortlist.First()
+                    Assert.AreEqual(CandidateStatus.Considering, saved.Status)
+                    Assert.AreEqual(3L, saved.Evidence.MatchingArticles)
+                    Assert.AreEqual("Anchoring in triage", saved.Evidence.Examples.Single().Title)
+                    CollectionAssert.AreEqual({"anchoring effects"}, saved.Evidence.Keywords)
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    <TestMethod>
     Public Sub ReportsPreviewAndSaveWhatIsChosen()
         RunOnStaThread(
             Sub()

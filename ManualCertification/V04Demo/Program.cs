@@ -8,7 +8,7 @@ namespace PaperRoute.V04Demo;
 internal static class Program
 {
     private const string Usage = "PaperRoute workflow manual demo\n\n" +
-        "Surfaces: vault (default), readiness, packet, packet-new, file, file-new, notes, submission, responses, workflow, board, publications, fill, about, route, update, report, candidate, online, key, journals, lookup\n" +
+        "Surfaces: vault (default), readiness, packet, packet-new, file, file-new, notes, submission, responses, workflow, board, publications, fill, about, route, update, report, candidate, online, key, journals, lookup, suggest, suggest-results\n" +
         "Options: --minimum, --primary, --empty (vault/readiness/board), --offline and --collapsed (board, journals), --integrity (populated vault only), --dark or --system, --help\n\n" +
         "Default surfaces discard manuscript changes when the window closes.\n" +
         "workflow and board save only in a new disposable temporary session.\n" +
@@ -27,7 +27,7 @@ internal static class Program
             return;
         }
 
-        var surfaces = new[] { "vault", "readiness", "packet", "packet-new", "file", "file-new", "notes", "submission", "responses", "workflow", "board", "publications", "fill", "about", "route", "update", "report", "candidate", "online", "key", "journals", "lookup" };
+        var surfaces = new[] { "vault", "readiness", "packet", "packet-new", "file", "file-new", "notes", "submission", "responses", "workflow", "board", "publications", "fill", "about", "route", "update", "report", "candidate", "online", "key", "journals", "lookup", "suggest", "suggest-results" };
         var positional = args.Where(argument => !argument.StartsWith("--")).ToArray();
         var surface = positional.FirstOrDefault()?.ToLowerInvariant() ?? "vault";
         var minimum = args.Contains("--minimum", StringComparer.OrdinalIgnoreCase);
@@ -85,6 +85,15 @@ internal static class Program
                 };
                 ConfigureDisplayEvidence(board, primary);
                 board.ShowDialog();
+                return;
+            }
+
+            if (surface == "suggest" || surface == "suggest-results")
+            {
+                using var suggest = JournalSuggestionsDemo.Dialog(surface == "suggest-results");
+                suggest.Text += " [DEMO - recorded OpenAlex answers]";
+                ConfigureDisplayEvidence(suggest, primary);
+                suggest.ShowDialog();
                 return;
             }
 

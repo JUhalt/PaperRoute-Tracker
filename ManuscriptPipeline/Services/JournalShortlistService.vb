@@ -151,6 +151,121 @@ Namespace Services
             manuscript.TargetJournalId = candidate.JournalId
         End Sub
 
+
+
+        ' Adds a journal found by Find Journals (#88) once, matched to the
+        ' Journal Library by ISSN, then name, and to the shortlist by library
+        ' record, name, ISSN, or OpenAlex id. An existing candidate is returned
+        ' untouched: its status, notes, checks, and evidence stay as they are.
+        Public Shared Function AddFound(manuscript As Manuscript, journalName As String, issns As IEnumerable(Of String), openAlexId As String,
+                                        library As IEnumerable(Of JournalRecord)) As (Candidate As JournalCandidate, Created As Boolean)
+
+            If manuscript Is Nothing Then Throw New ArgumentNullException(NameOf(manuscript))
+            Dim name As String = If(journalName, String.Empty).Trim()
+            If name.Length = 0 Then Throw New ArgumentException("A journal name is required.", NameOf(journalName))
+            If manuscript.JournalShortlist Is Nothing Then manuscript.JournalShortlist = New List(Of JournalCandidate)()
+
+            Dim found As List(Of String) = IssnService.NormalizeList(issns)
+            Dim id As String = OpenAlexSourceClient.NormalizeId(openAlexId)
+            Dim records As List(Of JournalRecord) = If(library, Enumerable.Empty(Of JournalRecord)()).Where(Function(item) item IsNot Nothing).ToList()
+            Dim record As JournalRecord =
+                If(records.FirstOrDefault(Function(item) found.Count > 0 AndAlso IssnService.NormalizeList(item.Issns).Intersect(found).Any()),
+                   records.FirstOrDefault(Function(item) RouteAnalyticsService.NameKey(item.Name) = RouteAnalyticsService.NameKey(name)))
+
+            Dim existing As JournalCandidate = FindCandidate(manuscript, If(record?.Name, name), found, id, record?.Id)
+            If existing Is Nothing AndAlso record IsNot Nothing Then existing = FindCandidate(manuscript, name, found, id, Nothing)
+            If existing IsNot Nothing Then Return (existing, False)
+
+            Dim candidate As New JournalCandidate With {
+                .JournalName = If(record IsNot Nothing, record.Name, name),
+                .JournalId = If(record IsNot Nothing, CType(record.Id, Guid?), Nothing),
+                .Status = CandidateStatus.Considering,
+                .AddedDate = DateTime.Today
+            }
+            manuscript.JournalShortlist.Add(candidate)
+            Return (candidate, True)
+
+        End Function
+
+
+        ' The candidate that is this journal: by library record, name, ISSN,
+        ' or OpenAlex id.
+        Public Shared Function FindCandidate(manuscript As Manuscript, journalName As String, issns As IEnumerable(Of String), openAlexId As String, journalId As Guid?) As JournalCandidate
+            If manuscript?.JournalShortlist Is Nothing Then Return Nothing
+            Dim key As String = RouteAnalyticsService.NameKey(If(journalName, String.Empty))
+            Dim found As List(Of String) = IssnService.NormalizeList(issns)
+            Dim id As String = OpenAlexSourceClient.NormalizeId(openAlexId)
+            Return manuscript.JournalShortlist.FirstOrDefault(
+                Function(item)
+                    If item Is Nothing Then Return False
+                    If journalId.HasValue AndAlso item.JournalId.HasValue AndAlso item.JournalId.Value = journalId.Value Then Return True
+                    If key.Length > 0 AndAlso RouteAnalyticsService.NameKey(item.JournalName) = key Then Return True
+                    If item.Evidence Is Nothing Then Return False
+                    If found.Count > 0 AndAlso IssnService.NormalizeList(item.Evidence.Issns).Intersect(found).Any() Then Return True
+                    Return id.Length > 0 AndAlso String.Equals(OpenAlexSourceClient.NormalizeId(item.Evidence.OpenAlexId), id, StringComparison.Ordinal)
+                End Function)
+        End Function
+
+
+        ' "Found by keyword search: 144 matching articles of 9,812 since 2021
+        ' (OpenAlex, Sep 30, 2026)" for a shortlist row.
+        Public Shared Function EvidenceLine(evidence As CandidateEvidence) As String
+            If evidence Is Nothing Then Return String.Empty
+            Dim culture As CultureInfo = CultureInfo.CurrentCulture
+            Dim articles As String =
+                evidence.MatchingArticles.ToString("N0", culture) &
+                If(evidence.MatchingArticles = 1, " matching article", " matching articles") &
+                If(evidence.AllArticles.HasValue, " of " & evidence.AllArticles.Value.ToString("N0", culture), String.Empty)
+            Dim since As String = If(evidence.SinceDate.HasValue, " since " & evidence.SinceDate.Value.Year.ToString(CultureInfo.InvariantCulture), String.Empty)
+            Dim where As String = If(String.IsNullOrWhiteSpace(evidence.Source), "OpenAlex", evidence.Source) &
+                If(evidence.RetrievedUtc.HasValue, ", " & evidence.RetrievedUtc.Value.ToLocalTime().ToString("MMM d, yyyy", culture), String.Empty)
+            Return "Found by keyword search: " & articles & since & " (" & where & ")"
+        End Function
+
+
+        ' Lenient, on load, save, and restore: an empty candidate is dropped,
+        ' and evidence is tidied or dropped, never fatal.
+        Public Shared Sub NormalizeManuscript(manuscript As Manuscript)
+
+            If manuscript Is Nothing Then Return
+            manuscript.JournalShortlist = If(manuscript.JournalShortlist, New List(Of JournalCandidate)()).Where(Function(item) item IsNot Nothing).ToList()
+
+            For Each candidate As JournalCandidate In manuscript.JournalShortlist
+                candidate.JournalName = If(candidate.JournalName, String.Empty)
+                candidate.Notes = If(candidate.Notes, String.Empty)
+                candidate.Checks = If(candidate.Checks, New List(Of String)()).Where(Function(item) Not String.IsNullOrWhiteSpace(item)).ToList()
+
+                Dim evidence As CandidateEvidence = candidate.Evidence
+                If evidence Is Nothing Then Continue For
+                evidence.Source = Truncate(If(evidence.Source, String.Empty).Trim(), 40)
+                evidence.OpenAlexId = OpenAlexSourceClient.NormalizeId(evidence.OpenAlexId)
+                evidence.Issns = IssnService.NormalizeList(evidence.Issns)
+                evidence.Keywords = If(evidence.Keywords, New List(Of String)()).
+                    Where(Function(item) Not String.IsNullOrWhiteSpace(item)).
+                    Select(Function(item) Truncate(item.Trim(), 80)).
+                    Take(JournalSuggestionService.MaximumKeywords).
+                    ToList()
+                If evidence.MatchingArticles < 0 Then evidence.MatchingArticles = 0
+                If evidence.AllArticles.HasValue AndAlso evidence.AllArticles.Value < 0 Then evidence.AllArticles = Nothing
+                evidence.Examples = If(evidence.Examples, New List(Of EvidenceExample)()).
+                    Where(Function(item) item IsNot Nothing AndAlso Not String.IsNullOrWhiteSpace(item.Title)).
+                    Take(3).
+                    ToList()
+                For Each example As EvidenceExample In evidence.Examples
+                    example.Title = Truncate(example.Title.Trim(), 300)
+                    Dim doi As String = DoiNormalizer.Normalize(If(example.Doi, String.Empty))
+                    example.Doi = If(DoiNormalizer.IsValid(doi), doi, String.Empty)
+                    If example.Year.HasValue AndAlso (example.Year.Value < 1600 OrElse example.Year.Value > 2200) Then example.Year = Nothing
+                Next
+            Next
+
+        End Sub
+
+
+        Private Shared Function Truncate(value As String, length As Integer) As String
+            Return If(value.Length <= length, value, value.Substring(0, length))
+        End Function
+
     End Class
 
 End Namespace
