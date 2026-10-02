@@ -56,6 +56,7 @@ Namespace Forms
 
         Private ReadOnly btnEditDecision As New Button()
         Private ReadOnly btnDeleteDecision As New Button()
+        Private ReadOnly btnReadLetter As New Button()
         Private ReadOnly lblDecisionHelp As New Label()
 
         Private ReadOnly _displayedDecisions As New List(Of EditorialDecisionEvent)()
@@ -666,13 +667,22 @@ Namespace Forms
                 .Height = 34
             }
 
+            ' The optional AI assistant (#84): shown only once it is turned on.
+            btnReadLetter.Text = "Read Decision Letter..."
+            btnReadLetter.AutoSize = True
+            btnReadLetter.Height = 34
+            btnReadLetter.AccessibleName = "Read a decision letter with the AI assistant"
+            btnReadLetter.Visible = AssistantRunner.IsTurnedOn()
+
             AddHandler btnEditDecision.Click, AddressOf EditSelectedDecision
             AddHandler btnDeleteDecision.Click, AddressOf DeleteSelectedDecision
             AddHandler btnAddDecision.Click, AddressOf AddDecision
+            AddHandler btnReadLetter.Click, AddressOf ReadDecisionLetter
 
             decisionButtons.Controls.Add(btnEditDecision)
             decisionButtons.Controls.Add(btnDeleteDecision)
             decisionButtons.Controls.Add(btnAddDecision)
+            decisionButtons.Controls.Add(btnReadLetter)
 
             toolbar.Controls.Add(lblDecisionHelp, 0, 0)
             toolbar.Controls.Add(decisionButtons, 1, 0)
@@ -807,6 +817,7 @@ Namespace Forms
 
             btnEditDecision.Visible = hasSelection
             btnDeleteDecision.Visible = hasSelection
+            btnReadLetter.Visible = AssistantRunner.IsTurnedOn()
 
         End Sub
 
@@ -875,27 +886,113 @@ Namespace Forms
 
                 If dialog.ShowDialog(Me) = DialogResult.OK AndAlso dialog.CreatedDecision IsNot Nothing Then
 
-                    _submission.Decisions.Add(dialog.CreatedDecision)
-
-                    If _manuscript IsNot Nothing Then
-
-                        ManuscriptLifecycleService.ApplyDecision(
-                            _manuscript,
-                            _submission,
-                            dialog.CreatedDecision
-                        )
-
-                    End If
-
-                    RefreshDecisionList()
-
-                    lstDecisions.SelectedIndex = lstDecisions.Items.Count - 1
+                    RecordDecision(dialog.CreatedDecision)
 
                 End If
 
             End Using
 
         End Sub
+
+
+        ' A new decision joins the editorial history and moves the
+        ' manuscript's stage, whether entered by hand or read from a letter.
+        Private Sub RecordDecision(created As EditorialDecisionEvent)
+
+            _submission.Decisions.Add(created)
+
+            If _manuscript IsNot Nothing Then
+
+                ManuscriptLifecycleService.ApplyDecision(
+                    _manuscript,
+                    _submission,
+                    created
+                )
+
+            End If
+
+            RefreshDecisionList()
+
+            lstDecisions.SelectedIndex = lstDecisions.Items.Count - 1
+
+        End Sub
+
+
+        ' Read Decision Letter (#84): the AI assistant proposes the decision,
+        ' its dates, and the reviewers' comments; the researcher checks them
+        ' and nothing changes until the decision is added. Cancel in the
+        ' decision step goes back to the letter's proposals.
+        Private Sub ReadDecisionLetter(sender As Object, e As EventArgs)
+
+            Dim reason As String = AssistantRunner.Unavailable()
+
+            If reason.Length > 0 Then
+                MessageBox.Show(Me, reason, "Read Decision Letter", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                Return
+            End If
+
+            Using letterDialog As New DecisionLetterForm(DecisionLetterMode.NewDecision, _submission)
+
+                Do
+
+                    If DecisionLetterForm.RunDialog(letterDialog, Me) <> DialogResult.OK Then
+                        Return
+                    End If
+
+                    Using decisionDialog As New AddDecisionForm()
+
+                        decisionDialog.UseProposal(letterDialog.Proposal, letterDialog.LetterText, letterDialog.DecisionSuggestion())
+
+                        If DecisionLetterForm.RunDialog(decisionDialog, Me) = DialogResult.OK AndAlso
+                           decisionDialog.CreatedDecision IsNot Nothing AndAlso
+                           RecordDecisionFromLetter(decisionDialog.CreatedDecision, letterDialog) Then
+
+                            Return
+
+                        End If
+
+                    End Using
+
+                Loop
+
+            End Using
+
+        End Sub
+
+
+        ' Adds the decision and the comments accepted from its letter
+        ' together, or nothing when the comments can't be added.
+        Private Function RecordDecisionFromLetter(created As EditorialDecisionEvent, letterDialog As DecisionLetterForm) As Boolean
+
+            Dim drafts As List(Of ReviewerResponseItem) = letterDialog.DraftItems(created.Id)
+
+            If drafts.Count > 0 Then
+
+                Try
+                    Dim probe As JournalSubmission = ManuscriptCloneService.CloneSubmission(_submission)
+                    probe.Decisions.Add(created)
+                    ReviewerResponseService.AddItems(probe, drafts)
+                Catch ex As Exception When TypeOf ex Is ArgumentException OrElse TypeOf ex Is InvalidDataException OrElse TypeOf ex Is InvalidOperationException
+                    MessageBox.Show(Me, ex.Message, "Check Reviewer Comments", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                    Return False
+                End Try
+
+            End If
+
+            RecordDecision(created)
+
+            If drafts.Count > 0 Then
+
+                ReviewerResponseService.AddItems(_submission, drafts)
+                _responsesMatrix?.RefreshFromSubmission()
+                RaiseEvent Changed(Me, EventArgs.Empty)
+                ShowReviewerResponses()
+
+            End If
+
+            Return True
+
+        End Function
 
 
         Private Sub EditSelectedDecision(sender As Object, e As EventArgs)
