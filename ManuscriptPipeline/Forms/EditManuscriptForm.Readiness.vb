@@ -4,6 +4,7 @@ Imports System.Drawing
 Imports System.Linq
 Imports System.Windows.Forms
 Imports ManuscriptPipeline.Models
+Imports ManuscriptPipeline.Services
 
 Namespace Forms
 
@@ -11,6 +12,12 @@ Namespace Forms
 
         Private ReadOnly btnReadiness As New Button()
         Private ReadOnly btnSubmissionPackets As New Button()
+        ' The AI assistant's cover letter starting point (#84), shown only
+        ' while the assistant is turned on.
+        Private ReadOnly btnCoverLetter As New Button()
+
+        ' Test seam: shows the cover letter window instead of ShowDialog.
+        Friend coverLetterPrompt As Action(Of CoverLetterForm) = Nothing
 
 
         Private Function CreateJournalToolsPanel() As Control
@@ -105,8 +112,22 @@ Namespace Forms
                 .Margin = New Padding(0)
             }
 
+            btnCoverLetter.Text = "Draft Cover Letter..."
+            btnCoverLetter.AutoSize = True
+            btnCoverLetter.Height = 36
+            btnCoverLetter.Anchor = AnchorStyles.Left
+            btnCoverLetter.Visible = AssistantRunner.IsTurnedOn()
+            AddHandler btnCoverLetter.Click, Sub(sender, e) OpenCoverLetter()
+
             buttons.Controls.Add(btnReadiness)
             buttons.Controls.Add(btnSubmissionPackets)
+            buttons.Controls.Add(btnCoverLetter)
+
+            ' The assistant may have been turned on or off since the page opened.
+            AddHandler layout.VisibleChanged,
+                Sub(sender, e)
+                    If layout.Visible Then btnCoverLetter.Visible = AssistantRunner.IsTurnedOn()
+                End Sub
 
             layout.Controls.Add(lblDescription, 0, 0)
             layout.Controls.Add(lblReadinessSummary, 0, 1)
@@ -162,6 +183,74 @@ Namespace Forms
             RunSubmissionWorkflow(New SubmissionWorkflowRequest With {.Target = SubmissionWorkflowTarget.Packets})
 
         End Sub
+
+
+        ' A cover letter starting point from the page's current values: the
+        ' title, target journal, type of work, keywords, and abstract, and the
+        ' journal's facts from the Journal Library. Never notes or author
+        ' names. Nothing on the page or in the library changes.
+        Private Sub OpenCoverLetter()
+
+            Dim reason As String = AssistantRunner.Unavailable()
+            If reason.Length > 0 AndAlso coverLetterPrompt Is Nothing Then
+                MessageBox.Show(Me.FindForm(), reason, AssistantService.FeatureName(AssistantService.CoverLetterFeature), MessageBoxButtons.OK, MessageBoxIcon.Information)
+                Return
+            End If
+
+            Dim typeName As String =
+                If(_workingManuscript.WorkType = WorkType.Unspecified, String.Empty, WorkTypeService.DisplayName(_workingManuscript.WorkType))
+
+            Using dialog As New CoverLetterForm(
+                txtTitle.Text,
+                txtTargetJournal.Text,
+                typeName,
+                _workingManuscript.Metadata?.Keywords,
+                _workingManuscript.Metadata?.AbstractText,
+                AddressOf CoverLetterJournalFacts)
+
+                If coverLetterPrompt IsNot Nothing Then
+                    coverLetterPrompt(dialog)
+                Else
+                    dialog.ShowDialog(Me.FindForm())
+                End If
+
+            End Using
+
+        End Sub
+
+
+        ' One line of facts for a journal in the Journal Library: the
+        ' manuscript's linked journal when the name still matches, else the
+        ' first with that name. "" when none matches.
+        Private Function CoverLetterJournalFacts(journalName As String) As String
+
+            Dim key As String = RouteAnalyticsService.NameKey(journalName)
+            If key.Length = 0 Then Return String.Empty
+
+            Dim library As List(Of JournalRecord) = If(_authorLibrary?.Journals, New List(Of JournalRecord)())
+            Dim record As JournalRecord = Nothing
+            If _workingManuscript.TargetJournalId.HasValue Then
+                record = library.FirstOrDefault(Function(item) item IsNot Nothing AndAlso item.Id = _workingManuscript.TargetJournalId.Value AndAlso RouteAnalyticsService.NameKey(item.Name) = key)
+            End If
+            If record Is Nothing Then
+                record = library.FirstOrDefault(Function(item) item IsNot Nothing AndAlso RouteAnalyticsService.NameKey(item.Name) = key)
+            End If
+
+            Return JournalFactsService.OneLine(record)
+
+        End Function
+
+
+        Friend Sub DraftCoverLetterForTest()
+            OpenCoverLetter()
+        End Sub
+
+
+        Friend ReadOnly Property CoverLetterButton As Button
+            Get
+                Return btnCoverLetter
+            End Get
+        End Property
 
 
         Private Sub CopyReadinessStateToOriginal(

@@ -22,6 +22,20 @@ Namespace Forms
         Private ReadOnly txtResponse As New TextBox()
         Private ReadOnly txtLocation As New TextBox()
         Private ReadOnly txtNotes As New TextBox()
+        Private ReadOnly tabs As New UnderlineTabControl()
+        ' The AI assistant's starting point (#84), below the response box.
+        Private ReadOnly assistantRow As New TableLayoutPanel()
+        Private ReadOnly btnSuggest As New Button()
+        Private ReadOnly lblAssistantNote As New Label()
+        Private ReadOnly lblProvenance As New Label()
+        Private _assistantOn As Boolean
+        ' A starting point used in this editing session, kept on Save Comment.
+        Private _pendingSuggestion As AssistantSuggestion
+
+        ' Test seams: the starting-point window, and the notices otherwise
+        ' shown in message boxes.
+        Friend draftPrompt As Func(Of AssistantDraftForm, DialogResult) = Nothing
+        Friend noticePrompt As Action(Of String) = Nothing
 
         Private _editedItem As ReviewerResponseItem
         Public ReadOnly Property EditedItem As ReviewerResponseItem
@@ -86,12 +100,13 @@ Namespace Forms
             Next
             root.Controls.Add(metadata, 0, 1)
 
-            Dim tabs As New UnderlineTabControl With {.Dock = DockStyle.Fill, .AccessibleName = "Reviewer response fields"}
+            tabs.Dock = DockStyle.Fill
+            tabs.AccessibleName = "Reviewer response fields"
             Dim commentTab As New TabPage("Comment && action")
             commentTab.Controls.Add(CreateTextPair("Reviewer comment (enter a comment or action)", txtComment,
                                                   "Planned or completed action", txtAction))
             Dim responseTab As New TabPage("Draft response")
-            responseTab.Controls.Add(CreateTextSection("Response draft for the journal", txtResponse))
+            responseTab.Controls.Add(CreateResponseSection())
             Dim notesTab As New TabPage("Location && notes")
             notesTab.Controls.Add(CreateTextPair("Manuscript location (page, line, or section)", txtLocation,
                                                 "Working notes (included in export)", txtNotes))
@@ -139,6 +154,119 @@ Namespace Forms
             Return panel
         End Function
 
+        ' The response box, with the assistant's starting point below it when
+        ' the assistant is turned on, and where an accepted one came from.
+        Private Function CreateResponseSection() As Control
+            Dim panel As TableLayoutPanel = DirectCast(CreateTextSection("Response draft for the journal", txtResponse), TableLayoutPanel)
+            panel.RowCount = 3
+            panel.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+
+            _assistantOn = AssistantRunner.IsTurnedOn()
+            assistantRow.Dock = DockStyle.Fill
+            assistantRow.AutoSize = True
+            assistantRow.ColumnCount = 2
+            assistantRow.RowCount = 2
+            assistantRow.Margin = New Padding(0, 8, 0, 0)
+            assistantRow.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
+            assistantRow.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
+            assistantRow.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+            assistantRow.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+
+            btnSuggest.Text = "Su&ggest a Starting Point..."
+            btnSuggest.AutoSize = True
+            btnSuggest.MinimumSize = New Size(0, 32)
+            btnSuggest.Margin = New Padding(0, 0, 12, 0)
+            btnSuggest.Visible = _assistantOn
+            AddHandler btnSuggest.Click, Sub(sender, e) SuggestStartingPoint()
+
+            lblAssistantNote.AutoSize = True
+            lblAssistantNote.Dock = DockStyle.Fill
+            lblAssistantNote.UseMnemonic = False
+            lblAssistantNote.ForeColor = UiTheme.SecondaryText()
+            lblAssistantNote.Margin = New Padding(0, 6, 0, 0)
+            lblAssistantNote.Visible = _assistantOn
+            If _assistantOn Then
+                lblAssistantNote.Text = "Sends only the reviewer, comment, and planned action to " & AssistantDraftForm.RecipientText() & ", never your notes or draft."
+            End If
+
+            lblProvenance.AutoSize = True
+            lblProvenance.Dock = DockStyle.Fill
+            lblProvenance.UseMnemonic = False
+            lblProvenance.ForeColor = UiTheme.MutedText()
+            lblProvenance.Margin = New Padding(0, 6, 0, 0)
+
+            assistantRow.Controls.Add(btnSuggest, 0, 0)
+            assistantRow.Controls.Add(lblAssistantNote, 1, 0)
+            assistantRow.Controls.Add(lblProvenance, 0, 1)
+            assistantRow.SetColumnSpan(lblProvenance, 2)
+            panel.Controls.Add(assistantRow, 0, 2)
+
+            AddHandler txtResponse.TextChanged, Sub(sender, e) RefreshAssistantRow()
+            Return panel
+        End Function
+
+        ' Where the response began, while it has text.
+        Private Sub RefreshAssistantRow()
+            Dim suggestion As AssistantSuggestion = If(_pendingSuggestion, _existing?.ResponseSuggestion)
+            Dim provenance As String = If(String.IsNullOrWhiteSpace(txtResponse.Text), String.Empty, AssistantSuggestionService.Describe(suggestion))
+            lblProvenance.Text = provenance
+            lblProvenance.Visible = provenance.Length > 0
+            assistantRow.Visible = _assistantOn OrElse provenance.Length > 0
+        End Sub
+
+        Private Sub Notify(message As String)
+            If noticePrompt IsNot Nothing Then
+                noticePrompt(message)
+            Else
+                MessageBox.Show(Me, message, AssistantService.FeatureName(AssistantService.DraftResponseFeature), MessageBoxButtons.OK, MessageBoxIcon.Information)
+            End If
+        End Sub
+
+        ' Sends only the reviewer label, comment, and planned action: never
+        ' the notes, the location, or the response draft. Nothing changes
+        ' until the researcher uses the suggestion, and nothing is saved
+        ' until Save Comment and then the page's Save.
+        Private Sub SuggestStartingPoint()
+            Dim reason As String = AssistantRunner.Unavailable()
+            If reason.Length > 0 Then
+                Notify(reason)
+                Return
+            End If
+            If String.IsNullOrWhiteSpace(txtComment.Text) AndAlso String.IsNullOrWhiteSpace(txtAction.Text) Then
+                Notify("Write the comment first.")
+                tabs.SelectedIndex = 0
+                txtComment.Focus()
+                Return
+            End If
+
+            Dim request As AssistantRequest = AssistantService.BuildResponseRequest(txtReviewer.Text, txtComment.Text, txtAction.Text)
+            If Not AssistantRunner.Confirm(Me, request) Then Return
+
+            Using dialog As New AssistantDraftForm(request, txtResponse.Text)
+                Dim answer As DialogResult = If(draftPrompt IsNot Nothing, draftPrompt(dialog), dialog.ShowDialog(Me))
+                If answer <> DialogResult.OK OrElse dialog.Reply Is Nothing OrElse IsDisposed Then Return
+                UseStartingPoint(dialog.ChosenText, dialog.Placement, dialog.Reply)
+            End Using
+        End Sub
+
+        Private Sub UseStartingPoint(text As String, placement As DraftPlacement, reply As AssistantReply)
+            Dim suggestion As String = AssistantDraftForm.TextBoxText(text).Trim()
+            If suggestion.Length = 0 Then Return
+            Dim start As Integer = 0
+            If placement = DraftPlacement.Below AndAlso txtResponse.Text.Trim().Length > 0 Then
+                Dim kept As String = txtResponse.Text.TrimEnd() & Environment.NewLine & Environment.NewLine
+                start = kept.Length
+                txtResponse.Text = kept & suggestion
+            Else
+                txtResponse.Text = suggestion
+            End If
+            _pendingSuggestion = AssistantService.SuggestionFor(AssistantService.DraftResponseFeature, reply, txtComment.Text, DateTime.UtcNow)
+            RefreshAssistantRow()
+            txtResponse.Focus()
+            txtResponse.Select(start, 0)
+            txtResponse.ScrollToCaret()
+        End Sub
+
         Private Shared Function CreateTextPair(firstLabel As String, firstField As TextBox,
                                               secondLabel As String, secondField As TextBox) As Control
             Dim panel As New TableLayoutPanel With {.Dock = DockStyle.Fill, .ColumnCount = 1, .RowCount = 2}
@@ -153,7 +281,10 @@ Namespace Forms
         Private Sub LoadItem()
             cmbStatus.SelectedIndex = 0
             If cmbDecision.Items.Count = 1 Then cmbDecision.SelectedIndex = 0
-            If _existing Is Nothing Then Return
+            If _existing Is Nothing Then
+                RefreshAssistantRow()
+                Return
+            End If
             For index As Integer = 0 To cmbDecision.Items.Count - 1
                 If DirectCast(cmbDecision.Items(index), DecisionChoice).Id = _existing.DecisionId Then
                     cmbDecision.SelectedIndex = index
@@ -173,6 +304,7 @@ Namespace Forms
             txtResponse.Text = _existing.ResponseText
             txtLocation.Text = _existing.ManuscriptLocation
             txtNotes.Text = _existing.Notes
+            RefreshAssistantRow()
         End Sub
 
         Private Sub SaveItem(sender As Object, e As EventArgs)
@@ -188,6 +320,10 @@ Namespace Forms
             draft.ResponseText = txtResponse.Text
             draft.ManuscriptLocation = txtLocation.Text
             draft.Notes = txtNotes.Text
+            ' Where the response began: a starting point used now, else the
+            ' one it already had; none once the response is empty.
+            If _pendingSuggestion IsNot Nothing Then draft.ResponseSuggestion = _pendingSuggestion
+            If String.IsNullOrWhiteSpace(draft.ResponseText) Then draft.ResponseSuggestion = Nothing
             Try
                 ' Validation happens against a disposable copy. Cancel never edits the caller.
                 Dim probe As JournalSubmission = ManuscriptCloneService.CloneSubmission(_submission)
@@ -198,6 +334,23 @@ Namespace Forms
                 Return
             End Try
             DialogResult = DialogResult.OK
+        End Sub
+
+        ' For tests.
+        Friend ReadOnly Property SuggestButton As Button
+            Get
+                Return btnSuggest
+            End Get
+        End Property
+
+        Friend ReadOnly Property ProvenanceText As String
+            Get
+                Return lblProvenance.Text
+            End Get
+        End Property
+
+        Friend Sub SuggestStartingPointForTest()
+            SuggestStartingPoint()
         End Sub
 
         Private NotInheritable Class DecisionChoice
