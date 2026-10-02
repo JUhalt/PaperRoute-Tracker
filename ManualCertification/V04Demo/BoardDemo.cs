@@ -165,6 +165,17 @@ internal static class BoardDemo
         manuscripts[3].Tags.AddRange(new[] { "preregistered", "lab project" });
         manuscripts[4].WorkType = WorkType.JournalArticle;
         manuscripts[4].Tags.AddRange(new[] { "teaching", "mixed methods", "nursing" });
+        // A journal shortlist (#65) whose next journal is offered after the rejection.
+        manuscripts[4].JournalShortlist.AddRange(new[]
+        {
+            new JournalCandidate { JournalName = "Fictional Nursing Methods", Status = CandidateStatus.Preferred, Notes = "Methods focus; rejected after review",
+                Checks = { "trust.known", "trust.publisher", "trust.review", "trust.indexed", "trust.fees", "trust.guidelines", "fit.scope", "fit.type" } },
+            new JournalCandidate { JournalName = "Fictional Journal of Nursing Scholarship", Status = CandidateStatus.Preferred, Notes = "Publishes mixed-methods evaluations of teaching",
+                Checks = { "trust.known", "trust.publisher", "trust.review", "trust.indexed", "trust.fees", "trust.guidelines", "trust.member", "fit.scope", "fit.type", "fit.audience", "fit.timeline" } },
+            new JournalCandidate { JournalName = "Fictional Nurse Education Review", Status = CandidateStatus.Backup, Notes = "Broad readership; slower review",
+                Checks = { "trust.known", "trust.review", "fit.scope", "fit.audience" } },
+            new JournalCandidate { JournalName = "Fictional Rapid Health Letters", Status = CandidateStatus.RuledOut, Notes = "Unclear fees and peer review" }
+        });
         manuscripts[5].WorkType = WorkType.JournalArticle;
         manuscripts[6].WorkType = WorkType.JournalArticle;
         manuscripts[8].WorkType = WorkType.ConferencePaper;

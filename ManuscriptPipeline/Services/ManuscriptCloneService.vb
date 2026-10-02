@@ -37,6 +37,22 @@ Namespace Services
                 .Tags = If(source.Tags, New List(Of String)()).ToList()
             }
 
+            If source.JournalShortlist IsNot Nothing Then
+                For Each candidate As JournalCandidate In source.JournalShortlist
+                    If candidate Is Nothing Then Continue For
+                    clone.JournalShortlist.Add(New JournalCandidate With {
+                        .Id = candidate.Id,
+                        .JournalName = candidate.JournalName,
+                        .JournalId = candidate.JournalId,
+                        .Status = candidate.Status,
+                        .Notes = candidate.Notes,
+                        .Checks = If(candidate.Checks, New List(Of String)()).ToList(),
+                        .AddedDate = candidate.AddedDate,
+                        .Evidence = CloneEvidence(candidate.Evidence)
+                    })
+                Next
+            End If
+
             If source.Authors IsNot Nothing Then
                 For Each authorLink As ManuscriptAuthor In source.Authors
                     clone.Authors.Add(
@@ -427,7 +443,8 @@ Namespace Services
                             .DecisionDate = decisionEvent.DecisionDate,
                             .Decision = decisionEvent.Decision,
                             .RevisionDeadline = decisionEvent.RevisionDeadline,
-                            .Notes = decisionEvent.Notes
+                            .Notes = decisionEvent.Notes,
+                            .Suggestion = CloneSuggestion(decisionEvent.Suggestion)
                         }
                     )
                 Next
@@ -482,9 +499,45 @@ Namespace Services
                 .Notes = source.Notes,
                 .Status = source.Status,
                 .CreatedAtUtc = source.CreatedAtUtc,
-                .LastModifiedAtUtc = source.LastModifiedAtUtc
+                .LastModifiedAtUtc = source.LastModifiedAtUtc,
+                .CommentSuggestion = CloneSuggestion(source.CommentSuggestion),
+                .ResponseSuggestion = CloneSuggestion(source.ResponseSuggestion)
             }
 
+        End Function
+
+
+        ' A deep copy of where an AI assistant suggestion came from (#84), or Nothing.
+        Friend Shared Function CloneSuggestion(source As AssistantSuggestion) As AssistantSuggestion
+            If source Is Nothing Then Return Nothing
+            Return New AssistantSuggestion With {
+                .Feature = source.Feature,
+                .Provider = source.Provider,
+                .Model = source.Model,
+                .SuggestedUtc = source.SuggestedUtc,
+                .SourceText = source.SourceText
+            }
+        End Function
+
+
+        ' A deep copy of a suggestion's evidence (#88), or Nothing.
+        Friend Shared Function CloneEvidence(source As CandidateEvidence) As CandidateEvidence
+            If source Is Nothing Then Return Nothing
+            Return New CandidateEvidence With {
+                .Source = source.Source,
+                .OpenAlexId = source.OpenAlexId,
+                .Issns = If(source.Issns, New List(Of String)()).ToList(),
+                .Keywords = If(source.Keywords, New List(Of String)()).ToList(),
+                .MatchAll = source.MatchAll,
+                .SinceDate = source.SinceDate,
+                .MatchingArticles = source.MatchingArticles,
+                .AllArticles = source.AllArticles,
+                .Examples = If(source.Examples, New List(Of EvidenceExample)()).
+                    Where(Function(item) item IsNot Nothing).
+                    Select(Function(item) New EvidenceExample With {.Title = item.Title, .Year = item.Year, .Doi = item.Doi}).
+                    ToList(),
+                .RetrievedUtc = source.RetrievedUtc
+            }
         End Function
 
     End Class

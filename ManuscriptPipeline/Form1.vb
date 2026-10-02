@@ -138,9 +138,13 @@ Public Class Form1
         appSettings =
         settingsService.Load()
 
+        ' Before anything can go online (#86).
+        ConnectOnlineAccess()
+
         UiPolish.InstallGlobalDialogStyling()
 
         BuildInterface()
+        RefreshOnlineIndicators()
 
         If Not LoadManuscripts() Then
 
@@ -174,10 +178,19 @@ Public Class Form1
 
         RenderManuscripts()
 
-        TryShowStartupReminderNotification()
+        If settingsService.LoadFailed Then
+            lblStatus.Text = "PaperRoute couldn't read your settings, so it's working offline until you review Settings > Preferences > Online services."
+        End If
 
-        If appSettings.CheckForUpdatesAutomatically Then
-            BeginAutomaticUpdateCheck()
+        ' The example window neither notifies nor checks for updates.
+        If Not ExampleLibraryService.IsActive Then
+
+            TryShowStartupReminderNotification()
+
+            If appSettings.CheckForUpdatesAutomatically Then
+                BeginAutomaticUpdateCheck()
+            End If
+
         End If
 
     End Sub
@@ -192,9 +205,13 @@ Public Class Form1
 
         Me.Text =
             If(
-                StorageEnvironment.IsDevelopmentProfile(),
-                "PaperRoute Tracker [Development]",
-                "PaperRoute Tracker"
+                ExampleLibraryService.IsActive,
+                "PaperRoute Tracker - Example Library",
+                If(
+                    StorageEnvironment.IsDevelopmentProfile(),
+                    "PaperRoute Tracker [Development]",
+                    "PaperRoute Tracker"
+                )
             )
         Me.StartPosition = FormStartPosition.CenterScreen
         Me.Size = New Size(1280, 840)
@@ -525,6 +542,10 @@ Public Class Form1
         ApplyNavigationCollapsed(appSettings.NavigationCollapsed, persist:=False)
 
         Me.Controls.Add(shell)
+
+        If ExampleLibraryService.IsActive Then
+            Me.Controls.Add(CreateExampleBanner())
+        End If
 
         currentPage = WorkspacePage.Board
         SyncRail()
@@ -4059,8 +4080,18 @@ Public Class Form1
     e As EventArgs
 )
 
+        OpenSettingsAt(showOnlineServices:=False)
+
+    End Sub
+
+
+    Private Sub OpenSettingsAt(showOnlineServices As Boolean, Optional showAssistant As Boolean = False)
+
         Using dialog As New SettingsForm(
-        appSettings
+        appSettings,
+        settingsService,
+        showOnlineServices,
+        showAssistant
     )
 
             If dialog.ShowDialog(Me) <>
@@ -4070,6 +4101,7 @@ Public Class Form1
 
             End If
 
+            ApplyOnlineSettings()
             RenderManuscripts()
 
             If dialog.AppearanceChanged Then

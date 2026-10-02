@@ -652,6 +652,8 @@ Namespace Services
                 ReviewerResponseService.NormalizeAndValidateManuscript(manuscript)
                 PublicationMatchService.NormalizeAndValidateManuscript(manuscript)
                 WorkTypeService.NormalizeAndValidateManuscript(manuscript)
+                JournalShortlistService.NormalizeManuscript(manuscript)
+                AssistantSuggestionService.NormalizeManuscript(manuscript)
 
             Next
 
@@ -1228,6 +1230,8 @@ Namespace Services
                 ReviewerResponseService.NormalizeAndValidateManuscript(manuscript)
                 PublicationMatchService.NormalizeAndValidateManuscript(manuscript)
                 WorkTypeService.NormalizeAndValidateManuscript(manuscript)
+                JournalShortlistService.NormalizeManuscript(manuscript)
+                AssistantSuggestionService.NormalizeManuscript(manuscript)
 
             Next
 

@@ -426,7 +426,7 @@ Namespace Forms
 
                 MessageBox.Show(
                     Me,
-                    ex.Message,
+                    OnlineAccess.Describe(ex, "ORCID"),
                     "ORCID Lookup",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information

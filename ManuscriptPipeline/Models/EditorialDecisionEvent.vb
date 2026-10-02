@@ -19,6 +19,10 @@ Namespace Models
 
         Public Property Notes As String = String.Empty
 
+        ' The decision was proposed by the AI assistant from a decision
+        ' letter and confirmed by the researcher (#84); Nothing otherwise.
+        Public Property Suggestion As AssistantSuggestion = Nothing
+
     End Class
 
 End Namespace

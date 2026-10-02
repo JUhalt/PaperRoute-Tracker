@@ -1,5 +1,6 @@
 ﻿Imports System
 Imports System.Drawing
+Imports System.Windows.Forms
 
 Namespace Services
 
@@ -87,6 +88,54 @@ Namespace Services
             )
 
         End Function
+
+
+        ' A size no larger than the working area.
+        Public Shared Function FitSize(
+            workingArea As Rectangle,
+            size As Size
+        ) As Size
+
+            Return New Size(
+                Math.Max(1, Math.Min(size.Width, workingArea.Width)),
+                Math.Max(1, Math.Min(size.Height, workingArea.Height))
+            )
+
+        End Function
+
+
+        ' Keeps a window that would open larger than its screen's working
+        ' area (a tall window at 150% on a small display) inside it, so its
+        ' buttons can't sit behind the taskbar. A window that fits is left
+        ' where it is.
+        Public Shared Sub FitToWorkingArea(dialog As Form)
+
+            If dialog Is Nothing Then
+                Throw New ArgumentNullException(NameOf(dialog))
+            End If
+
+            Dim area As Rectangle =
+                Screen.FromControl(If(dialog.Owner, dialog)).WorkingArea
+
+            ' A minimum larger than this screen (scaled for another display)
+            ' would hold the window at a size that can't fit.
+            Dim minimum As Size = dialog.MinimumSize
+
+            If minimum.Width > area.Width OrElse minimum.Height > area.Height Then
+                dialog.MinimumSize = FitSize(area, minimum)
+            End If
+
+            Dim fitted As Size =
+                FitSize(area, dialog.Size)
+
+            If fitted = dialog.Size Then
+                Return
+            End If
+
+            dialog.Size = fitted
+            dialog.Location = CalculateCenteredLocation(area, dialog.Size)
+
+        End Sub
 
     End Class
 

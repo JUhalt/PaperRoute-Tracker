@@ -487,7 +487,7 @@ Namespace Forms
 
                 MessageBox.Show(
                     Me,
-                    ex.Message,
+                    OnlineAccess.Describe(ex, "Crossref"),
                     "Crossref Lookup",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Warning

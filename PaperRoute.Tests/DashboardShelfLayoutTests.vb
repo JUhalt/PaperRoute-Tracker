@@ -397,7 +397,7 @@ Public Class DashboardShelfLayoutTests
                     ' Settings in the rail is the first click; each item is the second.
                     Using menu As ContextMenuStrip = board.SettingsMenu()
                         CollectionAssert.AreEqual(
-                            {"Preferences...", "Check for Updates...", "Diagnostics...", "", "Backup Library...", "Restore Backup...", "", "About PaperRoute"},
+                            {"Preferences...", "Work Offline", "Check for Updates...", "Diagnostics...", "", "Backup Library...", "Restore Backup...", "", "About PaperRoute"},
                             menu.Items.Cast(Of ToolStripItem)().Select(Function(item) item.Text).ToList())
                     End Using
                     Assert.IsTrue(Descendants(board).OfType(Of Button)().Any(Function(button) button.Text = "Settings"))

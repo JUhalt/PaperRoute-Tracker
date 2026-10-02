@@ -22,6 +22,16 @@ Namespace Controls
         Checklist
         Publication
         Insights
+        Online
+        Offline
+    End Enum
+
+    ' A rail command that reports a state: green for Online, blue for
+    ' Working offline.
+    Friend Enum RailTone
+        Normal
+        Success
+        Info
     End Enum
 
     ' Paints one left-rail item: an icon, its label, and an optional count.
@@ -38,7 +48,8 @@ Namespace Controls
             selected As Boolean,
             hover As Boolean,
             focusCue As Boolean,
-            badge As Integer)
+            badge As Integer,
+            Optional tone As RailTone = RailTone.Normal)
 
             Dim dpi As Integer = control.DeviceDpi
             g.Clear(If(control.Parent IsNot Nothing, control.Parent.BackColor, UiTheme.HeaderBackground()))
@@ -47,9 +58,14 @@ Namespace Controls
             Dim bounds As New RectangleF(0.5F, 0.5F, control.Width - 1.0F, control.Height - 1.0F)
             Dim radius As Single = UiTheme.Px(7, dpi)
 
-            If selected OrElse hover Then
+            ' Working offline sits on a blue tint, a mode the user chose. Online
+            ' is green ink only, so it never reads as the selected page.
+            Dim tint As Color = If(tone = RailTone.Info, UiTheme.InfoMutedBackground(), Color.Empty)
+            If Not tint.IsEmpty AndAlso hover Then tint = UiTheme.Blend(tint, UiTheme.PrimaryText(), 0.08F)
+
+            If selected OrElse hover OrElse Not tint.IsEmpty Then
                 Using path As GraphicsPath = RoundedShapes.Create(bounds, radius)
-                    Using fill As New SolidBrush(If(selected, UiTheme.AccentMutedBackground(), UiTheme.HoverBackground()))
+                    Using fill As New SolidBrush(If(Not tint.IsEmpty, tint, If(selected, UiTheme.AccentMutedBackground(), UiTheme.HoverBackground())))
                         g.FillPath(fill, path)
                     End Using
                 End Using
@@ -63,7 +79,10 @@ Namespace Controls
                 End Using
             End If
 
-            Dim ink As Color = If(selected, UiTheme.AccentColor(), UiTheme.SecondaryText())
+            Dim ink As Color =
+                If(tone = RailTone.Success, UiTheme.SuccessColor(),
+                   If(tone = RailTone.Info, UiTheme.InfoColor(),
+                      If(selected, UiTheme.AccentColor(), UiTheme.SecondaryText())))
             Dim icon As Single = UiTheme.Px(16, dpi)
             Dim left As Single = UiTheme.Px(10, dpi)
             Dim top As Single = (control.Height - icon) / 2.0F
@@ -105,7 +124,7 @@ Namespace Controls
                 End If
 
                 Dim textBounds As New Rectangle(textLeft, 0, control.Width - textLeft - badgeWidth - UiTheme.Px(10, dpi), control.Height)
-                TextRenderer.DrawText(g, text, font, textBounds, If(selected, UiTheme.AccentColor(), UiTheme.PrimaryText()),
+                TextRenderer.DrawText(g, text, font, textBounds, If(tone = RailTone.Success, UiTheme.SuccessColor(), If(selected, UiTheme.AccentColor(), UiTheme.PrimaryText())),
                     TextFormatFlags.VerticalCenter Or TextFormatFlags.Left Or TextFormatFlags.EndEllipsis Or TextFormatFlags.NoPrefix Or TextFormatFlags.SingleLine)
             End Using
 
@@ -180,6 +199,13 @@ Namespace Controls
                     Case RailGlyph.ExpandRail
                         g.DrawLines(pen, {p(3.5F, 4), p(7.5F, 8), p(3.5F, 12)})
                         g.DrawLines(pen, {p(7.5F, 4), p(11.5F, 8), p(7.5F, 12)})
+                    Case RailGlyph.Online, RailGlyph.Offline
+                        ' A cloud; struck through when offline.
+                        g.DrawArc(pen, r(1.5F, 7, 6, 6), 90, 180)
+                        g.DrawArc(pen, r(4, 3.5F, 8, 8), 180, 180)
+                        g.DrawArc(pen, r(9.5F, 6.5F, 5, 6.5F), 270, 180)
+                        g.DrawLine(pen, p(4.5F, 13), p(12, 13))
+                        If glyph = RailGlyph.Offline Then g.DrawLine(pen, p(2, 2), p(14, 14))
                     Case RailGlyph.Help
                         g.DrawEllipse(pen, r(2, 2, 12, 12))
                         g.DrawBezier(pen, p(6.4F, 6.3F), p(6.4F, 4.3F), p(9.8F, 4.3F), p(9.6F, 6.6F))
@@ -277,6 +303,10 @@ Namespace Controls
         <DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)>
         Public Property Glyph As RailGlyph
 
+        ' A state rather than a command, drawn on its own tint.
+        <DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)>
+        Public Property Tone As RailTone
+
         Protected Overrides Sub OnMouseEnter(e As EventArgs)
             MyBase.OnMouseEnter(e)
             _hover = True
@@ -300,7 +330,7 @@ Namespace Controls
         End Sub
 
         Protected Overrides Sub OnPaint(e As PaintEventArgs)
-            RailPainter.Paint(Me, e.Graphics, Glyph, Text, False, _hover, Focused AndAlso ShowFocusCues, 0)
+            RailPainter.Paint(Me, e.Graphics, Glyph, Text, False, _hover, Focused AndAlso ShowFocusCues, 0, Tone)
         End Sub
 
     End Class

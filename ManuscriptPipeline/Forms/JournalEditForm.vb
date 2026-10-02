@@ -18,6 +18,10 @@ Namespace Forms
         Private ReadOnly txtPublisher As New TextBox()
         Private ReadOnly txtHomepage As New TextBox()
         Private ReadOnly txtPortal As New TextBox()
+        Private ReadOnly txtIssns As New TextBox()
+        Private ReadOnly txtAimsScope As New TextBox()
+        Private ReadOnly txtInstructions As New TextBox()
+        Private ReadOnly txtBoard As New TextBox()
         Private ReadOnly txtNotes As New TextBox()
         Private ReadOnly chkFavorite As New CheckBox()
         Private ReadOnly chkShortlist As New CheckBox()
@@ -32,6 +36,15 @@ Namespace Forms
         Private ReadOnly _workingChecklist As New List(
             Of JournalChecklistTemplateItem
         )()
+
+        ' Facts and metrics (#87), edited on copies until Save.
+        Private ReadOnly _workingFacts As New List(Of JournalFact)()
+        Private ReadOnly lvFacts As New ListView()
+        Private ReadOnly btnEditMetric As New Button()
+        Private ReadOnly btnRemoveFact As New Button()
+
+        ' Asks for a metric (Nothing to cancel); tests replace it.
+        Friend metricPrompt As Func(Of JournalFact, JournalFact) = Nothing
 
         Private _result As JournalRecord
 
@@ -50,10 +63,12 @@ Namespace Forms
             _source = source
 
             CloneChecklistFromSource()
+            If source IsNot Nothing Then _workingFacts.AddRange(JournalFactsService.Clone(source).Facts)
             BuildInterface()
             UiPolish.ApplyDialog(Me)
             LoadSource()
             RefreshChecklist()
+            RefreshFacts()
 
         End Sub
 
@@ -113,6 +128,10 @@ Namespace Forms
                 CreateChecklistTab()
             )
 
+            tabs.TabPages.Add(
+                CreateFactsTab()
+            )
+
             Dim footer As New FlowLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .AutoSize = True,
@@ -166,7 +185,7 @@ Namespace Forms
             Dim general As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .ColumnCount = 2,
-                .RowCount = 6
+                .RowCount = 10
             }
 
             general.ColumnStyles.Add(
@@ -183,7 +202,7 @@ Namespace Forms
                 )
             )
 
-            For index As Integer = 0 To 4
+            For index As Integer = 0 To 8
                 general.RowStyles.Add(
                     New RowStyle(
                         SizeType.AutoSize
@@ -210,6 +229,15 @@ Namespace Forms
             txtPortal.Dock =
                 DockStyle.Fill
 
+            For Each box As TextBox In {txtIssns, txtAimsScope, txtInstructions, txtBoard}
+                box.Dock = DockStyle.Fill
+            Next
+
+            txtIssns.PlaceholderText = "e.g. 1932-6203; separate several with commas"
+            txtAimsScope.PlaceholderText = "https://"
+            txtInstructions.PlaceholderText = "https://"
+            txtBoard.PlaceholderText = "https://"
+
             txtNotes.Dock =
                 DockStyle.Fill
 
@@ -222,7 +250,7 @@ Namespace Forms
             txtNotes.MinimumSize =
                 New Size(
                     0,
-                    150
+                    90
                 )
 
             Dim flags As New FlowLayoutPanel With {
@@ -253,17 +281,29 @@ Namespace Forms
             general.Controls.Add(CreateLabel("Publisher"), 0, 1)
             general.Controls.Add(txtPublisher, 1, 1)
 
-            general.Controls.Add(CreateLabel("Homepage URL"), 0, 2)
-            general.Controls.Add(txtHomepage, 1, 2)
+            general.Controls.Add(CreateLabel("ISSNs"), 0, 2)
+            general.Controls.Add(txtIssns, 1, 2)
 
-            general.Controls.Add(CreateLabel("Submission portal"), 0, 3)
-            general.Controls.Add(txtPortal, 1, 3)
+            general.Controls.Add(CreateLabel("Homepage URL"), 0, 3)
+            general.Controls.Add(txtHomepage, 1, 3)
 
-            general.Controls.Add(CreateLabel("List status"), 0, 4)
-            general.Controls.Add(flags, 1, 4)
+            general.Controls.Add(CreateLabel("Aims and scope"), 0, 4)
+            general.Controls.Add(txtAimsScope, 1, 4)
 
-            general.Controls.Add(CreateLabel("Notes"), 0, 5)
-            general.Controls.Add(txtNotes, 1, 5)
+            general.Controls.Add(CreateLabel("Author instructions"), 0, 5)
+            general.Controls.Add(txtInstructions, 1, 5)
+
+            general.Controls.Add(CreateLabel("Editorial board"), 0, 6)
+            general.Controls.Add(txtBoard, 1, 6)
+
+            general.Controls.Add(CreateLabel("Submission portal"), 0, 7)
+            general.Controls.Add(txtPortal, 1, 7)
+
+            general.Controls.Add(CreateLabel("List status"), 0, 8)
+            general.Controls.Add(flags, 1, 8)
+
+            general.Controls.Add(CreateLabel("Notes"), 0, 9)
+            general.Controls.Add(txtNotes, 1, 9)
 
             tab.Controls.Add(general)
 
@@ -507,6 +547,11 @@ Namespace Forms
 
             txtPortal.Text =
                 _source.SubmissionPortalUrl
+
+            txtIssns.Text = String.Join(", ", If(_source.Issns, New List(Of String)()))
+            txtAimsScope.Text = _source.AimsScopeUrl
+            txtInstructions.Text = _source.AuthorInstructionsUrl
+            txtBoard.Text = _source.EditorialBoardUrl
 
             txtNotes.Text =
                 _source.Notes
@@ -888,6 +933,27 @@ Namespace Forms
 
             Dim homepage As String
             Dim portal As String
+            Dim aimsScope As String
+            Dim instructions As String
+            Dim board As String
+
+            Dim issns = IssnService.ParseList(txtIssns.Text)
+            If issns.Invalid.Count > 0 OrElse issns.Valid.Count > IssnService.MaximumPerJournal Then
+
+                MessageBox.Show(
+                    Me,
+                    If(issns.Invalid.Count > 0,
+                       """" & issns.Invalid(0) & """ isn't a valid ISSN. An ISSN has eight characters, such as 1932-6203, and the last one can be X.",
+                       "A journal can have at most " & IssnService.MaximumPerJournal.ToString() & " ISSNs."),
+                    "Check ISSNs",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information
+                )
+
+                txtIssns.Focus()
+                Return
+
+            End If
 
             Try
 
@@ -902,6 +968,10 @@ Namespace Forms
                         txtPortal.Text,
                         "Submission portal"
                     )
+
+                aimsScope = UrlSafetyService.NormalizeOptionalHttpUrl(txtAimsScope.Text, "Aims and scope")
+                instructions = UrlSafetyService.NormalizeOptionalHttpUrl(txtInstructions.Text, "Author instructions")
+                board = UrlSafetyService.NormalizeOptionalHttpUrl(txtBoard.Text, "Editorial board")
 
             Catch ex As ArgumentException
 
@@ -919,34 +989,240 @@ Namespace Forms
 
             NormalizeSortOrder()
 
+            ' A copy of the record with only this form's fields replaced, so
+            ' everything it doesn't edit (such as looked-up ids and where each
+            ' field came from) survives.
             _result =
-                New JournalRecord With {
-                    .Id =
-                        If(
-                            _source Is Nothing,
-                            Guid.NewGuid(),
-                            _source.Id
-                        ),
-                    .Name = txtName.Text.Trim(),
-                    .Publisher = txtPublisher.Text.Trim(),
-                    .HomepageUrl = homepage,
-                    .SubmissionPortalUrl = portal,
-                    .Notes = txtNotes.Text.Trim(),
-                    .IsFavorite = chkFavorite.Checked,
-                    .IsShortlisted = chkShortlist.Checked,
-                    .ReadinessChecklistTemplate =
-                        _workingChecklist.
-                            Select(
-                                Function(item)
-                                    Return CloneChecklistItem(item)
-                                End Function
-                            ).
-                            ToList()
-                }
+                If(
+                    _source Is Nothing,
+                    New JournalRecord With {.Id = Guid.NewGuid()},
+                    JournalFactsService.Clone(_source)
+                )
+
+            _result.Name = txtName.Text.Trim()
+            _result.Publisher = txtPublisher.Text.Trim()
+            _result.HomepageUrl = homepage
+            _result.SubmissionPortalUrl = portal
+            If Not _result.Issns.SequenceEqual(issns.Valid) Then
+                ' Another journal's ids would no longer match.
+                _result.OpenAlexId = String.Empty
+                _result.DoajId = String.Empty
+            End If
+            _result.Issns = issns.Valid
+            _result.AimsScopeUrl = aimsScope
+            _result.AuthorInstructionsUrl = instructions
+            _result.EditorialBoardUrl = board
+            _result.Notes = txtNotes.Text.Trim()
+            _result.IsFavorite = chkFavorite.Checked
+            _result.IsShortlisted = chkShortlist.Checked
+            _result.ReadinessChecklistTemplate =
+                _workingChecklist.
+                    Select(
+                        Function(item)
+                            Return CloneChecklistItem(item)
+                        End Function
+                    ).
+                    ToList()
+            _result.Facts = JournalFactsService.Clone(New JournalRecord With {.Facts = _workingFacts}).Facts
 
             Me.DialogResult =
                 DialogResult.OK
 
+        End Sub
+
+
+
+        ' Facts from the open indexes and metrics the researcher entered
+        ' (#87). Looked-up facts come from Look Up Facts... on the Journals
+        ' page; metrics are entered here.
+        Private Function CreateFactsTab() As TabPage
+
+            Dim tab As New TabPage("Facts and Metrics") With {.Padding = New Padding(14)}
+
+            Dim layout As New TableLayoutPanel With {.Dock = DockStyle.Fill, .ColumnCount = 1, .RowCount = 4}
+            layout.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+            layout.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
+            layout.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+            layout.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+
+            Dim intro As New Label With {
+                .Text = "Facts from DOAJ and OpenAlex come from Look Up Facts... on the Journals page. Add metrics such as the Journal Impact Factor or CiteScore here, exactly as their publishers report them, with the year.",
+                .AutoSize = True,
+                .UseMnemonic = False,
+                .Margin = New Padding(0, 0, 0, 8)
+            }
+
+            lvFacts.Dock = DockStyle.Fill
+            lvFacts.View = View.Details
+            lvFacts.FullRowSelect = True
+            lvFacts.MultiSelect = False
+            lvFacts.HideSelection = False
+            lvFacts.ShowItemToolTips = True
+            lvFacts.BackColor = UiTheme.CardBackground()
+            lvFacts.ForeColor = UiTheme.PrimaryText()
+            lvFacts.Columns.Add("Fact", LogicalToDeviceUnits(200))
+            lvFacts.Columns.Add("Value", LogicalToDeviceUnits(250))
+            lvFacts.Columns.Add("Source", LogicalToDeviceUnits(150))
+            lvFacts.Columns.Add("Year or checked", LogicalToDeviceUnits(120))
+            lvFacts.Groups.Add(New ListViewGroup("open", "From open indexes"))
+            lvFacts.Groups.Add(New ListViewGroup("yours", "Entered by you"))
+            AddHandler lvFacts.SelectedIndexChanged, Sub(sender, e) RefreshFactButtons()
+            AddHandler lvFacts.DoubleClick, Sub(sender, e) EditMetric()
+
+            Dim buttons As New FlowLayoutPanel With {.Dock = DockStyle.Fill, .AutoSize = True, .WrapContents = True, .Padding = New Padding(0, 8, 0, 0)}
+            Dim btnAdd As New Button With {.Text = "Add Metric...", .AutoSize = True, .Height = 34}
+            btnEditMetric.Text = "Edit..."
+            btnEditMetric.AutoSize = True
+            btnEditMetric.Height = 34
+            btnRemoveFact.Text = "Remove"
+            btnRemoveFact.AutoSize = True
+            btnRemoveFact.Height = 34
+            AddHandler btnAdd.Click, Sub(sender, e) AddMetric()
+            AddHandler btnEditMetric.Click, Sub(sender, e) EditMetric()
+            AddHandler btnRemoveFact.Click, Sub(sender, e) RemoveFact()
+            buttons.Controls.Add(btnAdd)
+            buttons.Controls.Add(btnEditMetric)
+            buttons.Controls.Add(btnRemoveFact)
+
+            Dim dora As New LinkLabel With {
+                .Text = JournalFactCatalog.DoraNote & " About journal metrics (DORA)",
+                .AutoSize = True,
+                .UseMnemonic = False,
+                .Margin = New Padding(0, 8, 0, 0)
+            }
+            dora.LinkArea = New LinkArea(JournalFactCatalog.DoraNote.Length + 1, "About journal metrics (DORA)".Length)
+            AddHandler dora.LinkClicked,
+                Sub(sender, e)
+                    Try
+                        UrlSafetyService.OpenInBrowser(JournalFactCatalog.DoraUrl)
+                    Catch ex As Exception
+                        MessageBox.Show(Me, ex.Message, "Open Link", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                    End Try
+                End Sub
+
+            AddHandler layout.SizeChanged,
+                Sub(sender, e)
+                    Dim width As Integer = Math.Max(LogicalToDeviceUnits(200), layout.ClientSize.Width - LogicalToDeviceUnits(8))
+                    intro.MaximumSize = New Size(width, 0)
+                    dora.MaximumSize = New Size(width, 0)
+                End Sub
+
+            layout.Controls.Add(intro, 0, 0)
+            layout.Controls.Add(lvFacts, 0, 1)
+            layout.Controls.Add(buttons, 0, 2)
+            layout.Controls.Add(dora, 0, 3)
+            tab.Controls.Add(layout)
+
+            Return tab
+
+        End Function
+
+
+        Private Sub RefreshFacts(Optional selected As JournalFact = Nothing)
+
+            lvFacts.BeginUpdate()
+            Try
+                lvFacts.Items.Clear()
+                Dim ordered = _workingFacts.
+                    OrderBy(Function(item) If(item.EnteredByYou, 1, 0)).
+                    ThenBy(Function(item) JournalFactCatalog.Definitions.ToList().FindIndex(Function(definition) definition.Key = item.Key)).
+                    ThenByDescending(Function(item) item.Year)
+                For Each fact As JournalFact In ordered
+                    Dim yearOrChecked As String =
+                        If(fact.Year.HasValue, fact.Year.Value.ToString(),
+                           If(fact.CheckedUtc.HasValue, fact.CheckedUtc.Value.ToLocalTime().ToString("MMM d, yyyy"), String.Empty))
+                    Dim item As New ListViewItem({JournalFactCatalog.LabelOf(fact), JournalFactsService.DisplayValue(fact), fact.Source, yearOrChecked}) With {
+                        .Tag = fact,
+                        .Group = lvFacts.Groups(If(fact.EnteredByYou, 1, 0)),
+                        .ToolTipText = If(JournalFactCatalog.Find(fact.Key)?.Definition, String.Empty)
+                    }
+                    lvFacts.Items.Add(item)
+                    If fact Is selected Then item.Selected = True
+                Next
+            Finally
+                lvFacts.EndUpdate()
+            End Try
+
+            RefreshFactButtons()
+
+        End Sub
+
+
+        Private ReadOnly Property SelectedFact As JournalFact
+            Get
+                Return If(lvFacts.SelectedItems.Count = 0, Nothing, TryCast(lvFacts.SelectedItems(0).Tag, JournalFact))
+            End Get
+        End Property
+
+
+        Private Sub RefreshFactButtons()
+            Dim fact As JournalFact = SelectedFact
+            btnEditMetric.Enabled = fact IsNot Nothing AndAlso fact.EnteredByYou
+            btnRemoveFact.Enabled = fact IsNot Nothing
+        End Sub
+
+
+        Private Function PromptMetric(existing As JournalFact) As JournalFact
+            If metricPrompt IsNot Nothing Then Return metricPrompt(existing)
+            Using dialog As New JournalMetricForm(existing)
+                Return If(dialog.ShowDialog(Me) = DialogResult.OK, dialog.Result, Nothing)
+            End Using
+        End Function
+
+
+        Private Sub AddMetric()
+            Dim metric As JournalFact = PromptMetric(Nothing)
+            If metric Is Nothing Then Return
+            _workingFacts.Add(metric)
+            RefreshFacts(metric)
+        End Sub
+
+
+        Private Sub EditMetric()
+            Dim fact As JournalFact = SelectedFact
+            If fact Is Nothing OrElse Not fact.EnteredByYou Then Return
+            Dim edited As JournalFact = PromptMetric(fact)
+            If edited Is Nothing Then Return
+            _workingFacts(_workingFacts.IndexOf(fact)) = edited
+            RefreshFacts(edited)
+        End Sub
+
+
+        ' A looked-up fact returns with the next lookup, unless the source
+        ' no longer gives it.
+        Private Sub RemoveFact()
+            Dim fact As JournalFact = SelectedFact
+            If fact Is Nothing Then Return
+            _workingFacts.Remove(fact)
+            RefreshFacts()
+        End Sub
+
+
+        ' For tests.
+        Friend ReadOnly Property FactsList As ListView
+            Get
+                Return lvFacts
+            End Get
+        End Property
+
+        Friend ReadOnly Property IssnsBox As TextBox
+            Get
+                Return txtIssns
+            End Get
+        End Property
+
+        Friend ReadOnly Property NotesBox As TextBox
+            Get
+                Return txtNotes
+            End Get
+        End Property
+
+        Friend Sub AddMetricForTest()
+            AddMetric()
+        End Sub
+
+        Friend Sub SaveForTest()
+            SaveJournal(Me, EventArgs.Empty)
         End Sub
 
     End Class

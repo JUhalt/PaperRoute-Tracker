@@ -19,4 +19,4 @@ Useful reports include:
 - the potential impact; and
 - any suggested mitigation.
 
-PaperRoute is local-first, but features involving files, imports, external metadata services, update infrastructure, and local persistence should still be treated as security-sensitive.
+PaperRoute is local-first, but features involving files, imports, external metadata services, the optional AI assistant and its provider keys, update infrastructure, and local persistence should still be treated as security-sensitive.

@@ -24,6 +24,26 @@ Namespace Models
         Public Property ReadinessChecklistTemplate As List(Of JournalChecklistTemplateItem) =
             New List(Of JournalChecklistTemplateItem)()
 
+        ' Journal facts (#87, Schema 9). ISSNs are "NNNN-NNNC", at most four.
+        Public Property Issns As List(Of String) = New List(Of String)()
+
+        Public Property AimsScopeUrl As String = String.Empty
+
+        Public Property AuthorInstructionsUrl As String = String.Empty
+
+        Public Property EditorialBoardUrl As String = String.Empty
+
+        ' Ids in the open indexes, from the last lookup.
+        Public Property OpenAlexId As String = String.Empty
+
+        Public Property DoajId As String = String.Empty
+
+        ' Fields a lookup filled, keyed by JournalFactsService field names.
+        Public Property FieldSources As Dictionary(Of String, FieldSource) =
+            New Dictionary(Of String, FieldSource)(StringComparer.Ordinal)
+
+        Public Property Facts As List(Of JournalFact) = New List(Of JournalFact)()
+
 
         Public ReadOnly Property DisplayName As String
             Get

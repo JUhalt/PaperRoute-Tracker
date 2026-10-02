@@ -37,6 +37,29 @@ Namespace Services
             Return item
         End Function
 
+        ' Several comments at once, such as those accepted from a decision
+        ' letter (#84): all are added, in order, or none is.
+        Public Shared Function AddItems(
+            submission As JournalSubmission,
+            drafts As IEnumerable(Of ReviewerResponseItem)
+        ) As IReadOnlyList(Of ReviewerResponseItem)
+            If drafts Is Nothing Then Throw New ArgumentNullException(NameOf(drafts))
+            Dim candidate = CopyForEdit(submission)
+            Dim added As New List(Of ReviewerResponseItem)()
+            For Each draft As ReviewerResponseItem In drafts
+                If draft Is Nothing Then Throw New ArgumentException("A response item to add is missing.", NameOf(drafts))
+                Dim item = ManuscriptCloneService.CloneReviewerResponse(draft)
+                item.Id = Guid.NewGuid()
+                item.CreatedAtUtc = DateTime.UtcNow
+                item.LastModifiedAtUtc = Nothing
+                candidate.ReviewerResponses.Add(item)
+                added.Add(item)
+            Next
+            NormalizeAndValidateSubmission(candidate)
+            submission.ReviewerResponses = candidate.ReviewerResponses
+            Return added.AsReadOnly()
+        End Function
+
         Public Shared Function UpdateItem(
             submission As JournalSubmission,
             itemId As Guid,

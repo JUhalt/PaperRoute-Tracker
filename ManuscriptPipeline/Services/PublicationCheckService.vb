@@ -25,8 +25,15 @@ Namespace Services
     Public Class OnlinePublicationSource
         Implements IPublicationSource
 
-        Private ReadOnly _crossref As New CrossrefClient()
-        Private ReadOnly _orcid As New OrcidClient()
+        Private ReadOnly _crossref As CrossrefClient
+        Private ReadOnly _orcid As OrcidClient
+
+        ' Check for Publications runs as the publication check; Fill Blanks
+        ' from Crossref is a DOI lookup (#86).
+        Public Sub New(Optional serviceId As String = OnlineServiceCatalog.PublicationCheck)
+            _crossref = New CrossrefClient(serviceId)
+            _orcid = New OrcidClient(serviceId)
+        End Sub
 
         Public Async Function LookupDoiAsync(doi As String, cancellationToken As CancellationToken) As Task(Of CrossrefMetadataSuggestion) Implements IPublicationSource.LookupDoiAsync
             Try
@@ -100,7 +107,7 @@ Namespace Services
                     Try
                         works = Await source.OrcidWorksAsync(OrcidIdentifierService.NormalizeAndValidate(orcid), cancellationToken)
                     Catch ex As Exception When IsLookupFailure(ex, cancellationToken)
-                        result.Failures.Add((Nothing, "The ORCID record could not be read: " & ex.Message))
+                        result.Failures.Add((Nothing, "The ORCID record could not be read: " & OnlineAccess.Describe(ex, "ORCID")))
                     End Try
                 End If
 
@@ -119,12 +126,16 @@ Namespace Services
                     Catch ex As CrossrefRateLimitException
                         Throw
                     Catch ex As Exception When IsLookupFailure(ex, cancellationToken)
-                        result.Failures.Add((manuscript, ex.Message))
+                        result.Failures.Add((manuscript, OnlineAccess.Describe(ex, "Crossref")))
                     End Try
 
                 Next
 
             Catch ex As CrossrefRateLimitException
+                result.StoppedReason = ex.Message
+            Catch ex As OnlineServiceBlockedException
+                ' Work offline or a switched-off service stops the run once,
+                ' instead of failing every manuscript (#86).
                 result.StoppedReason = ex.Message
             Catch ex As OperationCanceledException When cancellationToken.IsCancellationRequested
                 result.StoppedReason = "The check was cancelled."
@@ -199,7 +210,7 @@ Namespace Services
         ' Network trouble and unexpected responses affect one manuscript;
         ' the user's Cancel does not count.
         Private Shared Function IsLookupFailure(ex As Exception, cancellationToken As CancellationToken) As Boolean
-            If TypeOf ex Is CrossrefRateLimitException Then Return False
+            If TypeOf ex Is CrossrefRateLimitException OrElse TypeOf ex Is OnlineServiceBlockedException Then Return False
             If TypeOf ex Is OperationCanceledException Then Return Not cancellationToken.IsCancellationRequested
             Return TypeOf ex Is HttpRequestException OrElse
                    TypeOf ex Is InvalidOperationException OrElse

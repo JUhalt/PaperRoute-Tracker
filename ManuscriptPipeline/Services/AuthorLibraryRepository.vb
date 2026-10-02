@@ -239,6 +239,36 @@ Namespace Services
         End Function
 
 
+        ' Saves authors, affiliations, and tags from a copy that never edits
+        ' journals, keeping the journals as they are on disk. Only the
+        ' Journals page changes journals, and what it saved (such as looked-up
+        ' facts, #87) must not be undone by an older copy.
+        Public Sub SaveKeepingJournals(
+            library As AuthorLibraryData
+        )
+
+            If library Is Nothing Then
+                Throw New ArgumentNullException(NameOf(library))
+            End If
+
+            Dim current As AuthorLibraryData = Nothing
+
+            Try
+                If File.Exists(_dataFilePath) OrElse File.Exists(_backupFilePath) Then current = Load()
+            Catch ex As Exception When TypeOf ex Is IOException OrElse
+                                       TypeOf ex Is InvalidDataException OrElse
+                                       TypeOf ex Is UnauthorizedAccessException OrElse
+                                       TypeOf ex Is JsonException
+                current = Nothing
+            End Try
+
+            If current IsNot Nothing Then library.Journals = current.Journals
+
+            Save(library)
+
+        End Sub
+
+
         Public Sub Save(
             library As AuthorLibraryData
         )

@@ -192,12 +192,15 @@ Namespace Forms
                     Catch ex As CrossrefRateLimitException
                         stopped = ex.Message
                         Exit For
+                    Catch ex As OnlineServiceBlockedException
+                        stopped = ex.Message
+                        Exit For
                     Catch ex As OperationCanceledException When _cancellation.IsCancellationRequested
                         stopped = "The lookup was stopped."
                         Exit For
                     Catch ex As Exception When TypeOf ex Is System.Net.Http.HttpRequestException OrElse TypeOf ex Is InvalidOperationException OrElse
                                                TypeOf ex Is OperationCanceledException OrElse TypeOf ex Is JsonException
-                        failures.Add(ReminderService.SafeManuscriptTitle(manuscript) & ": " & ex.Message)
+                        failures.Add(ReminderService.SafeManuscriptTitle(manuscript) & ": " & OnlineAccess.Describe(ex, "Crossref"))
                     End Try
                 Next
             Finally

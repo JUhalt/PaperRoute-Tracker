@@ -324,6 +324,20 @@ Public Class ManuscriptPageTests
                         {"Paste a title page", "ORCID works", "BibTeX or RIS", "Spreadsheet"},
                         Descendants(board.Welcome).OfType(Of FilterChip)().Select(Function(chip) chip.Text).ToList())
 
+                    ' #83: the example library opens from the welcome and from
+                    ' Import & Export, in its own window; nothing here changes.
+                    Dim launches As Integer = 0
+                    board.exampleLauncher = Sub() launches += 1
+                    Dim example As LinkLabel = Descendants(board.Welcome).OfType(Of LinkLabel)().Single(Function(link) link.Text.EndsWith("Explore an example library", StringComparison.Ordinal))
+                    GetType(LinkLabel).GetMethod("OnLinkClicked", BindingFlags.Instance Or BindingFlags.NonPublic).
+                        Invoke(example, New Object() {New LinkLabelLinkClickedEventArgs(example.Links(0))})
+                    board.PressCommandKey(Keys.Control Or Keys.D6)
+                    Descendants(board).OfType(Of ActionButton)().Single(Function(button) button.Text = "Explore an Example Library...").PerformClick()
+                    Assert.AreEqual(2, launches)
+                    Assert.AreEqual(0, board.Library.Count, "Opening the example adds nothing to this library.")
+                    Assert.AreEqual(0, board.SaveCount)
+                    board.PressCommandKey(Keys.Control Or Keys.D1)
+
                     board.Library.Add(Sample("The first manuscript"))
                     board.Render()
                     Assert.IsFalse(board.Welcome.Visible, "The shelves replace the welcome.")
@@ -732,6 +746,94 @@ Public Class ManuscriptPageTests
             End Sub)
     End Sub
 
+    ' Your Citations (#91): saved figures on Insights, computed here; only
+    ' Update from OpenAlex... asks anything, and the tab never saves the library.
+    <TestMethod>
+    Public Sub YourCitationsShowSavedFiguresAndUpdateOnlyWhenAsked()
+        RunOnStaThread(
+            Sub()
+                Dim folder As String = Path.Combine(Path.GetTempPath(), "PaperRoute-Citations-" & Guid.NewGuid().ToString("N"))
+                Dim network As New NoNetwork()
+                OnlineAccess.ResetForTests()
+                OnlineAccess.InnerHandlerFactory = Function() network
+                Try
+                    Using board As New PageBoard()
+                        Dim published As Manuscript = RouteMapServiceTests.Anchoring()
+                        published.Metadata.Doi = "https://doi.org/10.5555/Example.Anchoring"
+                        Dim second As Manuscript = RouteMapServiceTests.Anchoring()
+                        second.Title = "A second published manuscript"
+                        second.Metadata.Doi = "10.5555/example.second"
+                        board.Prepare(published, second, Sample("Unsubmitted idea"))
+                        Dim store As New CitationStore(folder)
+                        board.citationStoreFactory = Function() store
+                        Dim prompted As New List(Of CitationSnapshot)()
+                        board.citationsUpdatePrompt =
+                            Function(previous)
+                                prompted.Add(previous)
+                                Dim snapshot As New CitationSnapshot With {.Orcid = "0000-0002-1825-0097", .Source = JournalFactCatalog.OpenAlexSource, .RetrievedUtc = New DateTime(2026, 9, 30, 12, 0, 0, DateTimeKind.Utc)}
+                                snapshot.Works.Add(New CitedWork With {.OpenAlexId = "W1", .Doi = "10.5555/example.anchoring", .Year = 2026, .CitedByCount = 12, .Fwci = 1.2, .Percentile = 0.8,
+                                                                       .CountsByYear = New List(Of YearCount) From {New YearCount With {.Year = 2026, .Count = 12}}})
+                                snapshot.Works.Add(New CitedWork With {.OpenAlexId = "W2", .Doi = "10.5555/example.other", .Year = 2020, .CitedByCount = 3})
+                                snapshot.Works.Add(New CitedWork With {.OpenAlexId = "W3", .Doi = "10.5555/example.second", .Year = 2018, .CitedByCount = 40, .Fwci = 12.3, .Percentile = 0.07})
+                                Return snapshot
+                            End Function
+
+                        ' Without an ORCID iD, the tab says where to add one.
+                        board.PressCommandKey(Keys.Control Or Keys.D5)
+                        Descendants(board).OfType(Of ShelfTabButton)().Single(Function(item) item.Text = "Your Citations").Checked = True
+                        Application.DoEvents()
+                        Assert.IsTrue(Descendants(board).OfType(Of Button)().Any(Function(button) button.Text = "Open Authors && Affiliations"))
+                        Assert.IsFalse(Descendants(board).OfType(Of Label)().Single(Function(label) label.Text.StartsWith("Days are calendar days")).Visible, "The route footnote belongs to the other views.")
+
+                        board.SetAuthors(New AuthorRecord With {.GivenName = "Josiah", .FamilyName = "Carberry", .IsMe = True, .Orcid = "https://orcid.org/0000-0002-1825-0097"})
+                        Descendants(board).OfType(Of ShelfTabButton)().Single(Function(item) item.Text.StartsWith("Your Journals")).Checked = True
+                        Descendants(board).OfType(Of ShelfTabButton)().Single(Function(item) item.Text = "Your Citations").Checked = True
+                        Application.DoEvents()
+                        Assert.IsTrue(Descendants(board).OfType(Of Label)().Any(Function(label) label.Text.StartsWith("See how your published work has been cited, from OpenAlex") AndAlso label.Text.Contains("(0000-0002-1825-0097)")))
+                        Dim update As Button = Descendants(board).OfType(Of Button)().Single(Function(button) button.Text = "Update from OpenAlex...")
+                        Assert.IsTrue(update.Enabled)
+
+                        ClickControl(update)
+                        Assert.AreEqual(1, prompted.Count)
+                        Assert.IsNull(prompted(0), "Nothing saved before.")
+                        Assert.AreEqual(3, store.Load().Works.Count, "The confirmed works are saved.")
+                        Dim labels As List(Of String) = Descendants(board).OfType(Of Label)().Select(Function(label) label.Text).ToList()
+                        CollectionAssert.IsSubsetOf({"Citations", "h-index", "i10-index", "g-index", "m-quotient", "55"}, labels)
+                        Assert.IsTrue(labels.Any(Function(text) text.StartsWith("From OpenAlex on Sep 30, 2026, for the 3 works you confirmed (ORCID iD 0000-0002-1825-0097).")))
+                        Assert.IsTrue(labels.Any(Function(text) text.Contains("2026 12 so far")))
+                        Assert.IsTrue(labels.Contains("Other works on your record: 1 (not tracked in PaperRoute)."))
+                        Dim grid As DataGridView = Descendants(board).OfType(Of DataGridView)().Single()
+                        Assert.AreEqual(2, grid.Rows.Count, "Your manuscripts, joined by DOI.")
+                        Dim row As DataGridViewRow = grid.Rows.Cast(Of DataGridViewRow)().Single(Function(item) CStr(item.Cells("Title").Value) = published.Title)
+                        Assert.AreEqual(12.0, CDbl(row.Cells("Citations").Value))
+                        Assert.AreEqual("80th", CStr(row.Cells("Percentile").Value))
+                        StringAssert.EndsWith(CStr(row.Cells("Fwci").Value), "(provisional)")
+                        ' Numbers sort as numbers: 12.30 above 1.20, the 80th above the 7th.
+                        grid.Sort(grid.Columns("Fwci"), System.ComponentModel.ListSortDirection.Descending)
+                        Assert.AreEqual("A second published manuscript", CStr(grid.Rows(0).Cells("Title").Value))
+                        grid.Sort(grid.Columns("Percentile"), System.ComponentModel.ListSortDirection.Descending)
+                        Assert.AreEqual(published.Title, CStr(grid.Rows(0).Cells("Title").Value))
+
+                        ' Working offline leaves the saved figures and turns Update off.
+                        OnlineAccess.Configure(New OnlineServicesSettings With {.WorkOffline = True})
+                        Descendants(board).OfType(Of ShelfTabButton)().Single(Function(item) item.Text.StartsWith("Your Routes")).Checked = True
+                        Descendants(board).OfType(Of ShelfTabButton)().Single(Function(item) item.Text = "Your Citations").Checked = True
+                        Application.DoEvents()
+                        Assert.IsFalse(Descendants(board).OfType(Of Button)().Single(Function(button) button.Text = "Update from OpenAlex...").Enabled)
+                        Assert.AreEqual(2, Descendants(board).OfType(Of DataGridView)().Single().Rows.Count)
+                        Assert.IsTrue(Descendants(board).OfType(Of Label)().Any(Function(label) label.Text.StartsWith("You're working offline, so updating is off.")))
+
+                        Assert.AreEqual(0, network.Requests, "Showing citations never sends anything.")
+                        Assert.AreEqual(0, board.SaveCount, "Citations never save the library.")
+                        board.Close()
+                    End Using
+                Finally
+                    OnlineAccess.ResetForTests()
+                    If Directory.Exists(folder) Then Directory.Delete(folder, True)
+                End Try
+            End Sub)
+    End Sub
+
     <TestMethod>
     Public Sub TheRouteViewOpensOnItsRouteDrawnToScale()
         RunOnStaThread(
@@ -752,6 +854,86 @@ Public Class ManuscriptPageTests
                     ShowOffscreen(view)
                     Assert.IsFalse(Descendants(view).OfType(Of RouteMapBar)().Any(), "No route map before a first submission.")
                     view.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    ' The journal shortlist (#65) on the Overview: added with its reasons,
+    ' offered after a rejection, and saved with the page.
+    <TestMethod>
+    Public Sub TheShortlistOffersTheNextJournalAfterARejectionAndSavesWithThePage()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard()
+                    Dim manuscript As Manuscript = Sample("Rerouted manuscript")
+                    manuscript.TargetJournal = "First Journal"
+                    Dim first As New JournalSubmission With {.JournalName = "First Journal", .SubmittedDate = New DateTime(2026, 1, 5)}
+                    first.Decisions.Add(New EditorialDecisionEvent With {.Decision = EditorialDecision.DeskRejected, .DecisionDate = New DateTime(2026, 1, 12)})
+                    manuscript.Submissions.Add(first)
+                    board.Prepare(manuscript)
+                    board.Open(manuscript)
+
+                    Assert.AreEqual(String.Empty, board.Editor.ShortlistOfferText, "Nothing to offer before a journal is shortlisted.")
+                    board.Editor.candidatePrompt =
+                        Function(existing) New JournalCandidate With {.JournalName = "Open Psychology", .Status = CandidateStatus.Preferred,
+                                                                     .Notes = "Publishes replications", .Checks = New List(Of String) From {"trust.known", "fit.scope"}}
+                    board.Editor.AddShortlistCandidateForTest()
+
+                    Assert.AreEqual("Desk rejected by First Journal on Jan 12, 2026. Next on your shortlist: Open Psychology (Preferred).", board.Editor.ShortlistOfferText)
+                    Assert.IsTrue(board.Editor.HasUnsavedChanges(), "The shortlist waits for Save like any change.")
+                    Assert.AreEqual(0, manuscript.JournalShortlist.Count, "The saved record is untouched until Save.")
+
+                    board.Editor.ShortlistOfferButton.PerformClick()
+                    Assert.AreEqual(String.Empty, board.Editor.ShortlistOfferText, "Once it is the target journal, there is nothing more to offer.")
+
+                    board.PressCommandKey(Keys.Control Or Keys.S)
+                    Assert.AreEqual("Open Psychology", manuscript.TargetJournal)
+                    Dim saved As JournalCandidate = manuscript.JournalShortlist.Single()
+                    Assert.AreEqual("Publishes replications", saved.Notes)
+                    CollectionAssert.AreEquivalent({"trust.known", "fit.scope"}, saved.Checks)
+                    Assert.AreEqual(1, board.SaveCount)
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    <TestMethod>
+    Public Sub FoundJournalsJoinTheShortlistWithTheirEvidenceAndWaitForSave()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard()
+                    Dim manuscript As Manuscript = Sample("Anchoring in clinical risk estimates")
+                    board.Prepare(manuscript)
+                    board.Open(manuscript)
+
+                    Dim messages As New List(Of String)()
+                    AddHandler board.Editor.StatusMessage, Sub(sender, message) messages.Add(message)
+                    Dim request As New JournalSuggestionRequest With {.Keywords = New List(Of String) From {"anchoring effects"}, .MatchAll = True, .SinceDate = New DateTime(2021, 9, 30)}
+                    Dim found As New List(Of JournalSuggestion) From {
+                        New JournalSuggestion With {.OpenAlexId = "S196734849", .Name = "Scientific Reports", .Issns = New List(Of String) From {"2045-2322"}, .MatchingArticles = 3, .AllArticles = 163365,
+                                                    .Examples = New List(Of EvidenceExample) From {New EvidenceExample With {.Title = "Anchoring in triage", .Year = 2026, .Doi = "10.1038/s41598-026-66155-3"}}},
+                        New JournalSuggestion With {.OpenAlexId = "S9692511", .Name = "Frontiers in Psychology", .Issns = New List(Of String) From {"1664-1078"}, .MatchingArticles = 2}
+                    }
+                    Dim result As New JournalSuggestionsResult With {.Request = request, .RetrievedUtc = New DateTime(2026, 9, 30, 12, 0, 0, DateTimeKind.Utc), .Journals = found}
+                    board.Editor.journalSuggestionPrompt = Function() (found, result)
+                    board.Editor.FindJournalsForTest()
+
+                    Assert.IsTrue(board.Editor.HasUnsavedChanges(), "Found journals wait for Save like any change.")
+                    Assert.AreEqual(0, manuscript.JournalShortlist.Count)
+                    CollectionAssert.AreEqual({"Added 2 journals to the shortlist as Considering. Save the manuscript page to keep them."}, messages)
+
+                    board.Editor.FindJournalsForTest()
+                    Assert.AreEqual(1, messages.Count, "Journals already on the shortlist aren't added again.")
+
+                    board.PressCommandKey(Keys.Control Or Keys.S)
+                    Assert.AreEqual(2, manuscript.JournalShortlist.Count)
+                    Dim saved As JournalCandidate = manuscript.JournalShortlist.First()
+                    Assert.AreEqual(CandidateStatus.Considering, saved.Status)
+                    Assert.AreEqual(3L, saved.Evidence.MatchingArticles)
+                    Assert.AreEqual("Anchoring in triage", saved.Evidence.Examples.Single().Title)
+                    CollectionAssert.AreEqual({"anchoring effects"}, saved.Evidence.Keywords)
+                    board.Close()
                 End Using
             End Sub)
     End Sub
@@ -903,6 +1085,17 @@ Public Class ManuscriptPageTests
     ' The real board and manuscript page, on in-memory samples. Saving is
     ' counted instead of written, and the reusable author library is a
     ' throwaway directory.
+    Private NotInheritable Class NoNetwork
+        Inherits Net.Http.HttpMessageHandler
+
+        Public Requests As Integer
+
+        Protected Overrides Function SendAsync(request As Net.Http.HttpRequestMessage, cancellationToken As CancellationToken) As Task(Of Net.Http.HttpResponseMessage)
+            Interlocked.Increment(Requests)
+            Throw New InvalidOperationException("No request was expected.")
+        End Function
+    End Class
+
     Private NotInheritable Class PageBoard
         Inherits Form1
 
@@ -956,6 +1149,12 @@ Public Class ManuscriptPageTests
         Public Sub Render()
             CallPrivate("RenderManuscripts")
             Application.DoEvents()
+        End Sub
+
+        Public Sub SetAuthors(ParamArray authors As AuthorRecord())
+            Dim library As New AuthorLibraryData()
+            library.Authors.AddRange(authors)
+            GetType(Form1).GetField("authorLibrary", BindingFlags.Instance Or BindingFlags.NonPublic).SetValue(Me, library)
         End Sub
 
         Public Sub Prepare(ParamArray samples As Manuscript())

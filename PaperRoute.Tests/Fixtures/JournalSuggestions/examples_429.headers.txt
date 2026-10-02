@@ -1,0 +1,14 @@
+HTTP/1.1 429 Too Many Requests
+Date: Wed, 30 Sep 2026 10:35:02 GMT
+Content-Type: application/json
+Content-Length: 253
+Connection: keep-alive
+Access-Control-Allow-Origin: *
+Cache-Control: no-store
+Retry-After: 36
+access-control-allow-headers: Accept, Accept-Language, Accept-Encoding, Authorization, Content-Type, X-OpenAlex-UI
+access-control-allow-methods: GET, HEAD, POST, PATCH, OPTIONS
+access-control-expose-headers: Cache-Control, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Onetime-Remaining, X-RateLimit-Credits-Used, X-RateLimit-Credits-Required, X-RateLimit-Reset, X-RateLimit-Limit-USD, X-RateLimit-Remaining-USD, X-RateLimit-Prepaid-Remaining-USD, X-RateLimit-Cost-USD, X-RateLimit-Cost-Required-USD, Retry-After
+Server: cloudflare
+CF-RAY: a432941b0af9acd7-EWR
+

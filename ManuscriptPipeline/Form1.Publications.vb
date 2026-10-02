@@ -15,9 +15,9 @@ Partial Public Class Form1
     Friend publicationSource As IPublicationSource = Nothing
     Friend markPublishedPrompt As Func(Of Manuscript, PublicationMatch, Boolean) = Nothing
 
-    Private Function CurrentPublicationSource() As IPublicationSource
-        If publicationSource Is Nothing Then publicationSource = New OnlinePublicationSource()
-        Return publicationSource
+    Private Function CurrentPublicationSource(Optional serviceId As String = OnlineServiceCatalog.PublicationCheck) As IPublicationSource
+        If publicationSource IsNot Nothing Then Return publicationSource
+        Return New OnlinePublicationSource(serviceId)
     End Function
 
 
@@ -49,7 +49,7 @@ Partial Public Class Form1
 
     Private Sub FillBlanksFromCrossref(sender As Object, e As EventArgs)
 
-        Using dialog As New FillBlanksForm(manuscripts, CurrentPublicationSource(), AddressOf SaveManuscripts)
+        Using dialog As New FillBlanksForm(manuscripts, CurrentPublicationSource(OnlineServiceCatalog.Crossref), AddressOf SaveManuscripts)
             If dialog.ShowDialog(Me) = DialogResult.OK AndAlso dialog.FilledCount > 0 Then
                 RenderManuscripts()
                 lblStatus.Text = "Filled " & dialog.FilledCount.ToString(CultureInfo.CurrentCulture) &

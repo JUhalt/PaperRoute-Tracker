@@ -501,6 +501,9 @@ Namespace Services
                     New List(Of JournalChecklistTemplateItem)()
             End If
 
+            ' Journal facts (#87): lenient, so a bad value is dropped.
+            JournalFactsService.Normalize(journal)
+
             Dim templateIds As New HashSet(Of Guid)()
 
             For Each item As JournalChecklistTemplateItem In

@@ -13,24 +13,16 @@ Namespace Services
 
     Public Class CrossrefClient
 
-        Private Shared ReadOnly SharedHttpClient As HttpClient =
-            CreateHttpClient()
+        ' Every request goes through the Online services gate (#86), under the
+        ' service that asked: a DOI lookup, or the publication check.
+        Private ReadOnly SharedHttpClient As HttpClient
 
 
-        Private Shared Function CreateHttpClient() As HttpClient
+        Public Sub New(Optional serviceId As String = OnlineServiceCatalog.Crossref)
 
-            Dim client As New HttpClient()
+            SharedHttpClient = OnlineAccess.ClientFor(serviceId)
 
-            client.Timeout =
-                TimeSpan.FromSeconds(20)
-
-            client.DefaultRequestHeaders.UserAgent.ParseAdd(
-                "PaperRouteTracker/0.2 (+https://github.com/JUhalt/PaperRoute-Tracker)"
-            )
-
-            Return client
-
-        End Function
+        End Sub
 
 
         Public Async Function LookupAsync(

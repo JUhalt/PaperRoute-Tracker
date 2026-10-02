@@ -1,4 +1,5 @@
 Imports System
+Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.IO
 Imports System.Linq
@@ -20,10 +21,12 @@ Namespace Forms
         Private ReadOnly txtDetails As New TextBox()
         Private ReadOnly lblCount As New Label()
         Private ReadOnly btnAdd As New Button()
+        Private ReadOnly btnFromLetter As New Button()
         Private ReadOnly btnEdit As New Button()
         Private ReadOnly btnRemove As New Button()
         Private ReadOnly btnUp As New Button()
         Private ReadOnly btnDown As New Button()
+        Private ReadOnly actions As New FlowLayoutPanel()
 
         ' Inline, the matrix is a tab of the manuscript page's submission detail:
         ' it edits the submission (itself part of the page's working copy)
@@ -144,16 +147,19 @@ Namespace Forms
             End If
             root.Controls.Add(body, 0, 2)
 
-            Dim actions As New FlowLayoutPanel With {
-                .Dock = DockStyle.Fill, .AutoSize = True, .WrapContents = True,
-                .Padding = New Padding(0, 10, 0, 6), .Margin = New Padding(0)
-            }
+            actions.Dock = DockStyle.Fill
+            actions.AutoSize = True
+            actions.WrapContents = True
+            actions.Padding = New Padding(0, 10, 0, 6)
+            actions.Margin = New Padding(0)
             ConfigureAction(btnAdd, "&Add Comment...", "Add reviewer comment", AddressOf AddItem)
+            ' The optional AI assistant (#84): in the row only once it is turned on.
+            ConfigureAction(btnFromLetter, "Add from &Letter...", "Add reviewer comments from a decision letter", AddressOf AddFromLetter)
             ConfigureAction(btnEdit, "&Edit...", "Edit reviewer comment", AddressOf EditItem)
             ConfigureAction(btnRemove, "&Remove", "Remove reviewer comment", AddressOf RemoveItem)
             ConfigureAction(btnUp, "Move &Up", "Move reviewer comment up", Sub() MoveItem(-1))
             ConfigureAction(btnDown, "Move &Down", "Move reviewer comment down", Sub() MoveItem(1))
-            actions.Controls.AddRange({btnAdd, btnEdit, btnRemove, btnUp, btnDown})
+            actions.Controls.AddRange({btnAdd, btnFromLetter, btnEdit, btnRemove, btnUp, btnDown})
             root.Controls.Add(actions, 0, 3)
             Dim saveNote As New Label With {
                 .Text = If(_inline,
@@ -299,9 +305,24 @@ Namespace Forms
 
         End Sub
 
+        ' The assistant's button is in the actions row only while the
+        ' assistant is turned on, so a hidden button never takes a place.
+        Private Sub RefreshLetterButton()
+            Dim turnedOn As Boolean = AssistantRunner.IsTurnedOn()
+            Dim shown As Boolean = actions.Controls.Contains(btnFromLetter)
+            If turnedOn AndAlso Not shown Then
+                actions.Controls.Add(btnFromLetter)
+                actions.Controls.SetChildIndex(btnFromLetter, actions.Controls.IndexOf(btnAdd) + 1)
+            ElseIf Not turnedOn AndAlso shown Then
+                actions.Controls.Remove(btnFromLetter)
+            End If
+            btnFromLetter.Enabled = btnAdd.Enabled
+        End Sub
+
         Private Sub RefreshSelection()
             Dim item As ReviewerResponseItem = SelectedItem()
             btnAdd.Enabled = _working.Decisions.Any(Function(candidateDecision) candidateDecision IsNot Nothing)
+            RefreshLetterButton()
             btnEdit.Enabled = item IsNot Nothing
             btnRemove.Enabled = item IsNot Nothing
             Dim index As Integer = If(item Is Nothing, -1, _working.ReviewerResponses.FindIndex(Function(candidate) candidate.Id = item.Id))
@@ -324,7 +345,15 @@ Namespace Forms
                 Dim ordinal As Integer = _working.Decisions.FindIndex(Function(candidate) candidate.Id = decision.Id) + 1
                 details.AppendLine("Decision " & ordinal.ToString() & ": " & decision.DecisionDate.ToString("MMM d, yyyy") & " — " & EditorialDecisionDisplayService.Format(decision.Decision))
             End If
+            ' Where AI assistant suggestions the researcher accepted came from (#84).
+            Dim commentOrigin As String = AssistantSuggestionService.Describe(item.CommentSuggestion)
+            If commentOrigin.Length > 0 Then details.AppendLine("Comment: " & commentOrigin)
+            Dim responseOrigin As String = AssistantSuggestionService.Describe(item.ResponseSuggestion)
+            If responseOrigin.Length > 0 Then details.AppendLine("Draft response: " & responseOrigin)
             AppendSection(details, "COMMENT", item.CommentText)
+            If item.CommentSuggestion IsNot Nothing AndAlso Not String.IsNullOrWhiteSpace(item.CommentSuggestion.SourceText) Then
+                AppendSection(details, "SOURCE (FROM THE DECISION LETTER)", item.CommentSuggestion.SourceText)
+            End If
             AppendSection(details, "ACTION", item.ActionText)
             AppendSection(details, "DRAFT RESPONSE", item.ResponseText)
             AppendSection(details, "MANUSCRIPT LOCATION", item.ManuscriptLocation)
@@ -344,6 +373,35 @@ Namespace Forms
                 Dim added As ReviewerResponseItem = ReviewerResponseService.AddItem(_working, editor.EditedItem)
                 cmbStatus.SelectedIndex = 0
                 RefreshItems(added.Id)
+                NotifyChanged()
+            End Using
+        End Sub
+
+        ' Add from Letter (#84): comments the AI assistant reads in a
+        ' decision letter, checked by the researcher, for a recorded decision.
+        Private Sub AddFromLetter(sender As Object, e As EventArgs)
+            Dim decisions As List(Of EditorialDecisionEvent) = _working.Decisions.Where(Function(candidateDecision) candidateDecision IsNot Nothing).ToList()
+            If decisions.Count = 0 Then Return
+            Dim reason As String = AssistantRunner.Unavailable()
+            If reason.Length > 0 Then
+                MessageBox.Show(Me, reason, "Add from Letter", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                Return
+            End If
+            ' With one decision, its notes may already hold the letter.
+            Dim prefill As String = If(decisions.Count = 1, decisions(0).Notes, String.Empty)
+            Using letterDialog As New DecisionLetterForm(DecisionLetterMode.ExistingDecision, _working, prefill)
+                If DecisionLetterForm.RunDialog(letterDialog, Me) <> DialogResult.OK OrElse Not letterDialog.ChosenDecisionId.HasValue Then Return
+                Dim drafts As List(Of ReviewerResponseItem) = letterDialog.DraftItems(letterDialog.ChosenDecisionId.Value)
+                If drafts.Count = 0 Then Return
+                Dim added As IReadOnlyList(Of ReviewerResponseItem)
+                Try
+                    added = ReviewerResponseService.AddItems(_working, drafts)
+                Catch ex As Exception When TypeOf ex Is ArgumentException OrElse TypeOf ex Is InvalidOperationException OrElse TypeOf ex Is InvalidDataException
+                    MessageBox.Show(Me, ex.Message, "Check Reviewer Comments", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                    Return
+                End Try
+                cmbStatus.SelectedIndex = 0
+                RefreshItems(added(0).Id)
                 NotifyChanged()
             End Using
         End Sub
@@ -397,6 +455,12 @@ Namespace Forms
             Using export As New ReviewerResponseExportForm(ReviewerResponseExportService.ExportMarkdown(context, _working))
                 export.ShowDialog(Me)
             End Using
+        End Sub
+
+        ' The assistant's button is disposed here when it isn't in the row.
+        Protected Overrides Sub Dispose(disposing As Boolean)
+            If disposing AndAlso Not actions.Controls.Contains(btnFromLetter) Then btnFromLetter.Dispose()
+            MyBase.Dispose(disposing)
         End Sub
 
         Private NotInheritable Class ResponseChoice

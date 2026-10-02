@@ -336,6 +336,7 @@ Partial Public Class Form1
         Dim editor As EditManuscriptForm = CreateManuscriptEditor(manuscript)
         EmbedForm(editor)
         AddHandler editor.DeleteConfirmed, AddressOf ManuscriptDeleteConfirmed
+        AddHandler editor.StatusMessage, Sub(sender, message) lblStatus.Text = message
         manuscriptEditor = editor
 
         frame.Controls.Add(crumb, 0, 0)

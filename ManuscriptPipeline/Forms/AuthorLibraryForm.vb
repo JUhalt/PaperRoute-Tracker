@@ -565,7 +565,7 @@ Namespace Forms
 
                     End If
 
-                    _repository.Save(
+                    _repository.SaveKeepingJournals(
                         _library
                     )
 
@@ -904,7 +904,7 @@ Namespace Forms
 
             Try
 
-                _repository.Save(
+                _repository.SaveKeepingJournals(
                     _library
                 )
 

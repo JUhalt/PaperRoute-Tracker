@@ -232,6 +232,8 @@ Partial Public Class Form1
                 End Using
             End Sub
 
+        Dim btnOnline As RailCommandButton = CreateOnlineStatusButton(itemWidth, itemHeight)
+
         Dim btnSettings As New RailCommandButton(RailGlyph.Settings, "Settings") With {
             .Width = itemWidth,
             .Height = itemHeight
@@ -252,9 +254,11 @@ Partial Public Class Form1
         AddHandler btnHelp.Click, AddressOf OpenUserGuide
         cardToolTip.SetToolTip(btnHelp, "User Guide (F1)")
         cardToolTip.SetToolTip(btnSettings, "Settings")
+        railItems.Add(btnOnline)
         railItems.Add(btnSettings)
         railItems.Add(btnHelp)
 
+        commands.Controls.Add(btnOnline)
         commands.Controls.Add(btnSettings)
         commands.Controls.Add(btnHelp)
 
@@ -327,6 +331,7 @@ Partial Public Class Form1
         Dim menu As New ContextMenuStrip()
 
         menu.Items.Add("Preferences...", Nothing, AddressOf OpenSettings)
+        menu.Items.Add(CreateWorkOfflineMenuItem())
         menu.Items.Add("Check for Updates...", Nothing, AddressOf CheckForUpdatesNow)
         menu.Items.Add("Diagnostics...", Nothing, AddressOf OpenDiagnostics)
         menu.Items.Add(New ToolStripSeparator())
@@ -334,6 +339,8 @@ Partial Public Class Form1
         menu.Items.Add("Restore Backup...", Nothing, AddressOf RestoreLibraryBackup)
         menu.Items.Add(New ToolStripSeparator())
         menu.Items.Add("About PaperRoute", Nothing, AddressOf OpenAbout)
+
+        AddHandler menu.Opening, Sub(sender, e) RefreshOnlineIndicators()
 
         AddHandler Me.FormClosed,
             Sub(sender, e)
@@ -1148,6 +1155,11 @@ Partial Public Class Form1
         addSection("Keep records current")
         addCommand("Check for Publications...", "Asks Crossref, and your ORCID record if you like, whether manuscripts you are tracking have been published. Only when you ask; nothing changes until you choose Mark Published.", AddressOf CheckForPublications)
         addCommand("Fill Blanks from Crossref...", "For manuscripts with a DOI: fills empty fields such as the journal, date, volume, and pages, after showing every change. It never replaces a value.", AddressOf FillBlanksFromCrossref)
+
+        If Not ExampleLibraryService.IsActive Then
+            addSection("Learn and teach")
+            addCommand("Explore an Example Library...", "A fictional research group's manuscripts, in a separate window: desk rejections and rerouting, revisions, a publication, a preprint, and the File Drawer. Change anything; your own library is never opened.", Sub(sender, e) OpenExampleLibrary())
+        End If
 
         addSection("Keep it safe")
         addCommand("Backup Library...", "A ZIP of the complete library, including files PaperRoute manages. The only format that keeps everything.", AddressOf BackupLibrary)

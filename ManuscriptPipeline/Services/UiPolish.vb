@@ -353,6 +353,12 @@ Namespace Services
                 grid.DefaultCellStyle.SelectionForeColor = UiTheme.PrimaryText()
                 grid.ColumnHeadersDefaultCellStyle.BackColor = UiTheme.HeaderBackground()
                 grid.ColumnHeadersDefaultCellStyle.ForeColor = UiTheme.PrimaryText()
+                ' A header never looks selected because a cell below it is.
+                grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = UiTheme.HeaderBackground()
+                grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = UiTheme.PrimaryText()
+                ' A header never looks selected because a cell below it is.
+                grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = UiTheme.HeaderBackground()
+                grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = UiTheme.PrimaryText()
 
                 Return
 

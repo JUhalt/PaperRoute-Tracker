@@ -102,6 +102,38 @@ Namespace Services
 
                 End If
 
+                ' Saved citation figures (#91), when present: read and written
+                ' again, so a damaged file (or its readable citations.bak)
+                ' never makes the backup unrestorable. Unreadable, it is left out.
+                Dim savedCitations As CitationSnapshot = Nothing
+
+                Try
+
+                    savedCitations =
+                        New CitationStore(
+                            Path.GetDirectoryName(
+                                repository.DataFilePath
+                            )
+                        ).Load()
+
+                Catch ex As InvalidDataException
+
+                    savedCitations = Nothing
+
+                End Try
+
+                If savedCitations IsNot Nothing Then
+
+                    Dim stagedCitations As New CitationStore(
+                        stagingDirectory
+                    )
+
+                    stagedCitations.Save(
+                        savedCitations
+                    )
+
+                End If
+
                 ' =============================================
                 ' Human-readable Excel export
                 ' =============================================
@@ -182,6 +214,8 @@ Namespace Services
                     "manuscripts.json is the native PaperRoute manuscript data file." &
                     Environment.NewLine &
                     "authors.json contains reusable authors, affiliations, and journals when present." &
+                    Environment.NewLine &
+                    "citations.json contains your saved citation figures when present." &
                     Environment.NewLine &
                     "library.xlsx is a human-readable export of the manuscript library." &
                     Environment.NewLine &

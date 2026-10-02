@@ -1,4 +1,4 @@
-﻿﻿# PaperRoute User Guide
+﻿# PaperRoute User Guide
 
 PaperRoute is a local-first academic manuscript tracker for researchers. It is designed to keep the complete route of a paper understandable: idea, writing, submission, peer review, revision, publication, or the File Drawer.
 
@@ -331,8 +331,11 @@ Journal records can include:
 
 - journal name;
 - publisher;
+- ISSNs;
 - journal homepage;
+- aims and scope, author instructions, and editorial board links;
 - submission portal;
+- facts and metrics (see **Journal Facts and Metrics**);
 - notes;
 - Favorite status;
 - Shortlist status; and
@@ -377,6 +380,109 @@ You can save labeled web links such as:
 For safety, PaperRoute opens only valid `http://` or `https://` URLs.
 
 ---
+
+## Journal Facts and Metrics
+
+The **Journals** page shows the selected journal beside the list: its facts, links, and metrics, each with where it came from.
+
+### Looking up a journal
+
+Choose **Look Up Facts...** to look the journal up in two open indexes:
+
+- **DOAJ** (the Directory of Open Access Journals, doaj.org), which lists fully open-access journals: the publication fee (the highest it lists), license and copyright, peer review type, typical weeks from submission to publication, plagiarism screening, and links to the journal's aims and scope, author instructions, and editorial board.
+- **OpenAlex** (openalex.org), an open index of scholarly works that covers most journals, open access or not: publisher, ISSNs, whether the journal is fully open access, its main topics, and three open citation metrics.
+
+PaperRoute sends the journal's ISSNs (the ones you saved, and any other ISSN OpenAlex lists for the same journal), and nothing else. A journal without an ISSN is first found by name: type the name, choose **Find**, and pick the journal from the list; PaperRoute then sends that journal's ISSNs, or its OpenAlex id if it has none. You see everything that was found before anything is saved:
+
+- a blank field is filled;
+- a field you typed is never replaced (**Yours is kept**);
+- a fact from an index is updated when the index changed it; and
+- a fact an index no longer gives is offered for removal, unchecked.
+
+Choose **Refresh Facts...** later to check again. Facts checked more than a year ago are marked as possibly out of date. While **Work offline** is on, or Journal facts is turned off in Online services, the page shows what was saved last time, with its date.
+
+A subscription journal isn't listed in DOAJ, which is expected. For such a journal, a fee from OpenAlex is shown as optional, for making an article open access.
+
+The facts are data from DOAJ and OpenAlex, both public domain (CC0). OpenAlex asks to be cited as: Priem, J., Piwowar, H., & Orr, R. (2022). OpenAlex: A fully-open index of scholarly works, authors, venues, institutions, and concepts. ArXiv. https://arxiv.org/abs/2205.01833. PaperRoute isn't affiliated with or endorsed by either index.
+
+### Links and sharing policies
+
+The card links to the journal's homepage, aims and scope, author instructions, editorial board, and submission portal, and to its sharing policy in **Open Policy Finder** (openpolicyfinder.jisc.ac.uk), which says whether and where you may share a preprint or accepted manuscript. Links open in your web browser; PaperRoute itself reads nothing from those pages. Editors and detailed submission requirements change often, so record what you need in the journal's notes or its checklist.
+
+### Journal metrics
+
+Metrics appear in two groups, always with their name and source. Metrics you enter show their year; OpenAlex's are as of the date the card says they were checked.
+
+- **From open data (OpenAlex):** 2-year mean citedness (citations received last year by works the journal published in the two years before, divided by the number of those works; similar in idea to the Journal Impact Factor, but not the same number), and the journal's h-index and i10-index across all years.
+- **Entered by you:** metrics that have no open source, such as the Journal Impact Factor, CiteScore, SJR, SNIP, or h5-index, and acceptance rates or decision times a journal publishes. Open **Edit... > Facts and Metrics** and choose **Add Metric...**; each metric shows its definition and where it is published. PaperRoute doesn't look these up.
+
+| Metric | Published by | What it measures |
+| --- | --- | --- |
+| Journal Impact Factor | Clarivate, Journal Citation Reports | Citations in one year to items from the two years before, per item |
+| 5-year Journal Impact Factor | Clarivate, Journal Citation Reports | The same over five years |
+| CiteScore | Elsevier, Scopus | Citations over four years to documents from those four years, per document |
+| SJR | SCImago | Weighted citations in one year to documents from the three years before, per document |
+| SNIP | CWTS, Leiden University | Citations per paper over three years, weighted for how much each field cites |
+| h5-index | Google Scholar Metrics | The largest h with h articles from the last five years cited h times each |
+
+Journal metrics describe a journal as a whole, not the quality of any single article or the work of any author, as the San Francisco Declaration on Research Assessment (https://sfdora.org/read/) explains. PaperRoute never combines metrics into one score, and never sorts or colors journals by them.
+
+---
+
+## Choosing a Journal
+
+Each manuscript keeps a **journal shortlist** on its Overview: the journals you are considering, in your order of preference, with your reasons.
+
+### Your shortlist
+
+- **Add Journal...** asks for the journal (suggested from your Journal Library and past submissions), its status (**Considering**, **Preferred**, **Backup**, or **Ruled out**), and why you are considering it. Your own history with the journal, from the Insights page, appears as you choose it.
+- Use **⋯** beside a journal to move it up or down, make it the target journal, or remove it. The number beside each status is its place in your order.
+- Each journal shows whether you have submitted to it and how that ended, read from the manuscript's own submissions.
+- When a submission is rejected or withdrawn while the manuscript is still in the Pipeline, the shortlist offers the next journal: your first **Preferred** journal not yet tried, then **Considering**, then **Backup**. **Make It the Target Journal** changes only the target journal; nothing else changes until you record the next submission.
+
+The shortlist is saved with the rest of the manuscript page, and like any change it waits for **Save**.
+
+### Is it a trusted journal?
+
+Before submitting, check that the journal is one you can trust. These questions are adapted from the Think. Check. Submit. checklist for journals, a cross-industry initiative (https://thinkchecksubmit.org/journals/), licensed CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/):
+
+- Do you or your colleagues know the journal, and have you read its articles?
+- Can you easily identify and contact the publisher?
+- Is the journal clear about the type of peer review it uses?
+- Are its articles indexed and archived in services you use?
+- Is it clear what fees will be charged, and for what?
+- Does it give clear guidelines for authors?
+- Does the publisher belong to recognized industry initiatives, such as COPE, DOAJ, or OASPA?
+
+Think. Check. Submit. suggests submitting only if you can answer yes to most of these questions.
+
+### Is it a good fit?
+
+Then ask whether the journal suits this manuscript:
+
+- Do its aims and scope cover this work?
+- Does it publish this type of article, within its length limits?
+- Does it reach the readers you want to reach?
+- Do its open-access options and fees work for you and any funder requirement?
+- Does its preprint and sharing policy suit your plans?
+- Does its time to decision and publication suit your timeline? Your own history with the journal, on the Insights page, helps here.
+
+Each shortlisted journal keeps your answers as checks, so the reasons for your choice stay with the manuscript and carry over if it is rerouted. PaperRoute never scores or ranks journals for you; the judgment stays yours.
+
+### Finding journals that publish work like this
+
+Not sure where to start? **Find Journals...** on the shortlist looks for journals that recently published articles like this one, using OpenAlex, an open index of published research.
+
+1. **Review the keywords.** PaperRoute proposes the manuscript's keywords (checked) and phrases from its title (unchecked). Check the ones that describe the work, or add your own. Choose whether articles must match every keyword or any keyword, and how many years back to look.
+2. **See what will be sent.** Before searching, the window shows the exact request: the keywords you checked and a start date, and nothing else. A phrase from the title is sent only if you check it; the abstract, notes, and files are never sent. **Show the exact web address** shows the address itself.
+3. **Read the evidence.** Each journal found shows how many matching articles it published, out of all its articles in those years, whether it is open access and its listed fee, your own history with it, and up to three recent matching articles, linked by DOI.
+4. **Add the ones worth a look.** **Add Checked to Shortlist** adds them as **Considering**, with the evidence, and nothing else changes. Journals already on the shortlist can't be added twice. Save the manuscript page to keep them.
+
+OpenAlex searches the titles, abstracts, and full text of articles, so a match means an article mentions your keywords, not that it is about the same topic. Counts favor large journals, and they are evidence to read, never a ranking of quality or of your chances. PaperRoute never scores journals or labels any as predatory; the questions above are there for that judgment.
+
+Without a key, OpenAlex allows a small amount of use each day and sometimes asks keyword searches to wait when it is busy. PaperRoute says how long, and a free OpenAlex key, added in **Settings > Preferences... > Online services**, raises the allowance.
+
+When a shortlisted journal has facts on the **Journals** page, its row shows them in one line, and the questions show what's known beside them, such as its peer review type beside the peer review question, with links to its aims and scope, author instructions, and sharing policy. The questions are never answered for you.
 
 ## Journal Submissions
 
@@ -433,7 +539,7 @@ Each item stores a reviewer/editor label, comment or action, status, draft respo
 | Addressed | You consider this request addressed. |
 | Not applicable | You have decided the request does not apply; explain why in the response or notes. |
 
-These statuses describe response work. They do not change manuscript stage, record a submission, or complete a reminder. The workflow uses manual entry and works without AI or an online account.
+These statuses describe response work. They do not change manuscript stage, record a submission, or complete a reminder. The workflow works without AI or an online account. If you turn on the optional AI assistant, **Add from Letter...** can propose the comments from a decision letter for you to check (see **AI Assistant**).
 
 Choose **Save Comment** to accept an item into the matrix. Use **Show status** to focus the list. Choose **All statuses** before using **Move Up** or **Move Down**; ordering applies to the complete sequence of items. A decision linked to response items cannot be deleted until you reassign or remove those items.
 
@@ -545,7 +651,7 @@ Types and tags never change a manuscript's stage, shelf, or route.
 
 ## Insights and Reports
 
-Open **Insights** in the left rail (Ctrl+5) to see how your work has moved through journals. Everything is calculated on this computer from your own PaperRoute records, each time you open the page. Nothing is sent anywhere, and nothing is changed.
+Open **Insights** in the left rail (Ctrl+5) to see how your work has moved through journals. Everything is calculated on this computer from your own PaperRoute records, each time you open the page, and nothing is changed. Nothing is sent anywhere, except when you choose **Update from OpenAlex...** on **Your Citations**.
 
 Across the top: how many manuscripts and submissions you have, the median time to a first decision, and the median time from first submission to acceptance. Each median says how many records it is based on.
 
@@ -554,6 +660,22 @@ Across the top: how many manuscripts and submissions you have, the median time t
 **Your Routes** lists every manuscript that has been submitted: its route, how many journals and revision rounds it took, and the days from first submission to acceptance and to publication. Press **Enter** or double-click to open the manuscript.
 
 **Route Map** lines up every published route at day 0 on one scale, shortest first, colored as in a manuscript's route map. Above it: the median days from first submission to publication, and the share of all those days spent with a journal, with you (revising or rerouting), and in production. **Include work not yet published** adds manuscripts still under way (drawn to today, with a dotted end and a + on their day count) and filed ones (drawn to their last decision). Click a route, or select it with the arrow keys and press **Enter**, to open its route map. With a journal chosen on **Your Journals**, the map shows only the manuscripts sent there.
+
+**Your Citations** shows how your published work has been cited, from OpenAlex, an open index of scholarly works. It needs your ORCID iD: in **Library > Authors & Affiliations**, edit your own record, check **This is me**, and add your iD. Opening the tab sends nothing; it shows the figures you saved last time and when they are from.
+
+**Update from OpenAlex...** first says what will be sent. It reads the works on your public ORCID record from ORCID and looks their DOIs up in OpenAlex, with the DOIs of your published manuscripts. Titles and abstracts are never sent. The option to also ask OpenAlex which other works it links to your iD sends your iD to OpenAlex too; it can find works missing from your ORCID record, but some may be someone else's. Before anything is saved, you check the works that are yours, and the figures update as you check. Versions of one work on your ORCID record count once, and a work you leave unchecked stays unchecked next time.
+
+Each figure is shown on its own, with its definition, and never combined into a score:
+
+- **Citations**: the sum of your checked works' citations in OpenAlex.
+- **h-index**: you have h works cited at least h times each.
+- **i10-index**: the number of your works cited at least 10 times.
+- **g-index**: your most-cited g works together have at least g² citations.
+- **m-quotient**: your h-index divided by the years since your first publication, counting the first year.
+- **Citations by year**: the last ten years, with this year marked "so far". OpenAlex counts citations by year from 2012.
+- For each of your manuscripts in PaperRoute with a DOI: its citations, its field-weighted citation impact (FWCI; 1.0 is average for work of the same type, year, and field, and it is provisional for work under four years old), its citation percentile, and how many journals it went to. Press **Enter** or double-click to open the manuscript.
+
+Citation counts differ between databases: OpenAlex, Scopus, Web of Science, and Google Scholar will not agree. They count citations; they don't measure the quality of the work. Your saved citations are kept in citations.json in PaperRoute's data folder and included in portable backups.
 
 How the numbers work:
 
@@ -568,6 +690,22 @@ How the numbers work:
 - **Route Report...** in a manuscript page's **⋯** menu shows one manuscript's full route: every submission, its decisions and dates, and the durations between them, with the definitions used.
 
 Reports are saved as a single web page that opens in any browser, where you can print it or save it as PDF. They never include notes, correspondence, reviewer comments or responses, file paths, or contact details, and a reminder appears only as "Reminder", never by its title.
+
+## Teaching with PaperRoute
+
+PaperRoute includes an **example library**: the fictional Example Lab's manuscripts, covering the routes a new researcher needs to see. Open it from the empty-library welcome (**Explore an example library**) or from **Import & Export → Explore an Example Library...**.
+
+The example opens in a separate window with a banner across the top. It has its own temporary storage: your own library is never opened, anything you change in the example is discarded when its window closes, and it never checks for updates or shows notifications. **Return to My Library** closes it. Its dates are relative to today, so Deadlines always has something overdue, due today, and coming up.
+
+### A 15-minute walk through the route
+
+1. **The board (2 minutes).** Three shelves, and **Needs Attention**: a revision due soon, a review waiting more than 90 days, a recent rejection. Each card's footer is its route so far.
+2. **One whole route (3 minutes).** Open *Example: anchoring effects in clinical risk estimates* and choose **View Route**. The route map shows 264 days from first submission to publication: a desk rejection after 7 days, 48 days of rerouting, two rounds of revision, and 28 days in production. Ask: how much of it was waiting on journals (105 days), and how much was the authors' own work (131 days)?
+3. **Responding to reviewers (3 minutes).** Open *Example: retrieval practice in an introductory statistics course*, then its submission's reviewer responses: four comments at four stages of response, and a revision deadline ahead.
+4. **After a rejection (2 minutes).** Open *Example: measurement invariance of a short grit scale*. Its journal shortlist offers the next journal, with the trust and fit questions answered for each. **How to choose a journal** explains them.
+5. **What needs action (2 minutes).** The **Deadlines** page: an overdue follow-up, a reminder due today, and the revision deadline.
+6. **The patterns (2 minutes).** **Insights**: turnaround with each journal, and the **Route Map** of every published route.
+7. **The File Drawer (1 minute).** *Example: a null result on priming and choice*: three rejections and a reason for setting it aside. Setbacks are part of every researcher's record.
 
 ## Publication and CV Export
 
@@ -628,6 +766,8 @@ Only Title is required.
 
 Use **Import & Export > Export Library to Excel...** to create a workbook from the current library.
 
+An Excel cell holds at most 32,767 characters. Longer text, such as a decision's notes that hold a whole letter, is cut short in the workbook with a note saying so; your library and portable backups keep the full text.
+
 ---
 
 ## Backup and Restore
@@ -640,11 +780,12 @@ A backup can contain:
 backup-info.txt
 manuscripts.json
 authors.json
+citations.json
 library.xlsx
 files\
 ```
 
-Depending on the library, `authors.json` contains reusable authors, affiliations, and journals, including journal checklist templates. `manuscripts.json` preserves manuscript histories, readiness profiles, packet associations, saved fingerprints, and reviewer-response items with their decisions, revision rounds, statuses, drafts, and order.
+Depending on the library, `authors.json` contains reusable authors, affiliations, and journals, including journal checklist templates, and `citations.json` your saved citation figures (see **Your Citations** under Insights). `manuscripts.json` preserves manuscript histories, readiness profiles, packet associations, saved fingerprints, and reviewer-response items with their decisions, revision rounds, statuses, drafts, and order.
 
 Managed document copies, including version and packet snapshots, are included. Externally linked files remain references; retain those originals separately. The included Excel workbook is a partial human-readable export, not a replacement for the native JSON and managed files in the ZIP.
 
@@ -657,6 +798,8 @@ Managed document copies, including version and packet snapshots, are included. E
 3. asks for confirmation;
 4. creates an emergency backup of the current library; and
 5. restores the selected backup.
+
+Restoring a backup that includes `citations.json` replaces your saved citation figures; a backup without it leaves them as they are.
 
 PaperRoute is intentionally conservative about restore operations because the manuscript library is the primary research-workflow record.
 
@@ -682,8 +825,10 @@ Choose **Settings > Preferences...** to configure:
 - Needs Attention thresholds;
 - File Drawer suggestion threshold;
 - reminder notification preferences;
-- Stable or Preview update channel; and
-- automatic update checking.
+- Stable or Preview update channel;
+- automatic update checking;
+- online services, Work offline, and an optional OpenAlex key (see **Online Services and Working Offline**); and
+- the optional AI assistant (see **AI Assistant**).
 
 Theme changes currently take effect after restarting PaperRoute.
 
@@ -698,6 +843,72 @@ Portable/developer builds are intended for development and smoke testing and do 
 ### Diagnostics
 
 Use **Settings > Diagnostics...** when troubleshooting storage, environment, or application-state problems.
+
+## Online Services and Working Offline
+
+PaperRoute keeps your library on this computer and works without the internet. A few features contact an online service, and only when you use them. Choose **Settings > Preferences... > Online services** to see each service, what it sends, and when, and to turn any of them off.
+
+- **Work offline** stops every online service, update checks included, until you turn it off. Choose **Settings > Work Offline**, or check it in Online services.
+- Above **Settings**, the rail shows **Online** in green, or **Working offline** in blue. Choose it to review Online services.
+- Turning off one service stops only its feature, which then explains why it didn't go online. Your choices for each service are kept while Work offline is on.
+- If PaperRoute can't read its settings file, it works offline until you review Online services and choose **Save**.
+- A service added in a later version starts on, and appears in Online services with what it sends. The AI assistant is the exception: it is off until you turn it on (see **AI Assistant**).
+- Requests identify PaperRoute and its version, and nothing about you. Beyond what the table below lists, PaperRoute sends nothing: not your library, your files, or your notes.
+- Links you choose to open, such as a journal's website, open in your web browser. They aren't PaperRoute requests, so Work offline doesn't stop them.
+
+### OpenAlex key
+
+OpenAlex, an open catalog of scholarly works and journals, gives everyone a small free daily allowance, and a free personal key raises it. To add one, sign in at openalex.org, copy your key from its API settings, and choose **Add Key...** under Online services.
+
+PaperRoute keeps the key encrypted for your Windows account on this computer, sends it only to api.openalex.org, in a request header, and never puts it in backups, exports, or Diagnostics. PaperRoute doesn't include a key of its own. After moving to another computer, add your key again.
+
+### What PaperRoute sends, and when
+
+| Service | Contacts | Sends | When |
+| --- | --- | --- | --- |
+| Update check | api.github.com, github.com, objects.githubusercontent.com, release-assets.githubusercontent.com | Nothing about you or your library; it reads the list of PaperRoute releases. | At startup, if automatic checks are on, and Check for Updates. |
+| DOI lookup (Crossref) | api.crossref.org | A DOI. | DOI & Crossref Metadata on a manuscript page, and Fill Blanks from Crossref. |
+| Publication check | api.crossref.org, orcid.org, pub.orcid.org | The DOIs and titles of the manuscripts you check, and your ORCID iD if you include it. | Check for Publications. |
+| ORCID import | orcid.org, pub.orcid.org | An ORCID iD. | ORCID... in Library > Authors & Affiliations. |
+| Journal facts (DOAJ and OpenAlex) | doaj.org, api.openalex.org | A journal's ISSNs, or a name you type to find a journal and the id of the one you pick. | Look Up Facts... on the Journals page. |
+| Find journals (OpenAlex) | api.openalex.org | The keywords you review, a start date, and the ids of the journals found. | Find Journals... on a manuscript's journal shortlist. |
+| Your citations (ORCID and OpenAlex) | pub.orcid.org, api.openalex.org | Your ORCID iD to ORCID, and the DOIs of your works to OpenAlex; your iD to OpenAlex only if you choose. | Update from OpenAlex... on Insights > Your Citations. |
+| AI assistant: Claude (Anthropic) | api.anthropic.com | Only what an AI assistant window shows you before sending: a decision letter you paste; one reviewer comment with its reviewer label and your planned action; or a manuscript's title, abstract, keywords, type of work, and target journal with its Journal Library facts. | Read Decision Letter..., Add from Letter..., Suggest a Starting Point..., and Draft Cover Letter..., after you turn on the AI assistant in Preferences. |
+| AI assistant: another server or a model on this computer | The address you set in Preferences: http only on this computer, https elsewhere | Only what an AI assistant window shows you before sending: a decision letter you paste; one reviewer comment with its reviewer label and your planned action; or a manuscript's title, abstract, keywords, type of work, and target journal with its Journal Library facts. | Read Decision Letter..., Add from Letter..., Suggest a Starting Point..., and Draft Cover Letter..., after you turn on the AI assistant in Preferences. |
+
+---
+
+## AI Assistant
+
+PaperRoute is complete without AI. An optional assistant can save time on three tasks, using Claude with your own Anthropic key, or a model on your own computer. It is off until you turn it on, it shows what it will send before sending, and nothing in your library changes until you accept a suggestion.
+
+### Turn it on
+
+1. Choose **Settings > Preferences... > AI assistant** and check **Turn on the AI assistant**.
+2. Choose a service:
+   - **Claude (Anthropic), with your own key.** Choose **Add Claude Key...** and paste a key from your Anthropic account (**Get a key from Anthropic** opens the page). The default model is claude-opus-5-5. Anthropic charges your account for what the assistant sends and receives.
+   - **Another server, or a model on this computer (OpenAI-compatible).** Enter the server's address and model, such as `http://localhost:11434/v1` and `llama3.1` for Ollama, or `http://localhost:1234/v1` for LM Studio. http works only for a server on this computer; a server elsewhere must use https. A key is optional.
+3. Choose **Save**. The assistant's buttons appear once it is on.
+
+**Work offline** turns the assistant off too, a model on this computer included.
+
+### What it does
+
+- **Read Decision Letter...** in a submission's **Editorial History**. Paste the decision letter and choose **Read Letter**. The assistant proposes the decision, the letter's date, any revision deadline, and each reviewer's and editor's comment. Every comment is checked against the letter: one PaperRoute can't find there word for word is marked "Not found in the letter: check it" and starts unchecked. A deadline given as a period, such as "within 60 days", is worked out by PaperRoute from the letter's date, not by the model, and follows the decision date if you correct it in **Add Decision**. The pasted letter becomes the decision's notes. Choose **Add Decision & N Comments...** to confirm the decision in **Add Decision**; the comments you kept then join **Reviewer Responses** for that decision and the revision round you chose. **Add from Letter...** in **Reviewer Responses** adds comments to a decision you have already recorded.
+- **Suggest a Starting Point...** on a comment's **Draft response** tab. The assistant writes a first draft of your reply, with [bracketed] placeholders where only you know the answer. **Use as Draft**, **Replace Draft**, or **Add Below** puts it in the response box; it is saved with **Save Comment** and then the page's **Save**, like anything you type.
+- **Draft Cover Letter...** in a manuscript's readiness section. The assistant writes a starting point from the title, abstract, keywords, type of work, and target journal you see in the window, with that journal's facts from your Journal Library. Copy it, or save it as a text or Markdown file; nothing is stored in your library.
+
+### What is sent, and when you're asked
+
+Each window shows what it will send, and to whom, before sending. Only that text goes, with PaperRoute's instructions for the task: the letter you paste, one comment with your planned action, or the manuscript details shown. Your notes, files, author names, and the rest of your library are never sent.
+
+Before a feature sends to a service elsewhere, PaperRoute shows the exact text and asks first, every time, until you choose not to be asked again for that feature and that service; **Forget Don't Ask Again Choices** in Preferences undoes it. A model on this computer is never asked about, because nothing leaves the computer.
+
+Your keys are kept encrypted for your Windows account on this computer. The Claude key goes only to api.anthropic.com, and a server key only to the address it was added for, in a request header. Neither is ever in backups, exports, or Diagnostics. Requests carry only what the service needs, and nothing about your computer.
+
+### Suggestions stay suggestions
+
+Every result is labeled as an AI suggestion, with the service and model. A decision, comment, or response draft you accept records that it began as an AI suggestion, with the service, the model, the date, and the text it came from. **Editorial History** shows this for a decision, and **Reviewer Responses** for a comment or a response draft. Check each suggestion before you use it: a model can misread a letter or invent details.
 
 ---
 
@@ -832,6 +1043,8 @@ The safest approach is:
 3. use **Settings > Restore Backup...**;
 4. confirm manuscript counts and managed files before retiring the old installation.
 
+Backups hold your library and its files, not your preferences or OpenAlex key. On the new computer, review **Settings > Preferences...** and add the key again.
+
 ## How do I recover from a bad import or restore?
 
 PaperRoute creates safety backups around high-risk operations.
@@ -858,7 +1071,7 @@ Visual Studio debugger sessions use the isolated development profile:
 
 Development managed-file copies are stored separately from the stable managed library.
 
-External services are used only for explicit features such as Crossref metadata lookup, a publication check you start, public ORCID lookup, GitHub update checks, or links you choose to open. A publication check sends Crossref the titles and DOIs of the manuscripts you check, and nothing else.
+External services are used only for the features listed in **What PaperRoute sends, and when**, and for links you choose to open. You can turn each service off, or work offline; see **Online Services and Working Offline**. The optional AI assistant is off until you turn it on, and sends only what its windows show; see **AI Assistant**. A publication check sends Crossref the titles and DOIs of the manuscripts you check, and nothing else.
 
 PaperRoute does not require a PaperRoute account for the core manuscript library.
 

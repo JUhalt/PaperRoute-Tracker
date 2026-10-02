@@ -8,8 +8,8 @@ namespace PaperRoute.V04Demo;
 internal static class Program
 {
     private const string Usage = "PaperRoute workflow manual demo\n\n" +
-        "Surfaces: vault (default), readiness, packet, packet-new, file, file-new, notes, submission, responses, workflow, board, publications, fill, about, route, update, report\n" +
-        "Options: --minimum, --primary, --empty (vault/readiness/board), --integrity (populated vault only), --dark or --system, --help\n\n" +
+        "Surfaces: vault (default), readiness, packet, packet-new, file, file-new, notes, submission, responses, workflow, board, publications, fill, about, route, update, report, candidate, online, key, journals, lookup, suggest, suggest-results, citations, citations-update, assistant-settings, assistant-consent, letter, letter-read, decision-prefill, draft-response, cover-letter, cover-letter-result\n" +
+        "Options: --minimum, --primary, --empty (vault/readiness/board), --offline and --collapsed (board, journals, citations), --integrity (populated vault only), --dark or --system, --help\n\n" +
         "Default surfaces discard manuscript changes when the window closes.\n" +
         "workflow and board save only in a new disposable temporary session.\n" +
         "--integrity creates and retains disposable files in a unique temporary directory.";
@@ -27,7 +27,7 @@ internal static class Program
             return;
         }
 
-        var surfaces = new[] { "vault", "readiness", "packet", "packet-new", "file", "file-new", "notes", "submission", "responses", "workflow", "board", "publications", "fill", "about", "route", "update", "report" };
+        var surfaces = new[] { "vault", "readiness", "packet", "packet-new", "file", "file-new", "notes", "submission", "responses", "workflow", "board", "publications", "fill", "about", "route", "update", "report", "candidate", "online", "key", "journals", "lookup", "suggest", "suggest-results", "citations", "citations-update", "assistant-settings", "assistant-consent", "letter", "letter-read", "decision-prefill", "draft-response", "cover-letter", "cover-letter-result" };
         var positional = args.Where(argument => !argument.StartsWith("--")).ToArray();
         var surface = positional.FirstOrDefault()?.ToLowerInvariant() ?? "vault";
         var minimum = args.Contains("--minimum", StringComparer.OrdinalIgnoreCase);
@@ -36,16 +36,21 @@ internal static class Program
         var integrity = args.Contains("--integrity", StringComparer.OrdinalIgnoreCase);
         var dark = args.Contains("--dark", StringComparer.OrdinalIgnoreCase);
         var system = args.Contains("--system", StringComparer.OrdinalIgnoreCase);
+        var offline = args.Contains("--offline", StringComparer.OrdinalIgnoreCase);
+        var collapsed = args.Contains("--collapsed", StringComparer.OrdinalIgnoreCase);
         var invalidOption = args.Any(argument => argument.StartsWith("--") &&
             !argument.Equals("--minimum", StringComparison.OrdinalIgnoreCase) &&
             !argument.Equals("--primary", StringComparison.OrdinalIgnoreCase) &&
             !argument.Equals("--empty", StringComparison.OrdinalIgnoreCase) &&
             !argument.Equals("--integrity", StringComparison.OrdinalIgnoreCase) &&
             !argument.Equals("--dark", StringComparison.OrdinalIgnoreCase) &&
-            !argument.Equals("--system", StringComparison.OrdinalIgnoreCase));
+            !argument.Equals("--system", StringComparison.OrdinalIgnoreCase) &&
+            !argument.Equals("--offline", StringComparison.OrdinalIgnoreCase) &&
+            !argument.Equals("--collapsed", StringComparison.OrdinalIgnoreCase));
 
         if (positional.Length > 1 || !surfaces.Contains(surface) || invalidOption ||
             (dark && system) ||
+            ((offline || collapsed) && surface != "board" && surface != "journals" && surface != "citations") ||
             (empty && surface != "vault" && surface != "readiness" && surface != "board") ||
             (integrity && (surface != "vault" || empty)))
         {
@@ -60,12 +65,125 @@ internal static class Program
         DemoFixture fixture;
         try
         {
+            if (surface == "journals")
+            {
+                // The Journals page with facts from recorded DOAJ and OpenAlex
+                // answers (#87); nothing is looked up.
+                var sessionRoot = Path.Combine(Path.GetTempPath(),
+                    "PaperRoute-Journals-Demo-" + Guid.NewGuid().ToString("N"));
+                StorageEnvironment.ConfigureIsolatedSessionRoot(sessionRoot);
+                BoardDemo.CreateSamples(sessionRoot);
+                var selected = JournalFactsDemo.AddJournals();
+                if (offline || collapsed)
+                    new AppSettingsService().Save(new AppSettings { NavigationCollapsed = collapsed, OnlineServices = new OnlineServicesSettings { WorkOffline = offline } });
+                using var board = new ManuscriptPipeline.Form1();
+                board.Shown += (_, _) =>
+                {
+                    board.Text += " [DEMO - recorded index answers; nothing looked up]";
+                    board.NavigateTo(ManuscriptPipeline.Form1.WorkspacePage.Journals);
+                    JournalFactsDemo.Find<JournalLibraryForm>(board)?.SelectJournal(selected);
+                };
+                ConfigureDisplayEvidence(board, primary);
+                board.ShowDialog();
+                return;
+            }
+
+            if (surface == "assistant-settings")
+            {
+                // Preferences opened at the AI assistant (#84), in an isolated
+                // session with no key.
+                var sessionRoot = Path.Combine(Path.GetTempPath(),
+                    "PaperRoute-Assistant-Demo-" + Guid.NewGuid().ToString("N"));
+                StorageEnvironment.ConfigureIsolatedSessionRoot(sessionRoot);
+                using var preferences = new SettingsForm(AssistantDemo.Settings(), new AppSettingsService(), false, true);
+                preferences.Text += " [DEMO - isolated settings; no key]";
+                ConfigureDisplayEvidence(preferences, primary);
+                if (minimum) preferences.Shown += (_, _) => preferences.Size = preferences.MinimumSize;
+                preferences.ShowDialog();
+                return;
+            }
+
+            if (surface is "assistant-consent" or "letter" or "letter-read" or "decision-prefill" or "draft-response" or "cover-letter" or "cover-letter-result")
+            {
+                // The AI assistant's windows (#84) with a canned answer;
+                // nothing is sent anywhere.
+                AssistantDemo.Enable();
+                using var window = surface switch
+                {
+                    "assistant-consent" => AssistantDemo.Consent(),
+                    "letter" => AssistantDemo.LetterDialog(false),
+                    "letter-read" => AssistantDemo.LetterDialog(true),
+                    "decision-prefill" => AssistantDemo.DecisionDialog(),
+                    "draft-response" => AssistantDemo.DraftDialog(),
+                    "cover-letter" => AssistantDemo.CoverLetterDialog(false),
+                    _ => AssistantDemo.CoverLetterDialog(true)
+                };
+                window.Text += " [DEMO - canned answer; nothing sent]";
+                ConfigureDisplayEvidence(window, primary);
+                if (minimum) window.Shown += (_, _) => window.Size = window.MinimumSize;
+                window.ShowDialog();
+                return;
+            }
+
+            if (surface == "citations")
+            {
+                // Insights > Your Citations with fictional saved figures (#91);
+                // nothing is looked up.
+                var sessionRoot = Path.Combine(Path.GetTempPath(),
+                    "PaperRoute-Citations-Demo-" + Guid.NewGuid().ToString("N"));
+                StorageEnvironment.ConfigureIsolatedSessionRoot(sessionRoot);
+                BoardDemo.CreateSamples(sessionRoot);
+                CitationsDemo.Prepare();
+                if (offline || collapsed)
+                    new AppSettingsService().Save(new AppSettings { NavigationCollapsed = collapsed, OnlineServices = new OnlineServicesSettings { WorkOffline = offline } });
+                using var board = new ManuscriptPipeline.Form1();
+                board.Shown += (_, _) =>
+                {
+                    board.Text += " [DEMO - fictional citation figures; nothing looked up]";
+                    board.NavigateTo(ManuscriptPipeline.Form1.WorkspacePage.Insights);
+                    var tab = CitationsDemo.Find<ManuscriptPipeline.Controls.ShelfTabButton>(board, item => item.Text == "Your Citations");
+                    if (tab is not null) tab.Checked = true;
+                };
+                ConfigureDisplayEvidence(board, primary);
+                board.ShowDialog();
+                return;
+            }
+
+            if (surface == "citations-update")
+            {
+                using var update = CitationsDemo.Dialog();
+                update.Text += " [DEMO - recorded answer]";
+                ConfigureDisplayEvidence(update, primary);
+                update.ShowDialog();
+                return;
+            }
+
+            if (surface == "suggest" || surface == "suggest-results")
+            {
+                using var suggest = JournalSuggestionsDemo.Dialog(surface == "suggest-results");
+                suggest.Text += " [DEMO - recorded OpenAlex answers]";
+                ConfigureDisplayEvidence(suggest, primary);
+                suggest.ShowDialog();
+                return;
+            }
+
+            if (surface == "lookup")
+            {
+                using var lookup = JournalFactsDemo.LookupDialog();
+                lookup.Text += " [DEMO - recorded index answers]";
+                ConfigureDisplayEvidence(lookup, primary);
+                lookup.ShowDialog();
+                return;
+            }
+
             if (surface == "board")
             {
                 var sessionRoot = Path.Combine(Path.GetTempPath(),
                     "PaperRoute-Board-Demo-" + Guid.NewGuid().ToString("N"));
                 StorageEnvironment.ConfigureIsolatedSessionRoot(sessionRoot);
                 BoardDemo.CreateSamples(sessionRoot, empty);
+                if (offline || collapsed)
+                    new AppSettingsService().Save(new AppSettings { NavigationCollapsed = collapsed, OnlineServices = new OnlineServicesSettings { WorkOffline = offline } });
                 using var board = new ManuscriptPipeline.Form1();
                 BoardDemo.RecordLayoutEvidence(board, sessionRoot);
                 board.Shown += (_, _) =>
@@ -78,11 +196,51 @@ internal static class Program
                 return;
             }
 
+            if (surface == "online")
+            {
+                // Preferences opened at Online services, with the ORCID import
+                // switched off, in a disposable session: nothing is contacted.
+                var sessionRoot = Path.Combine(Path.GetTempPath(),
+                    "PaperRoute-Online-Demo-" + Guid.NewGuid().ToString("N"));
+                StorageEnvironment.ConfigureIsolatedSessionRoot(sessionRoot);
+                var settings = new AppSettings { OnlineServices = new OnlineServicesSettings { TurnedOff = { OnlineServiceCatalog.OrcidImport } } };
+                using var preferences = new SettingsForm(settings, new AppSettingsService(), true);
+                preferences.Text += " [DEMO - disposable settings]";
+                ConfigureDisplayEvidence(preferences, primary);
+                preferences.ShowDialog();
+                return;
+            }
+
+            if (surface == "key")
+            {
+                using var key = new OpenAlexKeyForm();
+                key.Text += " [DEMO - nothing saved]";
+                ConfigureDisplayEvidence(key, primary);
+                key.ShowDialog();
+                return;
+            }
+
             if (surface == "about")
             {
                 using var about = new AboutForm();
                 ConfigureDisplayEvidence(about, primary);
                 about.ShowDialog();
+                return;
+            }
+
+            if (surface == "candidate")
+            {
+                var candidate = new JournalCandidate
+                {
+                    JournalName = "Fictional Journal of Nursing Scholarship", Status = CandidateStatus.Preferred,
+                    Notes = "Publishes mixed-methods evaluations of teaching; open access with a fee waiver for our funder.",
+                    Checks = { "trust.known", "trust.publisher", "trust.review", "trust.indexed", "trust.fees", "trust.guidelines", "fit.scope", "fit.type", "fit.audience" }
+                };
+                using var dialog = new JournalCandidateForm(candidate, new[] { "Fictional Journal of Nursing Scholarship", "Fictional Nurse Education Review" },
+                    name => "2 submissions · 1 accepted · median 41 days to a first decision · last submitted Mar 4, 2026.");
+                dialog.Text += " [DEMO - nothing saved]";
+                ConfigureDisplayEvidence(dialog, primary);
+                dialog.ShowDialog();
                 return;
             }
 
