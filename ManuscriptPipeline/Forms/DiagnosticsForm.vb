@@ -154,12 +154,50 @@ Namespace Forms
             Dim names As New List(Of String)()
 
             For Each service As OnlineService In OnlineServiceCatalog.Services
-                If turnedOff.Contains(service.Id) Then names.Add(service.Name)
+                If Not service.OffUntilTurnedOn AndAlso turnedOff.Contains(service.Id) Then names.Add(service.Name)
             Next
 
             Return If(names.Count = 0, "None", String.Join(", ", names))
 
         End Function
+
+
+        ' The AI assistant (#84): whether it is on, which kind of service,
+        ' and whether its keys are stored; never an address, host, or key.
+        Friend Shared Function AssistantLines(assistant As AssistantSettings, keys As ProtectedKeyStore) As String()
+
+            Dim state As String
+
+            If assistant Is Nothing OrElse Not assistant.Enabled Then
+                state = "Off"
+            ElseIf assistant.Provider = AssistantProvider.Claude Then
+                Dim model As String = If(assistant.ClaudeModel, String.Empty).Trim()
+                ' Settings keep only a well-formed model id, but say nothing else.
+                If Not System.Text.RegularExpressions.Regex.IsMatch(model, "^[A-Za-z0-9._:@-]{1,100}$") Then model = "claude-opus-5-5"
+                state = "On (Claude, " & model & ")"
+            Else
+                Dim endpoint As Uri = OnlineAccess.ParseAssistantEndpoint(assistant.Endpoint)
+                state =
+                    If(endpoint Is Nothing, "On (OpenAI-compatible server, not set up)",
+                       If(endpoint.IsLoopback, "On (OpenAI-compatible server on this computer)",
+                          "On (OpenAI-compatible server elsewhere, https)"))
+            End If
+
+            Return {
+                "AI assistant: " & state,
+                "Claude key: " & If(keys.HasKey(ProtectedKeyStore.Anthropic), "Added", "Not added"),
+                "Server key: " & If(keys.HasKey(ProtectedKeyStore.AssistantEndpoint), "Added", "Not added")
+            }
+
+        End Function
+
+
+        ' For tests.
+        Friend ReadOnly Property ReportText As String
+            Get
+                Return txtReport.Text
+            End Get
+        End Property
 
 
         Private Function BuildDiagnosticReport() As String
@@ -178,6 +216,9 @@ Namespace Forms
             builder.AppendLine("Online services turned off: " & TurnedOffServices())
             ' Whether a key is stored, never the key.
             builder.AppendLine("OpenAlex key: " & If(OnlineAccess.KeyStore().HasKey(ProtectedKeyStore.OpenAlex), "Added", "Not added"))
+            For Each line As String In AssistantLines(_settings.OnlineServices?.Assistant, OnlineAccess.KeyStore())
+                builder.AppendLine(line)
+            Next
             builder.AppendLine("Storage schema: " & StorageMigrationService.ReadSchemaVersion().ToString())
             builder.AppendLine()
             builder.AppendLine("OS: " & RuntimeInformation.OSDescription)

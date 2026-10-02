@@ -423,13 +423,15 @@ Public Class OnlineServicesTests
 
                     Dim checks As List(Of CheckBox) = Descendants(dialog).OfType(Of CheckBox)().ToList()
                     Dim workOffline As CheckBox = checks.Single(Function(box) box.Text = "Work offline")
-                    Dim rows As List(Of CheckBox) = OnlineServiceCatalog.Services.Select(Function(item) checks.Single(Function(box) box.Text = item.Name)).ToList()
+                    ' The AI assistant is listed, but turned on under AI assistant, not here.
+                    Dim rows As List(Of CheckBox) = OnlineServiceCatalog.Services.Where(Function(item) Not item.OffUntilTurnedOn).Select(Function(item) checks.Single(Function(box) box.Text = item.Name)).ToList()
+                    Assert.IsFalse(checks.Any(Function(box) OnlineServiceCatalog.Services.Any(Function(item) item.OffUntilTurnedOn AndAlso item.Name = box.Text)))
                     Dim automatic As CheckBox = checks.Single(Function(box) box.Text = "Check for updates when PaperRoute starts")
                     Assert.IsTrue(rows.All(Function(box) box.Checked AndAlso box.Enabled))
                     Assert.IsTrue(workOffline.Focused OrElse workOffline.ContainsFocus, "Opened at Online services.")
 
                     For Each item As OnlineService In OnlineServiceCatalog.Services
-                        Assert.IsTrue(Descendants(dialog).OfType(Of Label)().Any(Function(label) label.Text.Contains("Contacts: " & String.Join(", ", item.Hosts), StringComparison.Ordinal) AndAlso
+                        Assert.IsTrue(Descendants(dialog).OfType(Of Label)().Any(Function(label) label.Text.Contains("Contacts: " & item.Contacts, StringComparison.Ordinal) AndAlso
                                                                                      label.Text.Contains("Sends: " & item.Sends, StringComparison.Ordinal)), item.Name)
                     Next
 

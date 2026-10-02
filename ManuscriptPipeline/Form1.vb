@@ -4085,12 +4085,13 @@ Public Class Form1
     End Sub
 
 
-    Private Sub OpenSettingsAt(showOnlineServices As Boolean)
+    Private Sub OpenSettingsAt(showOnlineServices As Boolean, Optional showAssistant As Boolean = False)
 
         Using dialog As New SettingsForm(
         appSettings,
         settingsService,
-        showOnlineServices
+        showOnlineServices,
+        showAssistant
     )
 
             If dialog.ShowDialog(Me) <>
