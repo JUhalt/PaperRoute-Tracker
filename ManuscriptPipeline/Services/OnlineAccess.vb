@@ -1,5 +1,6 @@
 ﻿Imports System
 Imports System.Collections.Generic
+Imports System.Linq
 Imports System.Net
 Imports System.Net.Http
 Imports System.Net.Http.Headers
@@ -14,7 +15,43 @@ Namespace Services
         WorkOffline
         ServiceOff
         UnexpectedHost
+        ' The AI assistant (#84) is off, or set up for another service.
+        NotTurnedOn
     End Enum
+
+
+    ' The AI assistant's service as set up now (#84): which one, which
+    ' model, and where it is.
+    Public NotInheritable Class AssistantConnection
+
+        Public Property ServiceId As String = String.Empty
+
+        Public Property Provider As AssistantProvider
+
+        ' "Claude" or "OpenAI-compatible server": what provenance records.
+        Public Property ProviderName As String = String.Empty
+
+        Public Property Model As String = String.Empty
+
+        ' https://api.anthropic.com, or the compatible server's address
+        ' (scheme, host, and port).
+        Public Property Origin As Uri
+
+        ' The compatible server's base address, up to /v1.
+        Public Property Endpoint As Uri
+
+        ' A server on this computer: nothing leaves it.
+        Public Property IsOnThisComputer As Boolean
+
+        ' "Claude at api.anthropic.com", "the server at localhost:11434 (on this computer)".
+        Public ReadOnly Property Recipient As String
+            Get
+                If Provider = AssistantProvider.Claude Then Return "Claude at " & Origin.Host
+                Return "the server at " & Origin.Authority & If(IsOnThisComputer, " (on this computer)", String.Empty)
+            End Get
+        End Property
+
+    End Class
 
 
     ' A request the Online services settings did not allow (#86). It is an
@@ -92,10 +129,19 @@ Namespace Services
         Private Shared ReadOnly _turnedOff As New HashSet(Of String)(StringComparer.Ordinal)
         Private Shared ReadOnly _clients As New Dictionary(Of String, HttpClient)(StringComparer.Ordinal)
         Private Shared _inner As HttpMessageHandler
+        Private Shared _assistant As New AssistantSettings()
+        Private Shared _assistantEndpoint As Uri
+        Private Shared ReadOnly _confirmedUses As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+
+        Public Const AnthropicHost As String = "api.anthropic.com"
 
         ' Test seams: the handler under the gate, and the key store.
         Friend Shared InnerHandlerFactory As Func(Of HttpMessageHandler) = Nothing
         Friend Shared KeyStoreFactory As Func(Of ProtectedKeyStore) = Nothing
+
+        ' Called when the researcher agrees not to be asked again before a
+        ' feature sends to a service ("feature|origin"); Form1 saves it.
+        Friend Shared AssistantUseConfirmed As Action(Of String) = Nothing
 
 
         Public Shared Sub Configure(settings As OnlineServicesSettings)
@@ -105,7 +151,95 @@ Namespace Services
                 For Each id As String In If(settings?.TurnedOff, New List(Of String)())
                     If Not String.IsNullOrWhiteSpace(id) Then _turnedOff.Add(id.Trim())
                 Next
+                Dim assistant As AssistantSettings = If(settings?.Assistant, New AssistantSettings())
+                _assistant = New AssistantSettings With {
+                    .Enabled = assistant.Enabled,
+                    .Provider = assistant.Provider,
+                    .ClaudeModel = If(assistant.ClaudeModel, String.Empty).Trim(),
+                    .Endpoint = If(assistant.Endpoint, String.Empty).Trim(),
+                    .EndpointModel = If(assistant.EndpointModel, String.Empty).Trim(),
+                    .EndpointKeyOrigin = If(assistant.EndpointKeyOrigin, String.Empty).Trim()
+                }
+                _assistantEndpoint = ParseAssistantEndpoint(_assistant.Endpoint)
+                _confirmedUses.Clear()
+                For Each use As String In If(assistant.ConfirmedUses, New List(Of String)())
+                    If Not String.IsNullOrWhiteSpace(use) Then _confirmedUses.Add(use.Trim())
+                Next
             End SyncLock
+        End Sub
+
+
+        ' A compatible server's base address, or Nothing when it can't be
+        ' used: absolute http or https, no user name, password, query, or
+        ' fragment, and http only on this computer (a loopback address).
+        Public Shared Function ParseAssistantEndpoint(value As String) As Uri
+            Dim text As String = If(value, String.Empty).Trim().TrimEnd("/"c)
+            Dim parsed As Uri = Nothing
+            If text.Length = 0 OrElse Not Uri.TryCreate(text, UriKind.Absolute, parsed) Then Return Nothing
+            If parsed.Scheme <> Uri.UriSchemeHttps AndAlso parsed.Scheme <> Uri.UriSchemeHttp Then Return Nothing
+            If parsed.UserInfo.Length > 0 OrElse parsed.Query.Length > 0 OrElse parsed.Fragment.Length > 0 OrElse parsed.Host.Length = 0 Then Return Nothing
+            If parsed.Scheme = Uri.UriSchemeHttp AndAlso Not parsed.IsLoopback Then Return Nothing
+            Return parsed
+        End Function
+
+
+        ' "http://localhost:11434": scheme, host, and port, lower-case.
+        Public Shared Function OriginOf(address As Uri) As String
+            If address Is Nothing OrElse Not address.IsAbsoluteUri Then Return String.Empty
+            Return (address.Scheme & "://" & address.Host & ":" & address.Port.ToString(Globalization.CultureInfo.InvariantCulture)).ToLowerInvariant()
+        End Function
+
+
+        ' The AI assistant's service as set up now, or Nothing when it is
+        ' off or not set up (whether or not it is blocked right now).
+        Public Shared Function CurrentAssistant() As AssistantConnection
+            SyncLock StateLock
+                If Not _assistant.Enabled Then Return Nothing
+                If _assistant.Provider = AssistantProvider.Claude Then
+                    Return New AssistantConnection With {
+                        .ServiceId = OnlineServiceCatalog.AssistantClaude,
+                        .Provider = AssistantProvider.Claude,
+                        .ProviderName = "Claude",
+                        .Model = If(_assistant.ClaudeModel.Length > 0, _assistant.ClaudeModel, "claude-opus-5-5"),
+                        .Origin = New Uri("https://" & AnthropicHost),
+                        .IsOnThisComputer = False
+                    }
+                End If
+                If _assistantEndpoint Is Nothing OrElse _assistant.EndpointModel.Length = 0 Then Return Nothing
+                Return New AssistantConnection With {
+                    .ServiceId = OnlineServiceCatalog.AssistantCompatible,
+                    .Provider = AssistantProvider.Compatible,
+                    .ProviderName = "OpenAI-compatible server",
+                    .Model = _assistant.EndpointModel,
+                    .Origin = New Uri(_assistantEndpoint.GetLeftPart(UriPartial.Authority)),
+                    .Endpoint = _assistantEndpoint,
+                    .IsOnThisComputer = _assistantEndpoint.IsLoopback
+                }
+            End SyncLock
+        End Function
+
+
+        ' Whether to show what a feature sends and ask first: always for a
+        ' service elsewhere, unless the researcher said not to ask again for
+        ' this feature and this service; never for one on this computer.
+        Public Shared Function NeedsConfirmation(feature As String) As Boolean
+            Dim connection As AssistantConnection = CurrentAssistant()
+            If connection Is Nothing OrElse connection.IsOnThisComputer Then Return False
+            SyncLock StateLock
+                Return Not _confirmedUses.Contains(feature & "|" & OriginOf(connection.Origin))
+            End SyncLock
+        End Function
+
+
+        ' Don't ask again before this feature sends to this service.
+        Public Shared Sub RememberConfirmation(feature As String)
+            Dim connection As AssistantConnection = CurrentAssistant()
+            If connection Is Nothing Then Return
+            Dim use As String = feature & "|" & OriginOf(connection.Origin)
+            SyncLock StateLock
+                If Not _confirmedUses.Add(use) Then Return
+            End SyncLock
+            AssistantUseConfirmed?.Invoke(use)
         End Sub
 
 
@@ -120,9 +254,16 @@ Namespace Services
 
         ' Why a service may not be used now, or Nothing when it may.
         Public Shared Function BlockReason(serviceId As String) As OnlineBlockReason?
+            Dim service As OnlineService = OnlineServiceCatalog.Find(serviceId)
             SyncLock StateLock
                 If _workOffline Then Return OnlineBlockReason.WorkOffline
                 If _turnedOff.Contains(serviceId) Then Return OnlineBlockReason.ServiceOff
+                If service IsNot Nothing AndAlso service.OffUntilTurnedOn Then
+                    If Not _assistant.Enabled Then Return OnlineBlockReason.NotTurnedOn
+                    If serviceId = OnlineServiceCatalog.AssistantClaude AndAlso _assistant.Provider <> AssistantProvider.Claude Then Return OnlineBlockReason.NotTurnedOn
+                    If serviceId = OnlineServiceCatalog.AssistantCompatible AndAlso
+                       (_assistant.Provider <> AssistantProvider.Compatible OrElse _assistantEndpoint Is Nothing) Then Return OnlineBlockReason.NotTurnedOn
+                End If
                 Return Nothing
             End SyncLock
         End Function
@@ -140,8 +281,20 @@ Namespace Services
         End Sub
 
 
-        ' Only https, and only a host the service lists.
+        ' Only https, and only a host the service lists; for a compatible
+        ' server, only the address set for it (http only on this computer).
         Friend Shared Sub CheckHost(service As OnlineService, target As Uri)
+            If service IsNot Nothing AndAlso service.ConfiguredHost Then
+                Dim endpoint As Uri
+                SyncLock StateLock
+                    endpoint = _assistantEndpoint
+                End SyncLock
+                If target Is Nothing OrElse Not target.IsAbsoluteUri OrElse endpoint Is Nothing OrElse OriginOf(target) <> OriginOf(endpoint) OrElse
+                   (target.Scheme <> Uri.UriSchemeHttps AndAlso Not (target.Scheme = Uri.UriSchemeHttp AndAlso target.IsLoopback)) Then
+                    Throw New OnlineServiceBlockedException(service, OnlineBlockReason.UnexpectedHost, If(target?.IsAbsoluteUri, target.Host, String.Empty))
+                End If
+                Return
+            End If
             If target Is Nothing OrElse Not target.IsAbsoluteUri OrElse
                Not String.Equals(target.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) OrElse
                Not service.AllowsHost(target.Host) Then
@@ -165,8 +318,17 @@ Namespace Services
         End Function
 
 
-        ' A client of its own for a long download, such as an update package;
-        ' disposing it leaves the shared connections open.
+        ' The compatible server's address and the address its key was added
+        ' for, as the gate checks them.
+        Friend Shared Function AssistantEndpointKeyTarget() As (Endpoint As Uri, KeyOrigin As String)
+            SyncLock StateLock
+                Return (_assistantEndpoint, _assistant.EndpointKeyOrigin)
+            End SyncLock
+        End Function
+
+
+        ' A client of its own for a long download, such as an update package,
+        ' or a model's answer; disposing it leaves the shared connections open.
         Friend Shared Function CreateClient(serviceId As String, timeout As TimeSpan) As HttpClient
             Require(serviceId)
             SyncLock StateLock
@@ -221,6 +383,8 @@ Namespace Services
                     Return "Work offline is on, so PaperRoute didn't go online. To use " & name & ", turn off Work offline in Settings > Preferences > Online services."
                 Case OnlineBlockReason.ServiceOff
                     Return name & " is turned off in Settings > Preferences > Online services, so PaperRoute didn't go online."
+                Case OnlineBlockReason.NotTurnedOn
+                    Return "The AI assistant is off. To use it, turn it on and choose a service in Settings > Preferences > AI assistant."
                 Case Else
                     Return "PaperRoute stopped a request to " & If(String.IsNullOrWhiteSpace(host), "an unlisted address", host) & ", which isn't listed for " & name & ". Nothing was sent."
             End Select
@@ -287,9 +451,13 @@ Namespace Services
                 _inner = Nothing
                 _workOffline = False
                 _turnedOff.Clear()
+                _assistant = New AssistantSettings()
+                _assistantEndpoint = Nothing
+                _confirmedUses.Clear()
             End SyncLock
             InnerHandlerFactory = Nothing
             KeyStoreFactory = Nothing
+            AssistantUseConfirmed = Nothing
         End Sub
 
 
@@ -324,7 +492,7 @@ Namespace Services
             For hop As Integer = 0 To MaxRedirects
                 OnlineAccess.Check(_serviceId)
                 OnlineAccess.CheckHost(service, current.RequestUri)
-                Prepare(current)
+                Prepare(_serviceId, current)
 
                 Dim response As HttpResponseMessage = Await MyBase.SendAsync(current, cancellationToken).ConfigureAwait(False)
                 Dim location As Uri = response.Headers.Location
@@ -336,7 +504,7 @@ Namespace Services
                 Dim target As Uri = If(location.IsAbsoluteUri, location, New Uri(current.RequestUri, location))
                 Dim following As New HttpRequestMessage(current.Method, target)
                 For Each header As KeyValuePair(Of String, IEnumerable(Of String)) In current.Headers
-                    If Not String.Equals(header.Key, "Authorization", StringComparison.OrdinalIgnoreCase) Then
+                    If Not SecretHeaders.Contains(header.Key) Then
                         following.Headers.TryAddWithoutValidation(header.Key, header.Value)
                     End If
                 Next
@@ -349,14 +517,49 @@ Namespace Services
 
         End Function
 
-        ' One user agent; the OpenAlex key only to OpenAlex, only as a header.
+        ' Headers that carry a key: never copied to a redirect, and set only here.
+        Private Shared ReadOnly SecretHeaders As New HashSet(Of String)({"Authorization", "x-api-key", "api-key"}, StringComparer.OrdinalIgnoreCase)
+
+        ' All an AI assistant request carries besides its content and the key
+        ' (#84): anything else, such as an SDK's system details or headers
+        ' from environment variables, is dropped.
+        Private Shared ReadOnly AssistantHeaders As New HashSet(Of String)({"Accept", "anthropic-version", "anthropic-beta"}, StringComparer.OrdinalIgnoreCase)
+
         Friend Shared Sub Prepare(request As HttpRequestMessage)
+            Prepare(Nothing, request)
+        End Sub
+
+        ' One user agent, and each key only to its own service, only as a
+        ' header: the OpenAlex key to OpenAlex, the Claude key to Anthropic,
+        ' and a compatible server's key only to the address it was added for.
+        Friend Shared Sub Prepare(serviceId As String, request As HttpRequestMessage)
+            Dim service As OnlineService = If(serviceId Is Nothing, Nothing, OnlineServiceCatalog.Find(serviceId))
+            If service IsNot Nothing AndAlso service.OffUntilTurnedOn Then
+                For Each name As String In request.Headers.Select(Function(header) header.Key).ToList()
+                    If Not AssistantHeaders.Contains(name) Then request.Headers.Remove(name)
+                Next
+            End If
             request.Headers.UserAgent.Clear()
             request.Headers.UserAgent.ParseAdd(OnlineAccess.UserAgent())
             request.Headers.Authorization = Nothing
-            If String.Equals(request.RequestUri.Host, OpenAlexHost, StringComparison.OrdinalIgnoreCase) Then
+            request.Headers.Remove("x-api-key")
+            request.Headers.Remove("api-key")
+            Dim host As String = request.RequestUri.Host
+            If String.Equals(host, OpenAlexHost, StringComparison.OrdinalIgnoreCase) Then
                 Dim key As String = OnlineAccess.KeyStore().Load(ProtectedKeyStore.OpenAlex)
                 If Not String.IsNullOrEmpty(key) Then request.Headers.Authorization = New AuthenticationHeaderValue("Bearer", key)
+            ElseIf serviceId = OnlineServiceCatalog.AssistantClaude AndAlso String.Equals(host, OnlineAccess.AnthropicHost, StringComparison.OrdinalIgnoreCase) AndAlso
+                   request.RequestUri.Scheme = Uri.UriSchemeHttps Then
+                Dim key As String = OnlineAccess.KeyStore().Load(ProtectedKeyStore.Anthropic)
+                If Not String.IsNullOrEmpty(key) Then request.Headers.TryAddWithoutValidation("x-api-key", key)
+            ElseIf serviceId = OnlineServiceCatalog.AssistantCompatible Then
+                Dim target = OnlineAccess.AssistantEndpointKeyTarget()
+                Dim origin As String = OnlineAccess.OriginOf(target.Endpoint)
+                If origin.Length > 0 AndAlso OnlineAccess.OriginOf(request.RequestUri) = origin AndAlso
+                   String.Equals(If(target.KeyOrigin, String.Empty), origin, StringComparison.OrdinalIgnoreCase) Then
+                    Dim key As String = OnlineAccess.KeyStore().Load(ProtectedKeyStore.AssistantEndpoint)
+                    If Not String.IsNullOrEmpty(key) Then request.Headers.Authorization = New AuthenticationHeaderValue("Bearer", key)
+                End If
             End If
         End Sub
 

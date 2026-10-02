@@ -443,7 +443,8 @@ Namespace Services
                             .DecisionDate = decisionEvent.DecisionDate,
                             .Decision = decisionEvent.Decision,
                             .RevisionDeadline = decisionEvent.RevisionDeadline,
-                            .Notes = decisionEvent.Notes
+                            .Notes = decisionEvent.Notes,
+                            .Suggestion = CloneSuggestion(decisionEvent.Suggestion)
                         }
                     )
                 Next
@@ -498,9 +499,24 @@ Namespace Services
                 .Notes = source.Notes,
                 .Status = source.Status,
                 .CreatedAtUtc = source.CreatedAtUtc,
-                .LastModifiedAtUtc = source.LastModifiedAtUtc
+                .LastModifiedAtUtc = source.LastModifiedAtUtc,
+                .CommentSuggestion = CloneSuggestion(source.CommentSuggestion),
+                .ResponseSuggestion = CloneSuggestion(source.ResponseSuggestion)
             }
 
+        End Function
+
+
+        ' A deep copy of where an AI assistant suggestion came from (#84), or Nothing.
+        Friend Shared Function CloneSuggestion(source As AssistantSuggestion) As AssistantSuggestion
+            If source Is Nothing Then Return Nothing
+            Return New AssistantSuggestion With {
+                .Feature = source.Feature,
+                .Provider = source.Provider,
+                .Model = source.Model,
+                .SuggestedUtc = source.SuggestedUtc,
+                .SourceText = source.SourceText
+            }
         End Function
 
 

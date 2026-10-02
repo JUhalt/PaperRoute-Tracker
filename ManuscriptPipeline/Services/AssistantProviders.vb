@@ -1,0 +1,341 @@
+Imports System
+Imports System.Collections.Generic
+Imports System.Globalization
+Imports System.Linq
+Imports System.Net
+Imports System.Net.Http
+Imports System.Text
+Imports System.Text.Json
+Imports System.Threading
+Imports System.Threading.Tasks
+Imports Anthropic
+Imports ManuscriptPipeline.Models
+Imports Beta = Anthropic.Models.Beta.Messages
+
+Namespace Services
+
+    ' One AI assistant request (#84): PaperRoute's instructions and the text
+    ' the researcher saw before it was sent, and the JSON shape the answer
+    ' must have, if any.
+    Public NotInheritable Class AssistantRequest
+
+        ' "decision-letter", "draft-response", or "cover-letter".
+        Public Property Feature As String = String.Empty
+
+        Public Property Instructions As String = String.Empty
+
+        Public Property Content As String = String.Empty
+
+        ' A JSON schema (an object) the answer must match; Nothing for text.
+        Public Property Schema As Dictionary(Of String, JsonElement)
+
+        Public Property MaxTokens As Integer = 16000
+
+    End Class
+
+
+    Public NotInheritable Class AssistantReply
+
+        Public Property Text As String = String.Empty
+
+        ' "Claude" or "OpenAI-compatible server", and the model that answered.
+        Public Property ProviderName As String = String.Empty
+
+        Public Property Model As String = String.Empty
+
+        ' The answer stopped at its length limit.
+        Public Property Truncated As Boolean
+
+    End Class
+
+
+    ' A plain-language reason an assistant request didn't give a usable
+    ' answer, such as a missing key or a declined request.
+    Public Class AssistantException
+        Inherits InvalidOperationException
+
+        Public Sub New(message As String, Optional inner As Exception = Nothing)
+            MyBase.New(message, inner)
+        End Sub
+
+    End Class
+
+
+    Public Interface IAssistantProvider
+
+        ReadOnly Property ProviderName As String
+
+        ReadOnly Property Model As String
+
+        Function CompleteAsync(request As AssistantRequest, cancellationToken As CancellationToken) As Task(Of AssistantReply)
+
+    End Interface
+
+
+    ' Claude through the official Anthropic SDK, with the researcher's own
+    ' key. The SDK is given the gate's HTTP client, so every request passes
+    ' the gate: the gate adds the key (the SDK only ever holds a
+    ' placeholder), drops every header but the few the API needs, and
+    ' refuses the request while the assistant is off or Work offline is on.
+    Public Class ClaudeAssistantProvider
+        Implements IAssistantProvider
+
+        Public Shared ReadOnly RequestTimeout As TimeSpan = TimeSpan.FromMinutes(5)
+
+        ' The SDK needs a value; the gate replaces it with the real key.
+        Friend Const PlaceholderKey As String = "added-by-paperroute"
+
+        ' Models that take an effort level and Anthropic's server-side
+        ' fallback, which re-serves a request a safety check declined on
+        ' another model instead of failing it.
+        Private Shared ReadOnly CurrentModels As New HashSet(Of String)({"claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5", "claude-fable-5-1"}, StringComparer.OrdinalIgnoreCase)
+
+        Private ReadOnly _model As String
+
+        Public Sub New(model As String)
+            _model = If(String.IsNullOrWhiteSpace(model), "claude-opus-5-5", model.Trim())
+        End Sub
+
+        Public ReadOnly Property ProviderName As String Implements IAssistantProvider.ProviderName
+            Get
+                Return "Claude"
+            End Get
+        End Property
+
+        Public ReadOnly Property Model As String Implements IAssistantProvider.Model
+            Get
+                Return _model
+            End Get
+        End Property
+
+
+        Public Async Function CompleteAsync(request As AssistantRequest, cancellationToken As CancellationToken) As Task(Of AssistantReply) Implements IAssistantProvider.CompleteAsync
+
+            OnlineAccess.Check(OnlineServiceCatalog.AssistantClaude)
+            If Not OnlineAccess.KeyStore().HasKey(ProtectedKeyStore.Anthropic) Then
+                Throw New AssistantException("Add your Claude key in Settings > Preferences > AI assistant first. Nothing was sent.")
+            End If
+
+            Using http As HttpClient = OnlineAccess.CreateClient(OnlineServiceCatalog.AssistantClaude, RequestTimeout)
+                Dim client As New AnthropicClient With {
+                    .HttpClient = http,
+                    .BaseUrl = "https://" & OnlineAccess.AnthropicHost,
+                    .ApiKey = PlaceholderKey,
+                    .AuthToken = Nothing,
+                    .MaxRetries = 0,
+                    .Timeout = RequestTimeout
+                }
+                Dim parameters As Beta.MessageCreateParams = BuildParameters(request, _model)
+                Dim message As Beta.BetaMessage
+                Try
+                    message = Await client.Beta.Messages.Create(parameters, cancellationToken).ConfigureAwait(False)
+                Catch ex As Exception When Not TypeOf ex Is OperationCanceledException OrElse Not cancellationToken.IsCancellationRequested
+                    Throw Translate(ex)
+                End Try
+                Return ReadReply(message, _model)
+            End Using
+
+        End Function
+
+
+        ' The request as sent: the instructions as the system prompt, the
+        ' researcher's text as the one user message.
+        Friend Shared Function BuildParameters(request As AssistantRequest, model As String) As Beta.MessageCreateParams
+            Dim current As Boolean = CurrentModels.Contains(model)
+            ' Effort only where the model takes it; a JSON shape when asked.
+            Dim output As Beta.BetaOutputConfig = Nothing
+            If current AndAlso request.Schema IsNot Nothing Then
+                output = New Beta.BetaOutputConfig With {.Effort = Beta.Effort.Medium, .Format = New Beta.BetaJsonOutputFormat With {.Schema = request.Schema}}
+            ElseIf current Then
+                output = New Beta.BetaOutputConfig With {.Effort = Beta.Effort.Medium}
+            ElseIf request.Schema IsNot Nothing Then
+                output = New Beta.BetaOutputConfig With {.Format = New Beta.BetaJsonOutputFormat With {.Schema = request.Schema}}
+            End If
+            Dim parameters As New Beta.MessageCreateParams With {
+                .Model = model,
+                .MaxTokens = request.MaxTokens,
+                .System = request.Instructions,
+                .Messages = New List(Of Beta.BetaMessageParam) From {
+                    New Beta.BetaMessageParam With {.Role = Beta.Role.User, .Content = request.Content}
+                }
+            }
+            If output IsNot Nothing Then parameters = New Beta.MessageCreateParams(parameters) With {.OutputConfig = output}
+            If current Then
+                parameters = New Beta.MessageCreateParams(parameters) With {
+                    .Betas = New List(Of Anthropic.Core.ApiEnum(Of String, Anthropic.Models.Beta.AnthropicBeta)) From {Anthropic.Models.Beta.AnthropicBeta.ServerSideFallback2026_07_01},
+                    .Fallbacks = New Beta.Default()
+                }
+            End If
+            Return parameters
+        End Function
+
+
+        Friend Shared Function ReadReply(message As Beta.BetaMessage, model As String) As AssistantReply
+            Dim stopReason As String = If(message.StopReason Is Nothing, String.Empty, message.StopReason.Raw())
+            If String.Equals(stopReason, "refusal", StringComparison.Ordinal) Then
+                Throw New AssistantException("Claude declined this request. Nothing was changed.")
+            End If
+            Dim text As New StringBuilder()
+            For Each block As Beta.BetaContentBlock In message.Content
+                Dim part As Beta.BetaTextBlock = Nothing
+                If block.TryPickText(part) Then text.Append(part.Text)
+            Next
+            Return New AssistantReply With {
+                .Text = text.ToString(),
+                .ProviderName = "Claude",
+                .Model = If(message.Model Is Nothing, model, message.Model.Raw()),
+                .Truncated = String.Equals(stopReason, "max_tokens", StringComparison.Ordinal)
+            }
+        End Function
+
+
+        ' The SDK's errors, and the gate's refusal inside them, as the
+        ' exceptions the rest of PaperRoute explains in plain words.
+        Friend Shared Function Translate(ex As Exception) As Exception
+            Dim blocked As OnlineServiceBlockedException = FindInner(Of OnlineServiceBlockedException)(ex)
+            If blocked IsNot Nothing Then Return blocked
+            If FindInner(Of TimeoutException)(ex) IsNot Nothing Then
+                Return New TaskCanceledException("Claude didn't answer in time.", New TimeoutException())
+            End If
+            Dim api As Anthropic.Exceptions.AnthropicApiException = FindInner(Of Anthropic.Exceptions.AnthropicApiException)(ex)
+            If api IsNot Nothing Then
+                Dim code As Integer = CInt(api.StatusCode)
+                If code = 429 Then Return New OnlineServiceBusyException("Claude", Nothing, False)
+                Return New HttpRequestException("Claude answered with HTTP " & code.ToString(CultureInfo.InvariantCulture) & ".", ex, api.StatusCode)
+            End If
+            If FindInner(Of Anthropic.Exceptions.AnthropicIOException)(ex) IsNot Nothing OrElse FindInner(Of HttpRequestException)(ex) IsNot Nothing Then
+                Return New HttpRequestException("PaperRoute couldn't reach Claude.", ex)
+            End If
+            Return New AssistantException("Claude's answer couldn't be read. Nothing was changed.", ex)
+        End Function
+
+
+        Private Shared Function FindInner(Of T As Exception)(ex As Exception) As T
+            Dim current As Exception = ex
+            While current IsNot Nothing
+                Dim match As T = TryCast(current, T)
+                If match IsNot Nothing Then Return match
+                current = current.InnerException
+            End While
+            Return Nothing
+        End Function
+
+    End Class
+
+
+    ' A server that speaks the OpenAI chat completions protocol: a model on
+    ' this computer (Ollama, LM Studio, llama.cpp) or another service over
+    ' https. Plain HTTP through the gate, which checks the address against
+    ' the one set in Preferences and adds the optional key only there.
+    Public Class CompatibleAssistantProvider
+        Implements IAssistantProvider
+
+        ' A model on this computer can take minutes to load and answer.
+        Public Shared ReadOnly RequestTimeout As TimeSpan = TimeSpan.FromMinutes(10)
+
+        Private ReadOnly _endpoint As Uri
+        Private ReadOnly _model As String
+
+        Public Sub New(endpoint As Uri, model As String)
+            _endpoint = endpoint
+            _model = If(model, String.Empty).Trim()
+        End Sub
+
+        Public ReadOnly Property ProviderName As String Implements IAssistantProvider.ProviderName
+            Get
+                Return "OpenAI-compatible server"
+            End Get
+        End Property
+
+        Public ReadOnly Property Model As String Implements IAssistantProvider.Model
+            Get
+                Return _model
+            End Get
+        End Property
+
+
+        ' {endpoint}/chat/completions, such as http://localhost:11434/v1/chat/completions.
+        Public Shared Function CompletionsAddress(endpoint As Uri) As Uri
+            Return New Uri(endpoint.AbsoluteUri.TrimEnd("/"c) & "/chat/completions")
+        End Function
+
+
+        Public Async Function CompleteAsync(request As AssistantRequest, cancellationToken As CancellationToken) As Task(Of AssistantReply) Implements IAssistantProvider.CompleteAsync
+
+            OnlineAccess.Check(OnlineServiceCatalog.AssistantCompatible)
+            If _endpoint Is Nothing OrElse _model.Length = 0 Then
+                Throw New AssistantException("Set the server's address and model in Settings > Preferences > AI assistant first. Nothing was sent.")
+            End If
+
+            Using http As HttpClient = OnlineAccess.CreateClient(OnlineServiceCatalog.AssistantCompatible, RequestTimeout)
+                Dim answer = Await SendAsync(http, request, useSchema:=request.Schema IsNot Nothing, cancellationToken).ConfigureAwait(False)
+                ' A server that doesn't support structured answers is asked
+                ' once more without them; the instructions still ask for JSON.
+                If answer.Status = HttpStatusCode.BadRequest AndAlso request.Schema IsNot Nothing Then
+                    answer = Await SendAsync(http, request, useSchema:=False, cancellationToken).ConfigureAwait(False)
+                End If
+                If CInt(answer.Status) = 429 Then Throw New OnlineServiceBusyException("The server", answer.RetryAfter, False)
+                If CInt(answer.Status) < 200 OrElse CInt(answer.Status) > 299 Then
+                    Throw New HttpRequestException("The server answered with HTTP " & CInt(answer.Status).ToString(CultureInfo.InvariantCulture) & ".", Nothing, answer.Status)
+                End If
+                Return ParseReply(answer.Body, _model)
+            End Using
+
+        End Function
+
+
+        Private Async Function SendAsync(http As HttpClient, request As AssistantRequest, useSchema As Boolean, cancellationToken As CancellationToken) As Task(Of (Status As HttpStatusCode, Body As String, RetryAfter As TimeSpan?))
+            Using message As New HttpRequestMessage(HttpMethod.Post, CompletionsAddress(_endpoint))
+                message.Content = New StringContent(BuildBody(request, _model, useSchema), Encoding.UTF8, "application/json")
+                message.Headers.Accept.ParseAdd("application/json")
+                Using response As HttpResponseMessage = Await http.SendAsync(message, cancellationToken).ConfigureAwait(False)
+                    Dim body As String = Await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(False)
+                    Return (response.StatusCode, body, response.Headers.RetryAfter?.Delta)
+                End Using
+            End Using
+        End Function
+
+
+        Friend Shared Function BuildBody(request As AssistantRequest, model As String, useSchema As Boolean) As String
+            Dim body As New Dictionary(Of String, Object) From {
+                {"model", model},
+                {"messages", New Object() {
+                    New Dictionary(Of String, String) From {{"role", "system"}, {"content", request.Instructions}},
+                    New Dictionary(Of String, String) From {{"role", "user"}, {"content", request.Content}}
+                }},
+                {"max_tokens", request.MaxTokens},
+                {"stream", False}
+            }
+            If useSchema AndAlso request.Schema IsNot Nothing Then
+                body("response_format") = New Dictionary(Of String, Object) From {
+                    {"type", "json_schema"},
+                    {"json_schema", New Dictionary(Of String, Object) From {{"name", "answer"}, {"strict", True}, {"schema", request.Schema}}}
+                }
+            End If
+            Return JsonSerializer.Serialize(body)
+        End Function
+
+
+        Friend Shared Function ParseReply(body As String, model As String) As AssistantReply
+            Try
+                Using document As JsonDocument = JsonDocument.Parse(body)
+                    Dim choice As JsonElement = JsonFacts.Items(document.RootElement, "choices").FirstOrDefault()
+                    If choice.ValueKind <> JsonValueKind.Object Then Throw New AssistantException("The server's answer had no text. Nothing was changed.")
+                    Dim message As JsonElement = JsonFacts.Child(choice, "message")
+                    Dim content As JsonElement = JsonFacts.Child(message, "content")
+                    Dim reported As String = JsonFacts.RawText(document.RootElement, "model")
+                    Return New AssistantReply With {
+                        .Text = If(content.ValueKind = JsonValueKind.String, content.GetString(), String.Empty),
+                        .ProviderName = "OpenAI-compatible server",
+                        .Model = If(reported.Length > 0, reported, model),
+                        .Truncated = String.Equals(JsonFacts.RawText(choice, "finish_reason"), "length", StringComparison.Ordinal)
+                    }
+                End Using
+            Catch ex As JsonException
+                Throw New AssistantException("The server's answer couldn't be read. Nothing was changed.", ex)
+            End Try
+        End Function
+
+    End Class
+
+End Namespace

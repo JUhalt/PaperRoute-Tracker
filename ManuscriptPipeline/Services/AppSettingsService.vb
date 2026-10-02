@@ -204,6 +204,26 @@ Namespace Services
                     Distinct(StringComparer.Ordinal).
                     ToList()
 
+            ' The AI assistant (#84): off, and nothing that could carry a
+            ' secret into settings.json, unless it is well formed.
+            Dim assistant As AssistantSettings = If(settings.OnlineServices.Assistant, New AssistantSettings())
+            settings.OnlineServices.Assistant = assistant
+            If Not [Enum].IsDefined(GetType(AssistantProvider), assistant.Provider) Then assistant.Provider = AssistantProvider.Claude
+            assistant.ClaudeModel = If(assistant.ClaudeModel, String.Empty).Trim()
+            If assistant.ClaudeModel.Length = 0 OrElse assistant.ClaudeModel.Length > 100 OrElse
+               Not Text.RegularExpressions.Regex.IsMatch(assistant.ClaudeModel, "^[A-Za-z0-9._:@-]+$") Then assistant.ClaudeModel = "claude-opus-5-5"
+            assistant.Endpoint = If(assistant.Endpoint, String.Empty).Trim()
+            If assistant.Endpoint.Length > 0 AndAlso OnlineAccess.ParseAssistantEndpoint(assistant.Endpoint) Is Nothing Then assistant.Endpoint = String.Empty
+            assistant.EndpointModel = If(assistant.EndpointModel, String.Empty).Trim()
+            If assistant.EndpointModel.Length > 200 Then assistant.EndpointModel = assistant.EndpointModel.Substring(0, 200)
+            assistant.EndpointKeyOrigin = If(assistant.EndpointKeyOrigin, String.Empty).Trim().ToLowerInvariant()
+            assistant.ConfirmedUses =
+                If(assistant.ConfirmedUses, New List(Of String)()).
+                    Where(Function(item) Not String.IsNullOrWhiteSpace(item) AndAlso item.Length <= 300).
+                    Select(Function(item) item.Trim()).
+                    Distinct(StringComparer.OrdinalIgnoreCase).
+                    ToList()
+
         End Sub
 
     End Class

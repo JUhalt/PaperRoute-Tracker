@@ -57,7 +57,9 @@ Public Class OnlineServicesTests
         OnlineAccess.Configure(New OnlineServicesSettings With {.WorkOffline = True})
 
         For Each service As OnlineService In OnlineServiceCatalog.Services
-            Dim blocked As OnlineServiceBlockedException = Refused(service.Id, "https://" & service.Hosts(0) & "/")
+            ' A compatible AI server has no fixed host; any address is refused first.
+            Dim address As String = If(service.Hosts.Count > 0, "https://" & service.Hosts(0) & "/", "http://localhost:11434/v1/chat/completions")
+            Dim blocked As OnlineServiceBlockedException = Refused(service.Id, address)
             Assert.AreEqual(OnlineBlockReason.WorkOffline, blocked.Reason, service.Name)
             Assert.AreEqual(service.Id, blocked.ServiceId)
             StringAssert.Contains(blocked.Message, "Work offline is on")
@@ -397,7 +399,8 @@ Public Class OnlineServicesTests
         StringAssert.Contains(guide, "### What PaperRoute sends, and when" & vbLf & vbLf & OnlineServiceCatalog.ToMarkdownTable().Replace(vbCrLf, vbLf) & vbLf,
                               "The User Guide's table matches the services PaperRoute can contact.")
         For Each service As OnlineService In OnlineServiceCatalog.Services
-            Assert.IsTrue(service.Hosts.Count > 0 AndAlso service.Hosts.All(Function(host) host = host.ToLowerInvariant() AndAlso Not host.Contains("/"c)), service.Name)
+            Assert.IsTrue((service.Hosts.Count > 0 OrElse service.ConfiguredHost) AndAlso service.Hosts.All(Function(host) host = host.ToLowerInvariant() AndAlso Not host.Contains("/"c)), service.Name)
+            Assert.IsFalse(String.IsNullOrWhiteSpace(service.Contacts), service.Name)
         Next
         Assert.AreEqual(OnlineServiceCatalog.Services.Count, OnlineServiceCatalog.Services.Select(Function(item) item.Id).Distinct().Count())
     End Sub

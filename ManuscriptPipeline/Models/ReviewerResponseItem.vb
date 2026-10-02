@@ -17,6 +17,11 @@ Namespace Models
         Public Property Status As ReviewerResponseStatus = ReviewerResponseStatus.Unresolved
         Public Property CreatedAtUtc As DateTime = DateTime.UtcNow
         Public Property LastModifiedAtUtc As DateTime? = Nothing
+        ' The comment began as an AI assistant suggestion from a decision
+        ' letter (#84); Nothing when it was entered by hand.
+        Public Property CommentSuggestion As AssistantSuggestion = Nothing
+        ' The draft response began as an AI assistant suggestion (#84).
+        Public Property ResponseSuggestion As AssistantSuggestion = Nothing
     End Class
 
 End Namespace

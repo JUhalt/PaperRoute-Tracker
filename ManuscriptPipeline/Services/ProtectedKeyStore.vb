@@ -12,6 +12,10 @@ Namespace Services
     Public NotInheritable Class ProtectedKeyStore
 
         Public Const OpenAlex As String = "openalex"
+        ' The AI assistant's keys (#84): the researcher's Anthropic key, and
+        ' an optional key for a compatible server.
+        Public Const Anthropic As String = "anthropic"
+        Public Const AssistantEndpoint As String = "assistant-endpoint"
 
         Private Shared ReadOnly Entropy As Byte() = Encoding.UTF8.GetBytes("PaperRoute.ProtectedKeyStore.v1")
 

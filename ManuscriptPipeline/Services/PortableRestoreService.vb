@@ -1275,6 +1275,7 @@ Namespace Services
                 PublicationMatchService.NormalizeAndValidateManuscript(manuscript)
                 WorkTypeService.NormalizeAndValidateManuscript(manuscript)
                 JournalShortlistService.NormalizeManuscript(manuscript)
+                AssistantSuggestionService.NormalizeManuscript(manuscript)
 
             Next
 

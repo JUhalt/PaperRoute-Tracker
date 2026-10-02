@@ -11,12 +11,16 @@ Namespace Services
     ' this one description.
     Public NotInheritable Class OnlineService
 
-        Public Sub New(id As String, name As String, hosts As String(), sends As String, whenUsed As String)
+        Public Sub New(id As String, name As String, hosts As String(), sends As String, whenUsed As String,
+                       Optional offUntilTurnedOn As Boolean = False, Optional contacts As String = Nothing, Optional configuredHost As Boolean = False)
             Me.Id = id
             Me.Name = name
             Me.Hosts = hosts
             Me.Sends = sends
             Me.WhenUsed = whenUsed
+            Me.OffUntilTurnedOn = offUntilTurnedOn
+            Me.Contacts = If(contacts, String.Join(", ", hosts))
+            Me.ConfiguredHost = configuredHost
         End Sub
 
         Public ReadOnly Property Id As String
@@ -29,6 +33,17 @@ Namespace Services
         Public ReadOnly Property Sends As String
 
         Public ReadOnly Property WhenUsed As String
+
+        ' The AI assistant (#84): off until the researcher turns it on,
+        ' where every other service is on until turned off.
+        Public ReadOnly Property OffUntilTurnedOn As Boolean
+
+        ' What the guide and the Online services page say it contacts.
+        Public ReadOnly Property Contacts As String
+
+        ' The address is the one the researcher sets (a compatible server),
+        ' not a fixed list; the gate compares it with that address.
+        Public ReadOnly Property ConfiguredHost As Boolean
 
         Public Function AllowsHost(host As String) As Boolean
             Return Hosts.Any(Function(item) String.Equals(item, host, StringComparison.OrdinalIgnoreCase))
@@ -49,6 +64,11 @@ Namespace Services
         Public Const JournalFacts As String = "journal-facts"
         Public Const JournalSuggestions As String = "journal-suggestions"
         Public Const Citations As String = "citations"
+        Public Const AssistantClaude As String = "assistant-claude"
+        Public Const AssistantCompatible As String = "assistant-compatible"
+
+        Private Const AssistantSends As String = "Only what an AI assistant window shows you before sending: a decision letter you paste, one reviewer comment, or a manuscript's title, abstract, keywords, and target journal."
+        Private Const AssistantWhen As String = "Read Decision Letter..., Suggest a Starting Point..., and Draft Cover Letter..., after you turn on the AI assistant in Preferences."
 
         ' In the order the Online services page lists them.
         Public Shared ReadOnly Property Services As IReadOnlyList(Of OnlineService) = {
@@ -79,7 +99,17 @@ Namespace Services
             New OnlineService(Citations, "Your citations (ORCID and OpenAlex)",
                               {"pub.orcid.org", "api.openalex.org"},
                               "Your ORCID iD to ORCID, and the DOIs of your works to OpenAlex; your iD to OpenAlex only if you choose.",
-                              "Update from OpenAlex... on Insights > Your Citations.")
+                              "Update from OpenAlex... on Insights > Your Citations."),
+            New OnlineService(AssistantClaude, "AI assistant: Claude (Anthropic)",
+                              {"api.anthropic.com"},
+                              AssistantSends, AssistantWhen,
+                              offUntilTurnedOn:=True),
+            New OnlineService(AssistantCompatible, "AI assistant: another server or a model on this computer",
+                              Array.Empty(Of String)(),
+                              AssistantSends, AssistantWhen,
+                              offUntilTurnedOn:=True,
+                              contacts:="The address you set in Preferences: http only on this computer, https elsewhere",
+                              configuredHost:=True)
         }
 
 
@@ -94,7 +124,7 @@ Namespace Services
             table.AppendLine("| Service | Contacts | Sends | When |")
             table.AppendLine("| --- | --- | --- | --- |")
             For Each service As OnlineService In Services
-                table.AppendLine("| " & service.Name & " | " & String.Join(", ", service.Hosts) & " | " & service.Sends & " | " & service.WhenUsed & " |")
+                table.AppendLine("| " & service.Name & " | " & service.Contacts & " | " & service.Sends & " | " & service.WhenUsed & " |")
             Next
             Return table.ToString().TrimEnd()
         End Function

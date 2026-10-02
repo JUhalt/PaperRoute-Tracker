@@ -316,7 +316,8 @@ Namespace Forms
                     .DecisionDate = dtpDecisionDate.Value.Date,
                     .Decision = selectedOption.Value,
                     .RevisionDeadline = deadline,
-                    .Notes = txtNotes.Text.Trim()
+                    .Notes = txtNotes.Text.Trim(),
+                    .Suggestion = ManuscriptCloneService.CloneSuggestion(_existingDecision?.Suggestion)
                 }
 
             If _existingDecision Is Nothing Then
