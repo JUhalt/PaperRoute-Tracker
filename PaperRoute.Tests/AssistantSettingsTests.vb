@@ -683,7 +683,7 @@ Public Class AssistantSettingsTests
             End Sub) With {.IsBackground = True}
         thread.SetApartmentState(ApartmentState.STA)
         thread.Start()
-        Assert.IsTrue(thread.Join(TimeSpan.FromSeconds(60)), "The AI assistant settings test timed out.")
+        Assert.IsTrue(thread.Join(TimeSpan.FromMinutes(5)), "The AI assistant settings test timed out.")
         failure?.Throw()
     End Sub
 

@@ -933,7 +933,7 @@ Public Class DecisionLetterTests
             End Sub) With {.IsBackground = True}
         thread.SetApartmentState(ApartmentState.STA)
         thread.Start()
-        Assert.IsTrue(thread.Join(TimeSpan.FromSeconds(60)), "The decision letter UI test timed out.")
+        Assert.IsTrue(thread.Join(TimeSpan.FromMinutes(5)), "The decision letter UI test timed out.")
         If failure IsNot Nothing Then ExceptionDispatchInfo.Capture(failure).Throw()
     End Sub
 

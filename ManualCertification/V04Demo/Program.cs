@@ -8,7 +8,7 @@ namespace PaperRoute.V04Demo;
 internal static class Program
 {
     private const string Usage = "PaperRoute workflow manual demo\n\n" +
-        "Surfaces: vault (default), readiness, packet, packet-new, file, file-new, notes, submission, responses, workflow, board, publications, fill, about, route, update, report, candidate, online, key, journals, lookup, suggest, suggest-results, citations, citations-update\n" +
+        "Surfaces: vault (default), readiness, packet, packet-new, file, file-new, notes, submission, responses, workflow, board, publications, fill, about, route, update, report, candidate, online, key, journals, lookup, suggest, suggest-results, citations, citations-update, assistant-settings, assistant-consent, letter, letter-read, decision-prefill, draft-response, cover-letter, cover-letter-result\n" +
         "Options: --minimum, --primary, --empty (vault/readiness/board), --offline and --collapsed (board, journals, citations), --integrity (populated vault only), --dark or --system, --help\n\n" +
         "Default surfaces discard manuscript changes when the window closes.\n" +
         "workflow and board save only in a new disposable temporary session.\n" +
@@ -27,7 +27,7 @@ internal static class Program
             return;
         }
 
-        var surfaces = new[] { "vault", "readiness", "packet", "packet-new", "file", "file-new", "notes", "submission", "responses", "workflow", "board", "publications", "fill", "about", "route", "update", "report", "candidate", "online", "key", "journals", "lookup", "suggest", "suggest-results", "citations", "citations-update" };
+        var surfaces = new[] { "vault", "readiness", "packet", "packet-new", "file", "file-new", "notes", "submission", "responses", "workflow", "board", "publications", "fill", "about", "route", "update", "report", "candidate", "online", "key", "journals", "lookup", "suggest", "suggest-results", "citations", "citations-update", "assistant-settings", "assistant-consent", "letter", "letter-read", "decision-prefill", "draft-response", "cover-letter", "cover-letter-result" };
         var positional = args.Where(argument => !argument.StartsWith("--")).ToArray();
         var surface = positional.FirstOrDefault()?.ToLowerInvariant() ?? "vault";
         var minimum = args.Contains("--minimum", StringComparer.OrdinalIgnoreCase);
@@ -85,6 +85,43 @@ internal static class Program
                 };
                 ConfigureDisplayEvidence(board, primary);
                 board.ShowDialog();
+                return;
+            }
+
+            if (surface == "assistant-settings")
+            {
+                // Preferences opened at the AI assistant (#84), in an isolated
+                // session with no key.
+                var sessionRoot = Path.Combine(Path.GetTempPath(),
+                    "PaperRoute-Assistant-Demo-" + Guid.NewGuid().ToString("N"));
+                StorageEnvironment.ConfigureIsolatedSessionRoot(sessionRoot);
+                using var preferences = new SettingsForm(AssistantDemo.Settings(), new AppSettingsService(), false, true);
+                preferences.Text += " [DEMO - isolated settings; no key]";
+                ConfigureDisplayEvidence(preferences, primary);
+                if (minimum) preferences.Shown += (_, _) => preferences.Size = preferences.MinimumSize;
+                preferences.ShowDialog();
+                return;
+            }
+
+            if (surface is "assistant-consent" or "letter" or "letter-read" or "decision-prefill" or "draft-response" or "cover-letter" or "cover-letter-result")
+            {
+                // The AI assistant's windows (#84) with a canned answer;
+                // nothing is sent anywhere.
+                AssistantDemo.Enable();
+                using var window = surface switch
+                {
+                    "assistant-consent" => AssistantDemo.Consent(),
+                    "letter" => AssistantDemo.LetterDialog(false),
+                    "letter-read" => AssistantDemo.LetterDialog(true),
+                    "decision-prefill" => AssistantDemo.DecisionDialog(),
+                    "draft-response" => AssistantDemo.DraftDialog(),
+                    "cover-letter" => AssistantDemo.CoverLetterDialog(false),
+                    _ => AssistantDemo.CoverLetterDialog(true)
+                };
+                window.Text += " [DEMO - canned answer; nothing sent]";
+                ConfigureDisplayEvidence(window, primary);
+                if (minimum) window.Shown += (_, _) => window.Size = window.MinimumSize;
+                window.ShowDialog();
                 return;
             }
 
