@@ -123,6 +123,14 @@ Namespace Forms
         Friend Shared ConsentPrompt As Func(Of IWin32Window, AssistantRequest, AssistantConnection, Boolean?) = Nothing
 
 
+        ' Whether the researcher turned the assistant on and set it up, so
+        ' its buttons are shown; whether it can be used right now is
+        ' Unavailable's question (Work offline, a missing key).
+        Public Shared Function IsTurnedOn() As Boolean
+            Return AssistantService.ProviderFactory IsNot Nothing OrElse OnlineAccess.CurrentAssistant() IsNot Nothing
+        End Function
+
+
         ' Why the assistant can't be used now, or "" when it can.
         Public Shared Function Unavailable() As String
             If AssistantService.ProviderFactory IsNot Nothing Then Return String.Empty
