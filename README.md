@@ -194,6 +194,7 @@ The internal project/folder name remains `ManuscriptPipeline` for compatibility 
 - Visual Basic .NET
 - .NET 10 Windows Forms
 - ClosedXML for Excel workbook support
+- The Anthropic .NET SDK for the optional AI assistant's Claude requests
 - System.Text.Json for local persistence
 - GitHub Actions for Windows CI and release builds
 - Velopack for Windows installation and automatic updates

@@ -539,7 +539,7 @@ Each item stores a reviewer/editor label, comment or action, status, draft respo
 | Addressed | You consider this request addressed. |
 | Not applicable | You have decided the request does not apply; explain why in the response or notes. |
 
-These statuses describe response work. They do not change manuscript stage, record a submission, or complete a reminder. The workflow uses manual entry and works without AI or an online account.
+These statuses describe response work. They do not change manuscript stage, record a submission, or complete a reminder. The workflow works without AI or an online account. If you turn on the optional AI assistant, **Add from Letter...** can propose the comments from a decision letter for you to check (see **AI Assistant**).
 
 Choose **Save Comment** to accept an item into the matrix. Use **Show status** to focus the list. Choose **All statuses** before using **Move Up** or **Move Down**; ordering applies to the complete sequence of items. A decision linked to response items cannot be deleted until you reassign or remove those items.
 
@@ -824,8 +824,9 @@ Choose **Settings > Preferences...** to configure:
 - File Drawer suggestion threshold;
 - reminder notification preferences;
 - Stable or Preview update channel;
-- automatic update checking; and
-- online services, Work offline, and an optional OpenAlex key (see **Online Services and Working Offline**).
+- automatic update checking;
+- online services, Work offline, and an optional OpenAlex key (see **Online Services and Working Offline**); and
+- the optional AI assistant (see **AI Assistant**).
 
 Theme changes currently take effect after restarting PaperRoute.
 
@@ -849,7 +850,7 @@ PaperRoute keeps your library on this computer and works without the internet. A
 - Above **Settings**, the rail shows **Online** in green, or **Working offline** in blue. Choose it to review Online services.
 - Turning off one service stops only its feature, which then explains why it didn't go online. Your choices for each service are kept while Work offline is on.
 - If PaperRoute can't read its settings file, it works offline until you review Online services and choose **Save**.
-- A service added in a later version starts on, and appears in Online services with what it sends.
+- A service added in a later version starts on, and appears in Online services with what it sends. The AI assistant is the exception: it is off until you turn it on (see **AI Assistant**).
 - Requests identify PaperRoute and its version, and nothing about you. Beyond what the table below lists, PaperRoute sends nothing: not your library, your files, or your notes.
 - Links you choose to open, such as a journal's website, open in your web browser. They aren't PaperRoute requests, so Work offline doesn't stop them.
 
@@ -872,6 +873,40 @@ PaperRoute keeps the key encrypted for your Windows account on this computer, se
 | Your citations (ORCID and OpenAlex) | pub.orcid.org, api.openalex.org | Your ORCID iD to ORCID, and the DOIs of your works to OpenAlex; your iD to OpenAlex only if you choose. | Update from OpenAlex... on Insights > Your Citations. |
 | AI assistant: Claude (Anthropic) | api.anthropic.com | Only what an AI assistant window shows you before sending: a decision letter you paste, one reviewer comment, or a manuscript's title, abstract, keywords, and target journal. | Read Decision Letter..., Suggest a Starting Point..., and Draft Cover Letter..., after you turn on the AI assistant in Preferences. |
 | AI assistant: another server or a model on this computer | The address you set in Preferences: http only on this computer, https elsewhere | Only what an AI assistant window shows you before sending: a decision letter you paste, one reviewer comment, or a manuscript's title, abstract, keywords, and target journal. | Read Decision Letter..., Suggest a Starting Point..., and Draft Cover Letter..., after you turn on the AI assistant in Preferences. |
+
+---
+
+## AI Assistant
+
+PaperRoute is complete without AI. An optional assistant can save time on three tasks, using Claude with your own Anthropic key, or a model on your own computer. It is off until you turn it on, it shows what it will send before sending, and nothing in your library changes until you accept a suggestion.
+
+### Turn it on
+
+1. Choose **Settings > Preferences... > AI assistant** and check **Turn on the AI assistant**.
+2. Choose a service:
+   - **Claude (Anthropic), with your own key.** Choose **Add Claude Key...** and paste a key from your Anthropic account (**Get a key from Anthropic** opens the page). The default model is claude-opus-5-5. Anthropic charges your account for what the assistant sends and receives.
+   - **Another server, or a model on this computer (OpenAI-compatible).** Enter the server's address and model, such as `http://localhost:11434/v1` and `llama3.1` for Ollama, or `http://localhost:1234/v1` for LM Studio. http works only for a server on this computer; a server elsewhere must use https. A key is optional.
+3. Choose **Save**. The assistant's buttons appear once it is on.
+
+**Work offline** turns the assistant off too, a model on this computer included.
+
+### What it does
+
+- **Read Decision Letter...** in a submission's **Editorial History**. Paste the decision letter and choose **Read Letter**. The assistant proposes the decision, the letter's date, any revision deadline, and each reviewer's and editor's comment. Every comment is checked against the letter: one PaperRoute can't find there word for word is marked "Not found in the letter: check it" and starts unchecked. A deadline given as a period, such as "within 60 days", is worked out by PaperRoute from the letter's date, not by the model. Choose **Add Decision & N Comments...** to confirm the decision in **Add Decision**; the comments you kept then join **Reviewer Responses** for that decision and the revision round you chose. **Add from Letter...** in **Reviewer Responses** adds comments to a decision you have already recorded.
+- **Suggest a Starting Point...** on a comment's **Draft response** tab. The assistant writes a first draft of your reply, with [bracketed] placeholders where only you know the answer. **Use as Draft**, **Replace Draft**, or **Add Below** puts it in the response box; it is saved with **Save Comment** and then the page's **Save**, like anything you type.
+- **Draft Cover Letter...** in a manuscript's readiness section. The assistant writes a starting point from the title, abstract, keywords, type of work, and target journal you see in the window. Copy it, or save it as a text or Markdown file; nothing is stored in your library.
+
+### What is sent, and when you're asked
+
+Each window shows what it will send, and to whom, before sending. Only that text goes, with PaperRoute's instructions for the task: the letter you paste, one comment with your planned action, or the manuscript details shown. Your notes, files, author names, and the rest of your library are never sent.
+
+The first time a feature sends to a service elsewhere, PaperRoute shows the exact text and asks first. You can choose not to be asked again for that feature and that service; **Forget Don't Ask Again Choices** in Preferences undoes it. A model on this computer is never asked about, because nothing leaves the computer.
+
+Your keys are kept encrypted for your Windows account on this computer. The Claude key goes only to api.anthropic.com, and a server key only to the address it was added for, in a request header. Neither is ever in backups, exports, or Diagnostics. Requests carry only what the service needs, and nothing about your computer.
+
+### Suggestions stay suggestions
+
+Every result is labelled as an AI suggestion, with the service and model. A decision, comment, or response draft you accept records that it began as an AI suggestion, with the service, the model, the date, and the text it came from, and **Reviewer Responses** shows this beside the item. Check each suggestion before you use it: a model can misread a letter or invent details.
 
 ---
 
@@ -1034,7 +1069,7 @@ Visual Studio debugger sessions use the isolated development profile:
 
 Development managed-file copies are stored separately from the stable managed library.
 
-External services are used only for the features listed in **What PaperRoute sends, and when**, and for links you choose to open. You can turn each service off, or work offline; see **Online Services and Working Offline**. A publication check sends Crossref the titles and DOIs of the manuscripts you check, and nothing else.
+External services are used only for the features listed in **What PaperRoute sends, and when**, and for links you choose to open. You can turn each service off, or work offline; see **Online Services and Working Offline**. The optional AI assistant is off until you turn it on, and sends only what its windows show; see **AI Assistant**. A publication check sends Crossref the titles and DOIs of the manuscripts you check, and nothing else.
 
 PaperRoute does not require a PaperRoute account for the core manuscript library.
 

@@ -8,7 +8,7 @@ Open the manuscript's existing journal submission and record the relevant editor
 
 Each item contains an existing editorial decision, an explicitly chosen positive revision-round number, a reviewer/editor label, the original comment, an action, a draft response, a manuscript location, and notes. A label and either a comment or an action are required. Use multiple items for separate requests. Keep reviewer labels consistent when several comments came from the same person.
 
-The statuses are **Unresolved**, **In progress**, **Addressed**, and **Not applicable**. They describe your response work and do not change the manuscript's lifecycle state or record a resubmission. The workflow uses manual entry and requires no AI service or account.
+The statuses are **Unresolved**, **In progress**, **Addressed**, and **Not applicable**. They describe your response work and do not change the manuscript's lifecycle state or record a resubmission. The workflow requires no AI service or account. The optional AI assistant (#84), when turned on, can propose comments from a pasted decision letter for you to check before they are added.
 
 ## Edit, order, and save
 
