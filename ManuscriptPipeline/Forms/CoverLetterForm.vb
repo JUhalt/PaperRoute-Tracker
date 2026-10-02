@@ -84,6 +84,12 @@ Namespace Forms
         End Sub
 
 
+        Protected Overrides Sub OnLoad(e As EventArgs)
+            MyBase.OnLoad(e)
+            ResponsiveDialogSizingService.FitToWorkingArea(Me)
+        End Sub
+
+
         Private Sub BuildInterface()
 
             SuspendLayout()
@@ -144,7 +150,9 @@ Namespace Forms
             AddHandler btnClose.Click, AddressOf CloseClicked
             AcceptButton = btnPrimary
             ' Esc stops a request, or closes; a running request vetoes the close.
+            ' The button's own handler decides, so Stop never closes the window.
             CancelButton = btnClose
+            btnClose.DialogResult = DialogResult.None
 
             root.Controls.Add(lblIntro, 0, 0)
             root.Controls.Add(body, 0, 1)
@@ -498,8 +506,8 @@ Namespace Forms
 
         Private Sub CloseClicked(sender As Object, e As EventArgs)
             If _cancellation IsNot Nothing Then
-                _cancellation.Cancel()
                 btnClose.Enabled = False
+                _cancellation.Cancel()
                 Return
             End If
             DialogResult = DialogResult.Cancel
@@ -510,10 +518,11 @@ Namespace Forms
         ' Closing while a request runs stops it first, then closes.
         Protected Overrides Sub OnFormClosing(e As FormClosingEventArgs)
             If _cancellation IsNot Nothing Then
-                _cancellation.Cancel()
+                Dim closeAfter As Boolean = e.CloseReason = CloseReason.UserClosing OrElse e.CloseReason = CloseReason.None
+                If closeAfter Then _closeWhenStopped = True
                 btnClose.Enabled = False
-                If e.CloseReason = CloseReason.UserClosing OrElse e.CloseReason = CloseReason.None Then
-                    _closeWhenStopped = True
+                _cancellation.Cancel()
+                If closeAfter Then
                     e.Cancel = True
                     Return
                 End If

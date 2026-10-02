@@ -62,7 +62,7 @@ Namespace Services
                         manuscriptExternalId
 
                     manuscriptsSheet.Cell(manuscriptRow, 2).Value =
-                        manuscript.Title
+                        CellText(manuscript.Title)
 
                     manuscriptsSheet.Cell(manuscriptRow, 3).Value =
                         FormatStage(manuscript.CurrentStage)
@@ -71,7 +71,7 @@ Namespace Services
                         FormatLocation(manuscript.Location)
 
                     manuscriptsSheet.Cell(manuscriptRow, 5).Value =
-                        manuscript.TargetJournal
+                        CellText(manuscript.TargetJournal)
 
                     manuscriptsSheet.Cell(manuscriptRow, 6).Value =
                         manuscript.StageEnteredDate
@@ -84,7 +84,7 @@ Namespace Services
                     End If
 
                     manuscriptsSheet.Cell(manuscriptRow, 8).Value =
-                        manuscript.FileDrawerReason
+                        CellText(manuscript.FileDrawerReason)
 
                     If manuscript.WorkType <> WorkType.Unspecified Then
                         manuscriptsSheet.Cell(manuscriptRow, 9).Value =
@@ -92,7 +92,7 @@ Namespace Services
                     End If
 
                     manuscriptsSheet.Cell(manuscriptRow, 10).Value =
-                        String.Join("; ", If(manuscript.Tags, New List(Of String)()))
+                        CellText(String.Join("; ", If(manuscript.Tags, New List(Of String)())))
 
                     manuscriptRow += 1
 
@@ -112,19 +112,19 @@ Namespace Services
                             manuscriptExternalId
 
                         submissionsSheet.Cell(submissionRow, 3).Value =
-                            submission.JournalName
+                            CellText(submission.JournalName)
 
                         submissionsSheet.Cell(submissionRow, 4).Value =
-                            submission.ManuscriptNumber
+                            CellText(submission.ManuscriptNumber)
 
                         submissionsSheet.Cell(submissionRow, 5).Value =
                             submission.SubmittedDate
 
                         submissionsSheet.Cell(submissionRow, 6).Value =
-                            submission.PortalUrl
+                            CellText(submission.PortalUrl)
 
                         submissionsSheet.Cell(submissionRow, 7).Value =
-                            submission.Notes
+                            CellText(submission.Notes)
 
                         submissionRow += 1
 
@@ -157,7 +157,7 @@ Namespace Services
                             End If
 
                             decisionsSheet.Cell(decisionRow, 6).Value =
-                                decisionEvent.Notes
+                                CellText(decisionEvent.Notes)
 
                             decisionRow += 1
 
@@ -185,10 +185,10 @@ Namespace Services
                                 FormatCorrespondenceType(item.Type)
 
                             correspondenceSheet.Cell(correspondenceRow, 5).Value =
-                                item.Title
+                                CellText(item.Title)
 
                             correspondenceSheet.Cell(correspondenceRow, 6).Value =
-                                item.LocalFilePath
+                                CellText(item.LocalFilePath)
 
                             If Not String.IsNullOrWhiteSpace(item.LocalFilePath) Then
 
@@ -207,10 +207,10 @@ Namespace Services
                             End If
 
                             correspondenceSheet.Cell(correspondenceRow, 8).Value =
-                                item.SourceUrl
+                                CellText(item.SourceUrl)
 
                             correspondenceSheet.Cell(correspondenceRow, 9).Value =
-                                item.Notes
+                                CellText(item.Notes)
 
                             correspondenceRow += 1
 
@@ -225,6 +225,36 @@ Namespace Services
             End Using
 
         End Sub
+
+
+        ' =====================================================
+        ' Cell text
+        ' =====================================================
+
+        ' An Excel cell holds at most 32,767 characters, and the workbook
+        ' can't be written with more. Longer text, such as a decision note
+        ' that holds a whole letter, is cut short with a note saying so, so
+        ' one long field never fails an export or a backup.
+        Public Const MaximumCellLength As Integer = 32767
+
+        Public Const CutShortNote As String = " [cut short here: an Excel cell holds 32,767 characters]"
+
+        Public Shared Function CellText(value As String) As String
+
+            If value Is Nothing OrElse value.Length <= MaximumCellLength Then
+                Return value
+            End If
+
+            Dim cut As Integer = MaximumCellLength - CutShortNote.Length
+
+            ' Never between the two halves of one character.
+            If Char.IsHighSurrogate(value(cut - 1)) Then
+                cut -= 1
+            End If
+
+            Return value.Substring(0, cut).TrimEnd() & CutShortNote
+
+        End Function
 
 
         ' =====================================================

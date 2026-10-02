@@ -9,7 +9,7 @@ Imports ManuscriptPipeline.Services
 Namespace Controls
 
     ' The selected journal on the Journals page (#87): its facts with their
-    ' sources, its links, and its metrics, each labelled by name, source, and
+    ' sources, its links, and its metrics, each labeled by name, source, and
     ' year and never combined into a score.
     Friend Class JournalFactsCard
         Inherits Panel

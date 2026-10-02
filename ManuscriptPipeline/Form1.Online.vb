@@ -15,11 +15,22 @@ Partial Public Class Form1
     Private mnuWorkOffline As ToolStripMenuItem = Nothing
 
 
-    ' After settings load or change: the gate, the rail, and the menu.
-    Private Sub ApplyOnlineSettings()
+    ' The settings reach the gate, and the gate saves a Don't Ask Again
+    ' choice for the AI assistant through this window (#84). Startup and
+    ' every later change go through here, so a choice made in a session's
+    ' first use is saved like any other.
+    Private Sub ConnectOnlineAccess()
 
         OnlineAccess.Configure(appSettings.OnlineServices)
         OnlineAccess.AssistantUseConfirmed = AddressOf RememberAssistantUse
+
+    End Sub
+
+
+    ' After settings change: the gate, the rail, and the menu.
+    Private Sub ApplyOnlineSettings()
+
+        ConnectOnlineAccess()
         RefreshOnlineIndicators()
 
         ' Your Citations shows whether it can update.

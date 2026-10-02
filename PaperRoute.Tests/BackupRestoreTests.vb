@@ -59,6 +59,57 @@ Public Class BackupRestoreTests
 
     End Sub
 
+    ' A decision's notes can hold a whole decision letter (#84), longer than
+    ' an Excel cell holds: the workbook cuts it short and says so, and the
+    ' backup keeps all of it.
+    <TestMethod>
+    Public Sub Backup_KeepsANoteLongerThanAnExcelCell()
+
+        Dim managedDirectory As String = Path.Combine(_root, "long-library")
+        Dim repository As New ManuscriptRepository(Path.Combine(_root, "long-data"), managedDirectory)
+        Dim longNote As String = String.Concat(Enumerable.Repeat("A sentence of a long decision letter. ", 1600)).Trim()
+        Assert.IsTrue(longNote.Length > 60000)
+
+        Dim manuscript As New Manuscript With {
+            .Title = "Long Letter Study",
+            .CurrentStage = PaperStage.Revision,
+            .Location = ManuscriptLocation.Pipeline
+        }
+        Dim submission As New JournalSubmission With {.JournalName = "Fictional Journal of Psychology", .SubmittedDate = New DateTime(2026, 6, 1)}
+        submission.Decisions.Add(New EditorialDecisionEvent With {.Decision = EditorialDecision.MajorRevision, .DecisionDate = New DateTime(2026, 9, 15), .Notes = longNote})
+        manuscript.Submissions.Add(submission)
+        Dim manuscripts As New List(Of Manuscript) From {manuscript}
+        repository.Save(manuscripts)
+
+        Dim backupPath As String = Path.Combine(_root, "long.zip")
+        Call New PortableBackupService(managedDirectory).CreateBackup(backupPath, manuscripts, repository)
+
+        Dim targetManaged As String = Path.Combine(_root, "long-target-library")
+        Dim targetRepository As New ManuscriptRepository(Path.Combine(_root, "long-target-data"), targetManaged)
+        Dim current As New List(Of Manuscript)()
+        targetRepository.Save(current)
+        Call New PortableRestoreService(targetManaged).RestoreBackup(backupPath, current, targetRepository)
+        Assert.AreEqual(longNote, targetRepository.Load().Single().Submissions(0).Decisions(0).Notes, "The backup keeps the whole note.")
+
+        Dim workbook As String = Path.Combine(_root, "long.xlsx")
+        Call New LibraryExcelExporter().Export(workbook, manuscripts)
+        Dim cell As String = New StandardExcelImporter().Import(workbook).Manuscripts.Single().Submissions(0).Decisions(0).Notes
+        Assert.IsTrue(cell.Length <= LibraryExcelExporter.MaximumCellLength AndAlso cell.Length > 32000)
+        StringAssert.StartsWith(cell, "A sentence of a long decision letter. A sentence")
+        StringAssert.EndsWith(cell, "[cut short here: an Excel cell holds 32,767 characters]")
+
+        Assert.AreEqual("A short note.", LibraryExcelExporter.CellText("A short note."))
+        Assert.IsNull(LibraryExcelExporter.CellText(Nothing))
+        Assert.AreEqual(LibraryExcelExporter.MaximumCellLength, LibraryExcelExporter.CellText(New String("n"c, 32767)).Length, "A full cell is left alone.")
+
+        ' The cut never falls between the two halves of one character.
+        Dim keep As Integer = LibraryExcelExporter.MaximumCellLength - LibraryExcelExporter.CutShortNote.Length
+        Dim paired As String = LibraryExcelExporter.CellText(New String("n"c, keep - 1) & Char.ConvertFromUtf32(&H1D45D) & New String("n"c, 40000))
+        Assert.AreEqual(New String("n"c, keep - 1) & LibraryExcelExporter.CutShortNote, paired)
+        Assert.IsFalse(paired.Any(Function(character) Char.IsSurrogate(character)))
+
+    End Sub
+
     <TestMethod>
     Public Sub Restore_RoundTripsLibraryAndRewritesManagedPaths()
 

@@ -1,4 +1,4 @@
-﻿﻿# PaperRoute User Guide
+﻿# PaperRoute User Guide
 
 PaperRoute is a local-first academic manuscript tracker for researchers. It is designed to keep the complete route of a paper understandable: idea, writing, submission, peer review, revision, publication, or the File Drawer.
 
@@ -766,6 +766,8 @@ Only Title is required.
 
 Use **Import & Export > Export Library to Excel...** to create a workbook from the current library.
 
+An Excel cell holds at most 32,767 characters. Longer text, such as a decision's notes that hold a whole letter, is cut short in the workbook with a note saying so; your library and portable backups keep the full text.
+
 ---
 
 ## Backup and Restore
@@ -871,8 +873,8 @@ PaperRoute keeps the key encrypted for your Windows account on this computer, se
 | Journal facts (DOAJ and OpenAlex) | doaj.org, api.openalex.org | A journal's ISSNs, or a name you type to find a journal and the id of the one you pick. | Look Up Facts... on the Journals page. |
 | Find journals (OpenAlex) | api.openalex.org | The keywords you review, a start date, and the ids of the journals found. | Find Journals... on a manuscript's journal shortlist. |
 | Your citations (ORCID and OpenAlex) | pub.orcid.org, api.openalex.org | Your ORCID iD to ORCID, and the DOIs of your works to OpenAlex; your iD to OpenAlex only if you choose. | Update from OpenAlex... on Insights > Your Citations. |
-| AI assistant: Claude (Anthropic) | api.anthropic.com | Only what an AI assistant window shows you before sending: a decision letter you paste, one reviewer comment, or a manuscript's title, abstract, keywords, and target journal. | Read Decision Letter..., Suggest a Starting Point..., and Draft Cover Letter..., after you turn on the AI assistant in Preferences. |
-| AI assistant: another server or a model on this computer | The address you set in Preferences: http only on this computer, https elsewhere | Only what an AI assistant window shows you before sending: a decision letter you paste, one reviewer comment, or a manuscript's title, abstract, keywords, and target journal. | Read Decision Letter..., Suggest a Starting Point..., and Draft Cover Letter..., after you turn on the AI assistant in Preferences. |
+| AI assistant: Claude (Anthropic) | api.anthropic.com | Only what an AI assistant window shows you before sending: a decision letter you paste; one reviewer comment with its reviewer label and your planned action; or a manuscript's title, abstract, keywords, type of work, and target journal with its Journal Library facts. | Read Decision Letter..., Add from Letter..., Suggest a Starting Point..., and Draft Cover Letter..., after you turn on the AI assistant in Preferences. |
+| AI assistant: another server or a model on this computer | The address you set in Preferences: http only on this computer, https elsewhere | Only what an AI assistant window shows you before sending: a decision letter you paste; one reviewer comment with its reviewer label and your planned action; or a manuscript's title, abstract, keywords, type of work, and target journal with its Journal Library facts. | Read Decision Letter..., Add from Letter..., Suggest a Starting Point..., and Draft Cover Letter..., after you turn on the AI assistant in Preferences. |
 
 ---
 
@@ -892,21 +894,21 @@ PaperRoute is complete without AI. An optional assistant can save time on three 
 
 ### What it does
 
-- **Read Decision Letter...** in a submission's **Editorial History**. Paste the decision letter and choose **Read Letter**. The assistant proposes the decision, the letter's date, any revision deadline, and each reviewer's and editor's comment. Every comment is checked against the letter: one PaperRoute can't find there word for word is marked "Not found in the letter: check it" and starts unchecked. A deadline given as a period, such as "within 60 days", is worked out by PaperRoute from the letter's date, not by the model. Choose **Add Decision & N Comments...** to confirm the decision in **Add Decision**; the comments you kept then join **Reviewer Responses** for that decision and the revision round you chose. **Add from Letter...** in **Reviewer Responses** adds comments to a decision you have already recorded.
+- **Read Decision Letter...** in a submission's **Editorial History**. Paste the decision letter and choose **Read Letter**. The assistant proposes the decision, the letter's date, any revision deadline, and each reviewer's and editor's comment. Every comment is checked against the letter: one PaperRoute can't find there word for word is marked "Not found in the letter: check it" and starts unchecked. A deadline given as a period, such as "within 60 days", is worked out by PaperRoute from the letter's date, not by the model, and follows the decision date if you correct it in **Add Decision**. The pasted letter becomes the decision's notes. Choose **Add Decision & N Comments...** to confirm the decision in **Add Decision**; the comments you kept then join **Reviewer Responses** for that decision and the revision round you chose. **Add from Letter...** in **Reviewer Responses** adds comments to a decision you have already recorded.
 - **Suggest a Starting Point...** on a comment's **Draft response** tab. The assistant writes a first draft of your reply, with [bracketed] placeholders where only you know the answer. **Use as Draft**, **Replace Draft**, or **Add Below** puts it in the response box; it is saved with **Save Comment** and then the page's **Save**, like anything you type.
-- **Draft Cover Letter...** in a manuscript's readiness section. The assistant writes a starting point from the title, abstract, keywords, type of work, and target journal you see in the window. Copy it, or save it as a text or Markdown file; nothing is stored in your library.
+- **Draft Cover Letter...** in a manuscript's readiness section. The assistant writes a starting point from the title, abstract, keywords, type of work, and target journal you see in the window, with that journal's facts from your Journal Library. Copy it, or save it as a text or Markdown file; nothing is stored in your library.
 
 ### What is sent, and when you're asked
 
 Each window shows what it will send, and to whom, before sending. Only that text goes, with PaperRoute's instructions for the task: the letter you paste, one comment with your planned action, or the manuscript details shown. Your notes, files, author names, and the rest of your library are never sent.
 
-The first time a feature sends to a service elsewhere, PaperRoute shows the exact text and asks first. You can choose not to be asked again for that feature and that service; **Forget Don't Ask Again Choices** in Preferences undoes it. A model on this computer is never asked about, because nothing leaves the computer.
+Before a feature sends to a service elsewhere, PaperRoute shows the exact text and asks first, every time, until you choose not to be asked again for that feature and that service; **Forget Don't Ask Again Choices** in Preferences undoes it. A model on this computer is never asked about, because nothing leaves the computer.
 
 Your keys are kept encrypted for your Windows account on this computer. The Claude key goes only to api.anthropic.com, and a server key only to the address it was added for, in a request header. Neither is ever in backups, exports, or Diagnostics. Requests carry only what the service needs, and nothing about your computer.
 
 ### Suggestions stay suggestions
 
-Every result is labelled as an AI suggestion, with the service and model. A decision, comment, or response draft you accept records that it began as an AI suggestion, with the service, the model, the date, and the text it came from, and **Reviewer Responses** shows this beside the item. Check each suggestion before you use it: a model can misread a letter or invent details.
+Every result is labeled as an AI suggestion, with the service and model. A decision, comment, or response draft you accept records that it began as an AI suggestion, with the service, the model, the date, and the text it came from. **Editorial History** shows this for a decision, and **Reviewer Responses** for a comment or a response draft. Check each suggestion before you use it: a model can misread a letter or invent details.
 
 ---
 

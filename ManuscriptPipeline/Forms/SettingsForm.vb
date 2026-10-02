@@ -1269,10 +1269,12 @@ Namespace Forms
             claudeKey.Refresh()
             serverKey.Refresh()
 
+            ' A stored key can always be removed, whichever service is chosen
+            ' and even with the assistant off; adding one needs its service.
             claudeKey.AddButton.Enabled = ClaudeChosen()
-            claudeKey.RemoveButton.Enabled = ClaudeChosen()
+            claudeKey.RemoveButton.Enabled = True
             serverKey.AddButton.Enabled = CompatibleChosen() AndAlso endpoint IsNot Nothing
-            serverKey.RemoveButton.Enabled = CompatibleChosen()
+            serverKey.RemoveButton.Enabled = True
 
         End Sub
 
@@ -1286,9 +1288,9 @@ Namespace Forms
                    "Will be forgotten when you save.",
                    If(_confirmedUses = 0,
                       "PaperRoute asks every time before sending to a service elsewhere.",
-                      "You chose not to be asked again for " &
+                      "Don't Ask Again choices saved: " &
                       _confirmedUses.ToString(Globalization.CultureInfo.CurrentCulture) &
-                      If(_confirmedUses = 1, " feature.", " features.")))
+                      ". Each is for one feature with one service."))
 
         End Sub
 
@@ -1396,6 +1398,18 @@ Namespace Forms
         End Function
 
 
+        ' The address a stored key was added for, or "".
+        Private Shared Function StoredKeyOrigin(name As String) As String
+
+            Try
+                Return If(OnlineAccess.KeyStore().OriginOf(name), String.Empty)
+            Catch ex As Exception When TypeOf ex Is IO.IOException OrElse TypeOf ex Is UnauthorizedAccessException
+                Return String.Empty
+            End Try
+
+        End Function
+
+
         ' One key's row: whether one is stored, and a change that waits for Save.
         Private NotInheritable Class KeyRow
 
@@ -1438,7 +1452,7 @@ Namespace Forms
                 Status.Text =
                     If(PendingKey IsNot Nothing, "Will be added when you save",
                        If(HasKey AndAlso RemoveRequested, "Will be removed when you save",
-                          If(HasKey AndAlso Outdated, "Will be removed when you save: it was added for another address",
+                          If(HasKey AndAlso Outdated, "Will be removed when you save: it wasn't added for this address",
                              If(HasKey, "Added", "Not added"))))
                 AddButton.Text = If(WillHaveKey, _replaceText, _addText)
                 RemoveButton.Visible = WillHaveKey
@@ -1562,7 +1576,9 @@ Namespace Forms
             cboClaudeModel.Text = If(String.IsNullOrWhiteSpace(assistant.ClaudeModel), ClaudeModels(0), assistant.ClaudeModel.Trim())
             txtEndpoint.Text = If(assistant.Endpoint, String.Empty)
             txtEndpointModel.Text = If(assistant.EndpointModel, String.Empty)
-            _endpointKeyOrigin = If(assistant.EndpointKeyOrigin, String.Empty).Trim()
+            ' The address the stored server key is for comes from the key
+            ' itself, which is what the gate goes by.
+            _endpointKeyOrigin = StoredKeyOrigin(serverKey.Name)
             _confirmedUses = If(assistant.ConfirmedUses, New List(Of String)()).Where(Function(use) Not String.IsNullOrWhiteSpace(use)).Count()
 
             openAlexKey.HasKey = HasStoredKey(openAlexKey.Name)
@@ -1736,7 +1752,11 @@ Namespace Forms
                 Try
 
                     Dim keys As ProtectedKeyStore = OnlineAccess.KeyStore()
-                    If row.PendingKey IsNot Nothing Then
+                    If row.PendingKey IsNot Nothing AndAlso row Is serverKey Then
+                        ' Stored with the address it is for, in one encrypted
+                        ' file: the key can never be sent anywhere else.
+                        keys.SaveFor(row.Name, _settings.OnlineServices.Assistant.EndpointKeyOrigin, row.PendingKey)
+                    ElseIf row.PendingKey IsNot Nothing Then
                         keys.Save(row.Name, row.PendingKey)
                     Else
                         keys.Remove(row.Name)

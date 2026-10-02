@@ -245,9 +245,12 @@ Public Class AssistantDraftingTests
                             Assert.IsTrue(dialog.IsRunning)
                             Assert.AreEqual("Stop", dialog.DismissAction.Text)
                             dialog.DismissAction.PerformClick()
+                            Assert.AreEqual(DialogResult.None, dialog.DialogResult, "Stop doesn't close the window.")
                             pending.TrySetCanceled(_provider.LastToken)
                             Application.DoEvents()
                             Assert.IsTrue(dialog.HasFailed)
+                            Assert.IsTrue(dialog.Visible AndAlso dialog.DialogResult = DialogResult.None)
+                            Assert.IsTrue(dialog.DismissAction.Enabled)
                             StringAssert.StartsWith(dialog.HeadingText, "Stopped.")
                             dialog.DismissAction.PerformClick()
                             Return dialog.DialogResult
@@ -405,6 +408,25 @@ Public Class AssistantDraftingTests
                     Assert.IsFalse(cover.HasResult)
                     StringAssert.EndsWith(cover.StatusText, "Nothing was changed.")
                     Assert.AreEqual("&Draft", cover.PrimaryAction.Text, "Back to the details to try again.")
+
+                    ' Stop goes back to the details as edited; the window stays open.
+                    _provider.Failure = Nothing
+                    Dim pending As New TaskCompletionSource(Of AssistantReply)()
+                    _provider.Pending = pending
+                    cover.AbstractBox.Text = "An abstract typed here and saved nowhere."
+                    Dim drafting As Task = cover.DraftAsync()
+                    Assert.IsTrue(cover.IsRunning)
+                    Assert.AreEqual("Stop", cover.CloseAction.Text)
+                    cover.CloseAction.PerformClick()
+                    Assert.AreEqual(DialogResult.None, cover.DialogResult, "Stop doesn't close the window.")
+                    pending.TrySetCanceled(_provider.LastToken)
+                    Application.DoEvents()
+                    Assert.IsTrue(drafting.IsCompleted)
+                    Assert.IsTrue(cover.Visible AndAlso cover.DialogResult = DialogResult.None)
+                    Assert.AreEqual("Stopped. Nothing was changed.", cover.StatusText)
+                    Assert.AreEqual("An abstract typed here and saved nowhere.", cover.AbstractBox.Text)
+                    Assert.AreEqual("Close", cover.CloseAction.Text)
+                    Assert.IsTrue(cover.CloseAction.Enabled)
                 End Using
             End Sub)
     End Sub

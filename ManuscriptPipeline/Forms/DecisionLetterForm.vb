@@ -29,8 +29,9 @@ Namespace Forms
 
         Public Property Text As String = String.Empty
 
-        ' The letter's own text the comment came from, or the assistant's
-        ' text when it isn't in the letter.
+        ' The letter's own text the comment came from; empty when the
+        ' comment isn't in the letter, so nothing else is recorded as its
+        ' source.
         Public Property SourceExcerpt As String = String.Empty
 
     End Class
@@ -85,6 +86,10 @@ Namespace Forms
         ' Test seam: shows one step of a letter flow (this window or the
         ' decision that follows it) instead of ShowDialog.
         Friend Shared DialogRunner As Func(Of Form, IWin32Window, DialogResult) = Nothing
+
+        ' Test seam: the day the answer's dates are checked against, for
+        ' windows opened by other windows.
+        Friend Shared TodayOverride As DateTime? = Nothing
 
 
         ' Shows a step of a letter flow modally, or through the test seam.
@@ -141,13 +146,19 @@ Namespace Forms
             If submission Is Nothing Then Throw New ArgumentNullException(NameOf(submission))
             _mode = mode
             _submission = submission
-            _today = If(today, DateTime.Today).Date
+            _today = If(today, If(TodayOverride, DateTime.Today)).Date
 
             BuildInterface()
             If Not String.IsNullOrWhiteSpace(letter) Then txtLetter.Text = ForTextBox(letter).Trim()
             ShowPaste()
             UiPolish.ApplyDialog(Me)
 
+        End Sub
+
+
+        Protected Overrides Sub OnLoad(e As EventArgs)
+            MyBase.OnLoad(e)
+            ResponsiveDialogSizingService.FitToWorkingArea(Me)
         End Sub
 
 
@@ -287,7 +298,9 @@ Namespace Forms
             buttons.Controls.Add(btnCancel)
             buttons.Controls.Add(btnBack)
             ' Esc stops a request, or closes; a running request vetoes closing.
+            ' The button's own handler decides, so Stop never closes the window.
             CancelButton = btnCancel
+            btnCancel.DialogResult = DialogResult.None
             AcceptButton = btnPrimary
 
             root.Controls.Add(lblIntro, 0, 0)
@@ -447,6 +460,9 @@ Namespace Forms
             nudRound.Minimum = 1
             nudRound.Maximum = 999
             nudRound.Value = 1
+            ' A minimum, so an early layout in a still-empty panel can't
+            ' collapse it before the window scales for the display.
+            nudRound.MinimumSize = New Size(90, 0)
             nudRound.Width = 90
             nudRound.Anchor = AnchorStyles.Left
             nudRound.Margin = New Padding(0, 4, 0, 4)
@@ -518,12 +534,12 @@ Namespace Forms
             })
             gridComments.Columns.Add(New DataGridViewTextBoxColumn With {
                 .Name = ColumnComment, .HeaderText = "Comment", .ReadOnly = True,
-                .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = 50, .MinimumWidth = 120,
+                .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = 76, .MinimumWidth = 120,
                 .SortMode = DataGridViewColumnSortMode.NotSortable
             })
             gridComments.Columns.Add(New DataGridViewTextBoxColumn With {
                 .Name = ColumnStatus, .HeaderText = "Status", .ReadOnly = True,
-                .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = 26, .MinimumWidth = 100,
+                .AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells, .MinimumWidth = 100,
                 .SortMode = DataGridViewColumnSortMode.NotSortable
             })
 
@@ -560,6 +576,9 @@ Namespace Forms
             ShowStatus(String.Empty)
             RefreshPaste()
             ActiveControl = txtLetter
+            ' The caret starts at the beginning, so typing never replaces a
+            ' letter already there.
+            txtLetter.Select(0, 0)
 
         End Sub
 
@@ -757,10 +776,19 @@ Namespace Forms
         Private Shared Function DecisionDetails(found As DecisionLetterProposal) As String
             Dim lines As New List(Of String)()
             If found.DecisionQuote.Length > 0 Then lines.Add(Quoted(found.DecisionQuote))
-            lines.Add("Letter date: " & If(found.DecisionDate.HasValue, DateText(found.DecisionDate.Value), "not found; check it in the next step"))
+            If found.DecisionDate.HasValue Then
+                lines.Add("Letter date: " & DateText(found.DecisionDate.Value))
+            ElseIf found.LetterDateNotUsed.HasValue Then
+                lines.Add("Letter date: " & DateText(found.LetterDateNotUsed.Value) & " is far from today; check it in the next step")
+            Else
+                lines.Add("Letter date: not found; check it in the next step")
+            End If
             If found.RevisionDeadline.HasValue Then
                 lines.Add("Revision deadline: " & DateText(found.RevisionDeadline.Value) &
                           If(found.DeadlineBasis.Length > 0, " (" & LowerFirst(found.DeadlineBasis) & ")", String.Empty))
+                If found.DeadlineQuote.Length > 0 Then lines.Add(Quoted(found.DeadlineQuote))
+            ElseIf found.DeadlineNotUsed Then
+                lines.Add("Revision deadline: set it in the next step")
                 If found.DeadlineQuote.Length > 0 Then lines.Add(Quoted(found.DeadlineQuote))
             Else
                 lines.Add("Revision deadline: none found")
@@ -927,7 +955,7 @@ Namespace Forms
                     .Text = ForTextBox(row.Text).Trim(),
                     .SourceExcerpt = If(candidate.Found AndAlso candidate.SourceStart >= 0 AndAlso candidate.SourceStart + candidate.SourceLength <= _letter.Length,
                                         _letter.Substring(candidate.SourceStart, candidate.SourceLength).Trim(),
-                                        candidate.Text)
+                                        String.Empty)
                 })
             Next
             _chosenDecisionId = If(_mode = DecisionLetterMode.ExistingDecision AndAlso chosen IsNot Nothing, chosen.Id, CType(Nothing, Guid?))
@@ -967,11 +995,16 @@ Namespace Forms
         Protected Overrides Sub OnFormClosing(e As FormClosingEventArgs)
             Dim running As CancellationTokenSource = _cancellation
             If running IsNot Nothing Then
-                e.Cancel = True
-                _closeWhenStopped = True
+                ' Closing waits for the request to stop; Windows shutting
+                ' down is never held up.
+                Dim closeAfter As Boolean = e.CloseReason = CloseReason.UserClosing OrElse e.CloseReason = CloseReason.None
+                If closeAfter Then _closeWhenStopped = True
                 btnCancel.Enabled = False
                 running.Cancel()
-                Return
+                If closeAfter Then
+                    e.Cancel = True
+                    Return
+                End If
             End If
             MyBase.OnFormClosing(e)
         End Sub

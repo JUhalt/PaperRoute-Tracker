@@ -61,6 +61,54 @@ Namespace Services
     End Class
 
 
+    ' What a service said when it refused a request, such as "Your credit
+    ' balance is too low": one short line, carried on the failure so the
+    ' window can show the real reason.
+    Friend NotInheritable Class AssistantErrorText
+
+        Private Const DataKey As String = "PaperRoute.ServiceMessage"
+        Private Const MaximumLength As Integer = 240
+
+        Private Sub New()
+        End Sub
+
+
+        ' {"error":{"message":"..."}} (Anthropic, OpenAI), {"error":"..."}
+        ' (Ollama), or {"message":"..."}; "" when the body has none.
+        Public Shared Function FromBody(body As String) As String
+            If String.IsNullOrWhiteSpace(body) Then Return String.Empty
+            Try
+                Using document As JsonDocument = JsonDocument.Parse(body)
+                    Dim root As JsonElement = document.RootElement
+                    Dim text As String = JsonFacts.Text(JsonFacts.Child(root, "error"), "message")
+                    If text.Length = 0 Then text = JsonFacts.Text(root, "error")
+                    If text.Length = 0 Then text = JsonFacts.Text(root, "message")
+                    ' One plain line, whatever the service put in it: no
+                    ' line breaks, control characters, or hidden formatting.
+                    text = RegularExpressions.Regex.Replace(text, "\p{Cf}+", String.Empty)
+                    text = RegularExpressions.Regex.Replace(text, "[\p{Cc}\s]+", " ").Trim()
+                    If text.Length > MaximumLength Then text = text.Substring(0, MaximumLength).TrimEnd() & "..."
+                    Return text
+                End Using
+            Catch ex As JsonException
+                Return String.Empty
+            End Try
+        End Function
+
+
+        Public Shared Function Attach(failure As Exception, message As String) As Exception
+            If Not String.IsNullOrEmpty(message) Then failure.Data(DataKey) = message
+            Return failure
+        End Function
+
+
+        Public Shared Function MessageOf(failure As Exception) As String
+            Return If(TryCast(failure?.Data(DataKey), String), String.Empty)
+        End Function
+
+    End Class
+
+
     Public Interface IAssistantProvider
 
         ReadOnly Property ProviderName As String
@@ -200,8 +248,10 @@ Namespace Services
             Dim api As Anthropic.Exceptions.AnthropicApiException = FindInner(Of Anthropic.Exceptions.AnthropicApiException)(ex)
             If api IsNot Nothing Then
                 Dim code As Integer = CInt(api.StatusCode)
-                If code = 429 Then Return New OnlineServiceBusyException("Claude", Nothing, False)
-                Return New HttpRequestException("Claude answered with HTTP " & code.ToString(CultureInfo.InvariantCulture) & ".", ex, api.StatusCode)
+                If code = 429 Then Return AssistantErrorText.Attach(New OnlineServiceBusyException("Claude", Nothing, False), AssistantErrorText.FromBody(api.ResponseBody))
+                Return AssistantErrorText.Attach(
+                    New HttpRequestException("Claude answered with HTTP " & code.ToString(CultureInfo.InvariantCulture) & ".", ex, api.StatusCode),
+                    AssistantErrorText.FromBody(api.ResponseBody))
             End If
             If FindInner(Of Anthropic.Exceptions.AnthropicIOException)(ex) IsNot Nothing OrElse FindInner(Of HttpRequestException)(ex) IsNot Nothing Then
                 Return New HttpRequestException("PaperRoute couldn't reach Claude.", ex)
@@ -232,6 +282,11 @@ Namespace Services
 
         ' A model on this computer can take minutes to load and answer.
         Public Shared ReadOnly RequestTimeout As TimeSpan = TimeSpan.FromMinutes(10)
+
+        ' The answer's length limit: the name every server takes, and the
+        ' one some newer models ask for instead.
+        Friend Const LengthLimitName As String = "max_tokens"
+        Friend Const NewerLengthLimitName As String = "max_completion_tokens"
 
         Private ReadOnly _endpoint As Uri
         Private ReadOnly _model As String
@@ -268,15 +323,27 @@ Namespace Services
             End If
 
             Using http As HttpClient = OnlineAccess.CreateClient(OnlineServiceCatalog.AssistantCompatible, RequestTimeout)
-                Dim answer = Await SendAsync(http, request, useSchema:=request.Schema IsNot Nothing, cancellationToken).ConfigureAwait(False)
+                Dim useSchema As Boolean = request.Schema IsNot Nothing
+                Dim limitName As String = LengthLimitName
+                Dim answer = Await SendAsync(http, request, useSchema, limitName, cancellationToken).ConfigureAwait(False)
+                ' Some newer models take the length limit under another name,
+                ' and say so; they are asked once more with that name.
+                If answer.Status = HttpStatusCode.BadRequest AndAlso If(answer.Body, String.Empty).Contains(NewerLengthLimitName, StringComparison.OrdinalIgnoreCase) Then
+                    limitName = NewerLengthLimitName
+                    answer = Await SendAsync(http, request, useSchema, limitName, cancellationToken).ConfigureAwait(False)
+                End If
                 ' A server that doesn't support structured answers is asked
                 ' once more without them; the instructions still ask for JSON.
-                If answer.Status = HttpStatusCode.BadRequest AndAlso request.Schema IsNot Nothing Then
-                    answer = Await SendAsync(http, request, useSchema:=False, cancellationToken).ConfigureAwait(False)
+                If answer.Status = HttpStatusCode.BadRequest AndAlso useSchema Then
+                    answer = Await SendAsync(http, request, False, limitName, cancellationToken).ConfigureAwait(False)
                 End If
-                If CInt(answer.Status) = 429 Then Throw New OnlineServiceBusyException("The server", answer.RetryAfter, False)
+                If CInt(answer.Status) = 429 Then
+                    Throw AssistantErrorText.Attach(New OnlineServiceBusyException("The server", answer.RetryAfter, False), AssistantErrorText.FromBody(answer.Body))
+                End If
                 If CInt(answer.Status) < 200 OrElse CInt(answer.Status) > 299 Then
-                    Throw New HttpRequestException("The server answered with HTTP " & CInt(answer.Status).ToString(CultureInfo.InvariantCulture) & ".", Nothing, answer.Status)
+                    Throw AssistantErrorText.Attach(
+                        New HttpRequestException("The server answered with HTTP " & CInt(answer.Status).ToString(CultureInfo.InvariantCulture) & ".", Nothing, answer.Status),
+                        AssistantErrorText.FromBody(answer.Body))
                 End If
                 Return ParseReply(answer.Body, _model)
             End Using
@@ -284,9 +351,9 @@ Namespace Services
         End Function
 
 
-        Private Async Function SendAsync(http As HttpClient, request As AssistantRequest, useSchema As Boolean, cancellationToken As CancellationToken) As Task(Of (Status As HttpStatusCode, Body As String, RetryAfter As TimeSpan?))
+        Private Async Function SendAsync(http As HttpClient, request As AssistantRequest, useSchema As Boolean, limitName As String, cancellationToken As CancellationToken) As Task(Of (Status As HttpStatusCode, Body As String, RetryAfter As TimeSpan?))
             Using message As New HttpRequestMessage(HttpMethod.Post, CompletionsAddress(_endpoint))
-                message.Content = New StringContent(BuildBody(request, _model, useSchema), Encoding.UTF8, "application/json")
+                message.Content = New StringContent(BuildBody(request, _model, useSchema, limitName), Encoding.UTF8, "application/json")
                 message.Headers.Accept.ParseAdd("application/json")
                 Using response As HttpResponseMessage = Await http.SendAsync(message, cancellationToken).ConfigureAwait(False)
                     Dim body As String = Await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(False)
@@ -296,14 +363,14 @@ Namespace Services
         End Function
 
 
-        Friend Shared Function BuildBody(request As AssistantRequest, model As String, useSchema As Boolean) As String
+        Friend Shared Function BuildBody(request As AssistantRequest, model As String, useSchema As Boolean, Optional limitName As String = LengthLimitName) As String
             Dim body As New Dictionary(Of String, Object) From {
                 {"model", model},
                 {"messages", New Object() {
                     New Dictionary(Of String, String) From {{"role", "system"}, {"content", request.Instructions}},
                     New Dictionary(Of String, String) From {{"role", "user"}, {"content", request.Content}}
                 }},
-                {"max_tokens", request.MaxTokens},
+                {limitName, request.MaxTokens},
                 {"stream", False}
             }
             If useSchema AndAlso request.Schema IsNot Nothing Then

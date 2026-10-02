@@ -4,6 +4,7 @@ Imports System.IO
 Imports System.Linq
 Imports System.Net
 Imports System.Net.Http
+Imports System.Net.Sockets
 Imports System.Text
 Imports System.Text.Json
 Imports System.Threading
@@ -202,9 +203,13 @@ Public Class AssistantCoreTests
         _keys.Save(ProtectedKeyStore.Anthropic, "sk-ant-test-key-0001")
         Assert.AreEqual(String.Empty, AssistantRunner.Unavailable())
         Dim connection As AssistantConnection = OnlineAccess.CurrentAssistant()
-        For Each item In {(Status:=429, Expected:="Claude is busy"), (Status:=401, Expected:="didn't accept the key"), (Status:=529, Expected:="overloaded"), (Status:=500, Expected:="problem on its side")}
+        ' A wait is named only when the service gave one, and a refused
+        ' request shows the service's own reason, such as billing.
+        For Each item In {(Status:=429, Expected:="Claude is limiting requests right now. It said: Your credit balance is too low."), (Status:=401, Expected:="didn't accept the key"),
+                          (Status:=400, Expected:="Claude couldn't accept the request (HTTP 400). It said: Your credit balance is too low."),
+                          (Status:=529, Expected:="overloaded"), (Status:=500, Expected:="problem on its side")}
             Dim status As Integer = item.Status
-            UseNetwork(Function(sent) Answer(CType(status, HttpStatusCode), "{""type"":""error"",""error"":{""type"":""x"",""message"":""m""}}"))
+            UseNetwork(Function(sent) Answer(CType(status, HttpStatusCode), "{""type"":""error"",""error"":{""type"":""x"",""message"":""Your credit   balance is too low""}}"))
             OnlineAccess.Configure(ClaudeSettings())
             Dim failure As Exception = Nothing
             Try
@@ -239,7 +244,7 @@ Public Class AssistantCoreTests
         Dim settings As OnlineServicesSettings = CompatibleSettings("http://localhost:11434/v1")
         settings.Assistant.EndpointKeyOrigin = "http://localhost:11434"
         OnlineAccess.Configure(settings)
-        _keys.Save(ProtectedKeyStore.AssistantEndpoint, "local-key-123")
+        _keys.SaveFor(ProtectedKeyStore.AssistantEndpoint, "http://localhost:11434", "local-key-123")
         _keys.Save(ProtectedKeyStore.Anthropic, "sk-ant-test-key-0001")
 
         Dim provider As IAssistantProvider = AssistantService.CurrentProvider()
@@ -266,6 +271,99 @@ Public Class AssistantCoreTests
         AssistantService.CurrentProvider().CompleteAsync(AssistantService.BuildResponseRequest("Reviewer 1", "Clarify.", ""), CancellationToken.None).GetAwaiter().GetResult()
         Assert.IsNull(network.Requests.Single().Header("Authorization"))
         Assert.IsTrue(OnlineAccess.NeedsConfirmation(AssistantService.DraftResponseFeature), "A server elsewhere: ask first.")
+
+        ' Settings that name the new address, as after a key that couldn't
+        ' be written: the stored key still belongs to the old one.
+        moved.Assistant.EndpointKeyOrigin = "https://models.example.org:443"
+        OnlineAccess.Configure(moved)
+        network.Requests.Clear()
+        AssistantService.CurrentProvider().CompleteAsync(AssistantService.BuildResponseRequest("Reviewer 1", "Clarify.", ""), CancellationToken.None).GetAwaiter().GetResult()
+        Assert.IsNull(network.Requests.Single().Header("Authorization"), "The key is stored with its address, so it goes nowhere else.")
+        Assert.AreEqual("http://localhost:11434", _keys.OriginOf(ProtectedKeyStore.AssistantEndpoint))
+        Assert.IsNull(_keys.LoadFor(ProtectedKeyStore.AssistantEndpoint, "https://models.example.org:443"))
+        Assert.ThrowsExactly(Of ArgumentException)(Sub() _keys.SaveFor(ProtectedKeyStore.AssistantEndpoint, " ", "local-key-123"))
+        Assert.ThrowsExactly(Of ArgumentException)(Sub() _keys.SaveFor(ProtectedKeyStore.AssistantEndpoint, "https://a.example:443" & vbLf & "https://b.example:443", "local-key-123"))
+
+        ' An address in another script is kept as written, and is its own address.
+        Dim accented As String = "https://mod" & ChrW(&HE8) & "le.example:443"
+        _keys.SaveFor(ProtectedKeyStore.AssistantEndpoint, accented, "local-key-123")
+        Assert.AreEqual("local-key-123", _keys.LoadFor(ProtectedKeyStore.AssistantEndpoint, accented))
+        Assert.IsNull(_keys.LoadFor(ProtectedKeyStore.AssistantEndpoint, "https://modele.example:443"))
+
+        ' A key saved without an address is given to none.
+        _keys.Save(ProtectedKeyStore.AssistantEndpoint, "local-key-123")
+        Assert.IsNull(_keys.LoadFor(ProtectedKeyStore.AssistantEndpoint, "http://localhost:11434"))
+    End Sub
+
+    <TestMethod>
+    Public Sub AModelOnThisComputerIsNeverReachedThroughAProxy()
+        Dim listener As New TcpListener(IPAddress.Loopback, 0)
+        listener.Start()
+        Dim port As Integer = DirectCast(listener.LocalEndpoint, IPEndPoint).Port
+        Dim served As Task(Of String) = Task.Run(Function() ServeOnceAsync(listener, CompatibleAnswer("Hello")))
+
+        Dim proxy As New RecordingProxy()
+        Dim previous As IWebProxy = HttpClient.DefaultProxy
+        OnlineAccess.ResetForTests()
+        OnlineAccess.KeyStoreFactory = Function() _keys
+        HttpClient.DefaultProxy = proxy
+        Try
+            OnlineAccess.Configure(CompatibleSettings("http://127.0.0.1:" & port.ToString(Globalization.CultureInfo.InvariantCulture) & "/v1"))
+            Using limit As New CancellationTokenSource(TimeSpan.FromSeconds(60))
+                Dim reply As AssistantReply = AssistantService.CurrentProvider().CompleteAsync(AssistantService.BuildResponseRequest("Reviewer 1", "Clarify the sample.", ""), limit.Token).GetAwaiter().GetResult()
+                Assert.AreEqual("Hello", reply.Text)
+            End Using
+            StringAssert.StartsWith(served.GetAwaiter().GetResult(), "POST /v1/chat/completions ", "Sent straight to this computer.")
+            Assert.AreEqual(0, proxy.Asked, "No proxy is consulted for a request to this computer.")
+        Finally
+            HttpClient.DefaultProxy = previous
+            OnlineAccess.ResetForTests()
+            listener.Stop()
+        End Try
+    End Sub
+
+    <TestMethod>
+    Public Sub AServerThatNamesItsLimitDifferentlyIsAskedOnceMoreAndARefusalGivesItsReason()
+        Dim network As CapturingNetwork = UseNetwork(
+            Function(sent)
+                If sent.Body.Contains("""max_tokens""") Then
+                    Return Answer(HttpStatusCode.BadRequest, "{""error"":{""message"":""Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.""}}")
+                End If
+                Return Answer(HttpStatusCode.OK, CompatibleAnswer("Hello"))
+            End Function)
+        OnlineAccess.Configure(CompatibleSettings("https://models.example.org/v1"))
+        Dim request As AssistantRequest = AssistantService.BuildResponseRequest("Reviewer 1", "Clarify the sample.", "")
+        Assert.AreEqual("Hello", AssistantService.CurrentProvider().CompleteAsync(request, CancellationToken.None).GetAwaiter().GetResult().Text)
+        Assert.AreEqual(2, network.Requests.Count)
+        StringAssert.Contains(network.Requests(1).Body, """max_completion_tokens"":4000")
+        Assert.IsFalse(network.Requests(1).Body.Contains("""max_tokens"""))
+
+        For Each item In {(Status:=400, Body:="{""error"":{""message"":""This model's maximum context length is 8192 tokens.""}}",
+                           Expected:="The server couldn't accept the request (HTTP 400). It said: This model's maximum context length is 8192 tokens. Nothing was changed."),
+                          (Status:=400, Body:="{""error"":""model requires more system memory""}",
+                           Expected:="The server couldn't accept the request (HTTP 400). It said: model requires more system memory. Nothing was changed."),
+                          (Status:=400, Body:="not json",
+                           Expected:="The server couldn't accept the request (HTTP 400). Check the model in Settings > Preferences > AI assistant, or send less text. Nothing was changed."),
+                          (Status:=429, Body:="{}",
+                           Expected:="The server is limiting requests right now. Try again in a few minutes. Nothing was changed."),
+                          (Status:=429, Body:="{""error"":{""message"":""You exceeded your current quota, please check your plan and billing details."",""type"":""insufficient_quota""}}",
+                           Expected:="The server is limiting requests right now. It said: You exceeded your current quota, please check your plan and billing details. Nothing was changed."),
+                          (Status:=400, Body:="{""error"":{""message"":""first&#10;&#10;second\u0000third‮""}}",
+                           Expected:="The server couldn't accept the request (HTTP 400). It said: first second third. Nothing was changed.")}
+            Dim scenario = item
+            UseNetwork(Function(sent) Answer(CType(scenario.Status, HttpStatusCode), scenario.Body))
+            OnlineAccess.Configure(CompatibleSettings("https://models.example.org/v1"))
+            Dim failure As Exception = Nothing
+            Try
+                AssistantService.CurrentProvider().CompleteAsync(request, CancellationToken.None).GetAwaiter().GetResult()
+            Catch ex As Exception
+                failure = ex
+            End Try
+            Assert.IsNotNull(failure, scenario.Body)
+            Assert.AreEqual(scenario.Expected, AssistantRunner.Describe(failure))
+        Next
+
+        Assert.AreEqual(243, AssistantErrorText.FromBody("{""error"":{""message"":""" & New String("x"c, 500) & """}}").Length, "A long reason is cut to a line.")
     End Sub
 
     <TestMethod>
@@ -294,7 +392,8 @@ Public Class AssistantCoreTests
         Assert.AreEqual("Based on their comments, I would like to invite a major revision.", proposal.DecisionQuote)
         Assert.AreEqual(New DateTime(2026, 9, 15), proposal.DecisionDate.Value)
         Assert.AreEqual(New DateTime(2026, 11, 14), proposal.RevisionDeadline.Value, "60 days from the letter's date, worked out here.")
-        StringAssert.StartsWith(proposal.DeadlineBasis, "60 days after Sep 15, 2026")
+        Assert.AreEqual("60 days after Sep 15, 2026 (the letter's date)", proposal.DeadlineBasis)
+        Assert.AreEqual(60, proposal.DeadlineDays.Value, "Kept, so the deadline can follow a corrected decision date.")
         Assert.AreEqual("Please submit your revised manuscript within 60 days.", proposal.DeadlineQuote)
 
         Assert.AreEqual(4, proposal.Comments.Count, "The repeated comment is offered once.")
@@ -315,8 +414,17 @@ Public Class AssistantCoreTests
         Dim proposal As DecisionLetterProposal = AssistantService.ReadLetterReply(New AssistantReply With {.Text = unclear}, Letter, Today)
         Assert.IsFalse(proposal.Decision.HasValue)
         Assert.AreEqual(String.Empty, proposal.DecisionQuote, "A quote not in the letter is dropped.")
-        Assert.IsFalse(proposal.DecisionDate.HasValue, "A date far from today is dropped.")
+        Assert.IsFalse(proposal.DecisionDate.HasValue, "A date far from today is not used.")
+        Assert.AreEqual(New DateTime(1999, 1, 1), proposal.LetterDateNotUsed.Value, "It is reported, to be checked.")
         Assert.IsFalse(proposal.RevisionDeadline.HasValue, "A deadline before the letter is dropped.")
+
+        ' A period is never counted from today when the letter's date is in doubt.
+        Dim oldLetter As DecisionLetterProposal = AssistantService.ReadLetterReply(New AssistantReply With {.Text = "{""decision"":""major_revision"",""decision_date"":""2022-03-03"",""deadline_days"":60,""comments"":[]}"}, Letter, Today)
+        Assert.AreEqual(New DateTime(2022, 3, 3), oldLetter.LetterDateNotUsed.Value)
+        Assert.IsFalse(oldLetter.RevisionDeadline.HasValue OrElse oldLetter.DeadlineDays.HasValue)
+        Assert.IsTrue(oldLetter.DeadlineNotUsed, "The letter gave a deadline, so the researcher is asked to set it.")
+        Assert.IsFalse(AssistantService.ReadLetterReply(New AssistantReply With {.Text = "{""decision"":""rejected"",""decision_date"":""2022-03-03"",""deadline_date"":"""",""deadline_days"":0,""comments"":[]}"}, Letter, Today).DeadlineNotUsed,
+                       "A letter with no deadline doesn't ask for one.")
         Assert.AreEqual(1, proposal.Comments.Count)
         Assert.AreEqual("Reviewer", proposal.Comments(0).ReviewerLabel)
 
@@ -324,6 +432,13 @@ Public Class AssistantCoreTests
         Assert.AreEqual(EditorialDecision.DeskRejected, noDate.Decision)
         Assert.AreEqual(Today.AddDays(14), noDate.RevisionDeadline.Value, "Without the letter's date, from today.")
         StringAssert.EndsWith(noDate.DeadlineBasis, "(today)")
+        Assert.AreEqual(14, noDate.DeadlineDays.Value)
+
+        ' An answer that stopped at its length limit says so.
+        Dim cut As AssistantException = Assert.ThrowsExactly(Of AssistantException)(
+            Sub() AssistantService.ReadLetterReply(New AssistantReply With {.Text = LetterAnswer.Substring(0, LetterAnswer.Length - 40), .Truncated = True}, Letter, Today))
+        Assert.AreEqual("The answer was cut short before it finished. Paste the letter in parts, such as one reviewer at a time. Nothing was changed.", cut.Message)
+        Assert.IsTrue(AssistantService.ReadLetterReply(New AssistantReply With {.Text = LetterAnswer, .Truncated = True}, Letter, Today).Truncated, "A complete answer that was cut short is still read.")
 
         Assert.ThrowsExactly(Of AssistantException)(Sub() AssistantService.ReadLetterReply(New AssistantReply With {.Text = "I can't help with that."}, Letter, Today))
         Assert.ThrowsExactly(Of AssistantException)(Sub() AssistantService.ReadLetterReply(New AssistantReply With {.Text = "{not json}"}, Letter, Today))
@@ -384,9 +499,11 @@ Public Class AssistantCoreTests
 
     <TestMethod>
     Public Sub AcceptedSuggestionsKeepWhereTheyCameFrom()
-        Dim suggestion As AssistantSuggestion = AssistantService.SuggestionFor(AssistantService.DecisionLetterFeature, New AssistantReply With {.ProviderName = "Claude", .Model = "claude-opus-5-5"}, New String("x"c, 5000), New DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc))
+        Dim suggested As New DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc)
+        Dim suggestion As AssistantSuggestion = AssistantService.SuggestionFor(AssistantService.DecisionLetterFeature, New AssistantReply With {.ProviderName = "Claude", .Model = "claude-opus-5-5"}, New String("x"c, 5000), suggested)
         Assert.AreEqual(AssistantSuggestionService.MaximumSourceLength, suggestion.SourceText.Length)
-        StringAssert.StartsWith(AssistantSuggestionService.Describe(suggestion), "Began as an AI suggestion (Claude, claude-opus-5-5, Oct 1, 2026)")
+        ' The day as it is here: noon UTC is the next day in some zones.
+        StringAssert.StartsWith(AssistantSuggestionService.Describe(suggestion), "Began as an AI suggestion (Claude, claude-opus-5-5, " & suggested.ToLocalTime().ToString("MMM d, yyyy", Globalization.CultureInfo.CurrentCulture) & ")")
 
         Dim submission As New JournalSubmission With {.JournalName = "Fictional Open Psychology"}
         Dim decision As New EditorialDecisionEvent With {.Decision = EditorialDecision.MajorRevision, .Suggestion = suggestion}
@@ -431,7 +548,7 @@ Public Class AssistantCoreTests
     ' Helpers
     ' ---------------------------------------------------------------
 
-    Private Shared Function RepositoryRoot() As String
+    Friend Shared Function RepositoryRoot() As String
         Dim folder As New DirectoryInfo(AppContext.BaseDirectory)
         While folder IsNot Nothing AndAlso Not File.Exists(Path.Combine(folder.FullName, "ManuscriptPipeline.slnx"))
             folder = folder.Parent
@@ -461,6 +578,55 @@ Public Class AssistantCoreTests
     Private Shared Function Answer(status As HttpStatusCode, body As String) As HttpResponseMessage
         Return New HttpResponseMessage(status) With {.Content = New StringContent(body, Encoding.UTF8, "application/json")}
     End Function
+
+    ' One request answered on this computer; gives back the request's first line.
+    Private Shared Async Function ServeOnceAsync(listener As TcpListener, body As String) As Task(Of String)
+        Using client As TcpClient = Await listener.AcceptTcpClientAsync()
+            Using stream As NetworkStream = client.GetStream()
+                Dim received As New MemoryStream()
+                Dim buffer(8191) As Byte
+                Dim text As String = String.Empty
+                Do
+                    Dim count As Integer = Await stream.ReadAsync(buffer, 0, buffer.Length)
+                    If count = 0 Then Exit Do
+                    received.Write(buffer, 0, count)
+                    text = Encoding.UTF8.GetString(received.ToArray())
+                    Dim headersEnd As Integer = text.IndexOf(vbCrLf & vbCrLf, StringComparison.Ordinal)
+                    If headersEnd < 0 Then Continue Do
+                    Dim lengthLine As String = text.Substring(0, headersEnd).Split({vbCrLf}, StringSplitOptions.None).
+                        FirstOrDefault(Function(line) line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
+                    Dim expected As Integer = If(lengthLine Is Nothing, 0, Integer.Parse(lengthLine.Substring("Content-Length:".Length).Trim(), Globalization.CultureInfo.InvariantCulture))
+                    If received.Length >= Encoding.UTF8.GetByteCount(text.Substring(0, headersEnd + 4)) + expected Then Exit Do
+                Loop
+                Dim payload As Byte() = Encoding.UTF8.GetBytes(body)
+                Dim head As Byte() = Encoding.ASCII.GetBytes("HTTP/1.1 200 OK" & vbCrLf & "Content-Type: application/json" & vbCrLf &
+                    "Content-Length: " & payload.Length.ToString(Globalization.CultureInfo.InvariantCulture) & vbCrLf & "Connection: close" & vbCrLf & vbCrLf)
+                Await stream.WriteAsync(head, 0, head.Length)
+                Await stream.WriteAsync(payload, 0, payload.Length)
+                Await stream.FlushAsync()
+                Return text.Split({vbCrLf}, StringSplitOptions.None)(0)
+            End Using
+        End Using
+    End Function
+
+    ' A proxy that counts every time it is consulted.
+    Private NotInheritable Class RecordingProxy
+        Implements IWebProxy
+
+        Public Asked As Integer
+
+        Public Property Credentials As ICredentials Implements IWebProxy.Credentials
+
+        Public Function GetProxy(destination As Uri) As Uri Implements IWebProxy.GetProxy
+            Interlocked.Increment(Asked)
+            Return New Uri("http://127.0.0.1:9")
+        End Function
+
+        Public Function IsBypassed(host As Uri) As Boolean Implements IWebProxy.IsBypassed
+            Interlocked.Increment(Asked)
+            Return False
+        End Function
+    End Class
 
     Private Function UseNetwork(respond As Func(Of SentRequest, HttpResponseMessage)) As CapturingNetwork
         OnlineAccess.ResetForTests()

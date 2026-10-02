@@ -32,6 +32,8 @@ Public Class DecisionLetterTests
     <TestInitialize>
     Public Sub Setup()
         Reset()
+        ' Windows opened by other windows check dates against this day too.
+        DecisionLetterForm.TodayOverride = Today
         _directory = TestSupport.CreateTemporaryRoot()
         Dim keys As New ProtectedKeyStore(Path.Combine(_directory, "keys"))
         OnlineAccess.KeyStoreFactory = Function() keys
@@ -48,6 +50,7 @@ Public Class DecisionLetterTests
         AssistantService.ProviderFactory = Nothing
         AssistantRunner.ConsentPrompt = Nothing
         DecisionLetterForm.DialogRunner = Nothing
+        DecisionLetterForm.TodayOverride = Nothing
     End Sub
 
     Private Shared Function UseProvider() As FakeProvider
@@ -213,11 +216,14 @@ Public Class DecisionLetterTests
                     Assert.AreEqual("Referee 2", edited.ReviewerLabel)
                     Assert.AreEqual("The discussion should address how clinicians' experience moderates anchoring.", edited.Text)
                     Assert.AreEqual(AssistantCoreTests.Letter.Substring(found.SourceStart, found.SourceLength), edited.SourceExcerpt, "The source stays the letter's text.")
-                    Assert.AreEqual("Please add a figure showing the anchoring effect by experience.", letterDialog.AcceptedComments(1).SourceExcerpt, "Not in the letter: the assistant's text.")
+                    Assert.AreEqual("Please add a figure showing the anchoring effect by experience.", letterDialog.AcceptedComments(1).Text)
+                    Assert.AreEqual(String.Empty, letterDialog.AcceptedComments(1).SourceExcerpt, "Not in the letter: nothing is recorded as its source.")
 
                     Dim decisionId As Guid = Guid.NewGuid()
                     Dim drafts As List(Of ReviewerResponseItem) = letterDialog.DraftItems(decisionId)
                     Assert.AreEqual(2, drafts.Count)
+                    Assert.AreEqual(String.Empty, drafts(1).CommentSuggestion.SourceText)
+                    Assert.AreEqual(AssistantService.DecisionLetterFeature, drafts(1).CommentSuggestion.Feature, "Still recorded as an AI suggestion.")
                     Assert.IsTrue(drafts.All(Function(item) item.DecisionId = decisionId AndAlso item.RevisionRoundNumber = 1 AndAlso item.CommentSuggestion.Provider = "Claude"))
                     StringAssert.StartsWith(AssistantSuggestionService.Describe(drafts(0).CommentSuggestion), "Began as an AI suggestion (Claude, claude-opus-5-5, ")
                     Assert.AreEqual(AssistantService.DecisionLetterFeature, letterDialog.DecisionSuggestion().Feature)
@@ -409,8 +415,11 @@ Public Class DecisionLetterTests
                     Assert.AreEqual("Stop", letterDialog.CancelButtonForTest.Text)
                     Assert.IsFalse(letterDialog.PrimaryButton.Enabled)
                     Assert.AreEqual("Reading the letter with Claude...", letterDialog.StatusText)
-                    letterDialog.CancelForTest()
+                    ' As a click or Esc gives it: through the window's cancel button.
+                    letterDialog.CancelButtonForTest.PerformClick()
+                    Assert.AreEqual(DialogResult.None, letterDialog.DialogResult, "Stop doesn't ask the window to close.")
                     PumpUntil(Function() reading.IsCompleted)
+                    Assert.IsTrue(letterDialog.Visible AndAlso letterDialog.DialogResult = DialogResult.None)
                     Assert.IsFalse(letterDialog.IsRunning)
                     Assert.IsFalse(letterDialog.IsReviewing)
                     Assert.AreEqual("Stopped. Nothing was changed.", letterDialog.StatusText)
@@ -643,6 +652,100 @@ Public Class DecisionLetterTests
             End Sub)
     End Sub
 
+    <TestMethod>
+    Public Sub APeriodDeadlineFollowsACorrectedDecisionDateUntilTheDeadlineIsSet()
+        RunOnSta(
+            Sub()
+                ' An email body with no date: the period was counted from today,
+                ' the day the dialog fills in.
+                Dim now As DateTime = DateTime.Today
+                Dim dayText As Func(Of DateTime, String) = Function(day) day.ToString("MMM d, yyyy", Globalization.CultureInfo.CurrentCulture)
+                Dim noDate As DecisionLetterProposal = AssistantService.ReadLetterReply(
+                    New AssistantReply With {.Text = "{""decision"":""major_revision"",""deadline_days"":60,""deadline_quote"":""Please submit your revised manuscript within 60 days."",""comments"":[]}"},
+                    AssistantCoreTests.Letter, now)
+                Using dialog As New AddDecisionForm()
+                    dialog.UseProposal(noDate, AssistantCoreTests.Letter, Nothing)
+                    Assert.AreEqual(now.AddDays(60), dialog.DeadlinePicker.Value.Date)
+                    StringAssert.Contains(dialog.BannerBox.Text, "Decision date: not found in the letter; today's date is filled in.")
+                    StringAssert.Contains(dialog.BannerBox.Text, "Revision deadline: 60 days after " & dayText(now) & " (today)")
+
+                    dialog.DecisionDatePicker.Value = now.AddDays(-17)
+                    Assert.AreEqual(now.AddDays(43), dialog.DeadlinePicker.Value.Date, "Counted from the corrected decision date.")
+                    StringAssert.Contains(dialog.BannerBox.Text, "Revision deadline: 60 days after " & dayText(now.AddDays(-17)) & " (the decision date)")
+                    dialog.DecisionDatePicker.Value = now.AddDays(-12)
+                    Assert.AreEqual(now.AddDays(48), dialog.DeadlinePicker.Value.Date, "And again.")
+
+                    ' Unchecked, it still follows, so checking it again shows the right day.
+                    dialog.DeadlineCheck.Checked = False
+                    dialog.DecisionDatePicker.Value = now.AddDays(-10)
+                    dialog.DeadlineCheck.Checked = True
+                    Assert.AreEqual(now.AddDays(50), dialog.DeadlinePicker.Value.Date)
+                    StringAssert.Contains(dialog.BannerBox.Text, "60 days after " & dayText(now.AddDays(-10)) & " (the decision date)")
+
+                    ' A decision date at the very end of the picker's range is taken without a failure.
+                    dialog.DecisionDatePicker.Value = dialog.DecisionDatePicker.MaxDate
+                    Assert.AreEqual(dialog.DeadlinePicker.MaxDate.Date, dialog.DeadlinePicker.Value.Date)
+                    dialog.DecisionDatePicker.Value = now.AddDays(-12)
+                    Assert.AreEqual(now.AddDays(48), dialog.DeadlinePicker.Value.Date)
+
+                    ' Once the researcher sets the deadline, it stays theirs.
+                    dialog.DeadlinePicker.Value = now.AddDays(90)
+                    dialog.DecisionDatePicker.Value = now.AddDays(-20)
+                    Assert.AreEqual(now.AddDays(90), dialog.DeadlinePicker.Value.Date)
+                End Using
+
+                ' A deadline the letter states as a date never moves.
+                Dim stated As New DecisionLetterProposal With {
+                    .Decision = EditorialDecision.MinorRevision, .DecisionDate = New DateTime(2026, 9, 15),
+                    .RevisionDeadline = New DateTime(2026, 11, 30), .DeadlineBasis = "Stated in the letter"
+                }
+                Using dialog As New AddDecisionForm()
+                    dialog.UseProposal(stated, String.Empty, Nothing)
+                    dialog.DecisionDatePicker.Value = New DateTime(2026, 9, 1)
+                    Assert.AreEqual(New DateTime(2026, 11, 30), dialog.DeadlinePicker.Value.Date)
+                End Using
+
+                ' A letter date far from today is reported, and no deadline is worked out from it.
+                Dim old As DecisionLetterProposal = AssistantService.ReadLetterReply(
+                    New AssistantReply With {.Text = "{""decision"":""major_revision"",""decision_date"":""2022-03-03"",""deadline_days"":60,""deadline_quote"":""Please submit your revised manuscript within 60 days."",""comments"":[]}"},
+                    AssistantCoreTests.Letter, Today)
+                Using dialog As New AddDecisionForm()
+                    dialog.UseProposal(old, String.Empty, Nothing)
+                    Assert.IsFalse(dialog.DeadlineCheck.Checked)
+                    StringAssert.Contains(dialog.BannerBox.Text, "Decision date: the letter's date, Mar 3, 2022, is far from today, so today's date is filled in. Check it.")
+                    StringAssert.Contains(dialog.BannerBox.Text, "Revision deadline: not filled in, because the letter's date needs checking; the letter says " &
+                                          ChrW(&H201C) & "Please submit your revised manuscript within 60 days." & ChrW(&H201D) & ". Set it below.")
+                End Using
+
+                ' ...and a letter that gives no deadline isn't said to have one.
+                Dim oldRejection As DecisionLetterProposal = AssistantService.ReadLetterReply(
+                    New AssistantReply With {.Text = "{""decision"":""rejected"",""decision_date"":""2022-03-03"",""deadline_date"":"""",""deadline_days"":0,""comments"":[]}"},
+                    AssistantCoreTests.Letter, Today)
+                Using dialog As New AddDecisionForm()
+                    dialog.UseProposal(oldRejection, String.Empty, Nothing)
+                    StringAssert.Contains(dialog.BannerBox.Text, "Revision deadline: none found in the letter.")
+                End Using
+
+                ' A note longer than the box's usual limit, stored or from a
+                ' letter, is kept whole and can still be typed in.
+                Dim longNote As New String("n"c, 40000)
+                Using dialog As New AddDecisionForm(New EditorialDecisionEvent With {.Decision = EditorialDecision.MajorRevision, .DecisionDate = New DateTime(2026, 9, 15), .Notes = longNote})
+                    Assert.AreEqual(40000, dialog.NotesBox.TextLength)
+                    Assert.AreEqual(0, dialog.NotesBox.MaxLength, "No limit, so the note can be edited.")
+                    dialog.SaveForTest()
+                    Assert.AreEqual(longNote, dialog.CreatedDecision.Notes)
+                End Using
+                Using dialog As New AddDecisionForm()
+                    dialog.UseProposal(stated, longNote, Nothing)
+                    Assert.AreEqual(40000, dialog.NotesBox.TextLength)
+                    Assert.AreEqual(0, dialog.NotesBox.MaxLength)
+                End Using
+                Using dialog As New AddDecisionForm(New EditorialDecisionEvent With {.Decision = EditorialDecision.MajorRevision, .DecisionDate = New DateTime(2026, 9, 15), .Notes = "A short note."})
+                    Assert.AreEqual(32767, dialog.NotesBox.MaxLength, "The usual limit otherwise.")
+                End Using
+            End Sub)
+    End Sub
+
 
     ' ---------------------------------------------------------------
     ' Off until turned on, and layout
@@ -729,6 +832,7 @@ Public Class DecisionLetterTests
                         Dim grid As DataGridView = letterDialog.CommentsGrid
                         Assert.IsTrue(grid.ClientSize.Height >= grid.ColumnHeadersHeight + grid.Rows(0).Height * 2, "At least two comments show.")
                         Assert.IsTrue(letterDialog.CommentBox.ClientSize.Height >= letterDialog.CommentBox.Font.Height * 2, "The comment editor keeps two lines.")
+                        Assert.IsTrue(letterDialog.RoundBox.Width >= letterDialog.RoundBox.Font.Height * 3, "The round box keeps its width: " & letterDialog.RoundBox.Width.ToString())
                         letterDialog.Close()
                     End Using
                 Next
@@ -752,7 +856,16 @@ Public Class DecisionLetterTests
                     For Each control As Control In Descendants(dialog).Where(Function(item) TypeOf item Is Button OrElse TypeOf item Is TextBox OrElse TypeOf item Is ComboBox OrElse TypeOf item Is DateTimePicker OrElse TypeOf item Is CheckBox)
                         AssertInside(control)
                     Next
+                    Assert.IsTrue(dialog.DecisionDatePicker.Width >= dialog.DecisionDatePicker.Font.Height * 5, "The decision date keeps its width: " & dialog.DecisionDatePicker.Width.ToString())
+                    Assert.AreEqual(0, dialog.BannerBox.SelectionLength, "Nothing starts selected in the suggestion.")
                     dialog.Close()
+                End Using
+
+                ' The same window without a suggestion, as Add Decision opens it.
+                Using plain As New AddDecisionForm()
+                    ShowOffscreen(plain)
+                    Assert.IsTrue(plain.DecisionDatePicker.Width >= plain.DecisionDatePicker.Font.Height * 5, "The decision date keeps its width: " & plain.DecisionDatePicker.Width.ToString())
+                    plain.Close()
                 End Using
             End Sub, mode)
     End Sub

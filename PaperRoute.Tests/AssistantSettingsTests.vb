@@ -286,7 +286,8 @@ Public Class AssistantSettingsTests
 
                 Assert.AreEqual("https://ai.example.org:443", settings.OnlineServices.Assistant.EndpointKeyOrigin)
                 Assert.AreEqual("https://ai.example.org:443", New AppSettingsService(_directory).Load().OnlineServices.Assistant.EndpointKeyOrigin)
-                Assert.AreEqual(ServerTestKey, _keys.Load(ProtectedKeyStore.AssistantEndpoint))
+                Assert.AreEqual(ServerTestKey, _keys.LoadFor(ProtectedKeyStore.AssistantEndpoint, "https://ai.example.org:443"), "Stored with its address.")
+                Assert.IsNull(_keys.LoadFor(ProtectedKeyStore.AssistantEndpoint, "https://other.example.net:443"), "And given to no other.")
 
                 Using again As New SettingsForm(settings, Service())
                     ShowOffscreen(again)
@@ -299,7 +300,7 @@ Public Class AssistantSettingsTests
                     Assert.AreEqual("Added", card.StatusOf(card.AddServerKey))
 
                     card.Address.Text = "https://other.example.net/v1"
-                    Assert.AreEqual("Will be removed when you save: it was added for another address", card.StatusOf(card.AddServerKey))
+                    Assert.AreEqual("Will be removed when you save: it wasn't added for this address", card.StatusOf(card.AddServerKey))
                     Assert.IsFalse(card.RemoveServerKey.Visible)
                     Assert.AreEqual("Add Server Key...", card.AddServerKey.Text)
                     Assert.IsTrue(_keys.HasKey(ProtectedKeyStore.AssistantEndpoint), "Nothing changes before Save.")
@@ -316,6 +317,46 @@ Public Class AssistantSettingsTests
     End Sub
 
     <TestMethod>
+    Public Sub AStoredKeyCanBeRemovedWithTheAssistantOffOrAnotherServiceChosen()
+        RunOnSta(
+            Sub()
+                _keys.Save(ProtectedKeyStore.Anthropic, ClaudeTestKey)
+                _keys.SaveFor(ProtectedKeyStore.AssistantEndpoint, "http://localhost:11434", ServerTestKey)
+                Dim settings As AppSettings = WithAssistant(AssistantCoreTests.CompatibleSettings("http://localhost:11434/v1"))
+                settings.OnlineServices.Assistant.EndpointKeyOrigin = "http://localhost:11434"
+
+                ' The other service is chosen: its key can still go.
+                Using dialog As New SettingsForm(settings, Service(), showAssistant:=True)
+                    ShowOffscreen(dialog)
+                    Dim card As New Card(dialog)
+                    Assert.IsTrue(card.Compatible.Checked)
+                    Assert.IsFalse(card.AddClaudeKey.Enabled, "Adding a key needs its service chosen.")
+                    Assert.IsTrue(card.RemoveClaudeKey.Visible AndAlso card.RemoveClaudeKey.Enabled)
+                    card.RemoveClaudeKey.PerformClick()
+                    Assert.IsTrue(_keys.HasKey(ProtectedKeyStore.Anthropic), "Nothing changes before Save.")
+                    card.TurnOn.Checked = False
+                    card.Save.PerformClick()
+                    Assert.AreEqual(DialogResult.OK, dialog.DialogResult)
+                End Using
+                Assert.IsFalse(_keys.HasKey(ProtectedKeyStore.Anthropic))
+                Assert.IsTrue(_keys.HasKey(ProtectedKeyStore.AssistantEndpoint))
+
+                ' The assistant is off: the server key can still go.
+                Using again As New SettingsForm(settings, Service(), showAssistant:=True)
+                    ShowOffscreen(again)
+                    Dim card As New Card(again)
+                    Assert.IsFalse(card.TurnOn.Checked)
+                    Assert.IsTrue(card.RemoveServerKey.Visible AndAlso card.RemoveServerKey.Enabled)
+                    card.RemoveServerKey.PerformClick()
+                    card.Save.PerformClick()
+                    Assert.AreEqual(DialogResult.OK, again.DialogResult)
+                End Using
+                Assert.IsFalse(_keys.HasKey(ProtectedKeyStore.AssistantEndpoint))
+                Assert.AreEqual(String.Empty, settings.OnlineServices.Assistant.EndpointKeyOrigin)
+            End Sub)
+    End Sub
+
+    <TestMethod>
     Public Sub DontAskAgainChoicesCanBeForgotten()
         RunOnSta(
             Sub()
@@ -327,7 +368,7 @@ Public Class AssistantSettingsTests
                     Dim card As New Card(dialog)
                     Dim forget As Button = card.Button("Forget Don't Ask Again Choices")
                     Assert.IsTrue(forget.Enabled)
-                    Assert.IsTrue(card.HasLabel("You chose not to be asked again for 2 features."))
+                    Assert.IsTrue(card.HasLabel("Don't Ask Again choices saved: 2. Each is for one feature with one service."))
                     forget.PerformClick()
                     Assert.IsFalse(forget.Enabled)
                     Assert.IsTrue(card.HasLabel("Will be forgotten when you save."))
@@ -384,7 +425,7 @@ Public Class AssistantSettingsTests
         RunOnSta(
             Sub()
                 Dim settings As AppSettings = WithAssistant(AssistantCoreTests.CompatibleSettings("http://localhost:11434/v1"))
-                _keys.Save(ProtectedKeyStore.AssistantEndpoint, ServerTestKey)
+                _keys.SaveFor(ProtectedKeyStore.AssistantEndpoint, "http://localhost:11434", ServerTestKey)
                 settings.OnlineServices.Assistant.EndpointKeyOrigin = "http://localhost:11434"
                 Using dialog As New SettingsForm(settings, Service(), showAssistant:=True)
                     ShowOffscreen(dialog)
@@ -451,7 +492,7 @@ Public Class AssistantSettingsTests
         Assert.AreEqual("AI assistant: Off", DiagnosticsForm.AssistantLines(Nothing, _keys)(0))
 
         _keys.Save(ProtectedKeyStore.Anthropic, ClaudeTestKey)
-        _keys.Save(ProtectedKeyStore.AssistantEndpoint, ServerTestKey)
+        _keys.SaveFor(ProtectedKeyStore.AssistantEndpoint, "https://ai.example.org:443", ServerTestKey)
         CollectionAssert.AreEqual({"AI assistant: On (Claude, claude-opus-5-5)", "Claude key: Added", "Server key: Added"},
                                   DiagnosticsForm.AssistantLines(AssistantCoreTests.ClaudeSettings().Assistant, _keys))
         Assert.AreEqual("AI assistant: On (OpenAI-compatible server on this computer)",
@@ -501,6 +542,27 @@ Public Class AssistantSettingsTests
                     Assert.AreEqual(1, New AppSettingsService(_directory).Load().OnlineServices.Assistant.ConfirmedUses.Count)
                 End Using
             End Sub)
+
+        ' The main window reaches the gate only through the step that also
+        ' connects the saving of a choice, and startup takes that step
+        ' before the interface is built.
+        Dim folder As String = Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManuscriptPipeline")
+        Dim configuring As New List(Of String)()
+        For Each source As String In Directory.GetFiles(folder, "Form1*.vb")
+            Dim code As String = String.Join(Environment.NewLine, File.ReadAllLines(source).Where(Function(line) Not line.TrimStart().StartsWith("'"c)))
+            Dim found As Integer = code.Split({"OnlineAccess.Configure("}, StringSplitOptions.None).Length - 1
+            For index As Integer = 1 To found
+                configuring.Add(Path.GetFileName(source))
+            Next
+        Next
+        CollectionAssert.AreEqual({"Form1.Online.vb"}, configuring, "Only ConnectOnlineAccess configures the gate.")
+
+        Dim startup As String = File.ReadAllText(Path.Combine(folder, "Form1.vb"))
+        Dim loading As Integer = startup.IndexOf("Private Sub Form1_Load(", StringComparison.Ordinal)
+        Assert.IsTrue(loading >= 0)
+        Dim connecting As Integer = startup.IndexOf("ConnectOnlineAccess()", loading, StringComparison.Ordinal)
+        Dim building As Integer = startup.IndexOf("BuildInterface()", loading, StringComparison.Ordinal)
+        Assert.IsTrue(connecting > loading AndAlso connecting < building, "Startup connects the gate, before the interface is built.")
     End Sub
 
 
@@ -643,10 +705,11 @@ Public Class AssistantSettingsTests
             Return True
         End Function
 
-        ' As at startup: the settings, then the gate.
+        ' As at startup, before the interface exists: the settings, then
+        ' the one step that connects them to the gate.
         Public Sub UseSettings(settings As AppSettings)
             GetType(Form1).GetField("appSettings", BindingFlags.Instance Or BindingFlags.NonPublic).SetValue(Me, settings)
-            GetType(Form1).GetMethod("ApplyOnlineSettings", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(Me, Nothing)
+            GetType(Form1).GetMethod("ConnectOnlineAccess", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(Me, Nothing)
         End Sub
     End Class
 

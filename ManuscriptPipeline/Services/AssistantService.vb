@@ -49,6 +49,18 @@ Namespace Services
         ' "Stated in the letter" or "60 days after Sep 30, 2026".
         Public Property DeadlineBasis As String = String.Empty
 
+        ' The period the letter gave, when the deadline was worked out from
+        ' one, so it can follow a corrected decision date.
+        Public Property DeadlineDays As Integer?
+
+        ' A date the letter gave that is too far from today to use; no
+        ' deadline is worked out then.
+        Public Property LetterDateNotUsed As DateTime?
+
+        ' The letter gave a deadline that wasn't worked out, because its
+        ' date wasn't used.
+        Public Property DeadlineNotUsed As Boolean
+
         Public Property Comments As New List(Of LetterCommentCandidate)()
 
         Public Property ProviderName As String = String.Empty
@@ -157,31 +169,55 @@ Namespace Services
             }
             Dim source As String = If(letter, String.Empty)
 
-            Using document As JsonDocument = ParseJsonAnswer(If(reply?.Text, String.Empty))
+            ' An answer that stopped at its length limit ends mid-sentence, so
+            ' it can't be read; say that, rather than calling it malformed.
+            Dim document As JsonDocument
+            Try
+                document = ParseJsonAnswer(If(reply?.Text, String.Empty))
+            Catch ex As AssistantException When proposal.Truncated
+                Throw New AssistantException("The answer was cut short before it finished. Paste the letter in parts, such as one reviewer at a time. Nothing was changed.", ex)
+            End Try
+
+            Using document
                 Dim root As JsonElement = document.RootElement
 
                 proposal.Decision = DecisionFor(JsonFacts.RawText(root, "decision"))
                 proposal.DecisionQuote = LetterTextOf(source, JsonFacts.RawText(root, "decision_quote"))
 
+                ' A date far from today is not used, and no deadline is
+                ' worked out from it: the researcher sets both.
                 Dim letterDate As DateTime? = DateOf(JsonFacts.RawText(root, "decision_date"))
-                If letterDate.HasValue AndAlso (letterDate.Value < today.Date.AddYears(-3) OrElse letterDate.Value > today.Date.AddDays(31)) Then letterDate = Nothing
+                If letterDate.HasValue AndAlso (letterDate.Value < today.Date.AddYears(-3) OrElse letterDate.Value > today.Date.AddDays(31)) Then
+                    proposal.LetterDateNotUsed = letterDate
+                    letterDate = Nothing
+                End If
                 proposal.DecisionDate = letterDate
 
-                Dim basis As DateTime = If(letterDate, today.Date)
-                Dim deadline As DateTime? = DateOf(JsonFacts.RawText(root, "deadline_date"))
-                If deadline.HasValue AndAlso (deadline.Value < basis OrElse deadline.Value > basis.AddYears(2)) Then deadline = Nothing
-                If deadline.HasValue Then
-                    proposal.DeadlineBasis = "Stated in the letter"
-                Else
-                    Dim days As Integer? = JsonFacts.Whole(root, "deadline_days")
-                    If days.HasValue AndAlso days.Value >= 1 AndAlso days.Value <= 730 Then
-                        deadline = basis.AddDays(days.Value)
-                        proposal.DeadlineBasis = days.Value.ToString("N0", CultureInfo.CurrentCulture) & If(days.Value = 1, " day", " days") & " after " &
-                            basis.ToString("MMM d, yyyy", CultureInfo.CurrentCulture) & If(letterDate.HasValue, " (the letter's date)", " (today)")
+                If Not proposal.LetterDateNotUsed.HasValue Then
+                    Dim basis As DateTime = If(letterDate, today.Date)
+                    Dim deadline As DateTime? = DateOf(JsonFacts.RawText(root, "deadline_date"))
+                    If deadline.HasValue AndAlso (deadline.Value < basis OrElse deadline.Value > basis.AddYears(2)) Then deadline = Nothing
+                    If deadline.HasValue Then
+                        proposal.DeadlineBasis = "Stated in the letter"
+                    Else
+                        Dim days As Integer? = JsonFacts.Whole(root, "deadline_days")
+                        If days.HasValue AndAlso days.Value >= 1 AndAlso days.Value <= 730 Then
+                            deadline = basis.AddDays(days.Value)
+                            proposal.DeadlineDays = days
+                            proposal.DeadlineBasis = PeriodBasis(days.Value, basis, If(letterDate.HasValue, "the letter's date", "today"))
+                        End If
                     End If
+                    proposal.RevisionDeadline = deadline
+                    If deadline.HasValue Then proposal.DeadlineQuote = LetterTextOf(source, JsonFacts.RawText(root, "deadline_quote"))
+                Else
+                    ' Only whether the letter gave a deadline, and its
+                    ' sentence, so the researcher is asked to set one only
+                    ' when there is one.
+                    Dim givenDays As Integer? = JsonFacts.Whole(root, "deadline_days")
+                    proposal.DeadlineNotUsed = DateOf(JsonFacts.RawText(root, "deadline_date")).HasValue OrElse
+                        (givenDays.HasValue AndAlso givenDays.Value >= 1 AndAlso givenDays.Value <= 730)
+                    If proposal.DeadlineNotUsed Then proposal.DeadlineQuote = LetterTextOf(source, JsonFacts.RawText(root, "deadline_quote"))
                 End If
-                proposal.RevisionDeadline = deadline
-                If deadline.HasValue Then proposal.DeadlineQuote = LetterTextOf(source, JsonFacts.RawText(root, "deadline_quote"))
 
                 Dim seen As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
                 For Each item As JsonElement In JsonFacts.Items(root, "comments")
@@ -202,6 +238,13 @@ Namespace Services
 
             Return proposal
 
+        End Function
+
+
+        ' "60 days after Sep 15, 2026 (the letter's date)".
+        Public Shared Function PeriodBasis(days As Integer, basis As DateTime, basisName As String) As String
+            Return days.ToString("N0", CultureInfo.CurrentCulture) & If(days = 1, " day", " days") & " after " &
+                basis.ToString("MMM d, yyyy", CultureInfo.CurrentCulture) & " (" & basisName & ")"
         End Function
 
 

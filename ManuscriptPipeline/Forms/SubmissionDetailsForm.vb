@@ -863,6 +863,14 @@ Namespace Forms
                     decisionEvent.Decision
                 )
 
+            ' Where a decision read from its letter came from (#84).
+            Dim origin As String =
+                AssistantSuggestionService.Describe(decisionEvent.Suggestion)
+
+            If origin.Length > 0 Then
+                details &= Environment.NewLine & origin
+            End If
+
             details &=
                 Environment.NewLine &
                 Environment.NewLine &

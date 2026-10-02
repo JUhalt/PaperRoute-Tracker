@@ -18,6 +18,7 @@ Namespace Forms
         Private ReadOnly btnOk As New Button()
         Private ReadOnly lblHint As New Label()
         Private ReadOnly root As New TableLayoutPanel()
+        Private ReadOnly _font As New Font("Segoe UI", 10.0F)
         Private ReadOnly _keyPage As String
         Private ReadOnly _keyNoun As String
 
@@ -68,6 +69,12 @@ Namespace Forms
         End Property
 
 
+        Protected Overrides Sub Dispose(disposing As Boolean)
+            MyBase.Dispose(disposing)
+            If disposing Then _font.Dispose()
+        End Sub
+
+
         ' Sized to its content once scaled, so nothing is clipped at any scale.
         Protected Overrides Sub OnLoad(e As EventArgs)
             MyBase.OnLoad(e)
@@ -91,7 +98,7 @@ Namespace Forms
             ' Sizes below are at 96 DPI and scale with the display.
             Me.AutoScaleDimensions = New SizeF(96.0F, 96.0F)
             Me.ClientSize = New Size(560, 280)
-            Me.Font = New Font("Segoe UI", 10.0F)
+            Me.Font = _font
             Me.AutoScaleMode = AutoScaleMode.Dpi
 
             root.Dock = DockStyle.Fill

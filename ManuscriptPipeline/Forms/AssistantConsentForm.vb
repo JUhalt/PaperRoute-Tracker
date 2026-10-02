@@ -9,19 +9,21 @@ Imports ManuscriptPipeline.Services
 
 Namespace Forms
 
-    ' Before an AI assistant feature first sends to a service elsewhere
-    ' (#84): exactly what will be sent, and to whom. Nothing is sent unless
-    ' the researcher chooses Send.
+    ' Before an AI assistant feature sends to a service elsewhere (#84):
+    ' exactly what will be sent, and to whom. Nothing is sent unless the
+    ' researcher chooses Send.
     Friend Class AssistantConsentForm
         Inherits Form
 
+        Private ReadOnly _font As New Font("Segoe UI", 10.0F)
+        Private ReadOnly _boldFont As New Font(_font, FontStyle.Bold)
         Private ReadOnly chkRemember As New CheckBox()
         Private ReadOnly txtSent As New TextBox()
 
         Public Sub New(request As AssistantRequest, connection As AssistantConnection)
 
             Text = "Before Sending"
-            Font = New Font("Segoe UI", 10.0F)
+            Font = _font
             AutoScaleMode = AutoScaleMode.Dpi
             StartPosition = FormStartPosition.CenterParent
             Size = New Size(820, 640)
@@ -40,7 +42,7 @@ Namespace Forms
             Dim who As String = If(connection Is Nothing, "the AI assistant", connection.Recipient)
             Dim intro As New Label With {
                 .Text = "PaperRoute will send this to " & who & If(connection?.Provider = AssistantProvider.Claude, ", using your Anthropic key", String.Empty) & ":",
-                .AutoSize = True, .Dock = DockStyle.Fill, .UseMnemonic = False, .Font = New Font(Font, FontStyle.Bold), .Margin = New Padding(0, 0, 0, 8)
+                .AutoSize = True, .Dock = DockStyle.Fill, .UseMnemonic = False, .Font = _boldFont, .Margin = New Padding(0, 0, 0, 8)
             }
             root.Controls.Add(intro, 0, 0)
 
@@ -71,8 +73,9 @@ Namespace Forms
             Dim footer As New FlowLayoutPanel With {.Dock = DockStyle.Fill, .AutoSize = True, .FlowDirection = FlowDirection.RightToLeft, .WrapContents = False, .Padding = New Padding(0, 10, 0, 0)}
             Dim cancel As New Button With {.Text = "Cancel", .AutoSize = True, .MinimumSize = New Size(96, 34), .DialogResult = DialogResult.Cancel}
             Dim send As New Button With {.Text = "&Send", .AutoSize = True, .MinimumSize = New Size(96, 34), .DialogResult = DialogResult.OK}
-            footer.Controls.Add(cancel)
+            ' Right to left: Send sits at the right, as the primary button does elsewhere.
             footer.Controls.Add(send)
+            footer.Controls.Add(cancel)
             root.Controls.Add(footer, 0, 4)
 
             Controls.Add(root)
@@ -106,6 +109,15 @@ Namespace Forms
                 Return chkRemember
             End Get
         End Property
+
+
+        Protected Overrides Sub Dispose(disposing As Boolean)
+            MyBase.Dispose(disposing)
+            If disposing Then
+                _boldFont.Dispose()
+                _font.Dispose()
+            End If
+        End Sub
 
     End Class
 
@@ -177,7 +189,15 @@ Namespace Forms
                 Return name & " didn't answer in time." & If(connection IsNot Nothing AndAlso connection.IsOnThisComputer, " A model on this computer can take a while to load; try again.", " Try again later.") & Unchanged
             End If
             If TypeOf ex Is OperationCanceledException Then Return "Stopped." & Unchanged
-            If TypeOf ex Is OnlineServiceBusyException Then Return OnlineAccess.Describe(ex, name) & Unchanged
+            ' Only a wait the service really gave is named; without one, its
+            ' own reason is shown, since waiting doesn't help a used-up quota.
+            Dim busy As OnlineServiceBusyException = TryCast(ex, OnlineServiceBusyException)
+            If busy IsNot Nothing Then
+                If busy.RetryAfter.HasValue Then Return OnlineAccess.Describe(ex, name) & Unchanged
+                Dim reason As String = AssistantErrorText.MessageOf(busy)
+                If reason.Length > 0 Then Return name & " is limiting requests right now. " & ItSaid(reason) & Unchanged
+                Return name & " is limiting requests right now. Try again in a few minutes." & Unchanged
+            End If
 
             Dim request As HttpRequestException = TryCast(ex, HttpRequestException)
             If request IsNot Nothing Then
@@ -192,13 +212,26 @@ Namespace Forms
                 Dim codeText As String = code.ToString(Globalization.CultureInfo.InvariantCulture)
                 If code = 401 OrElse code = 403 Then Return name & " didn't accept the key. Check it in Settings > Preferences > AI assistant." & Unchanged
                 If code = 404 Then Return name & " didn't recognize the model or address. Check them in Settings > Preferences > AI assistant." & Unchanged
-                If code = 400 OrElse code = 413 OrElse code = 422 Then Return name & " couldn't accept the request (HTTP " & codeText & "). Check the model in Settings > Preferences > AI assistant, or send less text." & Unchanged
+                If code = 400 OrElse code = 413 OrElse code = 422 Then
+                    ' The service's own reason, when it gave one: a 400 is
+                    ' as often billing as it is the model or the length.
+                    Dim said As String = AssistantErrorText.MessageOf(request)
+                    If said.Length > 0 Then Return name & " couldn't accept the request (HTTP " & codeText & "). " & ItSaid(said) & Unchanged
+                    Return name & " couldn't accept the request (HTTP " & codeText & "). Check the model in Settings > Preferences > AI assistant, or send less text." & Unchanged
+                End If
                 If code = 529 Then Return name & " is overloaded right now. Try again in a few minutes." & Unchanged
                 If code >= 500 Then Return name & " had a problem on its side (HTTP " & codeText & "). Try again later." & Unchanged
                 Return name & " answered with an error (HTTP " & codeText & ")." & Unchanged
             End If
 
             Return OnlineAccess.Describe(ex, name) & Unchanged
+        End Function
+
+
+        ' "It said: Your credit balance is too low." The service's own words,
+        ' ending as a sentence.
+        Private Shared Function ItSaid(reason As String) As String
+            Return "It said: " & reason & If(".!?".Contains(reason(reason.Length - 1)), String.Empty, ".")
         End Function
 
     End Class

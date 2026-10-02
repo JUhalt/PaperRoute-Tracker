@@ -173,7 +173,9 @@ Namespace Forms
             buttons.Controls.Add(btnCancel)
             AcceptButton = btnPrimary
             ' Esc stops a request, or closes; a running request vetoes the close.
+            ' The button's own handler decides, so Stop never closes the window.
             CancelButton = btnCancel
+            btnCancel.DialogResult = DialogResult.None
 
             root.Controls.Add(lblHeading, 0, 0)
             root.Controls.Add(body, 0, 1)
@@ -338,8 +340,8 @@ Namespace Forms
 
         Private Sub CancelClicked(sender As Object, e As EventArgs)
             If _cancellation IsNot Nothing Then
-                _cancellation.Cancel()
                 btnCancel.Enabled = False
+                _cancellation.Cancel()
                 Return
             End If
             DialogResult = DialogResult.Cancel
@@ -350,10 +352,11 @@ Namespace Forms
         ' Closing while a request runs stops it first, then closes.
         Protected Overrides Sub OnFormClosing(e As FormClosingEventArgs)
             If _cancellation IsNot Nothing Then
-                _cancellation.Cancel()
+                Dim closeAfter As Boolean = e.CloseReason = CloseReason.UserClosing OrElse e.CloseReason = CloseReason.None
+                If closeAfter Then _closeWhenStopped = True
                 btnCancel.Enabled = False
-                If e.CloseReason = CloseReason.UserClosing OrElse e.CloseReason = CloseReason.None Then
-                    _closeWhenStopped = True
+                _cancellation.Cancel()
+                If closeAfter Then
                     e.Cancel = True
                     Return
                 End If

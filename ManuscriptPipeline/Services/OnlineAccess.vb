@@ -129,6 +129,7 @@ Namespace Services
         Private Shared ReadOnly _turnedOff As New HashSet(Of String)(StringComparer.Ordinal)
         Private Shared ReadOnly _clients As New Dictionary(Of String, HttpClient)(StringComparer.Ordinal)
         Private Shared _inner As HttpMessageHandler
+        Private Shared _loopback As HttpMessageInvoker
         Private Shared _assistant As New AssistantSettings()
         Private Shared _assistantEndpoint As Uri
         Private Shared ReadOnly _confirmedUses As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
@@ -360,6 +361,23 @@ Namespace Services
         End Function
 
 
+        ' For requests to this computer (a model here, #84): the same
+        ' handler without a proxy, so the text can't be handed to one. Nothing
+        ' when a test supplies the handler under the gate, which then gets
+        ' every request.
+        Friend Shared Function LoopbackInvoker() As HttpMessageInvoker
+            SyncLock StateLock
+                If InnerHandlerFactory IsNot Nothing Then Return Nothing
+                If _loopback Is Nothing Then
+                    Dim handler As SocketsHttpHandler = DefaultInnerHandler()
+                    handler.UseProxy = False
+                    _loopback = New HttpMessageInvoker(handler, disposeHandler:=True)
+                End If
+                Return _loopback
+            End SyncLock
+        End Function
+
+
         ' "PaperRoute-Tracker/0.9.0 (+https://github.com/JUhalt/PaperRoute-Tracker)":
         ' the version, never anything about the user.
         Public Shared Function UserAgent() As String
@@ -449,6 +467,8 @@ Namespace Services
                 _clients.Clear()
                 _inner?.Dispose()
                 _inner = Nothing
+                _loopback?.Dispose()
+                _loopback = Nothing
                 _workOffline = False
                 _turnedOff.Clear()
                 _assistant = New AssistantSettings()
@@ -494,7 +514,13 @@ Namespace Services
                 OnlineAccess.CheckHost(service, current.RequestUri)
                 Prepare(_serviceId, current)
 
-                Dim response As HttpResponseMessage = Await MyBase.SendAsync(current, cancellationToken).ConfigureAwait(False)
+                ' A request to this computer never goes through a proxy, so
+                ' "nothing leaves this computer" holds whatever proxy is set.
+                Dim direct As HttpMessageInvoker = If(current.RequestUri.IsLoopback, OnlineAccess.LoopbackInvoker(), Nothing)
+                Dim response As HttpResponseMessage =
+                    If(direct IsNot Nothing,
+                       Await direct.SendAsync(current, cancellationToken).ConfigureAwait(False),
+                       Await MyBase.SendAsync(current, cancellationToken).ConfigureAwait(False))
                 Dim location As Uri = response.Headers.Location
                 If Not IsRedirect(response.StatusCode) OrElse location Is Nothing OrElse hop = MaxRedirects OrElse
                    (current.Method <> HttpMethod.Get AndAlso current.Method <> HttpMethod.Head) Then
@@ -555,9 +581,10 @@ Namespace Services
             ElseIf serviceId = OnlineServiceCatalog.AssistantCompatible Then
                 Dim target = OnlineAccess.AssistantEndpointKeyTarget()
                 Dim origin As String = OnlineAccess.OriginOf(target.Endpoint)
-                If origin.Length > 0 AndAlso OnlineAccess.OriginOf(request.RequestUri) = origin AndAlso
-                   String.Equals(If(target.KeyOrigin, String.Empty), origin, StringComparison.OrdinalIgnoreCase) Then
-                    Dim key As String = OnlineAccess.KeyStore().Load(ProtectedKeyStore.AssistantEndpoint)
+                ' The key is stored with the address it was added for, in one
+                ' encrypted file, so it is read only for that address.
+                If origin.Length > 0 AndAlso OnlineAccess.OriginOf(request.RequestUri) = origin Then
+                    Dim key As String = OnlineAccess.KeyStore().LoadFor(ProtectedKeyStore.AssistantEndpoint, origin)
                     If Not String.IsNullOrEmpty(key) Then request.Headers.Authorization = New AuthenticationHeaderValue("Bearer", key)
                 End If
             End If

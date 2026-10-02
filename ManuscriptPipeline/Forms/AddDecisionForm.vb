@@ -48,6 +48,11 @@ Namespace Forms
         ' from a decision letter (#84).
         Private _suggestion As AssistantSuggestion
 
+        ' A proposed deadline that the letter gave as a period: it follows
+        ' the decision date until the researcher sets the deadline.
+        Private _proposal As DecisionLetterProposal
+        Private _proposedDeadline As DateTime?
+
         Private _bannerHeight As Integer
 
         Private _boldFont As Font
@@ -124,7 +129,8 @@ Namespace Forms
             _root.Controls.Add(bannerPanel, 0, 0)
             _root.SetColumnSpan(bannerPanel, 2)
 
-            cmbDecision.Dock = DockStyle.Fill
+            ' Each field sits level with its label, in the middle of its row.
+            cmbDecision.Anchor = AnchorStyles.Left Or AnchorStyles.Right
             cmbDecision.DropDownStyle = ComboBoxStyle.DropDownList
 
             AddDecisionOption("Rejected", EditorialDecision.Rejected)
@@ -148,23 +154,36 @@ Namespace Forms
 
             dtpDecisionDate.Format = DateTimePickerFormat.Short
             dtpDecisionDate.Value = DateTime.Today
+            ' A minimum, so an early layout in the still-empty table can't
+            ' collapse it before the window scales for the display.
+            dtpDecisionDate.MinimumSize = New Size(180, 0)
             dtpDecisionDate.Width = 180
+            dtpDecisionDate.Anchor = AnchorStyles.Left
+
+            AddHandler dtpDecisionDate.ValueChanged,
+                AddressOf DecisionDateChanged
 
             _root.Controls.Add(CreateFieldLabel("Decision date"), 0, 2)
             _root.Controls.Add(dtpDecisionDate, 1, 2)
 
             Dim deadlinePanel As New FlowLayoutPanel With {
-                .Dock = DockStyle.Fill,
+                .AutoSize = True,
+                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                .Anchor = AnchorStyles.Left,
+                .Margin = New Padding(0),
                 .FlowDirection = FlowDirection.LeftToRight,
                 .WrapContents = False
             }
 
             chkDeadline.Text = "Set deadline"
             chkDeadline.AutoSize = True
+            chkDeadline.Anchor = AnchorStyles.Left
 
             dtpDeadline.Format = DateTimePickerFormat.Short
             dtpDeadline.Value = DateTime.Today.AddDays(30)
+            dtpDeadline.MinimumSize = New Size(180, 0)
             dtpDeadline.Width = 180
+            dtpDeadline.Anchor = AnchorStyles.Left
             dtpDeadline.Enabled = False
 
             AddHandler chkDeadline.CheckedChanged,
@@ -314,6 +333,12 @@ Namespace Forms
 
             End If
 
+            ' A note that began as a whole decision letter can be longer
+            ' than the box's usual limit.
+            If If(_existingDecision.Notes, String.Empty).Length > txtNotes.MaxLength Then
+                txtNotes.MaxLength = 0
+            End If
+
             txtNotes.Text =
                 _existingDecision.Notes
 
@@ -373,7 +398,13 @@ Namespace Forms
 
                 chkDeadline.Checked = True
 
+                If proposal.DeadlineDays.HasValue Then
+                    _proposedDeadline = dtpDeadline.Value.Date
+                End If
+
             End If
+
+            _proposal = proposal
 
             Dim letterText As String =
                 If(letter, String.Empty).Trim()
@@ -388,14 +419,57 @@ Namespace Forms
 
             End If
 
-            ShowBanner(BannerText(proposal))
+            ShowBanner(BannerText(proposal, String.Empty))
 
         End Sub
 
 
-        ' The letter's sentences and where the dates came from.
+        ' A deadline the letter gave as a period is counted from the
+        ' decision date, so it follows a corrected one, until the researcher
+        ' sets the deadline.
+        Private Sub DecisionDateChanged(
+            sender As Object,
+            e As EventArgs
+        )
+
+            ' It follows while unchecked too, so checking it again shows the
+            ' deadline for the date as it now stands.
+            If _proposal Is Nothing OrElse
+               Not _proposal.DeadlineDays.HasValue OrElse
+               Not _proposedDeadline.HasValue OrElse
+               dtpDeadline.Value.Date <> _proposedDeadline.Value Then
+                Return
+            End If
+
+            Dim basis As DateTime =
+                dtpDecisionDate.Value.Date
+
+            Dim days As Integer =
+                _proposal.DeadlineDays.Value
+
+            ' Never past the last date the picker takes.
+            Dim deadline As DateTime =
+                If(basis > dtpDeadline.MaxDate.AddDays(-days),
+                   dtpDeadline.MaxDate,
+                   Clamp(basis.AddDays(days), dtpDeadline))
+
+            dtpDeadline.Value = deadline
+            _proposedDeadline = deadline
+
+            txtBanner.Text =
+                BannerText(
+                    _proposal,
+                    AssistantService.PeriodBasis(days, basis, "the decision date")
+                )
+
+        End Sub
+
+
+        ' The letter's sentences and where the dates came from. A deadline
+        ' that has followed a changed decision date gives its new basis.
         Private Shared Function BannerText(
-            proposal As DecisionLetterProposal
+            proposal As DecisionLetterProposal,
+            deadlineBasis As String
         ) As String
 
             Dim lines As New List(Of String)()
@@ -410,13 +484,21 @@ Namespace Forms
 
             If proposal.DecisionDate.HasValue Then
                 lines.Add("Decision date: " & proposal.DecisionDate.Value.ToString("MMM d, yyyy", CultureInfo.CurrentCulture) & ", the letter's date")
+            ElseIf proposal.LetterDateNotUsed.HasValue Then
+                lines.Add("Decision date: the letter's date, " & proposal.LetterDateNotUsed.Value.ToString("MMM d, yyyy", CultureInfo.CurrentCulture) &
+                          ", is far from today, so today's date is filled in. Check it.")
             Else
                 lines.Add("Decision date: not found in the letter; today's date is filled in.")
             End If
 
             If proposal.RevisionDeadline.HasValue Then
-                lines.Add("Revision deadline: " & If(proposal.DeadlineBasis.Length > 0, proposal.DeadlineBasis, "from the letter") &
+                Dim basis As String = If(deadlineBasis.Length > 0, deadlineBasis, proposal.DeadlineBasis)
+                lines.Add("Revision deadline: " & If(basis.Length > 0, basis, "from the letter") &
                           If(proposal.DeadlineQuote.Length > 0, ", from " & Quoted(proposal.DeadlineQuote), String.Empty))
+            ElseIf proposal.DeadlineNotUsed Then
+                lines.Add("Revision deadline: not filled in, because the letter's date needs checking" &
+                          If(proposal.DeadlineQuote.Length > 0, "; the letter says " & Quoted(proposal.DeadlineQuote), String.Empty) &
+                          ". Set it below.")
             Else
                 lines.Add("Revision deadline: none found in the letter.")
             End If
@@ -459,6 +541,11 @@ Namespace Forms
             Dim target As Integer = Math.Min(ClientSize.Height + growth, Math.Max(ClientSize.Height, available))
 
             ClientSize = New Size(ClientSize.Width, target)
+
+            ' The window opens on the decision, with nothing selected in the
+            ' suggestion's text.
+            txtBanner.Select(0, 0)
+            ActiveControl = cmbDecision
 
         End Sub
 

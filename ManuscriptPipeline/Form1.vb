@@ -139,7 +139,7 @@ Public Class Form1
         settingsService.Load()
 
         ' Before anything can go online (#86).
-        OnlineAccess.Configure(appSettings.OnlineServices)
+        ConnectOnlineAccess()
 
         UiPolish.InstallGlobalDialogStyling()
 
