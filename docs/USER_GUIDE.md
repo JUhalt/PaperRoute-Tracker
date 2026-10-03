@@ -874,8 +874,8 @@ PaperRoute keeps the key encrypted for your Windows account on this computer, se
 | Journal facts (DOAJ and OpenAlex) | doaj.org, api.openalex.org | A journal's ISSNs, or a name you type to find a journal and the id of the one you pick. | Look Up Facts... on the Journals page. |
 | Find journals (OpenAlex) | api.openalex.org | The keywords you review, a start date, and the ids of the journals found. | Find Journals... on a manuscript's journal shortlist. |
 | Your citations (ORCID and OpenAlex) | pub.orcid.org, api.openalex.org | Your ORCID iD to ORCID, and the DOIs of your works to OpenAlex; your iD to OpenAlex only if you choose. | Update from OpenAlex... on Insights > Your Citations. |
-| AI assistant: Claude (Anthropic) | api.anthropic.com | Only what an AI assistant window shows you before sending: a decision letter you paste; a journal's author instructions you paste, with the article type you enter; one reviewer comment with its reviewer label and your planned action; or a manuscript's title, abstract, keywords, type of work, and target journal with its Journal Library facts. | Read Decision Letter..., Add from Letter..., Read Author Instructions..., Suggest a Starting Point..., and Draft Cover Letter..., after you turn on the AI assistant in Preferences. |
-| AI assistant: another server or a model on this computer | The address you set in Preferences: http only on this computer, https elsewhere | Only what an AI assistant window shows you before sending: a decision letter you paste; a journal's author instructions you paste, with the article type you enter; one reviewer comment with its reviewer label and your planned action; or a manuscript's title, abstract, keywords, type of work, and target journal with its Journal Library facts. | Read Decision Letter..., Add from Letter..., Read Author Instructions..., Suggest a Starting Point..., and Draft Cover Letter..., after you turn on the AI assistant in Preferences. |
+| AI assistant: Claude (Anthropic) | api.anthropic.com | Only what an AI assistant window shows you before sending: a decision letter you paste; a journal's author instructions you paste, with the article type you enter; one reviewer comment with its reviewer label and your planned action; or a manuscript's title, abstract, keywords, type of work, and target journal with its Journal Library facts. Test Connection in Preferences sends only the key, if you added one, to list the models. | Read Decision Letter..., Add from Letter..., Read Author Instructions..., Suggest a Starting Point..., Draft Cover Letter..., and Test Connection, after you turn on the AI assistant in Preferences. |
+| AI assistant: another server or a model on this computer | The address you set in Preferences: http only on this computer, https elsewhere | Only what an AI assistant window shows you before sending: a decision letter you paste; a journal's author instructions you paste, with the article type you enter; one reviewer comment with its reviewer label and your planned action; or a manuscript's title, abstract, keywords, type of work, and target journal with its Journal Library facts. Test Connection in Preferences sends only the key, if you added one, to list the models. | Read Decision Letter..., Add from Letter..., Read Author Instructions..., Suggest a Starting Point..., Draft Cover Letter..., and Test Connection, after you turn on the AI assistant in Preferences. |
 
 ---
 
@@ -889,9 +889,10 @@ PaperRoute is complete without AI. An optional assistant can save time on four t
 2. Choose a service:
    - **Claude (Anthropic), with your own key.** Choose **Add Claude Key...** and paste a key from your Anthropic account (**Get a key from Anthropic** opens the page). The default model is claude-opus-5-5. Anthropic charges your account for what the assistant sends and receives.
    - **Another server, or a model on this computer (OpenAI-compatible).** Enter the server's address and model, such as `http://localhost:11434/v1` and `llama3.1` for Ollama, or `http://localhost:1234/v1` for LM Studio. http works only for a server on this computer; a server elsewhere must use https. A key is optional.
-3. Choose **Save**. The assistant's buttons appear once it is on.
+3. Optionally, choose **Test Connection** to check the setup before saving. For Claude, it sends only your key to api.anthropic.com, checks that your account can use the model, and fills the **Model** list with the models your account can use. For another server, it asks the address you set for its models, with the server key if you added one. It says if the key, the model, or the address is wrong, or if the server isn't running. The line below the button says what it sends, and testing saves nothing.
+4. Choose **Save**. The assistant's buttons appear once it is on.
 
-**Work offline** turns the assistant off too, a model on this computer included.
+**Work offline** turns the assistant off too, a model on this computer included, and stops **Test Connection**.
 
 ### What it does
 
@@ -904,7 +905,7 @@ PaperRoute is complete without AI. An optional assistant can save time on four t
 
 Each window shows what it will send, and to whom, before sending. Only that text goes, with PaperRoute's instructions for the task: the letter or author instructions you paste, one comment with your planned action, or the manuscript details shown. Your notes, files, author names, and the rest of your library are never sent.
 
-Before a feature sends to a service elsewhere, PaperRoute shows the exact text and asks first, every time, until you choose not to be asked again for that feature and that service; **Forget Don't Ask Again Choices** in Preferences undoes it. A model on this computer is never asked about, because nothing leaves the computer.
+Before a feature sends to a service elsewhere, PaperRoute shows the exact text and asks first, every time, until you choose not to be asked again for that feature and that service; **Forget Don't Ask Again Choices** in Preferences undoes it. A model on this computer is never asked about, because nothing leaves the computer. **Test Connection** sends none of your text, so it doesn't ask; the line below it says what it sends.
 
 Your keys are kept encrypted for your Windows account on this computer. The Claude key goes only to api.anthropic.com, and a server key only to the address it was added for, in a request header. Neither is ever in backups, exports, or Diagnostics. Requests carry only what the service needs, and nothing about your computer.
 

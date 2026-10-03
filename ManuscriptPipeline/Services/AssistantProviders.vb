@@ -11,6 +11,7 @@ Imports System.Threading.Tasks
 Imports Anthropic
 Imports ManuscriptPipeline.Models
 Imports Beta = Anthropic.Models.Beta.Messages
+Imports SdkModels = Anthropic.Models.Models
 
 Namespace Services
 
@@ -165,14 +166,7 @@ Namespace Services
             End If
 
             Using http As HttpClient = OnlineAccess.CreateClient(OnlineServiceCatalog.AssistantClaude, RequestTimeout)
-                Dim client As New AnthropicClient With {
-                    .HttpClient = http,
-                    .BaseUrl = "https://" & OnlineAccess.AnthropicHost,
-                    .ApiKey = PlaceholderKey,
-                    .AuthToken = Nothing,
-                    .MaxRetries = 0,
-                    .Timeout = RequestTimeout
-                }
+                Dim client As AnthropicClient = NewClient(http, RequestTimeout)
                 Dim parameters As Beta.MessageCreateParams = BuildParameters(request, _model)
                 Dim message As Beta.BetaMessage
                 Try
@@ -183,6 +177,59 @@ Namespace Services
                 Return ReadReply(message, _model)
             End Using
 
+        End Function
+
+
+        ' The SDK on the gate's client, holding only a placeholder key.
+        Private Shared Function NewClient(http As HttpClient, timeout As TimeSpan) As AnthropicClient
+            Return New AnthropicClient With {
+                .HttpClient = http,
+                .BaseUrl = "https://" & OnlineAccess.AnthropicHost,
+                .ApiKey = PlaceholderKey,
+                .AuthToken = Nothing,
+                .MaxRetries = 0,
+                .Timeout = timeout
+            }
+        End Function
+
+
+        ' A name that is safe as part of an address, such as claude-opus-5-5.
+        Friend Shared Function IsModelName(model As String) As Boolean
+            Return RegularExpressions.Regex.IsMatch(If(model, String.Empty), "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,99}$")
+        End Function
+
+
+        ' Test Connection (#96): the models the key's account can use, and
+        ' whether it can use this one. The list gives full names, such as
+        ' claude-haiku-4-5-20251001, so a name not in it, such as the alias
+        ' claude-haiku-4-5, is looked up on its own; only "not found" means
+        ' the account can't use it. Only the key is sent, by the gate.
+        Friend Shared Async Function ListModelsAsync(http As HttpClient, model As String, cancellationToken As CancellationToken) As Task(Of (Models As List(Of String), ModelFound As Boolean))
+
+            Dim client As AnthropicClient = NewClient(http, http.Timeout)
+            Try
+                Dim page As SdkModels.ModelListPage = Await client.Models.List(New SdkModels.ModelListParams With {.Limit = 1000}, cancellationToken).ConfigureAwait(False)
+                Dim names As List(Of String) = page.Items.Select(Function(item) item.ID).Where(AddressOf IsModelName).Distinct(StringComparer.Ordinal).ToList()
+                If names.Contains(model, StringComparer.Ordinal) Then Return (names, True)
+                If Not IsModelName(model) Then Return (names, False)
+                Dim found As Boolean
+                Try
+                    Await client.Models.Retrieve(model, Nothing, cancellationToken).ConfigureAwait(False)
+                    found = True
+                Catch ex As Exception When IsNotFound(ex)
+                    found = False
+                End Try
+                Return (names, found)
+            Catch ex As Exception When Not TypeOf ex Is OperationCanceledException OrElse Not cancellationToken.IsCancellationRequested
+                Throw Translate(ex)
+            End Try
+
+        End Function
+
+
+        Private Shared Function IsNotFound(ex As Exception) As Boolean
+            Dim api As Anthropic.Exceptions.AnthropicApiException = FindInner(Of Anthropic.Exceptions.AnthropicApiException)(ex)
+            Return api IsNot Nothing AndAlso CInt(api.StatusCode) = 404
         End Function
 
 
@@ -315,6 +362,12 @@ Namespace Services
         End Function
 
 
+        ' {endpoint}/models, such as http://localhost:11434/v1/models.
+        Public Shared Function ModelsAddress(endpoint As Uri) As Uri
+            Return New Uri(endpoint.AbsoluteUri.TrimEnd("/"c) & "/models")
+        End Function
+
+
         Public Async Function CompleteAsync(request As AssistantRequest, cancellationToken As CancellationToken) As Task(Of AssistantReply) Implements IAssistantProvider.CompleteAsync
 
             OnlineAccess.Check(OnlineServiceCatalog.AssistantCompatible)
@@ -337,17 +390,74 @@ Namespace Services
                 If answer.Status = HttpStatusCode.BadRequest AndAlso useSchema Then
                     answer = Await SendAsync(http, request, False, limitName, cancellationToken).ConfigureAwait(False)
                 End If
-                If CInt(answer.Status) = 429 Then
-                    Throw AssistantErrorText.Attach(New OnlineServiceBusyException("The server", answer.RetryAfter, False), AssistantErrorText.FromBody(answer.Body))
-                End If
-                If CInt(answer.Status) < 200 OrElse CInt(answer.Status) > 299 Then
-                    Throw AssistantErrorText.Attach(
-                        New HttpRequestException("The server answered with HTTP " & CInt(answer.Status).ToString(CultureInfo.InvariantCulture) & ".", Nothing, answer.Status),
-                        AssistantErrorText.FromBody(answer.Body))
-                End If
+                ThrowIfFailed(answer.Status, answer.Body, answer.RetryAfter)
                 Return ParseReply(answer.Body, _model)
             End Using
 
+        End Function
+
+
+        ' A refusal or a wait the server asked for, with its own reason.
+        Private Shared Sub ThrowIfFailed(status As HttpStatusCode, body As String, retryAfter As TimeSpan?)
+            If CInt(status) = 429 Then
+                Throw AssistantErrorText.Attach(New OnlineServiceBusyException("The server", retryAfter, False), AssistantErrorText.FromBody(body))
+            End If
+            If CInt(status) < 200 OrElse CInt(status) > 299 Then
+                Throw AssistantErrorText.Attach(
+                    New HttpRequestException("The server answered with HTTP " & CInt(status).ToString(CultureInfo.InvariantCulture) & ".", Nothing, status),
+                    AssistantErrorText.FromBody(body))
+            End If
+        End Sub
+
+
+        ' Test Connection (#96): the models the server lists, asked for at
+        ' its address with nothing but the optional key, which the gate adds.
+        Friend Shared Async Function ListModelsAsync(http As HttpClient, endpoint As Uri, cancellationToken As CancellationToken) As Task(Of List(Of String))
+            Using message As New HttpRequestMessage(HttpMethod.Get, ModelsAddress(endpoint))
+                message.Headers.Accept.ParseAdd("application/json")
+                Using response As HttpResponseMessage = Await http.SendAsync(message, cancellationToken).ConfigureAwait(False)
+                    Dim body As String = Await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(False)
+                    ThrowIfFailed(response.StatusCode, body, response.Headers.RetryAfter?.Delta)
+                    Return ParseModelList(body)
+                End Using
+            End Using
+        End Function
+
+
+        ' {"object":"list","data":[{"id":"llama3.1:latest"}, ...]}: each
+        ' name as one short plain line, whatever the server put in it.
+        Friend Shared Function ParseModelList(body As String) As List(Of String)
+            Const NotAList As String = "The server answered, but not with a list of models. Check the address; it usually ends in /v1."
+            Try
+                Using document As JsonDocument = JsonDocument.Parse(If(body, String.Empty))
+                    Dim data As JsonElement = JsonFacts.Child(document.RootElement, "data")
+                    If data.ValueKind <> JsonValueKind.Array Then Throw New AssistantException(NotAList)
+                    Return data.EnumerateArray().
+                        Select(Function(item) CleanName(JsonFacts.RawText(item, "id"))).
+                        Where(Function(name) name.Length > 0).
+                        Distinct(StringComparer.Ordinal).
+                        ToList()
+                End Using
+            Catch ex As JsonException
+                Throw New AssistantException(NotAList, ex)
+            End Try
+        End Function
+
+
+        Private Shared Function CleanName(name As String) As String
+            Dim text As String = RegularExpressions.Regex.Replace(If(name, String.Empty), "\p{Cf}+", String.Empty)
+            text = RegularExpressions.Regex.Replace(text, "[\p{Cc}\s]+", " ").Trim()
+            Return If(text.Length > 100, text.Substring(0, 100).TrimEnd() & "...", text)
+        End Function
+
+
+        ' Whether the server lists the model: the same name in any case, or,
+        ' as Ollama names them, the name without a tag for its :latest.
+        Friend Shared Function ListsModel(models As IEnumerable(Of String), model As String) As Boolean
+            Dim wanted As String = If(model, String.Empty).Trim()
+            If wanted.Length = 0 OrElse models Is Nothing Then Return False
+            Return models.Any(Function(name) String.Equals(name, wanted, StringComparison.OrdinalIgnoreCase) OrElse
+                                             (Not wanted.Contains(":"c) AndAlso String.Equals(name, wanted & ":latest", StringComparison.OrdinalIgnoreCase)))
         End Function
 
 
@@ -401,6 +511,122 @@ Namespace Services
             Catch ex As JsonException
                 Throw New AssistantException("The server's answer couldn't be read. Nothing was changed.", ex)
             End Try
+        End Function
+
+    End Class
+
+
+    ' What Test Connection found (#96).
+    Friend NotInheritable Class AssistantTestResult
+
+        Public Property Message As String = String.Empty
+
+        ' Connected, and the model is there; False is a warning about the model.
+        Public Property Succeeded As Boolean
+
+        ' The models the service listed, in its order.
+        Public Property Models As New List(Of String)()
+
+    End Class
+
+
+    ' Test Connection in Preferences (#96): checks the AI assistant as set
+    ' up in the window, before Save, by asking the service for its models.
+    ' It sends no text of the researcher's, only the key if there is one,
+    ' through the gate; a failure is thrown for the window to explain.
+    Friend NotInheritable Class AssistantConnectionTest
+
+        Private Sub New()
+        End Sub
+
+        Public Shared ReadOnly Timeout As TimeSpan = TimeSpan.FromSeconds(OnlineAccess.TimeoutSeconds)
+
+        Private Const MaximumNamesShown As Integer = 5
+
+
+        ' The line below the button: what testing sends, and to whom.
+        Public Shared Function WhatIsSent(connection As AssistantConnection, willSendKey As Boolean) As String
+            If connection Is Nothing Then Return String.Empty
+            If connection.Provider = AssistantProvider.Claude Then
+                Return "Test Connection sends only your Claude key to " & connection.Origin.Host & ", to list the models your account can use."
+            End If
+            Dim where As String = connection.Origin.Authority
+            Return If(willSendKey,
+                      "Test Connection sends only your server key to " & where & ", to list its models.",
+                      "Test Connection asks " & where & " for its models and sends nothing else.") &
+                   If(connection.IsOnThisComputer, " Nothing leaves this computer.", String.Empty)
+        End Function
+
+
+        Public Shared Async Function RunAsync(trial As AssistantTrial, cancellationToken As CancellationToken) As Task(Of AssistantTestResult)
+
+            If trial Is Nothing OrElse trial.Connection Is Nothing Then Throw New ArgumentNullException(NameOf(trial))
+            Dim connection As AssistantConnection = trial.Connection
+            OnlineAccess.CheckTrial(connection.ServiceId)
+
+            If connection.Provider = AssistantProvider.Claude Then
+                If trial.PendingKey Is Nothing AndAlso Not (trial.UseStoredKey AndAlso OnlineAccess.KeyStore().HasKey(ProtectedKeyStore.Anthropic)) Then
+                    Throw New AssistantException("Add your Claude key first. Nothing was sent.")
+                End If
+                Using http As HttpClient = OnlineAccess.CreateTrialClient(trial, Timeout)
+                    Dim listed = Await ClaudeAssistantProvider.ListModelsAsync(http, connection.Model, cancellationToken).ConfigureAwait(False)
+                    Return ClaudeResult(connection.Model, listed.Models, listed.ModelFound)
+                End Using
+            End If
+
+            Using http As HttpClient = OnlineAccess.CreateTrialClient(trial, Timeout)
+                Dim models As List(Of String) = Await CompatibleAssistantProvider.ListModelsAsync(http, connection.Endpoint, cancellationToken).ConfigureAwait(False)
+                Return ServerResult(connection, models)
+            End Using
+
+        End Function
+
+
+        Friend Shared Function ClaudeResult(model As String, models As List(Of String), found As Boolean) As AssistantTestResult
+            Dim count As String = models.Count.ToString(CultureInfo.CurrentCulture) & If(models.Count = 1, " model", " models")
+            If found Then
+                Return New AssistantTestResult With {
+                    .Succeeded = True,
+                    .Models = models,
+                    .Message = "Connected. Claude accepted your key, and your account can use " & model & "." &
+                               If(models.Count > 0, " The Model list now shows your account's " & count & ".", String.Empty)
+                }
+            End If
+            Return New AssistantTestResult With {
+                .Succeeded = False,
+                .Models = models,
+                .Message = "Claude accepted your key, but your account can't use the model " & model & "." &
+                           If(models.Count > 0, " Choose one from the Model list, which now shows your account's " & count & ".", " Check the model's name.")
+            }
+        End Function
+
+
+        Friend Shared Function ServerResult(connection As AssistantConnection, models As List(Of String)) As AssistantTestResult
+            Dim server As String = "The server at " & connection.Origin.Authority
+            If models.Count = 0 Then
+                Return New AssistantTestResult With {
+                    .Succeeded = False,
+                    .Models = models,
+                    .Message = server & " is running, but lists no models. Load or download one on it first."
+                }
+            End If
+            If CompatibleAssistantProvider.ListsModel(models, connection.Model) Then
+                Return New AssistantTestResult With {
+                    .Succeeded = True,
+                    .Models = models,
+                    .Message = "Connected. " & server & " has " & connection.Model & "."
+                }
+            End If
+            ' Some servers list one name but answer to any, so this is a
+            ' warning to check the name, not a failure.
+            Dim shown As String = String.Join(", ", models.Take(MaximumNamesShown))
+            Dim more As Integer = models.Count - MaximumNamesShown
+            If more > 0 Then shown &= ", and " & more.ToString(CultureInfo.CurrentCulture) & " more"
+            Return New AssistantTestResult With {
+                .Succeeded = False,
+                .Models = models,
+                .Message = server & " is running, but doesn't list " & connection.Model & ". It lists: " & shown & "."
+            }
         End Function
 
     End Class

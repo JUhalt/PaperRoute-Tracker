@@ -54,6 +54,23 @@ Namespace Services
     End Class
 
 
+    ' The AI assistant as set up in the open Preferences window, for Test
+    ' Connection (#96) before Save. It is only held in memory; the gate
+    ' checks every request against it as it does the saved setup.
+    Friend NotInheritable Class AssistantTrial
+
+        Public Property Connection As AssistantConnection
+
+        ' A key added in the window and not saved yet; Nothing if none.
+        Public Property PendingKey As String
+
+        ' Without a key added in the window: send the stored key (the Claude
+        ' key, or the server key stored for this address), as Save keeps it.
+        Public Property UseStoredKey As Boolean
+
+    End Class
+
+
     ' A request the Online services settings did not allow (#86). It is an
     ' InvalidOperationException so existing error paths show its plain
     ' message; callers that run many lookups stop instead of failing each.
@@ -196,27 +213,39 @@ Namespace Services
         Public Shared Function CurrentAssistant() As AssistantConnection
             SyncLock StateLock
                 If Not _assistant.Enabled Then Return Nothing
-                If _assistant.Provider = AssistantProvider.Claude Then
-                    Return New AssistantConnection With {
-                        .ServiceId = OnlineServiceCatalog.AssistantClaude,
-                        .Provider = AssistantProvider.Claude,
-                        .ProviderName = "Claude",
-                        .Model = If(_assistant.ClaudeModel.Length > 0, _assistant.ClaudeModel, "claude-opus-5-5"),
-                        .Origin = New Uri("https://" & AnthropicHost),
-                        .IsOnThisComputer = False
-                    }
-                End If
-                If _assistantEndpoint Is Nothing OrElse _assistant.EndpointModel.Length = 0 Then Return Nothing
-                Return New AssistantConnection With {
-                    .ServiceId = OnlineServiceCatalog.AssistantCompatible,
-                    .Provider = AssistantProvider.Compatible,
-                    .ProviderName = "OpenAI-compatible server",
-                    .Model = _assistant.EndpointModel,
-                    .Origin = New Uri(_assistantEndpoint.GetLeftPart(UriPartial.Authority)),
-                    .Endpoint = _assistantEndpoint,
-                    .IsOnThisComputer = _assistantEndpoint.IsLoopback
-                }
+                Return ConnectionFor(_assistant)
             End SyncLock
+        End Function
+
+
+        ' The service a setup names, whether or not it is turned on or
+        ' saved (Test Connection tries one before Save, #96); Nothing when
+        ' a compatible server has no usable address or model.
+        Friend Shared Function ConnectionFor(assistant As AssistantSettings) As AssistantConnection
+            If assistant Is Nothing Then Return Nothing
+            If assistant.Provider = AssistantProvider.Claude Then
+                Dim claudeModel As String = If(assistant.ClaudeModel, String.Empty).Trim()
+                Return New AssistantConnection With {
+                    .ServiceId = OnlineServiceCatalog.AssistantClaude,
+                    .Provider = AssistantProvider.Claude,
+                    .ProviderName = "Claude",
+                    .Model = If(claudeModel.Length > 0, claudeModel, "claude-opus-5-5"),
+                    .Origin = New Uri("https://" & AnthropicHost),
+                    .IsOnThisComputer = False
+                }
+            End If
+            Dim endpoint As Uri = ParseAssistantEndpoint(assistant.Endpoint)
+            Dim endpointModel As String = If(assistant.EndpointModel, String.Empty).Trim()
+            If endpoint Is Nothing OrElse endpointModel.Length = 0 Then Return Nothing
+            Return New AssistantConnection With {
+                .ServiceId = OnlineServiceCatalog.AssistantCompatible,
+                .Provider = AssistantProvider.Compatible,
+                .ProviderName = "OpenAI-compatible server",
+                .Model = endpointModel,
+                .Origin = New Uri(endpoint.GetLeftPart(UriPartial.Authority)),
+                .Endpoint = endpoint,
+                .IsOnThisComputer = endpoint.IsLoopback
+            }
         End Function
 
 
@@ -282,14 +311,32 @@ Namespace Services
         End Sub
 
 
+        ' Test Connection (#96) tries the AI assistant as set up in the
+        ' open Preferences window, before it is saved, so only Work offline
+        ' refuses it: the saved choice to turn the assistant on is the one
+        ' being made.
+        Friend Shared Sub CheckTrial(serviceId As String)
+            Dim service As OnlineService = Require(serviceId)
+            If Not service.OffUntilTurnedOn Then Throw New ArgumentException("Only the AI assistant is tried before it is saved.", NameOf(serviceId))
+            If IsWorkingOffline Then Throw New OnlineServiceBlockedException(service, OnlineBlockReason.WorkOffline)
+        End Sub
+
+
         ' Only https, and only a host the service lists; for a compatible
         ' server, only the address set for it (http only on this computer).
         Friend Shared Sub CheckHost(service As OnlineService, target As Uri)
+            Dim endpoint As Uri
+            SyncLock StateLock
+                endpoint = _assistantEndpoint
+            End SyncLock
+            CheckHost(service, target, endpoint)
+        End Sub
+
+
+        ' The same, comparing a compatible server's request with the given
+        ' address: the saved one, or the one a Test Connection trial is for.
+        Friend Shared Sub CheckHost(service As OnlineService, target As Uri, endpoint As Uri)
             If service IsNot Nothing AndAlso service.ConfiguredHost Then
-                Dim endpoint As Uri
-                SyncLock StateLock
-                    endpoint = _assistantEndpoint
-                End SyncLock
                 If target Is Nothing OrElse Not target.IsAbsoluteUri OrElse endpoint Is Nothing OrElse OriginOf(target) <> OriginOf(endpoint) OrElse
                    (target.Scheme <> Uri.UriSchemeHttps AndAlso Not (target.Scheme = Uri.UriSchemeHttp AndAlso target.IsLoopback)) Then
                     Throw New OnlineServiceBlockedException(service, OnlineBlockReason.UnexpectedHost, If(target?.IsAbsoluteUri, target.Host, String.Empty))
@@ -334,6 +381,24 @@ Namespace Services
             Require(serviceId)
             SyncLock StateLock
                 Return New HttpClient(New GatedHandler(serviceId, SharedInner()), disposeHandler:=False) With {
+                    .Timeout = timeout
+                }
+            End SyncLock
+        End Function
+
+
+        ' A client for Test Connection (#96): the AI assistant as set up in
+        ' the open Preferences window, with a key added there and not yet
+        ' saved. The gate still checks every hop: Work offline refuses it,
+        ' a compatible server is reached only at the trial's address, and
+        ' each key goes only as a header to its own service. Nothing about
+        ' the trial is kept.
+        Friend Shared Function CreateTrialClient(trial As AssistantTrial, timeout As TimeSpan) As HttpClient
+            If trial Is Nothing OrElse trial.Connection Is Nothing Then Throw New ArgumentNullException(NameOf(trial))
+            Dim service As OnlineService = Require(trial.Connection.ServiceId)
+            If Not service.OffUntilTurnedOn Then Throw New ArgumentException("Only the AI assistant is tried before it is saved.", NameOf(trial))
+            SyncLock StateLock
+                Return New HttpClient(New GatedHandler(service.Id, SharedInner(), trial), disposeHandler:=False) With {
                     .Timeout = timeout
                 }
             End SyncLock
@@ -499,9 +564,13 @@ Namespace Services
 
         Private ReadOnly _serviceId As String
 
-        Public Sub New(serviceId As String, inner As HttpMessageHandler)
+        ' Test Connection's setup, not yet saved (#96); Nothing otherwise.
+        Private ReadOnly _trial As AssistantTrial
+
+        Public Sub New(serviceId As String, inner As HttpMessageHandler, Optional trial As AssistantTrial = Nothing)
             MyBase.New(inner)
             _serviceId = serviceId
+            _trial = trial
         End Sub
 
         Protected Overrides Async Function SendAsync(request As HttpRequestMessage, cancellationToken As CancellationToken) As Task(Of HttpResponseMessage)
@@ -510,9 +579,14 @@ Namespace Services
             Dim current As HttpRequestMessage = request
 
             For hop As Integer = 0 To MaxRedirects
-                OnlineAccess.Check(_serviceId)
-                OnlineAccess.CheckHost(service, current.RequestUri)
-                Prepare(_serviceId, current)
+                If _trial Is Nothing Then
+                    OnlineAccess.Check(_serviceId)
+                    OnlineAccess.CheckHost(service, current.RequestUri)
+                Else
+                    OnlineAccess.CheckTrial(_serviceId)
+                    OnlineAccess.CheckHost(service, current.RequestUri, _trial.Connection.Endpoint)
+                End If
+                Prepare(_serviceId, current, _trial)
 
                 ' A request to this computer never goes through a proxy, so
                 ' "nothing leaves this computer" holds whatever proxy is set.
@@ -558,7 +632,9 @@ Namespace Services
         ' One user agent, and each key only to its own service, only as a
         ' header: the OpenAlex key to OpenAlex, the Claude key to Anthropic,
         ' and a compatible server's key only to the address it was added for.
-        Friend Shared Sub Prepare(serviceId As String, request As HttpRequestMessage)
+        ' A Test Connection trial (#96) brings the key added in Preferences,
+        ' or uses the stored one, under the same rules.
+        Friend Shared Sub Prepare(serviceId As String, request As HttpRequestMessage, Optional trial As AssistantTrial = Nothing)
             Dim service As OnlineService = If(serviceId Is Nothing, Nothing, OnlineServiceCatalog.Find(serviceId))
             If service IsNot Nothing AndAlso service.OffUntilTurnedOn Then
                 For Each name As String In request.Headers.Select(Function(header) header.Key).ToList()
@@ -576,19 +652,27 @@ Namespace Services
                 If Not String.IsNullOrEmpty(key) Then request.Headers.Authorization = New AuthenticationHeaderValue("Bearer", key)
             ElseIf serviceId = OnlineServiceCatalog.AssistantClaude AndAlso String.Equals(host, OnlineAccess.AnthropicHost, StringComparison.OrdinalIgnoreCase) AndAlso
                    request.RequestUri.Scheme = Uri.UriSchemeHttps Then
-                Dim key As String = OnlineAccess.KeyStore().Load(ProtectedKeyStore.Anthropic)
+                Dim key As String = KeyFor(trial, Function() OnlineAccess.KeyStore().Load(ProtectedKeyStore.Anthropic))
                 If Not String.IsNullOrEmpty(key) Then request.Headers.TryAddWithoutValidation("x-api-key", key)
             ElseIf serviceId = OnlineServiceCatalog.AssistantCompatible Then
-                Dim target = OnlineAccess.AssistantEndpointKeyTarget()
-                Dim origin As String = OnlineAccess.OriginOf(target.Endpoint)
+                Dim endpoint As Uri = If(trial IsNot Nothing, trial.Connection?.Endpoint, OnlineAccess.AssistantEndpointKeyTarget().Endpoint)
+                Dim origin As String = OnlineAccess.OriginOf(endpoint)
                 ' The key is stored with the address it was added for, in one
                 ' encrypted file, so it is read only for that address.
                 If origin.Length > 0 AndAlso OnlineAccess.OriginOf(request.RequestUri) = origin Then
-                    Dim key As String = OnlineAccess.KeyStore().LoadFor(ProtectedKeyStore.AssistantEndpoint, origin)
+                    Dim key As String = KeyFor(trial, Function() OnlineAccess.KeyStore().LoadFor(ProtectedKeyStore.AssistantEndpoint, origin))
                     If Not String.IsNullOrEmpty(key) Then request.Headers.Authorization = New AuthenticationHeaderValue("Bearer", key)
                 End If
             End If
         End Sub
+
+        ' The stored key; for a trial, the key added in Preferences, else
+        ' the stored one only when the trial says it will be kept.
+        Private Shared Function KeyFor(trial As AssistantTrial, stored As Func(Of String)) As String
+            If trial Is Nothing Then Return stored()
+            If trial.PendingKey IsNot Nothing Then Return trial.PendingKey
+            Return If(trial.UseStoredKey, stored(), Nothing)
+        End Function
 
         Private Shared Function IsRedirect(status As HttpStatusCode) As Boolean
             Dim code As Integer = CInt(status)

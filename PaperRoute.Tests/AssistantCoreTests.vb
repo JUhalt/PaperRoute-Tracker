@@ -381,6 +381,189 @@ Public Class AssistantCoreTests
 
 
     ' ---------------------------------------------------------------
+    ' Test Connection in Preferences (#96)
+    ' ---------------------------------------------------------------
+
+    <TestMethod>
+    Public Sub TestConnectionListsClaudeModelsWithOnlyTheKey()
+        Dim network As CapturingNetwork = UseNetwork(
+            Function(request)
+                If request.Uri.AbsolutePath = "/v1/models" Then Return Answer(HttpStatusCode.OK, ClaudeModelList("claude-opus-5-5", "claude-haiku-4-5-20251001"))
+                If request.Uri.AbsolutePath = "/v1/models/claude-haiku-4-5" Then Return Answer(HttpStatusCode.OK, ClaudeModelEntry("claude-haiku-4-5-20251001"))
+                Return Answer(HttpStatusCode.NotFound, "{""type"":""error"",""error"":{""type"":""not_found_error"",""message"":""model: claude-nope""}}")
+            End Function)
+        ' Saved, the assistant is off: the trial is what the window shows.
+        OnlineAccess.Configure(New OnlineServicesSettings())
+        Dim trial As AssistantTrial = ClaudeTrial("claude-opus-5-5", pendingKey:="sk-ant-test-key-0001")
+        Assert.AreEqual("Test Connection sends only your Claude key to api.anthropic.com, to list the models your account can use.", AssistantConnectionTest.WhatIsSent(trial.Connection, True))
+
+        Dim result As AssistantTestResult = RunTest(trial)
+        Assert.IsTrue(result.Succeeded)
+        Assert.AreEqual("Connected. Claude accepted your key, and your account can use claude-opus-5-5. The Model list now shows your account's 2 models.", result.Message)
+        CollectionAssert.AreEqual({"claude-opus-5-5", "claude-haiku-4-5-20251001"}, result.Models)
+        Dim sent As SentRequest = network.Requests.Single()
+        Assert.AreEqual(HttpMethod.Get, sent.Method)
+        Assert.AreEqual("https://api.anthropic.com/v1/models?limit=1000", sent.Uri.AbsoluteUri)
+        Assert.AreEqual(String.Empty, sent.Body, "Only the key is sent.")
+        Assert.AreEqual("sk-ant-test-key-0001", sent.Header("x-api-key"), "The key added in the window, as a header, by the gate.")
+        Assert.AreEqual("2023-06-01", sent.Header("anthropic-version"))
+        Assert.IsNull(sent.Header("Authorization"))
+        Assert.IsFalse(sent.HeaderNames.Any(Function(name) name.StartsWith("X-Stainless", StringComparison.OrdinalIgnoreCase)), String.Join(", ", sent.HeaderNames))
+        Assert.IsFalse(_keys.HasKey(ProtectedKeyStore.Anthropic), "Testing stores no key.")
+        Assert.IsNull(OnlineAccess.CurrentAssistant(), "...and changes nothing the gate goes by.")
+        Assert.AreEqual(OnlineBlockReason.NotTurnedOn, OnlineAccess.BlockReason(OnlineServiceCatalog.AssistantClaude))
+
+        ' The list gives full names: an alias is looked up on its own.
+        network.Requests.Clear()
+        result = RunTest(ClaudeTrial("claude-haiku-4-5", pendingKey:="sk-ant-test-key-0001"))
+        Assert.IsTrue(result.Succeeded, result.Message)
+        Assert.AreEqual(2, network.Requests.Count)
+        Assert.AreEqual("https://api.anthropic.com/v1/models/claude-haiku-4-5", network.Requests(1).Uri.AbsoluteUri)
+        Assert.AreEqual("sk-ant-test-key-0001", network.Requests(1).Header("x-api-key"))
+
+        ' A model the account can't use is a warning, not a failure.
+        result = RunTest(ClaudeTrial("claude-nope", pendingKey:="sk-ant-test-key-0001"))
+        Assert.IsFalse(result.Succeeded)
+        Assert.AreEqual("Claude accepted your key, but your account can't use the model claude-nope. Choose one from the Model list, which now shows your account's 2 models.", result.Message)
+        Assert.AreEqual(2, result.Models.Count)
+
+        ' The stored key, when the window keeps it.
+        _keys.Save(ProtectedKeyStore.Anthropic, "sk-ant-stored-key-0002")
+        network.Requests.Clear()
+        Assert.IsTrue(RunTest(ClaudeTrial("claude-opus-5-5", useStoredKey:=True)).Succeeded)
+        Assert.AreEqual("sk-ant-stored-key-0002", network.Requests.Single().Header("x-api-key"))
+
+        ' Neither (the window removes the stored key): nothing is sent.
+        network.Requests.Clear()
+        Dim noKey As AssistantException = Assert.ThrowsExactly(Of AssistantException)(Sub() RunTest(ClaudeTrial("claude-opus-5-5")))
+        Assert.AreEqual("Add your Claude key first. Nothing was sent.", noKey.Message)
+        Assert.AreEqual(0, network.Requests.Count)
+
+        ' Only the assistant can be tried before Save.
+        Assert.ThrowsExactly(Of ArgumentException)(Sub() OnlineAccess.CreateTrialClient(New AssistantTrial With {.Connection = New AssistantConnection With {.ServiceId = OnlineServiceCatalog.Crossref}}, TimeSpan.FromSeconds(1)))
+    End Sub
+
+    <TestMethod>
+    Public Sub TestConnectionAsksTheServerForItsModelsAtItsAddressOnly()
+        Dim network As CapturingNetwork = UseNetwork(Function(request) Answer(HttpStatusCode.OK, ServerModelList("llama3.1:latest", "qwen3:8b")))
+        ' Saved: a server elsewhere, with its key. The window names a model on this computer.
+        Dim saved As OnlineServicesSettings = CompatibleSettings("https://models.example.org/v1")
+        saved.Assistant.EndpointKeyOrigin = "https://models.example.org:443"
+        OnlineAccess.Configure(saved)
+        _keys.SaveFor(ProtectedKeyStore.AssistantEndpoint, "https://models.example.org:443", "saved-server-key-1")
+        _keys.Save(ProtectedKeyStore.Anthropic, "sk-ant-test-key-0001")
+        Dim trial As AssistantTrial = ServerTrial("http://localhost:11434/v1", "llama3.1", useStoredKey:=True)
+        Assert.AreEqual("Test Connection asks localhost:11434 for its models and sends nothing else. Nothing leaves this computer.", AssistantConnectionTest.WhatIsSent(trial.Connection, False))
+        Assert.AreEqual("Test Connection sends only your server key to models.example.org, to list its models.", AssistantConnectionTest.WhatIsSent(OnlineAccess.CurrentAssistant(), True))
+
+        Dim result As AssistantTestResult = RunTest(trial)
+        Assert.IsTrue(result.Succeeded, "llama3.1 is Ollama's llama3.1:latest.")
+        Assert.AreEqual("Connected. The server at localhost:11434 has llama3.1.", result.Message)
+        Dim sent As SentRequest = network.Requests.Single()
+        Assert.AreEqual(HttpMethod.Get, sent.Method)
+        Assert.AreEqual("http://localhost:11434/v1/models", sent.Uri.AbsoluteUri)
+        Assert.AreEqual(String.Empty, sent.Body)
+        Assert.AreEqual("application/json", sent.Header("Accept"))
+        Assert.IsNull(sent.Header("Authorization"), "The stored server key was added for another address.")
+        Assert.IsNull(sent.Header("x-api-key"), "The Claude key goes only to Anthropic.")
+
+        ' A key stored for this address goes with it while the window keeps it.
+        _keys.SaveFor(ProtectedKeyStore.AssistantEndpoint, "http://localhost:11434", "local-key-123")
+        network.Requests.Clear()
+        RunTest(trial)
+        Assert.AreEqual("Bearer local-key-123", network.Requests.Single().Header("Authorization"))
+        network.Requests.Clear()
+        RunTest(ServerTrial("http://localhost:11434/v1", "llama3.1"))
+        Assert.IsNull(network.Requests.Single().Header("Authorization"), "Not when the window removes it.")
+
+        ' A key added in the window goes to its address only, and isn't stored.
+        network.Requests.Clear()
+        RunTest(ServerTrial("http://localhost:11434/v1", "llama3.1", pendingKey:="pending-key-456"))
+        Assert.AreEqual("Bearer pending-key-456", network.Requests.Single().Header("Authorization"))
+        Assert.AreEqual("local-key-123", _keys.LoadFor(ProtectedKeyStore.AssistantEndpoint, "http://localhost:11434"))
+
+        ' The saved setup is untouched: other requests still go only to the saved address.
+        Assert.AreEqual("https://models.example.org/v1", OnlineAccess.CurrentAssistant().Endpoint.AbsoluteUri)
+        Dim service As OnlineService = OnlineServiceCatalog.Find(OnlineServiceCatalog.AssistantCompatible)
+        Assert.ThrowsExactly(Of OnlineServiceBlockedException)(Sub() OnlineAccess.CheckHost(service, New Uri("http://localhost:11434/v1/chat/completions")))
+
+        ' A redirect elsewhere is stopped before anything, the key included, goes there.
+        network = UseNetwork(
+            Function(request)
+                Dim moved As New HttpResponseMessage(HttpStatusCode.Found)
+                moved.Headers.Location = New Uri("https://elsewhere.example.net/v1/models")
+                Return moved
+            End Function)
+        Dim blocked As OnlineServiceBlockedException = Assert.ThrowsExactly(Of OnlineServiceBlockedException)(Sub() RunTest(ServerTrial("https://models.example.org/v1", "llama3.1", pendingKey:="pending-key-456")))
+        Assert.AreEqual(OnlineBlockReason.UnexpectedHost, blocked.Reason)
+        Assert.AreEqual("https://models.example.org/v1/models", network.Requests.Single().Uri.AbsoluteUri)
+
+        ' Ollama's tag rule, any case, and nothing else.
+        Assert.IsTrue(CompatibleAssistantProvider.ListsModel({"Llama3.1"}, "llama3.1"))
+        Assert.IsFalse(CompatibleAssistantProvider.ListsModel({"llama3.1:8b"}, "llama3.1"))
+        Assert.IsFalse(CompatibleAssistantProvider.ListsModel({"llama3.1:latest"}, "llama3.1:8b"))
+        CollectionAssert.AreEqual({"first second", "third"}, CompatibleAssistantProvider.ParseModelList("{""data"":[{""id"":""first\nsecond""},{""id"":""""},{""id"":""third""},{""id"":""third""},{""name"":""no id""}]}"))
+    End Sub
+
+    <TestMethod>
+    Public Sub TestConnectionProblemsReadPlainly()
+        Dim local As AssistantTrial = ServerTrial("http://localhost:11434/v1", "llama3.1")
+        Dim elsewhere As AssistantTrial = ServerTrial("https://models.example.org/v1", "llama3.1", pendingKey:="pending-key-456")
+        Dim claude As AssistantTrial = ClaudeTrial("claude-opus-5-5", pendingKey:="sk-ant-test-key-0001")
+
+        ' Work offline, as saved, refuses a trial before anything is sent.
+        Dim network As CapturingNetwork = UseNetwork(Function(sent) Answer(HttpStatusCode.OK, ServerModelList("llama3.1")))
+        OnlineAccess.Configure(New OnlineServicesSettings With {.WorkOffline = True})
+        For Each trial As AssistantTrial In {claude, local}
+            Dim failure As Exception = TestFailure(trial)
+            Assert.IsInstanceOfType(Of OnlineServiceBlockedException)(failure)
+            Assert.AreEqual("Work offline is on until you save, so PaperRoute didn't go online. Save with Work offline turned off, then test again.", AssistantRunner.DescribeTest(failure, trial.Connection))
+        Next
+        Assert.AreEqual(0, network.Requests.Count, "Nothing was sent.")
+
+        Dim many As String = ServerModelList("a", "b", "c", "d", "e", "f", "g")
+        For Each item In {(Trial:=claude, Status:=401, Body:="{""type"":""error"",""error"":{""type"":""authentication_error"",""message"":""invalid x-api-key""}}",
+                           Expected:="Claude didn't accept the key. Check that you copied all of it, or add it again."),
+                          (Trial:=claude, Status:=500, Body:="{}",
+                           Expected:="Claude had a problem on its side (HTTP 500). Try again later."),
+                          (Trial:=elsewhere, Status:=401, Body:="{""error"":""unauthorized""}",
+                           Expected:="The server at models.example.org didn't accept the request. Add its key, or check the one you added."),
+                          (Trial:=local, Status:=404, Body:="404 page not found",
+                           Expected:="The server at localhost:11434 has no list of models at /v1/models. Check the address; it usually ends in /v1."),
+                          (Trial:=local, Status:=200, Body:="<html>Open WebUI</html>",
+                           Expected:="The server answered, but not with a list of models. Check the address; it usually ends in /v1."),
+                          (Trial:=local, Status:=200, Body:="{""object"":""list""}",
+                           Expected:="The server answered, but not with a list of models. Check the address; it usually ends in /v1."),
+                          (Trial:=local, Status:=200, Body:=ServerModelList(),
+                           Expected:="The server at localhost:11434 is running, but lists no models. Load or download one on it first."),
+                          (Trial:=local, Status:=200, Body:=many,
+                           Expected:="The server at localhost:11434 is running, but doesn't list llama3.1. It lists: a, b, c, d, e, and 2 more.")}
+            Dim scenario = item
+            UseNetwork(Function(sent) Answer(CType(scenario.Status, HttpStatusCode), scenario.Body))
+            Dim text As String
+            Try
+                Dim result As AssistantTestResult = RunTest(scenario.Trial)
+                Assert.IsFalse(result.Succeeded, scenario.Expected)
+                text = result.Message
+            Catch ex As Exception
+                text = AssistantRunner.DescribeTest(ex, scenario.Trial.Connection)
+            End Try
+            Assert.AreEqual(scenario.Expected, text)
+        Next
+
+        ' A server that isn't running, and no network at all.
+        UseNetwork(Function(sent)
+                       Throw New HttpRequestException("refused", New SocketException(10061))
+                   End Function)
+        Assert.AreEqual("PaperRoute couldn't reach the server at localhost:11434. Check that it is running.", AssistantRunner.DescribeTest(TestFailure(local), local.Connection))
+        Assert.AreEqual("PaperRoute couldn't reach Claude. Check your internet connection, then try again.", AssistantRunner.DescribeTest(TestFailure(claude), claude.Connection))
+
+        ' A feature's failure still says nothing was changed.
+        StringAssert.EndsWith(AssistantRunner.Describe(New HttpRequestException("refused"), local.Connection), "Check that it is running. Nothing was changed.")
+    End Sub
+
+
+    ' ---------------------------------------------------------------
     ' Reading a decision letter
     ' ---------------------------------------------------------------
 
@@ -541,6 +724,12 @@ Public Class AssistantCoreTests
         StringAssert.Contains(source, ".HttpClient = http,", "The SDK always gets the gate's client.")
         StringAssert.Contains(source, "OnlineAccess.CreateClient(OnlineServiceCatalog.AssistantClaude", "...from the gate.")
         StringAssert.Contains(source, ".MaxRetries = 0", "...and never resends the text by itself.")
+        ' Test Connection (#96) is listed with what it sends, and goes through the gate too.
+        For Each item As OnlineService In {claude, compatible}
+            StringAssert.Contains(item.Sends, "Test Connection in Preferences sends only the key, if you added one, to list the models.")
+            StringAssert.Contains(item.WhenUsed, "and Test Connection,")
+        Next
+        StringAssert.Contains(source, "OnlineAccess.CreateTrialClient(trial", "Test Connection uses the gate's client for the setup in the window.")
     End Sub
 
 
@@ -575,8 +764,53 @@ Public Class AssistantCoreTests
             JsonSerializer.Serialize(text) & "},""finish_reason"":""stop""}]}"
     End Function
 
-    Private Shared Function Answer(status As HttpStatusCode, body As String) As HttpResponseMessage
+    Friend Shared Function Answer(status As HttpStatusCode, body As String) As HttpResponseMessage
         Return New HttpResponseMessage(status) With {.Content = New StringContent(body, Encoding.UTF8, "application/json")}
+    End Function
+
+    ' Anthropic's model list, and one model, as the Models API gives them.
+    Friend Shared Function ClaudeModelList(ParamArray ids As String()) As String
+        Return "{""data"":[" & String.Join(",", ids.Select(Function(id) ClaudeModelEntry(id))) & "],""has_more"":false,""first_id"":""" & ids.First() & """,""last_id"":""" & ids.Last() & """}"
+    End Function
+
+    Friend Shared Function ClaudeModelEntry(id As String) As String
+        Return "{""type"":""model"",""id"":""" & id & """,""display_name"":""" & id & """,""created_at"":""2026-08-01T00:00:00Z"",""max_input_tokens"":200000,""max_tokens"":64000}"
+    End Function
+
+    ' An OpenAI-compatible server's model list.
+    Friend Shared Function ServerModelList(ParamArray ids As String()) As String
+        Return "{""object"":""list"",""data"":[" & String.Join(",", ids.Select(Function(id) "{""id"":" & JsonSerializer.Serialize(id) & ",""object"":""model"",""owned_by"":""library""}")) & "]}"
+    End Function
+
+    ' The AI assistant as typed in Preferences, not saved.
+    Friend Shared Function ClaudeTrial(model As String, Optional pendingKey As String = Nothing, Optional useStoredKey As Boolean = False) As AssistantTrial
+        Return New AssistantTrial With {
+            .Connection = OnlineAccess.ConnectionFor(New AssistantSettings With {.Provider = AssistantProvider.Claude, .ClaudeModel = model}),
+            .PendingKey = pendingKey,
+            .UseStoredKey = useStoredKey
+        }
+    End Function
+
+    Friend Shared Function ServerTrial(endpoint As String, model As String, Optional pendingKey As String = Nothing, Optional useStoredKey As Boolean = False) As AssistantTrial
+        Return New AssistantTrial With {
+            .Connection = OnlineAccess.ConnectionFor(New AssistantSettings With {.Provider = AssistantProvider.Compatible, .Endpoint = endpoint, .EndpointModel = model}),
+            .PendingKey = pendingKey,
+            .UseStoredKey = useStoredKey
+        }
+    End Function
+
+    Private Shared Function RunTest(trial As AssistantTrial) As AssistantTestResult
+        Return AssistantConnectionTest.RunAsync(trial, CancellationToken.None).GetAwaiter().GetResult()
+    End Function
+
+    ' The exception a connection test ended with, or Nothing.
+    Private Shared Function TestFailure(trial As AssistantTrial) As Exception
+        Try
+            RunTest(trial)
+        Catch ex As Exception
+            Return ex
+        End Try
+        Return Nothing
     End Function
 
     ' One request answered on this computer; gives back the request's first line.
@@ -637,6 +871,7 @@ Public Class AssistantCoreTests
     End Function
 
     Friend NotInheritable Class SentRequest
+        Public Property Method As HttpMethod
         Public Property Uri As Uri
         Public Property Body As String = String.Empty
         Public Property Headers As New Dictionary(Of String, String)(StringComparer.OrdinalIgnoreCase)
@@ -661,7 +896,7 @@ Public Class AssistantCoreTests
         Public Property Respond As Func(Of SentRequest, HttpResponseMessage)
 
         Protected Overrides Async Function SendAsync(request As HttpRequestMessage, cancellationToken As CancellationToken) As Task(Of HttpResponseMessage)
-            Dim sent As New SentRequest With {.Uri = request.RequestUri}
+            Dim sent As New SentRequest With {.Method = request.Method, .Uri = request.RequestUri}
             For Each header In request.Headers
                 sent.Headers(header.Key) = String.Join(",", header.Value)
             Next
