@@ -238,17 +238,27 @@ Public Class AssistantSettingsTests
                     card.ClaudeModel.Text = "claude-sonnet-5-5"
                     Assert.AreEqual(String.Empty, dialog.TestResultText, "A result stays only for the setup it tested.")
                     card.ClaudeModel.Text = "claude-opus-5"
-                    Dim before As Integer = card.ClaudeModel.Width
+                    ' The layout puts the width straight back; counting resizes shows one happened.
+                    Dim resizes As Integer = 0
+                    Dim counter As EventHandler = Sub(sender, e) resizes += 1
+                    AddHandler card.ClaudeModel.SizeChanged, counter
                     card.ClaudeModel.Width -= 9
-                    Assert.AreNotEqual(before, card.ClaudeModel.Width, "The box really was resized.")
+                    RemoveHandler card.ClaudeModel.SizeChanged, counter
+                    Assert.IsTrue(resizes > 0, "The box really was resized.")
                     Application.DoEvents()
                     Assert.AreEqual("claude-opus-5", card.ClaudeModel.Text, "Not claude-opus-5-5, the first listed name that starts with it.")
 
-                    ' A model typed in another case keeps its case, and its result stays.
+                    ' A listed model typed in another case is that model, written as
+                    ' the list writes it, and the result stays. (The list is emptied
+                    ' first, as it is when PaperRoute starts, so the box can't
+                    ' match the typed name to a listed one before the test.)
+                    card.ClaudeModel.Items.Clear()
                     card.ClaudeModel.Text = "Claude-Opus-5-5"
+                    network.Requests.Clear()
                     PumpUntilComplete(dialog.TestConnectionAsync())
-                    Assert.AreEqual("Claude-Opus-5-5", card.ClaudeModel.Text, "Not changed to the listed claude-opus-5-5.")
-                    StringAssert.StartsWith(dialog.TestResultText, "Connected.")
+                    Assert.AreEqual("claude-opus-5-5", card.ClaudeModel.Text)
+                    Assert.AreEqual("Connected. Claude accepted your key, and your account can use claude-opus-5-5. The Model list now shows your account's 2 models.", dialog.TestResultText)
+                    Assert.AreEqual(1, network.Requests.Count, "A listed name needs no lookup of its own.")
 
                     ' Changing the setup during a test stops the test.
                     network.Hold = Function(request) request.Uri.Host = "ai.example.org"

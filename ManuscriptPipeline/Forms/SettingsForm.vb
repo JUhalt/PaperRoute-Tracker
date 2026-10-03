@@ -1368,13 +1368,8 @@ Namespace Forms
         Private Sub RefreshTestState()
 
             Dim connection As AssistantConnection = FormConnection()
-            Dim row As KeyRow = If(connection IsNot Nothing AndAlso connection.Provider = AssistantProvider.Compatible, serverKey, claudeKey)
-
-            Dim setup As String =
-                If(connection Is Nothing,
-                   String.Empty,
-                   String.Join("|", connection.ServiceId, connection.Model, OnlineAccess.OriginOf(connection.Endpoint), connection.Endpoint?.AbsolutePath,
-                               row.WillHaveKey.ToString(), _keyEdits.ToString(Globalization.CultureInfo.InvariantCulture)))
+            Dim row As KeyRow = KeyRowFor(connection)
+            Dim setup As String = TestSetup(connection)
 
             If Not String.Equals(setup, _testedSetup, StringComparison.Ordinal) Then
                 ' A test of the setup as it was is stopped; its answer would
@@ -1394,6 +1389,19 @@ Namespace Forms
             btnTestConnection.AccessibleDescription = lblTestSends.Text
 
         End Sub
+
+
+        Private Function KeyRowFor(connection As AssistantConnection) As KeyRow
+            Return If(connection IsNot Nothing AndAlso connection.Provider = AssistantProvider.Compatible, serverKey, claudeKey)
+        End Function
+
+
+        ' What a test result is for: the service, model, address, and key.
+        Private Function TestSetup(connection As AssistantConnection) As String
+            If connection Is Nothing Then Return String.Empty
+            Return String.Join("|", connection.ServiceId, connection.Model, OnlineAccess.OriginOf(connection.Endpoint), connection.Endpoint?.AbsolutePath,
+                               KeyRowFor(connection).WillHaveKey.ToString(), _keyEdits.ToString(Globalization.CultureInfo.InvariantCulture))
+        End Function
 
 
         Private Sub ShowTestResult(message As String, color As Color)
@@ -1445,8 +1453,21 @@ Namespace Forms
                 Dim result As AssistantTestResult = Await AssistantConnectionTest.RunAsync(trial, cancellation.Token)
                 If IsDisposed OrElse generation <> _testGeneration Then Return
 
-                ' Claude's list becomes the Model list; the model typed stays.
-                If claude AndAlso result.Models.Count > 0 Then ShowClaudeModels(result.Models)
+                ' Claude's list becomes the Model list. The model typed stays,
+                ' written as the list writes it when it is a listed name.
+                If claude Then
+                    If result.Models.Count > 0 Then ShowClaudeModels(result.Models)
+                    If result.Model.Length > 0 AndAlso Not String.Equals(cboClaudeModel.Text, result.Model, StringComparison.Ordinal) Then
+                        _listingModels = True
+                        Try
+                            cboClaudeModel.Text = result.Model
+                        Finally
+                            _listingModels = False
+                        End Try
+                    End If
+                    ' The result is for the setup as it now reads.
+                    _testedSetup = TestSetup(FormConnection())
+                End If
 
                 ShowTestResult(result.Message, If(result.Succeeded, UiTheme.PrimaryText(), UiTheme.WarningColor()))
 

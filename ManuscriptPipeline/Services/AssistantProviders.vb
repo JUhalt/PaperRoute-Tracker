@@ -203,15 +203,17 @@ Namespace Services
         ' whether it can use this one. The list gives full names, such as
         ' claude-haiku-4-5-20251001, so a name not in it, such as the alias
         ' claude-haiku-4-5, is looked up on its own; only "not found" means
-        ' the account can't use it. Only the key is sent, by the gate.
-        Friend Shared Async Function ListModelsAsync(http As HttpClient, model As String, cancellationToken As CancellationToken) As Task(Of (Models As List(Of String), ModelFound As Boolean))
+        ' the account can't use it. A listed name typed in another case is
+        ' that name, as the list writes it. Only the key is sent, by the gate.
+        Friend Shared Async Function ListModelsAsync(http As HttpClient, model As String, cancellationToken As CancellationToken) As Task(Of (Models As List(Of String), ModelFound As Boolean, Model As String))
 
             Dim client As AnthropicClient = NewClient(http, http.Timeout)
             Try
                 Dim page As SdkModels.ModelListPage = Await client.Models.List(New SdkModels.ModelListParams With {.Limit = 1000}, cancellationToken).ConfigureAwait(False)
                 Dim names As List(Of String) = page.Items.Select(Function(item) item.ID).Where(AddressOf IsModelName).Distinct(StringComparer.Ordinal).ToList()
-                If names.Contains(model, StringComparer.Ordinal) Then Return (names, True)
-                If Not IsModelName(model) Then Return (names, False)
+                Dim listed As String = names.FirstOrDefault(Function(name) String.Equals(name, model, StringComparison.OrdinalIgnoreCase))
+                If listed IsNot Nothing Then Return (names, True, listed)
+                If Not IsModelName(model) Then Return (names, False, model)
                 Dim found As Boolean
                 Try
                     Await client.Models.Retrieve(model, Nothing, cancellationToken).ConfigureAwait(False)
@@ -219,7 +221,7 @@ Namespace Services
                 Catch ex As Exception When IsNotFound(ex)
                     found = False
                 End Try
-                Return (names, found)
+                Return (names, found, model)
             Catch ex As Exception When Not TypeOf ex Is OperationCanceledException OrElse Not cancellationToken.IsCancellationRequested
                 Throw Translate(ex)
             End Try
@@ -527,6 +529,9 @@ Namespace Services
         ' The models the service listed, in its order.
         Public Property Models As New List(Of String)()
 
+        ' The model tested, as the service writes it (Claude only).
+        Public Property Model As String = String.Empty
+
     End Class
 
 
@@ -570,7 +575,7 @@ Namespace Services
                 End If
                 Using http As HttpClient = OnlineAccess.CreateTrialClient(trial, Timeout)
                     Dim listed = Await ClaudeAssistantProvider.ListModelsAsync(http, connection.Model, cancellationToken).ConfigureAwait(False)
-                    Return ClaudeResult(connection.Model, listed.Models, listed.ModelFound)
+                    Return ClaudeResult(listed.Model, listed.Models, listed.ModelFound)
                 End Using
             End If
 
@@ -588,6 +593,7 @@ Namespace Services
                 Return New AssistantTestResult With {
                     .Succeeded = True,
                     .Models = models,
+                    .Model = model,
                     .Message = "Connected. Claude accepted your key, and your account can use " & model & "." &
                                If(models.Count > 0, " The Model list now shows your account's " & count & ".", String.Empty)
                 }
@@ -595,6 +601,7 @@ Namespace Services
             Return New AssistantTestResult With {
                 .Succeeded = False,
                 .Models = models,
+                .Model = model,
                 .Message = "Claude accepted your key, but your account can't use the model " & model & "." &
                            If(models.Count > 0, " Choose one from the Model list, which now shows your account's " & count & ".", " Check the model's name.")
             }
