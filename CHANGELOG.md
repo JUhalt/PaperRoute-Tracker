@@ -4,7 +4,7 @@ All notable changes to PaperRoute Tracker will be documented here.
 
 ## [Unreleased] — v0.9 Journal Choice & Guidance
 
-Not released yet. These changes are merged to master through [PR #94](https://github.com/JUhalt/PaperRoute-Tracker/pull/94). Still to do: polish from the acceptance audit ([#96](https://github.com/JUhalt/PaperRoute-Tracker/issues/96)), the RO-Crate decision ([#45](https://github.com/JUhalt/PaperRoute-Tracker/issues/45)), then certification and release ([#97](https://github.com/JUhalt/PaperRoute-Tracker/issues/97)). Development is tracked in the [v0.9 milestone](https://github.com/JUhalt/PaperRoute-Tracker/milestone/13).
+Not released yet. These changes are merged to master through [PR #94](https://github.com/JUhalt/PaperRoute-Tracker/pull/94), and reading a journal's author instructions through [PR #100](https://github.com/JUhalt/PaperRoute-Tracker/pull/100). Still to do: polish from the acceptance audit ([#96](https://github.com/JUhalt/PaperRoute-Tracker/issues/96)), the RO-Crate decision ([#45](https://github.com/JUhalt/PaperRoute-Tracker/issues/45)), then certification and release ([#97](https://github.com/JUhalt/PaperRoute-Tracker/issues/97)). Development is tracked in the [v0.9 milestone](https://github.com/JUhalt/PaperRoute-Tracker/milestone/13).
 
 ### Added
 
