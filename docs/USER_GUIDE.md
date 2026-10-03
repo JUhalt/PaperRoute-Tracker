@@ -2,7 +2,7 @@
 
 PaperRoute is a local-first academic manuscript tracker for researchers. It is designed to keep the complete route of a paper understandable: idea, writing, submission, peer review, revision, publication, or the File Drawer.
 
-This guide describes **PaperRoute v0.5.0 — Reviewer Response Workflow**. See the [v0.5.0 release notes](releases/0.5.0.md) for the changes and the [repository homepage](../README.md) for current release availability.
+This guide describes **PaperRoute v0.9.0 — Journal Choice & Guidance**, which is in development and not released yet. The current release is v0.8.0; see the [v0.8.0 release notes](releases/0.8.0.md) and the [repository homepage](../README.md) for current release availability.
 
 ## Quick Start
 
@@ -803,7 +803,7 @@ Restoring a backup that includes `citations.json` replaces your saved citation f
 
 PaperRoute is intentionally conservative about restore operations because the manuscript library is the primary research-workflow record.
 
-PaperRoute v0.5 uses **Schema 6**. Restore a backup made by v0.5 with **v0.5 or later**. Older restore code may ignore reviewer-response fields even though an older application refuses to open a Schema 6 library directly. Keep a separate pre-upgrade v0.4 ZIP backup if you need to return to v0.4; do not use a v0.5 backup for that rollback. See the [upgrade notes](../UPGRADE_NOTES.md).
+PaperRoute v0.9 uses **Schema 9**, and v0.8 uses Schema 8. An older version refuses to open a newer library, and its restore may ignore data it does not know, so restore a backup with the version that made it or a later one. To go back to an earlier version, restore the backup you made with that version before upgrading; changes made since then are not in it. See the [upgrade notes](../UPGRADE_NOTES.md).
 
 ---
 
@@ -1125,8 +1125,8 @@ PaperRoute ships a local copy of this guide. Open it with **Help** at the bottom
 
 The Route, Version History, readiness profiles, submission packets, reviewer responses, and Deadlines form one connected manuscript record. Later releases build on that record:
 
-- **v0.9 — Journal Choice & Guidance:** a journal shortlist for each manuscript, an offline guide to choosing a journal, journal facts from open indexes, a teaching example library, and an optional AI assistant, with every online feature listed in one place and a switch to work offline.
 - **v0.9.1 — 1.0 Hardening:** guided onboarding, accessibility, consistency, recovery, and release certification.
+- **v1.0 — Trusted Research Workflow:** a release you can trust with your real publication pipeline.
 
 Planned releases are directional and may change; see the [roadmap](https://github.com/JUhalt/PaperRoute-Tracker/blob/master/ROADMAP.md).
 

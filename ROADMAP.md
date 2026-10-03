@@ -54,7 +54,7 @@ Targets are directional rather than promises. Data integrity, migrations, backup
 | **v0.6** | Workspace UI ✅ | Can I find and act on everything from one calm, uncluttered workspace? |
 | **v0.7** | Deadline Center ✅ | What requires action, and when? |
 | **v0.8** | Route Analytics & Reports ✅ | What does this publication journey show me—and how can I communicate it? |
-| **v0.9** | **Journal Choice & Guidance — next** | Where should this manuscript go, what will that journal ask of me, and how does someone new learn the route? |
+| **v0.9** | **Journal Choice & Guidance — in development** | Where should this manuscript go, what will that journal ask of me, and how does someone new learn the route? |
 | **v0.9.1** | 1.0 Hardening | Is the entire workflow polished, resilient, and certifiable? |
 | **v1.0** | Trusted Research Workflow | Would I trust this with my real publication pipeline? |
 
@@ -327,6 +327,8 @@ PaperRoute v0.8.0 was released on September 28, 2026 from [PR #80](https://githu
 
 Milestone: **[v0.9.0 — Journal Choice & Guidance](https://github.com/JUhalt/PaperRoute-Tracker/milestone/13)**
 
+Status: in development, not released; v0.8.0 is the current release. [PR #94](https://github.com/JUhalt/PaperRoute-Tracker/pull/94), merged to master on October 2, 2026, delivered the journal shortlist and Choosing a Journal guide (#65, #89), the example library (#83), Online services and Work offline (#86), journal facts and metrics (#87), journals that publish work like yours (#88), your citations (#91), and the optional AI assistant (#84 with #29). It moves the library to Schema 9. Still to do: reading author instructions into a checklist ([#95](https://github.com/JUhalt/PaperRoute-Tracker/issues/95)), polish from the acceptance audit ([#96](https://github.com/JUhalt/PaperRoute-Tracker/issues/96)), the RO-Crate decision ([#45](https://github.com/JUhalt/PaperRoute-Tracker/issues/45)), then certification and release ([#97](https://github.com/JUhalt/PaperRoute-Tracker/issues/97)).
+
 Help researchers decide where a manuscript should go and what that journal will ask of them, and let anyone new learn the route, before the 1.0 hardening pass. Offline guidance comes first; connected help adds facts and suggestions without making the library depend on the network.
 
 **Connected, but local-first.** Every online feature follows the rules the Crossref publication check already keeps: the user starts it, lookups are read-only, results are previewed before anything is applied, and anything stored records its source and the date it was retrieved. One settings page lists every service and exactly what it sends, and **Work offline** turns them all off. PaperRoute stays complete without them.
@@ -341,10 +343,10 @@ Offline:
 Connected, optional, and started by the user:
 
 - **[#86 Online services](https://github.com/JUhalt/PaperRoute-Tracker/issues/86)** — one local-first rule, one settings page, and a **Work offline** switch.
-- **[#87 Journal facts from open indexes](https://github.com/JUhalt/PaperRoute-Tracker/issues/87)** — DOAJ (CC0), OpenAlex, and sharing-policy records: publisher, fees, review type, typical turnaround, and links to the journal's aims and scope, author instructions, and editorial board; open citation metrics (2-year mean citedness, h-index, i10-index) fetched from OpenAlex, and proprietary ones (Impact Factor, CiteScore, SJR, SNIP) recorded by the researcher with source and year. Never a combined prestige score.
+- **[#87 Journal facts from open indexes](https://github.com/JUhalt/PaperRoute-Tracker/issues/87)** — DOAJ and OpenAlex (both CC0): publisher, fees, license, review type, typical time to publication, and links to the journal's aims and scope, author instructions, editorial board, and its sharing policy in Open Policy Finder (linked, never fetched); open citation metrics (2-year mean citedness, h-index, i10-index) fetched from OpenAlex, and proprietary ones (Impact Factor, CiteScore, SJR, SNIP) recorded by the researcher with source and year. Never a combined prestige score.
 - **[#88 Journals that publish work like yours](https://github.com/JUhalt/PaperRoute-Tracker/issues/88)** — suggestions backed by recently published papers that match keywords you review; never scores or predictions.
 - **[#91 Your citations](https://github.com/JUhalt/PaperRoute-Tracker/issues/91)** — the researcher's own citation record from open data, on request: citations, h-index, i10-index, g-index, m-quotient, and field-weighted citation impact per published manuscript, each with its source, date, and definition.
-- **[#84 Optional AI assistant](https://github.com/JUhalt/PaperRoute-Tracker/issues/84)** (with [#29](https://github.com/JUhalt/PaperRoute-Tracker/issues/29)) — off by default, with your own key or a local model: decision letters to the decision and reviewer comments, and drafting help for responses and cover letters, in v0.9. Author guidelines to readiness checklists, and fit summaries grounded in #88's evidence, follow later.
+- **[#84 Optional AI assistant](https://github.com/JUhalt/PaperRoute-Tracker/issues/84)** (with [#29](https://github.com/JUhalt/PaperRoute-Tracker/issues/29)) — off by default, with your own key or a local model: decision letters to the decision and reviewer comments, and drafting help for responses and cover letters. Reading a journal's author instructions into proposed checklist requirements, each checked against its source sentence, follows in [#95](https://github.com/JUhalt/PaperRoute-Tracker/issues/95). An AI fit summary was dropped on October 2, 2026: the fit questions (#89) leave that judgment to the researcher, and #88's evidence already shows what each journal publishes.
 
 ---
 
@@ -356,9 +358,9 @@ Systematic burn-down before 1.0:
 
 - migration/recovery verification
 - backup/restore certification
-- installer/updater certification
+- installer/updater certification, including the install step's first-run time ([#92](https://github.com/JUhalt/PaperRoute-Tracker/issues/92))
 - keyboard/accessibility pass
-- responsive sizing across dialogs and DPI levels
+- responsive sizing across dialogs and DPI levels, with one scaling rule for every dialog ([#93](https://github.com/JUhalt/PaperRoute-Tracker/issues/93))
 - retain regression coverage for the shelf scrolling fix completed for v0.5 ([#37](https://github.com/JUhalt/PaperRoute-Tracker/issues/37), [PR #51](https://github.com/JUhalt/PaperRoute-Tracker/pull/51)) during the whole-application hardening pass
 - consistency audit of every workflow against the v0.6 workspace patterns
 - guided onboarding/tutorial using the shared contextual-help catalog, building on the v0.6 welcome and empty states

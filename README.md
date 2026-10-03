@@ -17,7 +17,7 @@ PaperRoute Tracker helps researchers manage manuscripts from idea through submis
 ## Current status
 
 - **Stable:** [v0.8.0 — Route Analytics & Reports](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v0.8.0) draws each **route map** to scale, colored by who held the manuscript and when, and adds an **Insights** page with your own journal history and turnaround, shareable **reports**, and **work types and tags**. See the [release notes](docs/releases/0.8.0.md) and the [user guide](docs/USER_GUIDE.md).
-- **Next:** [v0.9 — Journal Choice & Guidance](https://github.com/JUhalt/PaperRoute-Tracker/milestone/13): a journal shortlist for each manuscript, an offline guide to choosing a journal, journal facts from open indexes, a teaching example library, and optional AI help, all under one local-first rule.
+- **In development:** [v0.9 — Journal Choice & Guidance](https://github.com/JUhalt/PaperRoute-Tracker/milestone/13), not released yet: a journal shortlist for each manuscript, an offline guide to choosing a journal, journal facts and metrics from open indexes, journals that publish work like yours, your own citations, a teaching example library, and optional AI help, all under one local-first rule with a **Work offline** switch. These are merged to master; certification and release come next.
 
 v0.8 moves the library to Schema 8, which v0.7 cannot open, so keep a backup made with v0.7 before upgrading. The [upgrade notes](UPGRADE_NOTES.md) explain the save and compatibility boundaries.
 
@@ -157,14 +157,14 @@ Choose **Settings → Backup Library...** (also on the Import & Export page) to 
 backup-info.txt
 manuscripts.json
 authors.json        (when reusable metadata exists)
-citations.json      (when citation figures are saved)
+citations.json      (v0.9 and later, when citation figures are saved)
 library.xlsx
 files\
 ```
 
-The native JSON preserves manuscript history, readiness profiles, packet associations, and saved file fingerprints. Reusable authors, affiliations, journals, and journal checklist templates are included when present, as are saved citation figures. Managed document copies, including version and packet snapshots, are included; externally linked files remain references to their original paths. The included Excel workbook is a convenient partial export, not a replacement for the ZIP backup.
+The native JSON preserves manuscript history, readiness profiles, packet associations, and saved file fingerprints. Reusable authors, affiliations, journals, and journal checklist templates are included when present. From v0.9 (in development), saved citation figures are included too. Managed document copies, including version and packet snapshots, are included; externally linked files remain references to their original paths. The included Excel workbook is a convenient partial export, not a replacement for the ZIP backup.
 
-**Restore Backup...** validates the archive, previews record/file counts, asks for explicit confirmation, creates an emergency backup of the current library, and then restores the selected archive. Restoring an archive with saved citation figures replaces yours.
+**Restore Backup...** validates the archive, previews record/file counts, asks for explicit confirmation, creates an emergency backup of the current library, and then restores the selected archive. From v0.9, restoring an archive with saved citation figures replaces yours.
 
 ## File Drawer
 
