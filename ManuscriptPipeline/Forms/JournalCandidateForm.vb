@@ -166,20 +166,33 @@ Namespace Forms
                 .Padding = New Padding(0, 6, 0, 0),
                 .AccessibleName = "Source: Think. Check. Submit."
             }
-            Dim linkText As String = "thinkchecksubmit.org"
-            attribution.LinkArea = New LinkArea(attribution.Text.IndexOf(linkText, StringComparison.Ordinal), linkText.Length)
+            ' The source and its license are each linked, as CC BY asks.
+            attribution.Links.Clear()
+            For Each link As (Text As String, Url As String) In {("thinkchecksubmit.org", JournalChoiceGuide.SourceUrl), ("CC BY 4.0", JournalChoiceGuide.LicenseUrl)}
+                attribution.Links.Add(attribution.Text.IndexOf(link.Text, StringComparison.Ordinal), link.Text.Length, link.Url)
+            Next
             AddHandler attribution.LinkClicked,
                 Sub(sender, e)
+                    Dim url As String = CStr(e.Link.LinkData)
                     Try
-                        Process.Start(New ProcessStartInfo(JournalChoiceGuide.SourceUrl) With {.UseShellExecute = True})
+                        Process.Start(New ProcessStartInfo(url) With {.UseShellExecute = True})
                     Catch ex As Exception When TypeOf ex Is ComponentModel.Win32Exception OrElse TypeOf ex Is InvalidOperationException
-                        MessageBox.Show(Me, "PaperRoute could not open " & JournalChoiceGuide.SourceUrl & ".", Me.Text, MessageBoxButtons.OK, MessageBoxIcon.Information)
+                        MessageBox.Show(Me, "PaperRoute could not open " & url & ".", Me.Text, MessageBoxButtons.OK, MessageBoxIcon.Information)
                     End Try
                 End Sub
             trust.Controls.Add(attribution)
             AddHandler trust.Resize, Sub(sender, e) attribution.MaximumSize = New Size(Math.Max(200, trust.DisplayRectangle.Width), 0)
 
             Dim fit As SectionCard = ChecksCard(JournalChoiceGuide.FitHeading, JournalChoiceGuide.FitChecks, answered)
+            Dim fitSource As New Label With {
+                .Text = JournalChoiceGuide.FitSource,
+                .AutoSize = True,
+                .UseMnemonic = False,
+                .Dock = DockStyle.Bottom,
+                .Padding = New Padding(0, 6, 0, 0)
+            }
+            fit.Controls.Add(fitSource)
+            AddHandler fit.Resize, Sub(sender, e) fitSource.MaximumSize = New Size(Math.Max(200, fit.DisplayRectangle.Width), 0)
             trust.Margin = New Padding(3, 3, 8, 3)
             fit.Margin = New Padding(8, 3, 3, 3)
             root.Controls.Add(trust, 0, 3)

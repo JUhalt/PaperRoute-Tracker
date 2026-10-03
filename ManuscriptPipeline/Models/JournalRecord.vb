@@ -19,6 +19,9 @@ Namespace Models
 
         Public Property IsFavorite As Boolean = False
 
+        ' Shown as "Watch list" (#96): it only sorts and labels the Journals
+        ' list. The stored name stays for existing libraries; a manuscript's
+        ' journal shortlist (#65) is Manuscript.JournalShortlist.
         Public Property IsShortlisted As Boolean = False
 
         Public Property ReadinessChecklistTemplate As List(Of JournalChecklistTemplateItem) =
@@ -54,7 +57,7 @@ Namespace Models
                 End If
 
                 If IsShortlisted Then
-                    prefix &= "[Shortlist] "
+                    prefix &= "[Watch list] "
                 End If
 
                 If String.IsNullOrWhiteSpace(Name) Then

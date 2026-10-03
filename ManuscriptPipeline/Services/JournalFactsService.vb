@@ -215,8 +215,17 @@ Namespace Services
             Dim publisherSource As String = If(doaj IsNot Nothing AndAlso doaj.Publisher.Length > 0, JournalFactCatalog.DoajSource, JournalFactCatalog.OpenAlexSource)
             PlanField(result, record, PublisherField, "Publisher", publisher, publisherSource, isUrl:=False)
 
-            If doaj IsNot Nothing Then
+            ' The homepage: DOAJ's when it lists one, else OpenAlex's. OpenAlex
+            ' never replaces a homepage DOAJ gave, even when DOAJ wasn't
+            ' reached this time or no longer lists the journal.
+            If doaj IsNot Nothing AndAlso Not String.IsNullOrWhiteSpace(doaj.HomepageUrl) Then
                 PlanField(result, record, HomepageField, "Homepage", doaj.HomepageUrl, JournalFactCatalog.DoajSource, isUrl:=True)
+            ElseIf openAlex IsNot Nothing AndAlso Not String.IsNullOrWhiteSpace(openAlex.HomepageUrl) AndAlso
+                   Not CameFrom(record, HomepageField, JournalFactCatalog.DoajSource) Then
+                PlanField(result, record, HomepageField, "Homepage", openAlex.HomepageUrl, JournalFactCatalog.OpenAlexSource, isUrl:=True)
+            End If
+
+            If doaj IsNot Nothing Then
                 PlanField(result, record, AimsScopeField, "Aims and scope", doaj.AimsScopeUrl, JournalFactCatalog.DoajSource, isUrl:=True)
                 PlanField(result, record, AuthorInstructionsField, "Author instructions", doaj.AuthorInstructionsUrl, JournalFactCatalog.DoajSource, isUrl:=True)
                 PlanField(result, record, EditorialBoardField, "Editorial board", doaj.EditorialBoardUrl, JournalFactCatalog.DoajSource, isUrl:=True)
@@ -662,6 +671,17 @@ Namespace Services
             End If
 
         End Sub
+
+
+        ' True when the field still holds the value the source filled it with.
+        Private Shared Function CameFrom(record As JournalRecord, key As String, source As String) As Boolean
+            Dim origin As FieldSource = Nothing
+            Return record.FieldSources IsNot Nothing AndAlso
+                   record.FieldSources.TryGetValue(key, origin) AndAlso
+                   origin IsNot Nothing AndAlso
+                   String.Equals(origin.Source, source, StringComparison.Ordinal) AndAlso
+                   String.Equals(origin.Value, FieldValue(record, key), StringComparison.Ordinal)
+        End Function
 
 
         Private Shared Sub PlanIssns(plan As JournalFactsPlan, record As JournalRecord, doaj As DoajJournal, openAlex As OpenAlexSource)

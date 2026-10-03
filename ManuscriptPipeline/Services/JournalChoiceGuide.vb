@@ -38,6 +38,12 @@ Namespace Services
 
         Public Const SourceUrl As String = "https://thinkchecksubmit.org/journals/"
 
+        Public Const LicenseUrl As String = "https://creativecommons.org/licenses/by/4.0/"
+
+        ' Shown under the fit questions, so they aren't read as part of the
+        ' adapted checklist.
+        Public Const FitSource As String = "Fit questions are PaperRoute's own."
+
         Public Shared ReadOnly Property TrustChecks As IReadOnlyList(Of JournalCheck) = {
             New JournalCheck("trust.known", "You or your colleagues know the journal and have read its articles"),
             New JournalCheck("trust.publisher", "You can easily identify and contact the publisher"),

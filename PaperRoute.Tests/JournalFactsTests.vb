@@ -201,6 +201,15 @@ Public Class JournalFactsTests
         StringAssert.Contains(String.Join(" ", plan.Notes), "isn't listed in DOAJ")
         Dim fee As JournalFactChange = plan.Changes.Single(Function(item) item.Field = "Publication fee")
         Assert.AreEqual("USD " & Money(3900) & " · GBP " & Money(2859) & " (optional, to make an article open access)", fee.Found, "A subscription journal's fee is optional.")
+
+        Dim homepage As JournalFactChange = plan.Changes.Single(Function(item) item.Field = "Homepage")
+        Assert.AreEqual(JournalFactChangeKind.Fill, homepage.Kind, "OpenAlex fills the homepage DOAJ can't give.")
+        Assert.AreEqual(JournalFactCatalog.OpenAlexSource, homepage.Source)
+        Assert.AreEqual("http://pss.sagepub.com/", homepage.Found)
+        Dim record As New JournalRecord With {.Name = "Psychological Science"}
+        JournalFactsService.Apply(record, plan)
+        Assert.AreEqual("http://pss.sagepub.com/", record.HomepageUrl)
+        Assert.AreEqual(JournalFactCatalog.OpenAlexSource, record.FieldSources(JournalFactsService.HomepageField).Source)
     End Sub
 
     <TestMethod>
@@ -296,6 +305,46 @@ Public Class JournalFactsTests
     End Sub
 
     <TestMethod>
+    Public Sub OpenAlexFillsTheHomepageOnlyWhenDoajGivesNone()
+        ' DOAJ lists the journal but no homepage: OpenAlex's is used.
+        Dim record As New JournalRecord With {.Name = "PLOS ONE", .Issns = New List(Of String) From {"1932-6203"}}
+        Dim noHomepage As JournalFactsLookup = PlosLookup()
+        noHomepage.Doaj.HomepageUrl = ""
+        Dim plan As JournalFactsPlan = JournalFactsService.Plan(record, noHomepage)
+        Dim homepage As JournalFactChange = plan.Changes.Single(Function(item) item.Field = "Homepage")
+        Assert.AreEqual(JournalFactChangeKind.Fill, homepage.Kind)
+        Assert.AreEqual(JournalFactCatalog.OpenAlexSource, homepage.Source)
+        JournalFactsService.Apply(record, plan)
+        Assert.AreEqual("http://www.plosone.org/", record.HomepageUrl)
+        Assert.AreEqual(JournalFactCatalog.OpenAlexSource, record.FieldSources(JournalFactsService.HomepageField).Source)
+
+        ' Once DOAJ lists one, DOAJ's replaces OpenAlex's.
+        plan = JournalFactsService.Plan(record, PlosLookup(Checked.AddDays(1)))
+        homepage = plan.Changes.Single(Function(item) item.Field = "Homepage")
+        Assert.AreEqual(JournalFactChangeKind.Update, homepage.Kind)
+        Assert.AreEqual(JournalFactCatalog.DoajSource, homepage.Source)
+        JournalFactsService.Apply(record, plan)
+        Assert.AreEqual("https://journals.plos.org/plosone/", record.HomepageUrl)
+
+        ' OpenAlex never replaces DOAJ's, even when DOAJ isn't reached.
+        Dim unreached As JournalFactsLookup = PlosLookup(Checked.AddDays(2))
+        unreached.Doaj = Nothing
+        unreached.DoajChecked = False
+        unreached.DoajError = "DOAJ had a problem on its side (HTTP 502). Try again later."
+        Assert.IsFalse(JournalFactsService.Plan(record, unreached).Changes.Any(Function(item) item.Field = "Homepage"))
+        Dim noneFromDoaj As JournalFactsLookup = PlosLookup(Checked.AddDays(2))
+        noneFromDoaj.Doaj.HomepageUrl = ""
+        Assert.IsFalse(JournalFactsService.Plan(record, noneFromDoaj).Changes.Any(Function(item) item.Field = "Homepage"))
+
+        ' A homepage you typed is kept, whichever source offers another.
+        record.HomepageUrl = "https://example.org/plos-one"
+        JournalFactsService.Normalize(record)
+        Dim kept As JournalFactChange = JournalFactsService.Plan(record, unreached).Changes.Single(Function(item) item.Field = "Homepage")
+        Assert.AreEqual(JournalFactChangeKind.Keep, kept.Kind)
+        Assert.AreEqual(JournalFactCatalog.OpenAlexSource, kept.Source)
+    End Sub
+
+    <TestMethod>
     Public Sub RefreshUpdatesLookedUpValuesButNotOnesYouChanged()
         Dim record As New JournalRecord With {.Name = "PLOS ONE", .Issns = New List(Of String) From {"1932-6203"}}
         JournalFactsService.Apply(record, JournalFactsService.Plan(record, PlosLookup()))
@@ -338,6 +387,7 @@ Public Class JournalFactsTests
         Assert.IsFalse(plan.Changes.Any(Function(item) item.Current = "My note from the editor: double anonymous"), "Entered facts are never offered for removal, whatever their source.")
 
         Assert.AreEqual("Not listed in DOAJ", plan.Changes.Single(Function(item) item.Field = "DOAJ listing").Found)
+        Assert.IsFalse(plan.Changes.Any(Function(item) item.Field = "Homepage"), "OpenAlex's older homepage doesn't replace DOAJ's.")
         Dim removals As List(Of JournalFactChange) = plan.Changes.Where(Function(item) item.Kind = JournalFactChangeKind.Remove).ToList()
         Assert.IsTrue(removals.Count >= 5 AndAlso removals.All(Function(item) Not item.Selected AndAlso item.Source = "DOAJ"), "Offered, never assumed.")
 

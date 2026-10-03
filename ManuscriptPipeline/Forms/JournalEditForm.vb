@@ -24,7 +24,7 @@ Namespace Forms
         Private ReadOnly txtBoard As New TextBox()
         Private ReadOnly txtNotes As New TextBox()
         Private ReadOnly chkFavorite As New CheckBox()
-        Private ReadOnly chkShortlist As New CheckBox()
+        Private ReadOnly chkWatchList As New CheckBox()
 
         Private ReadOnly lstChecklist As New ListBox()
         Private ReadOnly lblChecklistInfo As New Label()
@@ -268,14 +268,15 @@ Namespace Forms
             chkFavorite.AutoSize =
                 True
 
-            chkShortlist.Text =
-                "Shortlist"
+            ' "Shortlist" means only a manuscript's journal shortlist (#65).
+            chkWatchList.Text =
+                "Watch list"
 
-            chkShortlist.AutoSize =
+            chkWatchList.AutoSize =
                 True
 
             flags.Controls.Add(chkFavorite)
-            flags.Controls.Add(chkShortlist)
+            flags.Controls.Add(chkWatchList)
 
             general.Controls.Add(CreateLabel("Journal name"), 0, 0)
             general.Controls.Add(txtName, 1, 0)
@@ -590,7 +591,7 @@ Namespace Forms
             chkFavorite.Checked =
                 _source.IsFavorite
 
-            chkShortlist.Checked =
+            chkWatchList.Checked =
                 _source.IsShortlisted
 
         End Sub
@@ -1121,7 +1122,7 @@ Namespace Forms
             _result.EditorialBoardUrl = board
             _result.Notes = txtNotes.Text.Trim()
             _result.IsFavorite = chkFavorite.Checked
-            _result.IsShortlisted = chkShortlist.Checked
+            _result.IsShortlisted = chkWatchList.Checked
             _result.ReadinessChecklistTemplate =
                 _workingChecklist.
                     Select(

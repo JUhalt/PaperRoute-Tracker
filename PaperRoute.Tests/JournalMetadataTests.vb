@@ -59,6 +59,16 @@ Public Class JournalMetadataTests
                 loaded.Journals(0).IsFavorite
             )
 
+            ' The Watch list mark keeps its stored name (#96).
+            Assert.IsTrue(
+                loaded.Journals(0).IsShortlisted
+            )
+
+            Assert.AreEqual(
+                "★ [Watch list] Journal of Examples",
+                loaded.Journals(0).DisplayName
+            )
+
         Finally
 
             DeleteTempDirectory(

@@ -337,8 +337,7 @@ Journal records can include:
 - submission portal;
 - facts and metrics (see **Journal Facts and Metrics**);
 - notes;
-- Favorite status;
-- Shortlist status; and
+- **Favorite** (★) and **Watch list** marks, which keep a journal near the top of the list and are separate from a manuscript's journal shortlist (see **Choosing a Journal**); and
 - a reusable readiness checklist.
 
 A manuscript can link its target journal to one of these reusable records while retaining the free-text target-journal field for backward compatibility.
@@ -389,8 +388,8 @@ The **Journals** page shows the selected journal beside the list: its facts, lin
 
 Choose **Look Up Facts...** to look the journal up in two open indexes:
 
-- **DOAJ** (the Directory of Open Access Journals, doaj.org), which lists fully open-access journals: the publication fee (the highest it lists), license and copyright, peer review type, typical weeks from submission to publication, plagiarism screening, and links to the journal's aims and scope, author instructions, and editorial board.
-- **OpenAlex** (openalex.org), an open index of scholarly works that covers most journals, open access or not: publisher, ISSNs, whether the journal is fully open access, its main topics, and three open citation metrics.
+- **DOAJ** (the Directory of Open Access Journals, doaj.org), which lists fully open-access journals: the publication fee (the highest it lists), license and copyright, peer review type, typical weeks from submission to publication, plagiarism screening, and links to the journal's homepage, aims and scope, author instructions, and editorial board.
+- **OpenAlex** (openalex.org), an open index of scholarly works that covers most journals, open access or not: publisher, homepage, ISSNs, whether the journal is fully open access, its main topics, and three open citation metrics. When both give a publisher or homepage, DOAJ's is used, and OpenAlex never replaces a homepage DOAJ gave.
 
 PaperRoute sends the journal's ISSNs (the ones you saved, and any other ISSN OpenAlex lists for the same journal), and nothing else. A journal without an ISSN is first found by name: type the name, choose **Find**, and pick the journal from the list; PaperRoute then sends that journal's ISSNs, or its OpenAlex id if it has none. You see everything that was found before anything is saved:
 
@@ -456,9 +455,9 @@ Before submitting, check that the journal is one you can trust. These questions 
 
 Think. Check. Submit. suggests submitting only if you can answer yes to most of these questions.
 
-### Is it a good fit?
+### Is it a good fit for this manuscript?
 
-Then ask whether the journal suits this manuscript:
+Then ask whether the journal suits this manuscript. These questions are PaperRoute's own:
 
 - Do its aims and scope cover this work?
 - Does it publish this type of article, within its length limits?
