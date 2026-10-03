@@ -9,6 +9,10 @@ This directory contains disposable import fixtures used for repeatable F5/manual
 - [Disposable workflow demo](V04Demo/README.md)
 - [Candidate packaging and installation procedure](v0.4-Release-Packaging.md)
 
+## v0.9 evaluations
+
+- [RO-Crate export for submission packets: evaluation and decision (#45)](v0.9-RO-Crate-Evaluation/README.md)
+
 ## Safety
 
 Certification workbooks are **additive imports**.
