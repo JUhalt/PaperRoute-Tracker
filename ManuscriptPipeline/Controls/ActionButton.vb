@@ -95,9 +95,14 @@ Namespace Controls
             Invalidate()
         End Sub
 
+        ' Never smaller than the button's minimum: a layout must place the
+        ' button at the size it is drawn, or its neighbors overlap it and its
+        ' row is too short for it (as Look Up Journal Facts showed at 150%).
         Public Overrides Function GetPreferredSize(proposedSize As Size) As Size
             Dim text As Size = TextRenderer.MeasureText(Me.Text, Me.Font, Size.Empty, TextFlags())
-            Return New Size(text.Width + Padding.Horizontal, text.Height + Padding.Vertical)
+            Return New Size(
+                Math.Max(text.Width + Padding.Horizontal, MinimumSize.Width),
+                Math.Max(text.Height + Padding.Vertical, MinimumSize.Height))
         End Function
 
         Protected Overrides Sub OnPaint(e As PaintEventArgs)

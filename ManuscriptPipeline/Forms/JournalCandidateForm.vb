@@ -46,6 +46,14 @@ Namespace Forms
         Public Property Checks As New List(Of String)()
 
 
+        ' On a small screen or at a high scale, the window keeps its buttons
+        ' above the taskbar.
+        Protected Overrides Sub OnLoad(e As EventArgs)
+            MyBase.OnLoad(e)
+            ResponsiveDialogSizingService.FitToWorkingArea(Me)
+        End Sub
+
+
         Public Sub New(candidate As JournalCandidate, journalNames As IEnumerable(Of String), history As Func(Of String, String), Optional factsFor As Func(Of String, JournalRecord) = Nothing)
 
             _history = history

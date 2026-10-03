@@ -66,6 +66,14 @@ Namespace Forms
         Private ReadOnly toolTip As New ToolTip()
 
 
+        ' On a small screen or at a high scale, the window keeps its buttons
+        ' above the taskbar.
+        Protected Overrides Sub OnLoad(e As EventArgs)
+            MyBase.OnLoad(e)
+            ResponsiveDialogSizingService.FitToWorkingArea(Me)
+        End Sub
+
+
         ' title: the page's current title text; keywords: the manuscript's.
         Public Sub New(title As String, keywords As IEnumerable(Of String), source As IJournalSuggestionsSource,
                        isOnShortlist As Func(Of JournalSuggestion, Boolean), yoursFor As Func(Of JournalSuggestion, String),

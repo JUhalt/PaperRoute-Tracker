@@ -48,6 +48,14 @@ Namespace Forms
         Private ReadOnly root As New TableLayoutPanel()
 
 
+        ' On a small screen or at a high scale, the window keeps its buttons
+        ' above the taskbar.
+        Protected Overrides Sub OnLoad(e As EventArgs)
+            MyBase.OnLoad(e)
+            ResponsiveDialogSizingService.FitToWorkingArea(Me)
+        End Sub
+
+
         ' record: a copy, which Save changes and returns as Result.
         Public Sub New(record As JournalRecord, source As IJournalFactsSource)
 

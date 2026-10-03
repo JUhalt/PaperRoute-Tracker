@@ -43,6 +43,14 @@ Namespace Forms
         Private ReadOnly body As New Panel()
 
 
+        ' On a small screen or at a high scale, the window keeps its buttons
+        ' above the taskbar.
+        Protected Overrides Sub OnLoad(e As EventArgs)
+            MyBase.OnLoad(e)
+            ResponsiveDialogSizingService.FitToWorkingArea(Me)
+        End Sub
+
+
         Public Sub New(orcid As String, manuscriptDois As IEnumerable(Of (Doi As String, Title As String)), previous As CitationSnapshot, source As ICitationSource)
             _orcid = orcid
             _manuscripts = If(manuscriptDois, Enumerable.Empty(Of (Doi As String, Title As String))()).ToList()
