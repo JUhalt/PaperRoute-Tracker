@@ -327,7 +327,7 @@ PaperRoute v0.8.0 was released on September 28, 2026 from [PR #80](https://githu
 
 Milestone: **[v0.9.0 — Journal Choice & Guidance](https://github.com/JUhalt/PaperRoute-Tracker/milestone/13)**
 
-Status: in development, not released; v0.8.0 is the current release. [PR #94](https://github.com/JUhalt/PaperRoute-Tracker/pull/94), merged to master on October 2, 2026, delivered the journal shortlist and Choosing a Journal guide (#65, #89), the example library (#83), Online services and Work offline (#86), journal facts and metrics (#87), journals that publish work like yours (#88), your citations (#91), and the optional AI assistant (#84 with #29). It moves the library to Schema 9. Reading a journal's author instructions into its checklist ([#95](https://github.com/JUhalt/PaperRoute-Tracker/issues/95)) followed in [PR #100](https://github.com/JUhalt/PaperRoute-Tracker/pull/100). Still to do: polish from the acceptance audit ([#96](https://github.com/JUhalt/PaperRoute-Tracker/issues/96)), the RO-Crate decision ([#45](https://github.com/JUhalt/PaperRoute-Tracker/issues/45)), then certification and release ([#97](https://github.com/JUhalt/PaperRoute-Tracker/issues/97)).
+Status: in development, not released; v0.8.0 is the current release. [PR #94](https://github.com/JUhalt/PaperRoute-Tracker/pull/94), merged to master on October 2, 2026, delivered the journal shortlist and Choosing a Journal guide (#65, #89), the example library (#83), Online services and Work offline (#86), journal facts and metrics (#87), journals that publish work like yours (#88), your citations (#91), and the optional AI assistant (#84 with #29). It moves the library to Schema 9. Reading a journal's author instructions into its checklist ([#95](https://github.com/JUhalt/PaperRoute-Tracker/issues/95)) followed in [PR #100](https://github.com/JUhalt/PaperRoute-Tracker/pull/100). The RO-Crate export ([#45](https://github.com/JUhalt/PaperRoute-Tracker/issues/45)) was evaluated and deferred until after 1.0. Still to do: polish from the acceptance audit ([#96](https://github.com/JUhalt/PaperRoute-Tracker/issues/96)), then certification and release ([#97](https://github.com/JUhalt/PaperRoute-Tracker/issues/97)).
 
 Help researchers decide where a manuscript should go and what that journal will ask of them, and let anyone new learn the route, before the 1.0 hardening pass. Offline guidance comes first; connected help adds facts and suggestions without making the library depend on the network.
 
@@ -338,7 +338,7 @@ Offline:
 - **[#65 Per-manuscript journal shortlist](https://github.com/JUhalt/PaperRoute-Tracker/issues/65)** — Considering, Preferred, Backup, and Ruled out, with the reasons kept on the manuscript and offered again when it is rerouted.
 - **[#89 Choosing a journal](https://github.com/JUhalt/PaperRoute-Tracker/issues/89)** — a one-page guide adapted, with attribution, from the Think. Check. Submit. checklist (CC BY 4.0), plus fit questions and your own history with each journal.
 - **[#83 Example library for teaching](https://github.com/JUhalt/PaperRoute-Tracker/issues/83)** — a fictional research group's routes to explore, edit, and discard without touching your library.
-- **[#45 RO-Crate export for submission packets](https://github.com/JUhalt/PaperRoute-Tracker/issues/45)** — the documented adopt, defer, or reject decision.
+- **[#45 RO-Crate export for submission packets](https://github.com/JUhalt/PaperRoute-Tracker/issues/45)** — evaluated and deferred until after 1.0 on October 3, 2026 (see **Proposals awaiting scope review**).
 
 Connected, optional, and started by the user:
 
@@ -388,6 +388,6 @@ PaperRoute does not trade trustworthiness for cadence.
 
 # Proposals awaiting scope review
 
-None at present: the proposals reviewed on September 28, 2026 are scoped into v0.9.
+- **[#45 Optional RO-Crate export for submission packets (after 1.0)](https://github.com/JUhalt/PaperRoute-Tracker/issues/45)** — evaluated and deferred on October 3, 2026. A synthetic packet exported both as a plain folder (files, a SHA-256 manifest, and an HTML summary) and as an RO-Crate 1.3 crate met every rule in #45. But no journal, publisher, or submission system reads RO-Crate. For a person the two packages are the same page. And the hard parts (preview and per-file inclusion, hidden document metadata, blinding, safe file names) belong to any packet export, which is #43's portable-sharing decision. Revisit after 1.0, once a plain packet export has shipped, a real reader is named, and the model records publication-date precision, rights, and per-round dates. The evaluation and the rules for any future build are in [ManualCertification/v0.9-RO-Crate-Evaluation](ManualCertification/v0.9-RO-Crate-Evaluation/README.md).
 
 New research-informed ideas remain proposals until scoped. Every accepted finding or development path must have a linked issue and a roadmap disposition before implementation.
