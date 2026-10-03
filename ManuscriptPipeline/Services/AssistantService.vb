@@ -75,7 +75,58 @@ Namespace Services
     End Class
 
 
-    ' The AI assistant's three features (#84): what each sends, in the same
+    ' A requirement the assistant proposed from a journal's instructions for
+    ' authors (#95), checked against the text the researcher pasted.
+    Public NotInheritable Class RequirementCandidate
+
+        ' A short requirement, such as "Abstract of at most 250 words".
+        Public Property Title As String = String.Empty
+
+        ' One of the checklist's categories, or "" for General.
+        Public Property Category As String = String.Empty
+
+        Public Property IsRequired As Boolean = True
+
+        ' The article type it is for, as the text names it, or "" for every
+        ' type.
+        Public Property AppliesTo As String = String.Empty
+
+        ' The text's own words for it when found there; otherwise the quote
+        ' the assistant gave, which is shown but never recorded as a source.
+        Public Property Quote As String = String.Empty
+
+        Public Property Found As Boolean
+
+        Public Property SourceStart As Integer = -1
+
+        Public Property SourceLength As Integer
+
+        ' Every number in the requirement appears in its quote.
+        Public Property NumbersMatch As Boolean = True
+
+    End Class
+
+
+    ' What the assistant read in a journal's instructions for authors (#95):
+    ' proposals to check, never changes.
+    Public NotInheritable Class AuthorInstructionsProposal
+
+        Public Property Requirements As New List(Of RequirementCandidate)()
+
+        Public Property ProviderName As String = String.Empty
+
+        Public Property Model As String = String.Empty
+
+        Public Property SuggestedUtc As DateTime = DateTime.UtcNow
+
+        ' The answer stopped at its length limit, so requirements may be
+        ' missing.
+        Public Property Truncated As Boolean
+
+    End Class
+
+
+    ' The AI assistant's features (#84, #95): what each sends, in the same
     ' functions that build what the researcher sees before sending, and how
     ' each answer is read and checked.
     Public NotInheritable Class AssistantService
@@ -86,8 +137,13 @@ Namespace Services
         Public Const DecisionLetterFeature As String = "decision-letter"
         Public Const DraftResponseFeature As String = "draft-response"
         Public Const CoverLetterFeature As String = "cover-letter"
+        Public Const AuthorInstructionsFeature As String = "author-instructions"
 
         Public Const MaximumLetterLength As Integer = 60000
+
+        ' Kept short, so a model on this computer reads all of it and each
+        ' answer stays reviewable: one section of the instructions at a time.
+        Public Const MaximumInstructionsLength As Integer = 20000
 
         ' Test seam: the provider for the assistant as set up now.
         Friend Shared ProviderFactory As Func(Of IAssistantProvider) = Nothing
@@ -108,6 +164,7 @@ Namespace Services
                 Case DecisionLetterFeature : Return "Read Decision Letter"
                 Case DraftResponseFeature : Return "Suggest a Starting Point"
                 Case CoverLetterFeature : Return "Draft Cover Letter"
+                Case AuthorInstructionsFeature : Return "Read Author Instructions"
                 Case Else : Return feature
             End Select
         End Function
@@ -361,6 +418,202 @@ Namespace Services
                 .Content = content.ToString(),
                 .MaxTokens = 4000
             }
+        End Function
+
+
+        ' ---------------------------------------------------------------
+        ' A journal's instructions for authors (#95)
+        ' ---------------------------------------------------------------
+
+        ' The categories PaperRoute suggests for checklist requirements.
+        Public Shared ReadOnly StandardCategories As String() = {"Manuscript", "Editorial", "Compliance", "Files", "Figures"}
+
+
+        ' The categories a requirement may take: the standard ones, then any
+        ' the journal's checklist already uses. Only the standard ones are
+        ' sent; an answer is matched to the checklist's own on this computer.
+        Public Shared Function CategoriesFor(existing As IEnumerable(Of String)) As List(Of String)
+            Dim categories As New List(Of String)(StandardCategories)
+            For Each name As String In If(existing, Enumerable.Empty(Of String)())
+                Dim cleaned As String = Clean(name, 80)
+                If cleaned.Length > 0 AndAlso Not categories.Contains(cleaned, StringComparer.OrdinalIgnoreCase) Then categories.Add(cleaned)
+            Next
+            Return categories
+        End Function
+
+
+        Friend Shared ReadOnly AuthorInstructionsPrompt As String =
+            "You read the instructions for authors that a journal publishes, for a researcher preparing a submission, and answer with JSON only." & vbLf &
+            "- requirements: each thing an author must prepare, include, or state when submitting, such as word, abstract, or figure limits; the format of the title page, abstract, or keywords; the reference style; required statements, such as data availability, conflicts of interest, funding, ethics approval, or author contributions; files and figures to upload; anonymizing the manuscript; and reporting guidelines. Leave out the journal's publishing terms, such as fees, licenses, or copyright, and anything about peer review or the editorial process." & vbLf &
+            "- title: the requirement in a few plain words, such as ""Abstract of at most 250 words"". Keep every number exactly as the text gives it." & vbLf &
+            "- category: one of " & String.Join(", ", StandardCategories) & "." & vbLf &
+            "- required: true when the text requires it, false when the text calls it optional or recommended." & vbLf &
+            "- applies_to: the article type the requirement is for, as the text names it, or an empty string when it is for every type." & vbLf &
+            "- quote: the sentence or table text that states the requirement, copied exactly from the text; do not paraphrase, shorten, correct, or translate it." & vbLf &
+            "If an article type is given, list the requirements for that type and for every type, and leave out those only for other types." & vbLf &
+            "Never invent a requirement, number, or quote."
+
+        Friend Const AuthorInstructionsSchemaJson As String =
+            "{""type"":""object"",""properties"":{" &
+            """requirements"":{""type"":""array"",""items"":{""type"":""object"",""properties"":{" &
+            """title"":{""type"":""string""},""category"":{""type"":""string""},""required"":{""type"":""boolean""}," &
+            """applies_to"":{""type"":""string""},""quote"":{""type"":""string""}}," &
+            """required"":[""title"",""category"",""required"",""applies_to"",""quote""],""additionalProperties"":false}}" &
+            "},""required"":[""requirements""],""additionalProperties"":false}"
+
+
+        ' What Read Author Instructions sends: the pasted text, and the article
+        ' type when one is given. Nothing from the library, not even the
+        ' checklist's own category names.
+        Public Shared Function BuildAuthorInstructionsRequest(text As String, articleType As String) As AssistantRequest
+            Dim kind As String = Clean(articleType, 80)
+            Dim content As String = If(text, String.Empty).Trim()
+            If kind.Length > 0 Then content = "Article type: " & kind & vbLf & vbLf & content
+            Return New AssistantRequest With {
+                .Feature = AuthorInstructionsFeature,
+                .Instructions = AuthorInstructionsPrompt,
+                .Content = content,
+                .Schema = SchemaOf(AuthorInstructionsSchemaJson),
+                .MaxTokens = 8000
+            }
+        End Function
+
+
+        ' The answer, each requirement checked against the pasted text: its
+        ' quote word for word, and every number it gives in that quote.
+        Public Shared Function ReadAuthorInstructionsReply(reply As AssistantReply, text As String, categories As IEnumerable(Of String)) As AuthorInstructionsProposal
+
+            Dim proposal As New AuthorInstructionsProposal With {
+                .ProviderName = If(reply?.ProviderName, String.Empty),
+                .Model = If(reply?.Model, String.Empty),
+                .Truncated = reply IsNot Nothing AndAlso reply.Truncated
+            }
+            Dim source As String = If(text, String.Empty)
+            Dim allowed As List(Of String) = If(categories, StandardCategories).ToList()
+
+            Dim document As JsonDocument
+            Try
+                document = ParseJsonAnswer(If(reply?.Text, String.Empty))
+            Catch ex As AssistantException When proposal.Truncated
+                Throw New AssistantException("The answer was cut short before it finished. Paste the instructions in parts, such as one section at a time. Nothing was changed.", ex)
+            End Try
+
+            Using document
+                Dim seen As New HashSet(Of String)(StringComparer.Ordinal)
+                For Each item As JsonElement In JsonFacts.Items(document.RootElement, "requirements")
+                    Dim title As String = Clean(JsonFacts.RawText(item, "title"), 200)
+                    If title.Length = 0 Then Continue For
+                    Dim appliesTo As String = Clean(JsonFacts.RawText(item, "applies_to"), 80)
+                    If ForEveryType(appliesTo) Then appliesTo = String.Empty
+                    Dim quote As String = JsonFacts.RawText(item, "quote")
+                    Dim place = LocateExcerpt(source, quote)
+                    Dim candidate As New RequirementCandidate With {
+                        .Title = title,
+                        .Category = CategoryFor(JsonFacts.RawText(item, "category"), allowed),
+                        .IsRequired = JsonFacts.Flag(item, "required").GetValueOrDefault(True),
+                        .AppliesTo = appliesTo,
+                        .Found = place.HasValue,
+                        .SourceStart = If(place.HasValue, place.Value.Start, -1),
+                        .SourceLength = If(place.HasValue, place.Value.Length, 0),
+                        .Quote = If(place.HasValue, source.Substring(place.Value.Start, place.Value.Length).Trim(), Clean(quote, 600))
+                    }
+                    candidate.NumbersMatch = Not candidate.Found OrElse NumbersAppearIn(candidate.Title, candidate.Quote)
+                    If seen.Add(RequirementKey(candidate.Title) & "|" & RequirementKey(candidate.AppliesTo)) Then proposal.Requirements.Add(candidate)
+                Next
+            End Using
+
+            Return proposal
+
+        End Function
+
+
+        ' Two requirement titles that differ only in spacing, letter case,
+        ' quote marks, or dashes are the same requirement.
+        Public Shared Function SameRequirement(first As String, second As String) As Boolean
+            Return String.Equals(RequirementKey(first), RequirementKey(second), StringComparison.Ordinal)
+        End Function
+
+
+        ' The instructions a requirement keeps: the text's own words, and the
+        ' article type it is for. A requirement not found in the text keeps no
+        ' quote, so nothing unverified is recorded as the journal's.
+        Public Shared Function RequirementDescription(candidate As RequirementCandidate) As String
+            If candidate Is Nothing Then Return String.Empty
+            Dim lines As New List(Of String)()
+            If candidate.Found AndAlso candidate.Quote.Length > 0 Then lines.Add(candidate.Quote)
+            If candidate.AppliesTo.Length > 0 Then lines.Add("Applies to: " & candidate.AppliesTo & ".")
+            Return String.Join(Environment.NewLine, lines)
+        End Function
+
+
+        ' Every number in the requirement appears in the quote, reading
+        ' "8,000", "8 000", and "8000" alike, and "six" as 6.
+        Public Shared Function NumbersAppearIn(requirement As String, quote As String) As Boolean
+            Dim available As HashSet(Of String) = NumbersIn(quote, withParts:=True)
+            Return NumbersIn(requirement, withParts:=False).All(Function(number) available.Contains(number))
+        End Function
+
+
+        Private Shared ReadOnly NumberWords As String() = {
+            "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+            "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"
+        }
+
+        Private Shared ReadOnly TensWords As String() = {"twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"}
+
+
+        ' The numbers in a text: words such as "six" or "twenty-five" as
+        ' digits, and a number grouped in thousands with one separator, such as
+        ' "8,000" or "8 000", read whole. withParts also keeps each group, so a
+        ' table row pasted as "3,000 150" still holds 150.
+        Private Shared Function NumbersIn(text As String, withParts As Boolean) As HashSet(Of String)
+            Dim tens As String = String.Join("|", TensWords)
+            Dim units As String = String.Join("|", NumberWords.Skip(1).Take(9))
+            Dim value As String = Regex.Replace(If(text, String.Empty), "\b(" & tens & ")[- ](" & units & ")\b",
+                Function(found) (20 + 10 * Array.IndexOf(TensWords, found.Groups(1).Value.ToLowerInvariant()) +
+                                 Array.IndexOf(NumberWords, found.Groups(2).Value.ToLowerInvariant())).ToString(CultureInfo.InvariantCulture),
+                RegexOptions.IgnoreCase)
+            value = Regex.Replace(value, "\b(" & String.Join("|", NumberWords) & "|" & tens & ")\b",
+                Function(found)
+                    Dim word As String = found.Value.ToLowerInvariant()
+                    Dim small As Integer = Array.IndexOf(NumberWords, word)
+                    Return If(small >= 0, small, 20 + 10 * Array.IndexOf(TensWords, word)).ToString(CultureInfo.InvariantCulture)
+                End Function,
+                RegexOptions.IgnoreCase)
+            Dim joined As String = Regex.Replace(value, "(?<![\d.,])\d{1,3}(?<sep>[, \u00A0\u202F\u2009\u2007])\d{3}(?:\k<sep>\d{3})*(?!\d)",
+                Function(found) Regex.Replace(found.Value, "\D", String.Empty))
+            Dim numbers As New HashSet(Of String)(StringComparer.Ordinal)
+            For Each found As Match In Regex.Matches(joined, "\d+(?:\.\d+)?")
+                numbers.Add(found.Value)
+            Next
+            If withParts Then
+                For Each found As Match In Regex.Matches(value, "\d+(?:\.\d+)?")
+                    numbers.Add(found.Value)
+                Next
+            End If
+            Return numbers
+        End Function
+
+
+        Private Shared Function RequirementKey(value As String) As String
+            Return Normalized(Clean(value, 400)).Text.ToLowerInvariant()
+        End Function
+
+
+        Private Shared Function ForEveryType(appliesTo As String) As Boolean
+            Select Case appliesTo.Trim().TrimEnd("."c).ToLowerInvariant()
+                Case "all", "any", "every type", "all types", "all article types", "all articles", "all manuscripts", "all submissions", "every article", "any article"
+                    Return True
+                Case Else
+                    Return False
+            End Select
+        End Function
+
+
+        Private Shared Function CategoryFor(value As String, allowed As IEnumerable(Of String)) As String
+            Dim name As String = Clean(value, 80)
+            Dim match As String = allowed.FirstOrDefault(Function(category) String.Equals(category, name, StringComparison.OrdinalIgnoreCase))
+            Return If(match, String.Empty)
         End Function
 
 

@@ -20,6 +20,10 @@ Namespace Models
 
         Public Property IsRequired As Boolean = True
 
+        ' Copied with the requirement: where it came from, when it began as an
+        ' AI suggestion (#95).
+        Public Property Suggestion As AssistantSuggestion
+
         Public Property Status As ReadinessItemStatus =
             ReadinessItemStatus.Unresolved
 

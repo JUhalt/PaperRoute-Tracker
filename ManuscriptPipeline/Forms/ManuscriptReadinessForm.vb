@@ -606,8 +606,13 @@ Namespace Forms
                     profile
                 )
 
+            ' A list read by the AI assistant can miss requirements (#95).
+            Dim includesSuggestions As Boolean =
+                _displayedItems.Any(Function(item) item.Suggestion IsNot Nothing)
+
             lblSummary.Text =
-                FormatSummary(summary)
+                FormatSummary(summary) &
+                If(includesSuggestions, Environment.NewLine & AiFoundNote, String.Empty)
 
             If _displayedItems.Count > 0 Then
 
@@ -690,10 +695,15 @@ Namespace Forms
                 "  •  " &
                 category &
                 "  —  " &
-                item.Title
+                item.Title &
+                If(item.Suggestion IsNot Nothing, "  •  AI suggestion", String.Empty)
             )
 
         End Function
+
+
+        Friend Const AiFoundNote As String =
+            "Includes requirements found by the AI assistant. It can miss some, so check the journal's instructions."
 
 
         Private Function FormatSummary(
@@ -783,9 +793,14 @@ Namespace Forms
                         item.UserNotes.Trim()
                 )
 
+            ' Where an AI-found requirement came from (#95).
+            Dim origin As String =
+                AssistantSuggestionService.DescribeRequirement(item.Suggestion, DateTime.UtcNow)
+
             txtItemDetail.Text =
                 item.Title & Environment.NewLine & Environment.NewLine &
                 description & Environment.NewLine & Environment.NewLine &
+                If(origin.Length > 0, origin & Environment.NewLine & Environment.NewLine, String.Empty) &
                 notes
 
             UpdateItemButtons()
@@ -1136,6 +1151,30 @@ Namespace Forms
             End Function
 
         End Class
+
+
+        ' For tests.
+        Friend ReadOnly Property ItemLines As List(Of String)
+            Get
+                Return lstItems.Items.Cast(Of Object)().Select(Function(line) line.ToString()).ToList()
+            End Get
+        End Property
+
+        Friend ReadOnly Property ItemDetailText As String
+            Get
+                Return txtItemDetail.Text
+            End Get
+        End Property
+
+        Friend ReadOnly Property SummaryText As String
+            Get
+                Return lblSummary.Text
+            End Get
+        End Property
+
+        Friend Sub SelectItemForTest(index As Integer)
+            lstItems.SelectedIndex = index
+        End Sub
 
     End Class
 
