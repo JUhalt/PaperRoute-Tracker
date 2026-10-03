@@ -282,6 +282,46 @@ Public Class AssistantDraftingTests
             End Sub)
     End Sub
 
+    ' Each window's sizes are written at 96 DPI. Without that reference a
+    ' window keeps its 100% size on a 150% display, which a check of the
+    ' v0.9 windows at 150% found in Before Sending.
+    <TestMethod>
+    Public Sub EveryAssistantWindowScalesWithTheDisplay()
+        RunOnSta(
+            Sub()
+                OnlineAccess.Configure(AssistantCoreTests.ClaudeSettings())
+                Dim request As AssistantRequest = AssistantService.BuildLetterRequest(AssistantCoreTests.Letter)
+                Dim windows As New List(Of Form) From {
+                    New AssistantConsentForm(request, OnlineAccess.CurrentAssistant()),
+                    New DecisionLetterForm(DecisionLetterMode.NewDecision, New JournalSubmission()),
+                    New AssistantDraftForm(AssistantService.BuildResponseRequest("Reviewer 1", "Clarify the sample.", ""), String.Empty),
+                    New CoverLetterForm("Example: open materials", "Fictional Open Psychology", "Journal article", {"open science"}, "An abstract."),
+                    ApiKeyForm.ForAssistant(ProtectedKeyStore.Anthropic),
+                    ApiKeyForm.ForAssistant(ProtectedKeyStore.AssistantEndpoint)
+                }
+                Try
+                    For Each window As Form In windows
+                        Assert.AreEqual(New SizeF(96.0F, 96.0F), window.AutoScaleDimensions, window.Text)
+                        Assert.AreEqual(AutoScaleMode.Dpi, window.AutoScaleMode, window.Text)
+                    Next
+
+                    ' Before Sending at its smallest size still shows its choices.
+                    Dim consent As Form = windows(0)
+                    ShowOffscreen(consent)
+                    consent.Size = consent.MinimumSize
+                    consent.PerformLayout()
+                    Application.DoEvents()
+                    For Each button As Button In {DirectCast(consent.AcceptButton, Button), DirectCast(consent.CancelButton, Button)}
+                        AssertInside(consent, button)
+                    Next
+                Finally
+                    For Each window As Form In windows
+                        window.Dispose()
+                    Next
+                End Try
+            End Sub)
+    End Sub
+
     <TestMethod>
     <DataRow(SystemColorMode.Classic)>
     <DataRow(SystemColorMode.Dark)>

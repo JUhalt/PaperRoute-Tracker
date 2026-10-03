@@ -114,8 +114,19 @@ Namespace Services
                 Throw New ArgumentNullException(NameOf(dialog))
             End If
 
-            Dim area As Rectangle =
+            FitToWorkingArea(
+                dialog,
                 Screen.FromControl(If(dialog.Owner, dialog)).WorkingArea
+            )
+
+        End Sub
+
+
+        Public Shared Sub FitToWorkingArea(dialog As Form, area As Rectangle)
+
+            If dialog Is Nothing Then
+                Throw New ArgumentNullException(NameOf(dialog))
+            End If
 
             ' A minimum larger than this screen (scaled for another display)
             ' would hold the window at a size that can't fit.

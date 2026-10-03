@@ -30,6 +30,10 @@ Not released yet. These changes are merged to master through [PR #94](https://gi
 - Settings are saved by writing a new file and swapping it in, keeping the previous one as settings.bak. If the settings can't be read, PaperRoute works offline until you review Online services ([#86](https://github.com/JUhalt/PaperRoute-Tracker/issues/86)).
 - Network problems are explained in plain words (no connection, a timeout, a busy service) instead of the system's message, and a publication check or Fill Blanks run stops once, with the reason, when a service is turned off.
 
+### Fixed
+
+- At 150% display scaling, buttons drawn larger than their text (such as Save and Cancel in Look Up Journal Facts) no longer overlap one another or get cut off: layouts now place them at the size they are drawn. Find Journals and Before Sending now scale with the display, and every new v0.9 window stays inside the screen, so its buttons never sit behind the taskbar.
+
 ### Storage
 
 - **Schema 9** adds journal shortlists (with the evidence behind a suggested journal), and journal ISSNs, links, facts, and metrics. As with Schemas 7 and 8, the upgrade validates the library and changes only the schema marker.

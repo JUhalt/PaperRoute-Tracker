@@ -22,14 +22,21 @@ Namespace Forms
 
         Public Sub New(request As AssistantRequest, connection As AssistantConnection)
 
+            ' Laid out once, after every control exists, so the scale for the
+            ' display reaches all of them.
+            SuspendLayout()
+
             Text = "Before Sending"
-            Font = _font
-            AutoScaleMode = AutoScaleMode.Dpi
             StartPosition = FormStartPosition.CenterParent
-            Size = New Size(820, 640)
-            MinimumSize = New Size(560, 420)
             ShowInTaskbar = False
             MinimizeBox = False
+            ' Sizes below are at 96 DPI and scale with the display, so the
+            ' window keeps its proportions at 125% and 150%.
+            AutoScaleDimensions = New SizeF(96.0F, 96.0F)
+            ClientSize = New Size(800, 600)
+            MinimumSize = New Size(560, 420)
+            Font = _font
+            AutoScaleMode = AutoScaleMode.Dpi
 
             Dim root As New TableLayoutPanel With {.Dock = DockStyle.Fill, .ColumnCount = 1, .RowCount = 5, .Padding = New Padding(18)}
             root.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
@@ -82,13 +89,25 @@ Namespace Forms
             AcceptButton = send
             CancelButton = cancel
             AddHandler Resize, Sub(sender, e)
-                                   Dim width As Integer = Math.Max(200, root.ClientSize.Width - root.Padding.Horizontal)
+                                   Dim width As Integer = Math.Max(LogicalToDeviceUnits(200), root.ClientSize.Width - root.Padding.Horizontal)
                                    intro.MaximumSize = New Size(width, 0)
                                    note.MaximumSize = New Size(width, 0)
                                End Sub
+
+            ResumeLayout(False)
+            PerformLayout()
+
             UiPolish.ApplyDialog(Me)
             ActiveControl = cancel
 
+        End Sub
+
+
+        ' On a small screen at a high scale, the window keeps its buttons
+        ' above the taskbar.
+        Protected Overrides Sub OnLoad(e As EventArgs)
+            MyBase.OnLoad(e)
+            ResponsiveDialogSizingService.FitToWorkingArea(Me)
         End Sub
 
         Public ReadOnly Property DontAskAgain As Boolean

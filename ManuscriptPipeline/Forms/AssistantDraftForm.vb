@@ -51,6 +51,14 @@ Namespace Forms
         Private ReadOnly btnCancel As New Button()
 
 
+        ' On a small screen or at a high scale, the window keeps its buttons
+        ' above the taskbar.
+        Protected Overrides Sub OnLoad(e As EventArgs)
+            MyBase.OnLoad(e)
+            ResponsiveDialogSizingService.FitToWorkingArea(Me)
+        End Sub
+
+
         ' request: already confirmed by the caller; currentDraft: the
         ' response box's text, which decides between Use and Replace or Add.
         Public Sub New(request As AssistantRequest, currentDraft As String)
