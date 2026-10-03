@@ -245,6 +245,9 @@ Namespace Services
                                            .Checks = New List(Of String) From {"trust.known", "trust.fees", "fit.fees"},
                                            .Evidence = New CandidateEvidence With {
                                                .Source = JournalFactCatalog.ExampleSource,
+                                               .Publisher = openPsychology.Publisher,
+                                               .Topics = New List(Of String) From {"Psychometrics and measurement", "Personality and self-regulation"},
+                                               .HomepageUrl = "https://example.org/fictional-open-psychology",
                                                .Keywords = New List(Of String) From {"measurement invariance", "grit"},
                                                .MatchAll = True,
                                                .SinceDate = day.AddYears(-5),

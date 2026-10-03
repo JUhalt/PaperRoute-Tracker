@@ -474,14 +474,16 @@ Not sure where to start? **Find Journals...** on the shortlist looks for journal
 
 1. **Review the keywords.** PaperRoute proposes the manuscript's keywords (checked) and phrases from its title (unchecked). Check the ones that describe the work, or add your own. Choose whether articles must match every keyword or any keyword, and how many years back to look.
 2. **See what will be sent.** Before searching, the window shows the exact request: the keywords you checked and a start date, and nothing else. A phrase from the title is sent only if you check it; the abstract, notes, and files are never sent. **Show the exact web address** shows the address itself.
-3. **Read the evidence.** Each journal found shows how many matching articles it published, out of all its articles in those years, whether it is open access and its listed fee, your own history with it, and up to three recent matching articles, linked by DOI.
-4. **Add the ones worth a look.** **Add Checked to Shortlist** adds them as **Considering**, with the evidence, and nothing else changes. Journals already on the shortlist can't be added twice. Save the manuscript page to keep them.
+3. **Read the evidence.** Each journal found shows its publisher, how many matching articles it published, out of all its articles in those years, whether it is open access and its listed fee, your own history with it, and up to three recent matching articles, linked by DOI.
+4. **Add the ones worth a look.** **Add Checked to Shortlist** adds them as **Considering**, with the evidence, including the journal's publisher, main topics, and homepage from OpenAlex, and nothing else changes. Journals already on the shortlist can't be added twice. Save the manuscript page to keep them.
 
 OpenAlex searches the titles, abstracts, and full text of articles, so a match means an article mentions your keywords, not that it is about the same topic. Counts favor large journals, and they are evidence to read, never a ranking of quality or of your chances. PaperRoute never scores journals or labels any as predatory; the questions above are there for that judgment.
 
 Without a key, OpenAlex allows a small amount of use each day and sometimes asks keyword searches to wait when it is busy. PaperRoute says how long, and a free OpenAlex key, added in **Settings > Preferences... > Online services**, raises the allowance.
 
-When a shortlisted journal has facts on the **Journals** page, its row shows them in one line, and the questions show what's known beside them, such as its peer review type beside the peer review question, with links to its aims and scope, author instructions, and sharing policy. The questions are never answered for you.
+While **Work offline** is on, or Find journals is turned off in Online services, **Find Journals...** is unavailable and the shortlist says why.
+
+When a shortlisted journal has facts on the **Journals** page, its row shows them in one line, and the questions show what's known beside them, such as its peer review type beside the peer review question, its main topics and homepage beside the aims and scope question, and links to its aims and scope, author instructions, and sharing policy. For a journal added by **Find Journals...**, what OpenAlex gave fills in where the Journals page has nothing: its main topics and homepage beside the aims and scope question, and its publisher beside the publisher question, each marked with its source. The questions are never answered for you.
 
 ## Journal Submissions
 

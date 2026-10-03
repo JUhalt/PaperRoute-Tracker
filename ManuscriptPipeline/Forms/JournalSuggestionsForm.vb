@@ -25,6 +25,12 @@ Namespace Forms
             Evidence
         End Enum
 
+        ' The journals list's columns.
+        Private Const JournalColumn As Integer = 0
+        Private Const PublisherColumn As Integer = 1
+        Private Const MatchesColumn As Integer = 2
+        Private Const ShareColumn As Integer = 3
+
         Private ReadOnly _source As IJournalSuggestionsSource
         Private ReadOnly _isOnShortlist As Func(Of JournalSuggestion, Boolean)
         Private ReadOnly _yoursFor As Func(Of JournalSuggestion, String)
@@ -37,7 +43,7 @@ Namespace Forms
         Private _examplesBusyUntil As DateTime
         Private _result As JournalSuggestionsResult
         Private _allowCheck As Boolean
-        Private _sortColumn As Integer = 1
+        Private _sortColumn As Integer = MatchesColumn
         Private _waitUntil As DateTime?
 
         Private ReadOnly lblIntro As New Label()
@@ -116,7 +122,7 @@ Namespace Forms
             MinimizeBox = False
             ' Sizes below are at 96 DPI and scale with the display.
             AutoScaleDimensions = New SizeF(96.0F, 96.0F)
-            ClientSize = New Size(980, 640)
+            ClientSize = New Size(1120, 640)
             MinimumSize = New Size(700, 500)
             Font = New Font("Segoe UI", 10.0F)
             AutoScaleMode = AutoScaleMode.Dpi
@@ -303,10 +309,11 @@ Namespace Forms
             lvJournals.BackColor = UiTheme.CardBackground()
             lvJournals.ForeColor = UiTheme.PrimaryText()
             lvJournals.AccessibleName = "Journals that published matching articles"
-            lvJournals.Columns.Add("Journal", LogicalToDeviceUnits(250))
+            lvJournals.Columns.Add("Journal", LogicalToDeviceUnits(230))
+            lvJournals.Columns.Add("Publisher", LogicalToDeviceUnits(180))
             lvJournals.Columns.Add("Matching articles", LogicalToDeviceUnits(120), HorizontalAlignment.Right)
-            lvJournals.Columns.Add("Of all its articles", LogicalToDeviceUnits(140), HorizontalAlignment.Right)
-            lvJournals.Columns.Add("Open access and listed fee", LogicalToDeviceUnits(270))
+            lvJournals.Columns.Add("Of all its articles", LogicalToDeviceUnits(150), HorizontalAlignment.Right)
+            lvJournals.Columns.Add("Open access and listed fee", LogicalToDeviceUnits(230))
             lvJournals.Columns.Add("Yours", LogicalToDeviceUnits(150))
             AddHandler lvJournals.ItemCheck, AddressOf JournalChecking
             AddHandler lvJournals.ItemChecked, Sub(sender, e) RefreshAddButton()
@@ -466,7 +473,7 @@ Namespace Forms
 
             _result = result
             _stage = Stage.Evidence
-            _sortColumn = 1
+            _sortColumn = MatchesColumn
             If result.ExamplesBusy IsNot Nothing Then NoteExamplesBusy(result.ExamplesBusy)
             body.Controls.Clear()
             body.Controls.Add(evidencePanel)
@@ -518,6 +525,7 @@ Namespace Forms
             Dim yours As String = If(onShortlist, "On your shortlist", _yoursFor(journal))
             Dim item As New ListViewItem({
                 journal.Name,
+                If(journal.Publisher, String.Empty),
                 journal.MatchingArticles.ToString("N0", CultureInfo.CurrentCulture),
                 JournalSuggestionService.ShareText(journal),
                 JournalSuggestionService.AccessText(journal),
@@ -549,9 +557,10 @@ Namespace Forms
         End Sub
 
 
-        ' Sorting by journal, matches, or share only: never by a metric.
+        ' Sorting by journal, publisher, matches, or share only: never by a
+        ' metric.
         Private Sub SortBy(sender As Object, e As ColumnClickEventArgs)
-            If e.Column > 2 Then Return
+            If e.Column > ShareColumn Then Return
             _sortColumn = e.Column
             SortItems()
         End Sub
@@ -562,8 +571,12 @@ Namespace Forms
             Dim journalOf As Func(Of ListViewItem, JournalSuggestion) = Function(item) DirectCast(item.Tag, JournalSuggestion)
             Dim share As Func(Of JournalSuggestion, Double) = Function(journal) If(journal.AllArticles.HasValue AndAlso journal.AllArticles.Value > 0, journal.MatchingArticles / CDbl(journal.AllArticles.Value), -1)
             Select Case _sortColumn
-                Case 0 : items = items.OrderBy(Function(item) journalOf(item).Name, StringComparer.CurrentCultureIgnoreCase).ToList()
-                Case 2 : items = items.OrderByDescending(Function(item) share(journalOf(item))).ThenBy(Function(item) journalOf(item).Name, StringComparer.CurrentCultureIgnoreCase).ToList()
+                Case JournalColumn : items = items.OrderBy(Function(item) journalOf(item).Name, StringComparer.CurrentCultureIgnoreCase).ToList()
+                ' An unknown publisher sorts last.
+                Case PublisherColumn : items = items.OrderBy(Function(item) String.IsNullOrWhiteSpace(journalOf(item).Publisher)).
+                                           ThenBy(Function(item) journalOf(item).Publisher, StringComparer.CurrentCultureIgnoreCase).
+                                           ThenBy(Function(item) journalOf(item).Name, StringComparer.CurrentCultureIgnoreCase).ToList()
+                Case ShareColumn : items = items.OrderByDescending(Function(item) share(journalOf(item))).ThenBy(Function(item) journalOf(item).Name, StringComparer.CurrentCultureIgnoreCase).ToList()
                 Case Else : items = items.OrderByDescending(Function(item) journalOf(item).MatchingArticles).ThenBy(Function(item) journalOf(item).Name, StringComparer.CurrentCultureIgnoreCase).ToList()
             End Select
             Dim wasAllowed As Boolean = _allowCheck
@@ -806,6 +819,10 @@ Namespace Forms
         Friend Function ShowExamplesForTest() As Task
             Return ShowExamplesAsync()
         End Function
+
+        Friend Sub SortByForTest(column As Integer)
+            SortBy(lvJournals, New ColumnClickEventArgs(column))
+        End Sub
 
     End Class
 

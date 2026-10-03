@@ -556,12 +556,43 @@ Public Class JournalFactsTests
         JournalFactsService.Apply(record, JournalFactsService.Plan(record, PlosLookup()))
 
         Assert.AreEqual("Open access (DOAJ) · Up to USD " & Money(2477) & " (waivers available) · Single anonymous peer review · about 29 weeks to publication", JournalFactsService.OneLine(record))
-        Assert.AreEqual("Peer review: Single anonymous peer review (DOAJ)", JournalFactsService.HintFor("trust.review", record).Text)
-        Assert.AreEqual("Fee: Up to USD " & Money(2477) & " (waivers available) (DOAJ)", JournalFactsService.HintFor("fit.fees", record).Text)
-        Assert.AreEqual(record.AuthorInstructionsUrl, JournalFactsService.HintFor("trust.guidelines", record).Url)
-        Assert.AreEqual("https://openpolicyfinder.jisc.ac.uk/id/publication/17599", JournalFactsService.HintFor("fit.sharing", record).Url)
-        Assert.AreEqual(String.Empty, JournalFactsService.HintFor("fit.audience", record).Text, "Only questions a fact helps with get a hint.")
+        Assert.AreEqual("Peer review: Single anonymous peer review (DOAJ)", JournalFactsService.HintFor("trust.review", record).Single().Text)
+        Assert.AreEqual("Fee: Up to USD " & Money(2477) & " (waivers available) (DOAJ)", JournalFactsService.HintFor("fit.fees", record).Single().Text)
+        Assert.AreEqual(record.AuthorInstructionsUrl, JournalFactsService.HintFor("trust.guidelines", record).Single().Url)
+        Assert.AreEqual("https://openpolicyfinder.jisc.ac.uk/id/publication/17599", JournalFactsService.HintFor("fit.sharing", record).Single().Url)
+        Assert.AreEqual(0, JournalFactsService.HintFor("fit.audience", record).Count, "Only questions a fact helps with get a hint.")
         Assert.AreEqual(String.Empty, JournalFactsService.OneLine(New JournalRecord()))
+
+        ' Beside the scope question (#96): the main topics, then the aims and
+        ' scope, then the homepage, each with its source.
+        Dim scope = JournalFactsService.HintFor("fit.scope", record)
+        CollectionAssert.AreEqual({"Main topics: HIV/AIDS Research and Interventions · Plant and animal studies · Global Maternal and Child Health (OpenAlex)",
+                                   "Open aims and scope", "Open homepage (DOAJ)"}, scope.Select(Function(item) item.Text).ToList())
+        CollectionAssert.AreEqual({String.Empty, record.AimsScopeUrl, "https://journals.plos.org/plosone/"}, scope.Select(Function(item) item.Url).ToList())
+
+        ' A journal found by Find Journals, not in the Journal Library: what
+        ' its evidence kept, with its source.
+        Dim evidence As New CandidateEvidence With {
+            .Source = "OpenAlex", .Publisher = "Nature Portfolio",
+            .Topics = New List(Of String) From {"Cancer-related molecular mechanisms research", "MicroRNA in disease regulation"},
+            .HomepageUrl = "http://www.nature.com/srep/index.html"
+        }
+        Dim found = JournalFactsService.HintFor("fit.scope", Nothing, evidence)
+        CollectionAssert.AreEqual({"Main topics: Cancer-related molecular mechanisms research · MicroRNA in disease regulation (OpenAlex)", "Open homepage (OpenAlex)"},
+                                  found.Select(Function(item) item.Text).ToList())
+        Assert.AreEqual("http://www.nature.com/srep/index.html", found(1).Url)
+        Assert.AreEqual("Publisher: Nature Portfolio (OpenAlex)", JournalFactsService.HintFor("trust.publisher", Nothing, evidence).Single().Text)
+        Assert.AreEqual(0, JournalFactsService.HintFor("trust.review", Nothing, evidence).Count)
+
+        ' The Journal Library's own values come first; the evidence fills in.
+        Dim typed As New JournalRecord With {.Name = "Scientific Reports", .Publisher = "Springer Nature", .HomepageUrl = "https://www.nature.com/srep/"}
+        Assert.AreEqual("Publisher: Springer Nature", JournalFactsService.HintFor("trust.publisher", typed, evidence).Single().Text)
+        Dim mixed = JournalFactsService.HintFor("fit.scope", typed, evidence)
+        CollectionAssert.AreEqual({"Main topics: Cancer-related molecular mechanisms research · MicroRNA in disease regulation (OpenAlex)", "Open homepage"},
+                                  mixed.Select(Function(item) item.Text).ToList(), "A homepage you typed has no source.")
+        Assert.AreEqual("https://www.nature.com/srep/", mixed(1).Url)
+        evidence.HomepageUrl = "javascript:alert(1)"
+        Assert.IsFalse(JournalFactsService.HintFor("fit.scope", Nothing, evidence).Any(Function(item) item.Url.Length > 0), "Only web addresses are linked.")
 
         StringAssert.StartsWith(JournalFactsService.SourcesLine(record), "Facts from DOAJ and OpenAlex, public domain (CC0), checked ")
         Assert.IsFalse(JournalFactsService.IsStale(Checked, Checked.AddDays(365)))
@@ -786,6 +817,42 @@ Public Class JournalFactsTests
                     dialog.JournalBox.Text = "Another Journal"
                     Application.DoEvents()
                     Assert.IsFalse(dialog.Hints("trust.review").Visible)
+                    dialog.Close()
+                End Using
+
+                ' A journal found by Find Journals and not in the Journal
+                ' Library (#96): its evidence's topics and homepage beside the
+                ' scope question, and its publisher beside the publisher one.
+                Dim found As New JournalCandidate With {
+                    .JournalName = "Scientific Reports",
+                    .Evidence = New CandidateEvidence With {
+                        .Source = "OpenAlex", .Publisher = "Nature Portfolio",
+                        .Topics = New List(Of String) From {"Cancer-related molecular mechanisms research", "MicroRNA in disease regulation", "Gut microbiota and health"},
+                        .HomepageUrl = "http://www.nature.com/srep/index.html"
+                    }
+                }
+                Using dialog As New JournalCandidateForm(found, {"PLOS ONE"}, Function(name) "No submissions yet.", Function(name) Nothing)
+                    ShowOffscreen(dialog)
+                    Dim scope As LinkLabel = dialog.Hints("fit.scope")
+                    Assert.IsTrue(scope.Visible)
+                    StringAssert.StartsWith(scope.Text, "Main topics: Cancer-related molecular mechanisms research · MicroRNA in disease regulation · Gut microbiota and health (OpenAlex)")
+                    StringAssert.EndsWith(scope.Text, Environment.NewLine & "Open homepage (OpenAlex)")
+                    Dim homepage As LinkLabel.Link = scope.Links.Cast(Of LinkLabel.Link)().Single()
+                    Assert.AreEqual("http://www.nature.com/srep/index.html", CStr(homepage.LinkData))
+                    Assert.AreEqual("Open homepage (OpenAlex)", scope.Text.Substring(homepage.Start, homepage.Length), "Only the link's own line is linked.")
+                    Assert.AreEqual("Publisher: Nature Portfolio (OpenAlex)", dialog.Hints("trust.publisher").Text)
+                    Assert.AreEqual(0, dialog.Hints("trust.publisher").Links.Count)
+                    Assert.IsFalse(dialog.Hints("trust.review").Visible)
+
+                    ' Another journal's name: the evidence isn't its own.
+                    dialog.JournalBox.Text = "Another Journal"
+                    Application.DoEvents()
+                    Assert.IsFalse(dialog.Hints("fit.scope").Visible)
+                    Assert.IsFalse(dialog.Hints("trust.publisher").Visible)
+                    dialog.JournalBox.Text = "scientific  reports"
+                    Application.DoEvents()
+                    Assert.IsTrue(dialog.Hints("fit.scope").Visible, "The same journal, however it is typed.")
+                    Assert.IsFalse(dialog.CheckBoxes.Any(Function(box) box.Checked), "Nothing is ticked for you.")
                     dialog.Close()
                 End Using
             End Sub)

@@ -29,6 +29,11 @@ Namespace Forms
         Private ReadOnly _factsFor As Func(Of String, JournalRecord)
         Private ReadOnly _hints As New Dictionary(Of String, LinkLabel)(StringComparer.Ordinal)
 
+        ' What Find Journals kept for this journal (#96), shown only while the
+        ' journal box still names it.
+        Private ReadOnly _evidence As CandidateEvidence
+        Private ReadOnly _evidenceKey As String = String.Empty
+
         ' Opens Help at "Choosing a Journal"; tests replace it.
         Friend GuidePrompt As Action = Nothing
 
@@ -63,6 +68,8 @@ Namespace Forms
                 Status = candidate.Status
                 Notes = If(candidate.Notes, String.Empty)
                 Checks = If(candidate.Checks, New List(Of String)()).ToList()
+                _evidence = candidate.Evidence
+                _evidenceKey = RouteAnalyticsService.NameKey(candidate.JournalName)
             End If
 
             BuildInterface(candidate Is Nothing, If(journalNames, Enumerable.Empty(Of String)()))
@@ -288,25 +295,34 @@ Namespace Forms
             Dim name As String = cmbJournal.Text.Trim()
             btnOk.Enabled = name.Length > 0
             lblHistory.Text = If(name.Length = 0 OrElse _history Is Nothing, "Choose or type a journal.", "Your history with this journal: " & _history(name))
-            RefreshHints(If(name.Length = 0 OrElse _factsFor Is Nothing, Nothing, _factsFor(name)))
+            Dim evidence As CandidateEvidence = If(name.Length > 0 AndAlso _evidence IsNot Nothing AndAlso RouteAnalyticsService.NameKey(name) = _evidenceKey, _evidence, Nothing)
+            RefreshHints(If(name.Length = 0 OrElse _factsFor Is Nothing, Nothing, _factsFor(name)), evidence)
         End Sub
 
 
-        ' A fact or link from the Journals page under the question it helps
-        ' answer; a link opens in the browser.
-        Private Sub RefreshHints(record As JournalRecord)
+        ' Facts and links from the Journals page, or from Find Journals'
+        ' evidence, under the question they help answer, one per line; a
+        ' link opens in the browser.
+        Private Sub RefreshHints(record As JournalRecord, evidence As CandidateEvidence)
             For Each pair As KeyValuePair(Of String, LinkLabel) In _hints
-                Dim hint = JournalFactsService.HintFor(pair.Key, record)
-                pair.Value.Text = hint.Text
-                pair.Value.Tag = hint.Url
-                pair.Value.LinkArea = If(hint.Url.Length > 0, New LinkArea(0, hint.Text.Length), New LinkArea(0, 0))
-                pair.Value.Visible = hint.Text.Length > 0
+                Dim parts As List(Of (Text As String, Url As String)) = JournalFactsService.HintFor(pair.Key, record, evidence)
+                Dim hint As LinkLabel = pair.Value
+                ' The text first, so each link's place is within it.
+                hint.Text = String.Join(Environment.NewLine, parts.Select(Function(part) part.Text))
+                hint.Links.Clear()
+                Dim start As Integer = 0
+                For Each part As (Text As String, Url As String) In parts
+                    If part.Url.Length > 0 Then hint.Links.Add(start, part.Text.Length, part.Url)
+                    start += part.Text.Length + Environment.NewLine.Length
+                Next
+                hint.Tag = If(parts.Select(Function(part) part.Url).FirstOrDefault(Function(url) url.Length > 0), String.Empty)
+                hint.Visible = parts.Count > 0
             Next
         End Sub
 
 
         Private Sub OpenHint(sender As Object, e As LinkLabelLinkClickedEventArgs)
-            Dim url As String = TryCast(DirectCast(sender, LinkLabel).Tag, String)
+            Dim url As String = If(TryCast(e.Link?.LinkData, String), TryCast(DirectCast(sender, LinkLabel).Tag, String))
             If String.IsNullOrEmpty(url) Then Return
             Try
                 UrlSafetyService.OpenInBrowser(url)
