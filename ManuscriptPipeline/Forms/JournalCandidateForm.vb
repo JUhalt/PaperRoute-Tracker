@@ -310,10 +310,13 @@ Namespace Forms
                 ' The text first, so each link's place is within it.
                 hint.Text = String.Join(Environment.NewLine, parts.Select(Function(part) part.Text))
                 hint.Links.Clear()
+                ' LinkLabel places links by text element, not by character:
+                ' each line break (CR LF) counts as one.
                 Dim start As Integer = 0
                 For Each part As (Text As String, Url As String) In parts
-                    If part.Url.Length > 0 Then hint.Links.Add(start, part.Text.Length, part.Url)
-                    start += part.Text.Length + Environment.NewLine.Length
+                    Dim length As Integer = New System.Globalization.StringInfo(part.Text).LengthInTextElements
+                    If part.Url.Length > 0 Then hint.Links.Add(start, length, part.Url)
+                    start += length + 1
                 Next
                 hint.Tag = If(parts.Select(Function(part) part.Url).FirstOrDefault(Function(url) url.Length > 0), String.Empty)
                 hint.Visible = parts.Count > 0

@@ -81,9 +81,13 @@ Public Class AssistantSettingsTests
                     Assert.IsTrue(card.ClaudeModel.Enabled AndAlso card.AddClaudeKey.Enabled)
                     Assert.IsFalse(card.Address.Enabled OrElse card.ServerModel.Enabled, "Only the chosen service's setup.")
                     Assert.IsTrue(card.HasLabel("On. Set up under AI assistant below.", contains:=True))
-                    Assert.IsTrue(card.TestConnection.Enabled, "Claude can be tested before Save.")
-                    Assert.AreEqual("Test Connection sends only your Claude key to api.anthropic.com, to list the models your account can use.", card.TestSends.Text)
+                    Assert.IsFalse(card.TestConnection.Enabled, "Claude needs a key to test.")
+                    Assert.AreEqual("Add your Claude key to test the connection.", card.TestSends.Text)
                     Assert.AreEqual(card.TestSends.Text, card.TestConnection.AccessibleDescription)
+                    dialog.assistantKeyPrompt = Function(owner, name) ClaudeTestKey
+                    card.AddClaudeKey.PerformClick()
+                    Assert.IsTrue(card.TestConnection.Enabled, "Claude can be tested before Save, with the key added but not saved.")
+                    Assert.AreEqual("Test Connection sends only your Claude key to api.anthropic.com, to list the models your account can use and check the one you chose.", card.TestSends.Text)
 
                     card.Compatible.Checked = True
                     Assert.IsFalse(card.ClaudeModel.Enabled OrElse card.AddClaudeKey.Enabled)
@@ -203,7 +207,8 @@ Public Class AssistantSettingsTests
                     Dim card As New Card(dialog)
                     card.TurnOn.Checked = True
 
-                    ' Without a key, nothing is sent.
+                    ' Without a key, it can't be chosen, and nothing is sent.
+                    Assert.IsFalse(card.TestConnection.Enabled)
                     PumpUntilComplete(dialog.TestConnectionAsync())
                     Assert.AreEqual("Add your Claude key first. Nothing was sent.", dialog.TestResultText)
                     Assert.AreEqual(0, network.Requests.Count)
@@ -233,9 +238,32 @@ Public Class AssistantSettingsTests
                     card.ClaudeModel.Text = "claude-sonnet-5-5"
                     Assert.AreEqual(String.Empty, dialog.TestResultText, "A result stays only for the setup it tested.")
                     card.ClaudeModel.Text = "claude-opus-5"
-                    card.ClaudeModel.Width += 7
+                    Dim before As Integer = card.ClaudeModel.Width
+                    card.ClaudeModel.Width -= 9
+                    Assert.AreNotEqual(before, card.ClaudeModel.Width, "The box really was resized.")
                     Application.DoEvents()
                     Assert.AreEqual("claude-opus-5", card.ClaudeModel.Text, "Not claude-opus-5-5, the first listed name that starts with it.")
+
+                    ' A model typed in another case keeps its case, and its result stays.
+                    card.ClaudeModel.Text = "Claude-Opus-5-5"
+                    PumpUntilComplete(dialog.TestConnectionAsync())
+                    Assert.AreEqual("Claude-Opus-5-5", card.ClaudeModel.Text, "Not changed to the listed claude-opus-5-5.")
+                    StringAssert.StartsWith(dialog.TestResultText, "Connected.")
+
+                    ' Changing the setup during a test stops the test.
+                    network.Hold = Function(request) request.Uri.Host = "ai.example.org"
+                    card.Compatible.Checked = True
+                    card.Address.Text = "https://ai.example.org/v1"
+                    card.ServerModel.Text = "llama3.1"
+                    Dim waiting As Threading.Tasks.Task = dialog.TestConnectionAsync()
+                    Application.DoEvents()
+                    Assert.AreEqual("Testing the connection...", dialog.TestResultText)
+                    Assert.IsFalse(card.TestConnection.Enabled)
+                    card.Address.Text = "http://localhost:11434/v1"
+                    PumpUntilComplete(waiting)
+                    Assert.AreEqual(String.Empty, dialog.TestResultText, "The stopped test's answer isn't shown.")
+                    Assert.IsTrue(card.TestConnection.Enabled, "Ready at once for the setup as it is now.")
+                    network.Hold = Nothing
 
                     ' A model on this computer, typed and not saved.
                     card.Compatible.Checked = True

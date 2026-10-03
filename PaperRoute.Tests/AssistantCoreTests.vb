@@ -395,7 +395,7 @@ Public Class AssistantCoreTests
         ' Saved, the assistant is off: the trial is what the window shows.
         OnlineAccess.Configure(New OnlineServicesSettings())
         Dim trial As AssistantTrial = ClaudeTrial("claude-opus-5-5", pendingKey:="sk-ant-test-key-0001")
-        Assert.AreEqual("Test Connection sends only your Claude key to api.anthropic.com, to list the models your account can use.", AssistantConnectionTest.WhatIsSent(trial.Connection, True))
+        Assert.AreEqual("Test Connection sends only your Claude key to api.anthropic.com, to list the models your account can use and check the one you chose.", AssistantConnectionTest.WhatIsSent(trial.Connection, True))
 
         Dim result As AssistantTestResult = RunTest(trial)
         Assert.IsTrue(result.Succeeded)
@@ -726,7 +726,7 @@ Public Class AssistantCoreTests
         StringAssert.Contains(source, ".MaxRetries = 0", "...and never resends the text by itself.")
         ' Test Connection (#96) is listed with what it sends, and goes through the gate too.
         For Each item As OnlineService In {claude, compatible}
-            StringAssert.Contains(item.Sends, "Test Connection in Preferences sends only the key, if you added one, to list the models.")
+            StringAssert.Contains(item.Sends, "Test Connection in Preferences sends only the key, if you added one, to list the models and check the one you chose.")
             StringAssert.Contains(item.WhenUsed, "and Test Connection,")
         Next
         StringAssert.Contains(source, "OnlineAccess.CreateTrialClient(trial", "Test Connection uses the gate's client for the setup in the window.")
@@ -895,6 +895,10 @@ Public Class AssistantCoreTests
         Public ReadOnly Requests As New List(Of SentRequest)()
         Public Property Respond As Func(Of SentRequest, HttpResponseMessage)
 
+        ' A request this returns True for waits until it is cancelled, like
+        ' a server that never answers.
+        Public Property Hold As Func(Of SentRequest, Boolean)
+
         Protected Overrides Async Function SendAsync(request As HttpRequestMessage, cancellationToken As CancellationToken) As Task(Of HttpResponseMessage)
             Dim sent As New SentRequest With {.Method = request.Method, .Uri = request.RequestUri}
             For Each header In request.Headers
@@ -904,6 +908,7 @@ Public Class AssistantCoreTests
             SyncLock Requests
                 Requests.Add(sent)
             End SyncLock
+            If Hold IsNot Nothing AndAlso Hold(sent) Then Await Task.Delay(Timeout.Infinite, cancellationToken)
             Dim response As HttpResponseMessage = Respond(sent)
             response.RequestMessage = request
             Return response

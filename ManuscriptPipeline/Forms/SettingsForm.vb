@@ -1377,13 +1377,19 @@ Namespace Forms
                                row.WillHaveKey.ToString(), _keyEdits.ToString(Globalization.CultureInfo.InvariantCulture)))
 
             If Not String.Equals(setup, _testedSetup, StringComparison.Ordinal) Then
+                ' A test of the setup as it was is stopped; its answer would
+                ' no longer apply.
+                _testCancellation?.Cancel()
                 _testedSetup = setup
                 _testGeneration += 1
                 ShowTestResult(String.Empty, UiTheme.PrimaryText())
             End If
 
-            btnTestConnection.Enabled = _testCancellation Is Nothing AndAlso Not chkWorkOffline.Checked AndAlso connection IsNot Nothing
-            lblTestSends.Text = AssistantConnectionTest.WhatIsSent(connection, row.WillHaveKey)
+            ' Claude can't be tested without a key; say so rather than offer it.
+            Dim needsKey As Boolean = connection IsNot Nothing AndAlso connection.Provider = AssistantProvider.Claude AndAlso Not row.WillHaveKey
+
+            btnTestConnection.Enabled = _testCancellation Is Nothing AndAlso Not chkWorkOffline.Checked AndAlso connection IsNot Nothing AndAlso Not needsKey
+            lblTestSends.Text = If(needsKey, "Add your Claude key to test the connection.", AssistantConnectionTest.WhatIsSent(connection, row.WillHaveKey))
             lblTestSends.Visible = lblTestSends.Text.Length > 0
             btnTestConnection.AccessibleDescription = lblTestSends.Text
 
@@ -1470,7 +1476,9 @@ Namespace Forms
                 cboClaudeModel.Items.AddRange(models.Cast(Of Object)().ToArray())
             Finally
                 cboClaudeModel.EndUpdate()
-                cboClaudeModel.Text = typed
+                ' Clearing keeps the typed text. Setting it again would match a
+                ' listed name ignoring case and change the typed model's case.
+                If Not String.Equals(cboClaudeModel.Text, typed, StringComparison.Ordinal) Then cboClaudeModel.Text = typed
                 If Not cboClaudeModel.Focused Then cboClaudeModel.SelectionLength = 0
                 _listingModels = False
             End Try

@@ -548,7 +548,7 @@ Namespace Services
         Public Shared Function WhatIsSent(connection As AssistantConnection, willSendKey As Boolean) As String
             If connection Is Nothing Then Return String.Empty
             If connection.Provider = AssistantProvider.Claude Then
-                Return "Test Connection sends only your Claude key to " & connection.Origin.Host & ", to list the models your account can use."
+                Return "Test Connection sends only your Claude key to " & connection.Origin.Host & ", to list the models your account can use and check the one you chose."
             End If
             Dim where As String = connection.Origin.Authority
             Return If(willSendKey,

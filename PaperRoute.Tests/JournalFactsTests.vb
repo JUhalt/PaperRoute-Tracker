@@ -839,7 +839,8 @@ Public Class JournalFactsTests
                     StringAssert.EndsWith(scope.Text, Environment.NewLine & "Open homepage (OpenAlex)")
                     Dim homepage As LinkLabel.Link = scope.Links.Cast(Of LinkLabel.Link)().Single()
                     Assert.AreEqual("http://www.nature.com/srep/index.html", CStr(homepage.LinkData))
-                    Assert.AreEqual("Open homepage (OpenAlex)", scope.Text.Substring(homepage.Start, homepage.Length), "Only the link's own line is linked.")
+                    ' LinkLabel counts by text element (a line break is one), as it draws them.
+                    Assert.AreEqual("Open homepage (OpenAlex)", New Globalization.StringInfo(scope.Text).SubstringByTextElements(homepage.Start, homepage.Length), "Only the link's own line is linked.")
                     Assert.AreEqual("Publisher: Nature Portfolio (OpenAlex)", dialog.Hints("trust.publisher").Text)
                     Assert.AreEqual(0, dialog.Hints("trust.publisher").Links.Count)
                     Assert.IsFalse(dialog.Hints("trust.review").Visible)
