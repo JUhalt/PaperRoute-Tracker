@@ -187,6 +187,15 @@ Namespace Services
             published.History.Add(New HistoryEvent With {.Stage = PaperStage.UnderReview, .EventDate = start.AddDays(212), .Note = "Resubmitted after minor revision."})
             published.Versions.Add(New ManuscriptVersion With {.Label = "Submitted to Fictional Open Psychology", .CreatedDate = start.AddDays(55), .SubmissionId = second.Id, .Notes = "Metadata only; fictional."})
             published.Versions.Add(New ManuscriptVersion With {.Label = "Revision 1", .CreatedDate = start.AddDays(156), .SubmissionId = second.Id, .DecisionId = major.Id, .RevisionRoundNumber = 1, .Notes = "Metadata only; fictional."})
+            ' The packet sent with the second submission (#96): records only,
+            ' since the example has no files.
+            Dim packetCreated As DateTime = DateTime.SpecifyKind(start.AddDays(54), DateTimeKind.Utc)
+            Dim packet As SubmissionPacket = SubmissionPacketService.CreatePacket(published, published.Versions(0).Id, "Submission to Fictional Open Psychology",
+                                                                                  "Fictional; metadata only.", submissionId:=second.Id, createdAtUtc:=packetCreated)
+            For Each entry In {(SubmissionPacketFileRole.BlindedManuscript, "Anonymized manuscript"), (SubmissionPacketFileRole.TitlePage, "Title page"),
+                               (SubmissionPacketFileRole.CoverLetter, "Cover letter"), (SubmissionPacketFileRole.DataAvailability, "Data availability statement")}
+                SubmissionPacketService.AddFile(packet, entry.Item1, entry.Item2, String.Empty, String.Empty, SubmissionPacketFileStorageMode.MetadataOnly, packetCreated)
+            Next
             published.Metadata.Doi = "10.5555/example.anchoring"
             published.Metadata.PublicationJournal = openPsychology.Name
             published.Metadata.PublishedDate = start.AddDays(264)

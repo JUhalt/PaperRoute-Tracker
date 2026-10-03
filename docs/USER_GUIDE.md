@@ -692,14 +692,14 @@ Reports are saved as a single web page that opens in any browser, where you can 
 
 ## Teaching with PaperRoute
 
-PaperRoute includes an **example library**: the fictional Example Lab's manuscripts, covering the routes a new researcher needs to see. Open it from the empty-library welcome (**Explore an example library**) or from **Import & Export → Explore an Example Library...**.
+PaperRoute includes an **example library**: the fictional Example Lab's manuscripts, covering the routes a new researcher needs to see. Open it from the empty-library welcome (**Explore an example library**), from **Import & Export → Explore an Example Library...**, or from **Explore an Example Library...** at the bottom of **Help**, which stays open beside it for the walk below.
 
 The example opens in a separate window with a banner across the top. It has its own temporary storage: your own library is never opened, anything you change in the example is discarded when its window closes, and it never checks for updates or shows notifications. **Return to My Library** closes it. Its dates are relative to today, so Deadlines always has something overdue, due today, and coming up.
 
 ### A 15-minute walk through the route
 
 1. **The board (2 minutes).** Three shelves, and **Needs Attention**: a revision due soon, a review waiting more than 90 days, a recent rejection. Each card's footer is its route so far.
-2. **One whole route (3 minutes).** Open *Example: anchoring effects in clinical risk estimates* and choose **View Route**. The route map shows 264 days from first submission to publication: a desk rejection after 7 days, 48 days of rerouting, two rounds of revision, and 28 days in production. Ask: how much of it was waiting on journals (105 days), and how much was the authors' own work (131 days)?
+2. **One whole route (3 minutes).** Open *Example: anchoring effects in clinical risk estimates* and choose **View Route**. The route map shows 264 days from first submission to publication: a desk rejection after 7 days, 48 days of rerouting, two rounds of revision, and 28 days in production. Ask: how much of it was waiting on journals (105 days), and how much was the authors' own work (131 days)? On its **Readiness & Packets** tab, **Submission Packets...** shows the packet sent with the second submission: the version, the journal, and each file's role, as records only, since the example has no files.
 3. **Responding to reviewers (3 minutes).** Open *Example: retrieval practice in an introductory statistics course*, then its submission's reviewer responses: four comments at four stages of response, and a revision deadline ahead.
 4. **After a rejection (2 minutes).** Open *Example: measurement invariance of a short grit scale*. Its journal shortlist offers the next journal, with the trust and fit questions answered for each. **How to choose a journal** explains them.
 5. **What needs action (2 minutes).** The **Deadlines** page: an overdue follow-up, a reminder due today, and the revision deadline.

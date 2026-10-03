@@ -44,12 +44,49 @@ Public Class ExampleLibraryTests
         Assert.IsTrue(example.Manuscripts.All(Function(item) item.Title.StartsWith("Example:", StringComparison.Ordinal)))
         Assert.IsTrue(example.Library.Journals.All(Function(item) item.Name.StartsWith("Fictional ", StringComparison.Ordinal)))
         Assert.IsTrue(example.Manuscripts.SelectMany(Function(item) item.Submissions).All(Function(item) item.JournalName.StartsWith("Fictional ", StringComparison.Ordinal)))
+        Assert.IsTrue(example.Manuscripts.SelectMany(Function(item) item.SubmissionPackets).All(Function(item) item.JournalName.StartsWith("Fictional ", StringComparison.Ordinal)))
         Assert.IsTrue(example.Library.Authors.All(Function(item) item.Notes = "Fictional author."))
         Assert.IsTrue(example.Manuscripts.Where(Function(item) item.Metadata.Doi.Length > 0).All(Function(item) item.Metadata.Doi.StartsWith("10.5555/", StringComparison.Ordinal)),
                       "DOIs use the reserved example prefix.")
 
         Dim later = ExampleLibraryService.Create(Today.AddDays(30))
         Assert.AreEqual(example.Manuscripts(1).RevisionDeadline.Value.AddDays(30), later.Manuscripts(1).RevisionDeadline.Value, "Dates are relative to today.")
+    End Sub
+
+    ' #96: a submission packet to look at, as records only. The example has
+    ' no files, so nothing points at a file on this computer, and the packet
+    ' is linked to the submission it went with, so Deadlines gains nothing.
+    <TestMethod>
+    Public Sub TheExampleHasOneMetadataOnlySubmissionPacket()
+        Dim example = ExampleLibraryService.Create(Today)
+        Dim packets As List(Of SubmissionPacket) = example.Manuscripts.SelectMany(Function(item) item.SubmissionPackets).ToList()
+        Assert.AreEqual(1, packets.Count)
+
+        Dim packet As SubmissionPacket = packets(0)
+        Dim published As Manuscript = example.Manuscripts.Single(Function(item) item.SubmissionPackets.Contains(packet))
+        Assert.AreEqual(ManuscriptLocation.Published, published.Location)
+        Dim submission As JournalSubmission = published.Submissions.Single(Function(item) item.Id = packet.SubmissionId.Value)
+        Assert.AreEqual(submission.JournalId, packet.JournalId)
+        Assert.IsTrue(packet.JournalName.StartsWith("Fictional ", StringComparison.Ordinal))
+        Assert.IsTrue(published.Versions.Any(Function(item) item.Id = packet.ManuscriptVersionId AndAlso item.SubmissionId.HasValue AndAlso item.SubmissionId.Value = submission.Id),
+                      "The packet holds the version sent with that submission.")
+        Assert.IsTrue(packet.CreatedAtUtc.Date <= submission.SubmittedDate.Date, "Prepared before it was sent.")
+
+        CollectionAssert.AreEquivalent(
+            {SubmissionPacketFileRole.BlindedManuscript, SubmissionPacketFileRole.TitlePage, SubmissionPacketFileRole.CoverLetter, SubmissionPacketFileRole.DataAvailability},
+            packet.Files.Select(Function(item) item.Role).ToList())
+        Assert.IsTrue(packet.Files.All(Function(item) item.StorageMode = SubmissionPacketFileStorageMode.MetadataOnly AndAlso
+                                                      item.LocalFilePath.Length = 0 AndAlso item.OriginalFileName.Length = 0 AndAlso
+                                                      Not item.FileSizeBytes.HasValue AndAlso String.IsNullOrEmpty(item.Sha256)),
+                      "Metadata only: no file, path, size, or fingerprint.")
+
+        Assert.IsFalse(DeadlineService.Build(example.Manuscripts, Today).Any(Function(item) item.Kind = DeadlineKind.Preparation),
+                       "A packet linked to its submission adds no Preparation item.")
+
+        ' Saving checks every packet against its manuscript, as Seed does.
+        For Each manuscript As Manuscript In example.Manuscripts
+            SubmissionReadinessValidationService.NormalizeAndValidateManuscript(manuscript)
+        Next
     End Sub
 
     <TestMethod>
