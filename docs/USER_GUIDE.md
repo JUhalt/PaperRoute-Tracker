@@ -345,7 +345,7 @@ A manuscript can link its target journal to one of these reusable records while 
 
 ### Journal checklist templates
 
-Add or edit a journal and open its **Readiness Checklist** tab. Use **Add Requirement** to give a requirement a title, instructions, category, and required/optional designation. You can edit, remove, or reorder requirements before saving the journal. With the optional AI assistant on, **Read Author Instructions...** proposes requirements from instructions you paste (see [AI Assistant](#ai-assistant)); the list it gives can be incomplete, so compare it with the journal's instructions.
+Add or edit a journal and open its **Readiness Checklist** tab. Use **Add Requirement** to give a requirement a title, instructions, category, and required/optional designation. You can edit, remove, or reorder requirements before saving the journal. With the optional AI assistant on, **Read Author Instructions...** proposes requirements from instructions you paste (see **AI Assistant**); the list it gives can be incomplete, so compare it with the journal's instructions.
 
 Apply this template from a manuscript's **Submission Readiness...** window. Each readiness profile keeps its own copied requirements and completion history, so changing the reusable journal template does not silently rewrite earlier preparations.
 

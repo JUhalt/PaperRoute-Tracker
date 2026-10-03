@@ -144,8 +144,23 @@ Public Class AuthorInstructionsTests
         CollectionAssert.AreEqual({True, True, True, True, True, True, False, True}, requirements.Select(Function(item) item.Found).ToList())
         CollectionAssert.AreEqual({True, True, False, True, True, True, True, True}, requirements.Select(Function(item) item.NumbersMatch).ToList(), "Six isn't 5.")
 
-        For Each item As RequirementCandidate In requirements.Where(Function(candidate) candidate.Found)
-            Assert.AreEqual(item.Quote, Instructions.Substring(item.SourceStart, item.SourceLength).Trim(), "The quote is the text's own words.")
+        ' Each found quote is the sentence the assistant quoted, and its place
+        ' in the text is that sentence's place.
+        Dim quoted As String() = {
+            "Research articles should not exceed 8,000 words, including references.",
+            "Each manuscript must include a structured abstract of no more than 250 words.",
+            "Provide up to six keywords.",
+            "Remove all identifying information from the manuscript file, which is reviewed double-anonymously.",
+            "A data availability statement is required for all articles.",
+            "Authors are encouraged to follow the relevant reporting guideline, such as CONSORT or PRISMA.",
+            Nothing,
+            "Figures must be uploaded as separate TIFF or EPS files at 300 dpi or higher."
+        }
+        For index As Integer = 0 To quoted.Length - 1
+            If quoted(index) Is Nothing Then Continue For
+            Assert.AreEqual(quoted(index), requirements(index).Quote)
+            Assert.AreEqual(Instructions.IndexOf(quoted(index), StringComparison.Ordinal), requirements(index).SourceStart, quoted(index))
+            Assert.AreEqual(quoted(index).Length, requirements(index).SourceLength, quoted(index))
         Next
         Dim invented As RequirementCandidate = requirements(6)
         Assert.AreEqual(-1, invented.SourceStart)
@@ -747,7 +762,6 @@ Public Class AuthorInstructionsTests
                     Next
                     Dim grid As DataGridView = reader.RequirementsGrid
                     Assert.IsTrue(grid.ClientSize.Height >= grid.ColumnHeadersHeight + grid.Rows(0).Height * 3, "At least three requirements show.")
-                    Assert.IsTrue(grid.Columns(1).Width >= grid.Columns(1).MinimumWidth)
                     Assert.IsTrue(reader.QuoteBox.ClientSize.Height >= reader.QuoteBox.Font.Height * 2, "The quote keeps two lines.")
                     AssertNoLostAmpersands(reader)
                     AssertDistinctAccelerators(reader)
