@@ -356,12 +356,24 @@ Namespace Forms
                             0,
                             _source.SortOrder
                         ),
-                    .IsRequired = chkRequired.Checked
+                    .IsRequired = chkRequired.Checked,
+                    .Suggestion =
+                        If(
+                            _source Is Nothing,
+                            Nothing,
+                            ManuscriptCloneService.CloneSuggestion(_source.Suggestion)
+                        )
                 }
 
             Me.DialogResult =
                 DialogResult.OK
 
+        End Sub
+
+
+        ' For tests.
+        Friend Sub SaveForTest()
+            SaveItem(Me, EventArgs.Empty)
         End Sub
 
     End Class

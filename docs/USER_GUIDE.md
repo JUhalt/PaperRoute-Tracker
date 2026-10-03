@@ -345,7 +345,7 @@ A manuscript can link its target journal to one of these reusable records while 
 
 ### Journal checklist templates
 
-Add or edit a journal and open its **Readiness Checklist** tab. Use **Add Requirement** to give a requirement a title, instructions, category, and required/optional designation. You can edit, remove, or reorder requirements before saving the journal.
+Add or edit a journal and open its **Readiness Checklist** tab. Use **Add Requirement** to give a requirement a title, instructions, category, and required/optional designation. You can edit, remove, or reorder requirements before saving the journal. With the optional AI assistant on, **Read Author Instructions...** proposes requirements from instructions you paste (see [AI Assistant](#ai-assistant)); the list it gives can be incomplete, so compare it with the journal's instructions.
 
 Apply this template from a manuscript's **Submission Readiness...** window. Each readiness profile keeps its own copied requirements and completion history, so changing the reusable journal template does not silently rewrite earlier preparations.
 
@@ -873,14 +873,14 @@ PaperRoute keeps the key encrypted for your Windows account on this computer, se
 | Journal facts (DOAJ and OpenAlex) | doaj.org, api.openalex.org | A journal's ISSNs, or a name you type to find a journal and the id of the one you pick. | Look Up Facts... on the Journals page. |
 | Find journals (OpenAlex) | api.openalex.org | The keywords you review, a start date, and the ids of the journals found. | Find Journals... on a manuscript's journal shortlist. |
 | Your citations (ORCID and OpenAlex) | pub.orcid.org, api.openalex.org | Your ORCID iD to ORCID, and the DOIs of your works to OpenAlex; your iD to OpenAlex only if you choose. | Update from OpenAlex... on Insights > Your Citations. |
-| AI assistant: Claude (Anthropic) | api.anthropic.com | Only what an AI assistant window shows you before sending: a decision letter you paste; one reviewer comment with its reviewer label and your planned action; or a manuscript's title, abstract, keywords, type of work, and target journal with its Journal Library facts. | Read Decision Letter..., Add from Letter..., Suggest a Starting Point..., and Draft Cover Letter..., after you turn on the AI assistant in Preferences. |
-| AI assistant: another server or a model on this computer | The address you set in Preferences: http only on this computer, https elsewhere | Only what an AI assistant window shows you before sending: a decision letter you paste; one reviewer comment with its reviewer label and your planned action; or a manuscript's title, abstract, keywords, type of work, and target journal with its Journal Library facts. | Read Decision Letter..., Add from Letter..., Suggest a Starting Point..., and Draft Cover Letter..., after you turn on the AI assistant in Preferences. |
+| AI assistant: Claude (Anthropic) | api.anthropic.com | Only what an AI assistant window shows you before sending: a decision letter you paste; a journal's author instructions you paste, with the article type you enter; one reviewer comment with its reviewer label and your planned action; or a manuscript's title, abstract, keywords, type of work, and target journal with its Journal Library facts. | Read Decision Letter..., Add from Letter..., Read Author Instructions..., Suggest a Starting Point..., and Draft Cover Letter..., after you turn on the AI assistant in Preferences. |
+| AI assistant: another server or a model on this computer | The address you set in Preferences: http only on this computer, https elsewhere | Only what an AI assistant window shows you before sending: a decision letter you paste; a journal's author instructions you paste, with the article type you enter; one reviewer comment with its reviewer label and your planned action; or a manuscript's title, abstract, keywords, type of work, and target journal with its Journal Library facts. | Read Decision Letter..., Add from Letter..., Read Author Instructions..., Suggest a Starting Point..., and Draft Cover Letter..., after you turn on the AI assistant in Preferences. |
 
 ---
 
 ## AI Assistant
 
-PaperRoute is complete without AI. An optional assistant can save time on three tasks, using Claude with your own Anthropic key, or a model on your own computer. It is off until you turn it on, it shows what it will send before sending, and nothing in your library changes until you accept a suggestion.
+PaperRoute is complete without AI. An optional assistant can save time on four tasks, using Claude with your own Anthropic key, or a model on your own computer. It is off until you turn it on, it shows what it will send before sending, and nothing in your library changes until you accept a suggestion.
 
 ### Turn it on
 
@@ -895,12 +895,13 @@ PaperRoute is complete without AI. An optional assistant can save time on three 
 ### What it does
 
 - **Read Decision Letter...** in a submission's **Editorial History**. Paste the decision letter and choose **Read Letter**. The assistant proposes the decision, the letter's date, any revision deadline, and each reviewer's and editor's comment. Every comment is checked against the letter: one PaperRoute can't find there word for word is marked "Not found in the letter: check it" and starts unchecked. A deadline given as a period, such as "within 60 days", is worked out by PaperRoute from the letter's date, not by the model, and follows the decision date if you correct it in **Add Decision**. The pasted letter becomes the decision's notes. Choose **Add Decision & N Comments...** to confirm the decision in **Add Decision**; the comments you kept then join **Reviewer Responses** for that decision and the revision round you chose. **Add from Letter...** in **Reviewer Responses** adds comments to a decision you have already recorded.
+- **Read Author Instructions...** on a journal's **Readiness Checklist** tab. PaperRoute never fetches the journal's page: **Open the author instructions** opens it in your browser, and you copy and paste one section at a time, up to 20,000 characters. Give the article type if you like, so requirements for other types are left out. The assistant proposes checklist requirements, each with the sentence it came from. A requirement whose sentence PaperRoute can't find in the text word for word is marked "Not in the text", one with a number that isn't in its sentence "Numbers differ", and one already in the checklist "Already listed"; these start unchecked. Edit a requirement's wording, category, or whether it is required, then choose **Add N Requirements**. They join the checklist, with the sentence as their instructions, and are kept when you save the journal. The assistant can miss requirements, including ones on other pages, so read the journal's instructions too.
 - **Suggest a Starting Point...** on a comment's **Draft response** tab. The assistant writes a first draft of your reply, with [bracketed] placeholders where only you know the answer. **Use as Draft**, **Replace Draft**, or **Add Below** puts it in the response box; it is saved with **Save Comment** and then the page's **Save**, like anything you type.
 - **Draft Cover Letter...** in a manuscript's readiness section. The assistant writes a starting point from the title, abstract, keywords, type of work, and target journal you see in the window, with that journal's facts from your Journal Library. Copy it, or save it as a text or Markdown file; nothing is stored in your library.
 
 ### What is sent, and when you're asked
 
-Each window shows what it will send, and to whom, before sending. Only that text goes, with PaperRoute's instructions for the task: the letter you paste, one comment with your planned action, or the manuscript details shown. Your notes, files, author names, and the rest of your library are never sent.
+Each window shows what it will send, and to whom, before sending. Only that text goes, with PaperRoute's instructions for the task: the letter or author instructions you paste, one comment with your planned action, or the manuscript details shown. Your notes, files, author names, and the rest of your library are never sent.
 
 Before a feature sends to a service elsewhere, PaperRoute shows the exact text and asks first, every time, until you choose not to be asked again for that feature and that service; **Forget Don't Ask Again Choices** in Preferences undoes it. A model on this computer is never asked about, because nothing leaves the computer.
 
@@ -908,7 +909,7 @@ Your keys are kept encrypted for your Windows account on this computer. The Clau
 
 ### Suggestions stay suggestions
 
-Every result is labeled as an AI suggestion, with the service and model. A decision, comment, or response draft you accept records that it began as an AI suggestion, with the service, the model, the date, and the text it came from. **Editorial History** shows this for a decision, and **Reviewer Responses** for a comment or a response draft. Check each suggestion before you use it: a model can misread a letter or invent details.
+Every result is labeled as an AI suggestion, with the service and model. A decision, comment, response draft, or checklist requirement you accept records that it began as an AI suggestion, with the service, the model, the date, and the text it came from. **Editorial History** shows this for a decision, **Reviewer Responses** for a comment or a response draft, and a journal's **Readiness Checklist** and **Submission Readiness...** for a requirement, which notes after a year that the journal may have changed its instructions. **Submission Readiness...** also says when a profile includes requirements the assistant found, since it can miss some. Check each suggestion before you use it: a model can misread a letter or invent details.
 
 ---
 

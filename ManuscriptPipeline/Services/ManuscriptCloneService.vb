@@ -337,6 +337,7 @@ Namespace Services
                 .Category = source.Category,
                 .SortOrder = source.SortOrder,
                 .IsRequired = source.IsRequired,
+                .Suggestion = CloneSuggestion(source.Suggestion),
                 .Status = source.Status,
                 .UserNotes = source.UserNotes,
                 .CompletedAtUtc = source.CompletedAtUtc,

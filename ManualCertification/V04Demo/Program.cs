@@ -8,7 +8,7 @@ namespace PaperRoute.V04Demo;
 internal static class Program
 {
     private const string Usage = "PaperRoute workflow manual demo\n\n" +
-        "Surfaces: vault (default), readiness, packet, packet-new, file, file-new, notes, submission, responses, workflow, board, publications, fill, about, route, update, report, candidate, online, key, journals, lookup, suggest, suggest-results, citations, citations-update, assistant-settings, assistant-consent, letter, letter-read, decision-prefill, draft-response, cover-letter, cover-letter-result\n" +
+        "Surfaces: vault (default), readiness, packet, packet-new, file, file-new, notes, submission, responses, workflow, board, publications, fill, about, route, update, report, candidate, online, key, journals, lookup, suggest, suggest-results, citations, citations-update, assistant-settings, assistant-consent, letter, letter-read, decision-prefill, draft-response, cover-letter, cover-letter-result, author-instructions, author-instructions-read, journal-checklist\n" +
         "Options: --minimum, --primary, --empty (vault/readiness/board), --offline and --collapsed (board, journals, citations), --integrity (populated vault only), --dark or --system, --help\n\n" +
         "Default surfaces discard manuscript changes when the window closes.\n" +
         "workflow and board save only in a new disposable temporary session.\n" +
@@ -27,7 +27,7 @@ internal static class Program
             return;
         }
 
-        var surfaces = new[] { "vault", "readiness", "packet", "packet-new", "file", "file-new", "notes", "submission", "responses", "workflow", "board", "publications", "fill", "about", "route", "update", "report", "candidate", "online", "key", "journals", "lookup", "suggest", "suggest-results", "citations", "citations-update", "assistant-settings", "assistant-consent", "letter", "letter-read", "decision-prefill", "draft-response", "cover-letter", "cover-letter-result" };
+        var surfaces = new[] { "vault", "readiness", "packet", "packet-new", "file", "file-new", "notes", "submission", "responses", "workflow", "board", "publications", "fill", "about", "route", "update", "report", "candidate", "online", "key", "journals", "lookup", "suggest", "suggest-results", "citations", "citations-update", "assistant-settings", "assistant-consent", "letter", "letter-read", "decision-prefill", "draft-response", "cover-letter", "cover-letter-result", "author-instructions", "author-instructions-read", "journal-checklist" };
         var positional = args.Where(argument => !argument.StartsWith("--")).ToArray();
         var surface = positional.FirstOrDefault()?.ToLowerInvariant() ?? "vault";
         var minimum = args.Contains("--minimum", StringComparer.OrdinalIgnoreCase);
@@ -103,9 +103,9 @@ internal static class Program
                 return;
             }
 
-            if (surface is "assistant-consent" or "letter" or "letter-read" or "decision-prefill" or "draft-response" or "cover-letter" or "cover-letter-result")
+            if (surface is "assistant-consent" or "letter" or "letter-read" or "decision-prefill" or "draft-response" or "cover-letter" or "cover-letter-result" or "author-instructions" or "author-instructions-read" or "journal-checklist")
             {
-                // The AI assistant's windows (#84) with a canned answer;
+                // The AI assistant's windows (#84, #95) with a canned answer;
                 // nothing is sent anywhere.
                 AssistantDemo.Enable();
                 using var window = surface switch
@@ -116,6 +116,9 @@ internal static class Program
                     "decision-prefill" => AssistantDemo.DecisionDialog(),
                     "draft-response" => AssistantDemo.DraftDialog(),
                     "cover-letter" => AssistantDemo.CoverLetterDialog(false),
+                    "author-instructions" => AssistantDemo.AuthorInstructionsDialog(false),
+                    "author-instructions-read" => AssistantDemo.AuthorInstructionsDialog(true),
+                    "journal-checklist" => AssistantDemo.JournalChecklist(),
                     _ => AssistantDemo.CoverLetterDialog(true)
                 };
                 window.Text += " [DEMO - canned answer; nothing sent]";

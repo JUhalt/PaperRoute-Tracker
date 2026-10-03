@@ -383,6 +383,7 @@ Namespace Services
                 .Category = If(templateItem.Category, String.Empty),
                 .SortOrder = templateItem.SortOrder,
                 .IsRequired = templateItem.IsRequired,
+                .Suggestion = ManuscriptCloneService.CloneSuggestion(templateItem.Suggestion),
                 .Status = ReadinessItemStatus.Unresolved
             }
 

@@ -7,7 +7,8 @@ Namespace Models
     ' and the text it came from. Nothing for anything entered by hand.
     Public Class AssistantSuggestion
 
-        ' "decision-letter", "draft-response", or "cover-letter".
+        ' "decision-letter", "draft-response", "cover-letter", or
+        ' "author-instructions".
         Public Property Feature As String = String.Empty
 
         ' "Claude" or "OpenAI-compatible server": never an address or a key.

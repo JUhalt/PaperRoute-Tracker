@@ -294,6 +294,7 @@ Public Class AssistantDraftingTests
                 Dim windows As New List(Of Form) From {
                     New AssistantConsentForm(request, OnlineAccess.CurrentAssistant()),
                     New DecisionLetterForm(DecisionLetterMode.NewDecision, New JournalSubmission()),
+                    New AuthorInstructionsForm("Fictional Open Psychology", String.Empty, {}, {}),
                     New AssistantDraftForm(AssistantService.BuildResponseRequest("Reviewer 1", "Clarify the sample.", ""), String.Empty),
                     New CoverLetterForm("Example: open materials", "Fictional Open Psychology", "Journal article", {"open science"}, "An abstract."),
                     ApiKeyForm.ForAssistant(ProtectedKeyStore.Anthropic),

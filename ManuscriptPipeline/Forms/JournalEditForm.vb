@@ -32,6 +32,8 @@ Namespace Forms
         Private ReadOnly btnRemoveChecklist As New Button()
         Private ReadOnly btnMoveChecklistUp As New Button()
         Private ReadOnly btnMoveChecklistDown As New Button()
+        ' Shown while the AI assistant is on (#95).
+        Private ReadOnly btnReadInstructions As New Button()
 
         Private ReadOnly _workingChecklist As New List(
             Of JournalChecklistTemplateItem
@@ -345,6 +347,9 @@ Namespace Forms
             lblChecklistInfo.AutoSize =
                 True
 
+            lblChecklistInfo.UseMnemonic =
+                False
+
             lblChecklistInfo.ForeColor =
                 SystemColors.GrayText
 
@@ -436,7 +441,25 @@ Namespace Forms
             AddHandler btnMoveChecklistDown.Click,
                 AddressOf MoveChecklistItemDown
 
+            ' Requirements proposed from the journal's own instructions for
+            ' authors, pasted by the researcher (#95).
+            btnReadInstructions.Text =
+                "Read Author Instructions..."
+
+            btnReadInstructions.AutoSize =
+                True
+
+            btnReadInstructions.Height =
+                36
+
+            btnReadInstructions.Visible =
+                AssistantRunner.IsTurnedOn()
+
+            AddHandler btnReadInstructions.Click,
+                AddressOf ReadAuthorInstructions
+
             buttons.Controls.Add(btnAdd)
+            buttons.Controls.Add(btnReadInstructions)
             buttons.Controls.Add(btnEditChecklist)
             buttons.Controls.Add(btnRemoveChecklist)
             buttons.Controls.Add(btnMoveChecklistUp)
@@ -446,6 +469,13 @@ Namespace Forms
             root.Controls.Add(lblChecklistInfo, 0, 1)
             root.Controls.Add(lstChecklist, 0, 2)
             root.Controls.Add(buttons, 0, 3)
+
+            ' The selected requirement's details wrap rather than run past
+            ' the window.
+            AddHandler root.SizeChanged,
+                Sub(sender, e)
+                    lblChecklistInfo.MaximumSize = New Size(Math.Max(LogicalToDeviceUnits(200), root.ClientSize.Width - LogicalToDeviceUnits(8)), 0)
+                End Sub
 
             tab.Controls.Add(root)
 
@@ -524,7 +554,8 @@ Namespace Forms
                 .Description = source.Description,
                 .Category = source.Category,
                 .SortOrder = source.SortOrder,
-                .IsRequired = source.IsRequired
+                .IsRequired = source.IsRequired,
+                .Suggestion = ManuscriptCloneService.CloneSuggestion(source.Suggestion)
             }
 
         End Function
@@ -635,7 +666,8 @@ Namespace Forms
                 "  •  " &
                 category &
                 "  —  " &
-                item.Title
+                item.Title &
+                If(item.Suggestion IsNot Nothing, "  •  AI suggestion", String.Empty)
             )
 
         End Function
@@ -693,15 +725,27 @@ Namespace Forms
                         item.Description
                     ),
                     "No additional instructions.",
-                    item.Description.Trim()
+                    ShortText(item.Description)
                 )
+
+            ' Where an AI-found requirement came from (#95).
+            Dim origin As String =
+                AssistantSuggestionService.DescribeRequirement(item.Suggestion, DateTime.UtcNow)
 
             lblChecklistInfo.Text =
                 item.Title &
                 " — " &
-                detail
+                detail &
+                If(origin.Length > 0, Environment.NewLine & origin, String.Empty)
 
         End Sub
+
+
+        ' Long instructions, such as a quoted paragraph, on a few lines.
+        Private Shared Function ShortText(value As String) As String
+            Dim text As String = System.Text.RegularExpressions.Regex.Replace(value, "\s+", " ").Trim()
+            Return If(text.Length <= 300, text, text.Substring(0, 300).TrimEnd() & "…")
+        End Function
 
 
         Private Sub UpdateChecklistButtons()
@@ -759,6 +803,69 @@ Namespace Forms
                 RefreshChecklist(
                     _workingChecklist.Count - 1
                 )
+
+            End Using
+
+        End Sub
+
+
+        ' Read Author Instructions (#95): the AI assistant proposes
+        ' requirements from the journal's instructions for authors, which the
+        ' researcher pastes. The ones accepted join this checklist and, like
+        ' any change here, are kept only when the journal is saved.
+        Private Sub ReadAuthorInstructions(
+            sender As Object,
+            e As EventArgs
+        )
+
+            Dim reason As String =
+                AssistantRunner.Unavailable()
+
+            If reason.Length > 0 Then
+
+                MessageBox.Show(
+                    Me,
+                    reason,
+                    AssistantService.FeatureName(AssistantService.AuthorInstructionsFeature),
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information
+                )
+
+                Return
+
+            End If
+
+            ' The link as typed, if it is a web address; it is only opened.
+            Dim link As String =
+                If(UrlSafetyService.IsSafeHttpUrl(txtInstructions.Text.Trim()), txtInstructions.Text.Trim(), String.Empty)
+
+            Using dialog As New AuthorInstructionsForm(
+                txtName.Text.Trim(),
+                link,
+                _workingChecklist.Select(Function(item) item.Title),
+                _workingChecklist.Select(Function(item) item.Category)
+            )
+
+                If AuthorInstructionsForm.RunDialog(dialog, Me) <> DialogResult.OK Then
+                    Return
+                End If
+
+                Dim first As Integer =
+                    _workingChecklist.Count
+
+                For Each added As JournalChecklistTemplateItem In dialog.AcceptedRequirements
+
+                    added.SortOrder =
+                        (_workingChecklist.Count + 1) *
+                        10
+
+                    _workingChecklist.Add(added)
+
+                Next
+
+                If _workingChecklist.Count > first Then
+                    RefreshChecklist(first)
+                End If
 
             End Using
 
@@ -1223,6 +1330,39 @@ Namespace Forms
 
         Friend Sub SaveForTest()
             SaveJournal(Me, EventArgs.Empty)
+        End Sub
+
+        ' The checklist as edited, before Save (#95).
+        Friend ReadOnly Property ChecklistItems As IReadOnlyList(Of JournalChecklistTemplateItem)
+            Get
+                Return _workingChecklist.AsReadOnly()
+            End Get
+        End Property
+
+        Friend ReadOnly Property ChecklistLines As List(Of String)
+            Get
+                Return lstChecklist.Items.Cast(Of Object)().Select(Function(item) Convert.ToString(item, Globalization.CultureInfo.CurrentCulture)).ToList()
+            End Get
+        End Property
+
+        Friend ReadOnly Property ChecklistInfoText As String
+            Get
+                Return lblChecklistInfo.Text
+            End Get
+        End Property
+
+        Friend ReadOnly Property ReadInstructionsButton As Button
+            Get
+                Return btnReadInstructions
+            End Get
+        End Property
+
+        Friend Sub SelectChecklistItemForTest(index As Integer)
+            lstChecklist.SelectedIndex = index
+        End Sub
+
+        Friend Sub ReadAuthorInstructionsForTest()
+            ReadAuthorInstructions(Me, EventArgs.Empty)
         End Sub
 
     End Class

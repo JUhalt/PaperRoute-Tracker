@@ -504,6 +504,10 @@ Namespace Services
             ' Journal facts (#87): lenient, so a bad value is dropped.
             JournalFactsService.Normalize(journal)
 
+            ' Where AI-found requirements came from (#95): trimmed or
+            ' dropped, never fatal, so an older backup always restores.
+            AssistantSuggestionService.NormalizeJournal(journal)
+
             Dim templateIds As New HashSet(Of Guid)()
 
             For Each item As JournalChecklistTemplateItem In
