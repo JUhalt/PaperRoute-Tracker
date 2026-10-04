@@ -19,6 +19,22 @@ PaperRoute upgrades are designed not to overwrite the manuscript database, setti
 
 Use **Settings → Backup Library...** to create a portable backup. In v0.5 and earlier, it is **Data → Backup Library...**.
 
+## Moving from v0.8 to v0.9
+
+PaperRoute v0.9 adds a journal shortlist for each manuscript, a guide to choosing a journal, journal facts and metrics, Find Journals, Your Citations, an example library, the Online services page with Work offline, an optional AI assistant, and packet export. **v0.9.0-rc.1 is a Preview; v0.8.0 remains the current Stable release.** v0.9 upgrades the library to **Schema 9**, which adds journal shortlists (with the evidence behind a suggested journal), journal ISSNs, links, facts, and metrics, and a record of where an accepted AI suggestion came from.
+
+Before upgrading, create a portable ZIP backup with v0.8 (**Settings → Backup Library...**) and keep it separately.
+
+The Schema 8-to-9 upgrade validates the existing library first and then changes only the schema marker, keeping the previous marker as `schema.v8.bak`. Manuscript and author data, managed files, and automatic backups stay byte-for-byte, and every manuscript starts with an empty journal shortlist; nothing is inferred. If validation fails, nothing changes and PaperRoute says why.
+
+After upgrading:
+
+- A manuscript's journal shortlist is on its Overview. The Journal Library's own mark that used to be called **Shortlist** is now **Watch list**; marked journals keep their mark.
+- **Settings → Preferences... → Online services** lists every service PaperRoute can contact. The services you used before stay on; **Work offline** turns them all off, update checks included.
+- The AI assistant stays off until you turn it on in **Settings → Preferences... → AI assistant**. Its keys are kept encrypted for your Windows account and are never in backups, so add them again on another computer or account.
+- Backups now include saved citation figures (`citations.json`).
+- v0.8 refuses to open a Schema 9 library. To go back, restore the backup you made with v0.8; changes made in v0.9 are not in it. Restore v0.9 backups with v0.9 or later.
+
 ## Moving from v0.7 to v0.8
 
 PaperRoute v0.8 adds route maps, the Insights page, shareable reports, and work types and tags. **v0.8.0 is the current Stable release.** v0.8 upgrades the library to **Schema 8**, which adds work types, tags, and tag colors.
