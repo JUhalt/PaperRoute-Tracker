@@ -54,6 +54,14 @@ Namespace Models
 
         Public Property Issns As List(Of String) = New List(Of String)()
 
+        ' The journal's publisher, main topics (up to three), and homepage,
+        ' as the source listed them (#96).
+        Public Property Publisher As String = String.Empty
+
+        Public Property Topics As List(Of String) = New List(Of String)()
+
+        Public Property HomepageUrl As String = String.Empty
+
         ' The keywords searched, and whether articles had to match all.
         Public Property Keywords As List(Of String) = New List(Of String)()
 

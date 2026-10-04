@@ -324,8 +324,9 @@ Public Class ManuscriptPageTests
                         {"Paste a title page", "ORCID works", "BibTeX or RIS", "Spreadsheet"},
                         Descendants(board.Welcome).OfType(Of FilterChip)().Select(Function(chip) chip.Text).ToList())
 
-                    ' #83: the example library opens from the welcome and from
-                    ' Import & Export, in its own window; nothing here changes.
+                    ' #83 and #96: the example library opens from the welcome,
+                    ' Import & Export, and Help, in its own window; nothing
+                    ' here changes.
                     Dim launches As Integer = 0
                     board.exampleLauncher = Sub() launches += 1
                     Dim example As LinkLabel = Descendants(board.Welcome).OfType(Of LinkLabel)().Single(Function(link) link.Text.EndsWith("Explore an example library", StringComparison.Ordinal))
@@ -333,7 +334,17 @@ Public Class ManuscriptPageTests
                         Invoke(example, New Object() {New LinkLabelLinkClickedEventArgs(example.Links(0))})
                     board.PressCommandKey(Keys.Control Or Keys.D6)
                     Descendants(board).OfType(Of ActionButton)().Single(Function(button) button.Text = "Explore an Example Library...").PerformClick()
-                    Assert.AreEqual(2, launches)
+                    Using help As HelpForm = board.CreateUserGuide()
+                        ShowOffscreen(help)
+                        Descendants(help).OfType(Of Button)().Single(Function(button) button.Text = "Explore an Example Library...").PerformClick()
+                        Assert.IsTrue(help.Visible, "Help stays open beside the example.")
+                        help.Close()
+                    End Using
+                    Using plain As New HelpForm()
+                        Assert.IsFalse(Descendants(plain).OfType(Of Button)().Any(Function(button) button.Text = "Explore an Example Library..."),
+                                       "Help opened elsewhere, or inside the example, doesn't offer it.")
+                    End Using
+                    Assert.AreEqual(3, launches)
                     Assert.AreEqual(0, board.Library.Count, "Opening the example adds nothing to this library.")
                     Assert.AreEqual(0, board.SaveCount)
                     board.PressCommandKey(Keys.Control Or Keys.D1)
@@ -912,6 +923,8 @@ Public Class ManuscriptPageTests
                     Dim request As New JournalSuggestionRequest With {.Keywords = New List(Of String) From {"anchoring effects"}, .MatchAll = True, .SinceDate = New DateTime(2021, 9, 30)}
                     Dim found As New List(Of JournalSuggestion) From {
                         New JournalSuggestion With {.OpenAlexId = "S196734849", .Name = "Scientific Reports", .Issns = New List(Of String) From {"2045-2322"}, .MatchingArticles = 3, .AllArticles = 163365,
+                                                    .Publisher = "Nature Portfolio", .Topics = New List(Of String) From {"Cancer-related molecular mechanisms research", "MicroRNA in disease regulation"},
+                                                    .HomepageUrl = "http://www.nature.com/srep/index.html",
                                                     .Examples = New List(Of EvidenceExample) From {New EvidenceExample With {.Title = "Anchoring in triage", .Year = 2026, .Doi = "10.1038/s41598-026-66155-3"}}},
                         New JournalSuggestion With {.OpenAlexId = "S9692511", .Name = "Frontiers in Psychology", .Issns = New List(Of String) From {"1664-1078"}, .MatchingArticles = 2}
                     }
@@ -933,8 +946,68 @@ Public Class ManuscriptPageTests
                     Assert.AreEqual(3L, saved.Evidence.MatchingArticles)
                     Assert.AreEqual("Anchoring in triage", saved.Evidence.Examples.Single().Title)
                     CollectionAssert.AreEqual({"anchoring effects"}, saved.Evidence.Keywords)
+                    Assert.AreEqual("Nature Portfolio", saved.Evidence.Publisher, "The publisher, topics, and homepage are kept with the evidence (#96).")
+                    CollectionAssert.AreEqual({"Cancer-related molecular mechanisms research", "MicroRNA in disease regulation"}, saved.Evidence.Topics)
+                    Assert.AreEqual("http://www.nature.com/srep/index.html", saved.Evidence.HomepageUrl)
                     board.Close()
                 End Using
+            End Sub)
+    End Sub
+
+    ' Find Journals is unavailable while working offline (#96): the button is
+    ' off, the shortlist says why, and turning Work offline off brings it back.
+    <TestMethod>
+    Public Sub FindJournalsIsUnavailableWhileWorkingOffline()
+        RunOnStaThread(
+            Sub()
+                Dim network As New NoNetwork()
+                OnlineAccess.ResetForTests()
+                OnlineAccess.InnerHandlerFactory = Function() network
+                Try
+                    Using board As New PageBoard()
+                        Dim manuscript As Manuscript = Sample("Anchoring in clinical risk estimates")
+                        board.Prepare(manuscript)
+                        board.Open(manuscript)
+                        Assert.IsTrue(board.Editor.FindJournalsButton.Enabled)
+                        Assert.AreEqual(String.Empty, board.Editor.FindJournalsOffText)
+
+                        ' Work offline, turned on from the rail or the menu.
+                        Dim settings As AppSettings = DirectCast(GetType(Form1).GetField("appSettings", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(board), AppSettings)
+                        settings.OnlineServices.WorkOffline = True
+                        GetType(Form1).GetMethod("ApplyOnlineSettings", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(board, Nothing)
+                        Application.DoEvents()
+                        Assert.IsFalse(board.Editor.FindJournalsButton.Enabled, "Work offline turns the command off...")
+                        StringAssert.StartsWith(board.Editor.FindJournalsOffText, "Work offline is on", "...and the shortlist says why.")
+                        Assert.IsTrue(Descendants(board.Editor).OfType(Of Label)().Any(Function(label) label.Visible AndAlso label.Text = board.Editor.FindJournalsOffText))
+                        Assert.AreEqual(board.Editor.FindJournalsOffText, board.Editor.FindJournalsButton.AccessibleDescription)
+
+                        ' A shortlist change, or the page shown again, keeps it off.
+                        board.Editor.candidatePrompt = Function(existing) New JournalCandidate With {.JournalName = "Open Psychology"}
+                        board.Editor.AddShortlistCandidateForTest()
+                        Assert.IsFalse(board.Editor.FindJournalsButton.Enabled)
+                        board.Discard()
+                        Assert.IsFalse(board.Editor.FindJournalsButton.Enabled)
+                        StringAssert.StartsWith(board.Editor.FindJournalsOffText, "Work offline is on")
+
+                        settings.OnlineServices.WorkOffline = False
+                        settings.OnlineServices.TurnedOff.Add(OnlineServiceCatalog.JournalSuggestions)
+                        GetType(Form1).GetMethod("ApplyOnlineSettings", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(board, Nothing)
+                        Assert.IsFalse(board.Editor.FindJournalsButton.Enabled)
+                        StringAssert.StartsWith(board.Editor.FindJournalsOffText, "Find journals (OpenAlex) is turned off", "Turned off in Online services, it says so.")
+
+                        settings.OnlineServices.TurnedOff.Clear()
+                        GetType(Form1).GetMethod("ApplyOnlineSettings", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(board, Nothing)
+                        Application.DoEvents()
+                        Assert.IsTrue(board.Editor.FindJournalsButton.Enabled, "Back online, Find Journals is available again.")
+                        Assert.AreEqual(String.Empty, board.Editor.FindJournalsOffText)
+                        Assert.IsFalse(Descendants(board.Editor).OfType(Of Label)().Any(Function(label) label.Visible AndAlso label.Text.StartsWith("Work offline is on", StringComparison.Ordinal)))
+                        Assert.AreEqual(0, network.Requests, "Nothing was sent.")
+                        Assert.AreEqual(0, board.SaveCount)
+                        board.Close()
+                    End Using
+                Finally
+                    OnlineAccess.ResetForTests()
+                End Try
             End Sub)
     End Sub
 

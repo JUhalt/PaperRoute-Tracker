@@ -61,6 +61,9 @@ Namespace Forms
         Private ReadOnly lblShortlistOffer As New Label()
         Private ReadOnly btnShortlistOffer As New Button()
         Private ReadOnly lblShortlistEmpty As New Label()
+        ' Find Journals, and why it is unavailable while working offline (#96).
+        Private ReadOnly btnFindJournals As New Button()
+        Private ReadOnly lblFindJournalsOff As New Label()
 
         ' Adds or edits a shortlisted journal; returns the edited values, or
         ' Nothing when cancelled. Tests replace the dialog.
@@ -1340,11 +1343,11 @@ Namespace Forms
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 .ColumnCount = 1,
-                .RowCount = 4,
+                .RowCount = 5,
                 .Margin = New Padding(0)
             }
             layout.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
-            For index As Integer = 0 To 3
+            For index As Integer = 0 To 4
                 layout.RowStyles.Add(New RowStyle(SizeType.AutoSize))
             Next
 
@@ -1406,9 +1409,11 @@ Namespace Forms
             }
             Dim btnAdd As New Button With {.Text = "Add Journal...", .AutoSize = True, .Margin = New Padding(3, 0, 6, 0)}
             AddHandler btnAdd.Click, Sub(sender, e) AddShortlistCandidate()
-            Dim btnFind As New Button With {.Text = "Find Journals...", .AutoSize = True, .Margin = New Padding(3, 0, 12, 0)}
-            AddHandler btnFind.Click, Sub(sender, e) FindJournals()
-            shortlistToolTip.SetToolTip(btnFind, "Find journals that recently published articles mentioning keywords you review, using OpenAlex, an open index.")
+            btnFindJournals.Text = "Find Journals..."
+            btnFindJournals.AutoSize = True
+            btnFindJournals.Margin = New Padding(3, 0, 12, 0)
+            AddHandler btnFindJournals.Click, Sub(sender, e) FindJournals()
+            shortlistToolTip.SetToolTip(btnFindJournals, "Find journals that recently published articles mentioning keywords you review, using OpenAlex, an open index.")
             AddHandler Me.Disposed, Sub(sender, e) shortlistToolTip.Dispose()
             Dim guide As New LinkLabel With {.Text = "How to choose a journal", .AutoSize = True, .Margin = New Padding(3, 7, 3, 0)}
             AddHandler guide.LinkClicked,
@@ -1418,14 +1423,22 @@ Namespace Forms
                     End Using
                 End Sub
             actions.Controls.Add(btnAdd)
-            actions.Controls.Add(btnFind)
+            actions.Controls.Add(btnFindJournals)
             actions.Controls.Add(guide)
             layout.Controls.Add(actions, 0, 3)
+
+            ' A disabled button shows no tooltip, so the reason is a label.
+            lblFindJournalsOff.AutoSize = True
+            lblFindJournalsOff.UseMnemonic = False
+            lblFindJournalsOff.Margin = New Padding(3, 6, 3, 0)
+            lblFindJournalsOff.Visible = False
+            layout.Controls.Add(lblFindJournalsOff, 0, 4)
 
             AddHandler shortlistGroup.Resize,
                 Sub(sender, e)
                     Dim width As Integer = Math.Max(240, shortlistGroup.ClientSize.Width - shortlistGroup.Padding.Horizontal - 6)
                     lblShortlistEmpty.MaximumSize = New Size(width, 0)
+                    lblFindJournalsOff.MaximumSize = New Size(width, 0)
                     lblShortlistOffer.MaximumSize = New Size(Math.Max(200, width - btnShortlistOffer.Width - 40), 0)
                 End Sub
 
@@ -1473,6 +1486,24 @@ Namespace Forms
                 shortlistOffer.Invalidate()
             End If
 
+            RefreshOnlineCommands()
+
+        End Sub
+
+
+        ' Find Journals is unavailable while Work offline is on, or while
+        ' Find journals is turned off in Online services, and the shortlist
+        ' says why (#96). The main window calls this when those change.
+        Friend Sub RefreshOnlineCommands()
+            Dim blocked As OnlineBlockReason? = OnlineAccess.BlockReason(OnlineServiceCatalog.JournalSuggestions)
+            Dim reason As String = If(blocked.HasValue,
+                                      OnlineAccess.BlockedMessage(OnlineServiceCatalog.Find(OnlineServiceCatalog.JournalSuggestions), blocked.Value),
+                                      String.Empty)
+            btnFindJournals.Enabled = reason.Length = 0
+            btnFindJournals.AccessibleDescription = If(reason.Length = 0, Nothing, reason)
+            lblFindJournalsOff.Text = reason
+            lblFindJournalsOff.ForeColor = UiTheme.InfoColor()
+            lblFindJournalsOff.Visible = reason.Length > 0
         End Sub
 
 
@@ -1712,6 +1743,7 @@ Namespace Forms
             If blocked.HasValue AndAlso journalSuggestionPrompt Is Nothing Then
                 MessageBox.Show(Me.FindForm(), OnlineAccess.BlockedMessage(OnlineServiceCatalog.Find(OnlineServiceCatalog.JournalSuggestions), blocked.Value),
                                 "Find Journals", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                RefreshOnlineCommands()
                 Return
             End If
 
@@ -1790,6 +1822,19 @@ Namespace Forms
         Friend ReadOnly Property ShortlistOfferButton As Button
             Get
                 Return btnShortlistOffer
+            End Get
+        End Property
+
+        Friend ReadOnly Property FindJournalsButton As Button
+            Get
+                Return btnFindJournals
+            End Get
+        End Property
+
+        ' Why Find Journals is unavailable, as shown; "" when it isn't.
+        Friend ReadOnly Property FindJournalsOffText As String
+            Get
+                Return lblFindJournalsOff.Text
             End Get
         End Property
 

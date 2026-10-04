@@ -29,6 +29,11 @@ Namespace Forms
         Private ReadOnly _factsFor As Func(Of String, JournalRecord)
         Private ReadOnly _hints As New Dictionary(Of String, LinkLabel)(StringComparer.Ordinal)
 
+        ' What Find Journals kept for this journal (#96), shown only while the
+        ' journal box still names it.
+        Private ReadOnly _evidence As CandidateEvidence
+        Private ReadOnly _evidenceKey As String = String.Empty
+
         ' Opens Help at "Choosing a Journal"; tests replace it.
         Friend GuidePrompt As Action = Nothing
 
@@ -63,6 +68,8 @@ Namespace Forms
                 Status = candidate.Status
                 Notes = If(candidate.Notes, String.Empty)
                 Checks = If(candidate.Checks, New List(Of String)()).ToList()
+                _evidence = candidate.Evidence
+                _evidenceKey = RouteAnalyticsService.NameKey(candidate.JournalName)
             End If
 
             BuildInterface(candidate Is Nothing, If(journalNames, Enumerable.Empty(Of String)()))
@@ -166,20 +173,33 @@ Namespace Forms
                 .Padding = New Padding(0, 6, 0, 0),
                 .AccessibleName = "Source: Think. Check. Submit."
             }
-            Dim linkText As String = "thinkchecksubmit.org"
-            attribution.LinkArea = New LinkArea(attribution.Text.IndexOf(linkText, StringComparison.Ordinal), linkText.Length)
+            ' The source and its license are each linked, as CC BY asks.
+            attribution.Links.Clear()
+            For Each link As (Text As String, Url As String) In {("thinkchecksubmit.org", JournalChoiceGuide.SourceUrl), ("CC BY 4.0", JournalChoiceGuide.LicenseUrl)}
+                attribution.Links.Add(attribution.Text.IndexOf(link.Text, StringComparison.Ordinal), link.Text.Length, link.Url)
+            Next
             AddHandler attribution.LinkClicked,
                 Sub(sender, e)
+                    Dim url As String = CStr(e.Link.LinkData)
                     Try
-                        Process.Start(New ProcessStartInfo(JournalChoiceGuide.SourceUrl) With {.UseShellExecute = True})
+                        Process.Start(New ProcessStartInfo(url) With {.UseShellExecute = True})
                     Catch ex As Exception When TypeOf ex Is ComponentModel.Win32Exception OrElse TypeOf ex Is InvalidOperationException
-                        MessageBox.Show(Me, "PaperRoute could not open " & JournalChoiceGuide.SourceUrl & ".", Me.Text, MessageBoxButtons.OK, MessageBoxIcon.Information)
+                        MessageBox.Show(Me, "PaperRoute could not open " & url & ".", Me.Text, MessageBoxButtons.OK, MessageBoxIcon.Information)
                     End Try
                 End Sub
             trust.Controls.Add(attribution)
             AddHandler trust.Resize, Sub(sender, e) attribution.MaximumSize = New Size(Math.Max(200, trust.DisplayRectangle.Width), 0)
 
             Dim fit As SectionCard = ChecksCard(JournalChoiceGuide.FitHeading, JournalChoiceGuide.FitChecks, answered)
+            Dim fitSource As New Label With {
+                .Text = JournalChoiceGuide.FitSource,
+                .AutoSize = True,
+                .UseMnemonic = False,
+                .Dock = DockStyle.Bottom,
+                .Padding = New Padding(0, 6, 0, 0)
+            }
+            fit.Controls.Add(fitSource)
+            AddHandler fit.Resize, Sub(sender, e) fitSource.MaximumSize = New Size(Math.Max(200, fit.DisplayRectangle.Width), 0)
             trust.Margin = New Padding(3, 3, 8, 3)
             fit.Margin = New Padding(8, 3, 3, 3)
             root.Controls.Add(trust, 0, 3)
@@ -275,25 +295,37 @@ Namespace Forms
             Dim name As String = cmbJournal.Text.Trim()
             btnOk.Enabled = name.Length > 0
             lblHistory.Text = If(name.Length = 0 OrElse _history Is Nothing, "Choose or type a journal.", "Your history with this journal: " & _history(name))
-            RefreshHints(If(name.Length = 0 OrElse _factsFor Is Nothing, Nothing, _factsFor(name)))
+            Dim evidence As CandidateEvidence = If(name.Length > 0 AndAlso _evidence IsNot Nothing AndAlso RouteAnalyticsService.NameKey(name) = _evidenceKey, _evidence, Nothing)
+            RefreshHints(If(name.Length = 0 OrElse _factsFor Is Nothing, Nothing, _factsFor(name)), evidence)
         End Sub
 
 
-        ' A fact or link from the Journals page under the question it helps
-        ' answer; a link opens in the browser.
-        Private Sub RefreshHints(record As JournalRecord)
+        ' Facts and links from the Journals page, or from Find Journals'
+        ' evidence, under the question they help answer, one per line; a
+        ' link opens in the browser.
+        Private Sub RefreshHints(record As JournalRecord, evidence As CandidateEvidence)
             For Each pair As KeyValuePair(Of String, LinkLabel) In _hints
-                Dim hint = JournalFactsService.HintFor(pair.Key, record)
-                pair.Value.Text = hint.Text
-                pair.Value.Tag = hint.Url
-                pair.Value.LinkArea = If(hint.Url.Length > 0, New LinkArea(0, hint.Text.Length), New LinkArea(0, 0))
-                pair.Value.Visible = hint.Text.Length > 0
+                Dim parts As List(Of (Text As String, Url As String)) = JournalFactsService.HintFor(pair.Key, record, evidence)
+                Dim hint As LinkLabel = pair.Value
+                ' The text first, so each link's place is within it.
+                hint.Text = String.Join(Environment.NewLine, parts.Select(Function(part) part.Text))
+                hint.Links.Clear()
+                ' LinkLabel places links by text element, not by character:
+                ' each line break (CR LF) counts as one.
+                Dim start As Integer = 0
+                For Each part As (Text As String, Url As String) In parts
+                    Dim length As Integer = New System.Globalization.StringInfo(part.Text).LengthInTextElements
+                    If part.Url.Length > 0 Then hint.Links.Add(start, length, part.Url)
+                    start += length + 1
+                Next
+                hint.Tag = If(parts.Select(Function(part) part.Url).FirstOrDefault(Function(url) url.Length > 0), String.Empty)
+                hint.Visible = parts.Count > 0
             Next
         End Sub
 
 
         Private Sub OpenHint(sender As Object, e As LinkLabelLinkClickedEventArgs)
-            Dim url As String = TryCast(DirectCast(sender, LinkLabel).Tag, String)
+            Dim url As String = If(TryCast(e.Link?.LinkData, String), TryCast(DirectCast(sender, LinkLabel).Tag, String))
             If String.IsNullOrEmpty(url) Then Return
             Try
                 UrlSafetyService.OpenInBrowser(url)

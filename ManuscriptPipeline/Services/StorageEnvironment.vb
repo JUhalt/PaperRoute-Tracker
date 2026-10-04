@@ -18,8 +18,10 @@ Namespace Services
         End Sub
 
 
-        ' This is available only to the certification harness and tests through
-        ' InternalsVisibleTo. Normal application startup never configures a session.
+        ' Called once, before any storage root is resolved: by the example
+        ' library's own process (--example, #83), and by the certification
+        ' harness and tests through InternalsVisibleTo. A normal launch never
+        ' configures a session, so it always opens the user's own library.
         Friend Shared Sub ConfigureIsolatedSessionRoot(rootDirectory As String)
 
             SyncLock SessionRootLock

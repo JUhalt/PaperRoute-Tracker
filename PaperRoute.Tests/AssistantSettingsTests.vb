@@ -73,19 +73,35 @@ Public Class AssistantSettingsTests
                     Assert.AreEqual("llama3.1", card.ServerModel.PlaceholderText)
                     Assert.IsTrue(card.HasLink("Get a key from Anthropic") AndAlso card.HasLink("What the AI assistant sends"))
                     Assert.IsTrue(card.HasLabel("Off until turned on under AI assistant.", contains:=True), "The Online services card says where it is turned on.")
+                    Assert.IsFalse(card.TestConnection.Enabled, "Nothing to test while it is off.")
+                    Assert.IsFalse(card.TestSends.Visible)
 
                     card.TurnOn.Checked = True
                     Assert.IsTrue(card.Claude.Enabled AndAlso card.Compatible.Enabled)
                     Assert.IsTrue(card.ClaudeModel.Enabled AndAlso card.AddClaudeKey.Enabled)
                     Assert.IsFalse(card.Address.Enabled OrElse card.ServerModel.Enabled, "Only the chosen service's setup.")
                     Assert.IsTrue(card.HasLabel("On. Set up under AI assistant below.", contains:=True))
+                    Assert.IsFalse(card.TestConnection.Enabled, "Claude needs a key to test.")
+                    Assert.AreEqual("Add your Claude key to test the connection.", card.TestSends.Text)
+                    Assert.AreEqual(card.TestSends.Text, card.TestConnection.AccessibleDescription)
+                    dialog.assistantKeyPrompt = Function(owner, name) ClaudeTestKey
+                    card.AddClaudeKey.PerformClick()
+                    Assert.IsTrue(card.TestConnection.Enabled, "Claude can be tested before Save, with the key added but not saved.")
+                    Assert.AreEqual("Test Connection sends only your Claude key to api.anthropic.com, to list the models your account can use and check the one you chose.", card.TestSends.Text)
 
                     card.Compatible.Checked = True
                     Assert.IsFalse(card.ClaudeModel.Enabled OrElse card.AddClaudeKey.Enabled)
                     Assert.IsTrue(card.Address.Enabled AndAlso card.ServerModel.Enabled)
                     Assert.IsFalse(card.AddServerKey.Enabled, "A server key needs the server's address first.")
+                    Assert.IsFalse(card.TestConnection.Enabled, "A server needs its address and model first.")
                     card.Address.Text = "http://localhost:11434/v1"
                     Assert.IsTrue(card.AddServerKey.Enabled)
+                    Assert.IsFalse(card.TestConnection.Enabled)
+                    card.ServerModel.Text = "llama3.1"
+                    Assert.IsTrue(card.TestConnection.Enabled)
+                    Assert.AreEqual("Test Connection asks localhost:11434 for its models and sends nothing else. Nothing leaves this computer.", card.TestSends.Text)
+                    card.Address.Text = "https://ai.example.org/v1"
+                    Assert.AreEqual("Test Connection asks ai.example.org for its models and sends nothing else.", card.TestSends.Text)
 
                     ' Work offline stops the assistant but leaves its setup editable.
                     Dim offlineNote As Label = card.Label("Work offline is on, so the assistant can't be used until you turn it off.")
@@ -93,6 +109,9 @@ Public Class AssistantSettingsTests
                     card.Check("Work offline").Checked = True
                     Assert.IsTrue(offlineNote.Visible)
                     Assert.IsTrue(card.Address.Enabled AndAlso card.ServerModel.Enabled)
+                    Assert.IsFalse(card.TestConnection.Enabled, "Work offline stops Test Connection too.")
+                    card.Check("Work offline").Checked = False
+                    Assert.IsTrue(card.TestConnection.Enabled)
                     dialog.Close()
                 End Using
             End Sub)
@@ -167,6 +186,120 @@ Public Class AssistantSettingsTests
                     card.Save.PerformClick()
                     Assert.AreEqual(DialogResult.OK, again.DialogResult)
                 End Using
+            End Sub)
+    End Sub
+
+    <TestMethod>
+    Public Sub TestConnectionTestsWhatIsTypedBeforeSave()
+        Dim network As New AssistantCoreTests.CapturingNetwork With {
+            .Respond = Function(sent)
+                           If sent.Uri.Host = "localhost" Then Return AssistantCoreTests.Answer(Net.HttpStatusCode.OK, AssistantCoreTests.ServerModelList("llama3.1:latest"))
+                           If sent.Uri.AbsolutePath = "/v1/models" Then Return AssistantCoreTests.Answer(Net.HttpStatusCode.OK, AssistantCoreTests.ClaudeModelList("claude-opus-5-5", "claude-haiku-4-5-20251001"))
+                           Return AssistantCoreTests.Answer(Net.HttpStatusCode.OK, AssistantCoreTests.ClaudeModelEntry("claude-haiku-4-5-20251001"))
+                       End Function
+        }
+        OnlineAccess.InnerHandlerFactory = Function() network
+        RunOnSta(
+            Sub()
+                Using dialog As New SettingsForm(New AppSettings(), Service(), showAssistant:=True)
+                    dialog.assistantKeyPrompt = Function(owner, name) ClaudeTestKey
+                    ShowOffscreen(dialog)
+                    Dim card As New Card(dialog)
+                    card.TurnOn.Checked = True
+
+                    ' Without a key, it can't be chosen, and nothing is sent.
+                    Assert.IsFalse(card.TestConnection.Enabled)
+                    PumpUntilComplete(dialog.TestConnectionAsync())
+                    Assert.AreEqual("Add your Claude key first. Nothing was sent.", dialog.TestResultText)
+                    Assert.AreEqual(0, network.Requests.Count)
+
+                    ' Turned on, a key added, and a model typed, none of it saved.
+                    card.AddClaudeKey.PerformClick()
+                    Assert.AreEqual(String.Empty, dialog.TestResultText, "A result stays only for the setup it tested.")
+                    card.ClaudeModel.Text = "claude-haiku-4-5"
+                    PumpUntilComplete(dialog.TestConnectionAsync())
+                    Dim connected As String = "Connected. Claude accepted your key, and your account can use claude-haiku-4-5. The Model list now shows your account's 2 models."
+                    Assert.AreEqual(connected, dialog.TestResultText)
+                    Assert.AreEqual(ClaudeTestKey, network.Requests(0).Header("x-api-key"))
+                    Assert.AreEqual("https://api.anthropic.com/v1/models?limit=1000", network.Requests(0).Uri.AbsoluteUri)
+                    CollectionAssert.AreEqual({"claude-opus-5-5", "claude-haiku-4-5-20251001"}, card.ClaudeModel.Items.Cast(Of String)().ToList())
+                    Assert.AreEqual("claude-haiku-4-5", card.ClaudeModel.Text, "The model typed stays.")
+                    ' Resized, the box would put the first listed name that starts with what was typed.
+                    card.ClaudeModel.Width -= 7
+                    Application.DoEvents()
+                    Assert.AreEqual("claude-haiku-4-5", card.ClaudeModel.Text, "Resizing keeps the model typed.")
+                    Assert.AreEqual(connected, dialog.TestResultText)
+                    Assert.IsTrue(card.TestConnection.Enabled, "Ready to test again.")
+                    Assert.IsFalse(_keys.HasKey(ProtectedKeyStore.Anthropic), "Testing stores no key.")
+                    Assert.IsFalse(File.Exists(Path.Combine(_directory, "settings.json")), "...and saves nothing.")
+                    Assert.IsNull(OnlineAccess.CurrentAssistant(), "The saved setup, still off, is what the app goes by.")
+                    Assert.AreNotEqual(DialogResult.OK, dialog.DialogResult, "The window stays open.")
+
+                    card.ClaudeModel.Text = "claude-sonnet-5-5"
+                    Assert.AreEqual(String.Empty, dialog.TestResultText, "A result stays only for the setup it tested.")
+                    card.ClaudeModel.Text = "claude-opus-5"
+                    ' The layout puts the width straight back; counting resizes shows one happened.
+                    Dim resizes As Integer = 0
+                    Dim counter As EventHandler = Sub(sender, e) resizes += 1
+                    AddHandler card.ClaudeModel.SizeChanged, counter
+                    card.ClaudeModel.Width -= 9
+                    RemoveHandler card.ClaudeModel.SizeChanged, counter
+                    Assert.IsTrue(resizes > 0, "The box really was resized.")
+                    Application.DoEvents()
+                    Assert.AreEqual("claude-opus-5", card.ClaudeModel.Text, "Not claude-opus-5-5, the first listed name that starts with it.")
+
+                    ' A listed model typed in another case is that model, written as
+                    ' the list writes it, and the result stays. (The list is emptied
+                    ' first, as it is when PaperRoute starts, so the box can't
+                    ' match the typed name to a listed one before the test.)
+                    card.ClaudeModel.Items.Clear()
+                    card.ClaudeModel.Text = "Claude-Opus-5-5"
+                    network.Requests.Clear()
+                    PumpUntilComplete(dialog.TestConnectionAsync())
+                    Assert.AreEqual("claude-opus-5-5", card.ClaudeModel.Text)
+                    Assert.AreEqual("Connected. Claude accepted your key, and your account can use claude-opus-5-5. The Model list now shows your account's 2 models.", dialog.TestResultText)
+                    Assert.AreEqual(1, network.Requests.Count, "A listed name needs no lookup of its own.")
+
+                    ' Changing the setup during a test stops the test.
+                    network.Hold = Function(request) request.Uri.Host = "ai.example.org"
+                    card.Compatible.Checked = True
+                    card.Address.Text = "https://ai.example.org/v1"
+                    card.ServerModel.Text = "llama3.1"
+                    Dim waiting As Threading.Tasks.Task = dialog.TestConnectionAsync()
+                    Application.DoEvents()
+                    Assert.AreEqual("Testing the connection...", dialog.TestResultText)
+                    Assert.IsFalse(card.TestConnection.Enabled)
+                    card.Address.Text = "http://localhost:11434/v1"
+                    PumpUntilComplete(waiting)
+                    Assert.AreEqual(String.Empty, dialog.TestResultText, "The stopped test's answer isn't shown.")
+                    Assert.IsTrue(card.TestConnection.Enabled, "Ready at once for the setup as it is now.")
+                    network.Hold = Nothing
+
+                    ' A model on this computer, typed and not saved.
+                    card.Compatible.Checked = True
+                    card.Address.Text = "http://localhost:11434/v1"
+                    card.ServerModel.Text = "llama3.1"
+                    network.Requests.Clear()
+                    PumpUntilComplete(dialog.TestConnectionAsync())
+                    Assert.AreEqual("Connected. The server at localhost:11434 has llama3.1.", dialog.TestResultText)
+                    Dim sent As AssistantCoreTests.SentRequest = network.Requests.Single()
+                    Assert.AreEqual("http://localhost:11434/v1/models", sent.Uri.AbsoluteUri)
+                    Assert.IsNull(sent.Header("Authorization"))
+                    Assert.IsNull(sent.Header("x-api-key"), "The Claude key goes only to Anthropic.")
+
+                    ' Work offline in the window stops it before anything is sent.
+                    network.Requests.Clear()
+                    card.Check("Work offline").Checked = True
+                    PumpUntilComplete(dialog.TestConnectionAsync())
+                    Assert.AreEqual(0, network.Requests.Count)
+                    card.Check("Work offline").Checked = False
+
+                    DirectCast(dialog.CancelButton, Button).PerformClick()
+                    Assert.AreEqual(DialogResult.Cancel, dialog.DialogResult)
+                End Using
+
+                Assert.IsFalse(File.Exists(Path.Combine(_directory, "settings.json")), "Cancel saves nothing.")
+                Assert.IsFalse(_keys.HasKey(ProtectedKeyStore.Anthropic) OrElse _keys.HasKey(ProtectedKeyStore.AssistantEndpoint))
             End Sub)
     End Sub
 
@@ -422,6 +555,13 @@ Public Class AssistantSettingsTests
     <DataRow(SystemColorMode.Classic)>
     <DataRow(SystemColorMode.Dark)>
     Public Sub TheCardFitsAtTheSmallestSize(mode As SystemColorMode)
+        ' Test Connection's longest kind of result wraps too.
+        Dim network As New AssistantCoreTests.CapturingNetwork With {
+            .Respond = Function(sent) AssistantCoreTests.Answer(Net.HttpStatusCode.OK, AssistantCoreTests.ServerModelList(
+                "qwen3-coder:30b-a3b-instruct-q4_K_M", "deepseek-r1:70b-llama-distill-q4_K_M", "mistral-small3.2:24b-instruct-2506-q8_0",
+                "gemma3:27b-it-qat", "llama3.3:70b-instruct-q4_K_M", "phi4-reasoning:14b-plus-q8_0", "nomic-embed-text:latest"))
+        }
+        OnlineAccess.InnerHandlerFactory = Function() network
         RunOnSta(
             Sub()
                 Dim settings As AppSettings = WithAssistant(AssistantCoreTests.CompatibleSettings("http://localhost:11434/v1"))
@@ -431,7 +571,11 @@ Public Class AssistantSettingsTests
                     ShowOffscreen(dialog)
                     dialog.Size = dialog.MinimumSize
                     Application.DoEvents()
+                    PumpUntilComplete(dialog.TestConnectionAsync())
+                    StringAssert.StartsWith(dialog.TestResultText, "The server at localhost:11434 is running, but doesn't list llama3.1. It lists: ")
+                    Assert.AreEqual("Bearer " & ServerTestKey, network.Requests.Single().Header("Authorization"), "The stored key, at the address it was added for.")
                     Dim card As New Card(dialog)
+                    Assert.AreEqual("Test Connection sends only your server key to localhost:11434, to list its models. Nothing leaves this computer.", card.TestSends.Text)
                     Dim group As Control = card.TurnOn.Parent.Parent
                     Assert.IsTrue(TypeOf group Is GroupBox)
                     Assert.AreEqual(UiTheme.CardBackground(), group.BackColor, "Themed as a card.")
@@ -667,6 +811,19 @@ Public Class AssistantSettingsTests
             End Get
         End Property
 
+        Public ReadOnly Property TestConnection As Button
+            Get
+                Return Button("Test Connection")
+            End Get
+        End Property
+
+        ' The line below Test Connection: what it sends, and to whom.
+        Public ReadOnly Property TestSends As Label
+            Get
+                Return Descendants(_form).OfType(Of Label)().Single(Function(item) item.AccessibleName = "What Test Connection sends")
+            End Get
+        End Property
+
         ' A key's status sits beside its Add button.
         Public Function StatusOf(addButton As Button) As String
             Return addButton.Parent.Controls.OfType(Of Label)().Single().Text
@@ -712,6 +869,17 @@ Public Class AssistantSettingsTests
             GetType(Form1).GetMethod("ConnectOnlineAccess", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(Me, Nothing)
         End Sub
     End Class
+
+    Private Shared Sub PumpUntilComplete(operation As Tasks.Task)
+        Dim timer As Diagnostics.Stopwatch = Diagnostics.Stopwatch.StartNew()
+        While Not operation.IsCompleted AndAlso timer.Elapsed < TimeSpan.FromSeconds(10)
+            Application.DoEvents()
+            Thread.Sleep(1)
+        End While
+        Assert.IsTrue(operation.IsCompleted, "Test Connection timed out.")
+        operation.GetAwaiter().GetResult()
+        Application.DoEvents()
+    End Sub
 
     Private Shared Sub ShowOffscreen(form As Form)
         form.StartPosition = FormStartPosition.Manual

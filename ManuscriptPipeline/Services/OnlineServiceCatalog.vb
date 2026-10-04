@@ -67,8 +67,8 @@ Namespace Services
         Public Const AssistantClaude As String = "assistant-claude"
         Public Const AssistantCompatible As String = "assistant-compatible"
 
-        Private Const AssistantSends As String = "Only what an AI assistant window shows you before sending: a decision letter you paste; a journal's author instructions you paste, with the article type you enter; one reviewer comment with its reviewer label and your planned action; or a manuscript's title, abstract, keywords, type of work, and target journal with its Journal Library facts."
-        Private Const AssistantWhen As String = "Read Decision Letter..., Add from Letter..., Read Author Instructions..., Suggest a Starting Point..., and Draft Cover Letter..., after you turn on the AI assistant in Preferences."
+        Private Const AssistantSends As String = "Only what an AI assistant window shows you before sending: a decision letter you paste; a journal's author instructions you paste, with the article type you enter; one reviewer comment with its reviewer label and your planned action; or a manuscript's title, abstract, keywords, type of work, and target journal with its Journal Library facts. Test Connection in Preferences sends only the key, if you added one, to list the models and check the one you chose."
+        Private Const AssistantWhen As String = "Read Decision Letter..., Add from Letter..., Read Author Instructions..., Suggest a Starting Point..., Draft Cover Letter..., and Test Connection, after you turn on the AI assistant in Preferences."
 
         ' In the order the Online services page lists them.
         Public Shared ReadOnly Property Services As IReadOnlyList(Of OnlineService) = {

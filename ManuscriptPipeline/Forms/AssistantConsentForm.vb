@@ -198,24 +198,25 @@ Namespace Forms
 
 
         ' A failed request in plain words, ending "Nothing was changed."
-        Public Shared Function Describe(ex As Exception, Optional connection As AssistantConnection = Nothing) As String
+        ' unless another ending is given.
+        Public Shared Function Describe(ex As Exception, Optional connection As AssistantConnection = Nothing, Optional ending As String = " Nothing was changed.") As String
             connection = If(connection, OnlineAccess.CurrentAssistant())
             Dim name As String = If(connection Is Nothing OrElse connection.Provider = AssistantProvider.Claude, "Claude", "The server")
-            Const Unchanged As String = " Nothing was changed."
+            Dim unchanged As String = If(ending, String.Empty)
 
             If TypeOf ex Is OnlineServiceBlockedException OrElse TypeOf ex Is AssistantException Then Return ex.Message
             If TypeOf ex Is TaskCanceledException AndAlso TypeOf ex.InnerException Is TimeoutException Then
-                Return name & " didn't answer in time." & If(connection IsNot Nothing AndAlso connection.IsOnThisComputer, " A model on this computer can take a while to load; try again.", " Try again later.") & Unchanged
+                Return name & " didn't answer in time." & If(connection IsNot Nothing AndAlso connection.IsOnThisComputer, " A model on this computer can take a while to load; try again.", " Try again later.") & unchanged
             End If
-            If TypeOf ex Is OperationCanceledException Then Return "Stopped." & Unchanged
+            If TypeOf ex Is OperationCanceledException Then Return "Stopped." & unchanged
             ' Only a wait the service really gave is named; without one, its
             ' own reason is shown, since waiting doesn't help a used-up quota.
             Dim busy As OnlineServiceBusyException = TryCast(ex, OnlineServiceBusyException)
             If busy IsNot Nothing Then
-                If busy.RetryAfter.HasValue Then Return OnlineAccess.Describe(ex, name) & Unchanged
+                If busy.RetryAfter.HasValue Then Return OnlineAccess.Describe(ex, name) & unchanged
                 Dim reason As String = AssistantErrorText.MessageOf(busy)
-                If reason.Length > 0 Then Return name & " is limiting requests right now. " & ItSaid(reason) & Unchanged
-                Return name & " is limiting requests right now. Try again in a few minutes." & Unchanged
+                If reason.Length > 0 Then Return name & " is limiting requests right now. " & ItSaid(reason) & unchanged
+                Return name & " is limiting requests right now. Try again in a few minutes." & unchanged
             End If
 
             Dim request As HttpRequestException = TryCast(ex, HttpRequestException)
@@ -223,27 +224,57 @@ Namespace Forms
                 If Not request.StatusCode.HasValue Then
                     If connection IsNot Nothing AndAlso connection.Provider = AssistantProvider.Compatible Then
                         Return "PaperRoute couldn't reach the server at " & connection.Origin.Authority & "." &
-                            If(connection.IsOnThisComputer, " Check that it is running.", " Check the address and your internet connection.") & Unchanged
+                            If(connection.IsOnThisComputer, " Check that it is running.", " Check the address and your internet connection.") & unchanged
                     End If
-                    Return "PaperRoute couldn't reach Claude. Check your internet connection, then try again." & Unchanged
+                    Return "PaperRoute couldn't reach Claude. Check your internet connection, then try again." & unchanged
                 End If
                 Dim code As Integer = CInt(request.StatusCode.Value)
                 Dim codeText As String = code.ToString(Globalization.CultureInfo.InvariantCulture)
-                If code = 401 OrElse code = 403 Then Return name & " didn't accept the key. Check it in Settings > Preferences > AI assistant." & Unchanged
-                If code = 404 Then Return name & " didn't recognize the model or address. Check them in Settings > Preferences > AI assistant." & Unchanged
+                If code = 401 OrElse code = 403 Then Return name & " didn't accept the key. Check it in Settings > Preferences > AI assistant." & unchanged
+                If code = 404 Then Return name & " didn't recognize the model or address. Check them in Settings > Preferences > AI assistant." & unchanged
                 If code = 400 OrElse code = 413 OrElse code = 422 Then
                     ' The service's own reason, when it gave one: a 400 is
                     ' as often billing as it is the model or the length.
                     Dim said As String = AssistantErrorText.MessageOf(request)
-                    If said.Length > 0 Then Return name & " couldn't accept the request (HTTP " & codeText & "). " & ItSaid(said) & Unchanged
-                    Return name & " couldn't accept the request (HTTP " & codeText & "). Check the model in Settings > Preferences > AI assistant, or send less text." & Unchanged
+                    If said.Length > 0 Then Return name & " couldn't accept the request (HTTP " & codeText & "). " & ItSaid(said) & unchanged
+                    Return name & " couldn't accept the request (HTTP " & codeText & "). Check the model in Settings > Preferences > AI assistant, or send less text." & unchanged
                 End If
-                If code = 529 Then Return name & " is overloaded right now. Try again in a few minutes." & Unchanged
-                If code >= 500 Then Return name & " had a problem on its side (HTTP " & codeText & "). Try again later." & Unchanged
-                Return name & " answered with an error (HTTP " & codeText & ")." & Unchanged
+                If code = 529 Then Return name & " is overloaded right now. Try again in a few minutes." & unchanged
+                If code >= 500 Then Return name & " had a problem on its side (HTTP " & codeText & "). Try again later." & unchanged
+                Return name & " answered with an error (HTTP " & codeText & ")." & unchanged
             End If
 
-            Return OnlineAccess.Describe(ex, name) & Unchanged
+            Return OnlineAccess.Describe(ex, name) & unchanged
+        End Function
+
+
+        ' Why Test Connection in Preferences failed (#96), in plain words:
+        ' a wrong key, a wrong address, or a server that isn't running.
+        Friend Shared Function DescribeTest(ex As Exception, connection As AssistantConnection) As String
+            Dim claude As Boolean = connection Is Nothing OrElse connection.Provider = AssistantProvider.Claude
+            Dim server As String = If(claude, "Claude", "The server at " & connection.Origin.Authority)
+
+            Dim blocked As OnlineServiceBlockedException = TryCast(ex, OnlineServiceBlockedException)
+            ' The box in the window is clear (else the button is off), but
+            ' the saved choice still holds until Save.
+            If blocked IsNot Nothing AndAlso blocked.Reason = OnlineBlockReason.WorkOffline Then
+                Return "Work offline is on until you save, so PaperRoute didn't go online. Save with Work offline turned off, then test again."
+            End If
+
+            Dim request As HttpRequestException = TryCast(ex, HttpRequestException)
+            If request IsNot Nothing AndAlso Not TypeOf ex Is OnlineServiceBusyException AndAlso request.StatusCode.HasValue Then
+                Dim code As Integer = CInt(request.StatusCode.Value)
+                If code = 401 OrElse code = 403 Then
+                    Return If(claude,
+                              "Claude didn't accept the key. Check that you copied all of it, or add it again.",
+                              server & " didn't accept the request. Add its key, or check the one you added.")
+                End If
+                If code = 404 AndAlso Not claude AndAlso connection.Endpoint IsNot Nothing Then
+                    Return server & " has no list of models at " & connection.Endpoint.AbsolutePath.TrimEnd("/"c) & "/models. Check the address; it usually ends in /v1."
+                End If
+            End If
+
+            Return Describe(ex, connection, ending:=String.Empty)
         End Function
 
 

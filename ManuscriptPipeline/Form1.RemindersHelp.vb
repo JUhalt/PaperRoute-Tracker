@@ -15,7 +15,7 @@ Partial Public Class Form1
         e As EventArgs
     )
 
-        Using dialog As New HelpForm()
+        Using dialog As HelpForm = CreateUserGuide()
 
             dialog.ShowDialog(
                 Me
@@ -24,6 +24,16 @@ Partial Public Class Form1
         End Using
 
     End Sub
+
+
+    ' Help offers the example library (#96), except inside the example.
+    Friend Function CreateUserGuide() As HelpForm
+
+        Return New HelpForm(
+            openExample:=If(ExampleLibraryService.IsActive, Nothing, New Action(AddressOf OpenExampleLibrary))
+        )
+
+    End Function
 
 
     Private Sub TryShowStartupReminderNotification()

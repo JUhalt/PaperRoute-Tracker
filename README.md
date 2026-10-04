@@ -55,7 +55,7 @@ v0.8 moves the library to Schema 8, which v0.7 cannot open, so keep a backup mad
 ### Prepare and submit
 
 - **Journal submission history** with manuscript numbers, dates, notes, and publisher portal links.
-- **Reusable Journal Library** with favorites and shortlists, homepages, submission portals, and checklist templates.
+- **Reusable Journal Library** with favorites and a watch list, homepages, submission portals, and checklist templates.
 - **Per-journal readiness checklists** applied to a manuscript and tracked as unresolved, complete, or not applicable. Readiness is advisory and never records a submission by itself.
 - **Submission Packet Vault** that preserves the exact files prepared for a journal as managed copies, external links, or metadata-only records, with optional local SHA-256 checks that report unchanged, changed, or missing files. From v0.9 (in development), **Export Packet...** saves a packet's chosen files as a .zip with a summary page, a checksum list, and RO-Crate metadata, after showing any author names hidden inside the files.
 

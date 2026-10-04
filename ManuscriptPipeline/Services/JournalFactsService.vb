@@ -215,8 +215,17 @@ Namespace Services
             Dim publisherSource As String = If(doaj IsNot Nothing AndAlso doaj.Publisher.Length > 0, JournalFactCatalog.DoajSource, JournalFactCatalog.OpenAlexSource)
             PlanField(result, record, PublisherField, "Publisher", publisher, publisherSource, isUrl:=False)
 
-            If doaj IsNot Nothing Then
+            ' The homepage: DOAJ's when it lists one, else OpenAlex's. OpenAlex
+            ' never replaces a homepage DOAJ gave, even when DOAJ wasn't
+            ' reached this time or no longer lists the journal.
+            If doaj IsNot Nothing AndAlso Not String.IsNullOrWhiteSpace(doaj.HomepageUrl) Then
                 PlanField(result, record, HomepageField, "Homepage", doaj.HomepageUrl, JournalFactCatalog.DoajSource, isUrl:=True)
+            ElseIf openAlex IsNot Nothing AndAlso Not String.IsNullOrWhiteSpace(openAlex.HomepageUrl) AndAlso
+                   Not CameFrom(record, HomepageField, JournalFactCatalog.DoajSource) Then
+                PlanField(result, record, HomepageField, "Homepage", openAlex.HomepageUrl, JournalFactCatalog.OpenAlexSource, isUrl:=True)
+            End If
+
+            If doaj IsNot Nothing Then
                 PlanField(result, record, AimsScopeField, "Aims and scope", doaj.AimsScopeUrl, JournalFactCatalog.DoajSource, isUrl:=True)
                 PlanField(result, record, AuthorInstructionsField, "Author instructions", doaj.AuthorInstructionsUrl, JournalFactCatalog.DoajSource, isUrl:=True)
                 PlanField(result, record, EditorialBoardField, "Editorial board", doaj.EditorialBoardUrl, JournalFactCatalog.DoajSource, isUrl:=True)
@@ -515,43 +524,76 @@ Namespace Services
         End Function
 
 
-        ' A stored fact or link beside a journal-choice question (#89), such as
-        ' the peer review type beside "Is its peer review described?". The
+        ' Stored facts or links beside a journal-choice question (#89), such as
+        ' the peer review type beside "Is its peer review described?", one
+        ' line each; none when nothing helps. evidence: what Find Journals
+        ' kept for the journal (#96), used where the record has nothing, such
+        ' as its main topics and homepage beside the scope question. The
         ' question is never answered for the researcher.
-        Public Shared Function HintFor(checkId As String, record As JournalRecord) As (Text As String, Url As String)
+        Public Shared Function HintFor(checkId As String, record As JournalRecord, Optional evidence As CandidateEvidence = Nothing) As List(Of (Text As String, Url As String))
 
-            Dim none As (Text As String, Url As String) = (String.Empty, String.Empty)
-            If record Is Nothing Then Return none
-
-            Dim fact As Func(Of String, String, (String, String)) =
+            Dim parts As New List(Of (Text As String, Url As String))()
+            Dim add As Action(Of String, String) =
+                Sub(text, url)
+                    If Not String.IsNullOrWhiteSpace(text) Then parts.Add((text, If(url, String.Empty)))
+                End Sub
+            Dim link As Action(Of String, String) =
+                Sub(text, url)
+                    If UrlSafetyService.IsSafeHttpUrl(url) Then add(text, url)
+                End Sub
+            Dim fact As Func(Of String, String, String) =
                 Function(key, prefix)
                     Dim found As JournalFact = BestFact(record, key)
-                    Return If(found Is Nothing, none, (prefix & DisplayValue(found) & " (" & found.Source & ")", String.Empty))
+                    Return If(found Is Nothing, String.Empty, prefix & DisplayValue(found) & " (" & found.Source & ")")
                 End Function
+            ' Where the evidence came from: "OpenAlex", or "Example".
+            Dim evidenceSource As String = If(String.IsNullOrWhiteSpace(evidence?.Source), JournalFactCatalog.OpenAlexSource, evidence.Source.Trim())
 
             Select Case checkId
                 Case "trust.review"
-                    Return fact(JournalFactCatalog.Review, "Peer review: ")
+                    add(fact(JournalFactCatalog.Review, "Peer review: "), Nothing)
                 Case "trust.fees", "fit.fees"
-                    Return fact(JournalFactCatalog.Apc, "Fee: ")
+                    add(fact(JournalFactCatalog.Apc, "Fee: "), Nothing)
                 Case "trust.indexed"
-                    Dim listing As (String, String) = fact(JournalFactCatalog.DoajListing, String.Empty)
-                    Return If(listing.Item1.Length > 0, listing, fact(JournalFactCatalog.OpenAccess, String.Empty))
+                    Dim listing As String = fact(JournalFactCatalog.DoajListing, String.Empty)
+                    add(If(listing.Length > 0, listing, fact(JournalFactCatalog.OpenAccess, String.Empty)), Nothing)
                 Case "trust.publisher"
-                    Return If(String.IsNullOrWhiteSpace(record.Publisher), none, ("Publisher: " & record.Publisher.Trim(), String.Empty))
+                    If Not String.IsNullOrWhiteSpace(record?.Publisher) Then
+                        add("Publisher: " & record.Publisher.Trim(), Nothing)
+                    ElseIf Not String.IsNullOrWhiteSpace(evidence?.Publisher) Then
+                        add("Publisher: " & evidence.Publisher.Trim() & " (" & evidenceSource & ")", Nothing)
+                    End If
                 Case "trust.guidelines"
-                    Return If(UrlSafetyService.IsSafeHttpUrl(record.AuthorInstructionsUrl), ("Open author instructions", record.AuthorInstructionsUrl), none)
+                    If record IsNot Nothing Then link("Open author instructions", record.AuthorInstructionsUrl)
                 Case "fit.scope"
-                    Return If(UrlSafetyService.IsSafeHttpUrl(record.AimsScopeUrl), ("Open aims and scope", record.AimsScopeUrl), none)
+                    Dim topics As String = fact(JournalFactCatalog.Topics, "Main topics: ")
+                    Dim evidenceTopics As List(Of String) = If(evidence?.Topics, New List(Of String)()).Where(Function(item) Not String.IsNullOrWhiteSpace(item)).Select(Function(item) item.Trim()).ToList()
+                    If topics.Length = 0 AndAlso evidenceTopics.Count > 0 Then topics = "Main topics: " & String.Join(" · ", evidenceTopics) & " (" & evidenceSource & ")"
+                    add(topics, Nothing)
+                    If record IsNot Nothing Then link("Open aims and scope", record.AimsScopeUrl)
+                    If UrlSafetyService.IsSafeHttpUrl(record?.HomepageUrl) Then
+                        Dim origin As String = FilledBy(record, HomepageField)
+                        link("Open homepage" & If(origin.Length > 0, " (" & origin & ")", String.Empty), record.HomepageUrl)
+                    ElseIf evidence IsNot Nothing Then
+                        link("Open homepage (" & evidenceSource & ")", evidence.HomepageUrl)
+                    End If
                 Case "fit.sharing"
-                    Dim sharing As String = JournalFactCatalog.SharingPolicyUrl(record)
-                    Return If(sharing.Length = 0, none, ("Open sharing policy (Open Policy Finder)", sharing))
+                    If record IsNot Nothing Then link("Open sharing policy (Open Policy Finder)", JournalFactCatalog.SharingPolicyUrl(record))
                 Case "fit.timeline"
-                    Return fact(JournalFactCatalog.Weeks, String.Empty)
+                    add(fact(JournalFactCatalog.Weeks, String.Empty), Nothing)
             End Select
 
-            Return none
+            Return parts
 
+        End Function
+
+
+        ' The source that filled the field, while it still holds that value;
+        ' "" for a value the researcher typed.
+        Private Shared Function FilledBy(record As JournalRecord, key As String) As String
+            Dim origin As FieldSource = Nothing
+            If record?.FieldSources Is Nothing OrElse Not record.FieldSources.TryGetValue(key, origin) OrElse origin Is Nothing Then Return String.Empty
+            Return If(String.Equals(origin.Value, FieldValue(record, key), StringComparison.Ordinal), If(origin.Source, String.Empty).Trim(), String.Empty)
         End Function
 
 
@@ -662,6 +704,17 @@ Namespace Services
             End If
 
         End Sub
+
+
+        ' True when the field still holds the value the source filled it with.
+        Private Shared Function CameFrom(record As JournalRecord, key As String, source As String) As Boolean
+            Dim origin As FieldSource = Nothing
+            Return record.FieldSources IsNot Nothing AndAlso
+                   record.FieldSources.TryGetValue(key, origin) AndAlso
+                   origin IsNot Nothing AndAlso
+                   String.Equals(origin.Source, source, StringComparison.Ordinal) AndAlso
+                   String.Equals(origin.Value, FieldValue(record, key), StringComparison.Ordinal)
+        End Function
 
 
         Private Shared Sub PlanIssns(plan As JournalFactsPlan, record As JournalRecord, doaj As DoajJournal, openAlex As OpenAlexSource)

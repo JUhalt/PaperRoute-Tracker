@@ -254,6 +254,14 @@ Namespace Services
                 evidence.Source = Truncate(If(evidence.Source, String.Empty).Trim(), 40)
                 evidence.OpenAlexId = OpenAlexSourceClient.NormalizeId(evidence.OpenAlexId)
                 evidence.Issns = IssnService.NormalizeList(evidence.Issns)
+                evidence.Publisher = Truncate(If(evidence.Publisher, String.Empty).Trim(), 200)
+                evidence.Topics = If(evidence.Topics, New List(Of String)()).
+                    Where(Function(item) Not String.IsNullOrWhiteSpace(item)).
+                    Select(Function(item) Truncate(item.Trim(), 120)).
+                    Take(3).
+                    ToList()
+                ' A web address only; anything else is dropped.
+                evidence.HomepageUrl = JournalFactsService.StoredUrl(evidence.HomepageUrl)
                 evidence.Keywords = If(evidence.Keywords, New List(Of String)()).
                     Where(Function(item) Not String.IsNullOrWhiteSpace(item)).
                     Select(Function(item) Truncate(item.Trim(), 80)).
