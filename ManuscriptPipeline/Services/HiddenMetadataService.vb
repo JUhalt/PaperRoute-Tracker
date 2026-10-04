@@ -21,8 +21,19 @@ Namespace Services
         PlainType
         ' Any other type PaperRoute doesn't read.
         NotChecked
-        ' Damaged or unreadable.
+        ' Damaged, unreadable, or encrypted.
         CouldNotCheck
+    End Enum
+
+
+    ' What a check couldn't read, from least to most serious.
+    Public Enum HiddenMetadataGap
+        ' Everything the check looks for was read.
+        None
+        ' Part of the file is damaged or couldn't be read.
+        PartUnreadable
+        ' The file is encrypted, so most of what it holds can't be read.
+        Encrypted
     End Enum
 
 
@@ -34,8 +45,9 @@ Namespace Services
             Me.NamesPerson = namesPerson
         End Sub
 
-        ' "Author", "Last saved by", "Company", "Template", "Comment authors",
-        ' "Tracked changes by", "Camera details", or "Location".
+        ' "Author", "Last saved by", "Comment authors", "Tracked changes by",
+        ' "Custom properties", "Company", "Template", "Camera details", or
+        ' "Location".
         Public ReadOnly Property Label As String
 
         ' Trimmed, with whitespace collapsed; several values joined by ", ".
@@ -52,14 +64,22 @@ Namespace Services
         Public Sub New(
             state As HiddenMetadataState,
             Optional findings As IEnumerable(Of HiddenMetadataFinding) = Nothing,
-            Optional reachedLimit As Boolean = False
+            Optional reachedLimit As Boolean = False,
+            Optional gap As HiddenMetadataGap = HiddenMetadataGap.None
         )
-            Me.State = state
             Me.Findings = If(findings, Enumerable.Empty(Of HiddenMetadataFinding)()).
                 Where(Function(item) item IsNot Nothing).
                 ToList().
                 AsReadOnly()
+
+            ' A file that couldn't all be read never claims "None found".
+            If state = HiddenMetadataState.Checked AndAlso gap <> HiddenMetadataGap.None AndAlso Me.Findings.Count = 0 Then
+                state = HiddenMetadataState.CouldNotCheck
+            End If
+
+            Me.State = state
             Me.ReachedLimit = reachedLimit
+            Me.Gap = gap
         End Sub
 
         Public ReadOnly Property State As HiddenMetadataState
@@ -68,6 +88,10 @@ Namespace Services
 
         ' Only part of a very large file was read.
         Public ReadOnly Property ReachedLimit As Boolean
+
+        ' What couldn't be read: after the findings of a checked file, or why
+        ' a file couldn't be checked.
+        Public ReadOnly Property Gap As HiddenMetadataGap
 
         Public ReadOnly Property HasFindings As Boolean
             Get
@@ -87,17 +111,20 @@ Namespace Services
                         "None found",
                         String.Join("; ", Findings.Select(Function(item) item.Label & ": " & item.Value))
                     )
+                    If ReachedLimit Then result &= " (checked part of this large file)"
+                    Select Case Gap
+                        Case HiddenMetadataGap.Encrypted
+                            result &= "; the rest couldn't be checked (encrypted)"
+                        Case HiddenMetadataGap.PartUnreadable
+                            result &= "; part of this file couldn't be checked"
+                    End Select
                 Case HiddenMetadataState.PlainType
                     result = "Not checked (no hidden fields for this type)"
                 Case HiddenMetadataState.NotChecked
                     result = "Not checked"
                 Case Else
-                    result = "Couldn't be checked"
+                    result = If(Gap = HiddenMetadataGap.Encrypted, "Couldn't be checked (encrypted)", "Couldn't be checked")
             End Select
-
-            If ReachedLimit AndAlso State = HiddenMetadataState.Checked Then
-                result &= " (checked part of this large file)"
-            End If
 
             Return result
 
@@ -109,7 +136,9 @@ Namespace Services
     ' Reads document properties, comment and tracked-change authors, template
     ' paths, PDF Info and XMP authors, and photo EXIF, GPS, and text chunks.
     ' Never throws for a bad file (only when cancelled): a damaged or
-    ' unreadable file is reported as "Couldn't be checked".
+    ' unreadable file is reported as "Couldn't be checked", keeping anything
+    ' already found. Every loop moves forward through what was read, so a
+    ' crafted file can't make a check take much longer than reading it.
     Public NotInheritable Class HiddenMetadataService
 
         Public Const DefaultByteLimit As Long = 64L * 1024 * 1024
@@ -120,12 +149,29 @@ Namespace Services
         Private Const MaximumInflatedStream As Integer = 8 * 1024 * 1024
         Private Const MaximumInflatedText As Integer = 1024 * 1024
         Private Const MaximumPdfString As Integer = 8192
+        ' How far a PDF literal string is followed looking for its end.
+        Private Const MaximumPdfLiteral As Integer = 65536
+        ' At most this many compressed PDF streams, package parts, and
+        ' indirect /Author values are read, so a crafted file can't multiply
+        ' the work.
+        Private Const MaximumPdfStreams As Integer = 4096
+        Private Const MaximumPackageParts As Integer = 2000
+        Private Const MaximumPdfReferences As Integer = 16
         Private Const ReadBufferSize As Integer = 81920
 
         Private Const DcNamespace As String = "http://purl.org/dc/elements/1.1/"
         Private Const CoreNamespace As String = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
         Private Const AppNamespace As String = "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"
+        Private Const CustomNamespace As String = "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties"
+        Private Const RelationshipsNamespace As String = "http://schemas.openxmlformats.org/package/2006/relationships"
         Private Const WordNamespace As String = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+        Private Const Word2012Namespace As String = "http://schemas.microsoft.com/office/word/2012/wordml"
+        Private Const SpreadsheetNamespace As String = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+        Private Const ThreadedCommentNamespace As String = "http://schemas.microsoft.com/office/spreadsheetml/2018/threadedcomments"
+        Private Const PresentationNamespace As String = "http://schemas.openxmlformats.org/presentationml/2006/main"
+        Private Const Presentation2012Namespace As String = "http://schemas.microsoft.com/office/powerpoint/2012/main"
+        Private Const Presentation2018Namespace As String = "http://schemas.microsoft.com/office/powerpoint/2018/8/main"
+        Private Const OdfOfficeNamespace As String = "urn:oasis:names:tc:opendocument:xmlns:office:1.0"
         Private Const OdfMetaNamespace As String = "urn:oasis:names:tc:opendocument:xmlns:meta:1.0"
 
         Private Shared ReadOnly PlainExtensions As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase) From {
@@ -139,22 +185,24 @@ Namespace Services
         }
 
         Private Shared ReadOnly LabelOrder As String() = {
-            "Author", "Last saved by", "Comment authors", "Tracked changes by",
+            "Author", "Last saved by", "Comment authors", "Tracked changes by", "Custom properties",
             "Company", "Template", "Camera details", "Location"
         }
 
         Private Shared ReadOnly PersonLabels As New HashSet(Of String)(StringComparer.Ordinal) From {
-            "Author", "Last saved by", "Comment authors", "Tracked changes by"
+            "Author", "Last saved by", "Comment authors", "Tracked changes by", "Custom properties"
         }
 
-        ' Word elements that record a tracked change and its author.
-        Private Shared ReadOnly TrackedChangeElements As New HashSet(Of String)(StringComparer.Ordinal) From {
-            "ins", "del", "moveFrom", "moveTo", "cellIns", "cellDel", "cellMerge", "numberingChange"
+        ' Custom property names that suggest a person, such as _AuthorEmail.
+        Private Shared ReadOnly PersonPropertyWords As String() = {
+            "author", "owner", "editor", "creator", "reviewer", "manager", "contact",
+            "person", "user", "sender", "approver", "signer"
         }
 
         Private Shared ReadOnly PdfSignature As Byte() = Encoding.ASCII.GetBytes("%PDF-")
         Private Shared ReadOnly PdfEndOfFile As Byte() = Encoding.ASCII.GetBytes("%%EOF")
         Private Shared ReadOnly PdfAuthorKey As Byte() = Encoding.ASCII.GetBytes("/Author")
+        Private Shared ReadOnly PdfEncryptKey As Byte() = Encoding.ASCII.GetBytes("/Encrypt")
         Private Shared ReadOnly PdfStreamKeyword As Byte() = Encoding.ASCII.GetBytes("stream")
         Private Shared ReadOnly PdfEndStreamKeyword As Byte() = Encoding.ASCII.GetBytes("endstream")
         Private Shared ReadOnly PdfObjKeyword As Byte() = Encoding.ASCII.GetBytes("obj")
@@ -167,7 +215,7 @@ Namespace Services
         Private Shared ReadOnly PngSignature As Byte() = {&H89, &H50, &H4E, &H47, &HD, &HA, &H1A, &HA}
 
         Private Shared ReadOnly StreamTypePattern As New Regex(
-            "/Type\s*/(?:Metadata|ObjStm)(?![A-Za-z0-9])", RegexOptions.CultureInvariant
+            "/Type\s*/(Metadata|ObjStm)(?![A-Za-z0-9])", RegexOptions.CultureInvariant
         )
 
         Private Shared ReadOnly StreamLengthPattern As New Regex(
@@ -184,12 +232,15 @@ Namespace Services
             Optional cancellationToken As CancellationToken = Nothing
         ) As HiddenMetadataReport
 
+            Dim found As New FindingCollector()
+            Dim budget As ReadBudget = Nothing
+
             Try
                 cancellationToken.ThrowIfCancellationRequested()
                 If String.IsNullOrWhiteSpace(sourcePath) Then Return New HiddenMetadataReport(HiddenMetadataState.CouldNotCheck)
 
                 Dim extension As String = ExtensionOf(sourcePath)
-                Dim budget As New ReadBudget(Math.Min(LargestLimit, Math.Max(2L, byteLimit)), cancellationToken)
+                budget = New ReadBudget(Math.Min(LargestLimit, Math.Max(2L, byteLimit)), cancellationToken)
 
                 Using source As New FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read, ReadBufferSize)
 
@@ -200,7 +251,6 @@ Namespace Services
                     End If
 
                     Dim head As Byte() = ReadHead(source, 1024)
-                    Dim found As New FindingCollector()
 
                     Select Case Detect(head)
                         Case DetectedKind.Pdf
@@ -219,14 +269,22 @@ Namespace Services
                             Return New HiddenMetadataReport(HiddenMetadataState.NotChecked)
                     End Select
 
-                    Return New HiddenMetadataReport(HiddenMetadataState.Checked, found.ToFindings(), budget.ReachedLimit)
+                    Return New HiddenMetadataReport(HiddenMetadataState.Checked, found.ToFindings(), budget.ReachedLimit, found.Gap)
 
                 End Using
 
             Catch ex As OperationCanceledException When cancellationToken.IsCancellationRequested
                 Throw
             Catch
-                Return New HiddenMetadataReport(HiddenMetadataState.CouldNotCheck)
+                ' What was read before the damage still shows, with a note that
+                ' the rest wasn't checked; with nothing found, "Couldn't be checked".
+                found.NoteGap(HiddenMetadataGap.PartUnreadable)
+                Return New HiddenMetadataReport(
+                    HiddenMetadataState.Checked,
+                    found.ToFindings(),
+                    budget IsNot Nothing AndAlso budget.ReachedLimit,
+                    found.Gap
+                )
             End Try
 
         End Function
@@ -274,36 +332,106 @@ Namespace Services
                     If Not parts.ContainsKey(key) Then parts(key) = entry
                 Next
 
+                Dim reads As New List(Of (Entry As ZipArchiveEntry, Reading As Action(Of XmlReader, FindingCollector)))()
+
                 If parts.ContainsKey("[Content_Types].xml") Then
-                    ReadPart(parts, "docProps/core.xml", budget, found, AddressOf ReadCoreProperties)
-                    ReadPart(parts, "docProps/app.xml", budget, found, AddressOf ReadAppProperties)
-                    ReadPart(parts, "word/comments.xml", budget, found, AddressOf ReadCommentAuthors)
-                    ReadPart(parts, "word/document.xml", budget, found, AddressOf ReadTrackedChangeAuthors)
-                    Return True
+                    AddPart(reads, parts, "docProps/core.xml", AddressOf ReadCoreProperties)
+                    AddPart(reads, parts, "docProps/app.xml", AddressOf ReadAppProperties)
+                    AddPart(reads, parts, "docProps/custom.xml", AddressOf ReadCustomProperties)
+                    For Each part As KeyValuePair(Of String, ZipArchiveEntry) In parts
+                        If IsTemplateRelationshipsPart(part.Key) Then
+                            AddPart(reads, part.Value, AddressOf ReadAttachedTemplate)
+                        ElseIf IsOfficePeoplePart(part.Key) Then
+                            AddPart(reads, part.Value, AddressOf ReadOfficePeople)
+                        End If
+                    Next
+                ElseIf parts.ContainsKey("mimetype") OrElse parts.ContainsKey("meta.xml") Then
+                    AddPart(reads, parts, "meta.xml", AddressOf ReadOpenDocumentMeta)
+                    AddPart(reads, parts, "styles.xml", AddressOf ReadOpenDocumentPeople)
+                    AddPart(reads, parts, "content.xml", AddressOf ReadOpenDocumentPeople)
+                Else
+                    Return False
                 End If
 
-                If parts.ContainsKey("mimetype") OrElse parts.ContainsKey("meta.xml") Then
-                    ReadPart(parts, "meta.xml", budget, found, AddressOf ReadOpenDocumentMeta)
-                    Return True
-                End If
+                ' Small parts first, so one very large part (usually the body)
+                ' can't use up the byte budget before the others are read.
+                Dim ordered = reads.
+                    OrderBy(Function(item) item.Entry.Length).
+                    ThenBy(Function(item) item.Entry.FullName, StringComparer.Ordinal).
+                    ToList()
 
-                Return False
+                For index As Integer = 0 To ordered.Count - 1
+                    If index >= MaximumPackageParts Then
+                        budget.ReachedLimit = True
+                        Exit For
+                    End If
+                    ReadPart(ordered(index).Entry, budget, found, ordered(index).Reading)
+                Next
+
+                Return True
 
             End Using
 
         End Function
 
 
-        Private Shared Sub ReadPart(
+        Private Shared Sub AddPart(
+            reads As List(Of (Entry As ZipArchiveEntry, Reading As Action(Of XmlReader, FindingCollector))),
             parts As Dictionary(Of String, ZipArchiveEntry),
             partName As String,
+            reading As Action(Of XmlReader, FindingCollector)
+        )
+            Dim entry As ZipArchiveEntry = Nothing
+            If parts.TryGetValue(partName, entry) Then AddPart(reads, entry, reading)
+        End Sub
+
+
+        Private Shared Sub AddPart(
+            reads As List(Of (Entry As ZipArchiveEntry, Reading As Action(Of XmlReader, FindingCollector))),
+            entry As ZipArchiveEntry,
+            reading As Action(Of XmlReader, FindingCollector)
+        )
+            reads.Add((entry, reading))
+        End Sub
+
+
+        ' word/_rels/settings.xml.rels: where an attached template lives.
+        Private Shared Function IsTemplateRelationshipsPart(partName As String) As Boolean
+            Return partName.StartsWith("word/", StringComparison.OrdinalIgnoreCase) AndAlso
+                partName.EndsWith("_rels/settings.xml.rels", StringComparison.OrdinalIgnoreCase)
+        End Function
+
+
+        ' Parts that can name people: Word's body, notes, headers, footers,
+        ' comments, people list, and styles (also in a glossary); Excel's
+        ' comments and people; PowerPoint's comment authors.
+        Private Shared Function IsOfficePeoplePart(partName As String) As Boolean
+
+            If Not partName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) Then Return False
+
+            If partName.StartsWith("word/", StringComparison.OrdinalIgnoreCase) Then
+                Dim rest As String = partName.Substring("word/".Length)
+                If rest.StartsWith("glossary/", StringComparison.OrdinalIgnoreCase) Then rest = rest.Substring("glossary/".Length)
+                Return rest.IndexOf("/"c) < 0
+            End If
+
+            If partName.StartsWith("xl/", StringComparison.OrdinalIgnoreCase) Then
+                Return partName.IndexOf("comment", StringComparison.OrdinalIgnoreCase) >= 0 OrElse
+                    partName.StartsWith("xl/persons/", StringComparison.OrdinalIgnoreCase)
+            End If
+
+            Return String.Equals(partName, "ppt/commentAuthors.xml", StringComparison.OrdinalIgnoreCase) OrElse
+                String.Equals(partName, "ppt/authors.xml", StringComparison.OrdinalIgnoreCase)
+
+        End Function
+
+
+        Private Shared Sub ReadPart(
+            entry As ZipArchiveEntry,
             budget As ReadBudget,
             found As FindingCollector,
             reading As Action(Of XmlReader, FindingCollector)
         )
-
-            Dim entry As ZipArchiveEntry = Nothing
-            If Not parts.TryGetValue(partName, entry) Then Return
 
             budget.Token.ThrowIfCancellationRequested()
             If budget.Remaining <= 0 Then
@@ -311,23 +439,32 @@ Namespace Services
                 Return
             End If
 
+            ' The byte budget, not the character cap, cuts a large part short:
+            ' XML never decodes to more characters than it has bytes, so the
+            ' cap is only a backstop. No DTDs, so no entity expansion.
             Dim settings As New XmlReaderSettings With {
                 .DtdProcessing = DtdProcessing.Prohibit,
                 .XmlResolver = Nothing,
-                .MaxCharactersInDocument = 32L * 1024 * 1024,
+                .MaxCharactersInDocument = budget.Limit + 4096,
+                .MaxCharactersFromEntities = 1024 * 1024,
                 .IgnoreComments = True,
                 .IgnoreProcessingInstructions = True,
                 .CloseInput = True
             }
 
+            Dim limited As BudgetStream = Nothing
             Try
-                Using limited As New BudgetStream(entry.Open(), budget)
-                    Using reader As XmlReader = XmlReader.Create(limited, settings)
-                        reading(reader, found)
-                    End Using
+                limited = New BudgetStream(entry.Open(), budget)
+                Using reader As XmlReader = XmlReader.Create(limited, settings)
+                    reading(reader, found)
                 End Using
-            Catch ex As XmlException When budget.ReachedLimit
+            Catch ex As XmlException When limited IsNot Nothing AndAlso limited.Truncated
                 ' The part was cut off at the byte limit: keep what was read.
+            Catch ex As Exception When Not TypeOf ex Is OperationCanceledException
+                ' A damaged part: keep what was read, and say the rest wasn't checked.
+                found.NoteGap(HiddenMetadataGap.PartUnreadable)
+            Finally
+                limited?.Dispose()
             End Try
 
         End Sub
@@ -360,7 +497,7 @@ Namespace Services
                     If reader.LocalName = "Template" Then
                         ' A bare name such as Normal.dotm says nothing; a path can.
                         Dim template As String = ReadElementText(reader)
-                        If template.IndexOfAny({"\"c, "/"c, ":"c}) >= 0 Then found.Add("Template", template)
+                        If LooksLikePath(template) Then found.Add("Template", template)
                         Continue Do
                     End If
                 End If
@@ -369,25 +506,134 @@ Namespace Services
         End Sub
 
 
-        Private Shared Sub ReadCommentAuthors(reader As XmlReader, found As FindingCollector)
+        ' docProps/custom.xml: properties that name a person or hold an email
+        ' address, such as the _AuthorEmail and _AuthorEmailDisplayName that
+        ' Outlook adds when it sends a document.
+        Private Shared Sub ReadCustomProperties(reader As XmlReader, found As FindingCollector)
+            Do While Not reader.EOF
+                If reader.NodeType = XmlNodeType.Element AndAlso
+                   reader.LocalName = "property" AndAlso
+                   reader.NamespaceURI = CustomNamespace Then
+                    Dim propertyName As String = If(reader.GetAttribute("name"), String.Empty)
+                    Dim propertyValue As String = ReadElementText(reader)
+                    If IsPersonProperty(propertyName, propertyValue) Then found.Add("Custom properties", propertyValue)
+                    Continue Do
+                End If
+                reader.Read()
+            Loop
+        End Sub
+
+
+        Private Shared Function IsPersonProperty(propertyName As String, propertyValue As String) As Boolean
+            If propertyName.EndsWith("By", StringComparison.OrdinalIgnoreCase) Then Return True
+            If PersonPropertyWords.Any(Function(word) propertyName.IndexOf(word, StringComparison.OrdinalIgnoreCase) >= 0) Then Return True
+            Return LooksLikeEmail(propertyValue)
+        End Function
+
+
+        Private Shared Function LooksLikeEmail(value As String) As Boolean
+            If String.IsNullOrEmpty(value) Then Return False
+            Dim at As Integer = value.IndexOf("@"c)
+            Return at > 0 AndAlso at + 2 < value.Length AndAlso value.IndexOf("."c, at + 2) > 0
+        End Function
+
+
+        ' The email address in an Office user id such as
+        ' "S::name@example.org::1234"; empty when there is none.
+        Private Shared Function EmailIn(userId As String) As String
+            If String.IsNullOrEmpty(userId) Then Return String.Empty
+            For Each segment As String In userId.Split("::")
+                If LooksLikeEmail(segment) Then Return segment
+            Next
+            Return String.Empty
+        End Function
+
+
+        Private Shared Function LooksLikePath(value As String) As Boolean
+            Return value IsNot Nothing AndAlso value.IndexOfAny({"\"c, "/"c, ":"c}) >= 0
+        End Function
+
+
+        ' word/_rels/settings.xml.rels: the full path of an attached template,
+        ' which can include the Windows user name. docProps/app.xml usually
+        ' holds only the template's file name.
+        Private Shared Sub ReadAttachedTemplate(reader As XmlReader, found As FindingCollector)
             Do While reader.Read()
                 If reader.NodeType = XmlNodeType.Element AndAlso
-                   reader.LocalName = "comment" AndAlso
-                   reader.NamespaceURI = WordNamespace Then
-                    found.Add("Comment authors", reader.GetAttribute("author", WordNamespace))
+                   reader.LocalName = "Relationship" AndAlso
+                   reader.NamespaceURI = RelationshipsNamespace AndAlso
+                   If(reader.GetAttribute("Type"), String.Empty).EndsWith("/attachedTemplate", StringComparison.OrdinalIgnoreCase) Then
+                    Dim template As String = TemplatePath(reader.GetAttribute("Target"))
+                    If LooksLikePath(template) Then found.Add("Template", template)
                 End If
             Loop
         End Sub
 
 
-        Private Shared Sub ReadTrackedChangeAuthors(reader As XmlReader, found As FindingCollector)
-            Do While reader.Read()
-                If reader.NodeType = XmlNodeType.Element AndAlso
-                   reader.NamespaceURI = WordNamespace AndAlso
-                   (TrackedChangeElements.Contains(reader.LocalName) OrElse reader.LocalName.EndsWith("PrChange", StringComparison.Ordinal)) Then
-                    found.Add("Tracked changes by", reader.GetAttribute("author", WordNamespace))
+        ' "file:///C:\Users\name\Custom%20Office%20Templates\x.dotx" as
+        ' "C:\Users\name\Custom Office Templates\x.dotx".
+        Private Shared Function TemplatePath(target As String) As String
+            If String.IsNullOrEmpty(target) Then Return String.Empty
+            Dim decoded As String = Uri.UnescapeDataString(target)
+            If decoded.StartsWith("file:///", StringComparison.OrdinalIgnoreCase) Then decoded = decoded.Substring("file:///".Length)
+            Return decoded
+        End Function
+
+
+        ' People in Word, Excel, and PowerPoint parts: comment authors, the
+        ' people behind modern comments, and tracked-change authors.
+        Private Shared Sub ReadOfficePeople(reader As XmlReader, found As FindingCollector)
+
+            Do While Not reader.EOF
+
+                If reader.NodeType <> XmlNodeType.Element Then
+                    reader.Read()
+                    Continue Do
                 End If
+
+                Select Case reader.NamespaceURI
+                    Case WordNamespace
+                        ' Comments and every kind of tracked change carry w:author.
+                        Dim wordAuthor As String = If(reader.HasAttributes, reader.GetAttribute("author", WordNamespace), Nothing)
+                        If wordAuthor IsNot Nothing Then
+                            found.Add(If(reader.LocalName = "comment", "Comment authors", "Tracked changes by"), wordAuthor)
+                        End If
+
+                    Case Word2012Namespace
+                        If reader.LocalName = "person" Then found.Add("Comment authors", reader.GetAttribute("author", Word2012Namespace))
+                        If reader.LocalName = "presenceInfo" Then found.Add("Comment authors", EmailIn(reader.GetAttribute("userId", Word2012Namespace)))
+
+                    Case SpreadsheetNamespace
+                        If reader.LocalName = "author" Then
+                            Dim cellNoteAuthor As String = ReadElementText(reader)
+                            ' Excel's stand-in author for a threaded comment is "tc={id}".
+                            If Not cellNoteAuthor.StartsWith("tc=", StringComparison.OrdinalIgnoreCase) Then found.Add("Comment authors", cellNoteAuthor)
+                            Continue Do
+                        End If
+
+                    Case ThreadedCommentNamespace
+                        If reader.LocalName = "person" Then
+                            found.Add("Comment authors", reader.GetAttribute("displayName"))
+                            found.Add("Comment authors", EmailIn(reader.GetAttribute("userId")))
+                        End If
+
+                    Case PresentationNamespace
+                        If reader.LocalName = "cmAuthor" Then found.Add("Comment authors", reader.GetAttribute("name"))
+
+                    Case Presentation2012Namespace
+                        If reader.LocalName = "presenceInfo" Then found.Add("Comment authors", EmailIn(reader.GetAttribute("userId")))
+
+                    Case Presentation2018Namespace
+                        If reader.LocalName = "author" Then
+                            found.Add("Comment authors", reader.GetAttribute("name"))
+                            found.Add("Comment authors", EmailIn(reader.GetAttribute("userId")))
+                        End If
+                End Select
+
+                reader.Read()
+
             Loop
+
         End Sub
 
 
@@ -405,6 +651,34 @@ Namespace Services
                 End If
                 reader.Read()
             Loop
+        End Sub
+
+
+        ' OpenDocument content.xml and styles.xml: dc:creator inside an
+        ' office:change-info is a tracked change's author; anywhere else
+        ' (office:annotation, or officeooo:annotation in a presentation) it
+        ' is a comment's author.
+        Private Shared Sub ReadOpenDocumentPeople(reader As XmlReader, found As FindingCollector)
+
+            Dim openChangeInfo As Integer = 0
+
+            Do While Not reader.EOF
+                Select Case reader.NodeType
+                    Case XmlNodeType.Element
+                        If reader.LocalName = "change-info" AndAlso reader.NamespaceURI = OdfOfficeNamespace AndAlso Not reader.IsEmptyElement Then
+                            openChangeInfo += 1
+                        ElseIf reader.LocalName = "creator" AndAlso reader.NamespaceURI = DcNamespace Then
+                            found.Add(If(openChangeInfo > 0, "Tracked changes by", "Comment authors"), ReadElementText(reader))
+                            Continue Do
+                        End If
+                    Case XmlNodeType.EndElement
+                        If reader.LocalName = "change-info" AndAlso reader.NamespaceURI = OdfOfficeNamespace Then
+                            openChangeInfo = Math.Max(0, openChangeInfo - 1)
+                        End If
+                End Select
+                reader.Read()
+            Loop
+
         End Sub
 
 
@@ -437,10 +711,12 @@ Namespace Services
 
         ' ---- PDF ---------------------------------------------------------------
 
-        ' Reports the Info dictionary's /Author and XMP dc:creator, from the raw
-        ' bytes and from compressed metadata and object streams. /Creator,
-        ' /Producer, pdf:Producer, and xmp:CreatorTool name software, so they
-        ' are not reported.
+        ' Reports the Info dictionary's /Author (a string or a reference to
+        ' one) and XMP dc:creator, from the raw bytes and from compressed
+        ' metadata and object streams. /Creator, /Producer, pdf:Producer, and
+        ' xmp:CreatorTool name software, so they are not reported. In an
+        ' encrypted file the strings and streams are ciphertext: they are never
+        ' shown as names, and the report says the file is encrypted.
         Private Shared Sub InspectPdf(source As FileStream, budget As ReadBudget, found As FindingCollector)
 
             Dim parts As New List(Of Byte())()
@@ -462,49 +738,41 @@ Namespace Services
                 Throw New InvalidDataException("The PDF has no end-of-file marker.")
             End If
 
+            Dim encrypted As Boolean = parts.Any(Function(part) IsEncryptedPdf(part, budget.Token))
+            Dim scanner As New PdfScanner(budget, found, encrypted)
+
             For Each part As Byte() In parts
-                ScanPdfText(part, found)
-                ScanPdfStreams(part, budget, found)
+                scanner.ScanText(part)
+                scanner.ScanStreams(part)
             Next
+            scanner.ResolveReferences(parts)
+
+            If encrypted Then found.NoteGap(HiddenMetadataGap.Encrypted)
 
         End Sub
 
 
-        Private Shared Sub ScanPdfText(data As Byte(), found As FindingCollector)
-            For Each value As String In PdfStringValues(data, PdfAuthorKey)
-                found.Add("Author", value)
-            Next
-            FindXmpCreators(data, 0, data.Length, found)
-        End Sub
+        ' The trailer, or a cross-reference stream's dictionary, names an
+        ' /Encrypt dictionary, directly or as a reference such as "5 0 R".
+        Private Shared Function IsEncryptedPdf(data As Byte(), token As CancellationToken) As Boolean
 
-
-        ' Every string value that directly follows the key, such as /Author (...).
-        Private Shared Function PdfStringValues(data As Byte(), key As Byte()) As List(Of String)
-
-            Dim values As New List(Of String)()
             Dim position As Integer = 0
 
             Do
-                Dim index As Integer = IndexOf(data, key, position)
-                If index < 0 Then Exit Do
-                position = index + key.Length
+                token.ThrowIfCancellationRequested()
+                Dim index As Integer = IndexOf(data, PdfEncryptKey, position)
+                If index < 0 Then Return False
+                position = index + PdfEncryptKey.Length
+                ' Not /EncryptMetadata or another longer name.
                 If position < data.Length AndAlso IsPdfRegular(data(position)) Then Continue Do
 
                 Dim cursor As Integer = SkipPdfWhitespace(data, position)
-                If cursor >= data.Length Then Exit Do
-
-                Dim raw As Byte() = Nothing
-                If data(cursor) = AscW("("c) Then
-                    raw = ReadPdfLiteral(data, cursor)
-                ElseIf data(cursor) = AscW("<"c) AndAlso (cursor + 1 >= data.Length OrElse data(cursor + 1) <> AscW("<"c)) Then
-                    raw = ReadPdfHex(data, cursor)
-                End If
-
-                If raw IsNot Nothing Then values.Add(DecodePdfText(raw))
-                If values.Count >= 50 Then Exit Do
+                position = cursor
+                If cursor + 1 < data.Length AndAlso data(cursor) = AscW("<"c) AndAlso data(cursor + 1) = AscW("<"c) Then Return True
+                Dim reference As (Long, Integer) = Nothing
+                Dim finish As Integer
+                If TryReadPdfReference(data, cursor, reference, finish) Then Return True
             Loop
-
-            Return values
 
         End Function
 
@@ -526,6 +794,11 @@ Namespace Services
         End Function
 
 
+        Private Shared Function IsDigit(value As Byte) As Boolean
+            Return value >= AscW("0"c) AndAlso value <= AscW("9"c)
+        End Function
+
+
         Private Shared Function SkipPdfWhitespace(data As Byte(), start As Integer) As Integer
             Dim cursor As Integer = start
             Do While cursor < data.Length AndAlso IsPdfWhitespace(data(cursor))
@@ -535,28 +808,49 @@ Namespace Services
         End Function
 
 
+        ' A literal or hex string at cursor, or Nothing. "position" moves past
+        ' every byte looked at, so no byte is walked twice.
+        Private Shared Function ReadPdfString(data As Byte(), cursor As Integer, ByRef position As Integer) As Byte()
+
+            If cursor >= data.Length Then Return Nothing
+
+            Dim finish As Integer = cursor
+            Dim raw As Byte() = Nothing
+            If data(cursor) = AscW("("c) Then
+                raw = ReadPdfLiteral(data, cursor, finish)
+            ElseIf data(cursor) = AscW("<"c) AndAlso (cursor + 1 >= data.Length OrElse data(cursor + 1) <> AscW("<"c)) Then
+                raw = ReadPdfHex(data, cursor, finish)
+            End If
+
+            position = Math.Max(position, finish)
+            Return raw
+
+        End Function
+
+
         ' A literal string "( ... )" with balanced parentheses and escapes;
-        ' Nothing when it never closes.
-        Private Shared Function ReadPdfLiteral(data As Byte(), start As Integer) As Byte()
+        ' Nothing when it doesn't close within reach. "finish" is where the
+        ' walk stopped.
+        Private Shared Function ReadPdfLiteral(data As Byte(), start As Integer, ByRef finish As Integer) As Byte()
 
             Dim output As New List(Of Byte)()
             Dim depth As Integer = 1
             Dim cursor As Integer = start + 1
-            Dim stopAt As Integer = Math.Min(data.Length, start + 65536)
+            Dim stopAt As Integer = CInt(Math.Min(data.Length, CLng(start) + MaximumPdfLiteral))
 
             Do While cursor < stopAt
                 Dim current As Byte = data(cursor)
 
                 If current = AscW("\"c) Then
                     cursor += 1
-                    If cursor >= stopAt Then Return Nothing
+                    If cursor >= stopAt Then Exit Do
                     Dim escaped As Byte = data(cursor)
                     Select Case escaped
-                        Case AscW("n"c) : output.Add(10)
-                        Case AscW("r"c) : output.Add(13)
-                        Case AscW("t"c) : output.Add(9)
-                        Case AscW("b"c) : output.Add(8)
-                        Case AscW("f"c) : output.Add(12)
+                        Case AscW("n"c) : Append(output, 10)
+                        Case AscW("r"c) : Append(output, 13)
+                        Case AscW("t"c) : Append(output, 9)
+                        Case AscW("b"c) : Append(output, 8)
+                        Case AscW("f"c) : Append(output, 12)
                         Case 13
                             ' A backslash at the end of a line continues the string.
                             If cursor + 1 < stopAt AndAlso data(cursor + 1) = 10 Then cursor += 1
@@ -571,33 +865,43 @@ Namespace Services
                                 octal = octal * 8 + (data(cursor) - AscW("0"c))
                                 digits += 1
                             Loop
-                            output.Add(CByte(octal And &HFF))
+                            Append(output, CByte(octal And &HFF))
                         Case Else
                             ' \( \) \\ and unknown escapes: the character itself.
-                            output.Add(escaped)
+                            Append(output, escaped)
                     End Select
                 ElseIf current = AscW("("c) Then
                     depth += 1
-                    output.Add(current)
+                    Append(output, current)
                 ElseIf current = AscW(")"c) Then
                     depth -= 1
-                    If depth = 0 Then Return If(output.Count > MaximumPdfString, output.Take(MaximumPdfString).ToArray(), output.ToArray())
-                    output.Add(current)
+                    If depth = 0 Then
+                        finish = cursor + 1
+                        Return output.ToArray()
+                    End If
+                    Append(output, current)
                 Else
-                    output.Add(current)
+                    Append(output, current)
                 End If
 
                 cursor += 1
             Loop
 
+            finish = Math.Min(cursor, data.Length)
             Return Nothing
 
         End Function
 
 
+        Private Shared Sub Append(output As List(Of Byte), value As Byte)
+            If output.Count < MaximumPdfString Then output.Add(value)
+        End Sub
+
+
         ' A hex string "< ... >"; whitespace is ignored and an odd digit count
-        ' is padded with 0. Nothing when it isn't one.
-        Private Shared Function ReadPdfHex(data As Byte(), start As Integer) As Byte()
+        ' is padded with 0. Nothing when it isn't one. "finish" is where the
+        ' walk stopped.
+        Private Shared Function ReadPdfHex(data As Byte(), start As Integer, ByRef finish As Integer) As Byte()
 
             Dim digits As New StringBuilder()
             Dim cursor As Integer = start + 1
@@ -605,20 +909,106 @@ Namespace Services
             Do While cursor < data.Length
                 Dim current As Byte = data(cursor)
                 If current = AscW(">"c) Then
+                    finish = cursor + 1
                     If digits.Length Mod 2 = 1 Then digits.Append("0"c)
                     Return Convert.FromHexString(digits.ToString())
                 End If
                 If Not IsPdfWhitespace(current) Then
                     Dim character As Char = ChrW(current)
-                    If Not Uri.IsHexDigit(character) Then Return Nothing
-                    If digits.Length >= MaximumPdfString * 2 Then Return Nothing
+                    If Not Uri.IsHexDigit(character) OrElse digits.Length >= MaximumPdfString * 2 Then Exit Do
                     digits.Append(character)
                 End If
                 cursor += 1
             Loop
 
+            finish = cursor
             Return Nothing
 
+        End Function
+
+
+        ' An indirect reference such as "12 0 R" starting at start.
+        Private Shared Function TryReadPdfReference(
+            data As Byte(),
+            start As Integer,
+            ByRef reference As (Long, Integer),
+            ByRef finish As Integer
+        ) As Boolean
+
+            Dim cursor As Integer = start
+            Dim number As Long
+            Dim generation As Long
+            If Not TryReadPdfInteger(data, cursor, 10, number) Then Return False
+            If Not SkipSomeWhitespace(data, cursor, 1) Then Return False
+            If Not TryReadPdfInteger(data, cursor, 5, generation) Then Return False
+            If Not SkipSomeWhitespace(data, cursor, 1) Then Return False
+            If cursor >= data.Length OrElse data(cursor) <> AscW("R"c) Then Return False
+            cursor += 1
+            If cursor < data.Length AndAlso IsPdfRegular(data(cursor)) Then Return False
+
+            reference = (number, CInt(generation))
+            finish = cursor
+            Return True
+
+        End Function
+
+
+        ' The "12 0" before the "obj" keyword at keyword.
+        Private Shared Function TryReadObjectHeader(data As Byte(), keyword As Integer, ByRef reference As (Long, Integer)) As Boolean
+
+            Dim cursor As Integer = keyword - 1
+            Dim number As Long
+            Dim generation As Long
+            If Not SkipSomeWhitespace(data, cursor, -1) Then Return False
+            If Not TryReadPdfIntegerBackward(data, cursor, 5, generation) Then Return False
+            If Not SkipSomeWhitespace(data, cursor, -1) Then Return False
+            If Not TryReadPdfIntegerBackward(data, cursor, 10, number) Then Return False
+
+            reference = (number, CInt(generation))
+            Return True
+
+        End Function
+
+
+        ' Digits from cursor forward (at most maximumDigits), moving past them.
+        Private Shared Function TryReadPdfInteger(data As Byte(), ByRef cursor As Integer, maximumDigits As Integer, ByRef value As Long) As Boolean
+            Dim digits As Integer = 0
+            value = 0
+            Do While cursor < data.Length AndAlso IsDigit(data(cursor))
+                If digits = maximumDigits Then Return False
+                value = value * 10 + (data(cursor) - AscW("0"c))
+                digits += 1
+                cursor += 1
+            Loop
+            Return digits > 0
+        End Function
+
+
+        ' Digits from cursor backward (at most maximumDigits), moving before them.
+        Private Shared Function TryReadPdfIntegerBackward(data As Byte(), ByRef cursor As Integer, maximumDigits As Integer, ByRef value As Long) As Boolean
+            Dim digits As Integer = 0
+            Dim place As Long = 1
+            value = 0
+            Do While cursor >= 0 AndAlso IsDigit(data(cursor))
+                If digits = maximumDigits Then Return False
+                value += (data(cursor) - AscW("0"c)) * place
+                place *= 10
+                digits += 1
+                cursor -= 1
+            Loop
+            Return digits > 0
+        End Function
+
+
+        ' One to 32 whitespace bytes from cursor, forward (step 1) or
+        ' backward (step -1), moving past them.
+        Private Shared Function SkipSomeWhitespace(data As Byte(), ByRef cursor As Integer, [step] As Integer) As Boolean
+            Dim skipped As Integer = 0
+            Do While cursor >= 0 AndAlso cursor < data.Length AndAlso IsPdfWhitespace(data(cursor)) AndAlso skipped < 32
+                cursor += [step]
+                skipped += 1
+            Loop
+            Return skipped > 0
         End Function
 
 
@@ -635,51 +1025,15 @@ Namespace Services
         End Function
 
 
-        ' Flate-compressed metadata and object streams: an Info dictionary or
-        ' XMP packet can sit inside them.
-        Private Shared Sub ScanPdfStreams(data As Byte(), budget As ReadBudget, found As FindingCollector)
-
-            Dim position As Integer = 0
-
-            Do
-                budget.Token.ThrowIfCancellationRequested()
-
-                Dim keyword As Integer = IndexOf(data, PdfStreamKeyword, position)
-                If keyword < 0 Then Exit Do
-                position = keyword + PdfStreamKeyword.Length
-
-                If keyword >= 3 AndAlso
-                   data(keyword - 3) = AscW("e"c) AndAlso data(keyword - 2) = AscW("n"c) AndAlso data(keyword - 1) = AscW("d"c) Then
-                    Continue Do
-                End If
-
-                ' The data starts after "stream" and its end of line.
-                Dim dataStart As Integer = position
-                If dataStart < data.Length AndAlso data(dataStart) = 13 Then dataStart += 1
-                If dataStart < data.Length AndAlso data(dataStart) = 10 Then dataStart += 1
-                If dataStart = position Then Continue Do
-
-                Dim dictionaryText As String = StreamDictionary(data, keyword)
-                If dictionaryText Is Nothing Then Continue Do
-
-                Dim dataEnd As Integer = StreamEnd(data, dictionaryText, dataStart)
-                If dataEnd < dataStart Then Continue Do
-                position = Math.Max(position, dataEnd)
-
-                If dictionaryText.Contains("/FlateDecode") AndAlso StreamTypePattern.IsMatch(dictionaryText) Then
-                    Dim inflated As Byte() = Inflate(data, dataStart, dataEnd - dataStart, MaximumInflatedStream, budget)
-                    If inflated IsNot Nothing AndAlso inflated.Length > 0 Then ScanPdfText(inflated, found)
-                End If
-            Loop
-
-        End Sub
-
-
         ' The stream's dictionary "<< ... >>", found from the object header
-        ' before the "stream" keyword; Nothing when it can't be found.
-        Private Shared Function StreamDictionary(data As Byte(), keyword As Integer) As String
+        ' before the "stream" keyword and never before "floor" (the end of
+        ' the previous stream), so each byte is looked at once; Nothing when
+        ' it can't be found.
+        Private Shared Function StreamDictionary(data As Byte(), keyword As Integer, floor As Integer) As String
 
-            Dim windowStart As Integer = Math.Max(0, keyword - 16384)
+            Dim windowStart As Integer = Math.Max(floor, keyword - 16384)
+            If windowStart >= keyword - 1 Then Return Nothing
+
             Dim header As Integer = LastIndexOf(data, PdfObjKeyword, keyword - 1, windowStart)
             Dim from As Integer = If(header >= 0, header + PdfObjKeyword.Length, windowStart)
 
@@ -730,30 +1084,32 @@ Namespace Services
         End Function
 
 
-        ' Where the stream's data ends: its direct /Length, or "endstream".
-        Private Shared Function StreamEnd(data As Byte(), dictionaryText As String, dataStart As Integer) As Integer
-
+        ' Where the stream's data ends by its direct /Length; -1 without one.
+        Private Shared Function DeclaredStreamEnd(dictionaryText As String, dataStart As Integer, dataLength As Integer) As Integer
             Dim lengthMatch As Match = StreamLengthPattern.Match(dictionaryText)
             If lengthMatch.Success AndAlso Not lengthMatch.Groups(2).Success Then
                 Dim declared As Long
-                If Long.TryParse(lengthMatch.Groups(1).Value, declared) AndAlso dataStart + declared <= data.Length Then
+                If Long.TryParse(lengthMatch.Groups(1).Value, declared) AndAlso dataStart + declared <= dataLength Then
                     Return CInt(dataStart + declared)
                 End If
             End If
-
-            Dim finish As Integer = IndexOf(data, PdfEndStreamKeyword, dataStart)
-            If finish < 0 Then Return -1
-            If finish > dataStart AndAlso data(finish - 1) = 10 Then finish -= 1
-            If finish > dataStart AndAlso data(finish - 1) = 13 Then finish -= 1
-            Return finish
-
+            Return -1
         End Function
 
 
         ' Inflates zlib data, at most "cap" bytes and what the budget allows.
-        ' Data that doesn't inflate gives what was read before the error.
-        Private Shared Function Inflate(data As Byte(), offset As Integer, count As Integer, cap As Integer, budget As ReadBudget) As Byte()
+        ' Data that doesn't inflate gives what was read before the error, and
+        ' sets "failed".
+        Private Shared Function Inflate(
+            data As Byte(),
+            offset As Integer,
+            count As Integer,
+            cap As Integer,
+            budget As ReadBudget,
+            ByRef failed As Boolean
+        ) As Byte()
 
+            failed = False
             Dim allowance As Long = Math.Min(cap, budget.InflateRemaining)
             If allowance <= 0 Then
                 budget.ReachedLimit = True
@@ -764,7 +1120,7 @@ Namespace Services
                 Try
                     Using compressed As New MemoryStream(data, offset, count, writable:=False)
                         Using inflater As New ZLibStream(compressed, CompressionMode.Decompress)
-                            Dim buffer(ReadBufferSize - 1) As Byte
+                            Dim buffer As Byte() = budget.ScratchBuffer()
                             Do
                                 budget.Token.ThrowIfCancellationRequested()
                                 Dim wanted As Integer = CInt(Math.Min(buffer.Length, allowance - output.Length + 1))
@@ -781,6 +1137,7 @@ Namespace Services
                     End Using
                 Catch ex As Exception When Not TypeOf ex Is OperationCanceledException
                     ' Damaged or not zlib data: keep what inflated, if anything.
+                    failed = True
                 End Try
 
                 budget.InflateRemaining -= output.Length
@@ -790,13 +1147,199 @@ Namespace Services
         End Function
 
 
+        ' One forward pass over a PDF's bytes for /Author values, XMP
+        ' creators, and compressed metadata and object streams. No byte is
+        ' scanned more than a few times, whatever the file holds, and every
+        ' loop stops when the check is cancelled.
+        Private NotInheritable Class PdfScanner
+
+            Private ReadOnly _budget As ReadBudget
+            Private ReadOnly _found As FindingCollector
+            Private ReadOnly _encrypted As Boolean
+            ' Objects an /Author names by reference, such as /Author 12 0 R.
+            Private ReadOnly _references As New HashSet(Of (Long, Integer))()
+            Private _referencesDropped As Boolean
+            Private _streamsInflated As Integer
+
+            Public Sub New(budget As ReadBudget, found As FindingCollector, encrypted As Boolean)
+                _budget = budget
+                _found = found
+                _encrypted = encrypted
+            End Sub
+
+
+            ' Info /Author values and XMP creators in plain or inflated bytes.
+            Public Sub ScanText(data As Byte())
+                ' An encrypted file's strings are ciphertext, never names.
+                If Not _encrypted Then ReadAuthorValues(data)
+                FindXmpCreators(data, 0, data.Length, _found, _budget.Token)
+            End Sub
+
+
+            ' Every /Author value: a literal or hex string, or a reference to one.
+            Private Sub ReadAuthorValues(data As Byte())
+
+                Dim position As Integer = 0
+                Dim values As Integer = 0
+
+                Do
+                    _budget.Token.ThrowIfCancellationRequested()
+                    Dim index As Integer = IndexOf(data, PdfAuthorKey, position)
+                    If index < 0 Then Exit Do
+                    position = index + PdfAuthorKey.Length
+                    If position < data.Length AndAlso IsPdfRegular(data(position)) Then Continue Do
+
+                    Dim cursor As Integer = SkipPdfWhitespace(data, position)
+                    position = cursor
+
+                    Dim raw As Byte() = ReadPdfString(data, cursor, position)
+                    If raw IsNot Nothing Then
+                        _found.Add("Author", DecodePdfText(raw))
+                        values += 1
+                        If values >= 50 Then Exit Do
+                        Continue Do
+                    End If
+
+                    Dim reference As (Long, Integer) = Nothing
+                    If TryReadPdfReference(data, cursor, reference, position) Then AddReference(reference)
+                Loop
+
+            End Sub
+
+
+            Private Sub AddReference(reference As (Long, Integer))
+                If _references.Contains(reference) Then Return
+                If _references.Count >= MaximumPdfReferences Then
+                    _referencesDropped = True
+                    Return
+                End If
+                _references.Add(reference)
+            End Sub
+
+
+            ' Flate-compressed metadata and object streams: an Info dictionary
+            ' or XMP packet can sit inside them.
+            Public Sub ScanStreams(data As Byte())
+
+                Dim position As Integer = 0
+                ' A stream's dictionary lies after the previous stream.
+                Dim floor As Integer = 0
+                ' The last search for "endstream", where it started, and where
+                ' it found one (-1: none from there on). A later stream that
+                ' starts before that find gets the same answer without a search.
+                Dim endSearchFrom As Integer = -1
+                Dim endFound As Integer = -1
+
+                Do
+                    _budget.Token.ThrowIfCancellationRequested()
+
+                    Dim keyword As Integer = IndexOf(data, PdfStreamKeyword, position)
+                    If keyword < 0 Then Exit Do
+                    position = keyword + PdfStreamKeyword.Length
+
+                    If keyword >= 3 AndAlso
+                       data(keyword - 3) = AscW("e"c) AndAlso data(keyword - 2) = AscW("n"c) AndAlso data(keyword - 1) = AscW("d"c) Then
+                        floor = position
+                        Continue Do
+                    End If
+
+                    ' The data starts after "stream" and its end of line.
+                    Dim dataStart As Integer = position
+                    If dataStart < data.Length AndAlso data(dataStart) = 13 Then dataStart += 1
+                    If dataStart < data.Length AndAlso data(dataStart) = 10 Then dataStart += 1
+                    If dataStart = position Then Continue Do
+
+                    Dim dictionaryText As String = StreamDictionary(data, keyword, floor)
+                    floor = position
+                    If dictionaryText Is Nothing Then Continue Do
+
+                    Dim dataEnd As Integer = DeclaredStreamEnd(dictionaryText, dataStart, data.Length)
+                    If dataEnd < 0 Then
+                        If endSearchFrom < 0 OrElse dataStart < endSearchFrom OrElse (endFound >= 0 AndAlso dataStart > endFound) Then
+                            endSearchFrom = dataStart
+                            endFound = IndexOf(data, PdfEndStreamKeyword, dataStart)
+                        End If
+                        If endFound < 0 Then Continue Do
+                        dataEnd = endFound
+                        If dataEnd > dataStart AndAlso data(dataEnd - 1) = 10 Then dataEnd -= 1
+                        If dataEnd > dataStart AndAlso data(dataEnd - 1) = 13 Then dataEnd -= 1
+                    End If
+
+                    position = Math.Max(position, dataEnd)
+                    floor = position
+
+                    Dim streamType As Match = StreamTypePattern.Match(dictionaryText)
+                    If Not streamType.Success OrElse Not dictionaryText.Contains("/FlateDecode") Then Continue Do
+                    ' An encrypted file's object streams are encrypted too; its
+                    ' metadata may not be.
+                    If _encrypted AndAlso streamType.Groups(1).Value <> "Metadata" Then Continue Do
+
+                    If _streamsInflated >= MaximumPdfStreams Then
+                        _budget.ReachedLimit = True
+                        Exit Do
+                    End If
+                    _streamsInflated += 1
+
+                    Dim failed As Boolean
+                    Dim inflated As Byte() = Inflate(data, dataStart, dataEnd - dataStart, MaximumInflatedStream, _budget, failed)
+                    ' A stream that may hold the Info dictionary or XMP couldn't
+                    ' be read: the file must not read as "None found".
+                    If failed AndAlso Not _encrypted Then _found.NoteGap(HiddenMetadataGap.PartUnreadable)
+                    If inflated IsNot Nothing AndAlso inflated.Length > 0 Then ScanText(inflated)
+                Loop
+
+            End Sub
+
+
+            ' Looks up the strings that /Author references name, in one pass
+            ' over each part. A reference that can't be found means an author
+            ' wasn't checked.
+            Public Sub ResolveReferences(parts As IEnumerable(Of Byte()))
+
+                Dim resolved As New HashSet(Of (Long, Integer))()
+
+                If _references.Count > 0 Then
+                    For Each data As Byte() In parts
+                        Dim position As Integer = 0
+                        Do
+                            _budget.Token.ThrowIfCancellationRequested()
+                            Dim keyword As Integer = IndexOf(data, PdfObjKeyword, position)
+                            If keyword < 0 Then Exit Do
+                            position = keyword + PdfObjKeyword.Length
+                            If position < data.Length AndAlso IsPdfRegular(data(position)) Then Continue Do
+
+                            Dim reference As (Long, Integer) = Nothing
+                            If Not TryReadObjectHeader(data, keyword, reference) OrElse Not _references.Contains(reference) Then Continue Do
+
+                            Dim cursor As Integer = SkipPdfWhitespace(data, position)
+                            position = cursor
+                            Dim raw As Byte() = ReadPdfString(data, cursor, position)
+                            If raw IsNot Nothing Then
+                                _found.Add("Author", DecodePdfText(raw))
+                                resolved.Add(reference)
+                            End If
+                        Loop
+                    Next
+                End If
+
+                If _referencesDropped OrElse resolved.Count < _references.Count Then
+                    _found.NoteGap(HiddenMetadataGap.PartUnreadable)
+                End If
+
+            End Sub
+
+        End Class
+
+
         ' ---- XMP (in PDFs, JPEGs, and PNGs) --------------------------------------
 
-        Private Shared Sub FindXmpCreators(data As Byte(), start As Integer, finish As Integer, found As FindingCollector)
+        Private Shared Sub FindXmpCreators(data As Byte(), start As Integer, finish As Integer, found As FindingCollector, token As CancellationToken)
 
             Dim position As Integer = start
 
             Do
+                token.ThrowIfCancellationRequested()
+
                 Dim open As Integer = IndexOf(data, XmpCreatorOpen, position, finish)
                 If open < 0 Then Exit Do
                 Dim afterName As Integer = open + XmpCreatorOpen.Length
@@ -866,7 +1409,7 @@ Namespace Services
                     If StartsWith(segment, ExifHeader, 0) Then
                         ReadExif(segment, ExifHeader.Length, found)
                     ElseIf StartsWith(segment, JpegXmpHeader, 0) Then
-                        FindXmpCreators(segment, JpegXmpHeader.Length, segment.Length, found)
+                        FindXmpCreators(segment, JpegXmpHeader.Length, segment.Length, found, budget.Token)
                     End If
                 Else
                     source.Seek(segmentLength, SeekOrigin.Current)
@@ -992,13 +1535,15 @@ Namespace Services
             Dim isXmp As Boolean = String.Equals(keyword, "XML:com.adobe.xmp", StringComparison.Ordinal)
             If Not isAuthor AndAlso Not isXmp Then Return
 
+            Dim failed As Boolean
+
             Select Case chunkType
                 Case "tEXt"
                     If isAuthor Then found.Add("Author", Encoding.Latin1.GetString(chunk, keywordEnd + 1, chunk.Length - keywordEnd - 1))
 
                 Case "zTXt"
                     If isAuthor AndAlso keywordEnd + 2 <= chunk.Length Then
-                        Dim inflated As Byte() = Inflate(chunk, keywordEnd + 2, chunk.Length - keywordEnd - 2, MaximumInflatedText, budget)
+                        Dim inflated As Byte() = Inflate(chunk, keywordEnd + 2, chunk.Length - keywordEnd - 2, MaximumInflatedText, budget, failed)
                         If inflated IsNot Nothing Then found.Add("Author", Encoding.Latin1.GetString(inflated))
                     End If
 
@@ -1013,7 +1558,7 @@ Namespace Services
                     Dim textStart As Integer = translatedEnd + 1
                     Dim content As Byte()
                     If compressed Then
-                        content = Inflate(chunk, textStart, chunk.Length - textStart, MaximumInflatedText, budget)
+                        content = Inflate(chunk, textStart, chunk.Length - textStart, MaximumInflatedText, budget, failed)
                         If content Is Nothing Then Return
                     Else
                         content = chunk.Skip(textStart).ToArray()
@@ -1021,9 +1566,12 @@ Namespace Services
                     If isAuthor Then
                         found.Add("Author", Encoding.UTF8.GetString(content))
                     Else
-                        FindXmpCreators(content, 0, content.Length, found)
+                        FindXmpCreators(content, 0, content.Length, found, budget.Token)
                     End If
             End Select
+
+            ' A compressed author or XMP packet that won't inflate wasn't checked.
+            If failed Then found.NoteGap(HiddenMetadataGap.PartUnreadable)
 
         End Sub
 
@@ -1148,6 +1696,8 @@ Namespace Services
 
         Private NotInheritable Class ReadBudget
 
+            Private _scratch As Byte()
+
             Public Sub New(limit As Long, token As CancellationToken)
                 Me.Limit = limit
                 Remaining = limit
@@ -1167,6 +1717,12 @@ Namespace Services
 
             Public ReadOnly Property Token As CancellationToken
 
+            ' One buffer for every inflate in a check.
+            Public Function ScratchBuffer() As Byte()
+                If _scratch Is Nothing Then _scratch = New Byte(ReadBufferSize - 1) {}
+                Return _scratch
+            End Function
+
         End Class
 
 
@@ -1181,6 +1737,9 @@ Namespace Services
                 _inner = inner
                 _budget = budget
             End Sub
+
+            ' This part was cut off at the byte limit.
+            Public Property Truncated As Boolean
 
             Public Overrides ReadOnly Property CanRead As Boolean
                 Get
@@ -1221,7 +1780,10 @@ Namespace Services
 
                 If _budget.Remaining <= 0 Then
                     Dim probe(0) As Byte
-                    If _inner.Read(probe, 0, 1) > 0 Then _budget.ReachedLimit = True
+                    If _inner.Read(probe, 0, 1) > 0 Then
+                        _budget.ReachedLimit = True
+                        Truncated = True
+                    End If
                     Return 0
                 End If
 
@@ -1254,10 +1816,22 @@ Namespace Services
         End Class
 
 
-        ' Values per label: cleaned, once each (ignoring case), at most ten.
+        ' Values per label: cleaned, once each (ignoring case), at most ten;
+        ' and the most serious thing that couldn't be read.
         Private NotInheritable Class FindingCollector
 
             Private ReadOnly _values As New Dictionary(Of String, List(Of String))(StringComparer.Ordinal)
+            Private _gap As HiddenMetadataGap = HiddenMetadataGap.None
+
+            Public ReadOnly Property Gap As HiddenMetadataGap
+                Get
+                    Return _gap
+                End Get
+            End Property
+
+            Public Sub NoteGap(kind As HiddenMetadataGap)
+                If kind > _gap Then _gap = kind
+            End Sub
 
             Public Sub Add(findingLabel As String, value As String)
                 Dim cleaned As String = CleanValue(value)
