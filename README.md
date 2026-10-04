@@ -16,12 +16,12 @@ PaperRoute Tracker helps researchers manage manuscripts from idea through submis
 
 ## Current status
 
-- **Stable:** [v0.8.0 — Route Analytics & Reports](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v0.8.0) draws each **route map** to scale, colored by who held the manuscript and when, and adds an **Insights** page with your own journal history and turnaround, shareable **reports**, and **work types and tags**. See the [release notes](docs/releases/0.8.0.md) and the [user guide](docs/USER_GUIDE.md).
-- **Preview:** [v0.9.0-rc.1 — Journal Choice & Guidance](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v0.9.0-rc.1) helps you decide where a manuscript should go: a journal shortlist for each manuscript, a guide to choosing a journal, journal facts and metrics from open indexes, journals that publish work like yours, your own citations, a teaching example library, packet export with RO-Crate metadata, and optional AI help, all under one local-first rule with a **Work offline** switch. It upgrades the library to Schema 9; read the [release notes](docs/releases/0.9.0-rc.1.md) and [upgrade notes](UPGRADE_NOTES.md) before trying it.
+- **Stable:** [v0.9.0 — Journal Choice & Guidance](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v0.9.0) helps you decide where a manuscript should go: a journal shortlist for each manuscript, a guide to choosing a journal, journal facts and metrics from open indexes, journals that publish work like yours, your own citations, a teaching example library, packet export with RO-Crate metadata, and optional AI help, all under one local-first rule with a **Work offline** switch. See the [release notes](docs/releases/0.9.0.md) and the [user guide](docs/USER_GUIDE.md).
+- **Next:** [v0.9.1 — 1.0 Hardening](https://github.com/JUhalt/PaperRoute-Tracker/milestone/11): onboarding, accessibility, recovery, and certification across the whole workflow before 1.0.
 
-v0.8 moves the library to Schema 8 and v0.9 to Schema 9. An older version cannot open a library a newer one has used, so keep a backup made with the older version before upgrading. The [upgrade notes](UPGRADE_NOTES.md) explain the save and compatibility boundaries.
+v0.9 moves the library to Schema 9, which v0.8 cannot open, so keep a backup made with v0.8 before upgrading. The [upgrade notes](UPGRADE_NOTES.md) explain the save and compatibility boundaries.
 
-**New to PaperRoute?** Start with the [PaperRoute User Guide](https://github.com/JUhalt/PaperRoute-Tracker/blob/v0.8.0/docs/USER_GUIDE.md) for a Quick Start, feature tour, and task-oriented "How do I...?" reference.
+**New to PaperRoute?** Start with the [PaperRoute User Guide](https://github.com/JUhalt/PaperRoute-Tracker/blob/v0.9.0/docs/USER_GUIDE.md) for a Quick Start, feature tour, and task-oriented "How do I...?" reference.
 
 <p align="center">
   <img src="docs/images/board.png" width="860" alt="The PaperRoute board: pipeline cards with stage, what needs attention, target journal, and each manuscript's route so far (fictional sample data)">
@@ -47,13 +47,13 @@ v0.8 moves the library to Schema 8 and v0.9 to Schema 9. An older version cannot
 - **Route maps** draw a manuscript's whole route to scale, colored by who held it (the journal, you, or production), with every decision and resubmission numbered and explained. They show a student, or a researcher looking back, how much of publishing is waiting and how much is work.
 - **Insights** from your own records: median time to a first decision and to acceptance, your history with each journal, and every published route side by side from day 0. Missing dates are left out, never estimated.
 - **Pipeline and Route reports** to share with a supervisor or coauthor, as one web page to print or save as PDF, without notes, reviewer comments, or file paths.
-- **Your citations** (v0.9 Preview): how your published work has been cited, from OpenAlex, with each figure's definition. You confirm which works are yours.
+- **Your citations**: how your published work has been cited, from OpenAlex, with each figure's definition. You confirm which works are yours.
 
 <p align="center">
   <img src="docs/images/route-map.png" width="860" alt="A route map: 264 days from first submission to publication, drawn to scale and colored by who held the manuscript, with each decision and resubmission numbered and explained (fictional sample data)">
 </p>
 
-### Choose where to submit (v0.9 Preview)
+### Choose where to submit
 
 - **Journal shortlist** for each manuscript: Considering, Preferred, Backup, and Ruled out, with your reasons, offered again when a manuscript is rerouted.
 - **Choosing a journal:** trust questions adapted from Think. Check. Submit. (CC BY 4.0) and PaperRoute's own fit questions, with your history with each journal beside them.
@@ -66,13 +66,13 @@ v0.8 moves the library to Schema 8 and v0.9 to Schema 9. An older version cannot
 - **Journal submission history** with manuscript numbers, dates, notes, and publisher portal links.
 - **Reusable Journal Library** with favorites and a watch list, homepages, submission portals, and checklist templates.
 - **Per-journal readiness checklists** applied to a manuscript and tracked as unresolved, complete, or not applicable. Readiness is advisory and never records a submission by itself.
-- **Submission Packet Vault** that preserves the exact files prepared for a journal as managed copies, external links, or metadata-only records, with optional local SHA-256 checks that report unchanged, changed, or missing files. From v0.9 (Preview), **Export Packet...** saves a packet's chosen files as a .zip with a summary page, a checksum list, and RO-Crate metadata, after showing any author names hidden inside the files.
+- **Submission Packet Vault** that preserves the exact files prepared for a journal as managed copies, external links, or metadata-only records, with optional local SHA-256 checks that report unchanged, changed, or missing files. **Export Packet...** saves a packet's chosen files as a .zip with a summary page, a checksum list, and RO-Crate metadata, after showing any author names hidden inside the files.
 
 ### Revise and respond
 
 - **Editorial decisions** including desk rejection, revision requests, acceptance, and revision deadlines.
 - **Reviewer Response Matrix** for reviewer and editor comments, statuses, draft responses, manuscript locations, and an editable response-to-reviewers export.
-- **Optional AI assistant** (v0.9 Preview), off until you turn it on, with your own Claude key or a model on your computer: read a decision letter into the decision and reviewer comments, or start a response or a cover letter. Each window shows what it sends, and to whom, before sending, and nothing changes until you accept.
+- **Optional AI assistant**, off until you turn it on, with your own Claude key or a model on your computer: read a decision letter into the decision and reviewer comments, or start a response or a cover letter. Each window shows what it sends, and to whom, before sending, and nothing changes until you accept.
 - **Correspondence and local-file tracking** for decision letters, reviewer comments, response letters, and revised manuscripts.
 - **Deadlines** for everything that needs action, grouped Overdue, Today, Next 7 days, Later, and No date: revision deadlines with reviewer-comment progress, journal follow-ups, your reminders, and unfinished submission preparation. **Postpone** changes the date where it lives. Optional Windows notifications and portable `.ics` calendar export.
 
@@ -89,8 +89,8 @@ v0.8 moves the library to Schema 8 and v0.9 to Schema 9. An older version cannot
 ### Keep your data yours
 
 - **Local-first storage** and a managed local document library; no PaperRoute account.
-- **Online services and Work offline** (v0.9 Preview): one list of every service PaperRoute can contact and exactly what it sends, and one switch that stops them all.
-- **Example library for teaching** (v0.9 Preview): a fictional research group's manuscripts in a separate window; your own library is never opened.
+- **Online services and Work offline**: one list of every service PaperRoute can contact and exactly what it sends, and one switch that stops them all.
+- **Example library for teaching**: a fictional research group's manuscripts in a separate window; your own library is never opened.
 - **Portable ZIP backup and restore** with validation, a preview, and an emergency pre-restore backup.
 - **Excel import/export**, legacy tracker import, and a column-mapping wizard for arbitrary spreadsheets.
 - **Light, Dark, and Follow Windows themes** and a built-in offline **User Guide**.
@@ -101,7 +101,7 @@ The [User Guide](docs/USER_GUIDE.md) explains each workflow in detail.
 
 PaperRoute is designed so that its core manuscript-tracking workflow works offline. No PaperRoute account is required.
 
-Every online feature is optional and starts only when you ask: Crossref and ORCID lookups, update checks, and from v0.9 journal facts from DOAJ and OpenAlex, Find Journals, your citations, and the optional AI assistant. **Settings → Preferences... → Online services** lists each one with the hosts it contacts and exactly what it sends, and **Work offline** stops them all. Lookups are read-only and previewed before anything is applied. The AI assistant is off until you turn it on and shows what it will send, and to whom, before sending. Keys you add, such as an OpenAlex or AI assistant key, are encrypted for your Windows account and never stored in settings, backups, exports, or Diagnostics; PaperRoute includes no keys of its own. PaperRoute stores no ORCID password, OAuth token, or client secret, and no publisher credentials.
+Every online feature is optional and starts only when you ask: Crossref and ORCID lookups, update checks, journal facts from DOAJ and OpenAlex, Find Journals, your citations, and the optional AI assistant. **Settings → Preferences... → Online services** lists each one with the hosts it contacts and exactly what it sends, and **Work offline** stops them all. Lookups are read-only and previewed before anything is applied. The AI assistant is off until you turn it on and shows what it will send, and to whom, before sending. Keys you add, such as an OpenAlex or AI assistant key, are encrypted for your Windows account and never stored in settings, backups, exports, or Diagnostics; PaperRoute includes no keys of its own. PaperRoute stores no ORCID password, OAuth token, or client secret, and no publisher credentials.
 
 Current installed/portable PaperRoute application data is stored under `%LocalAppData%\PaperRoute\`.
 
@@ -223,8 +223,8 @@ PaperRoute is an independent, open-source project. Its implementation, local-fir
 | **Released** | v0.6 — Workspace | One window, manuscript pages, one save step, calmer design |
 | **Released** | v0.7 — Deadline Center | Everything that needs action, and when; the publication check |
 | **Released** | v0.8 — Route Analytics & Reports | Route maps, your own turnaround data, reports, types and tags |
-| **Preview** | [v0.9 — Journal Choice & Guidance](https://github.com/JUhalt/PaperRoute-Tracker/milestone/13) | Choosing a journal, journal facts, a teaching example, optional AI help |
-| | [v0.9.1 — 1.0 Hardening](https://github.com/JUhalt/PaperRoute-Tracker/milestone/11) | Onboarding, accessibility, recovery, certification |
+| **Released** | v0.9 — Journal Choice & Guidance | Choosing a journal, journal facts, packet export, a teaching example, optional AI help |
+| **Now** | [v0.9.1 — 1.0 Hardening](https://github.com/JUhalt/PaperRoute-Tracker/milestone/11) | Onboarding, accessibility, recovery, certification |
 | **Goal** | [v1.0 — Trusted Research Workflow](https://github.com/JUhalt/PaperRoute-Tracker/milestone/12) | "I trust this application with my research workflow." |
 
 See [`ROADMAP.md`](ROADMAP.md) for the reasoning behind each release. GitHub milestones and issues are the live source of truth for active release work.

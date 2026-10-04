@@ -21,7 +21,7 @@ Use **Settings → Backup Library...** to create a portable backup. In v0.5 and 
 
 ## Moving from v0.8 to v0.9
 
-PaperRoute v0.9 adds a journal shortlist for each manuscript, a guide to choosing a journal, journal facts and metrics, Find Journals, Your Citations, an example library, the Online services page with Work offline, an optional AI assistant, and packet export. **v0.9.0-rc.1 is a Preview; v0.8.0 remains the current Stable release.** v0.9 upgrades the library to **Schema 9**, which adds journal shortlists (with the evidence behind a suggested journal), journal ISSNs, links, facts, and metrics, and a record of where an accepted AI suggestion came from.
+PaperRoute v0.9 adds a journal shortlist for each manuscript, a guide to choosing a journal, journal facts and metrics, Find Journals, Your Citations, an example library, the Online services page with Work offline, an optional AI assistant, and packet export. **v0.9.0 is the current Stable release.** v0.9 upgrades the library to **Schema 9**, which adds journal shortlists (with the evidence behind a suggested journal), journal ISSNs, links, facts, and metrics, and a record of where an accepted AI suggestion came from.
 
 Before upgrading, create a portable ZIP backup with v0.8 (**Settings → Backup Library...**) and keep it separately.
 
@@ -37,7 +37,7 @@ After upgrading:
 
 ## Moving from v0.7 to v0.8
 
-PaperRoute v0.8 adds route maps, the Insights page, shareable reports, and work types and tags. **v0.8.0 is the current Stable release.** v0.8 upgrades the library to **Schema 8**, which adds work types, tags, and tag colors.
+PaperRoute v0.8 adds route maps, the Insights page, shareable reports, and work types and tags. v0.8 upgrades the library to **Schema 8**, which adds work types, tags, and tag colors.
 
 Before upgrading, create a portable ZIP backup with v0.7 (**Settings → Backup Library...**) and keep it separately.
 
