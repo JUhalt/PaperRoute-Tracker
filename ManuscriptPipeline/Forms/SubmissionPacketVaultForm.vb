@@ -1624,7 +1624,9 @@ Namespace Forms
                 cancellation.Dispose()
                 If Not IsDisposed AndAlso Not Disposing AndAlso Visible Then
                     _workspace.Enabled = True
-                    DirectCast(Me.AcceptButton, Control).Enabled = True
+                    ' Closing can clear the accept button before this runs.
+                    Dim accept As Control = TryCast(Me.AcceptButton, Control)
+                    If accept IsNot Nothing Then accept.Enabled = True
                     RefreshFiles(selectedId)
                     UpdatePacketButtons()
                 End If
