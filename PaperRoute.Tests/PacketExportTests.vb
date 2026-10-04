@@ -287,11 +287,16 @@ Public Class PacketExportTests
         Dim mueller As New AuthorRecord With {.GivenName = "Anna", .FamilyName = "M" & ChrW(&HFC) & "ller"}
         fixture.Library.Authors.Add(mueller)
         fixture.Manuscript.Authors.Add(New ManuscriptAuthor With {.AuthorId = mueller.Id})
+        Dim garcia As String = "Garc" & ChrW(&HED) & "a"
+        Dim compound As New AuthorRecord With {.GivenName = "Gabriel", .FamilyName = garcia & " M" & ChrW(&HE1) & "rquez"}
+        fixture.Library.Authors.Add(compound)
+        fixture.Manuscript.Authors.Add(New ManuscriptAuthor With {.AuthorId = compound.Id})
         fixture.Version.Label = "Carberry2026 R2"
         fixture.Packet.JournalName = "Bulletin of the Placeholder Society"
         AddFile(fixture, SubmissionPacketFileRole.Supplement, "Carberry2026_supplement.pdf", BuildPdf(), "Author-year supplement")
         AddFile(fixture, SubmissionPacketFileRole.Supplement, "PlaceholderEtAl_data.csv", Encoding.UTF8.GetBytes("a,b" & vbLf), "Camel-case data")
         AddFile(fixture, SubmissionPacketFileRole.Supplement, "Mueller lab notes.txt", Encoding.UTF8.GetBytes("notes" & vbLf), "Spelled-out umlaut")
+        AddFile(fixture, SubmissionPacketFileRole.Supplement, "Garcia2026.pdf", BuildPdf(), "Part of a compound name")
 
         Dim plan As PacketExportPlan = PacketExportService.Prepare(fixture.Manuscript, fixture.Packet, fixture.Library)
         PacketExportService.CheckFiles(plan)
@@ -300,9 +305,15 @@ Public Class PacketExportTests
         CollectionAssert.Contains(warnings, "Check Carberry2026_supplement.pdf: its name, label, or hidden information includes " & PacketExportService.Quoted("Carberry") & ".")
         CollectionAssert.Contains(warnings, "Check PlaceholderEtAl_data.csv: its name, label, or hidden information includes " & PacketExportService.Quoted("Placeholder") & ".")
         CollectionAssert.Contains(warnings, "Check Mueller lab notes.txt: its name, label, or hidden information includes " & PacketExportService.Quoted(mueller.FamilyName) & ".")
+        CollectionAssert.Contains(warnings, "Check Garcia2026.pdf: its name, label, or hidden information includes " & PacketExportService.Quoted(garcia) & ".")
         CollectionAssert.Contains(warnings, "The version label includes " & PacketExportService.Quoted("Carberry") & ". Change it in Version History before exporting.")
         CollectionAssert.Contains(warnings, "The journal name includes " & PacketExportService.Quoted("Placeholder") & ". Check the packet's journal before exporting.")
-        Assert.AreEqual(5, warnings.Count, String.Join(" | ", warnings))
+        Assert.AreEqual(6, warnings.Count, String.Join(" | ", warnings))
+
+        ' Each part of a compound family name with at least three letters,
+        ' split at spaces and hyphens.
+        CollectionAssert.AreEqual({garcia, "M" & ChrW(&HE1) & "rquez"}, PacketExportService.FamilyNameParts(garcia & "-M" & ChrW(&HE1) & "rquez").ToArray())
+        CollectionAssert.AreEqual({"Cruz"}, PacketExportService.FamilyNameParts("de la Cruz").ToArray())
 
         ' Not anonymized: no name checks at all.
         main.Role = SubmissionPacketFileRole.Manuscript
@@ -346,6 +357,33 @@ Public Class PacketExportTests
     <DataRow("", "Carberry", False)>
     Public Sub ContainsName_FindsAuthorYearCamelCaseAndAccents(value As String, name As String, expected As Boolean)
         Assert.AreEqual(expected, PacketExportService.ContainsName(value, name), value & " / " & name)
+    End Sub
+
+
+    <TestMethod>
+    Public Sub NameCheck_NeverThrowsOnALoneSurrogate()
+        ' A Windows file name or a label can hold half of a surrogate pair,
+        ' which String.Normalize refuses. The name check compares the text
+        ' as it is instead, on the UI thread, without throwing.
+        Dim lone As String = ChrW(&HD800)
+        Assert.IsTrue(PacketExportService.ContainsName("Carberry" & lone & ".pdf", "Carberry"))
+        Assert.IsTrue(PacketExportService.ContainsName(lone & "Garcia2026.pdf", "Garc" & ChrW(&HED) & "a"))
+        Assert.IsFalse(PacketExportService.ContainsName("Notes" & lone & ".txt", "Carberry"))
+        Assert.IsFalse(PacketExportService.ContainsName("Carberry.pdf", "Carberry" & ChrW(&HDC00)))
+
+        Dim fixture As ExportFixture = BuildExampleFixture(_root)
+        Dim main As SubmissionPacketFile = fixture.FileWithRole(SubmissionPacketFileRole.Manuscript)
+        main.Role = SubmissionPacketFileRole.BlindedManuscript
+        main.OriginalFileName = "Anonymized manuscript.pdf"
+        WritePdf(main.LocalFilePath)
+        main.Sha256 = String.Empty
+        AddFile(fixture, SubmissionPacketFileRole.Supplement, "Notes" & lone & ".txt", Encoding.UTF8.GetBytes("notes" & vbLf), "Carberry notes " & lone)
+
+        Dim plan As PacketExportPlan = PacketExportService.Prepare(fixture.Manuscript, fixture.Packet, fixture.Library)
+        PacketExportService.CheckFiles(plan)
+        CollectionAssert.AreEqual(
+            {"Check Notes" & lone & ".txt: its name, label, or hidden information includes " & PacketExportService.Quoted("Carberry") & "."},
+            plan.AuthorNameWarnings().ToArray())
     End Sub
 
 
@@ -756,6 +794,24 @@ Public Class PacketExportTests
         Assert.AreEqual("The date this revision was sent is not recorded.", unknown("description").GetValue(Of String)())
         StringAssert.Contains(EntryText(unknownZip, "ro-crate-preview.html"), "A revision (round not recorded). The date this revision was sent is not recorded.")
         Assert.IsFalse(EntryText(unknownZip, "ro-crate-metadata.json").Contains("2026-03-02"))
+
+        ' A version that records a round but links no submission or decision,
+        ' in a packet whose round is 0: still a revision, so the first
+        ' submission's date is never given. Its round may be another
+        ' submission's, so none is claimed.
+        fixture.Packet.RevisionRoundNumber = 0
+        fixture.Version.DecisionId = Nothing
+        fixture.Version.SubmissionId = Nothing
+        fixture.Version.RevisionRoundNumber = 2
+        Dim unlinkedZip As String = ExportWithDefaults(fixture, "unlinked-round.zip")
+        Dim unlinked As JsonObject = EntityOf(GraphOf(unlinkedZip), "#submission")
+        Assert.AreEqual("Sent to Fictional Journal of Psychology, revision (round not recorded)", unlinked("name").GetValue(Of String)())
+        Assert.IsNull(unlinked("startTime"), "A version that tracks a round isn't dated with the first submission's date.")
+        Assert.AreEqual("The date this revision was sent is not recorded.", unlinked("description").GetValue(Of String)())
+        Dim unlinkedHtml As String = EntryText(unlinkedZip, "ro-crate-preview.html")
+        StringAssert.Contains(unlinkedHtml, "A revision (round not recorded). The date this revision was sent is not recorded.")
+        Assert.IsFalse(unlinkedHtml.Contains("Sent on"))
+        Assert.IsFalse(EntryText(unlinkedZip, "ro-crate-metadata.json").Contains("2026-03-02"))
 
         ' A version revised for another submission, then sent here afresh:
         ' this submission's date stands.
@@ -1215,6 +1271,62 @@ Public Class PacketExportTests
         Assert.IsFalse(File.Exists(OutputPath("stopped.zip")))
         Assert.AreEqual(0, Directory.GetFiles(Path.GetDirectoryName(OutputPath("x.zip")), "*.partial").Length)
         Assert.IsTrue(File.Exists(main.LocalFilePath))
+    End Sub
+
+
+    <TestMethod>
+    Public Sub MoveIntoPlace_HoldsOnlyReadableFilesAndStopsWhenCancelled()
+        Dim fixture As ExportFixture = SimpleFixture()
+        Dim main As SubmissionPacketFile = AddFile(fixture, SubmissionPacketFileRole.Manuscript, "Main.pdf", BuildPdf(), "Main")
+        Dim letter As SubmissionPacketFile = AddFile(fixture, SubmissionPacketFileRole.CoverLetter, "Letter.txt", Encoding.UTF8.GetBytes("Dear Editor"), "Letter")
+        Dim missing As SubmissionPacketFile = AddFile(fixture, SubmissionPacketFileRole.Table, "Table.csv", Encoding.UTF8.GetBytes("a,b" & vbLf), "Table")
+        File.Delete(missing.LocalFilePath)
+        Dim locked As SubmissionPacketFile = AddFile(fixture, SubmissionPacketFileRole.Supplement, "Locked.txt", Encoding.UTF8.GetBytes("locked"), "Locked")
+        fixture.Packet.Files.Add(New SubmissionPacketFile With {.Role = SubmissionPacketFileRole.ReportingChecklist, .Label = "Checklist", .StorageMode = SubmissionPacketFileStorageMode.MetadataOnly})
+
+        Dim plan As PacketExportPlan = PacketExportService.Prepare(fixture.Manuscript, fixture.Packet, fixture.Library)
+        Using holder As New FileStream(locked.LocalFilePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None)
+            PacketExportService.CheckFiles(plan)
+        End Using
+        Assert.AreEqual(PacketExportFingerprint.Missing, RowFor(plan, "Table").Fingerprint)
+        Assert.AreEqual(PacketExportFingerprint.Unreadable, RowFor(plan, "Locked").Fingerprint)
+        Assert.IsFalse(RowFor(plan, "Letter").Include)
+
+        ' Only the files the check could read are held during the move,
+        ' included or not: a missing or unreadable one (perhaps on a share
+        ' that has gone offline) is never opened again.
+        CollectionAssert.AreEquivalent({main.LocalFilePath, letter.LocalFilePath}, PacketExportService.HeldPacketFilePaths(plan))
+
+        Dim temporary As String = OutputPath("moved.zip.test.partial")
+        Dim destination As String = OutputPath("moved.zip")
+        File.WriteAllText(temporary, "the finished zip")
+        Using source As New CancellationTokenSource()
+            source.Cancel()
+            Assert.ThrowsExactly(Of OperationCanceledException)(Sub() PacketExportService.MoveIntoPlace(plan, temporary, destination, source.Token))
+        End Using
+        Assert.IsFalse(File.Exists(destination), "A stopped export moves nothing into place.")
+        Assert.IsTrue(File.Exists(temporary))
+
+        ' A held file is still never replaced, however its path is spelled.
+        Dim failure As PacketExportException = Assert.ThrowsExactly(Of PacketExportException)(
+            Sub() PacketExportService.MoveIntoPlace(plan, temporary, "\\?\" & letter.LocalFilePath))
+        Assert.AreEqual(PacketExportFailure.DestinationUnwritable, failure.Kind)
+        Assert.AreEqual("Dear Editor", File.ReadAllText(letter.LocalFilePath))
+
+        PacketExportService.MoveIntoPlace(plan, temporary, destination)
+        Assert.AreEqual("the finished zip", File.ReadAllText(destination))
+        Assert.IsFalse(File.Exists(temporary))
+    End Sub
+
+
+    <TestMethod>
+    Public Sub FileIdentity_IndexZeroIsUnknown()
+        ' Some file servers report 0 as every file's index: two different
+        ' files would then look like one, so the identity is unknown and
+        ' only the path comparison applies.
+        Assert.IsNull(PacketExportService.IdentityText(&H1234ABCDUI, 0UI, 0UI))
+        Assert.AreEqual("1234abcd:0000000000000007", PacketExportService.IdentityText(&H1234ABCDUI, 0UI, 7UI))
+        Assert.AreEqual("1234abcd:0000000100000000", PacketExportService.IdentityText(&H1234ABCDUI, 1UI, 0UI))
     End Sub
 
 

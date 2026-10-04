@@ -284,14 +284,22 @@ Namespace Services
 
             ' A revision round comes from the packet, or else from its version
             ' when that version is a revision within the same submission (it
-            ' records a round or answers a decision). A revision is never
-            ' given the first submission's date.
+            ' records a round or answers a decision). A version that records
+            ' a round without saying which submission is a revision too, though
+            ' its round may be another submission's, so it isn't given. Only
+            ' a version linked to a different submission, then sent here
+            ' afresh, keeps this submission's date. A revision is never given
+            ' the first submission's date.
             Dim round As Integer? = PositiveRound(packet.RevisionRoundNumber)
             Dim versionIsRevision As Boolean = False
-            If HasSubmission AndAlso version IsNot Nothing AndAlso BelongsToSubmission(version, submission) Then
+            If HasSubmission AndAlso version IsNot Nothing Then
                 Dim versionRound As Integer? = PositiveRound(version.RevisionRoundNumber)
-                If Not round.HasValue Then round = versionRound
-                versionIsRevision = versionRound.HasValue OrElse version.DecisionId.HasValue
+                If BelongsToSubmission(version, submission) Then
+                    If Not round.HasValue Then round = versionRound
+                    versionIsRevision = versionRound.HasValue OrElse version.DecisionId.HasValue
+                ElseIf Not version.SubmissionId.HasValue AndAlso Not version.DecisionId.HasValue Then
+                    versionIsRevision = versionRound.HasValue
+                End If
             End If
             RevisionRound = If(HasSubmission, round, Nothing)
             IsRevision = HasSubmission AndAlso (RevisionRound.HasValue OrElse versionIsRevision)
@@ -422,7 +430,7 @@ Namespace Services
         Public ReadOnly Property SubmittedDate As DateTime?
 
         ' From the packet, or from its version when that is a revision in the
-        ' same submission; Nothing when no round is recorded.
+        ' same submission; Nothing when no round is recorded for it.
         Public ReadOnly Property RevisionRound As Integer?
 
         ' A revision, with or without a recorded round: the date it was sent
@@ -527,23 +535,30 @@ Namespace Services
 
 
         ' In an anonymized packet: every included file whose name, label, or
-        ' hidden information includes an author's family name; the package
-        ' name, version label, and journal name when they do; and a note when
-        ' there are no family names to look for.
+        ' hidden information includes an author's family name (or a part of
+        ' a compound one); the package name, version label, and journal name
+        ' when they do; and a note when there are no family names to look for.
         Public Function AuthorNameWarnings() As IReadOnlyList(Of String)
 
             Dim warnings As New List(Of String)()
             If Not IsBlinded Then Return warnings.AsReadOnly()
 
-            Dim familyNames As List(Of String) = Authors.
+            Dim wholeNames As List(Of String) = Authors.
                 Select(Function(item) item.FamilyName).
                 Where(Function(item) item IsNot Nothing AndAlso item.Length >= 2).
                 Distinct(StringComparer.OrdinalIgnoreCase).
                 ToList()
-            If familyNames.Count = 0 Then
+            If wholeNames.Count = 0 Then
                 warnings.Add(NoAuthorsToCheckText)
                 Return warnings.AsReadOnly()
             End If
+
+            ' Whole names first, so a match names the whole family name when
+            ' it can; then each part of a compound one ("García Márquez").
+            Dim familyNames As List(Of String) = wholeNames.
+                Concat(wholeNames.SelectMany(Function(item) PacketExportService.FamilyNameParts(item))).
+                Distinct(StringComparer.OrdinalIgnoreCase).
+                ToList()
 
             Dim nameIn As Func(Of String, String) =
                 Function(value) familyNames.FirstOrDefault(Function(familyName) PacketExportService.ContainsName(value, familyName))
@@ -1160,7 +1175,7 @@ Namespace Services
                 End Using
 
                 cancellationToken.ThrowIfCancellationRequested()
-                MoveIntoPlace(plan, temporaryPath, zipPath)
+                MoveIntoPlace(plan, temporaryPath, zipPath, cancellationToken)
 
             Catch ex As PacketExportException
                 DeleteQuietly(temporaryPath)
@@ -1286,19 +1301,29 @@ Namespace Services
         ' Moves the finished .zip over the destination while the packet's
         ' files are held open, shared only with readers: Windows then refuses
         ' to replace any of them, even through a path spelled another way (a
-        ' mapped drive, a junction, or the \\?\ form).
-        Private Shared Sub MoveIntoPlace(plan As PacketExportPlan, temporaryPath As String, zipPath As String)
+        ' mapped drive, a junction, or the \\?\ form). Only files the last
+        ' check could read are held, so a missing file or one on a share
+        ' that has gone offline can't stall the end of the export; the
+        ' path and identity checks still cover every packet file.
+        Friend Shared Sub MoveIntoPlace(
+            plan As PacketExportPlan,
+            temporaryPath As String,
+            zipPath As String,
+            Optional cancellationToken As CancellationToken = Nothing
+        )
 
             Dim held As New List(Of FileStream)()
             Try
-                For Each sourcePath As String In PacketFilePaths(plan)
+                For Each sourcePath As String In HeldPacketFilePaths(plan)
+                    cancellationToken.ThrowIfCancellationRequested()
                     Try
                         held.Add(New FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read))
                     Catch ex As Exception When IsFileAccessException(ex)
-                        ' Not there, or in use: the identity check below still applies.
+                        ' Gone or in use since the check: the identity check below still applies.
                     End Try
                 Next
 
+                cancellationToken.ThrowIfCancellationRequested()
                 Try
                     File.Move(temporaryPath, zipPath, overwrite:=True)
                 Catch ex As Exception When IsFileAccessException(ex)
@@ -1316,6 +1341,19 @@ Namespace Services
 
         Private Shared Function PacketFilePaths(plan As PacketExportPlan) As List(Of String)
             Return plan.Rows.
+                Select(Function(item) item.Source.LocalFilePath).
+                Where(Function(item) Not String.IsNullOrWhiteSpace(item)).
+                Distinct(StringComparer.OrdinalIgnoreCase).
+                ToList()
+        End Function
+
+
+        ' The packet files held open during the move: those the last check
+        ' could read (included or not), never a missing, unreadable, or
+        ' unchecked one.
+        Friend Shared Function HeldPacketFilePaths(plan As PacketExportPlan) As List(Of String)
+            Return plan.Rows.
+                Where(Function(item) item.CanInclude).
                 Select(Function(item) item.Source.LocalFilePath).
                 Where(Function(item) Not String.IsNullOrWhiteSpace(item)).
                 Distinct(StringComparer.OrdinalIgnoreCase).
@@ -1350,13 +1388,22 @@ Namespace Services
                 Using handle As SafeFileHandle = File.OpenHandle(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite Or FileShare.Delete)
                     Dim information As ByHandleFileInformation
                     If Not GetFileInformationByHandle(handle, information) Then Return Nothing
-                    Return information.VolumeSerialNumber.ToString("x8", CultureInfo.InvariantCulture) & ":" &
-                        information.FileIndexHigh.ToString("x8", CultureInfo.InvariantCulture) &
-                        information.FileIndexLow.ToString("x8", CultureInfo.InvariantCulture)
+                    Return IdentityText(information.VolumeSerialNumber, information.FileIndexHigh, information.FileIndexLow)
                 End Using
             Catch ex As Exception When IsFileAccessException(ex)
                 Return Nothing
             End Try
+        End Function
+
+
+        ' Nothing for a file index of 0, which some file servers report for
+        ' every file: the identity is then unknown, and only the path
+        ' comparison applies, so such files are never mistaken for each other.
+        Friend Shared Function IdentityText(volumeSerialNumber As UInteger, fileIndexHigh As UInteger, fileIndexLow As UInteger) As String
+            If fileIndexHigh = 0UI AndAlso fileIndexLow = 0UI Then Return Nothing
+            Return volumeSerialNumber.ToString("x8", CultureInfo.InvariantCulture) & ":" &
+                fileIndexHigh.ToString("x8", CultureInfo.InvariantCulture) &
+                fileIndexLow.ToString("x8", CultureInfo.InvariantCulture)
         End Function
 
 
@@ -1487,10 +1534,21 @@ Namespace Services
         End Function
 
 
+        ' The parts of a compound family name, split at spaces and hyphens,
+        ' that have at least three letters: "García Márquez" and
+        ' "García-Márquez" both give "García" and "Márquez".
+        Friend Shared Function FamilyNameParts(familyName As String) As IEnumerable(Of String)
+            If String.IsNullOrWhiteSpace(familyName) Then Return Enumerable.Empty(Of String)()
+            Return System.Text.RegularExpressions.Regex.Split(familyName.Trim(), "[\s\-\u2010\u2011]+").
+                Where(Function(part) part.Count(Function(character) Char.IsLetter(character)) >= 3).
+                ToList()
+        End Function
+
+
         ' The text without accents, and also with German umlauts spelled
         ' out ("ü" as "ue").
         Private Shared Function NameForms(value As String) As List(Of String)
-            Dim composed As String = value.Normalize(NormalizationForm.FormC)
+            Dim composed As String = SafeNormalize(value, NormalizationForm.FormC)
             Dim spelledOut As String = composed.
                 Replace(ChrW(&HE4), "ae").Replace(ChrW(&HF6), "oe").Replace(ChrW(&HFC), "ue").
                 Replace(ChrW(&HC4), "Ae").Replace(ChrW(&HD6), "Oe").Replace(ChrW(&HDC), "Ue")
@@ -1503,7 +1561,7 @@ Namespace Services
 
         Private Shared Function FoldAccents(value As String) As String
             Dim folded As New StringBuilder(value.Length)
-            For Each character As Char In value.Normalize(NormalizationForm.FormD)
+            For Each character As Char In SafeNormalize(value, NormalizationForm.FormD)
                 Select Case AscW(character)
                     Case &HDF : folded.Append("ss")     ' sharp s
                     Case &H1E9E : folded.Append("SS")
@@ -1524,7 +1582,18 @@ Namespace Services
                         If CharUnicodeInfo.GetUnicodeCategory(character) <> UnicodeCategory.NonSpacingMark Then folded.Append(character)
                 End Select
             Next
-            Return folded.ToString().Normalize(NormalizationForm.FormC)
+            Return SafeNormalize(folded.ToString(), NormalizationForm.FormC)
+        End Function
+
+
+        ' A file name or label can hold a lone surrogate, which Normalize
+        ' refuses: the name check then compares the text as it is.
+        Private Shared Function SafeNormalize(value As String, form As NormalizationForm) As String
+            Try
+                Return value.Normalize(form)
+            Catch ex As ArgumentException
+                Return value
+            End Try
         End Function
 
 

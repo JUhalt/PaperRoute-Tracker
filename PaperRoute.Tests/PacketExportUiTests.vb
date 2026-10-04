@@ -314,17 +314,36 @@ Public Class PacketExportUiTests
                     ' The note names each file as its row does, and not the
                     ' plain-text table, which has no hidden fields.
                     CollectionAssert.Contains(dialog.NotesBox.Lines,
-                        "PaperRoute couldn't look inside these files, which may still hold hidden information: Manuscript.docx (Couldn't be checked), Figure 1.bin (Not checked).")
+                        "PaperRoute couldn't look inside these files, which may still hold hidden information. Manuscript.docx: couldn't be checked; Figure 1.bin: not checked.")
                     Assert.IsFalse(dialog.NotesBox.Text.Contains("Table 1.csv"))
 
                     dialog.SetIncludeForTest(RowIndex(dialog, "Figure 1"), False)
                     CollectionAssert.Contains(dialog.NotesBox.Lines,
-                        "PaperRoute couldn't look inside these files, which may still hold hidden information: Manuscript.docx (Couldn't be checked).")
+                        "PaperRoute couldn't look inside these files, which may still hold hidden information. Manuscript.docx: couldn't be checked.")
                     dialog.SetIncludeForTest(RowIndex(dialog, "Main text"), False)
                     Assert.IsFalse(dialog.NotesBox.Text.Contains("couldn't look inside"), "Only included files are named.")
                     dialog.Close()
                 End Using
             End Sub)
+    End Sub
+
+
+    <TestMethod>
+    Public Sub UncheckedNote_HasNoNestedParentheses()
+        Dim fixture As ExportFixture = SimpleFixture()
+        AddFile(fixture, SubmissionPacketFileRole.Manuscript, "Paper.pdf", BuildPdf(), "Main text")
+        AddFile(fixture, SubmissionPacketFileRole.Figure, "Figure 1.bin", New Byte() {1, 2, 3}, "Figure 1")
+        Dim plan As PacketExportPlan = PacketExportService.Prepare(fixture.Manuscript, fixture.Packet, fixture.Library)
+        PacketExportService.CheckFiles(plan)
+
+        ' An encrypted PDF that opens without a password: its row says
+        ' "Couldn't be checked (encrypted)", and the note says it plainly.
+        Dim paper As PacketExportRow = plan.Rows.Single(Function(item) item.Label = "Main text")
+        paper.Hidden = New HiddenMetadataReport(HiddenMetadataState.Checked, gap:=HiddenMetadataGap.Encrypted)
+        Assert.AreEqual("Couldn't be checked (encrypted)", paper.Hidden.Summary())
+        Assert.AreEqual(
+            "PaperRoute couldn't look inside these files, which may still hold hidden information. Paper.pdf: couldn't be checked, encrypted; Figure 1.bin: not checked.",
+            PacketExportForm.UncheckedText(plan))
     End Sub
 
 

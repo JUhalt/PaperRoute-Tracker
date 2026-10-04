@@ -28,8 +28,8 @@ Namespace Forms
             "This packet has an anonymized manuscript, so the package is anonymized: it names no authors, and the manuscript with author details, the title page, and the cover letter start unchecked."
         Friend Const AcknowledgeText As String =
             "I've checked the hidden information listed above. Files are copied exactly as they are; PaperRoute doesn't remove it."
-        ' Followed by the names of the files, as their rows say.
-        Friend Const UncheckedTypesText As String = "PaperRoute couldn't look inside these files, which may still hold hidden information: "
+        ' Followed by each file's name and why, as its row says.
+        Friend Const UncheckedTypesText As String = "PaperRoute couldn't look inside these files, which may still hold hidden information. "
         Friend Const NothingToNoteText As String = "Nothing to note about these files."
         Friend Const CheckingText As String = "Checking the packet's files on this computer..."
         Friend Const ExportingText As String = "Exporting..."
@@ -640,14 +640,21 @@ Namespace Forms
 
 
         ' The included files PaperRoute couldn't look inside, each with what
-        ' its row says ("Not checked" or "Couldn't be checked"); "" for none.
+        ' its row says, as "Paper.pdf: couldn't be checked, encrypted"; ""
+        ' for none.
         Friend Shared Function UncheckedText(plan As PacketExportPlan) As String
             If Not plan.HasUncheckedTypes() Then Return String.Empty
             Dim files As IEnumerable(Of String) = plan.IncludedRows().
                 Where(Function(item) item.Hidden IsNot Nothing AndAlso
                     (item.Hidden.State = HiddenMetadataState.NotChecked OrElse item.Hidden.State = HiddenMetadataState.CouldNotCheck)).
-                Select(Function(item) item.OutputName & " (" & item.Hidden.Summary() & ")")
-            Return UncheckedTypesText & String.Join(", ", files) & "."
+                Select(Function(item) item.OutputName & ": " & UncheckedReason(item.Hidden))
+            Return UncheckedTypesText & String.Join("; ", files) & "."
+        End Function
+
+
+        Private Shared Function UncheckedReason(report As HiddenMetadataReport) As String
+            If report.State = HiddenMetadataState.NotChecked Then Return "not checked"
+            Return If(report.Gap = HiddenMetadataGap.Encrypted, "couldn't be checked, encrypted", "couldn't be checked")
         End Function
 
 
