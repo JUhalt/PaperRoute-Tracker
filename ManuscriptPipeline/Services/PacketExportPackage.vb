@@ -23,7 +23,7 @@ Namespace Services
         Private Const SubmissionId As String = "#submission"
         Private Const ExportId As String = "#export"
         Private Const RoundDateNote As String = "The date this revision round was sent is not recorded."
-        Private Const PackageDateNote As String = "The package's date is the day it is exported."
+        Friend Const PackageDateNote As String = "The package's date is the day it is exported."
 
         Private Sub New()
         End Sub
@@ -468,7 +468,8 @@ Namespace Services
         End Sub
 
 
-        Private Shared Function SubmissionText(plan As PacketExportPlan) As String
+        ' Also shown in the export window's package details.
+        Friend Shared Function SubmissionText(plan As PacketExportPlan) As String
             If Not plan.HasSubmission Then Return "Not linked to a recorded submission"
             If plan.RevisionRound.HasValue Then
                 Return "Revision round " & plan.RevisionRound.Value.ToString(CultureInfo.InvariantCulture) & ". " & RoundDateNote

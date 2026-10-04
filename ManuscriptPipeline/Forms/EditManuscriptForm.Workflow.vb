@@ -20,7 +20,7 @@ Namespace Forms
                             If dialog.ShowDialog(Me) = DialogResult.OK Then nextRequest = dialog.RequestedNavigation
                         End Using
                     Case SubmissionWorkflowTarget.Packets
-                        Using dialog As New SubmissionPacketVaultForm(_workingManuscript, request)
+                        Using dialog As New SubmissionPacketVaultForm(_workingManuscript, request, _authorLibrary)
                             If dialog.ShowDialog(Me) = DialogResult.OK Then nextRequest = dialog.RequestedNavigation
                         End Using
                     Case SubmissionWorkflowTarget.Version

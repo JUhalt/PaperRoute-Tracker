@@ -16,7 +16,7 @@ Public Class DialogFitTests
     ' The fixed-size dialogs added in v0.9.
     Private Shared ReadOnly V09Dialogs As String() = {
         "AssistantConsentForm", "AssistantDraftForm", "AuthorInstructionsForm", "CitationsUpdateForm", "CoverLetterForm", "DecisionLetterForm",
-        "JournalCandidateForm", "JournalFactsForm", "JournalSuggestionsForm"
+        "JournalCandidateForm", "JournalFactsForm", "JournalSuggestionsForm", "PacketExportForm"
     }
 
     <TestMethod>

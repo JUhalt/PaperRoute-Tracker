@@ -101,6 +101,25 @@ Select `no-baseline.txt` and choose **Record Fingerprint**, then **Check Files**
 
 All packet records, captured fingerprints, and edits remain in memory and are discarded when the demo closes. The three remaining text files are deliberately left in their unique temporary directory as disposable evidence. You may remove that specific `PaperRoute-V04-Integrity-Demo-<GUID>` directory afterward. The demo performs no recursive cleanup. These checks cover linked-file verification and the vault UI; persisted managed-file behavior still needs separate certification.
 
+## Packet export
+
+```powershell
+dotnet run --project ManualCertification/V04Demo/PaperRoute.V04Demo.csproj -- packet-export --minimum --primary
+dotnet run --project ManualCertification/V04Demo/PaperRoute.V04Demo.csproj -- packet-export-blinded --dark
+```
+
+These surfaces open the real **Export Submission Packet** window (#45) on a synthetic packet. Each run creates a new `PaperRoute-V04-Integrity-Demo-<GUID>` directory under the operating system's temporary directory with the integrity fixtures above, plus a small PDF and a title-page .docx whose hidden properties name "Demo Author", two PNG figures both originally named `Figure 1.png`, and `Table #1 (50% sample).csv`. The sample manuscript has two fictional authors (one with a valid ORCID iD), an abstract, keywords, and a DOI. Nothing is sent anywhere and no library is loaded or saved. `packet-export-blinded` makes the manuscripts anonymized ones.
+
+Check that:
+
+- The cover letter and the changed figure start unchecked, with the reason under Notes; the missing supplement and the metadata-only checklist can't be included; the second `Figure 1.png` is named `Figure 1 (2).png`.
+- The Hidden information column shows the PDF's and the title page's author, Export stays disabled until the acknowledgment is ticked, and unticking those files hides it.
+- Anonymized: the note under the introduction shows, Include authors is off and disabled, the title page starts unchecked, and the bold warning names the PDF's author.
+- **Export...** writes `PaperRoute-Packet-Export-Demo.zip` in the same temporary directory without asking where, the status reads "Exported N files to PaperRoute-Packet-Export-Demo.zip.", and the window stays open. Open the .zip: `files/`, `manifest-sha256.txt`, `ro-crate-preview.html`, and `ro-crate-metadata.json`, with no notes, paths, or authors' names in an anonymized package (the files themselves still carry their hidden properties).
+- Editing a name or label re-cleans it, and at the minimum size in Light and Dark every control, the list, the notes, and the details stay readable.
+
+The directory and the .zip are left in place as evidence; remove that specific directory afterward.
+
 ## Suggested visual checks
 
 The demo defaults to Light. Add `--dark` for Dark or `--system` for Follow Windows on any surface; these flags are mutually exclusive and affect only the demo process. They never change Windows settings or saved PaperRoute preferences. Native dark mode requires a supported Windows version; record the effective appearance when certifying it.
