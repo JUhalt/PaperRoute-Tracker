@@ -194,13 +194,13 @@ Namespace Services
         End Function
 
 
-        Private Shared Function Encode(value As String) As String
+        Friend Shared Function Encode(value As String) As String
             Return WebUtility.HtmlEncode(If(value, String.Empty))
         End Function
 
 
         ' Print-friendly, and readable on screen in light or dark.
-        Private Shared Sub OpenDocument(html As StringBuilder, title As String)
+        Friend Shared Sub OpenDocument(html As StringBuilder, title As String)
             html.Append("<!DOCTYPE html><html lang=""en""><head><meta charset=""utf-8"">")
             html.Append("<meta http-equiv=""X-UA-Compatible"" content=""IE=edge"">")
             html.Append("<meta name=""viewport"" content=""width=device-width, initial-scale=1"">")
@@ -223,7 +223,7 @@ Namespace Services
         End Sub
 
 
-        Private Shared Sub CloseDocument(html As StringBuilder)
+        Friend Shared Sub CloseDocument(html As StringBuilder)
             html.Append("</body></html>")
         End Sub
 

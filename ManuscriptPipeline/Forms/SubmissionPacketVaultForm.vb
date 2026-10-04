@@ -18,6 +18,8 @@ Namespace Forms
         Private ReadOnly _sourceManuscript As Manuscript
         Private ReadOnly _workingManuscript As Manuscript
         Private ReadOnly _managedLibrary As ManagedLibraryService
+        ' Authors, affiliations, and journals, read only by Export Packet.
+        Private ReadOnly _authorLibrary As AuthorLibraryData
 
         Private ReadOnly lstPackets As New ListBox()
         Private ReadOnly txtPacketDetail As New TextBox()
@@ -26,6 +28,7 @@ Namespace Forms
 
         Private ReadOnly btnEditPacket As New Button()
         Private ReadOnly btnDeletePacket As New Button()
+        Private ReadOnly btnExportPacket As New Button()
 
         Private ReadOnly btnAddFile As New Button()
         Private ReadOnly btnEditFile As New Button()
@@ -47,7 +50,8 @@ Namespace Forms
 
         Public Sub New(
             manuscript As Manuscript,
-            Optional workflowContext As SubmissionWorkflowRequest = Nothing
+            Optional workflowContext As SubmissionWorkflowRequest = Nothing,
+            Optional authorLibrary As AuthorLibraryData = Nothing
         )
 
             If manuscript Is Nothing Then
@@ -67,6 +71,7 @@ Namespace Forms
             _managedLibrary =
                 New ManagedLibraryService()
 
+            _authorLibrary = If(authorLibrary, New AuthorLibraryData())
             _workflowContext = CopyWorkflowContext(workflowContext)
             BuildInterface()
             UiPolish.ApplyDialog(Me)
@@ -354,6 +359,12 @@ Namespace Forms
             btnDeletePacket.Height =
                 36
 
+            btnExportPacket.Text = "Export Packet..."
+            btnExportPacket.AutoSize = True
+            btnExportPacket.Height = 36
+            btnExportPacket.AccessibleName = "Export selected packet as a zip file"
+            AddHandler btnExportPacket.Click, AddressOf ExportPacketClicked
+
             AddHandler btnNew.Click,
                 AddressOf NewPacket
 
@@ -374,6 +385,8 @@ Namespace Forms
             buttons.Controls.Add(
                 btnDeletePacket
             )
+
+            buttons.Controls.Add(btnExportPacket)
 
             AddWorkflowNavigation(buttons)
 
@@ -967,6 +980,8 @@ Namespace Forms
 
             btnDeletePacket.Enabled =
                 hasPacket
+
+            btnExportPacket.Enabled = hasPacket AndAlso Not _integrityBusy
 
             btnAddFile.Enabled =
                 hasPacket
@@ -1609,7 +1624,9 @@ Namespace Forms
                 cancellation.Dispose()
                 If Not IsDisposed AndAlso Not Disposing AndAlso Visible Then
                     _workspace.Enabled = True
-                    DirectCast(Me.AcceptButton, Control).Enabled = True
+                    ' Closing can clear the accept button before this runs.
+                    Dim accept As Control = TryCast(Me.AcceptButton, Control)
+                    If accept IsNot Nothing Then accept.Enabled = True
                     RefreshFiles(selectedId)
                     UpdatePacketButtons()
                 End If

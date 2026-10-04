@@ -11,7 +11,7 @@ This directory contains disposable import fixtures used for repeatable F5/manual
 
 ## v0.9 evaluations
 
-- [RO-Crate export for submission packets: evaluation and decision (#45)](v0.9-RO-Crate-Evaluation/README.md)
+- [RO-Crate export for submission packets: evaluation, deferral, and adoption (#45)](v0.9-RO-Crate-Evaluation/README.md)
 
 ## Safety
 

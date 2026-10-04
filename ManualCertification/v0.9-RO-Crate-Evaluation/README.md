@@ -1,5 +1,16 @@
 # RO-Crate export for submission packets: evaluation and decision (#45)
 
+**Decision update, October 3, 2026:** Adopted for v0.9.0 by the maintainer on October 3, 2026; the export follows the rules below; implemented in [PR #103](https://github.com/JUhalt/PaperRoute-Tracker/pull/103). **Export Packet...** in the Submission Packet vault writes one .zip that is both the plain package (`files/`, `manifest-sha256.txt`, and the summary page, here named `ro-crate-preview.html`) and an RO-Crate 1.3 crate (`ro-crate-metadata.json`); the summary page and checksum list make sense without the metadata. The original decision below is kept as history.
+
+Evidence: this evaluation's synthetic packet, rebuilt as a test fixture and exported by PaperRoute's own code (`PacketExportTests.SyntheticExport_WritesCrateForOfflineChecker`, with the changed supplement included to show its status), then checked offline with a re-implementation of roc-validator 0.12.1's `ro-crate-1.3` rules (the official validator was not run), passed 85 checks with no failures and seven RECOMMENDED warnings. All seven come from refusing to invent data, or are by design: no publisher; no organization URL; no ROR id; no contact point; no ORCID for one author; a local "rights not stated" license entity rather than a license URL; and, in the checker's extra provenance check, no person as the actions' agent and no end time for the submission. The checker's informational notes are optional file properties and the undescribed `manifest-sha256.txt`; its privacy checks (no local paths, no GPL on the content, no publication date) passed.
+
+Where the build differs from the rules:
+
+- Blinded mode comes only from a blinded manuscript in the packet, because PaperRoute records no journal's review type (rule 5).
+- In blinded mode the manuscript with author details (role Manuscript) also starts unchecked, beside the title page and cover letter, and the author-name check also covers labels, the package name, the version label, and the journal name, not only file names (rule 5).
+- A file that is locked or can't be read shows "Can't be read" and, like a missing file, can't be included (rule 7).
+- The official validator has not yet been run on a golden crate (rule 11); that remains release evidence to gather.
+
 **Decision, October 3, 2026: deferred until after 1.0.** PaperRoute does not export submission packets as RO-Crates in v0.9.0. The proposal stays open as an after-1.0 idea, with the rules below for any future build. No implementation issue was created.
 
 This folder records the bounded evaluation that [#45](https://github.com/JUhalt/PaperRoute-Tracker/issues/45) asked for. `make_eval.py` regenerates the wholly synthetic packet and both exports with Python's standard library only (`python make_eval.py`; output goes to `work/`, which git ignores).
