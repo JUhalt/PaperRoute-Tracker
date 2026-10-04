@@ -337,8 +337,7 @@ Journal records can include:
 - submission portal;
 - facts and metrics (see **Journal Facts and Metrics**);
 - notes;
-- Favorite status;
-- Shortlist status; and
+- **Favorite** (★) and **Watch list** marks, which keep a journal near the top of the list and are separate from a manuscript's journal shortlist (see **Choosing a Journal**); and
 - a reusable readiness checklist.
 
 A manuscript can link its target journal to one of these reusable records while retaining the free-text target-journal field for backward compatibility.
@@ -389,8 +388,8 @@ The **Journals** page shows the selected journal beside the list: its facts, lin
 
 Choose **Look Up Facts...** to look the journal up in two open indexes:
 
-- **DOAJ** (the Directory of Open Access Journals, doaj.org), which lists fully open-access journals: the publication fee (the highest it lists), license and copyright, peer review type, typical weeks from submission to publication, plagiarism screening, and links to the journal's aims and scope, author instructions, and editorial board.
-- **OpenAlex** (openalex.org), an open index of scholarly works that covers most journals, open access or not: publisher, ISSNs, whether the journal is fully open access, its main topics, and three open citation metrics.
+- **DOAJ** (the Directory of Open Access Journals, doaj.org), which lists fully open-access journals: the publication fee (the highest it lists), license and copyright, peer review type, typical weeks from submission to publication, plagiarism screening, and links to the journal's homepage, aims and scope, author instructions, and editorial board.
+- **OpenAlex** (openalex.org), an open index of scholarly works that covers most journals, open access or not: publisher, homepage, ISSNs, whether the journal is fully open access, its main topics, and three open citation metrics. When both give a publisher or homepage, DOAJ's is used, and OpenAlex never replaces a homepage DOAJ gave.
 
 PaperRoute sends the journal's ISSNs (the ones you saved, and any other ISSN OpenAlex lists for the same journal), and nothing else. A journal without an ISSN is first found by name: type the name, choose **Find**, and pick the journal from the list; PaperRoute then sends that journal's ISSNs, or its OpenAlex id if it has none. You see everything that was found before anything is saved:
 
@@ -456,9 +455,9 @@ Before submitting, check that the journal is one you can trust. These questions 
 
 Think. Check. Submit. suggests submitting only if you can answer yes to most of these questions.
 
-### Is it a good fit?
+### Is it a good fit for this manuscript?
 
-Then ask whether the journal suits this manuscript:
+Then ask whether the journal suits this manuscript. These questions are PaperRoute's own:
 
 - Do its aims and scope cover this work?
 - Does it publish this type of article, within its length limits?
@@ -475,14 +474,16 @@ Not sure where to start? **Find Journals...** on the shortlist looks for journal
 
 1. **Review the keywords.** PaperRoute proposes the manuscript's keywords (checked) and phrases from its title (unchecked). Check the ones that describe the work, or add your own. Choose whether articles must match every keyword or any keyword, and how many years back to look.
 2. **See what will be sent.** Before searching, the window shows the exact request: the keywords you checked and a start date, and nothing else. A phrase from the title is sent only if you check it; the abstract, notes, and files are never sent. **Show the exact web address** shows the address itself.
-3. **Read the evidence.** Each journal found shows how many matching articles it published, out of all its articles in those years, whether it is open access and its listed fee, your own history with it, and up to three recent matching articles, linked by DOI.
-4. **Add the ones worth a look.** **Add Checked to Shortlist** adds them as **Considering**, with the evidence, and nothing else changes. Journals already on the shortlist can't be added twice. Save the manuscript page to keep them.
+3. **Read the evidence.** Each journal found shows its publisher, how many matching articles it published, out of all its articles in those years, whether it is open access and its listed fee, your own history with it, and up to three recent matching articles, linked by DOI.
+4. **Add the ones worth a look.** **Add Checked to Shortlist** adds them as **Considering**, with the evidence, including the journal's publisher, main topics, and homepage from OpenAlex, and nothing else changes. Journals already on the shortlist can't be added twice. Save the manuscript page to keep them.
 
 OpenAlex searches the titles, abstracts, and full text of articles, so a match means an article mentions your keywords, not that it is about the same topic. Counts favor large journals, and they are evidence to read, never a ranking of quality or of your chances. PaperRoute never scores journals or labels any as predatory; the questions above are there for that judgment.
 
 Without a key, OpenAlex allows a small amount of use each day and sometimes asks keyword searches to wait when it is busy. PaperRoute says how long, and a free OpenAlex key, added in **Settings > Preferences... > Online services**, raises the allowance.
 
-When a shortlisted journal has facts on the **Journals** page, its row shows them in one line, and the questions show what's known beside them, such as its peer review type beside the peer review question, with links to its aims and scope, author instructions, and sharing policy. The questions are never answered for you.
+While **Work offline** is on, or Find journals is turned off in Online services, **Find Journals...** is unavailable and the shortlist says why.
+
+When a shortlisted journal has facts on the **Journals** page, its row shows them in one line, and the questions show what's known beside them, such as its peer review type beside the peer review question, its main topics and homepage beside the aims and scope question, and links to its aims and scope, author instructions, and sharing policy. For a journal added by **Find Journals...**, what OpenAlex gave fills in where the Journals page has nothing: its main topics and homepage beside the aims and scope question, and its publisher beside the publisher question, each marked with its source. The questions are never answered for you.
 
 ## Journal Submissions
 
@@ -693,14 +694,14 @@ Reports are saved as a single web page that opens in any browser, where you can 
 
 ## Teaching with PaperRoute
 
-PaperRoute includes an **example library**: the fictional Example Lab's manuscripts, covering the routes a new researcher needs to see. Open it from the empty-library welcome (**Explore an example library**) or from **Import & Export → Explore an Example Library...**.
+PaperRoute includes an **example library**: the fictional Example Lab's manuscripts, covering the routes a new researcher needs to see. Open it from the empty-library welcome (**Explore an example library**), from **Import & Export → Explore an Example Library...**, or from **Explore an Example Library...** at the bottom of **Help**, which stays open beside it for the walk below.
 
 The example opens in a separate window with a banner across the top. It has its own temporary storage: your own library is never opened, anything you change in the example is discarded when its window closes, and it never checks for updates or shows notifications. **Return to My Library** closes it. Its dates are relative to today, so Deadlines always has something overdue, due today, and coming up.
 
 ### A 15-minute walk through the route
 
 1. **The board (2 minutes).** Three shelves, and **Needs Attention**: a revision due soon, a review waiting more than 90 days, a recent rejection. Each card's footer is its route so far.
-2. **One whole route (3 minutes).** Open *Example: anchoring effects in clinical risk estimates* and choose **View Route**. The route map shows 264 days from first submission to publication: a desk rejection after 7 days, 48 days of rerouting, two rounds of revision, and 28 days in production. Ask: how much of it was waiting on journals (105 days), and how much was the authors' own work (131 days)?
+2. **One whole route (3 minutes).** Open *Example: anchoring effects in clinical risk estimates* and choose **View Route**. The route map shows 264 days from first submission to publication: a desk rejection after 7 days, 48 days of rerouting, two rounds of revision, and 28 days in production. Ask: how much of it was waiting on journals (105 days), and how much was the authors' own work (131 days)? On its **Readiness & Packets** tab, **Submission Packets...** shows the packet sent with the second submission: the version, the journal, and each file's role, as records only, since the example has no files.
 3. **Responding to reviewers (3 minutes).** Open *Example: retrieval practice in an introductory statistics course*, then its submission's reviewer responses: four comments at four stages of response, and a revision deadline ahead.
 4. **After a rejection (2 minutes).** Open *Example: measurement invariance of a short grit scale*. Its journal shortlist offers the next journal, with the trust and fit questions answered for each. **How to choose a journal** explains them.
 5. **What needs action (2 minutes).** The **Deadlines** page: an overdue follow-up, a reminder due today, and the revision deadline.
@@ -873,8 +874,8 @@ PaperRoute keeps the key encrypted for your Windows account on this computer, se
 | Journal facts (DOAJ and OpenAlex) | doaj.org, api.openalex.org | A journal's ISSNs, or a name you type to find a journal and the id of the one you pick. | Look Up Facts... on the Journals page. |
 | Find journals (OpenAlex) | api.openalex.org | The keywords you review, a start date, and the ids of the journals found. | Find Journals... on a manuscript's journal shortlist. |
 | Your citations (ORCID and OpenAlex) | pub.orcid.org, api.openalex.org | Your ORCID iD to ORCID, and the DOIs of your works to OpenAlex; your iD to OpenAlex only if you choose. | Update from OpenAlex... on Insights > Your Citations. |
-| AI assistant: Claude (Anthropic) | api.anthropic.com | Only what an AI assistant window shows you before sending: a decision letter you paste; a journal's author instructions you paste, with the article type you enter; one reviewer comment with its reviewer label and your planned action; or a manuscript's title, abstract, keywords, type of work, and target journal with its Journal Library facts. | Read Decision Letter..., Add from Letter..., Read Author Instructions..., Suggest a Starting Point..., and Draft Cover Letter..., after you turn on the AI assistant in Preferences. |
-| AI assistant: another server or a model on this computer | The address you set in Preferences: http only on this computer, https elsewhere | Only what an AI assistant window shows you before sending: a decision letter you paste; a journal's author instructions you paste, with the article type you enter; one reviewer comment with its reviewer label and your planned action; or a manuscript's title, abstract, keywords, type of work, and target journal with its Journal Library facts. | Read Decision Letter..., Add from Letter..., Read Author Instructions..., Suggest a Starting Point..., and Draft Cover Letter..., after you turn on the AI assistant in Preferences. |
+| AI assistant: Claude (Anthropic) | api.anthropic.com | Only what an AI assistant window shows you before sending: a decision letter you paste; a journal's author instructions you paste, with the article type you enter; one reviewer comment with its reviewer label and your planned action; or a manuscript's title, abstract, keywords, type of work, and target journal with its Journal Library facts. Test Connection in Preferences sends only the key, if you added one, to list the models and check the one you chose. | Read Decision Letter..., Add from Letter..., Read Author Instructions..., Suggest a Starting Point..., Draft Cover Letter..., and Test Connection, after you turn on the AI assistant in Preferences. |
+| AI assistant: another server or a model on this computer | The address you set in Preferences: http only on this computer, https elsewhere | Only what an AI assistant window shows you before sending: a decision letter you paste; a journal's author instructions you paste, with the article type you enter; one reviewer comment with its reviewer label and your planned action; or a manuscript's title, abstract, keywords, type of work, and target journal with its Journal Library facts. Test Connection in Preferences sends only the key, if you added one, to list the models and check the one you chose. | Read Decision Letter..., Add from Letter..., Read Author Instructions..., Suggest a Starting Point..., Draft Cover Letter..., and Test Connection, after you turn on the AI assistant in Preferences. |
 
 ---
 
@@ -888,9 +889,10 @@ PaperRoute is complete without AI. An optional assistant can save time on four t
 2. Choose a service:
    - **Claude (Anthropic), with your own key.** Choose **Add Claude Key...** and paste a key from your Anthropic account (**Get a key from Anthropic** opens the page). The default model is claude-opus-5-5. Anthropic charges your account for what the assistant sends and receives.
    - **Another server, or a model on this computer (OpenAI-compatible).** Enter the server's address and model, such as `http://localhost:11434/v1` and `llama3.1` for Ollama, or `http://localhost:1234/v1` for LM Studio. http works only for a server on this computer; a server elsewhere must use https. A key is optional.
-3. Choose **Save**. The assistant's buttons appear once it is on.
+3. Optionally, choose **Test Connection** to check the setup before saving. For Claude, once you have added your key, it sends only the key to api.anthropic.com, checks that your account can use the model, and fills the **Model** list with the models your account can use. For another server, it asks the address you set for its models, with the server key if you added one. It says if the key, the model, or the address is wrong, or if the server isn't running. The line below the button says what it sends, and testing saves nothing.
+4. Choose **Save**. The assistant's buttons appear once it is on.
 
-**Work offline** turns the assistant off too, a model on this computer included.
+**Work offline** turns the assistant off too, a model on this computer included, and stops **Test Connection**.
 
 ### What it does
 
@@ -903,7 +905,7 @@ PaperRoute is complete without AI. An optional assistant can save time on four t
 
 Each window shows what it will send, and to whom, before sending. Only that text goes, with PaperRoute's instructions for the task: the letter or author instructions you paste, one comment with your planned action, or the manuscript details shown. Your notes, files, author names, and the rest of your library are never sent.
 
-Before a feature sends to a service elsewhere, PaperRoute shows the exact text and asks first, every time, until you choose not to be asked again for that feature and that service; **Forget Don't Ask Again Choices** in Preferences undoes it. A model on this computer is never asked about, because nothing leaves the computer.
+Before a feature sends to a service elsewhere, PaperRoute shows the exact text and asks first, every time, until you choose not to be asked again for that feature and that service; **Forget Don't Ask Again Choices** in Preferences undoes it. A model on this computer is never asked about, because nothing leaves the computer. **Test Connection** sends none of your text, so it doesn't ask; the line below it says what it sends.
 
 Your keys are kept encrypted for your Windows account on this computer. The Claude key goes only to api.anthropic.com, and a server key only to the address it was added for, in a request header. Neither is ever in backups, exports, or Diagnostics. Requests carry only what the service needs, and nothing about your computer.
 

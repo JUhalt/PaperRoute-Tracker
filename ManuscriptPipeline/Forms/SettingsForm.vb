@@ -52,12 +52,24 @@ Namespace Forms
         Private ReadOnly lblAssistantOffline As New Label()
         Private ReadOnly rbClaude As New RadioButton()
         Private ReadOnly rbCompatible As New RadioButton()
-        Private ReadOnly cboClaudeModel As New ComboBox()
+        Private ReadOnly cboClaudeModel As New SteadyComboBox()
         Private ReadOnly txtEndpoint As New TextBox()
         Private ReadOnly txtEndpointModel As New TextBox()
         Private ReadOnly lblEndpointCheck As New Label()
         Private ReadOnly btnForgetChoices As New Button()
         Private ReadOnly lblChoices As New Label()
+
+        ' Test Connection (#96): tries the setup typed here, before Save.
+        Private ReadOnly btnTestConnection As New Button()
+        Private ReadOnly lblTestSends As New Label()
+        Private ReadOnly lblTestResult As New Label()
+        Private _testCancellation As System.Threading.CancellationTokenSource = Nothing
+        ' A result is shown only for the setup it tested.
+        Private _testGeneration As Integer = 0
+        Private _testedSetup As String = Nothing
+        Private _keyEdits As Integer = 0
+        Private _listingModels As Boolean = False
+
         Private ReadOnly claudeSection As New List(Of Control)()
         Private ReadOnly compatibleSection As New List(Of Control)()
         Private ReadOnly assistantServiceRows As New Dictionary(Of String, Label)(StringComparer.Ordinal)
@@ -78,6 +90,13 @@ Namespace Forms
 
         ' Shows why Save can't go ahead; tests replace the message box.
         Friend problemNotice As Action(Of String) = Nothing
+
+        ' For tests: what Test Connection last said.
+        Friend ReadOnly Property TestResultText As String
+            Get
+                Return lblTestResult.Text
+            End Get
+        End Property
 
         Private _appearanceChanged As Boolean = False
 
@@ -139,6 +158,16 @@ Namespace Forms
                 contentScroller.AutoScrollPosition = New Point(0, onlineGroup.Top)
                 chkWorkOffline.Focus()
             End If
+
+        End Sub
+
+
+        ' Closing stops a connection test still running; nothing it found is kept.
+        Protected Overrides Sub OnFormClosed(e As FormClosedEventArgs)
+
+            _testCancellation?.Cancel()
+
+            MyBase.OnFormClosed(e)
 
         End Sub
 
@@ -986,6 +1015,10 @@ Namespace Forms
                 Sub(sender, e)
                     If cboClaudeModel.IsHandleCreated AndAlso Not cboClaudeModel.Focused Then cboClaudeModel.SelectionLength = 0
                 End Sub
+            AddHandler cboClaudeModel.TextChanged,
+                Sub(sender, e)
+                    If Not _listingModels Then RefreshTestState()
+                End Sub
             Dim lblClaudeModel As Label = fieldLabel("Model")
             addRow(lblClaudeModel, cboClaudeModel)
 
@@ -1033,6 +1066,7 @@ Namespace Forms
             txtEndpointModel.MaximumSize = New Size(UiTheme.Px(260, DeviceDpi), 0)
             txtEndpointModel.Margin = New Padding(0, 7, 0, 4)
             txtEndpointModel.AccessibleName = "Server model"
+            AddHandler txtEndpointModel.TextChanged, Sub(sender, e) RefreshTestState()
             Dim lblEndpointModel As Label = fieldLabel("Model")
             addRow(lblEndpointModel, txtEndpointModel)
 
@@ -1042,6 +1076,38 @@ Namespace Forms
             detailed.Add(serverKey.Status)
 
             compatibleSection.AddRange({lblEndpoint, txtEndpoint, lblEndpointCheck, lblEndpointModel, txtEndpointModel, lblServerKey, serverKey.Status, serverKey.AddButton, serverKey.RemoveButton})
+
+            ' Test Connection (#96): the setup typed here, before Save, with
+            ' what it sends below it, so nothing is sent unannounced.
+            Dim testPanel As New FlowLayoutPanel With {
+                .AutoSize = True,
+                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                .FlowDirection = FlowDirection.LeftToRight,
+                .WrapContents = True,
+                .Margin = New Padding(0, 12, 0, 0)
+            }
+
+            btnTestConnection.Text = "Test Connection"
+            btnTestConnection.AutoSize = True
+            btnTestConnection.MinimumSize = New Size(UiTheme.Px(100, DeviceDpi), UiTheme.Px(32, DeviceDpi))
+            btnTestConnection.Margin = New Padding(0, 0, 12, 4)
+            AddHandler btnTestConnection.Click, Async Sub(sender, e) Await TestConnectionAsync()
+            testPanel.Controls.Add(btnTestConnection)
+            addRow(testPanel, Nothing)
+
+            lblTestSends.AutoSize = True
+            lblTestSends.UseMnemonic = False
+            lblTestSends.ForeColor = UiTheme.MutedText()
+            lblTestSends.Margin = New Padding(0, 2, 0, 2)
+            lblTestSends.AccessibleName = "What Test Connection sends"
+            addRow(lblTestSends, Nothing)
+
+            lblTestResult.AutoSize = True
+            lblTestResult.UseMnemonic = False
+            lblTestResult.Margin = New Padding(0, 4, 0, 4)
+            lblTestResult.AccessibleName = "Test Connection result"
+            addRow(lblTestResult, Nothing)
+            spanning.AddRange({lblTestSends, lblTestResult})
 
             ' The features the researcher said not to ask about again.
             Dim choicesPanel As New FlowLayoutPanel With {
@@ -1142,6 +1208,7 @@ Namespace Forms
                 Sub(sender, e)
                     row.PendingKey = Nothing
                     row.RemoveRequested = row.HasKey
+                    _keyEdits += 1
                     RefreshKeyState()
                 End Sub
 
@@ -1172,6 +1239,7 @@ Namespace Forms
 
             ' The assistant's setup stays editable while offline.
             lblAssistantOffline.Visible = offline
+            RefreshTestState()
 
         End Sub
 
@@ -1276,6 +1344,166 @@ Namespace Forms
             serverKey.AddButton.Enabled = CompatibleChosen() AndAlso endpoint IsNot Nothing
             serverKey.RemoveButton.Enabled = True
 
+            RefreshTestState()
+
+        End Sub
+
+
+        ' The AI assistant as set up in this window, saved or not; Nothing
+        ' while it is off or a server's address or model is missing.
+        Private Function FormConnection() As AssistantConnection
+
+            If Not chkAssistant.Checked Then Return Nothing
+
+            Dim assistant As New AssistantSettings()
+            ApplyAssistantTo(assistant)
+            Return OnlineAccess.ConnectionFor(assistant)
+
+        End Function
+
+
+        ' Test Connection is available for a complete setup while online,
+        ' and says what it will send; a result stays only for the setup it
+        ' tested.
+        Private Sub RefreshTestState()
+
+            Dim connection As AssistantConnection = FormConnection()
+            Dim row As KeyRow = KeyRowFor(connection)
+            Dim setup As String = TestSetup(connection)
+
+            If Not String.Equals(setup, _testedSetup, StringComparison.Ordinal) Then
+                ' A test of the setup as it was is stopped; its answer would
+                ' no longer apply.
+                _testCancellation?.Cancel()
+                _testedSetup = setup
+                _testGeneration += 1
+                ShowTestResult(String.Empty, UiTheme.PrimaryText())
+            End If
+
+            ' Claude can't be tested without a key; say so rather than offer it.
+            Dim needsKey As Boolean = connection IsNot Nothing AndAlso connection.Provider = AssistantProvider.Claude AndAlso Not row.WillHaveKey
+
+            btnTestConnection.Enabled = _testCancellation Is Nothing AndAlso Not chkWorkOffline.Checked AndAlso connection IsNot Nothing AndAlso Not needsKey
+            lblTestSends.Text = If(needsKey, "Add your Claude key to test the connection.", AssistantConnectionTest.WhatIsSent(connection, row.WillHaveKey))
+            lblTestSends.Visible = lblTestSends.Text.Length > 0
+            btnTestConnection.AccessibleDescription = lblTestSends.Text
+
+        End Sub
+
+
+        Private Function KeyRowFor(connection As AssistantConnection) As KeyRow
+            Return If(connection IsNot Nothing AndAlso connection.Provider = AssistantProvider.Compatible, serverKey, claudeKey)
+        End Function
+
+
+        ' What a test result is for: the service, model, address, and key.
+        Private Function TestSetup(connection As AssistantConnection) As String
+            If connection Is Nothing Then Return String.Empty
+            Return String.Join("|", connection.ServiceId, connection.Model, OnlineAccess.OriginOf(connection.Endpoint), connection.Endpoint?.AbsolutePath,
+                               KeyRowFor(connection).WillHaveKey.ToString(), _keyEdits.ToString(Globalization.CultureInfo.InvariantCulture))
+        End Function
+
+
+        Private Sub ShowTestResult(message As String, color As Color)
+
+            lblTestResult.Text = message
+            lblTestResult.ForeColor = color
+            lblTestResult.Visible = message.Length > 0
+
+        End Sub
+
+
+        ' Tries the setup typed in this window (#96), keys not yet saved
+        ' included, through the Online services gate. Nothing is stored or
+        ' saved, and no Don't Ask Again choice is made: the line below the
+        ' button says what is sent, and it is never the researcher's text.
+        Friend Async Function TestConnectionAsync() As System.Threading.Tasks.Task
+
+            If _testCancellation IsNot Nothing OrElse chkWorkOffline.Checked Then Return
+
+            Dim connection As AssistantConnection = FormConnection()
+            If connection Is Nothing Then Return
+            Dim claude As Boolean = connection.Provider = AssistantProvider.Claude
+            Dim row As KeyRow = If(claude, claudeKey, serverKey)
+
+            If claude AndAlso Not IsUsableClaudeModel(ClaudeModelText()) Then
+                ShowTestResult("Enter a Claude model, such as claude-opus-5-5. Nothing was sent.", UiTheme.WarningColor())
+                Return
+            End If
+
+            If claude AndAlso Not row.WillHaveKey Then
+                ShowTestResult("Add your Claude key first. Nothing was sent.", UiTheme.InfoColor())
+                Return
+            End If
+
+            Dim trial As New AssistantTrial With {
+                .Connection = connection,
+                .PendingKey = row.PendingKey,
+                .UseStoredKey = row.WillHaveKey AndAlso row.PendingKey Is Nothing
+            }
+
+            Dim generation As Integer = _testGeneration
+            Dim cancellation As New System.Threading.CancellationTokenSource()
+            _testCancellation = cancellation
+            btnTestConnection.Enabled = False
+            ShowTestResult("Testing the connection...", UiTheme.MutedText())
+
+            Try
+
+                Dim result As AssistantTestResult = Await AssistantConnectionTest.RunAsync(trial, cancellation.Token)
+                If IsDisposed OrElse generation <> _testGeneration Then Return
+
+                ' Claude's list becomes the Model list. The model typed stays,
+                ' written as the list writes it when it is a listed name.
+                If claude Then
+                    If result.Models.Count > 0 Then ShowClaudeModels(result.Models)
+                    If result.Model.Length > 0 AndAlso Not String.Equals(cboClaudeModel.Text, result.Model, StringComparison.Ordinal) Then
+                        _listingModels = True
+                        Try
+                            cboClaudeModel.Text = result.Model
+                        Finally
+                            _listingModels = False
+                        End Try
+                    End If
+                    ' The result is for the setup as it now reads.
+                    _testedSetup = TestSetup(FormConnection())
+                End If
+
+                ShowTestResult(result.Message, If(result.Succeeded, UiTheme.PrimaryText(), UiTheme.WarningColor()))
+
+            Catch ex As Exception
+
+                If IsDisposed OrElse generation <> _testGeneration Then Return
+                ShowTestResult(AssistantRunner.DescribeTest(ex, connection), UiTheme.InfoColor())
+
+            Finally
+
+                cancellation.Dispose()
+                _testCancellation = Nothing
+                If Not IsDisposed Then RefreshTestState()
+
+            End Try
+
+        End Function
+
+
+        Private Sub ShowClaudeModels(models As IEnumerable(Of String))
+
+            Dim typed As String = cboClaudeModel.Text
+            _listingModels = True
+            cboClaudeModel.BeginUpdate()
+            Try
+                cboClaudeModel.Items.Clear()
+                cboClaudeModel.Items.AddRange(models.Cast(Of Object)().ToArray())
+            Finally
+                cboClaudeModel.EndUpdate()
+                ' Clearing keeps the typed text. Setting it again would match a
+                ' listed name ignoring case and change the typed model's case.
+                If Not String.Equals(cboClaudeModel.Text, typed, StringComparison.Ordinal) Then cboClaudeModel.Text = typed
+                If Not cboClaudeModel.Focused Then cboClaudeModel.SelectionLength = 0
+                _listingModels = False
+            End Try
+
         End Sub
 
 
@@ -1319,6 +1547,7 @@ Namespace Forms
 
             row.PendingKey = key.Trim()
             row.RemoveRequested = False
+            _keyEdits += 1
             RefreshKeyState()
 
         End Sub
@@ -1343,6 +1572,13 @@ Namespace Forms
         End Function
 
 
+        Private Shared Function IsUsableClaudeModel(model As String) As Boolean
+
+            Return System.Text.RegularExpressions.Regex.IsMatch(If(model, String.Empty), "^[A-Za-z0-9._:@-]{1,100}$")
+
+        End Function
+
+
         ' Only an assistant PaperRoute can use is saved as turned on (#84).
         Private Function AssistantChoicesAreUsable() As Boolean
 
@@ -1353,8 +1589,7 @@ Namespace Forms
                 If txtEndpointModel.Text.Trim().Length = 0 Then Return Refuse("Enter the model the server should use, such as llama3.1.", txtEndpointModel)
             End If
 
-            If chkAssistant.Checked AndAlso rbClaude.Checked AndAlso
-               Not System.Text.RegularExpressions.Regex.IsMatch(ClaudeModelText(), "^[A-Za-z0-9._:@-]{1,100}$") Then
+            If chkAssistant.Checked AndAlso rbClaude.Checked AndAlso Not IsUsableClaudeModel(ClaudeModelText()) Then
                 Return Refuse("Enter a Claude model, such as claude-opus-5-5.", cboClaudeModel)
             End If
 
@@ -1408,6 +1643,43 @@ Namespace Forms
             End Try
 
         End Function
+
+
+        ' An editable list that keeps what was typed when it is resized.
+        ' Windows otherwise replaces the text with the first item that
+        ' starts with it, so claude-opus-5 would become claude-opus-5-5, or
+        ' an alias the full name Test Connection listed (#96).
+        Private NotInheritable Class SteadyComboBox
+            Inherits ComboBox
+
+            Private Const WM_SIZE As Integer = &H5
+            Private _resizing As Boolean = False
+
+            Protected Overrides Sub WndProc(ByRef m As Message)
+
+                If m.Msg <> WM_SIZE OrElse DropDownStyle <> ComboBoxStyle.DropDown Then
+                    MyBase.WndProc(m)
+                    Return
+                End If
+
+                Dim typed As String = MyBase.Text
+                _resizing = True
+                Try
+                    MyBase.WndProc(m)
+                    If Not String.Equals(MyBase.Text, typed, StringComparison.Ordinal) Then MyBase.Text = typed
+                Finally
+                    _resizing = False
+                End Try
+
+            End Sub
+
+            Protected Overrides Sub OnTextChanged(e As EventArgs)
+
+                If Not _resizing Then MyBase.OnTextChanged(e)
+
+            End Sub
+
+        End Class
 
 
         ' One key's row: whether one is stored, and a change that waits for Save.
@@ -1677,11 +1949,7 @@ Namespace Forms
             Dim endpoint As Uri = OnlineAccess.ParseAssistantEndpoint(txtEndpoint.Text)
             Dim assistant As AssistantSettings = If(target.OnlineServices.Assistant, New AssistantSettings())
             target.OnlineServices.Assistant = assistant
-            assistant.Enabled = chkAssistant.Checked
-            assistant.Provider = If(rbCompatible.Checked, AssistantProvider.Compatible, AssistantProvider.Claude)
-            assistant.ClaudeModel = ClaudeModelText()
-            assistant.Endpoint = txtEndpoint.Text.Trim().TrimEnd("/"c)
-            assistant.EndpointModel = txtEndpointModel.Text.Trim()
+            ApplyAssistantTo(assistant)
 
             ' A server key is sent only to the address it was added for.
             If serverKey.PendingKey IsNot Nothing Then
@@ -1691,6 +1959,20 @@ Namespace Forms
             End If
 
             If _forgetChoices Then assistant.ConfirmedUses = New List(Of String)()
+
+        End Sub
+
+
+        ' The AI assistant's service and model as chosen in this window.
+        Private Sub ApplyAssistantTo(
+            assistant As AssistantSettings
+        )
+
+            assistant.Enabled = chkAssistant.Checked
+            assistant.Provider = If(rbCompatible.Checked, AssistantProvider.Compatible, AssistantProvider.Claude)
+            assistant.ClaudeModel = ClaudeModelText()
+            assistant.Endpoint = txtEndpoint.Text.Trim().TrimEnd("/"c)
+            assistant.EndpointModel = txtEndpointModel.Text.Trim()
 
         End Sub
 

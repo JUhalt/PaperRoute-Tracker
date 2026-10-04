@@ -116,6 +116,25 @@ Public Class JournalShortlistTests
     End Sub
 
     <TestMethod>
+    Public Sub TheGuideAttributesTheTrustQuestionsAsTheDialogDoes()
+        Dim guide As String = File.ReadAllText(UserGuideService.GuideFilePath()).Replace(vbCrLf, vbLf)
+        Dim trustAt As Integer = guide.IndexOf("### " & JournalChoiceGuide.TrustHeading & vbLf, StringComparison.Ordinal)
+        Dim fitAt As Integer = guide.IndexOf("### " & JournalChoiceGuide.FitHeading & vbLf, StringComparison.Ordinal)
+        Assert.IsTrue(trustAt >= 0 AndAlso fitAt > trustAt, "The guide has both sections, under the dialog's headings, trust first.")
+        Dim fitEnd As Integer = guide.IndexOf(vbLf & "### ", fitAt + 4, StringComparison.Ordinal)
+        Assert.IsTrue(fitEnd > fitAt)
+
+        Dim trust As String = guide.Substring(trustAt, fitAt - trustAt)
+        For Each expected As String In {"Think. Check. Submit.", "CC BY 4.0", JournalChoiceGuide.SourceUrl, JournalChoiceGuide.LicenseUrl}
+            StringAssert.Contains(trust, expected, "The trust questions are attributed as the dialog attributes them.")
+        Next
+
+        Dim fit As String = guide.Substring(fitAt, fitEnd - fitAt)
+        StringAssert.Contains(fit, "PaperRoute's own", "The fit questions are marked as PaperRoute's own.")
+        Assert.IsFalse(fit.Contains("Think. Check. Submit.", StringComparison.Ordinal), "The fit questions aren't credited to Think. Check. Submit.")
+    End Sub
+
+    <TestMethod>
     Public Sub Schema9UpgradeChangesOnlyTheMarkerAndShortlistsRoundTrip()
         Dim root As String = Path.Combine(Path.GetTempPath(), "PaperRoute-Schema9-" & Guid.NewGuid().ToString("N"))
         Try
@@ -159,7 +178,14 @@ Public Class JournalShortlistTests
                     ShowOffscreen(dialog)
                     Assert.IsTrue(dialog.CheckBoxes.Single(Function(box) CStr(box.Tag) = "trust.review").Checked)
                     Assert.IsTrue(Descendants(dialog).OfType(Of Label)().Any(Function(label) label.Text = "Your history with this journal: 2 submissions · 1 accepted."))
-                    Assert.IsTrue(Descendants(dialog).OfType(Of LinkLabel)().Any(Function(link) link.Text = JournalChoiceGuide.Attribution), "The adapted questions are attributed.")
+                    Dim attribution As LinkLabel = Descendants(dialog).OfType(Of LinkLabel)().Single(Function(link) link.Text = JournalChoiceGuide.Attribution)
+                    CollectionAssert.AreEqual({"thinkchecksubmit.org", "CC BY 4.0"},
+                                              attribution.Links.Cast(Of LinkLabel.Link)().Select(Function(link) attribution.Text.Substring(link.Start, link.Length)).ToList(), "The adapted questions are attributed.")
+                    CollectionAssert.AreEqual({JournalChoiceGuide.SourceUrl, JournalChoiceGuide.LicenseUrl},
+                                              attribution.Links.Cast(Of LinkLabel.Link)().Select(Function(link) CStr(link.LinkData)).ToList(), "The source and its license are linked.")
+                    Dim fitSource As Label = Descendants(dialog).OfType(Of Label)().Single(Function(label) label.Text = JournalChoiceGuide.FitSource)
+                    Assert.AreEqual(JournalChoiceGuide.FitHeading, fitSource.Parent.Text, "The fit questions are marked as PaperRoute's own, under them.")
+                    Assert.IsTrue(fitSource.Visible)
                     dialog.CheckBoxes.Single(Function(box) CStr(box.Tag) = "fit.scope").Checked = True
                     dialog.JournalBox.Text = "Assessment"
                     dialog.AcceptForTest()
@@ -175,6 +201,28 @@ Public Class JournalShortlistTests
                     Application.DoEvents()
                     StringAssert.StartsWith(help.GuideText.Substring(help.GuideSelectionStart), "Choosing a Journal", "Help opens at the section.")
                     help.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    <TestMethod>
+    Public Sub TheJournalLibraryMarkIsAWatchListNotAShortlist()
+        Dim record As New JournalRecord With {.Name = "Open Psychology", .IsFavorite = True, .IsShortlisted = True}
+        Assert.AreEqual("★ [Watch list] Open Psychology", record.DisplayName)
+        Assert.IsTrue(Text.Json.JsonSerializer.Deserialize(Of JournalRecord)("{""Name"":""Old"",""IsShortlisted"":true}").IsShortlisted, "Existing marks are kept.")
+
+        RunOnStaThread(
+            Sub()
+                Using editor As New JournalEditForm(record)
+                    ShowOffscreen(editor)
+                    Dim mark As CheckBox = Descendants(editor).OfType(Of CheckBox)().Single(Function(box) box.Text = "Watch list")
+                    Assert.IsTrue(mark.Checked)
+                    Assert.IsFalse(Descendants(editor).Any(Function(item) item.Text.Contains("Shortlist", StringComparison.OrdinalIgnoreCase)),
+                                   "Shortlist means only a manuscript's journal shortlist.")
+                    mark.Checked = False
+                    editor.SaveForTest()
+                    Assert.IsFalse(editor.Result.IsShortlisted)
+                    Assert.AreEqual("★ Open Psychology", editor.Result.DisplayName)
                 End Using
             End Sub)
     End Sub

@@ -44,6 +44,9 @@ Namespace Services
         Public Property IsOa As Boolean?
         Public Property IsInDoaj As Boolean?
         Public Property ApcPrices As New List(Of ListedPrice)()
+        ' OpenAlex's first three topics for the journal, and its homepage.
+        Public Property Topics As New List(Of String)()
+        Public Property HomepageUrl As String = String.Empty
         Public Property MatchingArticles As Long
         ' All its articles in the same years, when OpenAlex answered.
         Public Property AllArticles As Long?
@@ -230,10 +233,11 @@ Namespace Services
         End Function
 
 
-        ' The journals' names, ISSNs, publishers, and open-access facts.
+        ' The journals' names, ISSNs, publishers, open-access facts,
+        ' homepages, and topics.
         Public Shared Function DetailsUrl(ids As IEnumerable(Of String)) As String
             Return SourcesBase & "?filter=openalex:" & String.Join("|", ids) &
-                "&select=id,display_name,issn_l,issn,host_organization_name,is_oa,is_in_doaj,apc_prices,homepage_url&per_page=50"
+                "&select=id,display_name,issn_l,issn,host_organization_name,is_oa,is_in_doaj,apc_prices,homepage_url,topics&per_page=50"
         End Function
 
 
@@ -318,6 +322,9 @@ Namespace Services
                 .Source = JournalFactCatalog.OpenAlexSource,
                 .OpenAlexId = suggestion.OpenAlexId,
                 .Issns = suggestion.Issns.ToList(),
+                .Publisher = If(suggestion.Publisher, String.Empty).Trim(),
+                .Topics = If(suggestion.Topics, New List(Of String)()).Where(Function(item) Not String.IsNullOrWhiteSpace(item)).Select(Function(item) item.Trim()).Take(3).ToList(),
+                .HomepageUrl = JournalFactsService.SafeUrl(suggestion.HomepageUrl),
                 .Keywords = CleanKeywords(result.Request),
                 .MatchAll = result.Request.MatchAll,
                 .SinceDate = result.Request.SinceDate,
@@ -416,6 +423,8 @@ Namespace Services
                     journal.IsOa = source.IsOa
                     journal.IsInDoaj = source.IsInDoaj
                     journal.ApcPrices = source.ApcPrices
+                    journal.Topics = source.Topics
+                    journal.HomepageUrl = source.HomepageUrl
                 Next
             Catch ex As Exception When IsPartialFailure(ex, cancellationToken)
                 result.DetailsError = OnlineAccess.Describe(ex, "OpenAlex")

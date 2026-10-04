@@ -14,9 +14,11 @@ Namespace Forms
         Private _searchStart As Integer = 0
 
 
-        Public Sub New(Optional startAt As String = Nothing)
+        ' With openExample, the footer also offers the example library
+        ' (#96); the example's own window passes none.
+        Public Sub New(Optional startAt As String = Nothing, Optional openExample As Action = Nothing)
 
-            BuildInterface()
+            BuildInterface(openExample)
             LoadGuide()
             UiPolish.ApplyDialog(Me)
 
@@ -55,7 +57,7 @@ Namespace Forms
         End Property
 
 
-        Private Sub BuildInterface()
+        Private Sub BuildInterface(openExample As Action)
 
             Me.Text =
                 "PaperRoute User Guide"
@@ -251,6 +253,28 @@ Namespace Forms
             footer.Controls.Add(
                 btnGitHub
             )
+
+            ' The example opens in its own window, and the guide stays open
+            ' beside it for the walk in Teaching with PaperRoute.
+            If openExample IsNot Nothing Then
+
+                Dim btnExample As New Button With {
+                    .Text = "Explore an Example Library...",
+                    .AutoSize = True,
+                    .Height = 36,
+                    .AccessibleDescription = "Opens a fictional research group's library in a separate window. Your own library is not changed."
+                }
+
+                AddHandler btnExample.Click,
+                    Sub(sender, e)
+                        openExample()
+                    End Sub
+
+                footer.Controls.Add(
+                    btnExample
+                )
+
+            End If
 
             root.Controls.Add(searchBar, 0, 0)
             root.Controls.Add(txtGuide, 0, 1)

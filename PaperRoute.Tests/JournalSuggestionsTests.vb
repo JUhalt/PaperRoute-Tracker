@@ -16,7 +16,9 @@ Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
 ' Journals that publish work like yours (#88), on answers recorded from
-' OpenAlex on September 30, 2026. No test reaches the network.
+' OpenAlex on September 30, 2026; the journals' topics in details.json were
+' recorded for the same journals on October 3, 2026 (#96). No test reaches
+' the network.
 <TestClass>
 <DoNotParallelize>
 Public Class JournalSuggestionsTests
@@ -109,6 +111,8 @@ Public Class JournalSuggestionsTests
         Dim reports As OpenAlexSource = details.Single(Function(item) item.Id = "S196734849")
         Assert.AreEqual("Scientific Reports", reports.DisplayName)
         CollectionAssert.AreEqual({"USD 2690", "EUR 2390", "GBP 2190"}, reports.ApcPrices.Select(Function(item) item.ToString()).ToList(), "Listed prices, not the converted apc_usd.")
+        Assert.AreEqual("http://www.nature.com/srep/index.html", reports.HomepageUrl)
+        CollectionAssert.AreEqual({"Cancer-related molecular mechanisms research", "MicroRNA in disease regulation", "Gut microbiota and health"}, reports.Topics, "The first three topics.")
 
         Dim examples = JournalSuggestionService.ParseExamples(Fixture("examples.json"))
         Assert.AreEqual(10, examples.Count)
@@ -133,6 +137,11 @@ Public Class JournalSuggestionsTests
         Assert.AreEqual(163365L, reports.AllArticles)
         Assert.AreEqual(True, reports.IsOa)
         CollectionAssert.AreEqual({"2045-2322"}, reports.Issns)
+        Assert.AreEqual("Nature Portfolio", reports.Publisher)
+        Assert.AreEqual("http://www.nature.com/srep/index.html", reports.HomepageUrl)
+        Assert.AreEqual(3, reports.Topics.Count)
+        StringAssert.Contains(network.Requests.Single(Function(item) item.Uri.AbsoluteUri.Contains("/sources?", StringComparison.Ordinal)).Uri.AbsoluteUri,
+                              "homepage_url,topics", "One details request, for the journals' homepages and topics too.")
         Assert.IsTrue(reports.ExamplesLoaded)
         Assert.IsTrue(reports.Examples.Count > 0 AndAlso reports.Examples.Count <= 3)
         StringAssert.Contains(network.Requests.Last().Uri.AbsoluteUri, "sort=publication_date:desc", "Examples come newest first.")
@@ -232,6 +241,7 @@ Public Class JournalSuggestionsTests
             .JournalName = "Scientific Reports",
             .Evidence = New CandidateEvidence With {
                 .Source = "OpenAlex", .OpenAlexId = "https://openalex.org/S196734849", .Issns = New List(Of String) From {"2045-2322", "bad"},
+                .Publisher = "  Nature Portfolio  ", .Topics = New List(Of String) From {"A", " ", "B", Nothing, "C", "D"}, .HomepageUrl = "javascript:alert(1)",
                 .Keywords = New List(Of String) From {"anchoring effects", " "}, .MatchingArticles = -3, .AllArticles = -1,
                 .Examples = New List(Of EvidenceExample) From {
                     New EvidenceExample With {.Title = "One", .Doi = "https://doi.org/10.1038/X1", .Year = 2025},
@@ -256,16 +266,45 @@ Public Class JournalSuggestionsTests
         Assert.AreEqual(3, evidence.Examples.Count)
         Assert.AreEqual("10.1038/X1", evidence.Examples(0).Doi)
         Assert.AreEqual(String.Empty, evidence.Examples(1).Doi)
+        Assert.AreEqual("Nature Portfolio", evidence.Publisher)
+        CollectionAssert.AreEqual({"A", "B", "C"}, evidence.Topics, "Up to three topics, blanks dropped.")
+        Assert.AreEqual(String.Empty, evidence.HomepageUrl, "Only a web address is kept.")
+        Dim older As New CandidateEvidence With {.Publisher = Nothing, .Topics = Nothing, .HomepageUrl = Nothing}
+        Dim olderManuscript As New Manuscript With {.Title = "Saved before topics were kept"}
+        olderManuscript.JournalShortlist.Add(New JournalCandidate With {.JournalName = "A journal", .Evidence = older})
+        JournalShortlistService.NormalizeManuscript(olderManuscript)
+        Assert.AreEqual(String.Empty, older.Publisher)
+        Assert.AreEqual(0, older.Topics.Count)
+        Assert.AreEqual(String.Empty, older.HomepageUrl)
 
+        evidence.HomepageUrl = "http://www.nature.com/srep/index.html"
         Dim copy As Manuscript = ManuscriptCloneService.CloneManuscript(manuscript)
         copy.JournalShortlist(0).Evidence.Examples(0).Title = "Changed in the copy"
+        copy.JournalShortlist(0).Evidence.Topics(0) = "Changed in the copy"
         Assert.AreEqual("One", candidate.Evidence.Examples(0).Title, "The page's working copy has its own evidence.")
+        Assert.AreEqual("A", candidate.Evidence.Topics(0))
+        Assert.AreEqual("Nature Portfolio", copy.JournalShortlist(0).Evidence.Publisher)
+        Assert.AreEqual("http://www.nature.com/srep/index.html", copy.JournalShortlist(0).Evidence.HomepageUrl)
 
         Dim repository As New ManuscriptRepository(Path.Combine(_directory, "data"), Path.Combine(_directory, "managed"))
         repository.Save(New List(Of Manuscript) From {manuscript})
         Dim loaded As JournalCandidate = repository.Load().Single().JournalShortlist.Single()
         Assert.AreEqual(3, loaded.Evidence.Examples.Count)
         Assert.AreEqual("S196734849", loaded.Evidence.OpenAlexId)
+        Assert.AreEqual("Nature Portfolio", loaded.Evidence.Publisher)
+        CollectionAssert.AreEqual({"A", "B", "C"}, loaded.Evidence.Topics)
+        Assert.AreEqual("http://www.nature.com/srep/index.html", loaded.Evidence.HomepageUrl)
+
+        ' What a search found becomes the evidence, tidied the same way.
+        Dim suggestion As New JournalSuggestion With {
+            .OpenAlexId = "S196734849", .Name = "Scientific Reports", .Publisher = " Nature Portfolio ",
+            .Topics = New List(Of String) From {"One", "Two", "Three", "Four"}, .HomepageUrl = "http://www.nature.com/srep/index.html"
+        }
+        Dim found As CandidateEvidence = JournalSuggestionService.EvidenceFor(suggestion, New JournalSuggestionsResult With {.Request = AnchoringRequest()})
+        Assert.AreEqual("Nature Portfolio", found.Publisher)
+        CollectionAssert.AreEqual({"One", "Two", "Three"}, found.Topics)
+        Assert.AreEqual("http://www.nature.com/srep/index.html", found.HomepageUrl)
+        Assert.AreNotSame(suggestion.Topics, found.Topics)
 
         Dim line As String = JournalShortlistService.EvidenceLine(New CandidateEvidence With {.Source = "OpenAlex", .MatchingArticles = 144, .AllArticles = 9812, .SinceDate = New DateTime(2021, 9, 30), .RetrievedUtc = New DateTime(2026, 9, 30, 12, 0, 0, DateTimeKind.Utc)})
         StringAssert.StartsWith(line, "Found by keyword search: 144 matching articles of " & 9812.ToString("N0") & " since 2021 (OpenAlex, ")
@@ -280,6 +319,10 @@ Public Class JournalSuggestionsTests
             Single(Function(item) item IsNot Nothing)
         Assert.AreEqual(JournalFactCatalog.ExampleSource, evidence.Source)
         Assert.IsTrue(evidence.Examples.All(Function(item) item.Title.StartsWith("Example:", StringComparison.Ordinal) AndAlso item.Doi.StartsWith("10.5555/", StringComparison.Ordinal)))
+        StringAssert.StartsWith(evidence.Publisher, "Fictional ")
+        Assert.AreEqual("example.org", New Uri(evidence.HomepageUrl).Host, "A fictional homepage.")
+        StringAssert.StartsWith(JournalFactsService.HintFor("fit.scope", Nothing, evidence)(0).Text, "Main topics: ")
+        StringAssert.EndsWith(JournalFactsService.HintFor("fit.scope", Nothing, evidence)(0).Text, " (Example)", "Shown as the example's, not OpenAlex's.")
     End Sub
 
 
@@ -312,10 +355,26 @@ Public Class JournalSuggestionsTests
                     Dim rows As List(Of ListViewItem) = dialog.JournalsList.Items.Cast(Of ListViewItem)().ToList()
                     Assert.AreEqual(result.Journals.Count, rows.Count)
                     Dim onShortlist As ListViewItem = rows.Single(Function(item) DirectCast(item.Tag, JournalSuggestion).OpenAlexId = "S196734849")
-                    Assert.AreEqual("On your shortlist", onShortlist.SubItems(4).Text)
+                    Assert.AreEqual("Publisher", dialog.JournalsList.Columns(1).Text)
+                    Assert.AreEqual("Nature Portfolio", onShortlist.SubItems(1).Text, "Each row shows its publisher.")
+                    Assert.AreEqual(String.Empty, rows.Single(Function(item) DirectCast(item.Tag, JournalSuggestion).OpenAlexId = "S4210212634").SubItems(1).Text, "An unknown publisher is left blank.")
+                    Assert.AreEqual("On your shortlist", onShortlist.SubItems(5).Text)
                     onShortlist.Checked = True
                     Assert.IsFalse(onShortlist.Checked, "A journal already shortlisted can't be added again.")
-                    Assert.AreEqual("Submitted 2" & ChrW(&HD7) & ", last 2024", rows.Single(Function(item) DirectCast(item.Tag, JournalSuggestion).OpenAlexId = "S9692511").SubItems(4).Text)
+                    Assert.AreEqual("Submitted 2" & ChrW(&HD7) & ", last 2024", rows.Single(Function(item) DirectCast(item.Tag, JournalSuggestion).OpenAlexId = "S9692511").SubItems(5).Text)
+
+                    ' Most matches first; the publisher column sorts by publisher, unknown last.
+                    Dim matches As List(Of Long) = rows.Select(Function(item) DirectCast(item.Tag, JournalSuggestion).MatchingArticles).ToList()
+                    CollectionAssert.AreEqual(matches.OrderByDescending(Function(item) item).ToList(), matches)
+                    dialog.SortByForTest(1)
+                    Dim publishers As List(Of String) = dialog.JournalsList.Items.Cast(Of ListViewItem)().Select(Function(item) item.SubItems(1).Text).ToList()
+                    Assert.AreEqual(String.Empty, publishers.Last())
+                    CollectionAssert.AreEqual(publishers.Where(Function(item) item.Length > 0).OrderBy(Function(item) item, StringComparer.CurrentCultureIgnoreCase).ToList(),
+                                              publishers.Where(Function(item) item.Length > 0).ToList())
+                    dialog.SortByForTest(4)
+                    CollectionAssert.AreEqual(publishers, dialog.JournalsList.Items.Cast(Of ListViewItem)().Select(Function(item) item.SubItems(1).Text).ToList(), "Never sorted by fee or access.")
+                    dialog.SortByForTest(2)
+                    rows = dialog.JournalsList.Items.Cast(Of ListViewItem)().ToList()
 
                     Dim withExamples As ListViewItem = rows.First(Function(item) DirectCast(item.Tag, JournalSuggestion).Examples.Count > 0)
                     withExamples.Selected = True
