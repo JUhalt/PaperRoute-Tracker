@@ -198,6 +198,34 @@ Results reflect the last observation, not continuous monitoring. Choose **Check 
 
 Choose **Save & Close** in the vault and then **Save** on the manuscript page to keep newly recorded fingerprints and packet edits. **Discard** on the page drops those unsaved changes. Managed-file copies and portable backup/restore preserve the saved fingerprints; they do not silently record a new baseline. A packet-linked version or submission must be unlinked from the packet, retargeted where appropriate, or have the packet removed before that referenced record can be deleted.
 
+#### Export a packet
+
+Select a packet in the vault and choose **Export Packet...** to make one .zip of its files, to send to a coauthor or a repository, or to keep. **Export Submission Packet** first reads each file to show what the package will hold. Nothing is written until you choose **Export...** and where to save the .zip.
+
+The .zip holds:
+
+- `files/`: the files you include, copied byte for byte;
+- `manifest-sha256.txt`: a SHA-256 checksum for each file;
+- `ro-crate-preview.html`: a summary page that opens in any browser;
+- `ro-crate-metadata.json`: the same description as RO-Crate 1.3 metadata, which research tools and repositories can read.
+
+Each file in the packet is one row:
+
+- **Include** chooses whether the file goes in. Manuscripts, title pages, figures, tables, supplements, highlights, graphical abstracts, reporting checklists, and data availability statements start checked. A cover letter (it can name the editor or suggested reviewers), a response to reviewers (it names reviewers and quotes their comments), a file with the role Other, and a file that changed since its fingerprint was recorded start unchecked; you can check any of them. A missing file, or one that can't be read, can't be included. A metadata-only entry has no file, so the package lists it by role only.
+- **Name in package** and **Label** can be edited. Names are cleaned so they work on any computer: characters such as `:` and `?` become `_`, and a second file with the same name becomes, for example, "Figure 1 (2).png". The label describes the file in the package.
+- **Fingerprint** compares the file with its recorded fingerprint: Unchanged, Changed since recorded, Not recorded, Missing, Can't be read, or No file. The package records each file's status, and for a changed file the fingerprint that was recorded.
+- **Hidden information** lists what is stored inside the file and travels with it: a document's author and last-saved-by name, company, template path, and comment and tracked-change authors, and a photo's camera details and location. "None found" means PaperRoute looked and found none. Plain text, CSV, and Markdown files show "Not checked (no hidden fields for this type)". "Not checked" or "Couldn't be checked" means PaperRoute couldn't look inside the file, which may still hold hidden information.
+
+Files are copied exactly as they are; PaperRoute never removes anything from them. If any included file shows hidden information, tick **I've checked the hidden information listed above** before **Export...** becomes available. To remove it, change it in the program that made the file, save the file again, and add the cleaned file to the packet.
+
+A packet with a blinded manuscript makes an anonymized package. It names no authors, the title page and cover letter start unchecked, and the notes warn when a file's name, label, or hidden information, or the package name, includes an author's family name. A stronger warning appears when the blinded manuscript's own hidden information names a person.
+
+**Package name** starts as the packet's label; it titles the summary page and suggests the .zip's file name, and you can change it. **Include authors** adds the authors' names, ORCID iDs, and affiliations, and **Include the abstract and keywords** adds those. **Package details** shows the title, the exact version, the journal, and the submission or revision round. The package states no license ("Rights not stated"), and its date is the day it is exported, not a publication date.
+
+The export runs on this computer. It sends nothing, and it changes nothing in your library, fingerprints included. It uses the packet as the vault shows it, including edits you haven't saved yet. If a file changes or disappears while the .zip is being written, nothing is written and the window says so. When the export finishes, the window says how many files it exported and stays open.
+
+A recipient can check the files with `sha256sum -c manifest-sha256.txt` in the unzipped folder, or in Windows PowerShell with `Get-FileHash -Algorithm SHA256 -LiteralPath .\files\NAME`, comparing the result with `manifest-sha256.txt`. The summary page explains both.
+
 ### Legacy co-author text
 
 Older or imported records may still contain free-text co-author information. PaperRoute preserves that text rather than silently parsing or replacing it.
@@ -968,6 +996,16 @@ If you already prepared an unlinked packet, use its **Save & Go To... > Record S
 
 This records preparation only. Record the journal submission after it actually occurs. A managed copy retains bytes when the manuscript is saved; a linked original can change independently of PaperRoute.
 
+## How do I share a packet's files or keep a copy?
+
+1. Open the manuscript and, on the **Readiness & Packets** tab, open **Submission Packets...**.
+2. Select the packet and choose **Export Packet...**.
+3. Check which files are included, their names, and the hidden information listed for each. If asked, tick the box to confirm you've checked the hidden information.
+4. Choose **Export...** and where to save the .zip.
+5. Send or keep the .zip. Its `ro-crate-preview.html` shows what it holds and how to check the files.
+
+Nothing is sent, and nothing in your library changes. See [Export a packet](#export-a-packet) for what starts unchecked and why.
+
 ## How do I remind myself to check on a journal?
 
 Use either method:
@@ -1073,6 +1111,8 @@ Visual Studio debugger sessions use the isolated development profile:
 Development managed-file copies are stored separately from the stable managed library.
 
 External services are used only for the features listed in **What PaperRoute sends, and when**, and for links you choose to open. You can turn each service off, or work offline; see **Online Services and Working Offline**. The optional AI assistant is off until you turn it on, and sends only what its windows show; see **AI Assistant**. A publication check sends Crossref the titles and DOIs of the manuscripts you check, and nothing else.
+
+**Export Packet...** writes a .zip only where you choose, and sends nothing. The summary and metadata it writes leave out notes, correspondence, reviewer names and comments, manuscript numbers, portal links, and where files are kept on your computer. The files themselves travel exactly as they are, so check the hidden information the export lists, such as a document's author, before you share the .zip.
 
 PaperRoute does not require a PaperRoute account for the core manuscript library.
 
