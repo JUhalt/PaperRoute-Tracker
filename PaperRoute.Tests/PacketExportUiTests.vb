@@ -200,7 +200,11 @@ Public Class PacketExportUiTests
                     Assert.AreEqual("Not recorded", CStr(Cell(dialog, RowIndex(dialog, "Table 1"), "Fingerprint").Value))
                     Assert.AreEqual("Cover letter", CStr(Cell(dialog, RowIndex(dialog, "Cover letter"), "Role").Value))
                     StringAssert.Contains(CStr(Cell(dialog, RowIndex(dialog, "Main text, revision 2"), "Hidden").Value), "Author: HIDDEN-PDF-AUTHOR")
-                    Assert.AreEqual("Not checked (no hidden fields for this type)", CStr(Cell(dialog, RowIndex(dialog, "Table 1"), "Hidden").Value))
+                    Dim plainCell As DataGridViewCell = Cell(dialog, RowIndex(dialog, "Table 1"), "Hidden")
+                    Assert.AreEqual("No hidden fields for this file type", CStr(plainCell.Value))
+                    Assert.IsTrue(plainCell.PreferredSize.Width <= dialog.Grid.Columns("Hidden").Width,
+                                  "The text shows whole at the default size: " & plainCell.PreferredSize.Width.ToString() & " > " & dialog.Grid.Columns("Hidden").Width.ToString())
+                    Assert.IsFalse(dialog.NotesBox.Text.Contains("may still hold hidden information"), "A plain-text file isn't one PaperRoute couldn't look inside.")
 
                     Dim checklist As Integer = RowIndex(dialog, "Reporting checklist (entered in the portal)")
                     Assert.AreEqual("No file", CStr(Cell(dialog, checklist, "Name").Value))
@@ -288,6 +292,83 @@ Public Class PacketExportUiTests
                     Assert.IsFalse(dialog.ExportButton.Enabled)
                     dialog.Close()
                 End Using
+            End Sub)
+    End Sub
+
+
+    <TestMethod>
+    Public Sub Dialog_NamesTheFilesItCouldNotLookInside()
+        RunOnSta(
+            Sub()
+                Dim fixture As ExportFixture = SimpleFixture()
+                AddFile(fixture, SubmissionPacketFileRole.Manuscript, "Manuscript.docx", Encoding.UTF8.GetBytes("not a zip: damaged or password-protected"), "Main text")
+                AddFile(fixture, SubmissionPacketFileRole.Figure, "Figure 1.bin", New Byte() {1, 2, 3}, "Figure 1")
+                AddFile(fixture, SubmissionPacketFileRole.Table, "Table 1.csv", Encoding.UTF8.GetBytes("a,b" & vbLf), "Table 1")
+
+                Using dialog As New ExportProbe(fixture)
+                    ShowOffscreen(dialog)
+                    PumpUntilComplete(dialog.Loading)
+                    Assert.AreEqual("Couldn't be checked", CStr(Cell(dialog, RowIndex(dialog, "Main text"), "Hidden").Value))
+                    Assert.AreEqual("Not checked", CStr(Cell(dialog, RowIndex(dialog, "Figure 1"), "Hidden").Value))
+
+                    ' The note names each file as its row does, and not the
+                    ' plain-text table, which has no hidden fields.
+                    CollectionAssert.Contains(dialog.NotesBox.Lines,
+                        "PaperRoute couldn't look inside these files, which may still hold hidden information: Manuscript.docx (Couldn't be checked), Figure 1.bin (Not checked).")
+                    Assert.IsFalse(dialog.NotesBox.Text.Contains("Table 1.csv"))
+
+                    dialog.SetIncludeForTest(RowIndex(dialog, "Figure 1"), False)
+                    CollectionAssert.Contains(dialog.NotesBox.Lines,
+                        "PaperRoute couldn't look inside these files, which may still hold hidden information: Manuscript.docx (Couldn't be checked).")
+                    dialog.SetIncludeForTest(RowIndex(dialog, "Main text"), False)
+                    Assert.IsFalse(dialog.NotesBox.Text.Contains("couldn't look inside"), "Only included files are named.")
+                    dialog.Close()
+                End Using
+            End Sub)
+    End Sub
+
+
+    <TestMethod>
+    Public Sub Dialog_FileChangedAfterTheCheckIsCheckedAgain()
+        RunOnSta(
+            Sub()
+                Dim fixture As ExportFixture = SimpleFixture()
+                AddFile(fixture, SubmissionPacketFileRole.Manuscript, "Main.pdf", BuildPdf(), "Main text")
+                Dim docx As String = Path.Combine(fixture.SourceFolder, "supplement-source.docx")
+                WriteDocx(docx, "", "")
+                AddStoredFile(fixture, SubmissionPacketFileRole.Supplement, "Supplement.docx", docx, "Supplement", record:=False)
+                Dim folder As String = Path.Combine(_root, "out")
+                Directory.CreateDirectory(folder)
+
+                Using dialog As New ExportProbe(fixture)
+                    ShowOffscreen(dialog)
+                    PumpUntilComplete(dialog.Loading)
+                    Dim supplement As Integer = RowIndex(dialog, "Supplement")
+                    Assert.AreEqual("Not recorded", CStr(Cell(dialog, supplement, "Fingerprint").Value))
+                    Assert.AreEqual("None found", CStr(Cell(dialog, supplement, "Hidden").Value))
+                    Assert.IsFalse(dialog.AcknowledgeBox.Visible)
+                    dialog.SavePathPrompt = Function() Path.Combine(folder, "first.zip")
+                    ExportAsAClickWould(dialog)
+                    Assert.AreEqual("Exported 2 files to first.zip.", dialog.StatusText)
+
+                    ' Saved again with the window still open, now naming its author.
+                    WriteDocx(docx, "HIDDEN Late Author", "")
+                    dialog.SavePathPrompt = Function() Path.Combine(folder, "second.zip")
+                    ExportAsAClickWould(dialog)
+
+                    Assert.AreEqual(PacketExportService.Quoted("Supplement.docx") & " changed after the list was checked. Check the list again, then export.", dialog.StatusText)
+                    Assert.IsFalse(File.Exists(Path.Combine(folder, "second.zip")), "Nothing nobody saw is written.")
+                    Assert.AreEqual("Author: HIDDEN Late Author", CStr(Cell(dialog, supplement, "Hidden").Value), "The list is checked again.")
+                    Assert.IsTrue(dialog.AcknowledgeBox.Visible)
+                    Assert.IsFalse(dialog.AcknowledgeBox.Checked, "What the file holds now needs a look.")
+                    Assert.IsFalse(dialog.ExportButton.Enabled)
+
+                    dialog.AcknowledgeBox.Checked = True
+                    ExportAsAClickWould(dialog)
+                    Assert.AreEqual("Exported 2 files to second.zip.", dialog.StatusText)
+                    dialog.Close()
+                End Using
+                Assert.AreEqual("", fixture.Packet.Files.Single(Function(item) item.Label = "Supplement").Sha256, "Nothing is recorded.")
             End Sub)
     End Sub
 
@@ -651,6 +732,22 @@ Public Class PacketExportUiTests
         Assert.IsTrue(operation.IsCompleted, "The packet export operation timed out.")
         operation.GetAwaiter().GetResult()
         Application.DoEvents()
+    End Sub
+
+
+    ' Starts Export from the message loop, as a click does, so the export's
+    ' awaits come back to this thread. Called directly after DoEvents, they
+    ' would resume on the thread pool, which is never the case in the app.
+    Private Shared Sub ExportAsAClickWould(dialog As PacketExportForm)
+        Dim export As Task = Nothing
+        dialog.BeginInvoke(New Action(Sub() export = dialog.ExportAsync()))
+        Dim timer As Stopwatch = Stopwatch.StartNew()
+        While export Is Nothing AndAlso timer.Elapsed < TimeSpan.FromSeconds(20)
+            Application.DoEvents()
+            Thread.Sleep(1)
+        End While
+        Assert.IsNotNull(export, "The export didn't start.")
+        PumpUntilComplete(export)
     End Sub
 
 

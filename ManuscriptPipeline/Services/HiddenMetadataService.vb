@@ -100,6 +100,10 @@ Namespace Services
         End Property
 
 
+        ' Short enough to show whole in the export window's column.
+        Public Const PlainTypeText As String = "No hidden fields for this file type"
+
+
         Public Function Summary() As String
 
             Dim result As String
@@ -119,7 +123,7 @@ Namespace Services
                             result &= "; part of this file couldn't be checked"
                     End Select
                 Case HiddenMetadataState.PlainType
-                    result = "Not checked (no hidden fields for this type)"
+                    result = PlainTypeText
                 Case HiddenMetadataState.NotChecked
                     result = "Not checked"
                 Case Else

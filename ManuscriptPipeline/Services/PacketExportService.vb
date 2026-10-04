@@ -5,12 +5,14 @@ Imports System.IO
 Imports System.IO.Compression
 Imports System.Linq
 Imports System.Reflection
+Imports System.Runtime.InteropServices
 Imports System.Security
 Imports System.Security.Cryptography
 Imports System.Text
 Imports System.Text.RegularExpressions
 Imports System.Threading
 Imports ManuscriptPipeline.Models
+Imports Microsoft.Win32.SafeHandles
 
 Namespace Services
 
@@ -193,7 +195,8 @@ Namespace Services
         ' The stored fingerprint, lowercase; "" when none was recorded.
         Public ReadOnly Property RecordedSha256 As String
 
-        ' The fingerprint seen by the last check, when one was recorded.
+        ' The SHA-256 of the bytes the last check read (and inspected), for
+        ' every file that can be included; "" otherwise. Never recorded.
         Public Property ObservedSha256 As String
             Get
                 Return _observedSha256
@@ -225,13 +228,23 @@ Namespace Services
 
 
         ' Include as the defaults say: an allow-listed role, unchanged since
-        ' its fingerprint, and not a title page in an anonymized packet.
+        ' its fingerprint, and in an anonymized packet not a file that names
+        ' the authors (the title page, or the manuscript with author details).
         Friend Sub ApplyDefault(isBlinded As Boolean)
             Include = CanInclude AndAlso
                 IncludedByDefault AndAlso
                 _fingerprint <> PacketExportFingerprint.Changed AndAlso
-                Not (isBlinded AndAlso Role = SubmissionPacketFileRole.TitlePage)
+                Not (isBlinded AndAlso NamesAuthorsByRole)
         End Sub
+
+
+        ' A title page or the manuscript with author details: both name the
+        ' authors, so an anonymized packet starts without them.
+        Friend ReadOnly Property NamesAuthorsByRole As Boolean
+            Get
+                Return Role = SubmissionPacketFileRole.TitlePage OrElse Role = SubmissionPacketFileRole.Manuscript
+            End Get
+        End Property
 
     End Class
 
@@ -259,7 +272,7 @@ Namespace Services
             VersionFound = version IsNot Nothing
             VersionLabel = If(VersionFound, PacketExportService.SingleLine(version.Label), String.Empty)
 
-            ' The real submission it went with, if any. Nothing is inferred.
+            ' The real submission it went with, if any; never guessed.
             Dim submission As JournalSubmission = Nothing
             If packet.SubmissionId.HasValue Then
                 submission = If(manuscript.Submissions, New List(Of JournalSubmission)()).
@@ -268,7 +281,20 @@ Namespace Services
             HasSubmission = submission IsNot Nothing
             SubmissionLinkMissing = packet.SubmissionId.HasValue AndAlso Not HasSubmission
             SubmittedDate = If(HasSubmission, CType(submission.SubmittedDate, DateTime?), Nothing)
-            RevisionRound = If(packet.RevisionRoundNumber.HasValue AndAlso packet.RevisionRoundNumber.Value > 0, packet.RevisionRoundNumber, Nothing)
+
+            ' A revision round comes from the packet, or else from its version
+            ' when that version is a revision within the same submission (it
+            ' records a round or answers a decision). A revision is never
+            ' given the first submission's date.
+            Dim round As Integer? = PositiveRound(packet.RevisionRoundNumber)
+            Dim versionIsRevision As Boolean = False
+            If HasSubmission AndAlso version IsNot Nothing AndAlso BelongsToSubmission(version, submission) Then
+                Dim versionRound As Integer? = PositiveRound(version.RevisionRoundNumber)
+                If Not round.HasValue Then round = versionRound
+                versionIsRevision = versionRound.HasValue OrElse version.DecisionId.HasValue
+            End If
+            RevisionRound = If(HasSubmission, round, Nothing)
+            IsRevision = HasSubmission AndAlso (RevisionRound.HasValue OrElse versionIsRevision)
 
             JournalName = PacketExportService.SingleLine(packet.JournalName)
             If JournalName.Length = 0 AndAlso HasSubmission Then JournalName = PacketExportService.SingleLine(submission.JournalName)
@@ -316,6 +342,21 @@ Namespace Services
             Next
 
         End Sub
+
+
+        Private Shared Function PositiveRound(value As Integer?) As Integer?
+            Return If(value.HasValue AndAlso value.Value > 0, value, Nothing)
+        End Function
+
+
+        ' The version was made within this submission: it links the
+        ' submission, or answers one of its decisions.
+        Private Shared Function BelongsToSubmission(version As ManuscriptVersion, submission As JournalSubmission) As Boolean
+            If version.SubmissionId.HasValue AndAlso version.SubmissionId.Value = submission.Id Then Return True
+            If Not version.DecisionId.HasValue Then Return False
+            Return If(submission.Decisions, New List(Of EditorialDecisionEvent)()).
+                Any(Function(item) item IsNot Nothing AndAlso item.Id = version.DecisionId.Value)
+        End Function
 
 
         Private Shared Function ResolveAuthors(manuscript As Manuscript, library As AuthorLibraryData) As List(Of PacketExportAuthor)
@@ -380,7 +421,13 @@ Namespace Services
         ' The submission's date, only when the packet links a real submission.
         Public ReadOnly Property SubmittedDate As DateTime?
 
+        ' From the packet, or from its version when that is a revision in the
+        ' same submission; Nothing when no round is recorded.
         Public ReadOnly Property RevisionRound As Integer?
+
+        ' A revision, with or without a recorded round: the date it was sent
+        ' isn't recorded, so the submission's date is never given for it.
+        Public ReadOnly Property IsRevision As Boolean
 
         ' The packet has an anonymized (blinded) manuscript.
         Public ReadOnly Property IsBlinded As Boolean
@@ -480,8 +527,9 @@ Namespace Services
 
 
         ' In an anonymized packet: every included file whose name, label, or
-        ' hidden information includes an author's family name, and the
-        ' package name when it does.
+        ' hidden information includes an author's family name; the package
+        ' name, version label, and journal name when they do; and a note when
+        ' there are no family names to look for.
         Public Function AuthorNameWarnings() As IReadOnlyList(Of String)
 
             Dim warnings As New List(Of String)()
@@ -492,7 +540,13 @@ Namespace Services
                 Where(Function(item) item IsNot Nothing AndAlso item.Length >= 2).
                 Distinct(StringComparer.OrdinalIgnoreCase).
                 ToList()
-            If familyNames.Count = 0 Then Return warnings.AsReadOnly()
+            If familyNames.Count = 0 Then
+                warnings.Add(NoAuthorsToCheckText)
+                Return warnings.AsReadOnly()
+            End If
+
+            Dim nameIn As Func(Of String, String) =
+                Function(value) familyNames.FirstOrDefault(Function(familyName) PacketExportService.ContainsName(value, familyName))
 
             For Each row As PacketExportRow In IncludedRows()
                 Dim texts As New List(Of String) From {row.OutputName, row.Label}
@@ -503,14 +557,28 @@ Namespace Services
                 End If
             Next
 
-            Dim inPackageName As String = familyNames.FirstOrDefault(Function(familyName) PacketExportService.ContainsName(PackageName, familyName))
+            Dim inPackageName As String = nameIn(PackageName)
             If inPackageName IsNot Nothing Then
                 warnings.Add("The package name includes " & PacketExportService.Quoted(inPackageName) & ". Change it before exporting.")
+            End If
+
+            ' Both are written into the package but can't be edited here.
+            Dim inVersion As String = nameIn(VersionLabel)
+            If inVersion IsNot Nothing Then
+                warnings.Add("The version label includes " & PacketExportService.Quoted(inVersion) & ". Change it in Version History before exporting.")
+            End If
+            Dim inJournal As String = nameIn(JournalName)
+            If inJournal IsNot Nothing Then
+                warnings.Add("The journal name includes " & PacketExportService.Quoted(inJournal) & ". Check the packet's journal before exporting.")
             End If
 
             Return warnings.AsReadOnly()
 
         End Function
+
+
+        Public Const NoAuthorsToCheckText As String =
+            "No structured authors with family names are recorded, so PaperRoute couldn't check the package for author names."
 
 
         ' An included file whose hidden information couldn't be looked at.
@@ -702,6 +770,9 @@ Namespace Services
             If isBlinded AndAlso row.Role = SubmissionPacketFileRole.TitlePage Then
                 Return row.OutputName & " starts unchecked: this packet is anonymized and a title page names the authors."
             End If
+            If isBlinded AndAlso row.Role = SubmissionPacketFileRole.Manuscript Then
+                Return row.OutputName & " starts unchecked: this packet is anonymized and, unlike the blinded manuscript, this one may name the authors."
+            End If
             If row.Fingerprint = PacketExportFingerprint.Changed Then
                 Return row.OutputName & " starts unchecked: it changed since its fingerprint was recorded."
             End If
@@ -724,6 +795,9 @@ Namespace Services
         ' Compares each file with its recorded fingerprint and looks for hidden
         ' information. Only reads files: run it off the UI thread. A second
         ' run keeps the user's choices for files whose state didn't change.
+        ' Every file that can be included gets a SHA-256 of the bytes checked,
+        ' recorded fingerprint or not, so the export can refuse a file that
+        ' changed afterwards. Nothing is recorded.
         Public Shared Sub CheckFiles(plan As PacketExportPlan, Optional cancellationToken As CancellationToken = Nothing)
 
             If plan Is Nothing Then Throw New ArgumentNullException(NameOf(plan))
@@ -734,16 +808,11 @@ Namespace Services
                 Dim before As PacketExportFingerprint = row.Fingerprint
 
                 If row.Fingerprint <> PacketExportFingerprint.NoFile AndAlso Not String.IsNullOrWhiteSpace(row.Source.LocalFilePath) Then
-                    Dim result As PacketFileIntegrityResult = SubmissionPacketIntegrityService.Verify(row.Source, cancellationToken)
-                    row.Fingerprint = MapStatus(result.Status)
-                    row.SizeBytes = If(result.FileSizeBytes, row.Source.FileSizeBytes)
-                    row.ObservedSha256 = If(
-                        result.Status = PacketFileIntegrityStatus.Unchanged OrElse result.Status = PacketFileIntegrityStatus.Changed,
-                        If(result.Sha256, String.Empty).ToLowerInvariant(),
-                        String.Empty)
+                    CheckFile(row, cancellationToken)
+                Else
+                    row.ObservedSha256 = String.Empty
+                    row.Hidden = Nothing
                 End If
-
-                row.Hidden = If(row.CanInclude, HiddenMetadataService.Inspect(row.Source.LocalFilePath, cancellationToken:=cancellationToken), Nothing)
 
                 If firstCheck OrElse before <> row.Fingerprint Then row.ApplyDefault(plan.IsBlinded)
             Next
@@ -755,6 +824,71 @@ Namespace Services
             plan.FilesChecked = True
 
         End Sub
+
+
+        ' The file is held open for reading, shared only with readers, so no
+        ' program can change or replace it between its fingerprint and the
+        ' look for hidden information: both describe the same bytes.
+        Private Shared Sub CheckFile(row As PacketExportRow, cancellationToken As CancellationToken)
+
+            Dim sourcePath As String = row.Source.LocalFilePath
+            Dim held As FileStream = Nothing
+            Try
+                held = New FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read, CopyBufferSize, FileOptions.SequentialScan)
+            Catch ex As Exception When IsFileAccessException(ex)
+                held = Nothing
+            End Try
+
+            Try
+                Dim result As PacketFileIntegrityResult = SubmissionPacketIntegrityService.Verify(row.Source, cancellationToken)
+                row.Fingerprint = MapStatus(result.Status)
+                row.SizeBytes = If(result.FileSizeBytes, row.Source.FileSizeBytes)
+                row.ObservedSha256 = String.Empty
+
+                Select Case row.Fingerprint
+                    Case PacketExportFingerprint.Unchanged, PacketExportFingerprint.Changed
+                        row.ObservedSha256 = If(result.Sha256, String.Empty).ToLowerInvariant()
+                    Case PacketExportFingerprint.NotRecorded
+                        ' Only to notice a later change; never recorded.
+                        Dim digest As String = If(held Is Nothing, Nothing, HashHeldFile(held, cancellationToken))
+                        If digest Is Nothing Then
+                            row.Fingerprint = PacketExportFingerprint.Unreadable
+                        Else
+                            row.ObservedSha256 = digest
+                        End If
+                End Select
+
+                If row.CanInclude AndAlso row.ObservedSha256.Length = 0 Then row.Fingerprint = PacketExportFingerprint.Unreadable
+                row.Hidden = If(row.CanInclude, HiddenMetadataService.Inspect(sourcePath, cancellationToken:=cancellationToken), Nothing)
+            Finally
+                held?.Dispose()
+            End Try
+
+        End Sub
+
+
+        ' Lowercase hex, or Nothing when the file can't be read to the end.
+        Private Shared Function HashHeldFile(held As FileStream, cancellationToken As CancellationToken) As String
+            Try
+                held.Seek(0, SeekOrigin.Begin)
+                Dim expected As Long = held.Length
+                Dim total As Long = 0
+                Using hash As IncrementalHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256)
+                    Dim buffer(CopyBufferSize - 1) As Byte
+                    Do
+                        cancellationToken.ThrowIfCancellationRequested()
+                        Dim bytesRead As Integer = held.Read(buffer, 0, buffer.Length)
+                        If bytesRead = 0 Then Exit Do
+                        hash.AppendData(buffer, 0, bytesRead)
+                        total += bytesRead
+                    Loop
+                    If total <> expected Then Return Nothing
+                    Return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant()
+                End Using
+            Catch ex As Exception When IsFileAccessException(ex)
+                Return Nothing
+            End Try
+        End Function
 
 
         Private Shared Function MapStatus(status As PacketFileIntegrityStatus) As PacketExportFingerprint
@@ -815,22 +949,37 @@ Namespace Services
                 value = TrimName(stem & ReplaceInvalid(If(fallbackExtension, String.Empty)))
             End If
 
-            Dim firstDot As Integer = value.IndexOf("."c)
-            Dim deviceName As String = If(firstDot >= 0, value.Substring(0, firstDot), value).TrimEnd(" "c)
-            If ReservedNames.Contains(deviceName) Then value = "_" & value
-
             Dim parts As (Stem As String, Extension As String) = SplitName(value)
-            Dim cappedStem As String = parts.Stem
-            If cappedStem.Length > NameStemLimit Then
-                Dim cut As Integer = NameStemLimit
-                If Char.IsHighSurrogate(cappedStem(cut - 1)) Then cut -= 1
-                cappedStem = cappedStem.Substring(0, cut)
-            End If
-            cappedStem = cappedStem.TrimEnd("."c, " "c)
+            Dim cappedStem As String = CapStem(parts.Stem)
             If cappedStem.Length = 0 Then cappedStem = "file"
+
+            ' Checked on the final name: capping can leave a bare device name,
+            ' as "CON" followed by many spaces does.
+            If IsReservedName(cappedStem & parts.Extension) Then cappedStem = CapStem("_" & cappedStem)
 
             Return cappedStem & parts.Extension
 
+        End Function
+
+
+        ' At most 100 characters, never splitting a surrogate pair, with no
+        ' trailing dots or spaces.
+        Private Shared Function CapStem(stem As String) As String
+            Dim value As String = stem
+            If value.Length > NameStemLimit Then
+                Dim cut As Integer = NameStemLimit
+                If Char.IsHighSurrogate(value(cut - 1)) Then cut -= 1
+                value = value.Substring(0, cut)
+            End If
+            Return value.TrimEnd("."c, " "c)
+        End Function
+
+
+        ' CON, NUL, COM1, and the like, with or without an extension.
+        Private Shared Function IsReservedName(name As String) As Boolean
+            Dim firstDot As Integer = name.IndexOf("."c)
+            Dim deviceName As String = If(firstDot >= 0, name.Substring(0, firstDot), name).TrimEnd(" "c)
+            Return ReservedNames.Contains(deviceName)
         End Function
 
 
@@ -982,14 +1131,9 @@ Namespace Services
                 Throw DestinationFailure(ex)
             End Try
 
-            ' Never write over one of this packet's own files.
-            For Each row As PacketExportRow In plan.Rows
-                If SamePath(row.Source.LocalFilePath, zipPath) Then
-                    Throw New PacketExportException(
-                        PacketExportFailure.DestinationUnwritable,
-                        "That file is part of this packet. Choose another name for the .zip.")
-                End If
-            Next
+            ' Never write over one of this packet's own files, however the
+            ' destination spells its path.
+            If IsPacketFile(plan, zipPath) Then Throw OwnFileFailure()
 
             Dim written As New List(Of PacketExportWrittenFile)()
 
@@ -1016,7 +1160,7 @@ Namespace Services
                 End Using
 
                 cancellationToken.ThrowIfCancellationRequested()
-                File.Move(temporaryPath, zipPath, overwrite:=True)
+                MoveIntoPlace(plan, temporaryPath, zipPath)
 
             Catch ex As PacketExportException
                 DeleteQuietly(temporaryPath)
@@ -1123,8 +1267,11 @@ Namespace Services
                     status = PacketExportFingerprint.Changed
                 End If
 
+                ' Every file that can be included was fingerprinted by the
+                ' check, so bytes that differ from what was checked (and
+                ' shown) are refused, recorded fingerprint or not.
                 If status <> row.Fingerprint OrElse
-                   (row.ObservedSha256.Length > 0 AndAlso Not String.Equals(row.ObservedSha256, digest, StringComparison.OrdinalIgnoreCase)) Then
+                   Not String.Equals(row.ObservedSha256, digest, StringComparison.OrdinalIgnoreCase) Then
                     Throw New PacketExportException(
                         PacketExportFailure.ChangedSincePreview,
                         Quoted(name) & " changed after the list was checked. Check the list again, then export.")
@@ -1133,6 +1280,106 @@ Namespace Services
                 Return New PacketExportWrittenFile(row, number, total, digest, status)
             End Using
 
+        End Function
+
+
+        ' Moves the finished .zip over the destination while the packet's
+        ' files are held open, shared only with readers: Windows then refuses
+        ' to replace any of them, even through a path spelled another way (a
+        ' mapped drive, a junction, or the \\?\ form).
+        Private Shared Sub MoveIntoPlace(plan As PacketExportPlan, temporaryPath As String, zipPath As String)
+
+            Dim held As New List(Of FileStream)()
+            Try
+                For Each sourcePath As String In PacketFilePaths(plan)
+                    Try
+                        held.Add(New FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                    Catch ex As Exception When IsFileAccessException(ex)
+                        ' Not there, or in use: the identity check below still applies.
+                    End Try
+                Next
+
+                Try
+                    File.Move(temporaryPath, zipPath, overwrite:=True)
+                Catch ex As Exception When IsFileAccessException(ex)
+                    If IsPacketFile(plan, zipPath) Then Throw OwnFileFailure(ex)
+                    Throw
+                End Try
+            Finally
+                For Each stream As FileStream In held
+                    stream.Dispose()
+                Next
+            End Try
+
+        End Sub
+
+
+        Private Shared Function PacketFilePaths(plan As PacketExportPlan) As List(Of String)
+            Return plan.Rows.
+                Select(Function(item) item.Source.LocalFilePath).
+                Where(Function(item) Not String.IsNullOrWhiteSpace(item)).
+                Distinct(StringComparer.OrdinalIgnoreCase).
+                ToList()
+        End Function
+
+
+        ' The destination is one of the packet's files: the same path, or the
+        ' same file on the same volume reached another way.
+        Private Shared Function IsPacketFile(plan As PacketExportPlan, zipPath As String) As Boolean
+            Dim paths As List(Of String) = PacketFilePaths(plan)
+            If paths.Any(Function(item) SamePath(item, zipPath)) Then Return True
+            Dim destination As String = FileIdentity(zipPath)
+            If destination Is Nothing Then Return False
+            Return paths.Any(Function(item) String.Equals(FileIdentity(item), destination, StringComparison.Ordinal))
+        End Function
+
+
+        Private Shared Function OwnFileFailure(Optional inner As Exception = Nothing) As PacketExportException
+            Return New PacketExportException(
+                PacketExportFailure.DestinationUnwritable,
+                "That file is part of this packet. Choose another name for the .zip.",
+                inner)
+        End Function
+
+
+        ' The volume serial number and file index, which every path to one
+        ' file shares; Nothing when the file isn't there or can't be opened.
+        Private Shared Function FileIdentity(filePath As String) As String
+            Try
+                If String.IsNullOrWhiteSpace(filePath) OrElse Not File.Exists(filePath) Then Return Nothing
+                Using handle As SafeFileHandle = File.OpenHandle(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite Or FileShare.Delete)
+                    Dim information As ByHandleFileInformation
+                    If Not GetFileInformationByHandle(handle, information) Then Return Nothing
+                    Return information.VolumeSerialNumber.ToString("x8", CultureInfo.InvariantCulture) & ":" &
+                        information.FileIndexHigh.ToString("x8", CultureInfo.InvariantCulture) &
+                        information.FileIndexLow.ToString("x8", CultureInfo.InvariantCulture)
+                End Using
+            Catch ex As Exception When IsFileAccessException(ex)
+                Return Nothing
+            End Try
+        End Function
+
+
+        <StructLayout(LayoutKind.Sequential)>
+        Private Structure ByHandleFileInformation
+            Public FileAttributes As UInteger
+            Public CreationTimeLow As UInteger
+            Public CreationTimeHigh As UInteger
+            Public LastAccessTimeLow As UInteger
+            Public LastAccessTimeHigh As UInteger
+            Public LastWriteTimeLow As UInteger
+            Public LastWriteTimeHigh As UInteger
+            Public VolumeSerialNumber As UInteger
+            Public FileSizeHigh As UInteger
+            Public FileSizeLow As UInteger
+            Public NumberOfLinks As UInteger
+            Public FileIndexHigh As UInteger
+            Public FileIndexLow As UInteger
+        End Structure
+
+
+        <DllImport("kernel32.dll", SetLastError:=True)>
+        Private Shared Function GetFileInformationByHandle(handle As SafeFileHandle, <Out> ByRef information As ByHandleFileInformation) As <MarshalAs(UnmanagedType.Bool)> Boolean
         End Function
 
 
@@ -1217,13 +1464,93 @@ Namespace Services
         End Function
 
 
-        ' The name as a whole word, ignoring case.
+        ' The name as a word, ignoring case and accents ("Muller" and
+        ' "Mueller" both match "Müller"). Digits, "_", and a change of case
+        ' end a word, so "Carberry2026" and "CarberryEtAl" match, but
+        ' "Carberryville" doesn't.
         Friend Shared Function ContainsName(value As String, name As String) As Boolean
             If String.IsNullOrEmpty(value) OrElse String.IsNullOrEmpty(name) Then Return False
-            Return System.Text.RegularExpressions.Regex.IsMatch(
-                value,
-                "(?<![\p{L}\p{N}])" & System.Text.RegularExpressions.Regex.Escape(name) & "(?![\p{L}\p{N}])",
-                RegexOptions.IgnoreCase Or RegexOptions.CultureInvariant)
+            Dim names As List(Of String) = NameForms(name)
+            For Each text As String In NameForms(value)
+                For Each form As String In names
+                    If form.Length = 0 Then Continue For
+                    Dim start As Integer = 0
+                    Do While start <= text.Length - form.Length
+                        Dim index As Integer = text.IndexOf(form, start, StringComparison.OrdinalIgnoreCase)
+                        If index < 0 Then Exit Do
+                        If IsWordAt(text, index, form.Length) Then Return True
+                        start = index + 1
+                    Loop
+                Next
+            Next
+            Return False
+        End Function
+
+
+        ' The text without accents, and also with German umlauts spelled
+        ' out ("ü" as "ue").
+        Private Shared Function NameForms(value As String) As List(Of String)
+            Dim composed As String = value.Normalize(NormalizationForm.FormC)
+            Dim spelledOut As String = composed.
+                Replace(ChrW(&HE4), "ae").Replace(ChrW(&HF6), "oe").Replace(ChrW(&HFC), "ue").
+                Replace(ChrW(&HC4), "Ae").Replace(ChrW(&HD6), "Oe").Replace(ChrW(&HDC), "Ue")
+            Dim forms As New List(Of String) From {FoldAccents(composed)}
+            Dim second As String = FoldAccents(spelledOut)
+            If Not String.Equals(second, forms(0), StringComparison.Ordinal) Then forms.Add(second)
+            Return forms
+        End Function
+
+
+        Private Shared Function FoldAccents(value As String) As String
+            Dim folded As New StringBuilder(value.Length)
+            For Each character As Char In value.Normalize(NormalizationForm.FormD)
+                Select Case AscW(character)
+                    Case &HDF : folded.Append("ss")     ' sharp s
+                    Case &H1E9E : folded.Append("SS")
+                    Case &HE6 : folded.Append("ae")     ' ae ligature
+                    Case &HC6 : folded.Append("AE")
+                    Case &H153 : folded.Append("oe")    ' oe ligature
+                    Case &H152 : folded.Append("OE")
+                    Case &HF8 : folded.Append("o")      ' o with stroke
+                    Case &HD8 : folded.Append("O")
+                    Case &H142 : folded.Append("l")     ' l with stroke
+                    Case &H141 : folded.Append("L")
+                    Case &H111, &HF0 : folded.Append("d")  ' d with stroke, eth
+                    Case &H110, &HD0 : folded.Append("D")
+                    Case &HFE : folded.Append("th")     ' thorn
+                    Case &HDE : folded.Append("Th")
+                    Case &H131 : folded.Append("i")     ' dotless i
+                    Case Else
+                        If CharUnicodeInfo.GetUnicodeCategory(character) <> UnicodeCategory.NonSpacingMark Then folded.Append(character)
+                End Select
+            Next
+            Return folded.ToString().Normalize(NormalizationForm.FormC)
+        End Function
+
+
+        ' A letter just before or after the match ends it only where the
+        ' case changes: "jCarberry", "JCarberry", "CarberryEtAl".
+        Private Shared Function IsWordAt(text As String, index As Integer, length As Integer) As Boolean
+
+            Dim first As Char = text(index)
+            Dim last As Char = text(index + length - 1)
+
+            Dim startsWord As Boolean = True
+            If index > 0 AndAlso Char.IsLetter(text(index - 1)) Then
+                Dim previous As Char = text(index - 1)
+                startsWord = Char.IsUpper(first) AndAlso
+                    (Char.IsLower(previous) OrElse
+                     (Char.IsUpper(previous) AndAlso length > 1 AndAlso Char.IsLower(text(index + 1))))
+            End If
+
+            Dim endsWord As Boolean = True
+            Dim after As Integer = index + length
+            If after < text.Length AndAlso Char.IsLetter(text(after)) Then
+                endsWord = Char.IsUpper(text(after)) AndAlso Char.IsLower(last)
+            End If
+
+            Return startsWord AndAlso endsWord
+
         End Function
 
 

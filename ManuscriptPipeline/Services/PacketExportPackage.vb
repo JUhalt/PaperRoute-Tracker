@@ -23,6 +23,11 @@ Namespace Services
         Private Const SubmissionId As String = "#submission"
         Private Const ExportId As String = "#export"
         Private Const RoundDateNote As String = "The date this revision round was sent is not recorded."
+        Private Const RevisionDateNote As String = "The date this revision was sent is not recorded."
+        ' Scoped to what PaperRoute writes: an included file may hold any of these.
+        Friend Const LeftOutText As String =
+            "The summary and metadata PaperRoute wrote leave out notes, correspondence, reviewer names and comments, manuscript numbers, portal links, and where files are kept on the computer. " &
+            "The files themselves are copied as they are."
         Friend Const PackageDateNote As String = "The package's date is the day it is exported."
 
         Private Sub New()
@@ -179,8 +184,8 @@ Namespace Services
                         writer.WriteEndObject()
                     End If
 
-                    ' The real submission. A revision round has no recorded date,
-                    ' so none is given.
+                    ' The real submission. A revision has no recorded date, so
+                    ' none is given: never the first submission's.
                     If plan.HasSubmission Then
                         writer.WriteStartObject()
                         writer.WriteString("@id", SubmissionId)
@@ -188,8 +193,8 @@ Namespace Services
                         writer.WriteString("name", SubmissionName(plan))
                         WriteRef(writer, "object", ManuscriptId)
                         If writesJournal Then WriteRef(writer, "recipient", JournalId)
-                        If plan.RevisionRound.HasValue Then
-                            writer.WriteString("description", RoundDateNote)
+                        If plan.IsRevision Then
+                            writer.WriteString("description", If(plan.RevisionRound.HasValue, RoundDateNote, RevisionDateNote))
                         ElseIf plan.SubmittedDate.HasValue Then
                             writer.WriteString("startTime", plan.SubmittedDate.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))
                         End If
@@ -322,7 +327,11 @@ Namespace Services
 
         Private Shared Function SubmissionName(plan As PacketExportPlan) As String
             Dim name As String = "Sent to " & If(plan.JournalName.Length > 0, plan.JournalName, "the journal")
-            If plan.RevisionRound.HasValue Then name &= ", revision round " & plan.RevisionRound.Value.ToString(CultureInfo.InvariantCulture)
+            If plan.RevisionRound.HasValue Then
+                name &= ", revision round " & plan.RevisionRound.Value.ToString(CultureInfo.InvariantCulture)
+            ElseIf plan.IsRevision Then
+                name &= ", revision (round not recorded)"
+            End If
             Return name
         End Function
 
@@ -413,7 +422,9 @@ Namespace Services
                 Dim doiUrl As String = PublishedWorkId(plan.PublishedDoi)
                 Dim published As String = "<a href=""" & Encode(doiUrl) & """>" & Encode(doiUrl) & "</a>"
                 If plan.PublicationJournal.Length > 0 Then published &= " in " & Encode(plan.PublicationJournal)
-                DetailRow(html, "Published as", published)
+                ' Like the metadata, it claims publication only when the
+                ' manuscript is published.
+                DetailRow(html, If(plan.IsPublished, "Published as", "DOI"), published)
             End If
 
             If plan.IncludeAbstract Then
@@ -454,7 +465,7 @@ Namespace Services
             html.Append("Elsewhere, run <code>sha256sum -c ").Append(PacketExportService.ManifestName).Append("</code> in this folder.</p>")
             html.Append("<p><a href=""").Append(PacketExportService.MetadataName).Append(""">").Append(PacketExportService.MetadataName).Append("</a> describes the package for research tools, using ")
             html.Append("<a href=""").Append(PacketExportService.RoCrateSpec).Append(""">RO-Crate 1.3</a>.</p>")
-            html.Append("<p>This package leaves out notes, correspondence, reviewer names and comments, manuscript numbers, portal links, and where files are kept on the computer.</p>")
+            html.Append("<p>").Append(Encode(LeftOutText)).Append("</p>")
 
             html.Append("<footer>Made with ").Append(Encode(PacketExportService.SoftwareName)).Append(" ").Append(Encode(appVersion)).Append(".</footer>")
             ReportService.CloseDocument(html)
@@ -474,6 +485,7 @@ Namespace Services
             If plan.RevisionRound.HasValue Then
                 Return "Revision round " & plan.RevisionRound.Value.ToString(CultureInfo.InvariantCulture) & ". " & RoundDateNote
             End If
+            If plan.IsRevision Then Return "A revision (round not recorded). " & RevisionDateNote
             Return "Sent on " & plan.SubmittedDate.Value.ToString("MMMM d, yyyy", CultureInfo.CurrentCulture)
         End Function
 

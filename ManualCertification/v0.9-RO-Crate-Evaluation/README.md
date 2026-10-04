@@ -7,6 +7,7 @@ Evidence: this evaluation's synthetic packet, rebuilt as a test fixture and expo
 Where the build differs from the rules:
 
 - Blinded mode comes only from a blinded manuscript in the packet, because PaperRoute records no journal's review type (rule 5).
+- In blinded mode the manuscript with author details (role Manuscript) also starts unchecked, beside the title page and cover letter, and the author-name check also covers labels, the package name, the version label, and the journal name, not only file names (rule 5).
 - A file that is locked or can't be read shows "Can't be read" and, like a missing file, can't be included (rule 7).
 - The official validator has not yet been run on a golden crate (rule 11); that remains release evidence to gather.
 

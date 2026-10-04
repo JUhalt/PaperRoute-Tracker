@@ -1,8 +1,11 @@
 Imports System
 Imports System.Collections.Generic
+Imports System.Diagnostics
+Imports System.Globalization
 Imports System.IO
 Imports System.IO.Compression
 Imports System.Linq
+Imports System.Runtime.InteropServices
 Imports System.Security.Cryptography
 Imports System.Text
 Imports System.Text.Json.Nodes
@@ -119,6 +122,8 @@ Public Class PacketExportTests
         Assert.AreEqual(PacketExportFingerprint.NotRecorded, highlights.Fingerprint)
         Assert.IsTrue(highlights.Include, "Never fingerprinted is still included by default.")
         Assert.AreEqual("", highlights.RecordedSha256)
+        Assert.AreEqual(Sha256Of(highlights.Source.LocalFilePath), highlights.ObservedSha256, "The check fingerprints it too, to notice a later change.")
+        Assert.AreEqual("", fixture.Packet.Files.Single(Function(item) item IsNot Nothing AndAlso item.Label = "Highlights").Sha256, "Nothing is recorded.")
 
         Dim letter As PacketExportRow = RowFor(plan, "Cover letter")
         Assert.IsFalse(letter.Include)
@@ -206,6 +211,141 @@ Public Class PacketExportTests
         Assert.IsNull(EntityOf(graph, "#manuscript")("author"))
         CollectionAssert.AreEqual({"Check Anonymized manuscript.pdf: its name, label, or hidden information includes " & PacketExportService.Quoted("Carberry") & "."}, plan.AuthorNameWarnings().ToArray(),
                                   "The anonymized manuscript itself still names an author inside the file.")
+
+        ' A deep look at what PaperRoute wrote: every entry outside files/,
+        ' decompressed, and every entry name, in UTF-8 or UTF-16, any case.
+        Dim written As List(Of (Entry As String, Bytes As Byte())) = DeepScan(zipPath).
+            Where(Function(item) Not item.Entry.StartsWith("files/", StringComparison.Ordinal) OrElse item.Entry.EndsWith(" (name)", StringComparison.Ordinal)).
+            ToList()
+        For Each marker As String In PersonMarkers()
+            Dim found As String = FindMarker(written, marker, ignoreCase:=True)
+            Assert.IsNull(found, marker & " is in " & found)
+        Next
+
+        ' With the anonymized manuscript cleaned, nothing in the package names
+        ' an author, inside the files included.
+        WritePdf(main.LocalFilePath)
+        PacketExportService.CheckFiles(plan)
+        Assert.AreEqual(0, plan.AuthorNameWarnings().Count, String.Join(" | ", plan.AuthorNameWarnings()))
+        Dim cleanZip As String = OutputPath("blinded-clean.zip")
+        Export(plan, cleanZip)
+        Dim everything As List(Of (Entry As String, Bytes As Byte())) = DeepScan(cleanZip)
+        Assert.IsTrue(everything.Any(Function(item) item.Entry.StartsWith("files/Supplement A.odt > ", StringComparison.Ordinal)), "The scan looks inside the files.")
+        For Each marker As String In PersonMarkers()
+            Dim found As String = FindMarker(everything, marker, ignoreCase:=True)
+            Assert.IsNull(found, marker & " is in " & found)
+        Next
+    End Sub
+
+
+    ' Who the example packet's authors are, in every form a package could
+    ' name them.
+    Private Shared Function PersonMarkers() As String()
+        Return {"Carberry", "Josiah", "Riley", "Placeholder", "orcid.org", ValidOrcid, ValidOrcid.Replace("-", ""),
+                "Brown University", "Fictional Institute", "Department of Examples"}
+    End Function
+
+
+    <TestMethod>
+    Public Sub BlindedPacket_IdentifiedManuscriptStartsUnchecked()
+        Dim fixture As ExportFixture = BuildExampleFixture(_root)
+        AddFile(fixture, SubmissionPacketFileRole.BlindedManuscript, "Anonymized manuscript.pdf", BuildPdf(), "Anonymized manuscript")
+
+        Dim plan As PacketExportPlan = PacketExportService.Prepare(fixture.Manuscript, fixture.Packet, fixture.Library)
+        PacketExportService.CheckFiles(plan)
+        Assert.IsTrue(plan.IsBlinded)
+
+        Dim identified As PacketExportRow = RowFor(plan, "Main text, revision 2")
+        Assert.IsTrue(identified.CanInclude)
+        Assert.IsFalse(identified.Include, "The manuscript with author details starts unchecked in an anonymized packet.")
+        Assert.AreEqual("Main text (revision 2).pdf starts unchecked: this packet is anonymized and, unlike the blinded manuscript, this one may name the authors.", identified.Note)
+        Assert.IsTrue(RowFor(plan, "Anonymized manuscript").Include)
+
+        Dim zipPath As String = OutputPath("blinded-defaults.zip")
+        Export(plan, zipPath)
+        Dim manuscript As JsonObject = EntityOf(GraphOf(zipPath), "#manuscript")
+        Assert.AreEqual(PacketExportService.CrateId("Anonymized manuscript.pdf"), manuscript("encoding")("@id").GetValue(Of String)(), "Only the anonymized manuscript is its encoding.")
+        Assert.IsNull(EntryBytes(zipPath, "files/Main text (revision 2).pdf"))
+
+        ' Not anonymized: the manuscript is included as usual.
+        fixture.Packet.Files.RemoveAll(Function(item) item.Role = SubmissionPacketFileRole.BlindedManuscript)
+        Dim plain As PacketExportPlan = PacketExportService.Prepare(fixture.Manuscript, fixture.Packet, fixture.Library)
+        PacketExportService.CheckFiles(plain)
+        Assert.IsTrue(RowFor(plain, "Main text, revision 2").Include)
+        Assert.AreEqual("", RowFor(plain, "Main text, revision 2").Note)
+    End Sub
+
+
+    <TestMethod>
+    Public Sub BlindedPacket_ChecksVersionJournalAndCommonNameForms()
+        Dim fixture As ExportFixture = BuildExampleFixture(_root)
+        Dim main As SubmissionPacketFile = fixture.FileWithRole(SubmissionPacketFileRole.Manuscript)
+        main.Role = SubmissionPacketFileRole.BlindedManuscript
+        main.OriginalFileName = "Anonymized manuscript.pdf"
+        WritePdf(main.LocalFilePath)
+        main.Sha256 = String.Empty
+        Dim mueller As New AuthorRecord With {.GivenName = "Anna", .FamilyName = "M" & ChrW(&HFC) & "ller"}
+        fixture.Library.Authors.Add(mueller)
+        fixture.Manuscript.Authors.Add(New ManuscriptAuthor With {.AuthorId = mueller.Id})
+        fixture.Version.Label = "Carberry2026 R2"
+        fixture.Packet.JournalName = "Bulletin of the Placeholder Society"
+        AddFile(fixture, SubmissionPacketFileRole.Supplement, "Carberry2026_supplement.pdf", BuildPdf(), "Author-year supplement")
+        AddFile(fixture, SubmissionPacketFileRole.Supplement, "PlaceholderEtAl_data.csv", Encoding.UTF8.GetBytes("a,b" & vbLf), "Camel-case data")
+        AddFile(fixture, SubmissionPacketFileRole.Supplement, "Mueller lab notes.txt", Encoding.UTF8.GetBytes("notes" & vbLf), "Spelled-out umlaut")
+
+        Dim plan As PacketExportPlan = PacketExportService.Prepare(fixture.Manuscript, fixture.Packet, fixture.Library)
+        PacketExportService.CheckFiles(plan)
+        Dim warnings As List(Of String) = plan.AuthorNameWarnings().ToList()
+
+        CollectionAssert.Contains(warnings, "Check Carberry2026_supplement.pdf: its name, label, or hidden information includes " & PacketExportService.Quoted("Carberry") & ".")
+        CollectionAssert.Contains(warnings, "Check PlaceholderEtAl_data.csv: its name, label, or hidden information includes " & PacketExportService.Quoted("Placeholder") & ".")
+        CollectionAssert.Contains(warnings, "Check Mueller lab notes.txt: its name, label, or hidden information includes " & PacketExportService.Quoted(mueller.FamilyName) & ".")
+        CollectionAssert.Contains(warnings, "The version label includes " & PacketExportService.Quoted("Carberry") & ". Change it in Version History before exporting.")
+        CollectionAssert.Contains(warnings, "The journal name includes " & PacketExportService.Quoted("Placeholder") & ". Check the packet's journal before exporting.")
+        Assert.AreEqual(5, warnings.Count, String.Join(" | ", warnings))
+
+        ' Not anonymized: no name checks at all.
+        main.Role = SubmissionPacketFileRole.Manuscript
+        Dim plain As PacketExportPlan = PacketExportService.Prepare(fixture.Manuscript, fixture.Packet, fixture.Library)
+        PacketExportService.CheckFiles(plain)
+        Assert.AreEqual(0, plain.AuthorNameWarnings().Count)
+    End Sub
+
+
+    <TestMethod>
+    Public Sub BlindedPacket_WithoutStructuredAuthorsSaysNamesWerentChecked()
+        Dim fixture As ExportFixture = SimpleFixture()
+        AddFile(fixture, SubmissionPacketFileRole.BlindedManuscript, "Carberry anonymized.pdf", BuildPdf(), "Anonymized manuscript")
+        fixture.Manuscript.CoAuthors = "Josiah Carberry, Riley Placeholder"
+
+        Dim plan As PacketExportPlan = PacketExportService.Prepare(fixture.Manuscript, fixture.Packet, fixture.Library)
+        PacketExportService.CheckFiles(plan)
+        CollectionAssert.AreEqual({PacketExportPlan.NoAuthorsToCheckText}, plan.AuthorNameWarnings().ToArray(),
+                                  "With only legacy co-author text, the names couldn't be checked, and the window says so.")
+    End Sub
+
+
+    <TestMethod>
+    <DataRow("Carberry_main.pdf", "Carberry", True)>
+    <DataRow("Carberry2026_supplement.pdf", "Carberry", True)>
+    <DataRow("2026Carberry.pdf", "Carberry", True)>
+    <DataRow("CarberryEtAl.docx", "Carberry", True)>
+    <DataRow("jCarberry.pdf", "Carberry", True)>
+    <DataRow("JCarberry_CV.pdf", "Carberry", True)>
+    <DataRow("carberry notes.txt", "Carberry", True)>
+    <DataRow("SMITH_2026.pdf", "Smith", True)>
+    <DataRow("Carberryville.pdf", "Carberry", False)>
+    <DataRow("Mccarberry.pdf", "Carberry", False)>
+    <DataRow("Leeds data.csv", "Lee", False)>
+    <DataRow("LEEDS.csv", "Lee", False)>
+    <DataRow("Garcia_review.pdf", "García", True)>
+    <DataRow("Muller lab.docx", "Müller", True)>
+    <DataRow("Mueller lab.docx", "Müller", True)>
+    <DataRow("MÜLLER.pdf", "Mueller", True)>
+    <DataRow("Sorensen 2026.pdf", "Sørensen", True)>
+    <DataRow("", "Carberry", False)>
+    Public Sub ContainsName_FindsAuthorYearCamelCaseAndAccents(value As String, name As String, expected As Boolean)
+        Assert.AreEqual(expected, PacketExportService.ContainsName(value, name), value & " / " & name)
     End Sub
 
 
@@ -255,6 +395,25 @@ Public Class PacketExportTests
         Assert.AreEqual("Manuscript.pdf", PacketExportService.DefaultRequestedName(unnamed))
         unnamed.OriginalFileName = "C:\Users\SECRETUSER\Desktop\Draft (final).docx"
         Assert.AreEqual("Draft (final).docx", PacketExportService.DefaultRequestedName(unnamed))
+    End Sub
+
+
+    <TestMethod>
+    Public Sub FileNames_ReservedNamesAreCheckedAfterCapping()
+        ' Capping the stem, then trimming its spaces, leaves a bare "CON".
+        Dim padded As String = "CON" & New String(" "c, 97) & "draft.pdf"
+        Assert.AreEqual("_CON.pdf", PacketExportService.CleanFileName(padded, "Figure", ".png"))
+        Assert.AreEqual("_nul.txt", PacketExportService.CleanFileName("nul" & New String(" "c, 120) & "x.txt", "Figure", ".png"))
+        Assert.AreEqual("_LPT1", PacketExportService.CleanFileName("LPT1" & New String(" "c, 99) & "tail", "Figure", ""))
+
+        ' A reserved name at the cap keeps within it.
+        Dim longReserved As String = PacketExportService.CleanFileName("AUX." & New String("a"c, 120) & ".pdf", "Figure", "")
+        Assert.AreEqual("_AUX." & New String("a"c, 95) & ".pdf", longReserved)
+
+        Dim fixture As ExportFixture = SimpleFixture()
+        Dim plan As PacketExportPlan = PacketExportService.Prepare(fixture.Manuscript, fixture.Packet, fixture.Library)
+        plan.PackageName = "CON" & New String(" "c, 97) & "x"
+        Assert.AreEqual("_CON.zip", plan.DefaultFileName())
     End Sub
 
 
@@ -529,14 +688,20 @@ Public Class PacketExportTests
         Assert.AreEqual("#published-in", published("isPartOf")("@id").GetValue(Of String)())
         Assert.AreEqual(ExampleJournal, EntityOf(graph, "#published-in")("name").GetValue(Of String)())
         Assert.IsNull(published("identifier"))
+        StringAssert.Contains(html, "<th scope=""row"">Published as</th><td><a href=""https://doi.org/10.5555/example.anchoring"">")
 
-        ' Accepted, not yet published: the DOI's work stays, without the status.
+        ' Accepted, not yet published: the DOI's work stays, without the
+        ' status, and the summary page doesn't claim publication either.
         fixture.Manuscript.Location = ManuscriptLocation.Pipeline
         fixture.Manuscript.CurrentStage = PaperStage.Accepted
-        Dim acceptedGraph As JsonArray = GraphOf(ExportWithDefaults(fixture, "accepted.zip"))
+        Dim acceptedZip As String = ExportWithDefaults(fixture, "accepted.zip")
+        Dim acceptedGraph As JsonArray = GraphOf(acceptedZip)
         Dim acceptedWork As JsonObject = EntityOf(acceptedGraph, "https://doi.org/10.5555/example.anchoring")
         Assert.IsNotNull(acceptedWork)
         Assert.IsNull(acceptedWork("creativeWorkStatus"))
+        Dim acceptedHtml As String = EntryText(acceptedZip, "ro-crate-preview.html")
+        Assert.IsFalse(acceptedHtml.Contains("Published", StringComparison.OrdinalIgnoreCase), "Not published, so not called published.")
+        StringAssert.Contains(acceptedHtml, "<th scope=""row"">DOI</th><td><a href=""https://doi.org/10.5555/example.anchoring"">")
 
         ' A DOI that isn't valid writes no published work at all.
         fixture.Manuscript.Metadata.Doi = "not a doi"
@@ -566,7 +731,43 @@ Public Class PacketExportTests
         Next
         StringAssert.Contains(EntryText(roundZip, "ro-crate-preview.html"), "Revision round 2. The date this revision round was sent is not recorded.")
 
+        ' The packet's round left at its default: its version is revision
+        ' round 2 of the same submission, so the round comes from there and
+        ' the first submission's date is still never given.
         fixture.Packet.RevisionRoundNumber = Nothing
+        Dim inferredZip As String = ExportWithDefaults(fixture, "inferred.zip")
+        Dim inferred As JsonObject = EntityOf(GraphOf(inferredZip), "#submission")
+        Assert.AreEqual("Sent to Fictional Journal of Psychology, revision round 2", inferred("name").GetValue(Of String)())
+        Assert.IsNull(inferred("startTime"), "A revision isn't dated with the first submission's date.")
+        Assert.AreEqual("The date this revision round was sent is not recorded.", inferred("description").GetValue(Of String)())
+        For Each entryName As String In {"ro-crate-metadata.json", "ro-crate-preview.html"}
+            Assert.IsFalse(EntryText(inferredZip, entryName).Contains("2026-03-02"), entryName)
+        Next
+        Assert.IsFalse(EntryText(inferredZip, "ro-crate-preview.html").Contains("Sent on"))
+
+        ' A version that answers one of the submission's decisions but
+        ' records no round is still a revision.
+        fixture.Version.RevisionRoundNumber = Nothing
+        fixture.Version.SubmissionId = Nothing
+        Dim unknownZip As String = ExportWithDefaults(fixture, "unknown-round.zip")
+        Dim unknown As JsonObject = EntityOf(GraphOf(unknownZip), "#submission")
+        Assert.AreEqual("Sent to Fictional Journal of Psychology, revision (round not recorded)", unknown("name").GetValue(Of String)())
+        Assert.IsNull(unknown("startTime"))
+        Assert.AreEqual("The date this revision was sent is not recorded.", unknown("description").GetValue(Of String)())
+        StringAssert.Contains(EntryText(unknownZip, "ro-crate-preview.html"), "A revision (round not recorded). The date this revision was sent is not recorded.")
+        Assert.IsFalse(EntryText(unknownZip, "ro-crate-metadata.json").Contains("2026-03-02"))
+
+        ' A version revised for another submission, then sent here afresh:
+        ' this submission's date stands.
+        fixture.Version.DecisionId = Nothing
+        fixture.Version.SubmissionId = Guid.NewGuid()
+        fixture.Version.RevisionRoundNumber = 1
+        Dim freshZip As String = ExportWithDefaults(fixture, "fresh.zip")
+        Assert.AreEqual("2026-03-02", EntityOf(GraphOf(freshZip), "#submission")("startTime").GetValue(Of String)())
+
+        ' The version first sent to this submission.
+        fixture.Version.SubmissionId = fixture.Submission.Id
+        fixture.Version.RevisionRoundNumber = Nothing
         Dim firstZip As String = ExportWithDefaults(fixture, "first.zip")
         Dim first As JsonObject = EntityOf(GraphOf(firstZip), "#submission")
         Assert.AreEqual("Sent to Fictional Journal of Psychology", first("name").GetValue(Of String)())
@@ -683,6 +884,22 @@ Public Class PacketExportTests
 
 
     <TestMethod>
+    Public Sub SummaryPage_ClaimsOnlyWhatPaperRouteWrote()
+        Dim fixture As ExportFixture = BuildExampleFixture(_root)
+        Dim zipPath As String = ExportWithDefaults(fixture, "with-response.zip",
+            Sub(plan)
+                RowFor(plan, "Response to reviewers").Include = True
+                RowFor(plan, "Cover letter").Include = True
+            End Sub)
+        Dim html As String = EntryText(zipPath, "ro-crate-preview.html")
+
+        StringAssert.Contains(html, ">Response to reviewers.txt</a>", "The response to reviewers is in the package.")
+        Assert.IsFalse(html.Contains("This package leaves out", StringComparison.Ordinal), "The page can't say the package leaves out what a file holds.")
+        StringAssert.Contains(html, "<p>The summary and metadata PaperRoute wrote leave out notes, correspondence, reviewer names and comments, manuscript numbers, portal links, and where files are kept on the computer. The files themselves are copied as they are.</p>")
+    End Sub
+
+
+    <TestMethod>
     Public Sub DefaultFileName_IsTheCleanedPackageName()
         Dim fixture As ExportFixture = SimpleFixture("Revision 2: to J/Psych?")
         Dim plan As PacketExportPlan = PacketExportService.Prepare(fixture.Manuscript, fixture.Packet, fixture.Library)
@@ -726,6 +943,26 @@ Public Class PacketExportTests
     <TestMethod>
     Public Sub NothingPrivateLeaks()
         Dim fixture As ExportFixture = BuildExampleFixture(_root, withSecrets:=True)
+
+        ' Every field outside the allow-list carries a marker, including
+        ' ones whose value could pass for an allowed one.
+        Assert.AreEqual("SECRET-Manuscript.TargetJournal", fixture.Manuscript.TargetJournal)
+        Assert.AreEqual("SECRET-JournalRecord.Name", fixture.Library.Journals(0).Name)
+        Assert.AreEqual("SECRET-JournalRecord.AimsScopeUrl", fixture.Library.Journals(0).AimsScopeUrl)
+        Assert.AreEqual("SECRET-JournalFact.Value", fixture.Library.Journals(0).Facts.Single().Value)
+        Assert.AreEqual("SECRET-JournalCandidate.Notes", fixture.Manuscript.JournalShortlist.Single().Notes)
+        Assert.AreEqual("SECRET-PublicationMatch.Title", fixture.Manuscript.PublicationMatches.Single().Title)
+        Assert.AreEqual("SECRET-AssistantSuggestion.SourceText", fixture.Submission.Decisions(0).Suggestion.SourceText)
+        Assert.AreEqual(SecretDate, fixture.Version.CreatedDate)
+        Assert.AreEqual(SecretDate, fixture.Submission.Decisions(0).DecisionDate)
+        Assert.AreEqual(SecretDate, fixture.Packet.CreatedAtUtc)
+        Assert.AreEqual(SecretDate, fixture.Packet.Files(0).HashComputedAtUtc)
+        Dim ids As List(Of Guid) = fixture.RecordIds()
+        For Each id As Guid In {fixture.Submission.Decisions(0).Id, fixture.Submission.Correspondence(0).Id, fixture.Submission.ReviewerResponses(0).Id,
+                                fixture.Packet.ReadinessProfileId.Value, fixture.Manuscript.TargetJournalId.Value, fixture.Manuscript.PublicationMatches(0).Id}
+            CollectionAssert.Contains(ids, id)
+        Next
+
         Dim plan As PacketExportPlan = PacketExportService.Prepare(fixture.Manuscript, fixture.Packet, fixture.Library)
         PacketExportService.CheckFiles(plan)
         For Each row As PacketExportRow In plan.Rows
@@ -736,7 +973,8 @@ Public Class PacketExportTests
         Export(plan, zipPath)
 
         Dim scan As List(Of (Entry As String, Bytes As Byte())) = DeepScan(zipPath)
-        Assert.IsNull(FindMarker(scan, "SECRET"), "A SECRET marker leaked into " & FindMarker(scan, "SECRET"))
+        Assert.IsNull(FindMarker(scan, "SECRET", ignoreCase:=True), "A SECRET marker leaked into " & FindMarker(scan, "SECRET", ignoreCase:=True))
+        Assert.IsNull(FindMarker(scan, "2031-07-19"), "A record's date leaked into " & FindMarker(scan, "2031-07-19"))
         Assert.IsNull(FindMarker(scan, _root), "The source folder's path leaked.")
         Assert.IsNull(FindMarker(scan, Path.GetFileName(_root)), "The temporary folder's name leaked.")
         For Each id As Guid In fixture.RecordIds()
@@ -752,7 +990,12 @@ Public Class PacketExportTests
             Dim written As String = EntryText(zipPath, entryName).Replace(PacketExportService.SoftwareUrl, "")
             packageFiles.Add((entryName, Encoding.UTF8.GetBytes(written)))
             Assert.IsFalse(Regex.IsMatch(written, "(?i)\b[a-z]:[\\/]|file:/|\\\\[a-z0-9]|/users/|appdata"), entryName & " holds a local path.")
-            For Each absent As String In {"2026-01-01", "2026-03-02", "10.5555/SECRET-PREPRINT", "HIDDEN-"}
+            Dim dates As String() = {
+                "2031-07-19", "July 19, 2031", "19 July 2031", "Jul 19, 2031",
+                SecretDate.ToString("d", CultureInfo.CurrentCulture), SecretDate.ToString("D", CultureInfo.CurrentCulture),
+                SecretDate.ToString("MMMM d, yyyy", CultureInfo.CurrentCulture), SecretDate.ToString("d", CultureInfo.InvariantCulture)
+            }
+            For Each absent As String In {"2026-01-01", "2026-03-02", "10.5555/SECRET-PREPRINT", "HIDDEN-"}.Concat(dates)
                 Assert.IsFalse(written.Contains(absent), entryName & " holds " & absent)
             Next
         Next
@@ -850,6 +1093,93 @@ Public Class PacketExportTests
         Assert.IsFalse(data.Include)
         Export(plan, zipPath)
         Assert.IsTrue(File.Exists(zipPath))
+    End Sub
+
+
+    <TestMethod>
+    Public Sub UnfingerprintedFileChangedAfterPreview_StopsTheExport()
+        Dim fixture As ExportFixture = SimpleFixture()
+        AddFile(fixture, SubmissionPacketFileRole.Manuscript, "Main.pdf", BuildPdf(), "Main text")
+        Dim docx As String = Path.Combine(fixture.SourceFolder, "anonymized.docx")
+        WriteDocx(docx, "", "")
+        Dim record As New SubmissionPacketFile With {
+            .Role = SubmissionPacketFileRole.BlindedManuscript, .Label = "Anonymized", .OriginalFileName = "Anonymized.docx",
+            .LocalFilePath = docx, .StorageMode = SubmissionPacketFileStorageMode.LinkedExternal
+        }
+        fixture.Packet.Files.Add(record)
+
+        Dim plan As PacketExportPlan = PacketExportService.Prepare(fixture.Manuscript, fixture.Packet, fixture.Library)
+        PacketExportService.CheckFiles(plan)
+        Dim row As PacketExportRow = RowFor(plan, "Anonymized")
+        Assert.AreEqual(PacketExportFingerprint.NotRecorded, row.Fingerprint)
+        Assert.AreEqual("None found", row.Hidden.Summary())
+        Assert.IsTrue(row.Include)
+        Assert.IsFalse(plan.NeedsAcknowledgment())
+        Assert.AreEqual(Sha256Of(docx), row.ObservedSha256)
+        Export(plan, OutputPath("first.zip"))
+
+        ' Saved again after the check, now naming its author: what was shown
+        ' and acknowledged no longer describes it.
+        WriteDocx(docx, "Josiah Carberry", "Josiah Carberry")
+        Dim zipPath As String = OutputPath("changed.zip")
+        Dim failure As PacketExportException = Assert.ThrowsExactly(Of PacketExportException)(Sub() Export(plan, zipPath))
+        Assert.AreEqual(PacketExportFailure.ChangedSincePreview, failure.Kind)
+        Assert.AreEqual(PacketExportService.Quoted("Anonymized.docx") & " changed after the list was checked. Check the list again, then export.", failure.Message)
+        Assert.IsFalse(File.Exists(zipPath))
+        Assert.AreEqual(0, Directory.GetFiles(Path.GetDirectoryName(zipPath), "*.partial").Length)
+
+        ' Checking again shows what the file holds now.
+        PacketExportService.CheckFiles(plan)
+        Assert.AreEqual("Author: Josiah Carberry; Last saved by: Josiah Carberry", row.Hidden.Summary())
+        Assert.IsTrue(plan.NeedsAcknowledgment())
+        Assert.IsTrue(plan.BlindedManuscriptNamesPerson())
+        Export(plan, zipPath)
+        Assert.IsTrue(File.Exists(zipPath))
+        Assert.AreEqual("", record.Sha256, "Nothing is recorded.")
+        Assert.IsNull(record.HashComputedAtUtc)
+    End Sub
+
+
+    <TestMethod>
+    Public Sub WriteZip_RefusesAPacketFileReachedAnotherWay()
+        Dim real As String = Path.Combine(_root, "Packet files with a long folder name")
+        Directory.CreateDirectory(real)
+        Dim supplement As String = Path.Combine(real, "Supplement.zip")
+        File.WriteAllText(supplement, "the packet's own supplement")
+        Dim fixture As ExportFixture = SimpleFixture()
+        AddFile(fixture, SubmissionPacketFileRole.Manuscript, "Main.pdf", BuildPdf(), "Main")
+        fixture.Packet.Files.Add(New SubmissionPacketFile With {
+            .Role = SubmissionPacketFileRole.Supplement, .Label = "Data", .OriginalFileName = "Supplement.zip",
+            .LocalFilePath = supplement, .StorageMode = SubmissionPacketFileStorageMode.LinkedExternal
+        })
+        Dim plan As PacketExportPlan = PacketExportService.Prepare(fixture.Manuscript, fixture.Packet, fixture.Library)
+        PacketExportService.CheckFiles(plan)
+
+        ' The same file by spellings that Path.GetFullPath leaves as they are:
+        ' the extended-length form, and a junction to its folder where this
+        ' machine can make one. (A short 8.3 name it expands, so the path
+        ' comparison already catches that one.)
+        Dim spellings As New List(Of String) From {"\\?\" & supplement}
+        Dim junction As String = Path.Combine(_root, "linked")
+        Try
+            If TryCreateJunction(junction, real) Then spellings.Add(Path.Combine(junction, "Supplement.zip"))
+            Dim shortFolder As String = ShortPathOf(real)
+            If shortFolder.Length > 0 AndAlso Not String.Equals(shortFolder, real, StringComparison.OrdinalIgnoreCase) Then
+                Assert.AreEqual(supplement, Path.GetFullPath(Path.Combine(shortFolder, "Supplement.zip")), "A short name is expanded.")
+            End If
+
+            For Each other As String In spellings
+                Assert.IsFalse(String.Equals(Path.GetFullPath(other), supplement, StringComparison.OrdinalIgnoreCase), "Another spelling: " & other)
+                Dim failure As PacketExportException = Assert.ThrowsExactly(Of PacketExportException)(Sub() Export(plan, other))
+                Assert.AreEqual(PacketExportFailure.DestinationUnwritable, failure.Kind, other)
+                Assert.AreEqual("That file is part of this packet. Choose another name for the .zip.", failure.Message, other)
+                Assert.AreEqual("the packet's own supplement", File.ReadAllText(supplement), "A packet file is never overwritten: " & other)
+                Assert.AreEqual(0, Directory.GetFiles(real, "*.partial").Length)
+            Next
+            If spellings.Count = 1 Then Assert.Inconclusive("Checked the extended-length spelling only: this machine couldn't make a junction.")
+        Finally
+            If Directory.Exists(junction) Then Directory.Delete(junction)
+        End Try
     End Sub
 
 
@@ -1009,6 +1339,43 @@ Public Class PacketExportTests
     Private Shared Function LoneId(reference As JsonObject, propertyName As String) As String
         Assert.AreEqual(1, reference.Count, propertyName & " nests an object other than a lone {""@id""}.")
         Return reference("@id").GetValue(Of String)()
+    End Function
+
+
+    Private Shared Function Sha256Of(filePath As String) As String
+        Return Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(filePath))).ToLowerInvariant()
+    End Function
+
+
+    ' A directory junction needs no special rights; False when it can't be made.
+    Private Shared Function TryCreateJunction(link As String, target As String) As Boolean
+        Try
+            Dim start As New ProcessStartInfo("cmd.exe", "/c mklink /J """ & link & """ """ & target & """") With {
+                .UseShellExecute = False, .CreateNoWindow = True, .RedirectStandardOutput = True, .RedirectStandardError = True
+            }
+            Using maker As Process = Process.Start(start)
+                maker.StandardOutput.ReadToEnd()
+                maker.StandardError.ReadToEnd()
+                If Not maker.WaitForExit(30000) Then Return False
+            End Using
+            Return Directory.Exists(link) AndAlso File.Exists(Path.Combine(link, Path.GetFileName(Directory.GetFiles(target).First())))
+        Catch ex As Exception When TypeOf ex Is IOException OrElse TypeOf ex Is System.ComponentModel.Win32Exception OrElse TypeOf ex Is InvalidOperationException
+            Return False
+        End Try
+    End Function
+
+
+    ' The folder's short 8.3 path, or "" when the volume makes none.
+    Private Shared Function ShortPathOf(longPath As String) As String
+        Dim buffer As New StringBuilder(1024)
+        Dim length As Integer = GetShortPathName(longPath, buffer, buffer.Capacity)
+        If length <= 0 OrElse length >= buffer.Capacity Then Return String.Empty
+        Return buffer.ToString()
+    End Function
+
+
+    <DllImport("kernel32.dll", CharSet:=CharSet.Unicode, SetLastError:=True)>
+    Private Shared Function GetShortPathName(longPath As String, shortPath As StringBuilder, bufferLength As Integer) As Integer
     End Function
 
 End Class

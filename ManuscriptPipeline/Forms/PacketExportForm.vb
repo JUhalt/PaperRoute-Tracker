@@ -25,10 +25,11 @@ Namespace Forms
             "Makes a .zip of this packet's files with a summary page, a checksum list, and RO-Crate metadata that research tools can read. " &
             "Nothing is sent anywhere, and nothing in your library changes."
         Friend Const BlindedText As String =
-            "This packet has an anonymized manuscript, so the package is anonymized: it names no authors, and the title page and cover letter start unchecked."
+            "This packet has an anonymized manuscript, so the package is anonymized: it names no authors, and the manuscript with author details, the title page, and the cover letter start unchecked."
         Friend Const AcknowledgeText As String =
             "I've checked the hidden information listed above. Files are copied exactly as they are; PaperRoute doesn't remove it."
-        Friend Const UncheckedTypesText As String = "Files marked Not checked may still hold hidden information."
+        ' Followed by the names of the files, as their rows say.
+        Friend Const UncheckedTypesText As String = "PaperRoute couldn't look inside these files, which may still hold hidden information: "
         Friend Const NothingToNoteText As String = "Nothing to note about these files."
         Friend Const CheckingText As String = "Checking the packet's files on this computer..."
         Friend Const ExportingText As String = "Exporting..."
@@ -630,10 +631,23 @@ Namespace Forms
                 If row.Note.Length > 0 Then lines.Add(row.Note)
             Next
             lines.AddRange(_plan.AuthorNameWarnings())
-            If _plan.HasUncheckedTypes() Then lines.Add(UncheckedTypesText)
+            Dim unchecked As String = UncheckedText(_plan)
+            If unchecked.Length > 0 Then lines.Add(unchecked)
             If lines.Count = 0 AndAlso _plan.FilesChecked Then lines.Add(NothingToNoteText)
             Return String.Join(Environment.NewLine, lines)
 
+        End Function
+
+
+        ' The included files PaperRoute couldn't look inside, each with what
+        ' its row says ("Not checked" or "Couldn't be checked"); "" for none.
+        Friend Shared Function UncheckedText(plan As PacketExportPlan) As String
+            If Not plan.HasUncheckedTypes() Then Return String.Empty
+            Dim files As IEnumerable(Of String) = plan.IncludedRows().
+                Where(Function(item) item.Hidden IsNot Nothing AndAlso
+                    (item.Hidden.State = HiddenMetadataState.NotChecked OrElse item.Hidden.State = HiddenMetadataState.CouldNotCheck)).
+                Select(Function(item) item.OutputName & " (" & item.Hidden.Summary() & ")")
+            Return UncheckedTypesText & String.Join(", ", files) & "."
         End Function
 
 

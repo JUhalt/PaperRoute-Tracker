@@ -1,12 +1,15 @@
 Imports System
+Imports System.Collections
 Imports System.Collections.Generic
 Imports System.IO
 Imports System.IO.Compression
 Imports System.Linq
 Imports System.Net
+Imports System.Reflection
 Imports System.Security
 Imports System.Text
 Imports System.Text.Json
+Imports System.Text.RegularExpressions
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
@@ -401,14 +404,17 @@ Friend Module PacketExportFixtures
             Return Packet.Files.Where(Function(item) item.Role = role).ElementAt(index)
         End Function
 
-        ' Every id of a record the export reads.
+        ' Every id in the manuscript and the library, as they are saved:
+        ' records, decisions, correspondence, reviewer responses, and links.
         Friend Function RecordIds() As List(Of Guid)
-            Dim ids As New List(Of Guid) From {Manuscript.Id, Packet.Id, Version.Id, Submission.Id}
-            ids.AddRange(Packet.Files.Select(Function(item) item.Id))
-            ids.AddRange(Library.Authors.Select(Function(item) item.Id))
-            ids.AddRange(Library.Affiliations.Select(Function(item) item.Id))
-            ids.AddRange(Library.Journals.Select(Function(item) item.Id))
-            Return ids
+            Dim ids As New HashSet(Of Guid)()
+            For Each saved As String In {Snapshot(Manuscript), Snapshot(Library)}
+                For Each found As Match In Regex.Matches(saved, "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+                    Dim id As Guid = Guid.Parse(found.Value)
+                    If id <> Guid.Empty Then ids.Add(id)
+                Next
+            Next
+            Return ids.ToList()
         End Function
     End Class
 
@@ -497,6 +503,11 @@ Friend Module PacketExportFixtures
         }
         Dim decision As New EditorialDecisionEvent With {.Decision = EditorialDecision.MajorRevision, .DecisionDate = New DateTime(2026, 5, 1), .Notes = secret("DECISION")}
         submission.Decisions.Add(decision)
+        ' "Revision 2" is a revision within this submission, as Version
+        ' History records one.
+        version.SubmissionId = submission.Id
+        version.DecisionId = decision.Id
+        version.RevisionRoundNumber = 2
         If withSecrets Then
             submission.Correspondence.Add(New CorrespondenceItem With {
                 .Title = "SECRET-CORRESPONDENCE", .Notes = "SECRET-CORRESPONDENCE-NOTE",
@@ -590,11 +601,116 @@ Friend Module PacketExportFixtures
             .StorageMode = SubmissionPacketFileStorageMode.MetadataOnly
         })
 
+        If withSecrets Then
+            ' Links between records, so their ids are in play too.
+            manuscript.TargetJournalId = journal.Id
+            manuscript.CurrentVersionId = version.Id
+            packet.ReadinessProfileId = manuscript.ReadinessProfiles(0).Id
+            SeedEveryOtherField(manuscript)
+            SeedEveryOtherField(library)
+        End If
+
         Return New ExportFixture With {
             .Root = root, .SourceFolder = folder, .Manuscript = manuscript, .Library = library,
             .Packet = packet, .Version = version, .Submission = submission
         }
 
+    End Function
+
+
+    ' ---- Secret markers in every field not on the allow-list ----------------------
+
+    ' What a packet export may write, or must read to work. Every other
+    ' field of every record it can reach is marked by SeedEveryOtherField.
+    Private ReadOnly AllowedFields As New HashSet(Of String)(StringComparer.Ordinal) From {
+        "Manuscript.Title",
+        "ManuscriptMetadata.AbstractText", "ManuscriptMetadata.Keywords", "ManuscriptMetadata.Doi", "ManuscriptMetadata.PublicationJournal",
+        "ManuscriptVersion.Label",
+        "SubmissionPacket.Label", "SubmissionPacket.JournalName",
+        "SubmissionPacketFile.Label", "SubmissionPacketFile.OriginalFileName", "SubmissionPacketFile.LocalFilePath", "SubmissionPacketFile.Sha256",
+        "JournalSubmission.JournalName", "JournalSubmission.SubmittedDate",
+        "AuthorRecord.GivenName", "AuthorRecord.MiddleName", "AuthorRecord.FamilyName", "AuthorRecord.Suffix",
+        "AuthorRecord.DisplayNameOverride", "AuthorRecord.Orcid",
+        "AffiliationRecord.Institution", "AffiliationRecord.Department",
+        "JournalRecord.Issns"
+    }
+
+    ' Every date outside the allow-list is set to this one.
+    Friend ReadOnly SecretDate As New DateTime(2031, 7, 19, 13, 57, 0)
+
+
+    ' Walks every record reachable from root. A string outside the
+    ' allow-list without a marker becomes "SECRET-Type.Property", a date
+    ' becomes SecretDate, a list of strings gains a marker, and an empty
+    ' list or missing object of records gains one new record, marked too.
+    ' Ids are left alone: RecordIds finds them all.
+    Friend Sub SeedEveryOtherField(root As Object)
+        SeedObject(root, New HashSet(Of Object)(ReferenceEqualityComparer.Instance))
+    End Sub
+
+
+    Private Sub SeedObject(target As Object, seen As HashSet(Of Object))
+
+        If target Is Nothing OrElse Not seen.Add(target) Then Return
+        Dim targetType As Type = target.GetType()
+
+        For Each member As PropertyInfo In targetType.GetProperties(BindingFlags.Instance Or BindingFlags.Public)
+            If Not member.CanRead OrElse member.GetIndexParameters().Length > 0 Then Continue For
+            Dim key As String = targetType.Name & "." & member.Name
+            If AllowedFields.Contains(key) Then Continue For
+            Dim kind As Type = member.PropertyType
+            Dim value As Object = member.GetValue(target)
+
+            If kind Is GetType(String) Then
+                If member.CanWrite AndAlso Not CStr(If(value, String.Empty)).Contains("SECRET") Then member.SetValue(target, "SECRET-" & key)
+
+            ElseIf kind Is GetType(DateTime) OrElse kind Is GetType(DateTime?) Then
+                If member.CanWrite Then member.SetValue(target, SecretDate)
+
+            ElseIf TypeOf value Is IDictionary Then
+                Dim map As IDictionary = DirectCast(value, IDictionary)
+                Dim arguments As Type() = kind.GetGenericArguments()
+                If arguments.Length = 2 AndAlso arguments(0) Is GetType(String) Then
+                    If arguments(1) Is GetType(String) Then
+                        If Not map.Values.Cast(Of Object)().Any(Function(item) CStr(If(item, String.Empty)).Contains("SECRET")) Then
+                            map("SECRET-" & key & "-key") = "SECRET-" & key
+                        End If
+                    ElseIf IsRecordType(arguments(1)) Then
+                        If map.Count = 0 Then map("SECRET-" & key & "-key") = Activator.CreateInstance(arguments(1))
+                        For Each item As Object In map.Values.Cast(Of Object)().ToList()
+                            SeedObject(item, seen)
+                        Next
+                    End If
+                End If
+
+            ElseIf TypeOf value Is IList AndAlso kind.IsGenericType Then
+                Dim items As IList = DirectCast(value, IList)
+                Dim element As Type = kind.GetGenericArguments()(0)
+                If element Is GetType(String) Then
+                    If Not items.Cast(Of Object)().Any(Function(item) CStr(If(item, String.Empty)).Contains("SECRET")) Then items.Add("SECRET-" & key)
+                ElseIf IsRecordType(element) Then
+                    If items.Count = 0 Then items.Add(Activator.CreateInstance(element))
+                    For Each item As Object In items.Cast(Of Object)().ToList()
+                        SeedObject(item, seen)
+                    Next
+                End If
+
+            ElseIf IsRecordType(kind) Then
+                If value Is Nothing AndAlso member.CanWrite Then
+                    value = Activator.CreateInstance(kind)
+                    member.SetValue(target, value)
+                End If
+                SeedObject(value, seen)
+            End If
+        Next
+
+    End Sub
+
+
+    Private Function IsRecordType(kind As Type) As Boolean
+        Return kind.IsClass AndAlso
+            String.Equals(kind.Namespace, GetType(Manuscript).Namespace, StringComparison.Ordinal) AndAlso
+            kind.GetConstructor(Type.EmptyTypes) IsNot Nothing
     End Function
 
 
@@ -709,18 +825,23 @@ Friend Module PacketExportFixtures
 
 
     ' Where the marker appears in any common encoding (UTF-8, UTF-16LE,
-    ' UTF-16BE, percent-encoded, JSON-escaped, or HTML-encoded); Nothing
-    ' when it appears nowhere.
-    Friend Function FindMarker(scan As IEnumerable(Of (Entry As String, Bytes As Byte())), marker As String) As String
+    ' UTF-16BE, percent-encoded, JSON-escaped, or HTML-encoded), and with
+    ' ignoreCase also in lower or upper case; Nothing when it appears nowhere.
+    Friend Function FindMarker(scan As IEnumerable(Of (Entry As String, Bytes As Byte())), marker As String, Optional ignoreCase As Boolean = False) As String
 
-        Dim forms As New List(Of Byte()) From {
-            Encoding.UTF8.GetBytes(marker),
-            Encoding.Unicode.GetBytes(marker),
-            Encoding.BigEndianUnicode.GetBytes(marker),
-            Encoding.UTF8.GetBytes(Uri.EscapeDataString(marker)),
-            Encoding.UTF8.GetBytes(JsonEncodedText.Encode(marker).ToString()),
-            Encoding.UTF8.GetBytes(WebUtility.HtmlEncode(marker))
-        }
+        Dim spellings As New List(Of String) From {marker}
+        If ignoreCase Then spellings.AddRange({marker.ToLowerInvariant(), marker.ToUpperInvariant()})
+        Dim forms As New List(Of Byte())()
+        For Each spelling As String In spellings.Distinct(StringComparer.Ordinal)
+            forms.AddRange({
+                Encoding.UTF8.GetBytes(spelling),
+                Encoding.Unicode.GetBytes(spelling),
+                Encoding.BigEndianUnicode.GetBytes(spelling),
+                Encoding.UTF8.GetBytes(Uri.EscapeDataString(spelling)),
+                Encoding.UTF8.GetBytes(JsonEncodedText.Encode(spelling).ToString()),
+                Encoding.UTF8.GetBytes(WebUtility.HtmlEncode(spelling))
+            })
+        Next
 
         For Each item In scan
             For Each form As Byte() In forms

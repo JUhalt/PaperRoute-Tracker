@@ -196,9 +196,9 @@ Public Class HiddenMetadataTests
 
 
     <TestMethod>
-    <DataRow(".txt", HiddenMetadataState.PlainType, "Not checked (no hidden fields for this type)")>
-    <DataRow(".CSV", HiddenMetadataState.PlainType, "Not checked (no hidden fields for this type)")>
-    <DataRow(".md", HiddenMetadataState.PlainType, "Not checked (no hidden fields for this type)")>
+    <DataRow(".txt", HiddenMetadataState.PlainType, "No hidden fields for this file type")>
+    <DataRow(".CSV", HiddenMetadataState.PlainType, "No hidden fields for this file type")>
+    <DataRow(".md", HiddenMetadataState.PlainType, "No hidden fields for this file type")>
     <DataRow(".bin", HiddenMetadataState.NotChecked, "Not checked")>
     <DataRow(".doc", HiddenMetadataState.NotChecked, "Not checked")>
     Public Sub PlainAndUnknownTypes_AreNotChecked(extension As String, expected As HiddenMetadataState, summary As String)
@@ -363,7 +363,7 @@ Public Class HiddenMetadataTests
 
         Assert.AreEqual("Author: A. Researcher; Last saved by: B. Person", New HiddenMetadataReport(HiddenMetadataState.Checked, findings).Summary())
         Assert.AreEqual("None found", New HiddenMetadataReport(HiddenMetadataState.Checked).Summary())
-        Assert.AreEqual("Not checked (no hidden fields for this type)", New HiddenMetadataReport(HiddenMetadataState.PlainType).Summary())
+        Assert.AreEqual("No hidden fields for this file type", New HiddenMetadataReport(HiddenMetadataState.PlainType).Summary())
         Assert.AreEqual("Not checked", New HiddenMetadataReport(HiddenMetadataState.NotChecked).Summary())
         Assert.AreEqual("Couldn't be checked", New HiddenMetadataReport(HiddenMetadataState.CouldNotCheck).Summary())
         Assert.AreEqual("None found (checked part of this large file)", New HiddenMetadataReport(HiddenMetadataState.Checked, reachedLimit:=True).Summary())
