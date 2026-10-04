@@ -95,6 +95,11 @@ Namespace Forms
         Protected Overrides Sub OnLoad(e As EventArgs)
             MyBase.OnLoad(e)
             ResponsiveDialogSizingService.FitToWorkingArea(Me)
+            ' The commonest hidden-information text shows whole even when the
+            ' window is fitted to a small screen; the list scrolls instead.
+            Dim hidden As DataGridViewColumn = gridFiles.Columns(ColumnHidden)
+            Dim needed As Integer = TextRenderer.MeasureText(HiddenMetadataReport.PlainTypeText, If(gridFiles.DefaultCellStyle.Font, gridFiles.Font)).Width + LogicalToDeviceUnits(16)
+            hidden.MinimumWidth = Math.Max(hidden.MinimumWidth, needed)
         End Sub
 
 
