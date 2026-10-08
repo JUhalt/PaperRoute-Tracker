@@ -2,9 +2,9 @@
 
 All notable changes to PaperRoute Tracker will be documented here.
 
-## [0.9.0] - 2026-10-04
+## [0.9.0] - 2026-10-08
 
-PaperRoute v0.9.0 — **Journal Choice & Guidance** — was released on October 4, 2026 from [PR #94](https://github.com/JUhalt/PaperRoute-Tracker/pull/94), [PR #100](https://github.com/JUhalt/PaperRoute-Tracker/pull/100), [PR #102](https://github.com/JUhalt/PaperRoute-Tracker/pull/102), [PR #103](https://github.com/JUhalt/PaperRoute-Tracker/pull/103), and [PR #105](https://github.com/JUhalt/PaperRoute-Tracker/pull/105), after the v0.9.0-rc.1 Preview ([PR #104](https://github.com/JUhalt/PaperRoute-Tracker/pull/104)). Certification is recorded in [#97](https://github.com/JUhalt/PaperRoute-Tracker/issues/97). v0.9 upgrades the library to Schema 9.
+PaperRoute v0.9.0 — **Journal Choice & Guidance** — was released on October 8, 2026 from [PR #94](https://github.com/JUhalt/PaperRoute-Tracker/pull/94), [PR #100](https://github.com/JUhalt/PaperRoute-Tracker/pull/100), [PR #102](https://github.com/JUhalt/PaperRoute-Tracker/pull/102), [PR #103](https://github.com/JUhalt/PaperRoute-Tracker/pull/103), and [PR #105](https://github.com/JUhalt/PaperRoute-Tracker/pull/105), after the v0.9.0-rc.1 Preview ([PR #104](https://github.com/JUhalt/PaperRoute-Tracker/pull/104)). Certification is recorded in [#97](https://github.com/JUhalt/PaperRoute-Tracker/issues/97). v0.9 upgrades the library to Schema 9.
 
 ### Added
 
