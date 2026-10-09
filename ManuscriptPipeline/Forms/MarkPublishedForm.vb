@@ -154,7 +154,7 @@ Namespace Forms
                 Return
             End If
             Try
-                Process.Start(New ProcessStartInfo(target.AbsoluteUri) With {.UseShellExecute = True})
+                UrlSafetyService.OpenInBrowser(target.AbsoluteUri)
             Catch ex As Exception
                 MessageBox.Show(owner, "PaperRoute could not open the web page." & Environment.NewLine & ex.Message,
                     "Review Match", MessageBoxButtons.OK, MessageBoxIcon.Information)

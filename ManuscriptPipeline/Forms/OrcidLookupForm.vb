@@ -660,13 +660,9 @@ Namespace Forms
 
             Try
 
-                Process.Start(
-                    New ProcessStartInfo With {
-                        .FileName =
-                            "https://orcid.org/" &
-                            _suggestion.Orcid,
-                        .UseShellExecute = True
-                    }
+                UrlSafetyService.OpenInBrowser(
+                    "https://orcid.org/" &
+                    _suggestion.Orcid
                 )
 
             Catch ex As Exception

@@ -1297,13 +1297,9 @@ Namespace Forms
 
             Try
 
-                Process.Start(
-                    New ProcessStartInfo With {
-                        .FileName =
-                            selected.LocalFilePath,
-                        .UseShellExecute =
-                            True
-                    }
+                FileOpenService.OpenRecordedFile(
+                    Me,
+                    selected.LocalFilePath
                 )
 
             Catch ex As Exception

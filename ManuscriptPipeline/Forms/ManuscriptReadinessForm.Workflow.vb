@@ -3,6 +3,7 @@ Imports System.Diagnostics
 Imports System.Linq
 Imports System.Windows.Forms
 Imports ManuscriptPipeline.Models
+Imports ManuscriptPipeline.Services
 
 Namespace Forms
     Partial Public Class ManuscriptReadinessForm
@@ -73,7 +74,7 @@ Namespace Forms
             Dim portal As Uri = GetReadinessPortal()
             If portal Is Nothing Then Return
             Try
-                Process.Start(New ProcessStartInfo(portal.AbsoluteUri) With {.UseShellExecute = True})
+                UrlSafetyService.OpenInBrowser(portal.AbsoluteUri)
             Catch ex As Exception
                 MessageBox.Show(Me, "PaperRoute could not open the submission portal." & Environment.NewLine & ex.Message,
                     "Submission Portal", MessageBoxButtons.OK, MessageBoxIcon.Information)

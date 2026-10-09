@@ -1423,12 +1423,9 @@ Namespace Forms
 
             Try
 
-                Process.Start(
-                    New ProcessStartInfo(
-                        packetFile.LocalFilePath
-                    ) With {
-                        .UseShellExecute = True
-                    }
+                FileOpenService.OpenRecordedFile(
+                    Me,
+                    packetFile.LocalFilePath
                 )
 
             Catch ex As Exception

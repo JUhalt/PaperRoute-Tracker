@@ -208,7 +208,7 @@ Namespace Forms
 
             If chkOpen.Checked AndAlso SavePathPrompt Is Nothing Then
                 Try
-                    Process.Start(New ProcessStartInfo(path) With {.UseShellExecute = True})
+                    FileOpenService.OpenRecordedFile(Me, path)
                 Catch ex As Exception
                     ' Saving succeeded; opening is a convenience.
                 End Try

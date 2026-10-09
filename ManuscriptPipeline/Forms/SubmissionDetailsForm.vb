@@ -605,8 +605,8 @@ Namespace Forms
                 Return
             End If
 
-            OpenShellTarget(
-                _submission.PortalUrl,
+            OpenTarget(
+                Sub() UrlSafetyService.OpenInBrowser(_submission.PortalUrl),
                 "The publisher portal could not be opened."
             )
 
@@ -1976,8 +1976,8 @@ Namespace Forms
 
             End If
 
-            OpenShellTarget(
-                selected.LocalFilePath,
+            OpenTarget(
+                Sub() FileOpenService.OpenRecordedFile(Me, selected.LocalFilePath),
                 "The file could not be opened."
             )
 
@@ -1997,8 +1997,10 @@ Namespace Forms
                 Return
             End If
 
-            OpenShellTarget(
-                selected.SourceUrl,
+            ' A library can arrive with anything in this field (a restored
+            ' backup, an edited file), so only a web address opens (#117).
+            OpenTarget(
+                Sub() UrlSafetyService.OpenInBrowser(selected.SourceUrl),
                 "The source URL could not be opened."
             )
 
@@ -2006,22 +2008,17 @@ Namespace Forms
 
 
         ' =====================================================
-        ' Shell helper
+        ' Open helper
         ' =====================================================
 
-        Private Sub OpenShellTarget(
-            target As String,
+        Private Sub OpenTarget(
+            open As Action,
             errorMessage As String
         )
 
             Try
 
-                Dim startInfo As New ProcessStartInfo With {
-                    .FileName = target,
-                    .UseShellExecute = True
-                }
-
-                Process.Start(startInfo)
+                open()
 
             Catch ex As Exception
 

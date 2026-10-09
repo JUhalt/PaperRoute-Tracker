@@ -182,8 +182,8 @@ Namespace Forms
                 Sub(sender, e)
                     Dim url As String = CStr(e.Link.LinkData)
                     Try
-                        Process.Start(New ProcessStartInfo(url) With {.UseShellExecute = True})
-                    Catch ex As Exception When TypeOf ex Is ComponentModel.Win32Exception OrElse TypeOf ex Is InvalidOperationException
+                        UrlSafetyService.OpenInBrowser(url)
+                    Catch ex As Exception When TypeOf ex Is ComponentModel.Win32Exception OrElse TypeOf ex Is InvalidOperationException OrElse TypeOf ex Is ArgumentException
                         MessageBox.Show(Me, "PaperRoute could not open " & url & ".", Me.Text, MessageBoxButtons.OK, MessageBoxIcon.Information)
                     End Try
                 End Sub
