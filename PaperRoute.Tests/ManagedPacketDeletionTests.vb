@@ -672,6 +672,388 @@ Public Class ManagedPacketDeletionTests
     End Sub
 
 
+    <TestMethod>
+    <DataRow(False)>
+    <DataRow(True)>
+    Public Sub Transaction_LeavesPacketFilesOfManuscriptNotInLibrary(
+        libraryHoldsAnotherManuscript As Boolean
+    )
+
+        Dim managedRoot As String =
+            Path.Combine(
+                _root,
+                "managed"
+            )
+
+        ' Another library sharing this managed folder, such as a second
+        ' computer syncing Documents, still references these files.
+        Dim foreignManuscript As Manuscript =
+            CreateManuscriptWithManagedPacketReference(
+                managedRoot
+            )
+
+        Dim foreignFilePath As String =
+            foreignManuscript.SubmissionPackets(0).Files(0).LocalFilePath
+
+        Dim foreignBytes As Byte() =
+            File.ReadAllBytes(
+                foreignFilePath
+            )
+
+        Dim library As New List(Of Manuscript)()
+
+        Dim removedFilePath As String =
+            String.Empty
+
+        If libraryHoldsAnotherManuscript Then
+
+            Dim manuscript As Manuscript =
+                CreateManuscriptWithManagedPacketReference(
+                    managedRoot
+                )
+
+            removedFilePath =
+                manuscript.SubmissionPackets(0).Files(0).LocalFilePath
+
+            manuscript.SubmissionPackets(0).Files.Clear()
+
+            library.Add(
+                manuscript
+            )
+
+        End If
+
+        Dim service As New ManagedPacketDeletionService(
+            managedRoot
+        )
+
+        Using transaction =
+            service.BeginDeletionTransaction(
+                library
+            )
+
+            transaction.Commit()
+
+        End Using
+
+        Assert.IsTrue(
+            File.Exists(
+                foreignFilePath
+            ),
+            "A save must not remove packet files of a manuscript the library does not contain."
+        )
+
+        CollectionAssert.AreEqual(
+            foreignBytes,
+            File.ReadAllBytes(
+                foreignFilePath
+            )
+        )
+
+        If libraryHoldsAnotherManuscript Then
+
+            Assert.IsFalse(
+                File.Exists(
+                    removedFilePath
+                ),
+                "A packet file the library no longer references must still be removed."
+            )
+
+        End If
+
+    End Sub
+
+
+    <TestMethod>
+    <DataRow(False)>
+    <DataRow(True)>
+    Public Sub RepositorySave_LeavesPacketFilesOfManuscriptNotInLibrary(
+        libraryHoldsAnotherManuscript As Boolean
+    )
+
+        Dim dataDirectory As String =
+            Path.Combine(
+                _root,
+                "data"
+            )
+
+        Dim managedRoot As String =
+            Path.Combine(
+                _root,
+                "managed"
+            )
+
+        Dim foreignManuscript As Manuscript =
+            CreateManuscriptWithManagedPacketReference(
+                managedRoot
+            )
+
+        Dim foreignFilePath As String =
+            foreignManuscript.SubmissionPackets(0).Files(0).LocalFilePath
+
+        Dim foreignBytes As Byte() =
+            File.ReadAllBytes(
+                foreignFilePath
+            )
+
+        Dim repository As New ManuscriptRepository(
+            dataDirectory,
+            managedRoot
+        )
+
+        ' A new or reinstalled PaperRoute starts from an empty library.
+        Dim library As List(Of Manuscript) =
+            repository.Load()
+
+        If libraryHoldsAnotherManuscript Then
+
+            library.Add(
+                CreateManuscriptWithManagedPacketReference(
+                    managedRoot
+                )
+            )
+
+        End If
+
+        repository.Save(
+            library
+        )
+
+        Assert.IsTrue(
+            File.Exists(
+                foreignFilePath
+            ),
+            "Saving must not remove packet files of a manuscript the library does not contain."
+        )
+
+        CollectionAssert.AreEqual(
+            foreignBytes,
+            File.ReadAllBytes(
+                foreignFilePath
+            )
+        )
+
+    End Sub
+
+
+    <TestMethod>
+    <DataRow(False)>
+    <DataRow(True)>
+    Public Sub Recovery_PutsBackStagedPacketFileOfManuscriptNotInLibrary(
+        originalPlaceIsOccupied As Boolean
+    )
+
+        Dim managedRoot As String =
+            Path.Combine(
+                _root,
+                "managed"
+            )
+
+        Dim foreignManuscript As Manuscript =
+            CreateManuscriptWithManagedPacketReference(
+                managedRoot
+            )
+
+        Dim packet As SubmissionPacket =
+            foreignManuscript.SubmissionPackets(0)
+
+        Dim packetFile As SubmissionPacketFile =
+            packet.Files(0)
+
+        Dim originalDirectory As String =
+            Path.GetDirectoryName(
+                packetFile.LocalFilePath
+            )
+
+        ' An interrupted save by an earlier PaperRoute staged this file.
+        Dim stagedDirectory As String =
+            Path.Combine(
+                managedRoot,
+                ManagedPacketDeletionService.StagingFolderName,
+                Guid.NewGuid().ToString("N"),
+                foreignManuscript.Id.ToString("N"),
+                packet.Id.ToString("N"),
+                packetFile.Id.ToString("N")
+            )
+
+        Directory.CreateDirectory(
+            Path.GetDirectoryName(
+                stagedDirectory
+            )
+        )
+
+        Directory.Move(
+            originalDirectory,
+            stagedDirectory
+        )
+
+        If originalPlaceIsOccupied Then
+
+            Directory.CreateDirectory(
+                originalDirectory
+            )
+
+            File.WriteAllText(
+                packetFile.LocalFilePath,
+                "different file"
+            )
+
+        End If
+
+        Dim service As New ManagedPacketDeletionService(
+            managedRoot
+        )
+
+        service.RecoverStagedDeletions(
+            New List(Of Manuscript) From {
+                New Manuscript With {
+                    .Title = "Another manuscript"
+                }
+            }
+        )
+
+        Dim stagedFilePath As String =
+            Path.Combine(
+                stagedDirectory,
+                "manuscript.docx"
+            )
+
+        If originalPlaceIsOccupied Then
+
+            Assert.IsTrue(
+                File.Exists(
+                    stagedFilePath
+                ),
+                "Recovery must keep the staged copy when its original place is taken."
+            )
+
+            Assert.AreEqual(
+                "managed",
+                File.ReadAllText(
+                    stagedFilePath
+                )
+            )
+
+            Assert.AreEqual(
+                "different file",
+                File.ReadAllText(
+                    packetFile.LocalFilePath
+                )
+            )
+
+        Else
+
+            Assert.IsTrue(
+                File.Exists(
+                    packetFile.LocalFilePath
+                ),
+                "Recovery must put back a staged file of a manuscript the library does not contain."
+            )
+
+            Assert.AreEqual(
+                "managed",
+                File.ReadAllText(
+                    packetFile.LocalFilePath
+                )
+            )
+
+            Assert.IsFalse(
+                Directory.Exists(
+                    Path.Combine(
+                        managedRoot,
+                        ManagedPacketDeletionService.StagingFolderName
+                    )
+                )
+            )
+
+        End If
+
+    End Sub
+
+
+    <TestMethod>
+    <DataRow(False)>
+    <DataRow(True)>
+    Public Sub VersionTransaction_LeavesVersionFilesOfManuscriptNotInLibrary(
+        libraryHoldsAnotherManuscript As Boolean
+    )
+
+        ' Passes before the packet fix too: the version sweep already looks
+        ' only inside folders of manuscripts in the library being saved.
+        Dim managedRoot As String =
+            Path.Combine(
+                _root,
+                "managed"
+            )
+
+        Dim versionDirectory As String =
+            Path.Combine(
+                managedRoot,
+                Guid.NewGuid().ToString("N"),
+                "versions",
+                Guid.NewGuid().ToString("N")
+            )
+
+        Directory.CreateDirectory(
+            versionDirectory
+        )
+
+        Dim versionFilePath As String =
+            Path.Combine(
+                versionDirectory,
+                "manuscript.docx"
+            )
+
+        File.WriteAllText(
+            versionFilePath,
+            "managed version"
+        )
+
+        Dim versionBytes As Byte() =
+            File.ReadAllBytes(
+                versionFilePath
+            )
+
+        Dim library As New List(Of Manuscript)()
+
+        If libraryHoldsAnotherManuscript Then
+
+            library.Add(
+                New Manuscript With {
+                    .Title = "Another manuscript"
+                }
+            )
+
+        End If
+
+        Dim service As New ManagedLibraryService(
+            managedRoot
+        )
+
+        Using transaction =
+            service.BeginVersionDeletionTransaction(
+                library
+            )
+
+            Assert.AreEqual(
+                0,
+                transaction.StagedDirectoryCount
+            )
+
+            transaction.Commit()
+
+        End Using
+
+        CollectionAssert.AreEqual(
+            versionBytes,
+            File.ReadAllBytes(
+                versionFilePath
+            )
+        )
+
+    End Sub
+
+
     Private Function CreateManuscriptWithManagedPacketReference(
         managedRoot As String
     ) As Manuscript

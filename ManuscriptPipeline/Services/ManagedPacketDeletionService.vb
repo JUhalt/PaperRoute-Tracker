@@ -224,12 +224,43 @@ Namespace Services
 
                             End If
 
-                        Else
+                        ElseIf referenced.ContainsKey(
+                            manuscriptId
+                        ) Then
 
                             Directory.Delete(
                                 fileDirectory,
                                 True
                             )
+
+                        Else
+
+                            ' This library does not contain the manuscript, but
+                            ' another library sharing the folder may. Put the file
+                            ' back if its place is free; otherwise keep both copies.
+                            Dim originalDirectory As String =
+                                GetPacketFileDirectoryPath(
+                                    manuscriptId,
+                                    packetId,
+                                    packetFileId
+                                )
+
+                            If Not Directory.Exists(
+                                originalDirectory
+                            ) Then
+
+                                Directory.CreateDirectory(
+                                    Path.GetDirectoryName(
+                                        originalDirectory
+                                    )
+                                )
+
+                                Directory.Move(
+                                    fileDirectory,
+                                    originalDirectory
+                                )
+
+                            End If
 
                         End If
 
@@ -490,6 +521,18 @@ Namespace Services
                             manuscriptDirectory
                         ),
                         "N",
+                        manuscriptId
+                    ) Then
+
+                        Continue For
+
+                    End If
+
+                    ' Sweep only manuscripts in the library being saved, as the
+                    ' version sweep does. Documents can be shared with another
+                    ' computer or outlive a reinstalled library, so a manuscript
+                    ' this library does not contain may still need its files.
+                    If Not referenced.ContainsKey(
                         manuscriptId
                     ) Then
 
