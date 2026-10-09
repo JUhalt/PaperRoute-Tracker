@@ -125,3 +125,62 @@ Friend Module TestSupport
     End Function
 
 End Module
+
+
+' Opens storage files as a repository does, except that the first
+' `failures` opens of `heldPath` fail the way Windows fails when another
+' program holds the file open (#111). No test waits on a real lock.
+Friend Class HeldFileOpener
+
+    Private ReadOnly _heldPath As String
+    Private ReadOnly _failures As Integer
+
+
+    Public Sub New(
+        heldPath As String,
+        failures As Integer
+    )
+
+        _heldPath = heldPath
+        _failures = failures
+
+    End Sub
+
+
+    ' How many times the held file was asked for.
+    Public Property Opens As Integer
+
+
+    Public Function Open(
+        filePath As String
+    ) As Stream
+
+        If String.Equals(
+            filePath,
+            _heldPath,
+            StringComparison.OrdinalIgnoreCase
+        ) Then
+
+            Opens += 1
+
+            If Opens <= _failures Then
+
+                Throw New IOException(
+                    "The process cannot access the file because it is being used by another process.",
+                    &H80070020
+                )
+
+            End If
+
+        End If
+
+        Return New FileStream(
+            filePath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read
+        )
+
+    End Function
+
+End Class

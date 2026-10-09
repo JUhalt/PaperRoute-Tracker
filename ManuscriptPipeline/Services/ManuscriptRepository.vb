@@ -14,6 +14,7 @@ Namespace Services
         Private ReadOnly _backupFilePath As String
         Private ReadOnly _jsonOptions As JsonSerializerOptions
         Private ReadOnly _managedLibrary As ManagedLibraryService
+        Private ReadOnly _openFile As Func(Of String, Stream)
 
         Private _lastLoadRecoveredFromBackup As Boolean
         Private _lastRecoveryPreservedFilePath As String =
@@ -30,10 +31,12 @@ Namespace Services
         End Sub
 
 
+        ' openFile stands in for the file system in tests (#111).
         Friend Sub New(
             dataDirectory As String,
             managedLibraryRoot As String,
-            Optional managedLibraryOverride As ManagedLibraryService = Nothing
+            Optional managedLibraryOverride As ManagedLibraryService = Nothing,
+            Optional openFile As Func(Of String, Stream) = Nothing
         )
 
             If String.IsNullOrWhiteSpace(
@@ -44,6 +47,18 @@ Namespace Services
                     "A data directory is required.",
                     NameOf(dataDirectory)
                 )
+
+            End If
+
+            If openFile IsNot Nothing Then
+
+                _openFile =
+                    openFile
+
+            Else
+
+                _openFile =
+                    AddressOf StorageFile.OpenRead
 
             End If
 
@@ -295,14 +310,11 @@ Namespace Services
 
             Try
 
-                Using stream As New FileStream(
-                    filePath,
-                    FileMode.Open,
-                    FileAccess.Read,
-                    FileShare.Read,
-                    bufferSize:=65536,
-                    options:=FileOptions.SequentialScan
-                )
+                Using stream As Stream =
+                    StorageFile.OpenReadWithRetry(
+                        filePath,
+                        _openFile
+                    )
 
                     If stream.Length = 0 Then
 
@@ -336,6 +348,11 @@ Namespace Services
                     Return loaded
 
                 End Using
+
+            Catch ex As StorageFileInUseException
+
+                ' Not damage: stop here, before anything turns to the backup.
+                Throw
 
             Catch ex As Exception
 
