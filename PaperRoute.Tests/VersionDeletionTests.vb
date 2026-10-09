@@ -393,6 +393,212 @@ Public Class VersionDeletionTests
 
 
     <TestMethod>
+    <DataRow(False)>
+    <DataRow(True)>
+    Public Sub ManagedDeletionRecovery_PutsBackStagedVersionOfManuscriptNotInLibrary(
+        originalPlaceIsOccupied As Boolean
+    )
+
+        Dim managedDirectory As String =
+            Path.Combine(
+                _root,
+                "managed-foreign"
+            )
+
+        ' A manuscript another computer's library holds; this one's does not.
+        Dim foreignManuscript As New Manuscript()
+        Dim versionId As Guid =
+            Guid.NewGuid()
+
+        Dim versionDirectory As String =
+            Path.Combine(
+                managedDirectory,
+                foreignManuscript.Id.ToString("N"),
+                "versions",
+                versionId.ToString("N")
+            )
+
+        Dim snapshotPath As String =
+            Path.Combine(
+                versionDirectory,
+                "snapshot.bin"
+            )
+
+        Dim snapshotBytes As Byte() =
+            New Byte() {80, 75, 3, 4, 255, 0, 127}
+
+        Directory.CreateDirectory(
+            versionDirectory
+        )
+
+        File.WriteAllBytes(
+            snapshotPath,
+            snapshotBytes
+        )
+
+        ' An interrupted save by the other computer staged this folder.
+        Dim stagedDirectory As String =
+            StageVersionDirectory(
+                managedDirectory,
+                foreignManuscript.Id,
+                versionId
+            )
+
+        If originalPlaceIsOccupied Then
+
+            Directory.CreateDirectory(
+                versionDirectory
+            )
+
+            File.WriteAllText(
+                snapshotPath,
+                "different file"
+            )
+
+        End If
+
+        Dim service As New ManagedLibraryService(
+            managedDirectory
+        )
+
+        service.RecoverStagedVersionDeletions(
+            New Manuscript() {
+                New Manuscript With {
+                    .Title = "Another manuscript"
+                }
+            }
+        )
+
+        Dim stagedSnapshotPath As String =
+            Path.Combine(
+                stagedDirectory,
+                "snapshot.bin"
+            )
+
+        If originalPlaceIsOccupied Then
+
+            Assert.IsTrue(
+                File.Exists(
+                    stagedSnapshotPath
+                ),
+                "Recovery must keep the staged copy when its original place is taken."
+            )
+
+            CollectionAssert.AreEqual(
+                snapshotBytes,
+                File.ReadAllBytes(
+                    stagedSnapshotPath
+                )
+            )
+
+            Assert.AreEqual(
+                "different file",
+                File.ReadAllText(
+                    snapshotPath
+                )
+            )
+
+        Else
+
+            Assert.IsTrue(
+                File.Exists(
+                    snapshotPath
+                ),
+                "Recovery must put back a staged version of a manuscript the library does not contain."
+            )
+
+            CollectionAssert.AreEqual(
+                snapshotBytes,
+                File.ReadAllBytes(
+                    snapshotPath
+                )
+            )
+
+            Assert.IsFalse(
+                Directory.Exists(
+                    Path.Combine(
+                        managedDirectory,
+                        ".paperroute-version-delete"
+                    )
+                )
+            )
+
+        End If
+
+    End Sub
+
+
+    <TestMethod>
+    Public Sub ManagedDeletionRecovery_DeletesStagedVersionOfManuscriptInLibrary()
+
+        ' This passes before and after the put-back of foreign manuscripts'
+        ' staged versions: it pins that a version the library itself dropped
+        ' is still deleted, not put back.
+        Dim managedDirectory As String =
+            Path.Combine(
+                _root,
+                "managed-dropped"
+            )
+
+        Dim manuscript As New Manuscript()
+        Dim versionId As Guid =
+            Guid.NewGuid()
+
+        Dim versionDirectory As String =
+            Path.Combine(
+                managedDirectory,
+                manuscript.Id.ToString("N"),
+                "versions",
+                versionId.ToString("N")
+            )
+
+        Directory.CreateDirectory(
+            versionDirectory
+        )
+
+        File.WriteAllText(
+            Path.Combine(
+                versionDirectory,
+                "snapshot.txt"
+            ),
+            "removed on purpose"
+        )
+
+        Dim stagedDirectory As String =
+            StageVersionDirectory(
+                managedDirectory,
+                manuscript.Id,
+                versionId
+            )
+
+        Dim service As New ManagedLibraryService(
+            managedDirectory
+        )
+
+        ' The library still holds the manuscript without this version.
+        service.RecoverStagedVersionDeletions(
+            New Manuscript() {
+                manuscript
+            }
+        )
+
+        Assert.IsFalse(
+            Directory.Exists(
+                stagedDirectory
+            )
+        )
+
+        Assert.IsFalse(
+            Directory.Exists(
+                versionDirectory
+            ),
+            "Recovery must not put back a version the library no longer references."
+        )
+
+    End Sub
+
+
+    <TestMethod>
     Public Sub DeleteOnWorkingCloneDoesNotTouchOriginalUntilRepositorySave()
 
         Dim managedDirectory As String =
@@ -469,6 +675,48 @@ Public Class VersionDeletionTests
             manuscript.Versions(2).Id
 
         Return manuscript
+
+    End Function
+
+
+    ' Moves a version folder into the staging folder the way an interrupted
+    ' save leaves it, and returns the staged path. The emptied versions folder
+    ' stays in place, as the sweep leaves it.
+    Private Shared Function StageVersionDirectory(
+        managedDirectory As String,
+        manuscriptId As Guid,
+        versionId As Guid
+    ) As String
+
+        Dim versionDirectory As String =
+            Path.Combine(
+                managedDirectory,
+                manuscriptId.ToString("N"),
+                "versions",
+                versionId.ToString("N")
+            )
+
+        Dim stagedDirectory As String =
+            Path.Combine(
+                managedDirectory,
+                ".paperroute-version-delete",
+                Guid.NewGuid().ToString("N"),
+                manuscriptId.ToString("N"),
+                versionId.ToString("N")
+            )
+
+        Directory.CreateDirectory(
+            Path.GetDirectoryName(
+                stagedDirectory
+            )
+        )
+
+        Directory.Move(
+            versionDirectory,
+            stagedDirectory
+        )
+
+        Return stagedDirectory
 
     End Function
 
