@@ -4,11 +4,19 @@ Imports System.Threading
 
 Namespace Services
 
-    ' How PaperRoute opens its own storage files: manuscripts.json,
-    ' authors.json and their safety backups. A file another program holds
-    ' for a moment, such as a sync client or a backup tool, is tried again
-    ' briefly and then reported as in use. That is not damage, so a loader
-    ' stops there instead of turning to the .bak (#111).
+    ' How PaperRoute opens and writes its own storage files: manuscripts.json,
+    ' authors.json, citations.json, settings.json, schema.json and their
+    ' safety backups.
+    '
+    ' Opening: a file another program holds for a moment, such as a sync
+    ' client or a backup tool, is tried again briefly and then reported as
+    ' in use. That is not damage, so a loader stops there instead of
+    ' turning to the .bak (#111).
+    '
+    ' Writing: the content goes to a temporary sibling, is flushed to disk,
+    ' and only then takes the live file's place, so a power cut at any
+    ' moment leaves the old file or the new one, never an empty or torn
+    ' one (#125).
     Friend NotInheritable Class StorageFile
 
         ' Five tries over about half a second: long enough for a sync
@@ -107,6 +115,97 @@ Namespace Services
                    code = LockViolation
 
         End Function
+
+
+        ' Writes livePath atomically: writeContent fills a temporary
+        ' sibling, which is flushed to disk and then put in the live file's
+        ' place, keeping the previous file as backupPath (none when
+        ' Nothing). On failure the live file is untouched and the temporary
+        ' file is deleted.
+        Friend Shared Sub Write(
+            livePath As String,
+            backupPath As String,
+            writeContent As Action(Of Stream)
+        )
+
+            Dim tempPath As String =
+                livePath & ".tmp"
+
+            Try
+
+                Using stream As New FileStream(
+                    tempPath,
+                    FileMode.Create,
+                    FileAccess.Write,
+                    FileShare.None,
+                    bufferSize:=65536,
+                    options:=FileOptions.SequentialScan
+                )
+
+                    writeContent(stream)
+
+                    stream.Flush(
+                        flushToDisk:=True
+                    )
+
+                End Using
+
+                StorageFile.Replace(
+                    tempPath,
+                    livePath,
+                    backupPath
+                )
+
+            Finally
+
+                If File.Exists(tempPath) Then
+
+                    Try
+
+                        File.Delete(
+                            tempPath
+                        )
+
+                    Catch
+                        ' Best-effort cleanup only.
+                    End Try
+
+                End If
+
+            End Try
+
+        End Sub
+
+
+        ' Puts a finished file in the live file's place, keeping the
+        ' previous live file as backupPath (none when Nothing). File.Replace
+        ' keeps an existing backup if the live file turns out to be locked;
+        ' removing the backup first would lose it.
+        Friend Shared Sub Replace(
+            finishedPath As String,
+            livePath As String,
+            backupPath As String
+        )
+
+            If File.Exists(livePath) Then
+
+                File.Replace(
+                    finishedPath,
+                    livePath,
+                    backupPath,
+                    True
+                )
+
+            Else
+
+                File.Move(
+                    finishedPath,
+                    livePath
+                )
+
+            End If
+
+        End Sub
 
     End Class
 

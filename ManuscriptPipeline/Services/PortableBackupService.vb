@@ -275,23 +275,11 @@ Namespace Services
                     partialZipPath
                 )
 
-                If File.Exists(destinationZipPath) Then
-
-                    File.Replace(
-                        partialZipPath,
-                        destinationZipPath,
-                        Nothing,
-                        True
-                    )
-
-                Else
-
-                    File.Move(
-                        partialZipPath,
-                        destinationZipPath
-                    )
-
-                End If
+                StorageFile.Replace(
+                    partialZipPath,
+                    destinationZipPath,
+                    Nothing
+                )
 
             Finally
 

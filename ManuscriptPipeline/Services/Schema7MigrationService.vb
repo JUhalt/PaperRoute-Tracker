@@ -47,21 +47,10 @@ Namespace Services
             Dim payload As New Dictionary(Of String, Object) From {
                 {"SchemaVersion", fromVersion + 1}, {"UpdatedAtUtc", DateTime.UtcNow.ToString("O")}
             }
-            Dim temporaryPath = schemaPath & ".tmp-" & Guid.NewGuid().ToString("N")
-            Try
-                File.WriteAllText(temporaryPath, JsonSerializer.Serialize(payload, New JsonSerializerOptions With {.WriteIndented = True}))
-                ' Replacing atomically also preserves any existing backup if
-                ' the marker is locked. Never remove that backup beforehand.
-                File.Replace(temporaryPath, schemaPath, Path.Combine(Path.GetDirectoryName(schemaPath), "schema.v" & fromVersion.ToString() & ".bak"), True)
-            Finally
-                If File.Exists(temporaryPath) Then
-                    Try
-                        File.Delete(temporaryPath)
-                    Catch
-                        ' Best-effort temporary-file cleanup only.
-                    End Try
-                End If
-            End Try
+            ' Flushed and swapped in, keeping the old marker as schema.vN.bak:
+            ' a power cut must never leave an empty schema.json (#125).
+            StorageFile.Write(schemaPath, Path.Combine(Path.GetDirectoryName(schemaPath), "schema.v" & fromVersion.ToString() & ".bak"),
+                Sub(stream) JsonSerializer.Serialize(stream, payload, New JsonSerializerOptions With {.WriteIndented = True}))
         End Sub
     End Class
 

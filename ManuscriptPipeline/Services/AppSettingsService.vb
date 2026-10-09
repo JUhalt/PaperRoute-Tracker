@@ -98,19 +98,12 @@ Namespace Services
                 _settingsDirectory
             )
 
-            Dim temporary As String = _settingsPath & ".tmp"
-            File.WriteAllText(temporary, JsonSerializer.Serialize(settings, _jsonOptions))
-
             ' A file that could not be read is set aside, not kept as the backup.
             If _loadFailed AndAlso File.Exists(_settingsPath) Then
                 File.Move(_settingsPath, Path.Combine(_settingsDirectory, "settings.unreadable.json"), overwrite:=True)
             End If
 
-            If File.Exists(_settingsPath) Then
-                File.Replace(temporary, _settingsPath, _backupPath)
-            Else
-                File.Move(temporary, _settingsPath)
-            End If
+            StorageFile.Write(_settingsPath, _backupPath, Sub(stream) JsonSerializer.Serialize(stream, settings, _jsonOptions))
 
             _loadFailed = False
 

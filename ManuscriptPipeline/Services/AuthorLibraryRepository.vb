@@ -292,62 +292,19 @@ Namespace Services
                 _dataDirectory
             )
 
-            Dim json As String =
-                JsonSerializer.Serialize(
-                    library,
-                    _jsonOptions
-                )
+            StorageFile.Write(
+                _dataFilePath,
+                _backupFilePath,
+                Sub(stream)
 
-            Dim tempFilePath As String =
-                Path.Combine(
-                    _dataDirectory,
-                    "authors.tmp"
-                )
-
-            Try
-
-                File.WriteAllText(
-                    tempFilePath,
-                    json
-                )
-
-                If File.Exists(
-                    _dataFilePath
-                ) Then
-
-                    File.Replace(
-                        tempFilePath,
-                        _dataFilePath,
-                        _backupFilePath,
-                        True
+                    JsonSerializer.Serialize(
+                        stream,
+                        library,
+                        _jsonOptions
                     )
 
-                Else
-
-                    File.Move(
-                        tempFilePath,
-                        _dataFilePath
-                    )
-
-                End If
-
-            Finally
-
-                If File.Exists(
-                    tempFilePath
-                ) Then
-
-                    Try
-                        File.Delete(
-                            tempFilePath
-                        )
-                    Catch
-                        ' Best-effort cleanup only.
-                    End Try
-
-                End If
-
-            End Try
+                End Sub
+            )
 
         End Sub
 
