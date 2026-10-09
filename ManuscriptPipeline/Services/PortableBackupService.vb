@@ -11,6 +11,16 @@ Namespace Services
         Private ReadOnly _managedLibrary As ManagedLibraryService
 
 
+        ' Restore's safety limits, so a library too large to take back is
+        ' reported now rather than when the backup is needed (#114).
+        ' Settable only so a test need not write twenty thousand files.
+        Friend Property MaximumArchiveEntries As Integer =
+            PortableRestoreService.MaximumArchiveEntries
+
+        Friend Property MaximumUncompressedBytes As Long =
+            PortableRestoreService.MaximumUncompressedBytes
+
+
         Public Sub New()
             _managedLibrary = New ManagedLibraryService()
         End Sub
@@ -58,6 +68,11 @@ Namespace Services
                     Path.GetTempPath(),
                     "PaperRouteBackup_" & Guid.NewGuid().ToString("N")
                 )
+
+            ' The ZIP is written here, beside the destination, and takes
+            ' the destination's place only once it is finished and proved.
+            Dim partialZipPath As String =
+                destinationZipPath & ".partial"
 
             Try
 
@@ -236,18 +251,63 @@ Namespace Services
                 ' ZIP
                 ' =============================================
 
-                If File.Exists(destinationZipPath) Then
-                    File.Delete(destinationZipPath)
+                ' A full or unplugged drive, or a failed write, must never
+                ' cost the previous backup (#114): write beside it, prove
+                ' the archive, and only then replace it.
+                If File.Exists(partialZipPath) Then
+                    File.Delete(partialZipPath)
                 End If
 
                 ZipFile.CreateFromDirectory(
                     stagingDirectory,
-                    destinationZipPath,
+                    partialZipPath,
                     CompressionLevel.Optimal,
                     False
                 )
 
+                ThrowIfLargerThanRestoreAccepts(
+                    partialZipPath
+                )
+
+                Call New PortableRestoreService(
+                    _managedLibrary.RootDirectory
+                ).InspectBackup(
+                    partialZipPath
+                )
+
+                If File.Exists(destinationZipPath) Then
+
+                    File.Replace(
+                        partialZipPath,
+                        destinationZipPath,
+                        Nothing,
+                        True
+                    )
+
+                Else
+
+                    File.Move(
+                        partialZipPath,
+                        destinationZipPath
+                    )
+
+                End If
+
             Finally
+
+                If File.Exists(partialZipPath) Then
+
+                    Try
+
+                        File.Delete(
+                            partialZipPath
+                        )
+
+                    Catch
+                        ' Temporary cleanup is best-effort.
+                    End Try
+
+                End If
 
                 If Directory.Exists(stagingDirectory) Then
 
@@ -267,6 +327,61 @@ Namespace Services
             End Try
 
         End Sub
+
+
+        ' Restore refuses an archive over its safety limits, so a library
+        ' that size is reported here, at backup time (#114).
+        Private Sub ThrowIfLargerThanRestoreAccepts(
+            zipPath As String
+        )
+
+            Dim entries As Integer
+            Dim uncompressedBytes As Long = 0
+
+            Using archive As ZipArchive = ZipFile.OpenRead(zipPath)
+
+                entries = archive.Entries.Count
+
+                For Each entry As ZipArchiveEntry In archive.Entries
+                    uncompressedBytes += entry.Length
+                Next
+
+            End Using
+
+            If entries > MaximumArchiveEntries Then
+
+                Throw New InvalidDataException(
+                    "Restore accepts a backup of up to " &
+                    MaximumArchiveEntries.ToString("N0") &
+                    " files, and this library has " &
+                    entries.ToString("N0") &
+                    ". The backup was not written."
+                )
+
+            End If
+
+            If uncompressedBytes > MaximumUncompressedBytes Then
+
+                Throw New InvalidDataException(
+                    "Restore accepts a backup of up to " &
+                    Gigabytes(MaximumUncompressedBytes) &
+                    " GB, and this library is " &
+                    Gigabytes(uncompressedBytes) &
+                    " GB. The backup was not written."
+                )
+
+            End If
+
+        End Sub
+
+
+        Private Shared Function Gigabytes(
+            bytes As Long
+        ) As String
+
+            Return (bytes / 1073741824.0).ToString("0.#")
+
+        End Function
 
 
         Private Sub CopyDirectory(

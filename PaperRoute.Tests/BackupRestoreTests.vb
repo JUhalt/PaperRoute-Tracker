@@ -395,6 +395,98 @@ Public Class BackupRestoreTests
     End Sub
 
 
+    ' A write that fails after the destination existed leaves the previous
+    ' backup byte-identical (#114): the ZIP is written beside it and takes
+    ' its place only once it is finished.
+    <TestMethod>
+    Public Sub Backup_FailedWriteKeepsThePreviousBackup()
+
+        Dim dataDirectory As String = Path.Combine(_root, "source-data")
+        Dim managedDirectory As String = Path.Combine(_root, "source-library")
+        Dim repository As New ManuscriptRepository(dataDirectory, managedDirectory)
+        Dim manuscripts As List(Of Manuscript) = CreateRepresentativeLibrary()
+        repository.Save(manuscripts)
+
+        Dim backupPath As String = Path.Combine(_root, "backup.zip")
+        Dim service As New PortableBackupService(managedDirectory)
+        service.CreateBackup(backupPath, manuscripts, repository)
+        Dim previous As Byte() = File.ReadAllBytes(backupPath)
+
+        manuscripts(0).Title = "Changed since the last backup"
+        repository.Save(manuscripts)
+
+        ' Another program holds the name the ZIP is written under.
+        Using holder As New FileStream(backupPath & ".partial", FileMode.Create, FileAccess.ReadWrite, FileShare.None)
+            Assert.ThrowsExactly(Of IOException)(Sub() service.CreateBackup(backupPath, manuscripts, repository))
+        End Using
+
+        CollectionAssert.AreEqual(previous, File.ReadAllBytes(backupPath), "The previous backup is untouched.")
+
+    End Sub
+
+
+    ' A ZIP that fails inspection never takes the destination's place, and
+    ' the temporary file is gone. Here a managed file is missing from disk,
+    ' so the archive could not be restored.
+    <TestMethod>
+    Public Sub Backup_ZipThatFailsInspectionKeepsThePreviousBackupAndLeavesNoPartial()
+
+        Dim dataDirectory As String = Path.Combine(_root, "source-data")
+        Dim managedDirectory As String = Path.Combine(_root, "source-library")
+        Dim repository As New ManuscriptRepository(dataDirectory, managedDirectory)
+        Dim manuscripts As List(Of Manuscript) = CreateRepresentativeLibrary()
+        AddManagedFixture(manuscripts, managedDirectory)
+        repository.Save(manuscripts)
+
+        Dim backupPath As String = Path.Combine(_root, "backup.zip")
+        Dim service As New PortableBackupService(managedDirectory)
+        service.CreateBackup(backupPath, manuscripts, repository)
+        Dim previous As Byte() = File.ReadAllBytes(backupPath)
+
+        File.Delete(manuscripts(0).Submissions(0).Correspondence(0).LocalFilePath)
+
+        Assert.ThrowsExactly(Of InvalidDataException)(Sub() service.CreateBackup(backupPath, manuscripts, repository))
+
+        CollectionAssert.AreEqual(previous, File.ReadAllBytes(backupPath), "The previous backup is untouched.")
+        Assert.AreEqual(0, Directory.GetFiles(_root, "*.partial").Length, "No partial file is left.")
+
+    End Sub
+
+
+    ' A library larger than Restore accepts is reported at backup time, not
+    ' when the backup is needed. The limits are lowered here so the test
+    ' need not write twenty thousand files or twenty gigabytes.
+    <TestMethod>
+    Public Sub Backup_ReportsALibraryLargerThanRestoreAccepts()
+
+        Dim dataDirectory As String = Path.Combine(_root, "source-data")
+        Dim managedDirectory As String = Path.Combine(_root, "source-library")
+        Dim repository As New ManuscriptRepository(dataDirectory, managedDirectory)
+        Dim manuscripts As List(Of Manuscript) = CreateRepresentativeLibrary()
+        AddManagedFixture(manuscripts, managedDirectory)
+        repository.Save(manuscripts)
+        Dim backupPath As String = Path.Combine(_root, "backup.zip")
+
+        Dim byDefault As New PortableBackupService(managedDirectory)
+        Assert.AreEqual(PortableRestoreService.MaximumArchiveEntries, byDefault.MaximumArchiveEntries, "Restore's own limit.")
+        Assert.AreEqual(PortableRestoreService.MaximumUncompressedBytes, byDefault.MaximumUncompressedBytes, "Restore's own limit.")
+
+        Dim tooManyFiles As New PortableBackupService(managedDirectory) With {.MaximumArchiveEntries = 2}
+        Dim failure As InvalidDataException =
+            Assert.ThrowsExactly(Of InvalidDataException)(Sub() tooManyFiles.CreateBackup(backupPath, manuscripts, repository))
+        StringAssert.Contains(failure.Message, "Restore accepts a backup of up to 2 files")
+        StringAssert.Contains(failure.Message, "The backup was not written.")
+
+        Dim tooLarge As New PortableBackupService(managedDirectory) With {.MaximumUncompressedBytes = 10}
+        failure = Assert.ThrowsExactly(Of InvalidDataException)(Sub() tooLarge.CreateBackup(backupPath, manuscripts, repository))
+        StringAssert.Contains(failure.Message, "Restore accepts a backup of up to 0 GB")
+
+        Assert.IsFalse(File.Exists(backupPath), "Nothing was written under the backup's name.")
+        Assert.AreEqual(0, Directory.GetFiles(_root, "*.partial").Length, "No partial file is left.")
+
+    End Sub
+
+
     Private Sub AddManagedFixture(
         manuscripts As List(Of Manuscript),
         managedDirectory As String

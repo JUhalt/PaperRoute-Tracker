@@ -31,8 +31,9 @@ Namespace Services
 
     Public Class PortableRestoreService
 
-        Private Const MaximumArchiveEntries As Integer = 20000
-        Private Const MaximumUncompressedBytes As Long = 21474836480L
+        ' Backup reports a library over these at backup time (#114).
+        Friend Const MaximumArchiveEntries As Integer = 20000
+        Friend Const MaximumUncompressedBytes As Long = 21474836480L
 
         Private ReadOnly _jsonOptions As JsonSerializerOptions
         Private ReadOnly _managedLibrary As ManagedLibraryService
