@@ -1360,6 +1360,182 @@ Public Class ManagedPacketDeletionTests
     End Sub
 
 
+    <TestMethod>
+    Public Sub RepositorySave_AfterManagedPacketFileRemovalMovesItToRemoved()
+
+        Dim dataDirectory As String =
+            Path.Combine(
+                _root,
+                "data"
+            )
+
+        Dim managedRoot As String =
+            Path.Combine(
+                _root,
+                "managed"
+            )
+
+        Dim manuscript As Manuscript =
+            CreateManuscriptWithManagedPacketReference(
+                managedRoot
+            )
+
+        Dim packet As SubmissionPacket =
+            manuscript.SubmissionPackets(0)
+
+        Dim packetFile As SubmissionPacketFile =
+            packet.Files(0)
+
+        Dim fileDirectory As String =
+            Path.GetDirectoryName(
+                packetFile.LocalFilePath
+            )
+
+        Dim repository As New ManuscriptRepository(
+            dataDirectory,
+            managedRoot
+        )
+
+        Dim library As New List(Of Manuscript) From {
+            manuscript
+        }
+
+        repository.Save(
+            library
+        )
+
+        SubmissionPacketService.RemoveFile(
+            packet,
+            packetFile.Id,
+            New ManagedLibraryService(
+                managedRoot
+            )
+        )
+
+        repository.Save(
+            library
+        )
+
+        Assert.IsFalse(
+            Directory.Exists(
+                fileDirectory
+            )
+        )
+
+        Assert.AreEqual(
+            "managed",
+            File.ReadAllText(
+                Path.Combine(
+                    RemovedCopyOf(
+                        managedRoot,
+                        fileDirectory
+                    ),
+                    "manuscript.docx"
+                )
+            ),
+            "A removed packet file waits under removed\<date>, at its path in the library."
+        )
+
+        Assert.IsFalse(
+            Directory.Exists(
+                Path.Combine(
+                    managedRoot,
+                    ManagedPacketDeletionService.StagingFolderName
+                )
+            )
+        )
+
+    End Sub
+
+
+    <TestMethod>
+    Public Sub Recovery_MovesStagedPacketFileOfManuscriptInLibraryToRemoved()
+
+        Dim managedRoot As String =
+            Path.Combine(
+                _root,
+                "managed"
+            )
+
+        Dim manuscript As Manuscript =
+            CreateManuscriptWithManagedPacketReference(
+                managedRoot
+            )
+
+        Dim packet As SubmissionPacket =
+            manuscript.SubmissionPackets(0)
+
+        Dim packetFile As SubmissionPacketFile =
+            packet.Files(0)
+
+        Dim originalDirectory As String =
+            Path.GetDirectoryName(
+                packetFile.LocalFilePath
+            )
+
+        Dim stagedDirectory As String =
+            Path.Combine(
+                managedRoot,
+                ManagedPacketDeletionService.StagingFolderName,
+                Guid.NewGuid().ToString("N"),
+                manuscript.Id.ToString("N"),
+                packet.Id.ToString("N"),
+                packetFile.Id.ToString("N")
+            )
+
+        Directory.CreateDirectory(
+            Path.GetDirectoryName(
+                stagedDirectory
+            )
+        )
+
+        Directory.Move(
+            originalDirectory,
+            stagedDirectory
+        )
+
+        ' The library still holds the manuscript without this file.
+        packet.Files.Clear()
+
+        Dim service As New ManagedPacketDeletionService(
+            managedRoot
+        )
+
+        service.RecoverStagedDeletions(
+            New List(Of Manuscript) From {
+                manuscript
+            }
+        )
+
+        Assert.IsFalse(
+            Directory.Exists(
+                stagedDirectory
+            )
+        )
+
+        Assert.IsFalse(
+            Directory.Exists(
+                originalDirectory
+            )
+        )
+
+        Assert.AreEqual(
+            "managed",
+            File.ReadAllText(
+                Path.Combine(
+                    RemovedCopyOf(
+                        managedRoot,
+                        originalDirectory
+                    ),
+                    "manuscript.docx"
+                )
+            ),
+            "A load-time discard moves the file under removed\<date> instead of deleting it."
+        )
+
+    End Sub
+
+
     ' The main window with its repository and library swapped for this
     ' test's, so its own save and status line run against a temporary root.
     Private NotInheritable Class StatusBoard

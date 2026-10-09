@@ -35,6 +35,8 @@ Namespace Services
             Nothing
         Private _baselinePacketFiles As Dictionary(Of Guid, Dictionary(Of Guid, HashSet(Of Guid))) =
             Nothing
+        Private _baselineCorrespondence As Dictionary(Of Guid, HashSet(Of (SubmissionId As Guid, ItemId As Guid))) =
+            Nothing
 
 
         Public Sub New()
@@ -755,6 +757,11 @@ Namespace Services
                     manuscripts
                 )
 
+            _baselineCorrespondence =
+                ManagedLibraryService.BuildReferencedCorrespondenceMap(
+                    manuscripts
+                )
+
         End Sub
 
 
@@ -967,6 +974,10 @@ Namespace Services
                         If(
                             _baselineVersions,
                             New Dictionary(Of Guid, HashSet(Of Guid))()
+                        ),
+                        If(
+                            _baselineCorrespondence,
+                            New Dictionary(Of Guid, HashSet(Of (SubmissionId As Guid, ItemId As Guid)))()
                         )
                     )
 

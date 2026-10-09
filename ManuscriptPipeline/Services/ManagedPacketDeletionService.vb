@@ -286,9 +286,14 @@ Namespace Services
 
                             Else
 
-                                Directory.Delete(
+                                ManagedLibraryService.MoveToRemoved(
+                                    _rootDirectory,
                                     fileDirectory,
-                                    True
+                                    GetPacketFileDirectoryPath(
+                                        manuscriptId,
+                                        packetId,
+                                        packetFileId
+                                    )
                                 )
 
                             End If
@@ -698,45 +703,11 @@ Namespace Services
 
                             End If
 
-                            Dim stagedDirectory As String =
-                                Path.Combine(
-                                    _stagingRoot,
-                                    manuscriptId.ToString("N"),
-                                    packetId.ToString("N"),
-                                    packetFileId.ToString("N")
-                                )
-
-                            Directory.CreateDirectory(
-                                Path.GetDirectoryName(
-                                    stagedDirectory
-                                )
-                            )
-
-                            Try
-
-                                Directory.Move(
-                                    fileDirectory,
-                                    stagedDirectory
-                                )
-
-                            Catch ex As Exception When TypeOf ex Is IOException OrElse TypeOf ex Is UnauthorizedAccessException
-
-                                ' A file in the folder is open, or a sync
-                                ' client holds it. Leave the folder where it
-                                ' is; the next save tries again.
-                                _skipped.Add(
-                                    (manuscriptId, packetId, packetFileId, fileDirectory)
-                                )
-
-                                Continue For
-
-                            End Try
-
-                            _operations.Add(
-                                New MoveOperation(
-                                    fileDirectory,
-                                    stagedDirectory
-                                )
+                            StagePacketFileDirectory(
+                                manuscriptId,
+                                packetId,
+                                packetFileId,
+                                fileDirectory
                             )
 
                         Next
@@ -753,6 +724,135 @@ Namespace Services
 
                 Next
 
+                ' A manuscript the library held at its last load or save and
+                ' holds no longer: every packet file folder it referenced
+                ' goes, and its emptied folders with it.
+                If baseline IsNot Nothing Then
+
+                    For Each manuscriptPair In baseline
+
+                        If referenced.ContainsKey(
+                            manuscriptPair.Key
+                        ) Then
+
+                            Continue For
+
+                        End If
+
+                        Dim manuscriptDirectory As String =
+                            Path.Combine(
+                                _rootDirectory,
+                                manuscriptPair.Key.ToString("N")
+                            )
+
+                        Dim packetsDirectory As String =
+                            Path.Combine(
+                                manuscriptDirectory,
+                                "packets"
+                            )
+
+                        For Each packetPair In manuscriptPair.Value
+
+                            Dim packetDirectory As String =
+                                Path.Combine(
+                                    packetsDirectory,
+                                    packetPair.Key.ToString("N")
+                                )
+
+                            For Each packetFileId As Guid In packetPair.Value
+
+                                Dim fileDirectory As String =
+                                    Path.Combine(
+                                        packetDirectory,
+                                        packetFileId.ToString("N")
+                                    )
+
+                                If Directory.Exists(
+                                    fileDirectory
+                                ) Then
+
+                                    StagePacketFileDirectory(
+                                        manuscriptPair.Key,
+                                        packetPair.Key,
+                                        packetFileId,
+                                        fileDirectory
+                                    )
+
+                                End If
+
+                            Next
+
+                            ManagedPacketDeletionService.DeleteDirectoryIfEmpty(
+                                packetDirectory
+                            )
+
+                        Next
+
+                        ManagedPacketDeletionService.DeleteDirectoryIfEmpty(
+                            packetsDirectory
+                        )
+
+                        ManagedPacketDeletionService.DeleteDirectoryIfEmpty(
+                            manuscriptDirectory
+                        )
+
+                    Next
+
+                End If
+
+            End Sub
+
+
+            ' Moves one packet file folder into staging, or leaves it in
+            ' place when a file in it is in use.
+            Private Sub StagePacketFileDirectory(
+                manuscriptId As Guid,
+                packetId As Guid,
+                packetFileId As Guid,
+                fileDirectory As String
+            )
+
+                Dim stagedDirectory As String =
+                    Path.Combine(
+                        _stagingRoot,
+                        manuscriptId.ToString("N"),
+                        packetId.ToString("N"),
+                        packetFileId.ToString("N")
+                    )
+
+                Directory.CreateDirectory(
+                    Path.GetDirectoryName(
+                        stagedDirectory
+                    )
+                )
+
+                Try
+
+                    Directory.Move(
+                        fileDirectory,
+                        stagedDirectory
+                    )
+
+                Catch ex As Exception When TypeOf ex Is IOException OrElse TypeOf ex Is UnauthorizedAccessException
+
+                    ' A file in the folder is open, or a sync client holds
+                    ' it. Leave the folder where it is; the next save tries
+                    ' again.
+                    _skipped.Add(
+                        (manuscriptId, packetId, packetFileId, fileDirectory)
+                    )
+
+                    Return
+
+                End Try
+
+                _operations.Add(
+                    New MoveOperation(
+                        fileDirectory,
+                        stagedDirectory
+                    )
+                )
+
             End Sub
 
 
@@ -762,16 +862,55 @@ Namespace Services
                     Return
                 End If
 
-                ' The authoritative JSON has already been replaced. Cleanup
-                ' failures must not trigger rollback or report an unsaved edit.
+                ' The authoritative JSON has already been replaced, so each
+                ' staged folder now goes to the removed folder. One that
+                ' cannot move stays in staging for startup recovery, which
+                ' moves it later; nothing here may trigger a rollback or
+                ' report an unsaved edit.
                 _completed =
                     True
+
+                For Each operation As MoveOperation In _operations
+
+                    Try
+
+                        If Directory.Exists(
+                            operation.StagedDirectory
+                        ) Then
+
+                            ManagedLibraryService.MoveToRemoved(
+                                _rootDirectory,
+                                operation.StagedDirectory,
+                                operation.OriginalDirectory
+                            )
+
+                        End If
+
+                    Catch
+                        ' Startup recovery moves what is left in staging.
+                    End Try
+
+                Next
+
+                DeleteStagingIfEmpty()
+
+            End Sub
+
+
+            ' Removes the staging folders once no file is left in them; a
+            ' folder that could not be moved stays for startup recovery.
+            Private Sub DeleteStagingIfEmpty()
 
                 Try
 
                     If Directory.Exists(
                         _stagingRoot
-                    ) Then
+                    ) AndAlso
+                    Directory.GetFiles(
+                        _stagingRoot,
+                        "*",
+                        SearchOption.AllDirectories
+                    ).Length = 0 Then
 
                         Directory.Delete(
                             _stagingRoot,
@@ -787,7 +926,7 @@ Namespace Services
                     )
 
                 Catch
-                    ' Startup recovery will discard unreferenced staging.
+                    ' Best-effort cleanup only.
                 End Try
 
             End Sub

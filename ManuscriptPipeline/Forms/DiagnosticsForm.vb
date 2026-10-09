@@ -232,6 +232,7 @@ Namespace Forms
             builder.AppendLine("Backup file: " & _repository.BackupFilePath)
             builder.AppendLine("Reusable metadata library: " & _authorRepository.DataFilePath)
             builder.AppendLine("Managed library: " & _managedLibrary.RootDirectory)
+            builder.AppendLine("Removed files: " & _managedLibrary.RemovedDirectory)
             builder.AppendLine("Legacy data retained: " & If(Directory.Exists(StorageMigrationService.LegacyDataRoot()), "Yes", "No"))
             builder.AppendLine("Legacy library retained: " & If(Directory.Exists(StorageMigrationService.LegacyManagedLibraryRoot()), "Yes", "No"))
 

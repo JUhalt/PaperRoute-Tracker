@@ -869,6 +869,685 @@ Public Class VersionDeletionTests
     End Sub
 
 
+    <TestMethod>
+    Public Sub RepositorySave_AfterVersionDeletionMovesSnapshotToRemoved()
+
+        Dim dataDirectory As String =
+            Path.Combine(
+                _root,
+                "data"
+            )
+
+        Dim managedDirectory As String =
+            Path.Combine(
+                _root,
+                "managed"
+            )
+
+        Dim workingPath As String =
+            Path.Combine(
+                _root,
+                "revision.txt"
+            )
+
+        File.WriteAllText(
+            workingPath,
+            "Managed revision snapshot."
+        )
+
+        Dim manuscript As New Manuscript With {
+            .Title = "Remove to the removed folder"
+        }
+
+        Dim version As ManuscriptVersion =
+            ManuscriptVersionService.CreateVersion(
+                manuscript,
+                "Revision 1",
+                String.Empty,
+                workingPath,
+                True,
+                makeCurrent:=True,
+                createdDate:=New DateTime(2026, 3, 1)
+            )
+
+        Dim repository As New ManuscriptRepository(
+            dataDirectory,
+            managedDirectory
+        )
+
+        Dim library As New List(Of Manuscript) From {
+            manuscript
+        }
+
+        repository.Save(
+            library
+        )
+
+        Dim managedPath As String =
+            version.LocalFilePath
+
+        Dim managedVersionDirectory As String =
+            Path.GetDirectoryName(
+                managedPath
+            )
+
+        ManuscriptVersionService.DeleteVersion(
+            manuscript,
+            version.Id
+        )
+
+        repository.Save(
+            library
+        )
+
+        Assert.IsFalse(
+            Directory.Exists(
+                managedVersionDirectory
+            )
+        )
+
+        Assert.AreEqual(
+            "Managed revision snapshot.",
+            File.ReadAllText(
+                Path.Combine(
+                    RemovedCopyOf(
+                        managedDirectory,
+                        managedVersionDirectory
+                    ),
+                    Path.GetFileName(
+                        managedPath
+                    )
+                )
+            ),
+            "A removed version's snapshot waits under removed\<date>, at its path in the library."
+        )
+
+        Assert.IsFalse(
+            Directory.Exists(
+                Path.Combine(
+                    managedDirectory,
+                    ".paperroute-version-delete"
+                )
+            ),
+            "Nothing is left in staging."
+        )
+
+    End Sub
+
+
+    <TestMethod>
+    Public Sub RepositorySave_AfterAddingBackARemovedSnapshotMakesAFreshManagedCopy()
+
+        ' The guide says a removed file can be added again as a version and
+        ' PaperRoute makes a fresh managed copy. A file under removed is
+        ' inside the library, so the copy must not be skipped as already
+        ' managed: the record would point into removed, and every later
+        ' backup would leave its only file out.
+        Dim dataDirectory As String =
+            Path.Combine(
+                _root,
+                "data"
+            )
+
+        Dim managedDirectory As String =
+            Path.Combine(
+                _root,
+                "managed"
+            )
+
+        Dim workingPath As String =
+            Path.Combine(
+                _root,
+                "revision.txt"
+            )
+
+        File.WriteAllText(
+            workingPath,
+            "Managed revision snapshot."
+        )
+
+        Dim manuscript As New Manuscript With {
+            .Title = "Put back a removed version"
+        }
+
+        Dim version As ManuscriptVersion =
+            ManuscriptVersionService.CreateVersion(
+                manuscript,
+                "Revision 1",
+                String.Empty,
+                workingPath,
+                True,
+                makeCurrent:=True,
+                createdDate:=New DateTime(2026, 3, 1)
+            )
+
+        Dim repository As New ManuscriptRepository(
+            dataDirectory,
+            managedDirectory
+        )
+
+        Dim library As New List(Of Manuscript) From {
+            manuscript
+        }
+
+        repository.Save(
+            library
+        )
+
+        Dim managedVersionDirectory As String =
+            Path.GetDirectoryName(
+                version.LocalFilePath
+            )
+
+        ManuscriptVersionService.DeleteVersion(
+            manuscript,
+            version.Id
+        )
+
+        repository.Save(
+            library
+        )
+
+        Dim removedSnapshot As String =
+            Path.Combine(
+                RemovedCopyOf(
+                    managedDirectory,
+                    managedVersionDirectory
+                ),
+                Path.GetFileName(
+                    version.LocalFilePath
+                )
+            )
+
+        Assert.IsTrue(
+            File.Exists(
+                removedSnapshot
+            )
+        )
+
+        ' Put it back as the guide says: add it again, from removed.
+        Dim putBack As ManuscriptVersion =
+            ManuscriptVersionService.CreateVersion(
+                manuscript,
+                "Put back",
+                String.Empty,
+                removedSnapshot,
+                True,
+                makeCurrent:=True
+            )
+
+        repository.Save(
+            library
+        )
+
+        StringAssert.StartsWith(
+            putBack.LocalFilePath,
+            Path.Combine(
+                managedDirectory,
+                manuscript.Id.ToString("N"),
+                "versions",
+                putBack.Id.ToString("N")
+            ) & Path.DirectorySeparatorChar,
+            "The put-back version gets a fresh managed copy under its own folder."
+        )
+
+        Assert.AreEqual(
+            "Managed revision snapshot.",
+            File.ReadAllText(
+                putBack.LocalFilePath
+            )
+        )
+
+        Assert.AreEqual(
+            "Managed revision snapshot.",
+            File.ReadAllText(
+                removedSnapshot
+            ),
+            "The removed copy stays where it is."
+        )
+
+        Dim backupPath As String =
+            Path.Combine(
+                _root,
+                "put-back.zip"
+            )
+
+        Call New PortableBackupService(
+            managedDirectory
+        ).CreateBackup(
+            backupPath,
+            library,
+            repository
+        )
+
+        Assert.AreEqual(
+            1,
+            New PortableRestoreService(
+                managedDirectory
+            ).InspectBackup(
+                backupPath
+            ).ManagedFileCount,
+            "The next backup holds the put-back version's file."
+        )
+
+    End Sub
+
+
+    <TestMethod>
+    Public Sub RepositorySave_AfterManuscriptDeletionMovesItsFoldersToRemoved()
+
+        Dim dataDirectory As String =
+            Path.Combine(
+                _root,
+                "data"
+            )
+
+        Dim managedDirectory As String =
+            Path.Combine(
+                _root,
+                "managed"
+            )
+
+        Dim workingPath As String =
+            Path.Combine(
+                _root,
+                "revision.txt"
+            )
+
+        File.WriteAllText(
+            workingPath,
+            "Managed revision snapshot."
+        )
+
+        Dim coverLetterPath As String =
+            Path.Combine(
+                _root,
+                "cover-letter.txt"
+            )
+
+        File.WriteAllText(
+            coverLetterPath,
+            "Cover letter bytes."
+        )
+
+        Dim manuscript As New Manuscript With {
+            .Title = "Deleted manuscript"
+        }
+
+        Dim version As ManuscriptVersion =
+            ManuscriptVersionService.CreateVersion(
+                manuscript,
+                "Revision 1",
+                String.Empty,
+                workingPath,
+                True,
+                makeCurrent:=True,
+                createdDate:=New DateTime(2026, 3, 1)
+            )
+
+        Dim packet As SubmissionPacket =
+            SubmissionPacketService.CreatePacket(
+                manuscript,
+                version.Id,
+                "Packet",
+                String.Empty
+            )
+
+        Dim packetFile As SubmissionPacketFile =
+            SubmissionPacketService.AddFile(
+                packet,
+                SubmissionPacketFileRole.CoverLetter,
+                "Cover letter",
+                String.Empty,
+                coverLetterPath,
+                SubmissionPacketFileStorageMode.ManagedCopy
+            )
+
+        ' A decision letter PaperRoute keeps a managed copy of, at
+        ' <manuscript>\<submission>\<item>.
+        Dim letterPath As String =
+            Path.Combine(
+                _root,
+                "decision-letter.txt"
+            )
+
+        File.WriteAllText(
+            letterPath,
+            "Decision letter bytes."
+        )
+
+        Dim submission As New JournalSubmission With {
+            .JournalName = "Fictional Journal of Psychology",
+            .SubmittedDate = New DateTime(2026, 4, 1)
+        }
+
+        Dim letter As New CorrespondenceItem With {
+            .ItemDate = New DateTime(2026, 5, 1),
+            .Type = CorrespondenceType.DecisionLetter,
+            .Title = "Decision letter",
+            .LocalFilePath = letterPath,
+            .IsManagedCopy = True
+        }
+
+        submission.Correspondence.Add(
+            letter
+        )
+
+        manuscript.Submissions.Add(
+            submission
+        )
+
+        Dim repository As New ManuscriptRepository(
+            dataDirectory,
+            managedDirectory
+        )
+
+        Dim library As New List(Of Manuscript) From {
+            manuscript
+        }
+
+        repository.Save(
+            library
+        )
+
+        Dim versionDirectory As String =
+            Path.GetDirectoryName(
+                version.LocalFilePath
+            )
+
+        Dim packetFileDirectory As String =
+            Path.GetDirectoryName(
+                packetFile.LocalFilePath
+            )
+
+        Dim letterDirectory As String =
+            Path.GetDirectoryName(
+                letter.LocalFilePath
+            )
+
+        Dim manuscriptDirectory As String =
+            Path.Combine(
+                managedDirectory,
+                manuscript.Id.ToString("N")
+            )
+
+        Assert.IsTrue(
+            Directory.Exists(
+                manuscriptDirectory
+            )
+        )
+
+        StringAssert.StartsWith(
+            letterDirectory,
+            manuscriptDirectory & Path.DirectorySeparatorChar,
+            "The save made a managed copy of the letter under the manuscript's folder."
+        )
+
+        ' Delete the manuscript, as the board's Delete does, and save.
+        library.Remove(
+            manuscript
+        )
+
+        repository.Save(
+            library
+        )
+
+        Assert.IsFalse(
+            Directory.Exists(
+                manuscriptDirectory
+            ),
+            "Nothing of a deleted manuscript stays under its folder."
+        )
+
+        Assert.AreEqual(
+            "Managed revision snapshot.",
+            File.ReadAllText(
+                Path.Combine(
+                    RemovedCopyOf(
+                        managedDirectory,
+                        versionDirectory
+                    ),
+                    Path.GetFileName(
+                        version.LocalFilePath
+                    )
+                )
+            ),
+            "The deleted manuscript's version snapshot waits under removed\<date>."
+        )
+
+        Assert.AreEqual(
+            "Cover letter bytes.",
+            File.ReadAllText(
+                Path.Combine(
+                    RemovedCopyOf(
+                        managedDirectory,
+                        packetFileDirectory
+                    ),
+                    Path.GetFileName(
+                        packetFile.LocalFilePath
+                    )
+                )
+            ),
+            "The deleted manuscript's packet file waits under removed\<date>."
+        )
+
+        Assert.AreEqual(
+            "Decision letter bytes.",
+            File.ReadAllText(
+                Path.Combine(
+                    RemovedCopyOf(
+                        managedDirectory,
+                        letterDirectory
+                    ),
+                    Path.GetFileName(
+                        letter.LocalFilePath
+                    )
+                )
+            ),
+            "The deleted manuscript's managed correspondence copy waits under removed\<date>."
+        )
+
+        Assert.AreEqual(
+            0,
+            repository.Load().Count
+        )
+
+    End Sub
+
+
+    <TestMethod>
+    Public Sub RepositorySave_WhenJsonWriteFailsRestoresDeletedVersionSnapshot()
+
+        ' Passes before the removed folder too: it pins that a failed save
+        ' still puts a staged snapshot back and removes nothing.
+        Dim dataDirectory As String =
+            Path.Combine(
+                _root,
+                "data"
+            )
+
+        Dim managedDirectory As String =
+            Path.Combine(
+                _root,
+                "managed"
+            )
+
+        Dim workingPath As String =
+            Path.Combine(
+                _root,
+                "revision.txt"
+            )
+
+        File.WriteAllText(
+            workingPath,
+            "Managed revision snapshot."
+        )
+
+        Dim manuscript As New Manuscript With {
+            .Title = "Failed save"
+        }
+
+        Dim version As ManuscriptVersion =
+            ManuscriptVersionService.CreateVersion(
+                manuscript,
+                "Revision 1",
+                String.Empty,
+                workingPath,
+                True,
+                makeCurrent:=True,
+                createdDate:=New DateTime(2026, 3, 1)
+            )
+
+        Dim repository As New ManuscriptRepository(
+            dataDirectory,
+            managedDirectory
+        )
+
+        Dim library As New List(Of Manuscript) From {
+            manuscript
+        }
+
+        repository.Save(
+            library
+        )
+
+        Dim managedPath As String =
+            version.LocalFilePath
+
+        Dim originalJson As String =
+            File.ReadAllText(
+                repository.DataFilePath
+            )
+
+        ManuscriptVersionService.DeleteVersion(
+            manuscript,
+            version.Id
+        )
+
+        ' A directory at the temporary JSON path forces failure after the
+        ' snapshot has been staged but before metadata is replaced.
+        Directory.CreateDirectory(
+            Path.Combine(
+                dataDirectory,
+                "manuscripts.tmp"
+            )
+        )
+
+        Assert.ThrowsExactly(Of UnauthorizedAccessException)(
+            Sub()
+                repository.Save(
+                    library
+                )
+            End Sub
+        )
+
+        Assert.AreEqual(
+            originalJson,
+            File.ReadAllText(
+                repository.DataFilePath
+            )
+        )
+
+        Assert.AreEqual(
+            "Managed revision snapshot.",
+            File.ReadAllText(
+                managedPath
+            )
+        )
+
+        Assert.IsFalse(
+            Directory.Exists(
+                Path.Combine(
+                    managedDirectory,
+                    "removed"
+                )
+            ),
+            "A failed save removes nothing."
+        )
+
+    End Sub
+
+
+    <TestMethod>
+    Public Sub ManagedDeletionRecovery_MovesStagedVersionOfManuscriptInLibraryToRemoved()
+
+        Dim managedDirectory As String =
+            Path.Combine(
+                _root,
+                "managed-discard"
+            )
+
+        Dim manuscript As New Manuscript()
+        Dim versionId As Guid =
+            Guid.NewGuid()
+
+        Dim versionDirectory As String =
+            Path.Combine(
+                managedDirectory,
+                manuscript.Id.ToString("N"),
+                "versions",
+                versionId.ToString("N")
+            )
+
+        Directory.CreateDirectory(
+            versionDirectory
+        )
+
+        File.WriteAllText(
+            Path.Combine(
+                versionDirectory,
+                "snapshot.txt"
+            ),
+            "removed on purpose"
+        )
+
+        Dim stagedDirectory As String =
+            StageVersionDirectory(
+                managedDirectory,
+                manuscript.Id,
+                versionId
+            )
+
+        Dim service As New ManagedLibraryService(
+            managedDirectory
+        )
+
+        ' The library still holds the manuscript without this version.
+        service.RecoverStagedVersionDeletions(
+            New Manuscript() {
+                manuscript
+            }
+        )
+
+        Assert.IsFalse(
+            Directory.Exists(
+                stagedDirectory
+            )
+        )
+
+        Assert.IsFalse(
+            Directory.Exists(
+                versionDirectory
+            )
+        )
+
+        Assert.AreEqual(
+            "removed on purpose",
+            File.ReadAllText(
+                Path.Combine(
+                    RemovedCopyOf(
+                        managedDirectory,
+                        versionDirectory
+                    ),
+                    "snapshot.txt"
+                )
+            ),
+            "A load-time discard moves the snapshot under removed\<date> instead of deleting it."
+        )
+
+    End Sub
+
+
     Private Shared Function BuildThreeVersionManuscript() As Manuscript
 
         Dim manuscript As New Manuscript()
