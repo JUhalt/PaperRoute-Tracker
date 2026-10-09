@@ -19,9 +19,15 @@ PaperRoute upgrades are designed not to overwrite the manuscript database, setti
 
 Use **Settings → Backup Library...** to create a portable backup. In v0.5 and earlier, it is **Data → Backup Library...**.
 
+## Moving from v0.9.0 to v0.9.1
+
+PaperRoute v0.9.1 fixes one defect: saving could delete the packet snapshots of manuscripts the open library did not contain. **v0.9.1 is the current Stable release.** It uses the same **Schema 9** library as v0.9.0 and migrates no data, and v0.9.0 can still open a library that v0.9.1 has used.
+
+If PaperRoute runs on more than one computer that shares a Documents folder, update every one of them before saving on any of them: a computer still on v0.9.0 deletes, on its first save, the packet snapshots of manuscripts its own library does not contain, and a synced folder carries the deletion to the others. Until every computer is updated, keep a portable backup (**Settings > Backup Library...**) made on the computer whose library is complete.
+
 ## Moving from v0.8 to v0.9
 
-PaperRoute v0.9 adds a journal shortlist for each manuscript, a guide to choosing a journal, journal facts and metrics, Find Journals, Your Citations, an example library, the Online services page with Work offline, an optional AI assistant, and packet export. **v0.9.0 is the current Stable release.** v0.9 upgrades the library to **Schema 9**, which adds journal shortlists (with the evidence behind a suggested journal), journal ISSNs, links, facts, and metrics, and a record of where an accepted AI suggestion came from.
+PaperRoute v0.9 adds a journal shortlist for each manuscript, a guide to choosing a journal, journal facts and metrics, Find Journals, Your Citations, an example library, the Online services page with Work offline, an optional AI assistant, and packet export. v0.9 upgrades the library to **Schema 9**, which adds journal shortlists (with the evidence behind a suggested journal), journal ISSNs, links, facts, and metrics, and a record of where an accepted AI suggestion came from.
 
 Before upgrading, create a portable ZIP backup with v0.8 (**Settings → Backup Library...**) and keep it separately.
 

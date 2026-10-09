@@ -536,12 +536,43 @@ Namespace Services
 
                         End If
 
-                    Else
+                    ElseIf referenced.ContainsKey(
+                        manuscriptId
+                    ) Then
 
                         Directory.Delete(
                             versionDirectory,
                             True
                         )
+
+                    Else
+
+                        ' This library does not contain the manuscript, but
+                        ' another library sharing the folder may. Put the
+                        ' snapshot back if its place is free; otherwise keep
+                        ' both copies.
+                        Dim originalDirectory As String =
+                            GetVersionDirectoryPath(
+                                manuscriptId,
+                                versionId
+                            )
+
+                        If Not Directory.Exists(
+                            originalDirectory
+                        ) Then
+
+                            Directory.CreateDirectory(
+                                Path.GetDirectoryName(
+                                    originalDirectory
+                                )
+                            )
+
+                            Directory.Move(
+                                versionDirectory,
+                                originalDirectory
+                            )
+
+                        End If
 
                     End If
 

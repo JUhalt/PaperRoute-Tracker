@@ -2,6 +2,14 @@
 
 All notable changes to PaperRoute Tracker will be documented here.
 
+## [0.9.1] - 2026-10-09
+
+PaperRoute v0.9.1 — **Packet File Safety** — was released on October 9, 2026 from [PR #163](https://github.com/JUhalt/PaperRoute-Tracker/pull/163), a Stable patch for v0.9.0. Certification is recorded in [#108](https://github.com/JUhalt/PaperRoute-Tracker/issues/108). v0.9.1 keeps the Schema 9 library of v0.9.0.
+
+### Fixed
+
+- Saving no longer deletes the packet snapshots of manuscripts the open library does not contain ([#107](https://github.com/JUhalt/PaperRoute-Tracker/issues/107)). The library lives in your Windows profile and the managed copies of your files in `Documents\PaperRoute Library`; when the two disagreed, as on a second computer that shares Documents, after a reinstall that started with an empty library before **Restore Backup...**, or after a library was recovered from its older safety copy, the first save deleted every packet snapshot the library did not reference, including those of manuscripts it did not contain. The save-time sweep now looks only inside the folders of manuscripts in the library, as the version sweep already did, and startup recovery, for packets and for versions, puts back a file of such a manuscript that an interrupted save had set aside instead of deleting it. The managed packet files of a manuscript that is not in the saved library now stay on disk, as its version files already did, including a manuscript you delete. Present since v0.4.0. Not covered, and tracked for v0.9.2: a library recovered from an older copy that still contains a manuscript loses that manuscript's newer packet files on the next save; **Restore Backup...** replaces the whole managed folder with the backup's files; and a computer still on v0.9.0 or earlier that shares Documents keeps deleting until it is updated.
+
 ## [0.9.0] - 2026-10-09
 
 PaperRoute v0.9.0 — **Journal Choice & Guidance** — was released on October 9, 2026 from [PR #94](https://github.com/JUhalt/PaperRoute-Tracker/pull/94), [PR #99](https://github.com/JUhalt/PaperRoute-Tracker/pull/99), [PR #100](https://github.com/JUhalt/PaperRoute-Tracker/pull/100), [PR #102](https://github.com/JUhalt/PaperRoute-Tracker/pull/102), [PR #103](https://github.com/JUhalt/PaperRoute-Tracker/pull/103), and [PR #105](https://github.com/JUhalt/PaperRoute-Tracker/pull/105), after the v0.9.0-rc.1 Preview ([PR #104](https://github.com/JUhalt/PaperRoute-Tracker/pull/104)). Certification is recorded in [#97](https://github.com/JUhalt/PaperRoute-Tracker/issues/97). v0.9 upgrades the library to Schema 9.
