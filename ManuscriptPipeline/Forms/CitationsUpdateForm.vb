@@ -7,6 +7,7 @@ Imports System.Linq
 Imports System.Threading
 Imports System.Threading.Tasks
 Imports System.Windows.Forms
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
@@ -35,7 +36,7 @@ Namespace Forms
 
         Private ReadOnly lblIntro As New Label()
         Private ReadOnly chkLinked As New CheckBox()
-        Private ReadOnly lvWorks As New ListView()
+        Private ReadOnly lvWorks As New GroupedListView()
         Private ReadOnly lblSummary As New Label()
         Private ReadOnly lblStatus As New Label()
         Private ReadOnly btnPrimary As New Button()

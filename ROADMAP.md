@@ -54,8 +54,8 @@ Targets are directional rather than promises. Data integrity, migrations, backup
 | **v0.6** | Workspace UI ✅ | Can I find and act on everything from one calm, uncluttered workspace? |
 | **v0.7** | Deadline Center ✅ | What requires action, and when? |
 | **v0.8** | Route Analytics & Reports ✅ | What does this publication journey show me—and how can I communicate it? |
-| **v0.9** | **Journal Choice & Guidance — Preview** | Where should this manuscript go, what will that journal ask of me, and how does someone new learn the route? |
-| **v0.9.1** | 1.0 Hardening | Is the entire workflow polished, resilient, and certifiable? |
+| **v0.9** | Journal Choice & Guidance ✅ | Where should this manuscript go, what will that journal ask of me, and how does someone new learn the route? |
+| **v0.9.1** | **1.0 Hardening — next** | Is the entire workflow polished, resilient, and certifiable? |
 | **v1.0** | Trusted Research Workflow | Would I trust this with my real publication pipeline? |
 
 On September 26, 2026, the train was re-sequenced so the interface can catch up with the depth of the data model: v0.6 became **Workspace UI**, Deadline Center moved to v0.7, Route Analytics & Reports moved to v0.8, and optional AI assistance became a proposal for after 1.0. Deadlines and Analytics arrive as pages in the new workspace rather than as additional dialogs.
@@ -323,11 +323,11 @@ PaperRoute v0.8.0 was released on September 28, 2026 from [PR #80](https://githu
 
 ---
 
-# v0.9 Journal Choice & Guidance
+## COMPLETE — v0.9 Journal Choice & Guidance
 
 Milestone: **[v0.9.0 — Journal Choice & Guidance](https://github.com/JUhalt/PaperRoute-Tracker/milestone/13)**
 
-Status: v0.9.0-rc.1 is the Preview candidate; v0.8.0 is the current Stable release. [PR #94](https://github.com/JUhalt/PaperRoute-Tracker/pull/94), merged to master on October 2, 2026, delivered the journal shortlist and Choosing a Journal guide (#65, #89), the example library (#83), Online services and Work offline (#86), journal facts and metrics (#87), journals that publish work like yours (#88), your citations (#91), and the optional AI assistant (#84 with #29). It moves the library to Schema 9. Reading a journal's author instructions into its checklist ([#95](https://github.com/JUhalt/PaperRoute-Tracker/issues/95)) followed in [PR #100](https://github.com/JUhalt/PaperRoute-Tracker/pull/100), and polish from the acceptance audit ([#96](https://github.com/JUhalt/PaperRoute-Tracker/issues/96)) in [PR #102](https://github.com/JUhalt/PaperRoute-Tracker/pull/102). The packet export with RO-Crate metadata ([#45](https://github.com/JUhalt/PaperRoute-Tracker/issues/45)) was evaluated and then adopted for v0.9 on October 3, 2026, and merged in [PR #103](https://github.com/JUhalt/PaperRoute-Tracker/pull/103). Certification and release are tracked in [#97](https://github.com/JUhalt/PaperRoute-Tracker/issues/97).
+[PR #94](https://github.com/JUhalt/PaperRoute-Tracker/pull/94), merged to master on October 2, 2026, delivered the journal shortlist and Choosing a Journal guide (#65, #89), the example library (#83), Online services and Work offline (#86), journal facts and metrics (#87), journals that publish work like yours (#88), your citations (#91), and the optional AI assistant (#84 with #29). It moves the library to Schema 9. Reading a journal's author instructions into its checklist ([#95](https://github.com/JUhalt/PaperRoute-Tracker/issues/95)) followed in [PR #100](https://github.com/JUhalt/PaperRoute-Tracker/pull/100), and polish from the acceptance audit ([#96](https://github.com/JUhalt/PaperRoute-Tracker/issues/96)) in [PR #102](https://github.com/JUhalt/PaperRoute-Tracker/pull/102). The packet export with RO-Crate metadata ([#45](https://github.com/JUhalt/PaperRoute-Tracker/issues/45)) was evaluated and then adopted for v0.9 on October 3, 2026, and merged in [PR #103](https://github.com/JUhalt/PaperRoute-Tracker/pull/103).
 
 Help researchers decide where a manuscript should go and what that journal will ask of them, and let anyone new learn the route, before the 1.0 hardening pass. Offline guidance comes first; connected help adds facts and suggestions without making the library depend on the network.
 
@@ -347,6 +347,8 @@ Connected, optional, and started by the user:
 - **[#88 Journals that publish work like yours](https://github.com/JUhalt/PaperRoute-Tracker/issues/88)** — suggestions backed by recently published papers that match keywords you review; never scores or predictions.
 - **[#91 Your citations](https://github.com/JUhalt/PaperRoute-Tracker/issues/91)** — the researcher's own citation record from open data, on request: citations, h-index, i10-index, g-index, m-quotient, and field-weighted citation impact per published manuscript, each with its source, date, and definition.
 - **[#84 Optional AI assistant](https://github.com/JUhalt/PaperRoute-Tracker/issues/84)** (with [#29](https://github.com/JUhalt/PaperRoute-Tracker/issues/29)) — off by default, with your own key or a local model: decision letters to the decision and reviewer comments, and drafting help for responses and cover letters. [#95](https://github.com/JUhalt/PaperRoute-Tracker/issues/95) reads a journal's author instructions, pasted by the researcher and never fetched, into proposed checklist requirements, each checked against its source sentence. An AI fit summary was dropped on October 2, 2026: the fit questions (#89) leave that judgment to the researcher, and #88's evidence already shows what each journal publishes.
+
+PaperRoute v0.9.0 was released on October 9, 2026 from [PR #105](https://github.com/JUhalt/PaperRoute-Tracker/pull/105), after the v0.9.0-rc.1 Preview ([PR #104](https://github.com/JUhalt/PaperRoute-Tracker/pull/104)). It moved the library to Schema 9 with a marker-only upgrade. Certification (published assets, the live Preview updater from v0.8.0 with byte-identical data files, a clean install, native display checks, and the live Stable updater) is recorded in [#97](https://github.com/JUhalt/PaperRoute-Tracker/issues/97).
 
 ---
 

@@ -2,7 +2,7 @@
 
 PaperRoute is a local-first academic manuscript tracker for researchers. It is designed to keep the complete route of a paper understandable: idea, writing, submission, peer review, revision, publication, or the File Drawer.
 
-This guide describes **PaperRoute v0.9.0-rc.1 — Journal Choice & Guidance**, a Preview. The current Stable release is v0.8.0; see the [v0.9.0-rc.1 release notes](releases/0.9.0-rc.1.md) and the [repository homepage](../README.md) for current release availability.
+This guide describes **PaperRoute v0.9.0 — Journal Choice & Guidance**. See the [v0.9.0 release notes](releases/0.9.0.md) for the changes and the [repository homepage](../README.md) for current release availability.
 
 ## Quick Start
 
