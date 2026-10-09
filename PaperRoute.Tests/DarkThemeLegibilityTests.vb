@@ -76,7 +76,7 @@ Public Class DarkThemeLegibilityTests
 
         RunWithColorMode(mode,
             Sub()
-                Using font As New Font("Segoe UI", 10.0F), form As New Form With {.ClientSize = New Size(520, 260), .Font = font}
+                Using font As New Font("Segoe UI", 10.0F), form As New Form With {.ClientSize = New Size(520, 360), .Font = font}
                     Dim wrapped As New CheckBox With {
                         .Text = PacketExportForm.AcknowledgeText, .AutoSize = False, .Bounds = New Rectangle(16, 12, 420, 70),
                         .CheckAlign = ContentAlignment.TopLeft, .TextAlign = ContentAlignment.TopLeft, .Checked = True
@@ -87,12 +87,22 @@ Public Class DarkThemeLegibilityTests
                     }
                     Dim choice As New RadioButton With {.Text = "Only &checked works", .AutoSize = True, .Location = New Point(16, 130), .Checked = True}
                     Dim remove As New Button With {.Text = "Remove", .AutoSize = True, .Location = New Point(16, 170)}
-                    Dim specimens As ButtonBase() = {wrapped, rightAligned, choice, remove}
+                    Dim edit As New Button With {.Text = "Edit...", .AutoSize = True, .Location = New Point(140, 170)}
+                    ' A button on a card has its parent's back color, and
+                    ' WinForms then fills it in a grey of its own.
+                    Dim card As New SectionCard With {.Text = "Authors", .Bounds = New Rectangle(16, 220, 480, 120)}
+                    Dim onCard As New Button With {.Text = "Remove", .AutoSize = True, .Location = New Point(16, 50)}
+                    Dim row As New FlowLayoutPanel With {.Bounds = New Rectangle(140, 44, 320, 60)}
+                    Dim inRow As New Button With {.Text = "Remove", .AutoSize = True}
+                    card.Controls.Add(onCard)
+                    card.Controls.Add(row)
+                    row.Controls.Add(inRow)
+                    Dim specimens As ButtonBase() = {wrapped, rightAligned, choice, remove, edit, onCard, inRow}
                     For Each specimen As ButtonBase In specimens
                         ' The app draws text with GDI; a test host starts with GDI+.
                         specimen.UseCompatibleTextRendering = False
                     Next
-                    form.Controls.AddRange(specimens)
+                    form.Controls.AddRange(New Control() {wrapped, rightAligned, choice, remove, edit, card})
 
                     ' A dialog styles itself, and is styled again once open.
                     UiPolish.ApplyDialog(form)
@@ -100,9 +110,11 @@ Public Class DarkThemeLegibilityTests
                     ShowOffscreen(form)
 
                     For Each specimen As ButtonBase In specimens
-                        For Each enabled As Boolean In {True, False}
+                        ' Disabled first: that picture is painted with the
+                        ' handler UiPolish attached, or with none if it did not.
+                        For Each enabled As Boolean In {False, True}
                             specimen.Enabled = enabled
-                            Dim label As String = $"{specimen.GetType().Name} '{specimen.Text}', {If(enabled, "enabled", "disabled")}, {mode}"
+                            Dim label As String = $"{specimen.GetType().Name} '{specimen.Text}' on a {specimen.Parent.GetType().Name}, {If(enabled, "enabled", "disabled")}, {mode}"
                             Using polished As Bitmap = Picture(specimen)
                                 RemoveHandler specimen.Paint, AddressOf UiPolish.PaintMutedCaption
                                 Using plain As Bitmap = Picture(specimen)
@@ -147,6 +159,7 @@ Public Class DarkThemeLegibilityTests
 
     ' Each heading sits just above its group's first row. Text is judged
     ' by its strongest pixels: smoothing leaves the rest of a stroke paler.
+    ' Its rule is a line in the card border color, longer than text is tall.
     Private Shared Sub AssertHeadingsReadable(list As ListView, expected As Integer)
 
         Using image As Bitmap = Picture(list)
@@ -158,6 +171,8 @@ Public Class DarkThemeLegibilityTests
                 Dim heading As Rectangle = Rectangle.FromLTRB(frame, frame + firstRow.Top - list.Font.Height, frame + list.ClientSize.Width, frame + firstRow.Top - 2)
                 Dim ratio As Double = StrongestContrast(image, heading, list.BackColor)
                 Assert.IsTrue(ratio >= 4.5, $"A group heading needs 4.5:1 contrast; '{group.Header}' has {ratio:F2}:1 on {list.BackColor}.")
+                Dim rule As Integer = CountPixels(image, heading, Function(pixel) pixel.ToArgb() = UiTheme.CardBorder().ToArgb())
+                Assert.IsTrue(rule > list.Font.Height, $"'{group.Header}' keeps its rule.")
                 shown += 1
             Next
             Assert.AreEqual(expected, shown, "Every group has rows, so every heading shows.")
@@ -172,9 +187,8 @@ Public Class DarkThemeLegibilityTests
         ' The app draws text with GDI; a test host starts with GDI+.
         control.UseCompatibleTextRendering = False
 
-        Dim surface As Color = control.BackColor
-
         Using image As Bitmap = Picture(control)
+            Dim surface As Color = SurfaceOf(control, image)
             Dim area As Rectangle = CaptionArea(control)
             Dim ratio As Double = StrongestContrast(image, area, surface)
             Assert.IsTrue(ratio >= 3.0, $"A disabled caption needs 3:1 contrast; '{control.Text}' has {ratio:F2}:1 on {surface}.")
@@ -202,6 +216,25 @@ Public Class DarkThemeLegibilityTests
         Return Rectangle.FromLTRB(area.Left + box, area.Top, area.Right, area.Bottom)
     End Function
 
+    ' What a caption is read against. A check box or option paints its own
+    ' back color. WinForms fills a button, in a grey of its own when the
+    ' button's back color is also its parent's: a button's surface is the
+    ' color of most of its picture.
+    Private Shared Function SurfaceOf(control As ButtonBase, image As Bitmap) As Color
+        If Not TypeOf control Is Button Then Return control.BackColor
+        Dim area As Rectangle = CaptionArea(control)
+        Dim counts As New Dictionary(Of Integer, Integer)()
+        For y As Integer = area.Top To area.Bottom - 1
+            For x As Integer = area.Left To area.Right - 1
+                Dim pixel As Integer = image.GetPixel(x, y).ToArgb()
+                Dim count As Integer = 0
+                counts.TryGetValue(pixel, count)
+                counts(pixel) = count + 1
+            Next
+        Next
+        Return Color.FromArgb(counts.OrderByDescending(Function(entry) entry.Value).First().Key)
+    End Function
+
     Private Shared Function IsDarker(pixel As Color, surface As Color) As Boolean
         Return pixel.R <= surface.R AndAlso pixel.G <= surface.G AndAlso pixel.B <= surface.B AndAlso
             (pixel.R < surface.R OrElse pixel.G < surface.G OrElse pixel.B < surface.B)
@@ -215,8 +248,8 @@ Public Class DarkThemeLegibilityTests
     ' frame are untouched.
     Private Shared Sub AssertOnlyCaptionRecolored(control As ButtonBase, plain As Bitmap, polished As Bitmap, label As String)
 
-        Dim surface As Color = control.BackColor
-        Dim drawn As Color = ControlPaint.Dark(surface)
+        Dim surface As Color = SurfaceOf(control, plain)
+        Dim drawn As Color = ControlPaint.Dark(control.BackColor)
         Dim muted As Color = UiTheme.MutedText()
         Dim area As Rectangle = CaptionArea(control)
         Dim caption As Integer = 0

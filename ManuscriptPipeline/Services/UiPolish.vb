@@ -2,7 +2,6 @@
 Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.Drawing.Imaging
-Imports System.Runtime.CompilerServices
 Imports System.Runtime.InteropServices
 Imports System.Text.RegularExpressions
 Imports System.Windows.Forms
@@ -566,11 +565,24 @@ Namespace Services
             button.BackColor =
                 UiTheme.CardBackground()
 
+            ' WinForms' dark buttons draw an enabled caption in this grey
+            ' when no text color is set. Setting the same grey changes
+            ' nothing while the button is enabled, and makes WinForms darken
+            ' its caption when disabled as it does every other one, so that
+            ' it is muted with them (see Disabled captions). High contrast
+            ' has no dark buttons and keeps the system's text color.
+            Dim plainText As Color =
+                If(
+                    Application.IsDarkModeEnabled,
+                    Color.FromArgb(240, 240, 240),
+                    UiTheme.PrimaryText()
+                )
+
             button.ForeColor =
                 If(
                     text.Contains("DELETE") OrElse text.Contains("REMOVE"),
                     UiTheme.DangerColor(),
-                    UiTheme.PrimaryText()
+                    plainText
                 )
 
             button.FlatAppearance.BorderColor =
@@ -594,10 +606,7 @@ Namespace Services
         ' readable grey on a light surface, near-black on a dark one. In
         ' Dark, once the control has painted, its caption is colored again
         ' in the muted text color, pixel for pixel, so it stays exactly
-        ' where the control put it. In Light nothing is done. (A button
-        ' whose text color never changed gets WinForms' own light grey when
-        ' disabled in Dark; that is not touched either.)
-        Private Shared ReadOnly _mutedCaptions As New ConditionalWeakTable(Of ButtonBase, Object)()
+        ' where the control put it. In Light nothing is done.
 
         ' Set while a control paints into a picture to find its caption.
         <ThreadStatic>
@@ -605,14 +614,9 @@ Namespace Services
 
         Private Shared Sub MuteDisabledCaption(button As ButtonBase)
 
-            Dim existing As Object = Nothing
-
             ' A dialog is styled more than once; one handler is enough.
-            If _mutedCaptions.TryGetValue(button, existing) Then
-                Return
-            End If
-
-            _mutedCaptions.Add(button, Nothing)
+            RemoveHandler button.Paint,
+                AddressOf PaintMutedCaption
 
             AddHandler button.Paint,
                 AddressOf PaintMutedCaption
@@ -667,9 +671,15 @@ Namespace Services
                     If TypeOf button Is Button Then
                         Dim frame As Integer = UiTheme.Px(UiTheme.SpaceXs, button.DeviceDpi)
                         within.Inflate(-frame, -frame)
+
+                        ' WinForms fills a button in a grey of its own when
+                        ' the button's back color is also its parent's, as
+                        ' on a card, yet still darkens the caption from the
+                        ' back color: the surface is what fills the button.
+                        surface = CommonestColor(picture, within)
                     End If
 
-                    KeepMutedCaption(picture, within, ControlPaint.Dark(surface), surface, UiTheme.MutedText())
+                    KeepMutedCaption(picture, within, ControlPaint.Dark(button.BackColor), surface, UiTheme.MutedText())
 
                     e.Graphics.DrawImage(picture, bounds)
 
@@ -680,6 +690,52 @@ Namespace Services
             End Try
 
         End Sub
+
+
+        ' The color of most pixels in an area of a picture.
+        Private Shared Function CommonestColor(
+            picture As Bitmap,
+            within As Rectangle
+        ) As Color
+
+            Dim area As New Rectangle(Point.Empty, picture.Size)
+            Dim data As BitmapData = picture.LockBits(area, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb)
+
+            Try
+
+                Dim pixels(area.Width * area.Height - 1) As Integer
+                Marshal.Copy(data.Scan0, pixels, 0, pixels.Length)
+
+                Dim counts As New Dictionary(Of Integer, Integer)()
+                Dim commonest As Integer = 0
+                Dim most As Integer = 0
+
+                within.Intersect(area)
+
+                For y As Integer = within.Top To within.Bottom - 1
+                    For x As Integer = within.Left To within.Right - 1
+
+                        Dim pixel As Integer = pixels(y * area.Width + x)
+                        Dim count As Integer = 0
+
+                        counts.TryGetValue(pixel, count)
+                        counts(pixel) = count + 1
+
+                        If count + 1 > most Then
+                            most = count + 1
+                            commonest = pixel
+                        End If
+
+                    Next
+                Next
+
+                Return Color.FromArgb(commonest)
+
+            Finally
+                picture.UnlockBits(data)
+            End Try
+
+        End Function
 
 
         ' Leaves only the caption in the picture, in the muted color. A pixel

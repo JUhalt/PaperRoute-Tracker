@@ -9,7 +9,9 @@ Namespace Controls
     ' group's heading in navy whatever the list's colors, and offers no
     ' color for it, so in Dark this list draws the heading and its rule
     ' itself, in the theme's colors. In Light, Windows draws them as before.
-    ' Only what this app's lists use is drawn: a left-aligned heading.
+    ' Only what this app's lists use is drawn: a left-aligned heading. The
+    ' band Windows shows on a heading under the pointer, and after a click,
+    ' is not drawn in Dark: Windows does not say when a heading is hot.
     Friend Class GroupedListView
         Inherits ListView
 
