@@ -40,6 +40,29 @@ Namespace Services
             manuscripts As IEnumerable(Of Manuscript)
         ) As ManagedPacketDeletionTransaction
 
+            Return BeginDeletionTransaction(
+                manuscripts,
+                Nothing
+            )
+
+        End Function
+
+
+        ' The baseline holds the packet file folders the library referenced
+        ' when it was last loaded or saved; only a folder in it is staged.
+        ' Nothing means no baseline check, which stages every unreferenced
+        ' folder under a manuscript in the library.
+        Friend Function BeginDeletionTransaction(
+            manuscripts As IEnumerable(Of Manuscript),
+            baseline As Dictionary(
+                Of Guid,
+                Dictionary(
+                    Of Guid,
+                    HashSet(Of Guid)
+                )
+            )
+        ) As ManagedPacketDeletionTransaction
+
             Dim transaction As New ManagedPacketDeletionTransaction(
                 _rootDirectory
             )
@@ -47,7 +70,8 @@ Namespace Services
             Try
 
                 transaction.StageOrphanedPacketFiles(
-                    manuscripts
+                    manuscripts,
+                    baseline
                 )
 
                 Return transaction
@@ -71,6 +95,26 @@ Namespace Services
             manuscripts As IEnumerable(Of Manuscript)
         )
 
+            RecoverStagedDeletions(
+                manuscripts,
+                keepUnreferenced:=False
+            )
+
+        End Sub
+
+
+        ' Puts back the staged packet files the library references and
+        ' discards the others of its manuscripts, or, when keepUnreferenced
+        ' is set, leaves those in staging and returns them: a library
+        ' recovered from its safety backup can be older than the set-aside
+        ' primary file, which may still reference them.
+        Friend Function RecoverStagedDeletions(
+            manuscripts As IEnumerable(Of Manuscript),
+            keepUnreferenced As Boolean
+        ) As List(Of String)
+
+            Dim kept As New List(Of String)()
+
             Dim stagingRoot As String =
                 Path.Combine(
                     _rootDirectory,
@@ -81,7 +125,7 @@ Namespace Services
                 stagingRoot
             ) Then
 
-                Return
+                Return kept
 
             End If
 
@@ -97,7 +141,9 @@ Namespace Services
 
                 RecoverTransactionDirectory(
                     transactionDirectory,
-                    referenced
+                    referenced,
+                    keepUnreferenced,
+                    kept
                 )
 
             Next
@@ -106,7 +152,9 @@ Namespace Services
                 stagingRoot
             )
 
-        End Sub
+            Return kept
+
+        End Function
 
 
         Private Sub RecoverTransactionDirectory(
@@ -117,7 +165,9 @@ Namespace Services
                     Of Guid,
                     HashSet(Of Guid)
                 )
-            )
+            ),
+            keepUnreferenced As Boolean,
+            kept As List(Of String)
         )
 
             For Each manuscriptDirectory As String In
@@ -228,10 +278,20 @@ Namespace Services
                             manuscriptId
                         ) Then
 
-                            Directory.Delete(
-                                fileDirectory,
-                                True
-                            )
+                            If keepUnreferenced Then
+
+                                kept.Add(
+                                    fileDirectory
+                                )
+
+                            Else
+
+                                Directory.Delete(
+                                    fileDirectory,
+                                    True
+                                )
+
+                            End If
 
                         Else
 
@@ -464,6 +524,7 @@ Namespace Services
             Private ReadOnly _rootDirectory As String
             Private ReadOnly _stagingRoot As String
             Private ReadOnly _operations As New List(Of MoveOperation)()
+            Private ReadOnly _skipped As New List(Of (ManuscriptId As Guid, PacketId As Guid, PacketFileId As Guid, Folder As String))()
 
             Private _completed As Boolean = False
 
@@ -492,8 +553,25 @@ Namespace Services
             End Property
 
 
+            ' Folders that could not be moved because a file in them was in
+            ' use. They stay where they are, so the save can go through, and
+            ' the repository keeps them in its baseline for the next save.
+            Friend ReadOnly Property SkippedFolders As IReadOnlyList(Of (ManuscriptId As Guid, PacketId As Guid, PacketFileId As Guid, Folder As String))
+                Get
+                    Return _skipped
+                End Get
+            End Property
+
+
             Friend Sub StageOrphanedPacketFiles(
-                manuscripts As IEnumerable(Of Manuscript)
+                manuscripts As IEnumerable(Of Manuscript),
+                baseline As Dictionary(
+                    Of Guid,
+                    Dictionary(
+                        Of Guid,
+                        HashSet(Of Guid)
+                    )
+                )
             )
 
                 Dim referenced =
@@ -603,6 +681,23 @@ Namespace Services
 
                             End If
 
+                            ' Stage only a folder the loaded library
+                            ' referenced. Another computer's library, a
+                            ' set-aside newer file, or a library never loaded
+                            ' from disk may still need a folder this one does
+                            ' not know.
+                            If baseline IsNot Nothing AndAlso
+                               Not ManagedPacketDeletionService.IsReferenced(
+                                   baseline,
+                                   manuscriptId,
+                                   packetId,
+                                   packetFileId
+                               ) Then
+
+                                Continue For
+
+                            End If
+
                             Dim stagedDirectory As String =
                                 Path.Combine(
                                     _stagingRoot,
@@ -617,10 +712,25 @@ Namespace Services
                                 )
                             )
 
-                            Directory.Move(
-                                fileDirectory,
-                                stagedDirectory
-                            )
+                            Try
+
+                                Directory.Move(
+                                    fileDirectory,
+                                    stagedDirectory
+                                )
+
+                            Catch ex As Exception When TypeOf ex Is IOException OrElse TypeOf ex Is UnauthorizedAccessException
+
+                                ' A file in the folder is open, or a sync
+                                ' client holds it. Leave the folder where it
+                                ' is; the next save tries again.
+                                _skipped.Add(
+                                    (manuscriptId, packetId, packetFileId, fileDirectory)
+                                )
+
+                                Continue For
+
+                            End Try
 
                             _operations.Add(
                                 New MoveOperation(

@@ -1,7 +1,12 @@
 Imports System
 Imports System.Collections.Generic
 Imports System.IO
+Imports System.Reflection
+Imports System.Runtime.ExceptionServices
+Imports System.Threading
+Imports System.Windows.Forms
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
+Imports ManuscriptPipeline
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
@@ -1134,6 +1139,305 @@ Public Class ManagedPacketDeletionTests
                 versionFilePath
             )
         )
+
+    End Sub
+
+
+    <TestMethod>
+    Public Sub RepositorySave_LeavesARemovedPacketFolderInUseAndNamesIt()
+
+        Dim dataDirectory As String =
+            Path.Combine(
+                _root,
+                "data"
+            )
+
+        Dim managedRoot As String =
+            Path.Combine(
+                _root,
+                "managed"
+            )
+
+        Dim manuscript As Manuscript =
+            CreateManuscriptWithManagedPacketReference(
+                managedRoot
+            )
+
+        Dim packet As SubmissionPacket =
+            manuscript.SubmissionPackets(0)
+
+        Dim packetFile As SubmissionPacketFile =
+            packet.Files(0)
+
+        Dim managedPath As String =
+            packetFile.LocalFilePath
+
+        Dim fileDirectory As String =
+            Path.GetDirectoryName(
+                managedPath
+            )
+
+        Dim repository As New ManuscriptRepository(
+            dataDirectory,
+            managedRoot
+        )
+
+        Dim library As New List(Of Manuscript) From {
+            manuscript
+        }
+
+        repository.Save(
+            library
+        )
+
+        SubmissionPacketService.RemoveFile(
+            packet,
+            packetFile.Id,
+            New ManagedLibraryService(
+                managedRoot
+            )
+        )
+
+        ' The snapshot is open in another program, so its folder cannot move.
+        Using File.Open(
+            managedPath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.None
+        )
+
+            repository.Save(
+                library
+            )
+
+        End Using
+
+        Assert.AreEqual(
+            "managed",
+            File.ReadAllText(
+                managedPath
+            ),
+            "A folder in use is left where it is."
+        )
+
+        Assert.AreEqual(
+            0,
+            New ManuscriptRepository(
+                dataDirectory,
+                managedRoot
+            ).Load()(0).SubmissionPackets(0).Files.Count,
+            "The save itself went through."
+        )
+
+        StringAssert.Contains(
+            repository.LastSaveWarning,
+            fileDirectory
+        )
+
+        Assert.IsFalse(
+            Directory.Exists(
+                Path.Combine(
+                    managedRoot,
+                    ManagedPacketDeletionService.StagingFolderName
+                )
+            )
+        )
+
+        ' Once the file is closed, the next save finishes the removal.
+        repository.Save(
+            library
+        )
+
+        Assert.IsFalse(
+            File.Exists(
+                managedPath
+            ),
+            "The next save removes the folder once the file is closed."
+        )
+
+        Assert.AreEqual(
+            String.Empty,
+            repository.LastSaveWarning
+        )
+
+    End Sub
+
+
+    <TestMethod>
+    Public Sub MainWindowSave_NamesTheFolderLeftInPlaceOnTheStatusLine()
+
+        Dim dataDirectory As String =
+            Path.Combine(
+                _root,
+                "data"
+            )
+
+        Dim managedRoot As String =
+            Path.Combine(
+                _root,
+                "managed"
+            )
+
+        Dim manuscript As Manuscript =
+            CreateManuscriptWithManagedPacketReference(
+                managedRoot
+            )
+
+        Dim packet As SubmissionPacket =
+            manuscript.SubmissionPackets(0)
+
+        Dim packetFile As SubmissionPacketFile =
+            packet.Files(0)
+
+        Dim managedPath As String =
+            packetFile.LocalFilePath
+
+        Dim repository As New ManuscriptRepository(
+            dataDirectory,
+            managedRoot
+        )
+
+        Dim library As New List(Of Manuscript) From {
+            manuscript
+        }
+
+        repository.Save(
+            library
+        )
+
+        SubmissionPacketService.RemoveFile(
+            packet,
+            packetFile.Id,
+            New ManagedLibraryService(
+                managedRoot
+            )
+        )
+
+        Dim status As String =
+            String.Empty
+
+        RunOnSta(
+            Sub()
+
+                Using board As New StatusBoard(
+                    repository,
+                    library
+                )
+
+                    Using File.Open(
+                        managedPath,
+                        FileMode.Open,
+                        FileAccess.Read,
+                        FileShare.None
+                    )
+
+                        Assert.IsTrue(
+                            board.SaveNow()
+                        )
+
+                    End Using
+
+                    status =
+                        board.Status
+
+                End Using
+
+            End Sub
+        )
+
+        StringAssert.StartsWith(
+            status,
+            "Saved locally - "
+        )
+
+        StringAssert.Contains(
+            status,
+            Path.GetDirectoryName(
+                managedPath
+            )
+        )
+
+    End Sub
+
+
+    ' The main window with its repository and library swapped for this
+    ' test's, so its own save and status line run against a temporary root.
+    Private NotInheritable Class StatusBoard
+        Inherits Form1
+
+        Public Sub New(
+            repository As ManuscriptRepository,
+            library As List(Of Manuscript)
+        )
+
+            GetType(Form1).GetField(
+                "repository",
+                BindingFlags.Instance Or BindingFlags.NonPublic
+            ).SetValue(
+                Me,
+                repository
+            )
+
+            GetType(Form1).GetField(
+                "manuscripts",
+                BindingFlags.Instance Or BindingFlags.NonPublic
+            ).SetValue(
+                Me,
+                library
+            )
+
+        End Sub
+
+
+        Protected Overrides Sub OnLoad(e As EventArgs)
+        End Sub
+
+
+        Public Function SaveNow() As Boolean
+            Return SaveManuscripts()
+        End Function
+
+
+        Public ReadOnly Property Status As String
+            Get
+                Return DirectCast(
+                    GetType(Form1).GetField(
+                        "lblStatus",
+                        BindingFlags.Instance Or BindingFlags.NonPublic
+                    ).GetValue(Me),
+                    Label
+                ).Text
+            End Get
+        End Property
+
+    End Class
+
+
+    Private Shared Sub RunOnSta(
+        action As Action
+    )
+
+        Dim failure As ExceptionDispatchInfo =
+            Nothing
+
+        Dim thread As New Thread(
+            Sub()
+                Try
+                    action()
+                Catch ex As Exception
+                    failure = ExceptionDispatchInfo.Capture(ex)
+                End Try
+            End Sub
+        )
+
+        thread.SetApartmentState(
+            ApartmentState.STA
+        )
+
+        thread.Start()
+        thread.Join()
+
+        failure?.Throw()
 
     End Sub
 

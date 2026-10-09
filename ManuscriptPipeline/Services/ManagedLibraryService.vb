@@ -380,6 +380,23 @@ Namespace Services
             manuscripts As IEnumerable(Of Manuscript)
         ) As ManagedVersionDeletionTransaction
 
+            Return BeginVersionDeletionTransaction(
+                manuscripts,
+                Nothing
+            )
+
+        End Function
+
+
+        ' The baseline holds the version folders the library referenced when
+        ' it was last loaded or saved; only a folder in it is staged. Nothing
+        ' means no baseline check, which stages every unreferenced folder
+        ' under a manuscript in the library.
+        Friend Function BeginVersionDeletionTransaction(
+            manuscripts As IEnumerable(Of Manuscript),
+            baseline As Dictionary(Of Guid, HashSet(Of Guid))
+        ) As ManagedVersionDeletionTransaction
+
             Dim transaction As New ManagedVersionDeletionTransaction(
                 _rootDirectory,
                 VersionDeletionStagingFolder
@@ -388,7 +405,8 @@ Namespace Services
             Try
 
                 transaction.StageOrphanedVersionDirectories(
-                    manuscripts
+                    manuscripts,
+                    baseline
                 )
 
                 Return transaction
@@ -414,6 +432,26 @@ Namespace Services
             manuscripts As IEnumerable(Of Manuscript)
         )
 
+            RecoverStagedVersionDeletions(
+                manuscripts,
+                keepUnreferenced:=False
+            )
+
+        End Sub
+
+
+        ' Puts back the staged version folders the library references and
+        ' discards the others of its manuscripts, or, when keepUnreferenced
+        ' is set, leaves those in staging and returns them: a library
+        ' recovered from its safety backup can be older than the set-aside
+        ' primary file, which may still reference them.
+        Friend Function RecoverStagedVersionDeletions(
+            manuscripts As IEnumerable(Of Manuscript),
+            keepUnreferenced As Boolean
+        ) As List(Of String)
+
+            Dim kept As New List(Of String)()
+
             Dim stagingRoot As String =
                 Path.Combine(
                     _rootDirectory,
@@ -421,7 +459,7 @@ Namespace Services
                 )
 
             If Not Directory.Exists(stagingRoot) Then
-                Return
+                Return kept
             End If
 
             Dim referenced As Dictionary(Of Guid, HashSet(Of Guid)) =
@@ -436,7 +474,9 @@ Namespace Services
 
                 RecoverTransactionDirectory(
                     transactionDirectory,
-                    referenced
+                    referenced,
+                    keepUnreferenced,
+                    kept
                 )
 
             Next
@@ -445,12 +485,16 @@ Namespace Services
                 stagingRoot
             )
 
-        End Sub
+            Return kept
+
+        End Function
 
 
         Private Sub RecoverTransactionDirectory(
             transactionDirectory As String,
-            referenced As Dictionary(Of Guid, HashSet(Of Guid))
+            referenced As Dictionary(Of Guid, HashSet(Of Guid)),
+            keepUnreferenced As Boolean,
+            kept As List(Of String)
         )
 
             For Each manuscriptDirectory As String In
@@ -540,10 +584,20 @@ Namespace Services
                         manuscriptId
                     ) Then
 
-                        Directory.Delete(
-                            versionDirectory,
-                            True
-                        )
+                        If keepUnreferenced Then
+
+                            kept.Add(
+                                versionDirectory
+                            )
+
+                        Else
+
+                            Directory.Delete(
+                                versionDirectory,
+                                True
+                            )
+
+                        End If
 
                     Else
 
@@ -591,7 +645,7 @@ Namespace Services
         End Sub
 
 
-        Private Shared Function BuildReferencedVersionMap(
+        Friend Shared Function BuildReferencedVersionMap(
             manuscripts As IEnumerable(Of Manuscript)
         ) As Dictionary(Of Guid, HashSet(Of Guid))
 
@@ -635,6 +689,22 @@ Namespace Services
             Next
 
             Return result
+
+        End Function
+
+
+        Private Shared Function IsReferenced(
+            referenced As Dictionary(Of Guid, HashSet(Of Guid)),
+            manuscriptId As Guid,
+            versionId As Guid
+        ) As Boolean
+
+            Return referenced.ContainsKey(
+                manuscriptId
+            ) AndAlso
+            referenced(manuscriptId).Contains(
+                versionId
+            )
 
         End Function
 
@@ -724,6 +794,7 @@ Namespace Services
             Private ReadOnly _rootDirectory As String
             Private ReadOnly _stagingRoot As String
             Private ReadOnly _operations As New List(Of MoveOperation)()
+            Private ReadOnly _skipped As New List(Of (ManuscriptId As Guid, VersionId As Guid, Folder As String))()
 
             Private _completed As Boolean = False
 
@@ -753,8 +824,19 @@ Namespace Services
             End Property
 
 
+            ' Folders that could not be moved because a file in them was in
+            ' use. They stay where they are, so the save can go through, and
+            ' the repository keeps them in its baseline for the next save.
+            Friend ReadOnly Property SkippedFolders As IReadOnlyList(Of (ManuscriptId As Guid, VersionId As Guid, Folder As String))
+                Get
+                    Return _skipped
+                End Get
+            End Property
+
+
             Friend Sub StageOrphanedVersionDirectories(
-                manuscripts As IEnumerable(Of Manuscript)
+                manuscripts As IEnumerable(Of Manuscript),
+                baseline As Dictionary(Of Guid, HashSet(Of Guid))
             )
 
                 Dim referenced As Dictionary(Of Guid, HashSet(Of Guid)) =
@@ -807,6 +889,21 @@ Namespace Services
 
                         End If
 
+                        ' Stage only a folder the loaded library referenced.
+                        ' Another computer's library, a set-aside newer file,
+                        ' or a library never loaded from disk may still need
+                        ' a folder this one does not know.
+                        If baseline IsNot Nothing AndAlso
+                           Not ManagedLibraryService.IsReferenced(
+                               baseline,
+                               pair.Key,
+                               versionId
+                           ) Then
+
+                            Continue For
+
+                        End If
+
                         Dim stagedDirectory As String =
                             Path.Combine(
                                 _stagingRoot,
@@ -820,10 +917,25 @@ Namespace Services
                             )
                         )
 
-                        Directory.Move(
-                            versionDirectory,
-                            stagedDirectory
-                        )
+                        Try
+
+                            Directory.Move(
+                                versionDirectory,
+                                stagedDirectory
+                            )
+
+                        Catch ex As Exception When TypeOf ex Is IOException OrElse TypeOf ex Is UnauthorizedAccessException
+
+                            ' A file in the folder is open, or a sync client
+                            ' holds it. Leave the folder where it is; the
+                            ' next save tries again.
+                            _skipped.Add(
+                                (pair.Key, versionId, versionDirectory)
+                            )
+
+                            Continue For
+
+                        End Try
 
                         _operations.Add(
                             New MoveOperation(

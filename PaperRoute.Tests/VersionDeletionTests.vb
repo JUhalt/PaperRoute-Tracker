@@ -643,6 +643,232 @@ Public Class VersionDeletionTests
     End Sub
 
 
+    <TestMethod>
+    Public Sub RepositorySave_AfterLoadRemovesDeletedVersionSnapshot()
+
+        ' Passes before the save baseline too: it pins that a version removed
+        ' from a loaded library is still swept, now because the load
+        ' referenced it.
+        Dim dataDirectory As String =
+            Path.Combine(
+                _root,
+                "data"
+            )
+
+        Dim managedDirectory As String =
+            Path.Combine(
+                _root,
+                "managed"
+            )
+
+        Dim workingPath As String =
+            Path.Combine(
+                _root,
+                "revision.txt"
+            )
+
+        File.WriteAllText(
+            workingPath,
+            "Managed revision snapshot."
+        )
+
+        Dim manuscript As New Manuscript With {
+            .Title = "Delete after load"
+        }
+
+        Dim version As ManuscriptVersion =
+            ManuscriptVersionService.CreateVersion(
+                manuscript,
+                "Revision 1",
+                String.Empty,
+                workingPath,
+                True,
+                makeCurrent:=True,
+                createdDate:=New DateTime(2026, 3, 1)
+            )
+
+        Call New ManuscriptRepository(
+            dataDirectory,
+            managedDirectory
+        ).Save(
+            New List(Of Manuscript) From {
+                manuscript
+            }
+        )
+
+        Dim managedVersionDirectory As String =
+            Path.GetDirectoryName(
+                version.LocalFilePath
+            )
+
+        ' A restart: the repository learns the library from disk.
+        Dim repository As New ManuscriptRepository(
+            dataDirectory,
+            managedDirectory
+        )
+
+        Dim library As List(Of Manuscript) =
+            repository.Load()
+
+        ManuscriptVersionService.DeleteVersion(
+            library(0),
+            version.Id
+        )
+
+        repository.Save(
+            library
+        )
+
+        Assert.IsFalse(
+            Directory.Exists(
+                managedVersionDirectory
+            )
+        )
+
+    End Sub
+
+
+    <TestMethod>
+    Public Sub RepositorySave_LeavesADeletedVersionFolderInUseAndNamesIt()
+
+        Dim dataDirectory As String =
+            Path.Combine(
+                _root,
+                "data"
+            )
+
+        Dim managedDirectory As String =
+            Path.Combine(
+                _root,
+                "managed"
+            )
+
+        Dim workingPath As String =
+            Path.Combine(
+                _root,
+                "revision.txt"
+            )
+
+        File.WriteAllText(
+            workingPath,
+            "Managed revision snapshot."
+        )
+
+        Dim manuscript As New Manuscript With {
+            .Title = "Version in use"
+        }
+
+        Dim version As ManuscriptVersion =
+            ManuscriptVersionService.CreateVersion(
+                manuscript,
+                "Revision 1",
+                String.Empty,
+                workingPath,
+                True,
+                makeCurrent:=True,
+                createdDate:=New DateTime(2026, 3, 1)
+            )
+
+        Dim repository As New ManuscriptRepository(
+            dataDirectory,
+            managedDirectory
+        )
+
+        Dim library As New List(Of Manuscript) From {
+            manuscript
+        }
+
+        repository.Save(
+            library
+        )
+
+        Dim managedPath As String =
+            version.LocalFilePath
+
+        Dim managedVersionDirectory As String =
+            Path.GetDirectoryName(
+                managedPath
+            )
+
+        ManuscriptVersionService.DeleteVersion(
+            manuscript,
+            version.Id
+        )
+
+        ' The snapshot is open in another program, so its folder cannot move.
+        Using File.Open(
+            managedPath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.None
+        )
+
+            repository.Save(
+                library
+            )
+
+        End Using
+
+        Assert.AreEqual(
+            "Managed revision snapshot.",
+            File.ReadAllText(
+                managedPath
+            ),
+            "A folder in use is left where it is."
+        )
+
+        Assert.AreEqual(
+            0,
+            New ManuscriptRepository(
+                dataDirectory,
+                managedDirectory
+            ).Load()(0).Versions.Count,
+            "The save itself went through."
+        )
+
+        StringAssert.Contains(
+            repository.LastSaveWarning,
+            managedVersionDirectory
+        )
+
+        Dim stagingRoot As String =
+            Path.Combine(
+                managedDirectory,
+                ".paperroute-version-delete"
+            )
+
+        Assert.IsFalse(
+            Directory.Exists(
+                stagingRoot
+            ) AndAlso
+            Directory.GetFiles(
+                stagingRoot,
+                "*",
+                SearchOption.AllDirectories
+            ).Length > 0,
+            "Nothing of the folder in use was staged."
+        )
+
+        ' Once the file is closed, the next save finishes the removal.
+        repository.Save(
+            library
+        )
+
+        Assert.IsFalse(
+            Directory.Exists(
+                managedVersionDirectory
+            ),
+            "The next save removes the folder once the file is closed."
+        )
+
+        Assert.AreEqual(
+            String.Empty,
+            repository.LastSaveWarning
+        )
+
+    End Sub
+
+
     Private Shared Function BuildThreeVersionManuscript() As Manuscript
 
         Dim manuscript As New Manuscript()
