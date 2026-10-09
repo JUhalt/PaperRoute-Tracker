@@ -887,6 +887,14 @@ Public Class ManagedPacketDeletionTests
             stagedDirectory
         )
 
+        ' The sweep also removes the emptied packet folder.
+        Directory.Delete(
+            Path.GetDirectoryName(
+                originalDirectory
+            ),
+            False
+        )
+
         If originalPlaceIsOccupied Then
 
             Directory.CreateDirectory(
@@ -967,6 +975,82 @@ Public Class ManagedPacketDeletionTests
             )
 
         End If
+
+    End Sub
+
+
+    <TestMethod>
+    Public Sub Recovery_DeletesStagedPacketFileOfManuscriptInLibrary()
+
+        Dim managedRoot As String =
+            Path.Combine(
+                _root,
+                "managed"
+            )
+
+        Dim manuscript As Manuscript =
+            CreateManuscriptWithManagedPacketReference(
+                managedRoot
+            )
+
+        Dim packet As SubmissionPacket =
+            manuscript.SubmissionPackets(0)
+
+        Dim packetFile As SubmissionPacketFile =
+            packet.Files(0)
+
+        Dim originalDirectory As String =
+            Path.GetDirectoryName(
+                packetFile.LocalFilePath
+            )
+
+        Dim stagedDirectory As String =
+            Path.Combine(
+                managedRoot,
+                ManagedPacketDeletionService.StagingFolderName,
+                Guid.NewGuid().ToString("N"),
+                manuscript.Id.ToString("N"),
+                packet.Id.ToString("N"),
+                packetFile.Id.ToString("N")
+            )
+
+        Directory.CreateDirectory(
+            Path.GetDirectoryName(
+                stagedDirectory
+            )
+        )
+
+        Directory.Move(
+            originalDirectory,
+            stagedDirectory
+        )
+
+        ' The library still holds the manuscript, so the file was removed on
+        ' purpose and must not come back as a foreign manuscript's file does.
+        packet.Files.Clear()
+
+        Dim service As New ManagedPacketDeletionService(
+            managedRoot
+        )
+
+        service.RecoverStagedDeletions(
+            New List(Of Manuscript) From {
+                manuscript
+            }
+        )
+
+        Assert.IsFalse(
+            Directory.Exists(
+                stagedDirectory
+            )
+        )
+
+        Assert.IsFalse(
+            Directory.Exists(
+                originalDirectory
+            ),
+            "Recovery must not put back a file the library no longer references."
+        )
 
     End Sub
 
