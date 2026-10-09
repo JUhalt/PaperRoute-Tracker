@@ -55,12 +55,16 @@ Targets are directional rather than promises. Data integrity, migrations, backup
 | **v0.7** | Deadline Center ✅ | What requires action, and when? |
 | **v0.8** | Route Analytics & Reports ✅ | What does this publication journey show me—and how can I communicate it? |
 | **v0.9** | Journal Choice & Guidance ✅ | Where should this manuscript go, what will that journal ask of me, and how does someone new learn the route? |
-| **v0.9.1** | **1.0 Hardening — next** | Is the entire workflow polished, resilient, and certifiable? |
+| **v0.9.1** | Packet File Safety ✅ | Does a save ever delete a file the library did not ask it to? |
+| **v0.9.2** | **1.0 Hardening — next** | Is the entire workflow polished, resilient, and certifiable? |
 | **v1.0** | Trusted Research Workflow | Would I trust this with my real publication pipeline? |
+| **v1.1** | macOS and Linux | Can PaperRoute be the same calm, trustworthy app on every desktop? |
 
 On September 26, 2026, the train was re-sequenced so the interface can catch up with the depth of the data model: v0.6 became **Workspace UI**, Deadline Center moved to v0.7, Route Analytics & Reports moved to v0.8, and optional AI assistance became a proposal for after 1.0. Deadlines and Analytics arrive as pages in the new workspace rather than as additional dialogs.
 
 On September 28, 2026, the proposals awaiting scope review moved into **v0.9 — Journal Choice & Guidance**, and 1.0 hardening moved to **v0.9.1**. Optional AI assistance returns before 1.0, and every online feature is grouped under one local-first rule rather than added piecemeal.
+
+On October 9, 2026, v0.9.1 became a Stable patch for one defect found right after v0.9.0 ([#107](https://github.com/JUhalt/PaperRoute-Tracker/issues/107)), and 1.0 hardening moved to **v0.9.2**. The maintainer also settled the shape of 1.0 and what follows: before 1.0, speed (no page switch or save that stalls the window), consistency at every scale and theme, micro-motion that WinForms can do credibly, and the Windows 11 chrome on every window; after 1.0, one cross-platform interface on Avalonia for Windows, macOS, and Linux (**v1.1**), where the fewer, calmer surfaces pass and composition-grade motion belong.
 
 ---
 
@@ -352,12 +356,27 @@ PaperRoute v0.9.0 was released on October 9, 2026 from [PR #105](https://github.
 
 ---
 
-# v0.9.1 1.0 Hardening
+## COMPLETE — v0.9.1 Packet File Safety
+
+Milestone: **[v0.9.1 — Packet File Safety](https://github.com/JUhalt/PaperRoute-Tracker/milestone/14)**
+
+A Stable patch for one defect, [#107](https://github.com/JUhalt/PaperRoute-Tracker/issues/107): every save swept the whole managed library and deleted the packet snapshots of manuscripts the open library did not contain, which bites on a second computer sharing Documents, after a reinstall before Restore Backup, and after a library is recovered from an older copy. The sweep now looks only at manuscripts in the library, and startup recovery puts such files back instead of deleting them.
+
+PaperRoute v0.9.1 was released on October 9, 2026 from [PR #163](https://github.com/JUhalt/PaperRoute-Tracker/pull/163). It keeps the Schema 9 library of v0.9.0. Certification (the candidate, the defect reproduced on the installed v0.9.0, the live Stable updater with the fix shown on the installed app, and the published-asset audit) is recorded in [#108](https://github.com/JUhalt/PaperRoute-Tracker/issues/108).
+
+---
+
+# v0.9.2 1.0 Hardening
+
+Renumbered from v0.9.1 on October 9, 2026, when v0.9.1 became a Stable patch for #107. The bounded work is in [milestone 11](https://github.com/JUhalt/PaperRoute-Tracker/milestone/11), one issue per pull request, tracked by [#43](https://github.com/JUhalt/PaperRoute-Tracker/issues/43).
 
 **Scope and evidence tracker:** [#43](https://github.com/JUhalt/PaperRoute-Tracker/issues/43). Create or link bounded work before implementation and record explicit decisions for sharing/signing.
 
 Systematic burn-down before 1.0:
 
+- speed: instant page switches and no stall on save, lookup, or startup, measured on a large library
+- micro-motion: a short cross-fade between pages, hover and press states, honouring Windows' animation setting
+- Windows 11 chrome: rounded corners and the dark title bar on every window, in every theme
 - migration/recovery verification
 - backup/restore certification
 - installer/updater certification, including the install step's first-run time ([#92](https://github.com/JUhalt/PaperRoute-Tracker/issues/92))
@@ -385,6 +404,14 @@ PaperRoute 1.0 is not defined by feature count.
 The 1.0 bar includes stable migrations, reliable installer/updater behavior, curated regression coverage, recovery tooling, proven backup/restore, accessible keyboard-first UI, transparent local analytics, coherent manuscript/submission/decision/revision/version relationships, clear privacy boundaries, and fully certified release artifacts.
 
 PaperRoute does not trade trustworthiness for cadence.
+
+---
+
+# v1.1 macOS and Linux
+
+Milestone: **[v1.1 — macOS and Linux](https://github.com/JUhalt/PaperRoute-Tracker/milestone/15)**
+
+One cross-platform interface on Avalonia, whose GPU compositor brings the motion and effects a WinForms app cannot, with the models, services, storage, migrations, and tests carried over; the fewer, calmer surfaces pass that goes with a rewritten interface; and Velopack packaging on three platforms. The migration is decided and planned there, not before 1.0, and 1.0.x on WinForms stays the Stable line until the Avalonia build replaces it.
 
 ---
 
