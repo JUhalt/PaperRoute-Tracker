@@ -2,9 +2,9 @@
 
 All notable changes to PaperRoute Tracker will be documented here.
 
-## [0.9.0] - 2026-10-08
+## [0.9.0] - 2026-10-09
 
-PaperRoute v0.9.0 — **Journal Choice & Guidance** — was released on October 8, 2026 from [PR #94](https://github.com/JUhalt/PaperRoute-Tracker/pull/94), [PR #100](https://github.com/JUhalt/PaperRoute-Tracker/pull/100), [PR #102](https://github.com/JUhalt/PaperRoute-Tracker/pull/102), [PR #103](https://github.com/JUhalt/PaperRoute-Tracker/pull/103), and [PR #105](https://github.com/JUhalt/PaperRoute-Tracker/pull/105), after the v0.9.0-rc.1 Preview ([PR #104](https://github.com/JUhalt/PaperRoute-Tracker/pull/104)). Certification is recorded in [#97](https://github.com/JUhalt/PaperRoute-Tracker/issues/97). v0.9 upgrades the library to Schema 9.
+PaperRoute v0.9.0 — **Journal Choice & Guidance** — was released on October 9, 2026 from [PR #94](https://github.com/JUhalt/PaperRoute-Tracker/pull/94), [PR #99](https://github.com/JUhalt/PaperRoute-Tracker/pull/99), [PR #100](https://github.com/JUhalt/PaperRoute-Tracker/pull/100), [PR #102](https://github.com/JUhalt/PaperRoute-Tracker/pull/102), [PR #103](https://github.com/JUhalt/PaperRoute-Tracker/pull/103), and [PR #105](https://github.com/JUhalt/PaperRoute-Tracker/pull/105), after the v0.9.0-rc.1 Preview ([PR #104](https://github.com/JUhalt/PaperRoute-Tracker/pull/104)). Certification is recorded in [#97](https://github.com/JUhalt/PaperRoute-Tracker/issues/97). v0.9 upgrades the library to Schema 9.
 
 ### Added
 
@@ -36,7 +36,10 @@ PaperRoute v0.9.0 — **Journal Choice & Guidance** — was released on October 
 
 ### Fixed
 
-- At 150% display scaling, buttons drawn larger than their text (such as Save and Cancel in Look Up Journal Facts) no longer overlap one another or get cut off: layouts now place them at the size they are drawn. Find Journals and Before Sending now scale with the display, and every new v0.9 window stays inside the screen, so its buttons never sit behind the taskbar.
+- At 150% display scaling, buttons drawn larger than their text (such as Save and Cancel in Look Up Journal Facts) no longer overlap one another or get cut off: layouts now place them at the size they are drawn. Before Sending now scales with the display, and every new v0.9 window, Find Journals included, stays inside the screen, so its buttons never sit behind the taskbar ([PR #99](https://github.com/JUhalt/PaperRoute-Tracker/pull/99)).
+- In the Dark theme, the group headings in **Update Your Citations** and in a journal's **Facts and Metrics** can be read. Windows drew them in dark navy on the dark list, and one of them carries an instruction (found during v0.9.0 certification, [#97](https://github.com/JUhalt/PaperRoute-Tracker/issues/97)).
+- In the Dark theme, the caption of an unavailable check box, option, or button is a muted grey instead of near-black on the dark window: for example **Include authors** when exporting an anonymized packet, and **Add Key** before a key is typed. An unavailable button no longer looks available (found during v0.9.0 certification, [#97](https://github.com/JUhalt/PaperRoute-Tracker/issues/97)).
+- The figures on **Insights > Your Citations** sit inside their card instead of over its border (found during v0.9.0 certification, [#97](https://github.com/JUhalt/PaperRoute-Tracker/issues/97)).
 
 ### Storage
 

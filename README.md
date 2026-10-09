@@ -121,7 +121,7 @@ Fresh installations default to the **Stable** update channel. Users who intentio
 
 ### Portable CI build
 
-The repository's **Build PaperRoute Tracker** workflow still produces a self-contained `PaperRouteTracker-win-x64` artifact for smoke testing. Portable/developer builds intentionally do not perform in-place automatic updates; install PaperRoute using the Setup program to test the updater.
+The repository's **CI** workflow still produces a self-contained `PaperRouteTracker-win-x64` artifact for smoke testing. Portable/developer builds intentionally do not perform in-place automatic updates; install PaperRoute using the Setup program to test the updater.
 
 ## Importing existing work
 
