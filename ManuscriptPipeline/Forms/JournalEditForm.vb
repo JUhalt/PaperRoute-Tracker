@@ -41,7 +41,7 @@ Namespace Forms
 
         ' Facts and metrics (#87), edited on copies until Save.
         Private ReadOnly _workingFacts As New List(Of JournalFact)()
-        Private ReadOnly lvFacts As New ListView()
+        Private ReadOnly lvFacts As New GroupedListView()
         Private ReadOnly btnEditMetric As New Button()
         Private ReadOnly btnRemoveFact As New Button()
 
