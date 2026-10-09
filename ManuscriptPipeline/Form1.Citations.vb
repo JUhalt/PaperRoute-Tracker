@@ -57,8 +57,9 @@ Partial Public Class Form1
             .Margin = New Padding(0, 0, 0, UiTheme.Px(10, dpi)),
             .BackColor = UiTheme.CardBackground(), .ForeColor = UiTheme.PrimaryText(), .AccessibleName = "Your citations"
         }
+        ' Docked, so the content starts inside the card's padding.
         Dim card As New TableLayoutPanel With {
-            .AutoSize = True, .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            .Dock = DockStyle.Top, .AutoSize = True, .AutoSizeMode = AutoSizeMode.GrowAndShrink,
             .ColumnCount = 1, .Margin = New Padding(0), .Padding = New Padding(0), .BackColor = UiTheme.CardBackground()
         }
         card.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100.0F))

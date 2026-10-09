@@ -813,6 +813,9 @@ Public Class ManuscriptPageTests
                         Assert.IsTrue(labels.Any(Function(text) text.StartsWith("From OpenAlex on Sep 30, 2026, for the 3 works you confirmed (ORCID iD 0000-0002-1825-0097).")))
                         Assert.IsTrue(labels.Any(Function(text) text.Contains("2026 12 so far")))
                         Assert.IsTrue(labels.Contains("Other works on your record: 1 (not tracked in PaperRoute)."))
+                        ' The figures sit inside the card, clear of its border.
+                        Dim figures As SectionCard = Descendants(board).OfType(Of SectionCard)().Single(Function(card) card.AccessibleName = "Your citations")
+                        Assert.IsTrue(figures.Controls(0).Left >= figures.Padding.Left AndAlso figures.Controls(0).Top >= figures.Padding.Top, "The card's content starts inside its padding.")
                         Dim grid As DataGridView = Descendants(board).OfType(Of DataGridView)().Single()
                         Assert.AreEqual(2, grid.Rows.Count, "Your manuscripts, joined by DOI.")
                         Dim row As DataGridViewRow = grid.Rows.Cast(Of DataGridViewRow)().Single(Function(item) CStr(item.Cells("Title").Value) = published.Title)
