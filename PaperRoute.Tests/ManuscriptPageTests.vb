@@ -355,6 +355,132 @@ Public Class ManuscriptPageTests
             End Sub)
     End Sub
 
+    ' A failed save cannot be closed away (#113). These go through the real
+    ' SaveManuscripts against a repository whose data folder is blocked by a
+    ' file of the same name, so every save fails until the file is removed.
+    <TestMethod>
+    Public Sub AFailedSaveKeepsTheBarAndAsksBeforeClosing()
+        RunOnStaThread(
+            Sub()
+                Dim root As String = CreateTemporaryRoot()
+                Try
+                    Using board As New PageBoard(), dialogs As New DialogWatcher()
+                        board.UseRepository(root)
+                        File.WriteAllText(Path.Combine(root, "data"), "in the way")
+                        Dim manuscript As Manuscript = Sample("Original title")
+                        board.Prepare(manuscript)
+                        board.Open(manuscript)
+                        board.Field("Title").Text = "Edited title"
+
+                        board.PressCommandKey(Keys.Control Or Keys.S)
+                        Assert.AreEqual("Edited title", manuscript.Title, "The edits reached the model.")
+                        CollectionAssert.AreEqual({"Save Error"}, dialogs.Closed)
+                        Assert.IsFalse(board.Editor.HasUnsavedChanges(), "The editor and the model agree.")
+                        Assert.IsTrue(board.SaveBarVisible, "The bar stays after a failed save.")
+                        board.Tick()
+                        Assert.IsTrue(board.SaveBarVisible, "The bar stays after the dirty check too.")
+                        Assert.IsTrue(board.LibrarySaveFailed)
+                        Assert.AreEqual("Warning: latest changes were not saved.", board.StatusText)
+                        board.SetStatus("Citation copied.")
+                        Assert.AreEqual("Warning: latest changes were not saved.", board.StatusText, "The status line keeps its warning.")
+
+                        Dim asked As Integer = 0
+                        board.SetPrompt(Function(title)
+                                           asked += 1
+                                           Return DialogResult.Cancel
+                                       End Function)
+                        board.Close()
+                        Assert.AreEqual(1, asked, "Closing asks about the unsaved library.")
+                        Assert.IsFalse(board.IsDisposed, "Cancel keeps PaperRoute open.")
+
+                        dialogs.Closed.Clear()
+                        board.SetPrompt(Function(title) DialogResult.Yes)
+                        board.Close()
+                        Assert.AreEqual(2, board.SaveCount, "Retry Save tries again.")
+                        CollectionAssert.AreEqual({"Save Error"}, dialogs.Closed)
+                        Assert.IsFalse(board.IsDisposed, "A retry that fails keeps PaperRoute open.")
+                        Assert.IsTrue(board.LibrarySaveFailed)
+
+                        board.SetPrompt(Function(title) DialogResult.No)
+                        board.Close()
+                        Assert.IsTrue(board.IsDisposed, "Close Without Saving closes.")
+                    End Using
+                Finally
+                    DeleteTemporaryRoot(root)
+                End Try
+            End Sub)
+    End Sub
+
+    <TestMethod>
+    Public Sub RetryingTheSaveClearsTheFlagAndTheBar()
+        RunOnStaThread(
+            Sub()
+                Dim root As String = CreateTemporaryRoot()
+                Try
+                    Using board As New PageBoard(), dialogs As New DialogWatcher()
+                        board.UseRepository(root)
+                        Dim blocker As String = Path.Combine(root, "data")
+                        File.WriteAllText(blocker, "in the way")
+                        Dim manuscript As Manuscript = Sample("Original title")
+                        board.Prepare(manuscript)
+                        board.Open(manuscript)
+                        board.Field("Title").Text = "Edited title"
+                        board.PressCommandKey(Keys.Control Or Keys.S)
+                        Assert.IsTrue(board.SaveBarVisible, "The bar stays after a failed save.")
+
+                        File.Delete(blocker)
+                        board.PressCommandKey(Keys.Control Or Keys.S)
+                        Assert.IsFalse(board.LibrarySaveFailed, "A save that succeeds clears the flag.")
+                        Assert.IsFalse(board.SaveBarVisible, "A save that succeeds clears the bar.")
+                        StringAssert.StartsWith(board.StatusText, "Saved locally")
+                        StringAssert.Contains(File.ReadAllText(Path.Combine(root, "data", "manuscripts.json")), "Edited title")
+
+                        Dim asked As Integer = 0
+                        board.SetPrompt(Function(title)
+                                           asked += 1
+                                           Return DialogResult.Cancel
+                                       End Function)
+                        board.Close()
+                        Assert.AreEqual(0, asked, "Nothing is left to ask about.")
+                        Assert.IsTrue(board.IsDisposed)
+                    End Using
+                Finally
+                    DeleteTemporaryRoot(root)
+                End Try
+            End Sub)
+    End Sub
+
+    <TestMethod>
+    Public Sub RetrySaveOnClosingSavesTheLibraryAndCloses()
+        RunOnStaThread(
+            Sub()
+                Dim root As String = CreateTemporaryRoot()
+                Try
+                    Using board As New PageBoard(), dialogs As New DialogWatcher()
+                        board.UseRepository(root)
+                        Dim blocker As String = Path.Combine(root, "data")
+                        File.WriteAllText(blocker, "in the way")
+                        Dim manuscript As Manuscript = Sample("Original title")
+                        board.Prepare(manuscript)
+                        board.Open(manuscript)
+                        board.Field("Title").Text = "Edited title"
+                        board.PressCommandKey(Keys.Control Or Keys.S)
+                        Assert.IsTrue(board.SaveBarVisible, "The bar stays after a failed save.")
+
+                        File.Delete(blocker)
+                        board.SetPrompt(Function(title) DialogResult.Yes)
+                        board.Close()
+                        Assert.IsTrue(board.IsDisposed, "Retry Save that succeeds lets the window close.")
+                        Assert.AreEqual(2, board.SaveCount)
+                        Assert.IsFalse(board.LibrarySaveFailed)
+                        StringAssert.Contains(File.ReadAllText(Path.Combine(root, "data", "manuscripts.json")), "Edited title", "The retried save reached the disk.")
+                    End Using
+                Finally
+                    DeleteTemporaryRoot(root)
+                End Try
+            End Sub)
+    End Sub
+
     <TestMethod>
     Public Sub DeletingFromThePageRemovesTheManuscriptAndReturns()
         RunOnStaThread(
@@ -1520,6 +1646,28 @@ Public Class ManuscriptPageTests
             Get
                 Dim bar = DirectCast(GetType(Form1).GetField("manuscriptSaveBar", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me), Control)
                 Return bar IsNot Nothing AndAlso bar.Visible
+            End Get
+        End Property
+
+        Public ReadOnly Property LibrarySaveFailed As Boolean
+            Get
+                Return CBool(GetType(Form1).GetField("librarySaveFailed", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me))
+            End Get
+        End Property
+
+        Public ReadOnly Property StatusText As String
+            Get
+                Return Status.Text
+            End Get
+        End Property
+
+        Public Sub SetStatus(text As String)
+            Status.Text = text
+        End Sub
+
+        Private ReadOnly Property Status As Label
+            Get
+                Return DirectCast(GetType(Form1).GetField("lblStatus", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me), Label)
             End Get
         End Property
 

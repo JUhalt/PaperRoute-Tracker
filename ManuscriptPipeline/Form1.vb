@@ -56,6 +56,14 @@ Public Class Form1
     Private uiInitialized As Boolean = False
     Private suppressBoardFilterEvents As Boolean = False
 
+    ' A save failed since the last good one (#113): closing would lose the
+    ' changes it did not write, so the status line and the manuscript page's
+    ' Unsaved changes bar say so until a save succeeds.
+    Private librarySaveFailed As Boolean = False
+
+    Private Const SaveFailedStatus As String =
+        "Warning: latest changes were not saved."
+
     Private ReadOnly boardSearchDebounceTimer As New Timer With {
         .Interval = 200
     }
@@ -533,6 +541,14 @@ Public Class Form1
         lblStatus.Margin = New Padding(0)
         lblStatus.ForeColor = UiTheme.MutedText()
         lblStatus.Text = "Local storage enabled."
+
+        ' While a save has failed, the status line keeps saying so (#113).
+        AddHandler lblStatus.TextChanged,
+            Sub(sender, e)
+                If librarySaveFailed AndAlso lblStatus.Text <> SaveFailedStatus Then
+                    lblStatus.Text = SaveFailedStatus
+                End If
+            End Sub
 
         content.Controls.Add(contentHost, 0, 0)
         content.Controls.Add(lblStatus, 0, 1)
@@ -1328,6 +1344,8 @@ Public Class Form1
             manuscripts
         )
 
+            librarySaveFailed = False
+
             lblStatus.Text =
             "Saved locally - " &
             DateTime.Now.ToString("h:mm tt")
@@ -1335,6 +1353,8 @@ Public Class Form1
             Return True
 
         Catch ex As Exception
+
+            librarySaveFailed = True
 
             MessageBox.Show(
             Me,
@@ -1348,7 +1368,7 @@ Public Class Form1
         )
 
             lblStatus.Text =
-            "Warning: latest changes were not saved."
+            SaveFailedStatus
 
             Return False
 
@@ -4101,8 +4121,9 @@ Public Class Form1
     End Sub
 
 
-    ' Both checks: the page's unsaved edits are asked about after the user
-    ' accepts the update and before it downloads (#112).
+    ' Both checks: the page's unsaved edits (#112), then a failed library
+    ' save (#113), are asked about after the user accepts the update and
+    ' before it downloads. The restart is a close.
     Private Function OfferUpdateAsync(
         interactive As Boolean
     ) As Task(Of Boolean)
@@ -4111,7 +4132,7 @@ Public Class Form1
             Me,
             appSettings.UpdateChannel,
             interactive,
-            AddressOf ConfirmLeaveManuscript
+            Function() ConfirmLeaveManuscript() AndAlso ConfirmCloseUnsavedLibrary()
         )
 
     End Function

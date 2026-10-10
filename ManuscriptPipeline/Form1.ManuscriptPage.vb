@@ -530,7 +530,7 @@ Partial Public Class Form1
             Return
         End If
 
-        Dim dirty As Boolean = manuscriptEditor.HasUnsavedChanges()
+        Dim dirty As Boolean = manuscriptEditor.HasUnsavedChanges() OrElse librarySaveFailed
 
         If manuscriptSaveBar.Visible <> dirty Then
             manuscriptSaveBar.Visible = dirty
@@ -564,7 +564,7 @@ Partial Public Class Form1
         RefreshManuscriptHeader()
 
         If manuscriptSaveBar IsNot Nothing AndAlso Not manuscriptSaveBar.IsDisposed Then
-            manuscriptSaveBar.Visible = manuscriptEditor.HasUnsavedChanges()
+            manuscriptSaveBar.Visible = manuscriptEditor.HasUnsavedChanges() OrElse librarySaveFailed
         End If
 
         Return saved
@@ -689,9 +689,47 @@ Partial Public Class Form1
     End Function
 
 
+    ' A save failed since the last good one (#113): closing would lose the
+    ' changes it did not write, so closing asks first. Yes tries the save
+    ' again, No closes without saving, Cancel stays. Returns False to stay.
+    Friend Function ConfirmCloseUnsavedLibrary() As Boolean
+
+        If Not librarySaveFailed Then
+            Return True
+        End If
+
+        Dim choice As DialogResult =
+            If(unsavedChangesPrompt IsNot Nothing,
+               unsavedChangesPrompt("your library"),
+               MessageBox.Show(
+                   Me,
+                   "Your latest changes have not been saved." &
+                   Environment.NewLine &
+                   Environment.NewLine &
+                   "Save again before closing? Choose No to close without saving.",
+                   "Unsaved Changes",
+                   MessageBoxButtons.YesNoCancel,
+                   MessageBoxIcon.Warning))
+
+        Select Case choice
+            Case DialogResult.Yes
+                Return SaveManuscripts()
+            Case DialogResult.No
+                Return True
+            Case Else
+                Return False
+        End Select
+
+    End Function
+
+
     Protected Overrides Sub OnFormClosing(e As FormClosingEventArgs)
 
         If Not e.Cancel AndAlso Not ConfirmLeaveManuscript() Then
+            e.Cancel = True
+        End If
+
+        If Not e.Cancel AndAlso Not ConfirmCloseUnsavedLibrary() Then
             e.Cancel = True
         End If
 
