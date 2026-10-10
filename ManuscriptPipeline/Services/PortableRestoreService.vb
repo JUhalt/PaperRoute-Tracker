@@ -452,10 +452,14 @@ Namespace Services
 
                     Dim backupService As New PortableBackupService(managedRoot)
 
+                    ' A copy of the library being replaced, which may be the
+                    ' reason for the restore: not held to Restore's
+                    ' acceptance checks (#114).
                     backupService.CreateBackup(
                         emergencyBackupPath,
                         currentManuscripts,
-                        repository
+                        repository,
+                        proveRestorable:=False
                     )
 
                 End If

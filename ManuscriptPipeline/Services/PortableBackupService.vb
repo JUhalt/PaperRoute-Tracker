@@ -44,6 +44,27 @@ Namespace Services
             repository As ManuscriptRepository
         )
 
+            CreateBackup(
+                destinationZipPath,
+                manuscripts,
+                repository,
+                proveRestorable:=True
+            )
+
+        End Sub
+
+
+        ' proveRestorable holds the finished ZIP to Restore's acceptance
+        ' checks. Restore's own emergency copy of the current library passes
+        ' False: that library may be the reason for the restore, and a
+        ' managed file missing from it must not stop the restore (#114).
+        Friend Sub CreateBackup(
+            destinationZipPath As String,
+            manuscripts As List(Of Manuscript),
+            repository As ManuscriptRepository,
+            proveRestorable As Boolean
+        )
+
             If String.IsNullOrWhiteSpace(destinationZipPath) Then
                 Throw New ArgumentException("A backup destination is required.")
             End If
@@ -265,21 +286,52 @@ Namespace Services
                     False
                 )
 
-                ThrowIfLargerThanRestoreAccepts(
-                    partialZipPath
+                ' The staging copy has served: removing it now keeps one
+                ' copy of the library in %TEMP% while the archive is proved,
+                ' which extracts it again.
+                DeleteStagingDirectory(
+                    stagingDirectory
                 )
 
-                Call New PortableRestoreService(
-                    _managedLibrary.RootDirectory
-                ).InspectBackup(
-                    partialZipPath
-                )
+                If proveRestorable Then
+
+                    ThrowIfLargerThanRestoreAccepts(
+                        partialZipPath
+                    )
+
+                    Call New PortableRestoreService(
+                        _managedLibrary.RootDirectory
+                    ).InspectBackup(
+                        partialZipPath
+                    )
+
+                End If
+
+                ' With a backup name, ReplaceFile keeps both files under
+                ' their own names if it fails after removing the destination;
+                ' the sibling goes once the swap has succeeded.
+                Dim previousZipPath As String =
+                    destinationZipPath & ".previous"
 
                 StorageFile.Replace(
                     partialZipPath,
                     destinationZipPath,
-                    Nothing
+                    previousZipPath
                 )
+
+                If File.Exists(previousZipPath) Then
+
+                    Try
+
+                        File.Delete(
+                            previousZipPath
+                        )
+
+                    Catch
+                        ' Temporary cleanup is best-effort.
+                    End Try
+
+                End If
 
             Finally
 
@@ -297,22 +349,33 @@ Namespace Services
 
                 End If
 
-                If Directory.Exists(stagingDirectory) Then
-
-                    Try
-
-                        Directory.Delete(
-                            stagingDirectory,
-                            True
-                        )
-
-                    Catch
-                        ' Temporary cleanup is best-effort.
-                    End Try
-
-                End If
+                DeleteStagingDirectory(
+                    stagingDirectory
+                )
 
             End Try
+
+        End Sub
+
+
+        Private Shared Sub DeleteStagingDirectory(
+            stagingDirectory As String
+        )
+
+            If Directory.Exists(stagingDirectory) Then
+
+                Try
+
+                    Directory.Delete(
+                        stagingDirectory,
+                        True
+                    )
+
+                Catch
+                    ' Temporary cleanup is best-effort.
+                End Try
+
+            End If
 
         End Sub
 

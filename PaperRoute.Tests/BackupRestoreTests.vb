@@ -487,6 +487,68 @@ Public Class BackupRestoreTests
     End Sub
 
 
+    ' A researcher reaches for Restore when the current library is damaged,
+    ' so its emergency backup is a plain copy of what is on disk, not held
+    ' to Restore's acceptance checks: a managed file missing from the
+    ' current library must not stop the restore (#114).
+    <TestMethod>
+    Public Sub Restore_CompletesWhenTheCurrentLibraryIsMissingAManagedFile()
+
+        Dim dataDirectory As String = Path.Combine(_root, "source-data")
+        Dim managedDirectory As String = Path.Combine(_root, "source-library")
+        Dim repository As New ManuscriptRepository(dataDirectory, managedDirectory)
+        Dim manuscripts As List(Of Manuscript) = CreateRepresentativeLibrary()
+        AddManagedFixture(manuscripts, managedDirectory)
+        repository.Save(manuscripts)
+
+        Dim backupPath As String = Path.Combine(_root, "backup.zip")
+        Call New PortableBackupService(managedDirectory).CreateBackup(backupPath, manuscripts, repository)
+
+        Dim managedFile As String = manuscripts(0).Submissions(0).Correspondence(0).LocalFilePath
+        File.Delete(managedFile)
+
+        Dim result As RestoreResult =
+            New PortableRestoreService(managedDirectory).RestoreBackup(backupPath, manuscripts, repository)
+
+        Assert.IsTrue(File.Exists(result.EmergencyBackupPath), "The emergency backup was written.")
+        Using archive As ZipArchive = ZipFile.OpenRead(result.EmergencyBackupPath)
+            Assert.IsNotNull(archive.GetEntry("manuscripts.json"), "The emergency backup is a usable archive.")
+        End Using
+        Assert.IsTrue(File.Exists(managedFile), "The managed file is back on disk.")
+        Assert.AreEqual(3, repository.Load().Count)
+
+    End Sub
+
+
+    ' Guard: a backup over an existing one keeps the previous file under a
+    ' sibling name only while File.Replace runs, so a replace that fails
+    ' halfway leaves both files (#114). That failure cannot be forced here;
+    ' this proves the sibling is gone afterwards and the new backup took the
+    ' destination's place. It passed before the change as well.
+    <TestMethod>
+    Public Sub Backup_OverThePreviousBackupLeavesNoSiblingBehind()
+
+        Dim dataDirectory As String = Path.Combine(_root, "source-data")
+        Dim managedDirectory As String = Path.Combine(_root, "source-library")
+        Dim repository As New ManuscriptRepository(dataDirectory, managedDirectory)
+        Dim manuscripts As List(Of Manuscript) = CreateRepresentativeLibrary()
+        repository.Save(manuscripts)
+
+        Dim backupPath As String = Path.Combine(_root, "backup.zip")
+        Dim service As New PortableBackupService(managedDirectory)
+        service.CreateBackup(backupPath, manuscripts, repository)
+        Dim previous As Byte() = File.ReadAllBytes(backupPath)
+
+        manuscripts(0).Title = "Changed since the last backup"
+        repository.Save(manuscripts)
+        service.CreateBackup(backupPath, manuscripts, repository)
+
+        CollectionAssert.AreNotEqual(previous, File.ReadAllBytes(backupPath), "The new backup took the destination's place.")
+        Assert.AreEqual(1, Directory.GetFiles(_root, "backup.zip*").Length, "No .partial or .previous sibling is left.")
+
+    End Sub
+
+
     Private Sub AddManagedFixture(
         manuscripts As List(Of Manuscript),
         managedDirectory As String
