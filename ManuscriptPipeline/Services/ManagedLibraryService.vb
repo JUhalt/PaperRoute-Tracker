@@ -1,5 +1,6 @@
 ﻿Imports System
 Imports System.Collections.Generic
+Imports System.Globalization
 Imports System.IO
 Imports System.Linq
 Imports ManuscriptPipeline.Models
@@ -10,6 +11,11 @@ Namespace Services
 
         Private Const VersionDeletionStagingFolder As String =
             ".paperroute-version-delete"
+
+        ' Where managed files PaperRoute no longer needs wait, under a folder
+        ' named for the day they were removed. Nothing empties it before 1.0.
+        Friend Const RemovedFolderName As String =
+            "removed"
 
         Private ReadOnly _rootDirectory As String
 
@@ -66,6 +72,18 @@ Namespace Services
         End Property
 
 
+        Public ReadOnly Property RemovedDirectory As String
+
+            Get
+                Return Path.Combine(
+                    _rootDirectory,
+                    RemovedFolderName
+                )
+            End Get
+
+        End Property
+
+
         Public Function IsManagedPath(
             filePath As String
         ) As Boolean
@@ -103,6 +121,41 @@ Namespace Services
         End Function
 
 
+        ' A file under the removed folder is inside the root, but PaperRoute
+        ' no longer manages it: added back as a version or correspondence
+        ' copy, it gets a fresh copy under its record's folder, and the
+        ' removed copy stays where it is.
+        Private Function IsRemovedPath(
+            filePath As String
+        ) As Boolean
+
+            If String.IsNullOrWhiteSpace(filePath) Then
+                Return False
+            End If
+
+            Try
+
+                Dim removedRoot As String =
+                    Path.GetFullPath(RemovedDirectory).TrimEnd(
+                        Path.DirectorySeparatorChar,
+                        Path.AltDirectorySeparatorChar
+                    ) &
+                    Path.DirectorySeparatorChar
+
+                Return Path.GetFullPath(filePath).StartsWith(
+                    removedRoot,
+                    StringComparison.OrdinalIgnoreCase
+                )
+
+            Catch
+
+                Return False
+
+            End Try
+
+        End Function
+
+
         Public Sub CommitManagedCopies(
             manuscripts As IEnumerable(Of Manuscript)
         )
@@ -128,7 +181,8 @@ Namespace Services
                             Continue For
                         End If
 
-                        If IsManagedPath(version.LocalFilePath) Then
+                        If IsManagedPath(version.LocalFilePath) AndAlso
+                           Not IsRemovedPath(version.LocalFilePath) Then
                             Continue For
                         End If
 
@@ -281,7 +335,8 @@ Namespace Services
                             Continue For
                         End If
 
-                        If IsManagedPath(item.LocalFilePath) Then
+                        If IsManagedPath(item.LocalFilePath) AndAlso
+                           Not IsRemovedPath(item.LocalFilePath) Then
                             Continue For
                         End If
 
@@ -380,6 +435,41 @@ Namespace Services
             manuscripts As IEnumerable(Of Manuscript)
         ) As ManagedVersionDeletionTransaction
 
+            Return BeginVersionDeletionTransaction(
+                manuscripts,
+                Nothing
+            )
+
+        End Function
+
+
+        ' The baseline holds the version folders the library referenced when
+        ' it was last loaded or saved; only a folder in it is staged. Nothing
+        ' means no baseline check, which stages every unreferenced folder
+        ' under a manuscript in the library.
+        Friend Function BeginVersionDeletionTransaction(
+            manuscripts As IEnumerable(Of Manuscript),
+            baseline As Dictionary(Of Guid, HashSet(Of Guid))
+        ) As ManagedVersionDeletionTransaction
+
+            Return BeginVersionDeletionTransaction(
+                manuscripts,
+                baseline,
+                Nothing
+            )
+
+        End Function
+
+
+        ' The correspondence baseline names the managed correspondence copies
+        ' the library referenced; a deleted manuscript's go to the removed
+        ' folder with its version folders. Nothing means none move.
+        Friend Function BeginVersionDeletionTransaction(
+            manuscripts As IEnumerable(Of Manuscript),
+            baseline As Dictionary(Of Guid, HashSet(Of Guid)),
+            correspondenceBaseline As Dictionary(Of Guid, HashSet(Of (SubmissionId As Guid, ItemId As Guid)))
+        ) As ManagedVersionDeletionTransaction
+
             Dim transaction As New ManagedVersionDeletionTransaction(
                 _rootDirectory,
                 VersionDeletionStagingFolder
@@ -388,7 +478,9 @@ Namespace Services
             Try
 
                 transaction.StageOrphanedVersionDirectories(
-                    manuscripts
+                    manuscripts,
+                    baseline,
+                    correspondenceBaseline
                 )
 
                 Return transaction
@@ -414,6 +506,26 @@ Namespace Services
             manuscripts As IEnumerable(Of Manuscript)
         )
 
+            RecoverStagedVersionDeletions(
+                manuscripts,
+                keepUnreferenced:=False
+            )
+
+        End Sub
+
+
+        ' Puts back the staged version folders the library references and
+        ' discards the others of its manuscripts, or, when keepUnreferenced
+        ' is set, leaves those in staging and returns them: a library
+        ' recovered from its safety backup can be older than the set-aside
+        ' primary file, which may still reference them.
+        Friend Function RecoverStagedVersionDeletions(
+            manuscripts As IEnumerable(Of Manuscript),
+            keepUnreferenced As Boolean
+        ) As List(Of String)
+
+            Dim kept As New List(Of String)()
+
             Dim stagingRoot As String =
                 Path.Combine(
                     _rootDirectory,
@@ -421,7 +533,7 @@ Namespace Services
                 )
 
             If Not Directory.Exists(stagingRoot) Then
-                Return
+                Return kept
             End If
 
             Dim referenced As Dictionary(Of Guid, HashSet(Of Guid)) =
@@ -436,7 +548,9 @@ Namespace Services
 
                 RecoverTransactionDirectory(
                     transactionDirectory,
-                    referenced
+                    referenced,
+                    keepUnreferenced,
+                    kept
                 )
 
             Next
@@ -445,12 +559,16 @@ Namespace Services
                 stagingRoot
             )
 
-        End Sub
+            Return kept
+
+        End Function
 
 
         Private Sub RecoverTransactionDirectory(
             transactionDirectory As String,
-            referenced As Dictionary(Of Guid, HashSet(Of Guid))
+            referenced As Dictionary(Of Guid, HashSet(Of Guid)),
+            keepUnreferenced As Boolean,
+            kept As List(Of String)
         )
 
             For Each manuscriptDirectory As String In
@@ -540,10 +658,24 @@ Namespace Services
                         manuscriptId
                     ) Then
 
-                        Directory.Delete(
-                            versionDirectory,
-                            True
-                        )
+                        If keepUnreferenced Then
+
+                            kept.Add(
+                                versionDirectory
+                            )
+
+                        Else
+
+                            MoveToRemoved(
+                                _rootDirectory,
+                                versionDirectory,
+                                GetVersionDirectoryPath(
+                                    manuscriptId,
+                                    versionId
+                                )
+                            )
+
+                        End If
 
                     Else
 
@@ -591,7 +723,7 @@ Namespace Services
         End Sub
 
 
-        Private Shared Function BuildReferencedVersionMap(
+        Friend Shared Function BuildReferencedVersionMap(
             manuscripts As IEnumerable(Of Manuscript)
         ) As Dictionary(Of Guid, HashSet(Of Guid))
 
@@ -639,6 +771,85 @@ Namespace Services
         End Function
 
 
+        ' The managed correspondence copies the library references, by
+        ' submission and item, which name the folder of each copy.
+        Friend Shared Function BuildReferencedCorrespondenceMap(
+            manuscripts As IEnumerable(Of Manuscript)
+        ) As Dictionary(Of Guid, HashSet(Of (SubmissionId As Guid, ItemId As Guid)))
+
+            Dim result As New Dictionary(Of Guid, HashSet(Of (SubmissionId As Guid, ItemId As Guid)))()
+
+            If manuscripts Is Nothing Then
+                Return result
+            End If
+
+            For Each manuscript As Manuscript In manuscripts
+
+                If manuscript Is Nothing OrElse
+                   manuscript.Id = Guid.Empty Then
+
+                    Continue For
+
+                End If
+
+                Dim items As New HashSet(Of (SubmissionId As Guid, ItemId As Guid))()
+
+                If manuscript.Submissions IsNot Nothing Then
+
+                    For Each submission As JournalSubmission In manuscript.Submissions
+
+                        If submission Is Nothing OrElse
+                           submission.Id = Guid.Empty OrElse
+                           submission.Correspondence Is Nothing Then
+
+                            Continue For
+
+                        End If
+
+                        For Each item As CorrespondenceItem In submission.Correspondence
+
+                            If item IsNot Nothing AndAlso
+                               item.Id <> Guid.Empty AndAlso
+                               item.IsManagedCopy Then
+
+                                items.Add(
+                                    (submission.Id, item.Id)
+                                )
+
+                            End If
+
+                        Next
+
+                    Next
+
+                End If
+
+                result(manuscript.Id) =
+                    items
+
+            Next
+
+            Return result
+
+        End Function
+
+
+        Private Shared Function IsReferenced(
+            referenced As Dictionary(Of Guid, HashSet(Of Guid)),
+            manuscriptId As Guid,
+            versionId As Guid
+        ) As Boolean
+
+            Return referenced.ContainsKey(
+                manuscriptId
+            ) AndAlso
+            referenced(manuscriptId).Contains(
+                versionId
+            )
+
+        End Function
+
+
         Private Function GetVersionDirectoryPath(
             manuscriptId As Guid,
             versionId As Guid
@@ -680,6 +891,84 @@ Namespace Services
             )
 
         End Sub
+
+
+        ' The one place a managed folder leaves the library. It is moved,
+        ' never deleted, to removed\<yyyy-MM-dd>\... under the root, keeping
+        ' its path there, so a mistake in a sweep is recoverable. Nothing
+        ' empties that folder before 1.0. Returns where the folder went.
+        Friend Shared Function MoveToRemoved(
+            rootDirectory As String,
+            sourceDirectory As String,
+            originalDirectory As String
+        ) As String
+
+            Dim relativePath As String =
+                Path.GetRelativePath(
+                    rootDirectory,
+                    originalDirectory
+                )
+
+            If Path.IsPathRooted(relativePath) OrElse
+               relativePath.StartsWith(
+                   "..",
+                   StringComparison.Ordinal
+               ) Then
+
+                Throw New ArgumentException(
+                    "A removed managed folder must come from inside the managed library.",
+                    NameOf(originalDirectory)
+                )
+
+            End If
+
+            Dim destination As String =
+                Path.Combine(
+                    rootDirectory,
+                    RemovedFolderName,
+                    DateTime.Now.ToString(
+                        "yyyy-MM-dd",
+                        CultureInfo.InvariantCulture
+                    ),
+                    relativePath
+                )
+
+            ' The same folder can be removed again on the same day, after a
+            ' put-back; the later copy gets a numbered name.
+            Dim candidate As String =
+                destination
+
+            Dim suffix As Integer =
+                2
+
+            While Directory.Exists(candidate) OrElse
+                  File.Exists(candidate)
+
+                candidate =
+                    destination &
+                    "-" &
+                    suffix.ToString(
+                        CultureInfo.InvariantCulture
+                    )
+
+                suffix += 1
+
+            End While
+
+            Directory.CreateDirectory(
+                Path.GetDirectoryName(
+                    candidate
+                )
+            )
+
+            Directory.Move(
+                sourceDirectory,
+                candidate
+            )
+
+            Return candidate
+
+        End Function
 
 
         Private Function CreateUniqueDestinationPath(
@@ -724,6 +1013,12 @@ Namespace Services
             Private ReadOnly _rootDirectory As String
             Private ReadOnly _stagingRoot As String
             Private ReadOnly _operations As New List(Of MoveOperation)()
+            Private ReadOnly _skipped As New List(Of (ManuscriptId As Guid, VersionId As Guid, Folder As String))()
+
+            ' A deleted manuscript's managed correspondence copies. They are
+            ' not staged: they stay where they are until the save has
+            ' committed, and then move to the removed folder.
+            Private ReadOnly _correspondenceFolders As New List(Of String)()
 
             Private _completed As Boolean = False
 
@@ -753,8 +1048,20 @@ Namespace Services
             End Property
 
 
+            ' Folders that could not be moved because a file in them was in
+            ' use. They stay where they are, so the save can go through, and
+            ' the repository keeps them in its baseline for the next save.
+            Friend ReadOnly Property SkippedFolders As IReadOnlyList(Of (ManuscriptId As Guid, VersionId As Guid, Folder As String))
+                Get
+                    Return _skipped
+                End Get
+            End Property
+
+
             Friend Sub StageOrphanedVersionDirectories(
-                manuscripts As IEnumerable(Of Manuscript)
+                manuscripts As IEnumerable(Of Manuscript),
+                baseline As Dictionary(Of Guid, HashSet(Of Guid)),
+                correspondenceBaseline As Dictionary(Of Guid, HashSet(Of (SubmissionId As Guid, ItemId As Guid)))
             )
 
                 Dim referenced As Dictionary(Of Guid, HashSet(Of Guid)) =
@@ -807,34 +1114,178 @@ Namespace Services
 
                         End If
 
-                        Dim stagedDirectory As String =
-                            Path.Combine(
-                                _stagingRoot,
-                                pair.Key.ToString("N"),
-                                versionId.ToString("N")
-                            )
+                        ' Stage only a folder the loaded library referenced.
+                        ' Another computer's library, a set-aside newer file,
+                        ' or a library never loaded from disk may still need
+                        ' a folder this one does not know.
+                        If baseline IsNot Nothing AndAlso
+                           Not ManagedLibraryService.IsReferenced(
+                               baseline,
+                               pair.Key,
+                               versionId
+                           ) Then
 
-                        Directory.CreateDirectory(
-                            Path.GetDirectoryName(
-                                stagedDirectory
-                            )
-                        )
+                            Continue For
 
-                        Directory.Move(
-                            versionDirectory,
-                            stagedDirectory
-                        )
+                        End If
 
-                        _operations.Add(
-                            New MoveOperation(
-                                versionDirectory,
-                                stagedDirectory
-                            )
+                        StageVersionDirectory(
+                            pair.Key,
+                            versionId,
+                            versionDirectory
                         )
 
                     Next
 
                 Next
+
+                ' A manuscript the library held at its last load or save and
+                ' holds no longer: every version folder it referenced goes,
+                ' and its emptied folders with it.
+                If baseline IsNot Nothing Then
+
+                    For Each pair As KeyValuePair(Of Guid, HashSet(Of Guid)) In
+                        baseline
+
+                        If referenced.ContainsKey(
+                            pair.Key
+                        ) Then
+
+                            Continue For
+
+                        End If
+
+                        Dim manuscriptDirectory As String =
+                            Path.Combine(
+                                _rootDirectory,
+                                pair.Key.ToString("N")
+                            )
+
+                        Dim versionsDirectory As String =
+                            Path.Combine(
+                                manuscriptDirectory,
+                                "versions"
+                            )
+
+                        For Each versionId As Guid In pair.Value
+
+                            Dim versionDirectory As String =
+                                Path.Combine(
+                                    versionsDirectory,
+                                    versionId.ToString("N")
+                                )
+
+                            If Directory.Exists(
+                                versionDirectory
+                            ) Then
+
+                                StageVersionDirectory(
+                                    pair.Key,
+                                    versionId,
+                                    versionDirectory
+                                )
+
+                            End If
+
+                        Next
+
+                        ' Its managed correspondence copies, at
+                        ' <manuscript>\<submission>\<item>, move once the
+                        ' save has committed; until then they stay put.
+                        Dim correspondence As HashSet(Of (SubmissionId As Guid, ItemId As Guid)) =
+                            Nothing
+
+                        If correspondenceBaseline IsNot Nothing AndAlso
+                           correspondenceBaseline.TryGetValue(
+                               pair.Key,
+                               correspondence
+                           ) Then
+
+                            For Each item In correspondence
+
+                                Dim itemDirectory As String =
+                                    Path.Combine(
+                                        manuscriptDirectory,
+                                        item.SubmissionId.ToString("N"),
+                                        item.ItemId.ToString("N")
+                                    )
+
+                                If Directory.Exists(
+                                    itemDirectory
+                                ) Then
+
+                                    _correspondenceFolders.Add(
+                                        itemDirectory
+                                    )
+
+                                End If
+
+                            Next
+
+                        End If
+
+                        ManagedLibraryService.DeleteDirectoryIfEmpty(
+                            versionsDirectory
+                        )
+
+                        ManagedLibraryService.DeleteDirectoryIfEmpty(
+                            manuscriptDirectory
+                        )
+
+                    Next
+
+                End If
+
+            End Sub
+
+
+            ' Moves one version folder into staging, or leaves it in place
+            ' when a file in it is in use.
+            Private Sub StageVersionDirectory(
+                manuscriptId As Guid,
+                versionId As Guid,
+                versionDirectory As String
+            )
+
+                Dim stagedDirectory As String =
+                    Path.Combine(
+                        _stagingRoot,
+                        manuscriptId.ToString("N"),
+                        versionId.ToString("N")
+                    )
+
+                Directory.CreateDirectory(
+                    Path.GetDirectoryName(
+                        stagedDirectory
+                    )
+                )
+
+                Try
+
+                    Directory.Move(
+                        versionDirectory,
+                        stagedDirectory
+                    )
+
+                Catch ex As Exception When TypeOf ex Is IOException OrElse TypeOf ex Is UnauthorizedAccessException
+
+                    ' A file in the folder is open, or a sync client holds
+                    ' it. Leave the folder where it is; the next save tries
+                    ' again.
+                    _skipped.Add(
+                        (manuscriptId, versionId, versionDirectory)
+                    )
+
+                    Return
+
+                End Try
+
+                _operations.Add(
+                    New MoveOperation(
+                        versionDirectory,
+                        stagedDirectory
+                    )
+                )
 
             End Sub
 
@@ -845,27 +1296,112 @@ Namespace Services
                     Return
                 End If
 
-                If Directory.Exists(
-                    _stagingRoot
-                ) Then
+                ' The authoritative metadata is already committed, so each
+                ' staged folder now goes to the removed folder. One that
+                ' cannot move stays in staging for startup recovery, which
+                ' moves it later; nothing here may trigger a rollback.
+                _completed =
+                    True
+
+                For Each operation As MoveOperation In _operations
 
                     Try
+
+                        If Directory.Exists(
+                            operation.StagedDirectory
+                        ) Then
+
+                            ManagedLibraryService.MoveToRemoved(
+                                _rootDirectory,
+                                operation.StagedDirectory,
+                                operation.OriginalDirectory
+                            )
+
+                        End If
+
+                    Catch
+                        ' Startup recovery moves what is left in staging.
+                    End Try
+
+                Next
+
+                ' A deleted manuscript's managed correspondence copies go the
+                ' same way, and its emptied folders with them. One that
+                ' cannot move stays under the manuscript's folder: an
+                ' orphan, never a loss.
+                For Each itemDirectory As String In _correspondenceFolders
+
+                    Try
+
+                        If Directory.Exists(
+                            itemDirectory
+                        ) Then
+
+                            ManagedLibraryService.MoveToRemoved(
+                                _rootDirectory,
+                                itemDirectory,
+                                itemDirectory
+                            )
+
+                        End If
+
+                        Dim submissionDirectory As String =
+                            Path.GetDirectoryName(
+                                itemDirectory
+                            )
+
+                        ManagedLibraryService.DeleteDirectoryIfEmpty(
+                            submissionDirectory
+                        )
+
+                        ManagedLibraryService.DeleteDirectoryIfEmpty(
+                            Path.GetDirectoryName(
+                                submissionDirectory
+                            )
+                        )
+
+                    Catch
+                        ' The copy stays where it is.
+                    End Try
+
+                Next
+
+                DeleteStagingIfEmpty()
+
+            End Sub
+
+
+            ' Removes the staging folders once no file is left in them; a
+            ' folder that could not be moved stays for startup recovery.
+            Private Sub DeleteStagingIfEmpty()
+
+                Try
+
+                    If Directory.Exists(
+                        _stagingRoot
+                    ) AndAlso
+                    Not Directory.EnumerateFiles(
+                        _stagingRoot,
+                        "*",
+                        SearchOption.AllDirectories
+                    ).Any() Then
 
                         Directory.Delete(
                             _stagingRoot,
                             True
                         )
 
-                    Catch
-                        ' The authoritative metadata is already committed.
-                        ' Leave staging in place; startup recovery will safely
-                        ' discard unreferenced staged directories later.
-                    End Try
+                    End If
 
-                End If
+                    ManagedLibraryService.DeleteDirectoryIfEmpty(
+                        Path.GetDirectoryName(
+                            _stagingRoot
+                        )
+                    )
 
-                _completed =
-                    True
+                Catch
+                    ' Best-effort cleanup only.
+                End Try
 
             End Sub
 

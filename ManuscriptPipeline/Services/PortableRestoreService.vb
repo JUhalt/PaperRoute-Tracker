@@ -702,9 +702,17 @@ Namespace Services
                 ' Emergency ZIP remains intentionally.
                 ' =============================================
 
-                SafeDeleteDirectory(
-                    rollbackFilesDirectory
-                )
+                ' The old library's removed folder holds files PaperRoute
+                ' no longer needs, which no backup holds. It comes across to
+                ' the restored library; if it cannot, the old library stays
+                ' beside the new one rather than being lost with it.
+                If CarryRemovedFolderOver(rollbackFilesDirectory) Then
+
+                    SafeDeleteDirectory(
+                        rollbackFilesDirectory
+                    )
+
+                End If
 
                 SafeDeleteFile(
                     rollbackJsonPath
@@ -1629,6 +1637,53 @@ Namespace Services
             Next
 
         End Sub
+
+
+        ' Moves the removed folder of the library a restore set aside into
+        ' the restored library, which has none of its own, since a backup
+        ' leaves the folder out. False when there is one after all, or the
+        ' move fails: the set-aside library then stays where it is.
+        Private Function CarryRemovedFolderOver(
+            rollbackFilesDirectory As String
+        ) As Boolean
+
+            Dim rollbackRemoved As String =
+                Path.Combine(
+                    rollbackFilesDirectory,
+                    ManagedLibraryService.RemovedFolderName
+                )
+
+            If Not Directory.Exists(rollbackRemoved) Then
+                Return True
+            End If
+
+            Dim destination As String =
+                _managedLibrary.RemovedDirectory
+
+            If Directory.Exists(destination) Then
+                Return False
+            End If
+
+            Try
+
+                Directory.CreateDirectory(
+                    Path.GetDirectoryName(destination)
+                )
+
+                Directory.Move(
+                    rollbackRemoved,
+                    destination
+                )
+
+                Return True
+
+            Catch
+
+                Return False
+
+            End Try
+
+        End Function
 
 
         Private Sub SafeDeleteDirectory(
