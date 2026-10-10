@@ -363,11 +363,12 @@ Namespace Services
 
                     End If
 
+                    ' Calendar dates as written, whatever zone wrote them (#118).
                     Dim loaded As List(Of Manuscript) =
                         JsonSerializer.Deserialize(
                             Of List(Of Manuscript)
                         )(
-                            stream,
+                            CalendarDateJson.Read(stream),
                             _jsonOptions
                         )
 
@@ -1003,12 +1004,15 @@ Namespace Services
                     options:=FileOptions.SequentialScan
                 )
 
-                    JsonSerializer.Serialize(
-                        Of List(Of Manuscript)
-                    )(
+                    ' Calendar dates without the machine's offset (#118).
+                    CalendarDateJson.Write(
                         stream,
-                        manuscripts,
-                        _jsonOptions
+                        JsonSerializer.Serialize(
+                            Of List(Of Manuscript)
+                        )(
+                            manuscripts,
+                            _jsonOptions
+                        )
                     )
 
                     stream.Flush(
