@@ -184,3 +184,110 @@ Friend Class HeldFileOpener
     End Function
 
 End Class
+
+
+' Opens a storage file as a repository does, except that reading it fails
+' the way Windows fails when another program holds a byte-range lock on
+' the file (ERROR_LOCK_VIOLATION): the open itself succeeded (#111).
+Friend Class LockedReadStream
+    Inherits Stream
+
+    Private _position As Long
+
+
+    Public Shared Function Open(
+        filePath As String
+    ) As Stream
+
+        Return New LockedReadStream()
+
+    End Function
+
+
+    Public Overrides ReadOnly Property CanRead As Boolean
+        Get
+            Return True
+        End Get
+    End Property
+
+
+    Public Overrides ReadOnly Property CanSeek As Boolean
+        Get
+            Return True
+        End Get
+    End Property
+
+
+    Public Overrides ReadOnly Property CanWrite As Boolean
+        Get
+            Return False
+        End Get
+    End Property
+
+
+    ' Not empty, so a loader goes on to read it.
+    Public Overrides ReadOnly Property Length As Long
+        Get
+            Return 1
+        End Get
+    End Property
+
+
+    Public Overrides Property Position As Long
+        Get
+            Return _position
+        End Get
+        Set(value As Long)
+            _position = value
+        End Set
+    End Property
+
+
+    Public Overrides Function Read(
+        buffer As Byte(),
+        offset As Integer,
+        count As Integer
+    ) As Integer
+
+        Throw New IOException(
+            "The process cannot access the file because another process has locked a portion of the file.",
+            &H80070021
+        )
+
+    End Function
+
+
+    Public Overrides Sub Flush()
+    End Sub
+
+
+    Public Overrides Function Seek(
+        offset As Long,
+        origin As SeekOrigin
+    ) As Long
+
+        Return _position
+
+    End Function
+
+
+    Public Overrides Sub SetLength(
+        value As Long
+    )
+
+        Throw New NotSupportedException()
+
+    End Sub
+
+
+    Public Overrides Sub Write(
+        buffer As Byte(),
+        offset As Integer,
+        count As Integer
+    )
+
+        Throw New NotSupportedException()
+
+    End Sub
+
+End Class

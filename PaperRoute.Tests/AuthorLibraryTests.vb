@@ -434,6 +434,73 @@ Public Class AuthorLibraryTests
     End Sub
 
 
+    ' An in-use error raised while reading, after the open succeeded (another
+    ' program holds a byte-range lock), is in use too: the loader stops and
+    ' nothing turns to the backup (#111).
+    <TestMethod>
+    Public Sub Load_FileInUseWhileReadingStopsAndChangesNothing()
+
+        Dim repository As New AuthorLibraryRepository(
+            _data
+        )
+
+        Dim library As New AuthorLibraryData()
+
+        library.Authors.Add(
+            New AuthorRecord With {
+                .DisplayNameOverride = "First"
+            }
+        )
+
+        repository.Save(
+            library
+        )
+
+        repository.Save(
+            library
+        )
+
+        Dim primaryBefore As Byte() =
+            File.ReadAllBytes(repository.DataFilePath)
+
+        Dim backupBefore As Byte() =
+            File.ReadAllBytes(repository.BackupFilePath)
+
+        Dim held As New AuthorLibraryRepository(
+            _data,
+            openFile:=AddressOf LockedReadStream.Open
+        )
+
+        Assert.ThrowsExactly(Of StorageFileInUseException)(
+            Sub()
+                Dim ignored As AuthorLibraryData =
+                    held.Load()
+            End Sub
+        )
+
+        Assert.IsFalse(
+            held.LastLoadRecoveredFromBackup
+        )
+
+        CollectionAssert.AreEqual(
+            primaryBefore,
+            File.ReadAllBytes(repository.DataFilePath)
+        )
+
+        CollectionAssert.AreEqual(
+            backupBefore,
+            File.ReadAllBytes(repository.BackupFilePath)
+        )
+
+        Assert.IsFalse(
+            Directory.Exists(
+                Path.Combine(_data, "recovery")
+            )
+        )
+
+    End Sub
+
+
     ' An authors.json that parses but fails validation is damage too: the
     ' backup is loaded and the file set aside, instead of PaperRoute
     ' closing on every launch (#111).

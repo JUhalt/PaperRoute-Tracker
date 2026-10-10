@@ -976,4 +976,64 @@ Public Class PersistenceTests
     End Sub
 
 
+    ' An in-use error raised while reading, after the open succeeded (another
+    ' program holds a byte-range lock), is in use too: the loader stops and
+    ' nothing turns to the backup (#111).
+    <TestMethod>
+    Public Sub Load_FileInUseWhileReadingStopsAndChangesNothing()
+
+        Dim repository As New ManuscriptRepository(
+            _dataDirectory,
+            _managedLibrary
+        )
+
+        Dim manuscripts As List(Of Manuscript) =
+            CreateRepresentativeLibrary()
+
+        repository.Save(manuscripts)
+
+        repository.Save(manuscripts)
+
+        Dim primaryBefore As Byte() =
+            File.ReadAllBytes(repository.DataFilePath)
+
+        Dim backupBefore As Byte() =
+            File.ReadAllBytes(repository.BackupFilePath)
+
+        Dim held As New ManuscriptRepository(
+            _dataDirectory,
+            _managedLibrary,
+            openFile:=AddressOf LockedReadStream.Open
+        )
+
+        Assert.ThrowsExactly(Of StorageFileInUseException)(
+            Sub()
+                Dim ignored As List(Of Manuscript) =
+                    held.Load()
+            End Sub
+        )
+
+        Assert.IsFalse(
+            held.LastLoadRecoveredFromBackup
+        )
+
+        CollectionAssert.AreEqual(
+            primaryBefore,
+            File.ReadAllBytes(repository.DataFilePath)
+        )
+
+        CollectionAssert.AreEqual(
+            backupBefore,
+            File.ReadAllBytes(repository.BackupFilePath)
+        )
+
+        Assert.IsFalse(
+            Directory.Exists(
+                Path.Combine(_dataDirectory, "recovery")
+            )
+        )
+
+    End Sub
+
+
 End Class

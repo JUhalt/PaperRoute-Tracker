@@ -354,6 +354,15 @@ Namespace Services
                 ' Not damage: stop here, before anything turns to the backup.
                 Throw
 
+            Catch ex As Exception When StorageFile.IsInUse(ex)
+
+                ' The same error raised while reading, after the open
+                ' succeeded: another program holds part of the file.
+                Throw New StorageFileInUseException(
+                    filePath,
+                    ex
+                )
+
             Catch ex As Exception
 
                 failure =
