@@ -16,6 +16,10 @@ Namespace Services
         Private Const RepositoryUrl As String =
             "https://github.com/JUhalt/PaperRoute-Tracker"
 
+        ' The steps that reach outside PaperRoute, behind delegates so tests
+        ' can drive an update without Velopack, a network, or a dialog (#112).
+        Friend Shared Steps As New UpdateSteps()
+
 
         Private Sub New()
         End Sub
@@ -71,10 +75,13 @@ Namespace Services
         End Function
 
 
+        ' Offers an update and, once the user accepts it, asks `confirm`
+        ' before anything downloads; False there stops the update (#112).
         Public Shared Async Function CheckAndOfferUpdateAsync(
             owner As IWin32Window,
             channel As AppUpdateChannel,
-            interactive As Boolean
+            interactive As Boolean,
+            Optional confirm As Func(Of Boolean) = Nothing
         ) As Task(Of Boolean)
 
             ' Work offline, or the update check switched off (#86): nothing is
@@ -82,34 +89,36 @@ Namespace Services
             Dim blocked As OnlineBlockReason? = OnlineAccess.BlockReason(OnlineServiceCatalog.Updates)
             If blocked.HasValue Then
                 If interactive Then
-                    MessageBox.Show(
+                    Steps.Report(
                         owner,
                         OnlineAccess.BlockedMessage(OnlineServiceCatalog.Find(OnlineServiceCatalog.Updates), blocked.Value),
                         "PaperRoute Updates",
-                        MessageBoxButtons.OK,
                         MessageBoxIcon.Information
                     )
                 End If
                 Return False
             End If
 
+            ' Once the user has accepted, a failure is shown on the startup
+            ' path too: they are waiting for the restart.
+            Dim accepted As Boolean = False
+
             Try
 
                 Dim manager As UpdateManager =
-                    CreateManager(channel)
+                    Steps.Manager(channel)
 
-                If Not manager.IsInstalled Then
+                If Not Steps.IsInstalled(manager) Then
 
                     If interactive Then
 
-                        MessageBox.Show(
+                        Steps.Report(
                             owner,
                             "Update checking is available in installed PaperRoute builds." &
                             Environment.NewLine & Environment.NewLine &
                             "This copy appears to be running from Visual Studio or as a portable build. " &
                             "Install PaperRoute using the Setup program from a GitHub release to test automatic updates.",
                             "Updates Unavailable",
-                            MessageBoxButtons.OK,
                             MessageBoxIcon.Information
                         )
 
@@ -121,13 +130,13 @@ Namespace Services
 
 
                 Dim updateInfo As UpdateInfo =
-                    Await manager.CheckForUpdatesAsync()
+                    Await Steps.Check(manager)
 
                 If updateInfo Is Nothing Then
 
                     If interactive Then
 
-                        MessageBox.Show(
+                        Steps.Report(
                             owner,
                             "You're up to date." &
                             Environment.NewLine & Environment.NewLine &
@@ -135,7 +144,6 @@ Namespace Services
                             Environment.NewLine &
                             "Channel: " & ChannelDisplayName(channel),
                             "PaperRoute Updates",
-                            MessageBoxButtons.OK,
                             MessageBoxIcon.Information
                         )
 
@@ -157,19 +165,26 @@ Namespace Services
                 End If
 
 
-                Using prompt As New UpdatePromptForm(
+                If Not Steps.Offer(
+                    owner,
                     CurrentInstalledVersion(manager),
                     availableVersion,
                     ChannelDisplayName(channel),
                     releaseNotes
-                )
+                ) Then
+                    Return False
+                End If
 
-                    If prompt.ShowDialog(owner) <> DialogResult.OK Then
-                        Return False
-                    End If
+                ' The window's own question, such as about unsaved page edits.
+                If confirm IsNot Nothing AndAlso Not confirm() Then
+                    Return False
+                End If
 
-                End Using
+                accepted = True
 
+                ' The window takes no clicks while the update downloads and
+                ' installs; a failure gives it back.
+                Dim window As Control = TryCast(owner, Control)
 
                 Using progressDialog As New UpdateProgressForm(
                     availableVersion
@@ -185,18 +200,34 @@ Namespace Services
                         End Sub
                     )
 
-                    Await manager.DownloadUpdatesAsync(
-                        updateInfo,
-                        progressCallback
-                    )
+                    Try
 
-                    progressDialog.SetProgress(100)
-                    progressDialog.SetStatus("Installing update and restarting PaperRoute...")
-                    progressDialog.Refresh()
+                        If window IsNot Nothing Then
+                            window.Enabled = False
+                        End If
 
-                    manager.ApplyUpdatesAndRestart(
-                        updateInfo.TargetFullRelease
-                    )
+                        Await Steps.Download(
+                            manager,
+                            updateInfo,
+                            progressCallback
+                        )
+
+                        progressDialog.SetProgress(100)
+                        progressDialog.SetStatus("Installing update and restarting PaperRoute...")
+                        progressDialog.Refresh()
+
+                        Steps.Apply(
+                            manager,
+                            updateInfo.TargetFullRelease
+                        )
+
+                    Finally
+
+                        If window IsNot Nothing AndAlso Not window.IsDisposed Then
+                            window.Enabled = True
+                        End If
+
+                    End Try
 
                 End Using
 
@@ -204,15 +235,14 @@ Namespace Services
 
             Catch ex As Exception
 
-                If interactive Then
+                If interactive OrElse accepted Then
 
-                    MessageBox.Show(
+                    Steps.Report(
                         owner,
-                        "PaperRoute could not complete the update check." &
+                        If(accepted, "PaperRoute could not finish the update.", "PaperRoute could not complete the update check.") &
                         Environment.NewLine & Environment.NewLine &
                         OnlineAccess.Describe(ex, "GitHub"),
                         "Update Error",
-                        MessageBoxButtons.OK,
                         MessageBoxIcon.Error
                     )
 
@@ -225,7 +255,9 @@ Namespace Services
         End Function
 
 
-        Private Shared Function CreateManager(
+        ' Needs the locator VelopackApp.Build().Run() set up at startup, so
+        ' tests put a stand-in behind Steps.Manager instead.
+        Friend Shared Function CreateManager(
             channel As AppUpdateChannel
         ) As UpdateManager
 
@@ -270,13 +302,47 @@ Namespace Services
             manager As UpdateManager
         ) As String
 
-            If manager.CurrentVersion IsNot Nothing Then
+            If manager?.CurrentVersion IsNot Nothing Then
                 Return manager.CurrentVersion.ToString()
             End If
 
             Return CurrentVersionText()
 
         End Function
+
+    End Class
+
+
+    ' Each step of an update that reaches outside PaperRoute: Velopack's
+    ' calls and the dialogs. Tests replace them to drive the path without
+    ' Velopack, a network, or a dialog (#112).
+    Friend NotInheritable Class UpdateSteps
+
+        Public Manager As Func(Of AppUpdateChannel, UpdateManager) =
+            AddressOf UpdateService.CreateManager
+
+        Public IsInstalled As Func(Of UpdateManager, Boolean) =
+            Function(manager) manager.IsInstalled
+
+        Public Check As Func(Of UpdateManager, Task(Of UpdateInfo)) =
+            Function(manager) manager.CheckForUpdatesAsync()
+
+        ' Shows the release notes; True when the user chose Download & Restart.
+        Public Offer As Func(Of IWin32Window, String, String, String, String, Boolean) =
+            Function(owner, currentVersion, availableVersion, channelName, releaseNotes)
+                Using prompt As New UpdatePromptForm(currentVersion, availableVersion, channelName, releaseNotes)
+                    Return prompt.ShowDialog(owner) = DialogResult.OK
+                End Using
+            End Function
+
+        Public Download As Func(Of UpdateManager, UpdateInfo, Action(Of Integer), Task) =
+            Function(manager, updateInfo, progress) manager.DownloadUpdatesAsync(updateInfo, progress)
+
+        Public Apply As Action(Of UpdateManager, VelopackAsset) =
+            Sub(manager, release) manager.ApplyUpdatesAndRestart(release)
+
+        Public Report As Action(Of IWin32Window, String, String, MessageBoxIcon) =
+            Sub(owner, text, title, icon) MessageBox.Show(owner, text, title, MessageBoxButtons.OK, icon)
 
     End Class
 

@@ -643,6 +643,18 @@ Partial Public Class Form1
     ' False to stay.
     Friend Function ConfirmLeaveManuscript() As Boolean
 
+        Return ConfirmUnsavedChanges("Choose No to discard them.")
+
+    End Function
+
+
+    ' Asks about unsaved manuscript changes before an action that would
+    ' otherwise miss them (#112): Yes saves first, No goes on without them
+    ' as the hint says, Cancel stops. Returns False to stop.
+    Friend Function ConfirmUnsavedChanges(
+        noHint As String
+    ) As Boolean
+
         If currentPage <> WorkspacePage.Manuscript OrElse
            manuscriptEditor Is Nothing OrElse
            manuscriptEditor.IsDisposed OrElse
@@ -660,7 +672,7 @@ Partial Public Class Form1
                    "Save your changes to '" & title & "'?" &
                    Environment.NewLine &
                    Environment.NewLine &
-                   "Choose No to discard them.",
+                   noHint,
                    "Unsaved Changes",
                    MessageBoxButtons.YesNoCancel,
                    MessageBoxIcon.Warning))

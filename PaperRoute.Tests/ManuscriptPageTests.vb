@@ -1,5 +1,6 @@
 Imports System.Drawing
 Imports System.IO
+Imports System.IO.Compression
 Imports System.Linq
 Imports System.Reflection
 Imports System.Runtime.ExceptionServices
@@ -12,6 +13,7 @@ Imports ManuscriptPipeline.Forms
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
+Imports Velopack
 
 ' The manuscript page (#55): one working copy per open manuscript, saved or
 ' discarded explicitly, and never lost silently when leaving.
@@ -167,6 +169,189 @@ Public Class ManuscriptPageTests
                     Assert.AreEqual("Edited title", manuscript.Title, "Yes saves before closing.")
                     Assert.AreEqual(1, board.SaveCount)
                 End Using
+            End Sub)
+    End Sub
+
+    ' Backup, Restore and Update ask about unsaved page edits before they
+    ' start (#112).
+    <TestMethod>
+    Public Sub BackupAsksAboutUnsavedEditsAndCancelWritesNothing()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard(), dialogs As New DialogWatcher()
+                    Dim manuscript As Manuscript = Sample("Original title")
+                    board.Prepare(manuscript)
+                    board.Open(manuscript)
+                    board.Field("Title").Text = "Edited title"
+
+                    Dim asked As Integer = 0
+                    board.SetPrompt(Function(title)
+                                       asked += 1
+                                       Return DialogResult.Cancel
+                                   End Function)
+                    board.BackUp()
+                    Assert.AreEqual(1, asked, "Backup asks before anything else.")
+                    Assert.AreEqual(0, board.SaveCount, "Cancel saves nothing.")
+                    Assert.IsFalse(File.Exists(board.BackupPath), "Cancel writes no backup file.")
+                    CollectionAssert.AreEqual(Array.Empty(Of String)(), dialogs.Closed, "Cancel opens no dialog.")
+                    Assert.AreEqual("Edited title", board.Field("Title").Text, "Cancel keeps the edits.")
+
+                    board.SetPrompt(Function(title) DialogResult.No)
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    <TestMethod>
+    Public Sub RestoreAsksAboutUnsavedEditsAndCancelBeginsNothing()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard(), dialogs As New DialogWatcher()
+                    Dim manuscript As Manuscript = Sample("Original title")
+                    board.Prepare(manuscript)
+                    board.Open(manuscript)
+                    board.Field("Title").Text = "Edited title"
+
+                    Dim asked As Integer = 0
+                    board.SetPrompt(Function(title)
+                                       asked += 1
+                                       Return DialogResult.Cancel
+                                   End Function)
+                    board.Restore()
+                    Assert.AreEqual(1, asked, "Restore asks before choosing a backup.")
+                    CollectionAssert.AreEqual(Array.Empty(Of String)(), dialogs.Closed, "Cancel opens no file dialog, so no restore begins.")
+                    Assert.AreEqual(0, board.SaveCount)
+                    Assert.AreEqual("Edited title", board.Field("Title").Text, "Cancel keeps the edits.")
+
+                    board.SetPrompt(Function(title) DialogResult.No)
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    <TestMethod>
+    Public Sub BackupYesSavesTheEditsIntoItAndNoBacksUpTheSavedVersion()
+        RunOnStaThread(
+            Sub()
+                Dim root As String = CreateTemporaryRoot()
+                Try
+                    Using board As New PageBoard(), dialogs As New DialogWatcher()
+                        board.UseRepository(root)
+                        Dim manuscript As Manuscript = Sample("Original title")
+                        board.Prepare(manuscript)
+                        board.Open(manuscript)
+                        board.Field("Title").Text = "Edited title"
+
+                        board.SetPrompt(Function(title) DialogResult.Yes)
+                        board.BackUp()
+                        Assert.AreEqual("Edited title", manuscript.Title, "Yes saves first.")
+                        Assert.IsFalse(board.Editor.HasUnsavedChanges())
+                        StringAssert.Contains(BackedUpJson(board.BackupPath), "Edited title", "The backup holds the edits.")
+                        CollectionAssert.AreEqual({"Backup Complete"}, dialogs.Closed)
+
+                        dialogs.Closed.Clear()
+                        board.Field("Title").Text = "Later title"
+                        board.SetPrompt(Function(title) DialogResult.No)
+                        board.BackUp()
+                        Dim json As String = BackedUpJson(board.BackupPath)
+                        StringAssert.Contains(json, "Edited title", "No backs up the last saved version.")
+                        Assert.IsFalse(json.Contains("Later title"))
+                        Assert.AreEqual("Later title", board.Field("Title").Text, "No keeps the edits on the page.")
+                        Assert.IsTrue(board.Editor.HasUnsavedChanges())
+                        CollectionAssert.AreEqual({"Backup Complete"}, dialogs.Closed)
+
+                        board.SetPrompt(Function(title) DialogResult.No)
+                        board.Close()
+                    End Using
+                Finally
+                    DeleteTemporaryRoot(root)
+                End Try
+            End Sub)
+    End Sub
+
+    <TestMethod>
+    Public Sub UpdateAsksAfterAcceptingAndCancelNeverApplies()
+        RunOnStaThread(
+            Sub()
+                Dim update As New ScriptedUpdate()
+                UpdateService.Steps = update.Steps()
+                OnlineAccess.ResetForTests()
+                Try
+                    Using board As New PageBoard()
+                        update.Window = board
+                        Dim manuscript As Manuscript = Sample("Original title")
+                        board.Prepare(manuscript)
+                        board.Open(manuscript)
+                        board.Field("Title").Text = "Edited title"
+
+                        Dim asked As Integer = 0
+                        board.SetPrompt(Function(title)
+                                           asked += 1
+                                           Return DialogResult.Cancel
+                                       End Function)
+                        Assert.IsFalse(board.OfferUpdate(interactive:=True))
+                        Assert.AreEqual(1, update.Offered)
+                        Assert.AreEqual(1, asked, "The question comes after the user accepts the update.")
+                        Assert.AreEqual(0, update.Downloaded)
+                        Assert.AreEqual(0, update.Applied, "Cancel never applies.")
+                        Assert.AreEqual("Edited title", board.Field("Title").Text, "Cancel keeps the edits.")
+                        Assert.IsTrue(board.Enabled)
+
+                        board.SetPrompt(Function(title) DialogResult.Yes)
+                        Assert.IsTrue(board.OfferUpdate(interactive:=True))
+                        Assert.AreEqual("Edited title", manuscript.Title, "Yes saves before the download.")
+                        Assert.AreEqual(1, board.SaveCount)
+                        Assert.AreEqual(1, update.Downloaded)
+                        Assert.IsFalse(update.WindowEnabledWhileDownloading, "The window takes no clicks while the update downloads.")
+                        Assert.AreEqual(1, update.Applied)
+                        Assert.AreEqual(0, update.Reports.Count)
+
+                        board.Close()
+                    End Using
+                Finally
+                    UpdateService.Steps = New UpdateSteps()
+                    OnlineAccess.ResetForTests()
+                End Try
+            End Sub)
+    End Sub
+
+    <TestMethod>
+    Public Sub ADownloadFailureAfterAcceptingIsReportedOnTheStartupPath()
+        RunOnStaThread(
+            Sub()
+                Dim update As New ScriptedUpdate()
+                UpdateService.Steps = update.Steps()
+                OnlineAccess.ResetForTests()
+                Try
+                    Using board As New PageBoard()
+                        update.Window = board
+                        Dim manuscript As Manuscript = Sample("Original title")
+                        board.Prepare(manuscript)
+                        board.Open(manuscript)
+
+                        ' Before the user accepted, the startup check stays quiet, as before.
+                        update.CheckFailure = New Net.Http.HttpRequestException("The connection was reset.")
+                        Assert.IsFalse(board.OfferUpdate(interactive:=False))
+                        Assert.AreEqual(0, update.Offered)
+                        Assert.AreEqual(0, update.Reports.Count)
+
+                        update.CheckFailure = Nothing
+                        update.DownloadFailure = New Net.Http.HttpRequestException("The connection was reset.")
+                        Assert.IsFalse(board.OfferUpdate(interactive:=False))
+                        Assert.AreEqual(1, update.Offered)
+                        Assert.AreEqual(1, update.Downloaded)
+                        Assert.AreEqual(1, update.Reports.Count, "A failure after the user accepted is shown on the startup path.")
+                        StringAssert.StartsWith(update.Reports(0), "Update Error: PaperRoute could not finish the update.")
+                        Assert.IsTrue(board.Enabled, "The window takes clicks again after a failed download.")
+                        Assert.IsFalse(Application.OpenForms.OfType(Of UpdateProgressForm)().Any(), "The progress window is gone.")
+                        Assert.AreEqual(0, update.Applied)
+
+                        board.Close()
+                    End Using
+                Finally
+                    UpdateService.Steps = New UpdateSteps()
+                    OnlineAccess.ResetForTests()
+                End Try
             End Sub)
     End Sub
 
@@ -1180,6 +1365,14 @@ Public Class ManuscriptPageTests
 
         Public SaveCount As Integer
 
+        ' Saves are written only after UseRepository pointed them at a
+        ' throwaway directory.
+        Private _realSaves As Boolean
+        Private _managedDirectory As String
+
+        Public ReadOnly BackupPath As String =
+            Path.Combine(Path.GetTempPath(), "PaperRoute-PageTests-" & Guid.NewGuid().ToString("N") & ".zip")
+
         Protected Overrides Sub OnLoad(e As EventArgs)
         End Sub
 
@@ -1196,7 +1389,44 @@ Public Class ManuscriptPageTests
 
         Protected Overrides Function SaveManuscripts() As Boolean
             SaveCount += 1
+            If _realSaves Then Return MyBase.SaveManuscripts()
             Return True
+        End Function
+
+        ' The library is written to a throwaway directory, as the app writes it.
+        Public Sub UseRepository(root As String)
+            _managedDirectory = Path.Combine(root, "library")
+            GetType(Form1).GetField("repository", BindingFlags.Instance Or BindingFlags.NonPublic).
+                SetValue(Me, New ManuscriptRepository(Path.Combine(root, "data"), _managedDirectory))
+            _realSaves = True
+        End Sub
+
+        Public Sub BackUp()
+            CallPrivate("BackupLibrary", Nothing, EventArgs.Empty)
+            Application.DoEvents()
+        End Sub
+
+        Public Sub Restore()
+            CallPrivate("RestoreLibraryBackup", Nothing, EventArgs.Empty)
+            Application.DoEvents()
+        End Sub
+
+        Protected Overrides Function ChooseBackupPath() As String
+            Return BackupPath
+        End Function
+
+        ' Fails loudly without UseRepository rather than touch the real
+        ' managed library.
+        Protected Overrides Function CreateBackupService() As PortableBackupService
+            Return New PortableBackupService(_managedDirectory)
+        End Function
+
+        Public Function OfferUpdate(interactive As Boolean) As Boolean
+            Dim operation As Task(Of Boolean) =
+                DirectCast(GetType(Form1).GetMethod("OfferUpdateAsync", BindingFlags.Instance Or BindingFlags.NonPublic).
+                    Invoke(Me, New Object() {interactive}), Task(Of Boolean))
+            PumpUntilComplete(operation)
+            Return operation.Result
         End Function
 
         Protected Overrides Function LoadAuthorLibrary() As Boolean
@@ -1321,10 +1551,106 @@ Public Class ManuscriptPageTests
             MyBase.Dispose(disposing)
             Try
                 If Directory.Exists(_authorDirectory) Then Directory.Delete(_authorDirectory, True)
+                If File.Exists(BackupPath) Then File.Delete(BackupPath)
             Catch ex As IOException
             End Try
         End Sub
     End Class
+
+    ' Closes any Windows dialog (a message box or a file dialog, class #32770)
+    ' that opens on the test thread while it is alive, and keeps their titles:
+    ' a production dialog then fails a test by name instead of blocking it.
+    Private NotInheritable Class DialogWatcher
+        Implements IDisposable
+
+        Private ReadOnly _threadId As Integer = GetCurrentThreadId()
+        Private ReadOnly _timer As New System.Windows.Forms.Timer With {.Interval = 50}
+        Private ReadOnly _seen As New HashSet(Of IntPtr)()
+
+        Public ReadOnly Closed As New List(Of String)()
+
+        Public Sub New()
+            AddHandler _timer.Tick, AddressOf CloseDialogs
+            _timer.Start()
+        End Sub
+
+        Private Sub CloseDialogs(sender As Object, e As EventArgs)
+            EnumThreadWindows(_threadId,
+                Function(handle, parameter)
+                    Dim className As New System.Text.StringBuilder(256)
+                    GetClassName(handle, className, className.Capacity)
+                    If className.ToString() = "#32770" AndAlso IsWindowVisible(handle) AndAlso _seen.Add(handle) Then
+                        Dim title As New System.Text.StringBuilder(256)
+                        GetWindowText(handle, title, title.Capacity)
+                        Closed.Add(title.ToString())
+                        PostMessage(handle, WM_CLOSE, IntPtr.Zero, IntPtr.Zero)
+                    End If
+                    Return True
+                End Function, IntPtr.Zero)
+        End Sub
+
+        Public Sub Dispose() Implements IDisposable.Dispose
+            _timer.Dispose()
+        End Sub
+    End Class
+
+    ' An update that is always available and accepted at once, then
+    ' downloaded and applied without Velopack or a network.
+    Private NotInheritable Class ScriptedUpdate
+
+        Public Window As Control
+        Public Offered, Downloaded, Applied As Integer
+        Public WindowEnabledWhileDownloading As Boolean = True
+        Public CheckFailure As Exception
+        Public DownloadFailure As Exception
+        Public ReadOnly Reports As New List(Of String)()
+
+        Public Function Steps() As UpdateSteps
+            Return New UpdateSteps With {
+                .Manager = Function(channel) Nothing,
+                .IsInstalled = Function(manager) True,
+                .Check = Function(manager) If(CheckFailure Is Nothing, Task.FromResult(Available()), Task.FromException(Of UpdateInfo)(CheckFailure)),
+                .Offer = Function(owner, currentVersion, availableVersion, channelName, releaseNotes)
+                             Offered += 1
+                             Return True
+                         End Function,
+                .Download = Function(manager, updateInfo, progress)
+                                Downloaded += 1
+                                WindowEnabledWhileDownloading = Window.Enabled
+                                If DownloadFailure IsNot Nothing Then Return Task.FromException(DownloadFailure)
+                                Return Task.CompletedTask
+                            End Function,
+                .Apply = Sub(manager, release) Applied += 1,
+                .Report = Sub(owner, text, title, icon) Reports.Add(title & ": " & text)
+            }
+        End Function
+
+        Private Shared Function Available() As UpdateInfo
+            Dim release As New VelopackAsset With {
+                .PackageId = "PaperRoute",
+                .Version = New SemanticVersion(New Version(9, 9, 9, 0), Nothing, Nothing),
+                .NotesMarkdown = "A fictional release."
+            }
+            Return New UpdateInfo(release, False, Nothing, Nothing)
+        End Function
+    End Class
+
+    Private Shared Function BackedUpJson(backupPath As String) As String
+        Using archive As ZipArchive = ZipFile.OpenRead(backupPath)
+            Using reader As New StreamReader(archive.GetEntry("manuscripts.json").Open())
+                Return reader.ReadToEnd()
+            End Using
+        End Using
+    End Function
+
+    Private Shared Sub PumpUntilComplete(operation As Task)
+        Dim timer As Diagnostics.Stopwatch = Diagnostics.Stopwatch.StartNew()
+        While Not operation.IsCompleted AndAlso timer.Elapsed < TimeSpan.FromSeconds(10)
+            Application.DoEvents()
+            Thread.Sleep(1)
+        End While
+        Assert.IsTrue(operation.IsCompleted, "The update check timed out.")
+    End Sub
 
     Private Shared Sub RunOnStaThread(action As Action)
         Dim failure As Exception = Nothing
@@ -1381,6 +1707,12 @@ Public Class ManuscriptPageTests
 
     <System.Runtime.InteropServices.DllImport("user32.dll")>
     Private Shared Function IsWindowVisible(handle As IntPtr) As Boolean
+    End Function
+
+    Private Const WM_CLOSE As UInteger = &H10
+
+    <System.Runtime.InteropServices.DllImport("user32.dll")>
+    Private Shared Function PostMessage(handle As IntPtr, message As UInteger, wParam As IntPtr, lParam As IntPtr) As Boolean
     End Function
 
 End Class
