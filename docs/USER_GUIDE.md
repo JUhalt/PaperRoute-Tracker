@@ -710,6 +710,7 @@ How the numbers work:
 
 - Days are calendar days between dates recorded in PaperRoute. A first decision is the earliest decision recorded for a submission.
 - A missing or inconsistent date (a decision dated before its submission, for example) leaves that value out. Nothing is estimated.
+- A date PaperRoute had to fill in during a spreadsheet import (a missing submission date becomes the day of the import, and a missing decision date the submission date) is noted on the record and counts here as written, so figures that include imported records are approximate to that extent.
 - On the route maps, time with you after a revision request ends at the next recorded Submitted or Under Review history entry. Without one, that stretch is drawn as not recorded.
 - Submissions count under a Journal Library record when they are linked to it or use exactly its name (ignoring capitals and spacing). A different spelling is shown on its own line rather than merged by guess.
 

@@ -297,6 +297,90 @@ Public Class ImporterTests
     End Sub
 
 
+    ' A date the importer made up is written into the record (#126), not
+    ' only into the import-time warning list: which date, and from what.
+    <TestMethod>
+    Public Sub FlexibleImporter_NoSubmissionDate_NotesTheImportDateItUsed()
+
+        Dim workbookPath As String = Path.Combine(_root, "no-submission-date.xlsx")
+
+        Using workbook As New XLWorkbook()
+            Dim worksheet = workbook.Worksheets.Add("Tracker")
+            worksheet.Cell("A1").Value = "Title"
+            worksheet.Cell("B1").Value = "Outlet"
+            worksheet.Cell("C1").Value = "Date Sent"
+            worksheet.Cell("D1").Value = "Comments"
+            worksheet.Cell("A2").Value = "Undated Study"
+            worksheet.Cell("B2").Value = "Journal of Undated Examples"
+            worksheet.Cell("D2").Value = "Synthetic comment."
+            workbook.SaveAs(workbookPath)
+        End Using
+
+        Dim mappings As New List(Of ExcelColumnMapping) From {
+            New ExcelColumnMapping With {.ColumnNumber = 1, .Field = ExcelImportField.Title},
+            New ExcelColumnMapping With {.ColumnNumber = 2, .Field = ExcelImportField.SubmissionJournal},
+            New ExcelColumnMapping With {.ColumnNumber = 3, .Field = ExcelImportField.SubmissionDate},
+            New ExcelColumnMapping With {.ColumnNumber = 4, .Field = ExcelImportField.Notes}
+        }
+
+        Dim result As ExcelImportResult =
+            New FlexibleExcelImporter().Import(workbookPath, "Tracker", 1, mappings)
+
+        Dim submission As JournalSubmission = result.Manuscripts(0).Submissions(0)
+        Dim today As String = DateTime.Today.ToString("yyyy-MM-dd")
+
+        Assert.AreEqual(DateTime.Today, submission.SubmittedDate)
+        Assert.IsTrue(result.Warnings.Any(Function(warning) warning.Contains("no readable submission date")), "The import-time warning stays.")
+        StringAssert.StartsWith(submission.Notes, "Synthetic comment.", "The row's own notes come first.")
+        StringAssert.Contains(submission.Notes, "no submission date", "The record says the date was missing.")
+        StringAssert.Contains(submission.Notes, "import", "The record says where the date came from.")
+        StringAssert.Contains(submission.Notes, today, "The record names the date that was used.")
+
+    End Sub
+
+    <TestMethod>
+    Public Sub FlexibleImporter_NoDecisionDate_NotesTheSubmissionDateItUsed()
+
+        Dim workbookPath As String = Path.Combine(_root, "no-decision-date.xlsx")
+
+        Using workbook As New XLWorkbook()
+            Dim worksheet = workbook.Worksheets.Add("Tracker")
+            worksheet.Cell("A1").Value = "Title"
+            worksheet.Cell("B1").Value = "Outlet"
+            worksheet.Cell("C1").Value = "Date Sent"
+            worksheet.Cell("D1").Value = "Outcome"
+            worksheet.Cell("E1").Value = "Response Date"
+            worksheet.Cell("A2").Value = "Dated Study"
+            worksheet.Cell("B2").Value = "Journal of Dated Examples"
+            worksheet.Cell("C2").Value = New DateTime(2026, 5, 1)
+            worksheet.Cell("D2").Value = "Rejected"
+            workbook.SaveAs(workbookPath)
+        End Using
+
+        Dim mappings As New List(Of ExcelColumnMapping) From {
+            New ExcelColumnMapping With {.ColumnNumber = 1, .Field = ExcelImportField.Title},
+            New ExcelColumnMapping With {.ColumnNumber = 2, .Field = ExcelImportField.SubmissionJournal},
+            New ExcelColumnMapping With {.ColumnNumber = 3, .Field = ExcelImportField.SubmissionDate},
+            New ExcelColumnMapping With {.ColumnNumber = 4, .Field = ExcelImportField.Decision},
+            New ExcelColumnMapping With {.ColumnNumber = 5, .Field = ExcelImportField.DecisionDate}
+        }
+
+        Dim result As ExcelImportResult =
+            New FlexibleExcelImporter().Import(workbookPath, "Tracker", 1, mappings)
+
+        Dim submission As JournalSubmission = result.Manuscripts(0).Submissions(0)
+        Dim decision As EditorialDecisionEvent = submission.Decisions(0)
+
+        Assert.AreEqual(New DateTime(2026, 5, 1), decision.DecisionDate)
+        Assert.IsTrue(result.Warnings.Any(Function(warning) warning.Contains("no readable decision date")), "The import-time warning stays.")
+        StringAssert.Contains(decision.Notes, "Imported from mapped spreadsheet.", "The import note stays.")
+        StringAssert.Contains(decision.Notes, "No decision date was given", "The record says the date was missing.")
+        StringAssert.Contains(decision.Notes, "submission date", "The record says where the date came from.")
+        StringAssert.Contains(decision.Notes, "2026-05-01", "The record names the date that was used.")
+        Assert.IsFalse(submission.Notes.Contains("no submission date"), "A submission that had its date gets no such note.")
+
+    End Sub
+
     Private Function CreateMinimalWorkbook(fileName As String) As String
 
         Dim workbookPath As String = System.IO.Path.Combine(_root, fileName)
