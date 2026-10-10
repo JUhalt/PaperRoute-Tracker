@@ -1,4 +1,5 @@
 Imports System
+Imports System.Threading.Tasks
 Imports System.Windows.Forms
 Imports Velopack
 Imports ManuscriptPipeline.Forms
@@ -21,6 +22,18 @@ Friend Module Program
         ' user's library is never opened.
         Dim isExample As Boolean = ExampleLibraryService.IsExampleLaunch(args)
         If isExample Then ExampleLibraryService.StartSession()
+
+        ' Unexpected errors are recorded on this computer and never sent
+        ' (#120): a crash anywhere in the process, and a faulted task nobody
+        ' awaited, which gets a report only. After the example session is
+        ' configured, so its reports go to the disposable session too.
+        Dim errorReports As New ErrorReportService()
+
+        AddHandler AppDomain.CurrentDomain.UnhandledException,
+            AddressOf errorReports.OnUnhandledException
+
+        AddHandler TaskScheduler.UnobservedTaskException,
+            AddressOf errorReports.OnUnobservedTaskException
 
         ' One window per library (#77): a second launch brings the running
         ' window forward and exits before touching storage.

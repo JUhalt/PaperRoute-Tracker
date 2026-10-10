@@ -243,10 +243,22 @@ Namespace Forms
             builder.AppendLine("Reusable metadata library: " & authorRepository.DataFilePath)
             builder.AppendLine("Managed library: " & managedLibrary.RootDirectory)
             builder.AppendLine("Removed files: " & managedLibrary.RemovedDirectory)
+            builder.AppendLine("Last error report: " & LastErrorReportText())
             builder.AppendLine("Legacy data retained: " & If(Directory.Exists(StorageMigrationService.LegacyDataRoot()), "Yes", "No"))
             builder.AppendLine("Legacy library retained: " & If(Directory.Exists(StorageMigrationService.LegacyManagedLibraryRoot()), "Yes", "No"))
 
             Return builder.ToString()
+
+        End Function
+
+
+        ' The newest local error report (#120), or None.
+        Private Shared Function LastErrorReportText() As String
+
+            Dim reportPath As String =
+                New ErrorReportService().LastReportPath()
+
+            Return If(reportPath.Length = 0, "None", reportPath)
 
         End Function
 
