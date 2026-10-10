@@ -11,6 +11,16 @@ Namespace Services
         Private ReadOnly _managedLibrary As ManagedLibraryService
 
 
+        ' Restore's safety limits, so a library too large to take back is
+        ' reported now rather than when the backup is needed (#114).
+        ' Settable only so a test need not write twenty thousand files.
+        Friend Property MaximumArchiveEntries As Integer =
+            PortableRestoreService.MaximumArchiveEntries
+
+        Friend Property MaximumUncompressedBytes As Long =
+            PortableRestoreService.MaximumUncompressedBytes
+
+
         Public Sub New()
             _managedLibrary = New ManagedLibraryService()
         End Sub
@@ -32,6 +42,27 @@ Namespace Services
             destinationZipPath As String,
             manuscripts As List(Of Manuscript),
             repository As ManuscriptRepository
+        )
+
+            CreateBackup(
+                destinationZipPath,
+                manuscripts,
+                repository,
+                proveRestorable:=True
+            )
+
+        End Sub
+
+
+        ' proveRestorable holds the finished ZIP to Restore's acceptance
+        ' checks. Restore's own emergency copy of the current library passes
+        ' False: that library may be the reason for the restore, and a
+        ' managed file missing from it must not stop the restore (#114).
+        Friend Sub CreateBackup(
+            destinationZipPath As String,
+            manuscripts As List(Of Manuscript),
+            repository As ManuscriptRepository,
+            proveRestorable As Boolean
         )
 
             If String.IsNullOrWhiteSpace(destinationZipPath) Then
@@ -58,6 +89,11 @@ Namespace Services
                     Path.GetTempPath(),
                     "PaperRouteBackup_" & Guid.NewGuid().ToString("N")
                 )
+
+            ' The ZIP is written here, beside the destination, and takes
+            ' the destination's place only once it is finished and proved.
+            Dim partialZipPath As String =
+                destinationZipPath & ".partial"
 
             Try
 
@@ -239,26 +275,59 @@ Namespace Services
                 ' ZIP
                 ' =============================================
 
-                If File.Exists(destinationZipPath) Then
-                    File.Delete(destinationZipPath)
+                ' A full or unplugged drive, or a failed write, must never
+                ' cost the previous backup (#114): write beside it, prove
+                ' the archive, and only then replace it.
+                If File.Exists(partialZipPath) Then
+                    File.Delete(partialZipPath)
                 End If
 
                 ZipFile.CreateFromDirectory(
                     stagingDirectory,
-                    destinationZipPath,
+                    partialZipPath,
                     CompressionLevel.Optimal,
                     False
                 )
 
-            Finally
+                ' The staging copy has served: removing it now keeps one
+                ' copy of the library in %TEMP% while the archive is proved,
+                ' which extracts it again.
+                DeleteStagingDirectory(
+                    stagingDirectory
+                )
 
-                If Directory.Exists(stagingDirectory) Then
+                If proveRestorable Then
+
+                    ThrowIfLargerThanRestoreAccepts(
+                        partialZipPath
+                    )
+
+                    Call New PortableRestoreService(
+                        _managedLibrary.RootDirectory
+                    ).InspectBackup(
+                        partialZipPath
+                    )
+
+                End If
+
+                ' With a backup name, ReplaceFile keeps both files under
+                ' their own names if it fails after removing the destination;
+                ' the sibling goes once the swap has succeeded.
+                Dim previousZipPath As String =
+                    destinationZipPath & ".previous"
+
+                StorageFile.Replace(
+                    partialZipPath,
+                    destinationZipPath,
+                    previousZipPath
+                )
+
+                If File.Exists(previousZipPath) Then
 
                     Try
 
-                        Directory.Delete(
-                            stagingDirectory,
-                            True
+                        File.Delete(
+                            previousZipPath
                         )
 
                     Catch
@@ -267,9 +336,106 @@ Namespace Services
 
                 End If
 
+            Finally
+
+                If File.Exists(partialZipPath) Then
+
+                    Try
+
+                        File.Delete(
+                            partialZipPath
+                        )
+
+                    Catch
+                        ' Temporary cleanup is best-effort.
+                    End Try
+
+                End If
+
+                DeleteStagingDirectory(
+                    stagingDirectory
+                )
+
             End Try
 
         End Sub
+
+
+        Private Shared Sub DeleteStagingDirectory(
+            stagingDirectory As String
+        )
+
+            If Directory.Exists(stagingDirectory) Then
+
+                Try
+
+                    Directory.Delete(
+                        stagingDirectory,
+                        True
+                    )
+
+                Catch
+                    ' Temporary cleanup is best-effort.
+                End Try
+
+            End If
+
+        End Sub
+
+
+        ' Restore refuses an archive over its safety limits, so a library
+        ' that size is reported here, at backup time (#114).
+        Private Sub ThrowIfLargerThanRestoreAccepts(
+            zipPath As String
+        )
+
+            Dim entries As Integer
+            Dim uncompressedBytes As Long = 0
+
+            Using archive As ZipArchive = ZipFile.OpenRead(zipPath)
+
+                entries = archive.Entries.Count
+
+                For Each entry As ZipArchiveEntry In archive.Entries
+                    uncompressedBytes += entry.Length
+                Next
+
+            End Using
+
+            If entries > MaximumArchiveEntries Then
+
+                Throw New InvalidDataException(
+                    "Restore accepts a backup of up to " &
+                    MaximumArchiveEntries.ToString("N0") &
+                    " files, and this library has " &
+                    entries.ToString("N0") &
+                    ". The backup was not written."
+                )
+
+            End If
+
+            If uncompressedBytes > MaximumUncompressedBytes Then
+
+                Throw New InvalidDataException(
+                    "Restore accepts a backup of up to " &
+                    Gigabytes(MaximumUncompressedBytes) &
+                    " GB, and this library is " &
+                    Gigabytes(uncompressedBytes) &
+                    " GB. The backup was not written."
+                )
+
+            End If
+
+        End Sub
+
+
+        Private Shared Function Gigabytes(
+            bytes As Long
+        ) As String
+
+            Return (bytes / 1073741824.0).ToString("0.#")
+
+        End Function
 
 
         Private Sub CopyDirectory(

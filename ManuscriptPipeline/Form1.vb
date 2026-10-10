@@ -1139,15 +1139,17 @@ Public Class Form1
 
             If repository.LastLoadRecoveredFromBackup Then
 
+                ' The .bak is the library as it was before the last save,
+                ' not the latest data: say so plainly (#111).
                 Dim recoveryMessage As String =
-                "PaperRoute detected a problem with the primary manuscript data file." &
+                "PaperRoute could not read the manuscript data file, so it opened the previous save instead." &
                 Environment.NewLine &
                 Environment.NewLine &
-                "Your library was recovered successfully from the automatic safety backup." &
+                "The previous save is PaperRoute's automatic safety backup: your library as it was before the last save. Changes made in that last save are not in it." &
                 Environment.NewLine &
                 Environment.NewLine &
                 manuscripts.Count.ToString() &
-                " manuscript(s) were recovered."
+                " manuscript(s) were loaded from the previous save."
 
                 If Not String.IsNullOrWhiteSpace(
                 repository.LastRecoveryPreservedFilePath
@@ -1156,7 +1158,7 @@ Public Class Form1
                     recoveryMessage &=
                     Environment.NewLine &
                     Environment.NewLine &
-                    "The damaged primary file was preserved for recovery and diagnostics at:" &
+                    "The file PaperRoute could not read was kept at:" &
                     Environment.NewLine &
                     repository.LastRecoveryPreservedFilePath
 
@@ -1179,18 +1181,18 @@ Public Class Form1
                 recoveryMessage &=
                 Environment.NewLine &
                 Environment.NewLine &
-                "PaperRoute has restored a valid primary data file and can continue normally."
+                "Check your most recent changes before going on."
 
                 MessageBox.Show(
                 Me,
                 recoveryMessage,
-                "Library Recovered",
+                "Previous Save Opened",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning
             )
 
                 lblStatus.Text =
-                "Library recovered from safety backup - " &
+                "Opened the previous save of the library - " &
                 DateTime.Now.ToString("h:mm tt")
 
             Else
@@ -1229,6 +1231,26 @@ Public Class Form1
             End If
 
             Return True
+
+        Catch ex As StorageFileInUseException
+
+            ' Not damage, and nothing was recovered: the message already
+            ' says what to do (#111).
+            manuscripts =
+            New List(Of Manuscript)()
+
+            MessageBox.Show(
+            Me,
+            ex.Message,
+            "Library File In Use",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Warning
+        )
+
+            lblStatus.Text =
+            "The library file is in use by another program."
+
+            Return False
 
         Catch ex As Exception
 
@@ -1282,8 +1304,13 @@ Public Class Form1
 
             If authorRepository.LastLoadRecoveredFromBackup Then
 
+                ' The .bak is the author library as it was before the last
+                ' save, not the latest data: say so plainly (#111).
                 Dim message As String =
-                    "PaperRoute recovered the reusable author library from its safety backup."
+                    "PaperRoute could not read the author library, so it opened the previous save instead." &
+                    Environment.NewLine &
+                    Environment.NewLine &
+                    "The previous save is PaperRoute's automatic safety backup: your authors as they were before the last save. Changes made in that last save are not in it."
 
                 If Not String.IsNullOrWhiteSpace(
                     authorRepository.LastRecoveryPreservedFilePath
@@ -1292,7 +1319,7 @@ Public Class Form1
                     message &=
                         Environment.NewLine &
                         Environment.NewLine &
-                        "The damaged author-library file was preserved at:" &
+                        "The file PaperRoute could not read was kept at:" &
                         Environment.NewLine &
                         authorRepository.LastRecoveryPreservedFilePath
 
@@ -1301,7 +1328,7 @@ Public Class Form1
                 MessageBox.Show(
                     Me,
                     message,
-                    "Author Library Recovered",
+                    "Previous Save Opened",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Warning
                 )

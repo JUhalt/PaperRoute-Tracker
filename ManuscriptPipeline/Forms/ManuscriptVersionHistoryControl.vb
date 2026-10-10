@@ -1,6 +1,5 @@
 ﻿Imports System
 Imports System.Collections.Generic
-Imports System.Diagnostics
 Imports System.Drawing
 Imports System.IO
 Imports System.Linq
@@ -1297,13 +1296,9 @@ Namespace Forms
 
             Try
 
-                Process.Start(
-                    New ProcessStartInfo With {
-                        .FileName =
-                            selected.LocalFilePath,
-                        .UseShellExecute =
-                            True
-                    }
+                FileOpenService.OpenRecordedFile(
+                    Me,
+                    selected.LocalFilePath
                 )
 
             Catch ex As Exception
