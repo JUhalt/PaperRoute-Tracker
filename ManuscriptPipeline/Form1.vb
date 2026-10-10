@@ -1235,27 +1235,14 @@ Public Class Form1
             manuscripts =
             New List(Of Manuscript)()
 
-            Dim errorMessage As String =
-            "PaperRoute could not safely load your manuscript library." &
-            Environment.NewLine &
-            Environment.NewLine &
-            "The primary data file could not be read, and PaperRoute could not recover a valid safety backup." &
-            Environment.NewLine &
-            Environment.NewLine &
-            "PaperRoute will close rather than continue with an empty library. Your existing data files have not been intentionally overwritten." &
-            Environment.NewLine &
-            Environment.NewLine &
-            "Error details:" &
-            Environment.NewLine &
-            ex.Message
-
-            MessageBox.Show(
-            Me,
-            errorMessage,
-            "Library Could Not Be Loaded",
-            MessageBoxButtons.OK,
-            MessageBoxIcon.Error
-        )
+            ' What failed and where, in place of the message box (#119).
+            StartupFailureForm.ShowFailure(
+                StartupFailure.ForManuscriptLibrary(
+                    ex,
+                    repository.DataFilePath
+                ),
+                Me
+            )
 
             lblStatus.Text =
             "Library could not be loaded safely."
@@ -1312,18 +1299,13 @@ Public Class Form1
 
         Catch ex As Exception
 
-            MessageBox.Show(
-                Me,
-                "PaperRoute could not safely load the reusable author library." &
-                Environment.NewLine &
-                Environment.NewLine &
-                ex.Message &
-                Environment.NewLine &
-                Environment.NewLine &
-                "PaperRoute will close rather than continue with uncertain author metadata.",
-                "Author Library Could Not Be Loaded",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error
+            ' What failed and where, in place of the message box (#119).
+            StartupFailureForm.ShowFailure(
+                StartupFailure.ForAuthorLibrary(
+                    ex,
+                    authorRepository.DataFilePath
+                ),
+                Me
             )
 
             Return False

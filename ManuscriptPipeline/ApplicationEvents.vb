@@ -17,24 +17,10 @@ Namespace My
             Dim settings As AppSettings =
                 settingsService.Load()
 
-            Select Case settings.Appearance
-
-                Case AppAppearance.Light
-
-                    e.ColorMode =
-                        SystemColorMode.Classic
-
-                Case AppAppearance.Dark
-
-                    e.ColorMode =
-                        SystemColorMode.Dark
-
-                Case Else
-
-                    e.ColorMode =
-                        SystemColorMode.System
-
-            End Select
+            e.ColorMode =
+                UiTheme.ColorModeFor(
+                    settings.Appearance
+                )
 
         End Sub
 

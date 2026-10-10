@@ -1,6 +1,7 @@
 Imports System
 Imports System.Windows.Forms
 Imports Velopack
+Imports ManuscriptPipeline.Forms
 Imports ManuscriptPipeline.Services
 
 Friend Module Program
@@ -52,22 +53,13 @@ Friend Module Program
 
         Catch ex As Exception
 
-            MessageBox.Show(
-                "PaperRoute could not safely prepare its local storage." &
-                Environment.NewLine &
-                Environment.NewLine &
-                "The storage format could not be verified, so PaperRoute will close rather than risk opening or rewriting data with an unknown format." &
-                Environment.NewLine &
-                Environment.NewLine &
-                "Existing source data has been preserved wherever possible." &
-                Environment.NewLine &
-                Environment.NewLine &
-                "Error details:" &
-                Environment.NewLine &
-                ex.Message,
-                "PaperRoute Storage Error",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error
+            ' What failed and where, with the actions Diagnostics would
+            ' offer if PaperRoute could start (#119).
+            StartupFailureForm.ShowBeforeStartup(
+                StartupFailure.ForStorage(
+                    ex,
+                    StorageMigrationService.SchemaFilePath()
+                )
             )
 
             Return
