@@ -38,6 +38,27 @@ Namespace My
 
         End Sub
 
+
+        ' An error on the UI thread (#121): the main window shows one plain
+        ' dialog and decides whether PaperRoute closes. With no window left
+        ' to keep working in, PaperRoute exits as the stock dialog's Quit did.
+        Private Sub MyApplication_UnhandledException(
+            sender As Object,
+            e As UnhandledExceptionEventArgs
+        ) Handles Me.UnhandledException
+
+            Dim window As Form1 =
+                Application.OpenForms.OfType(Of Form1)().FirstOrDefault()
+
+            If window Is Nothing OrElse window.IsDisposed Then
+                Return
+            End If
+
+            e.ExitApplication = False
+            window.ReportUnhandledError(e.Exception)
+
+        End Sub
+
     End Class
 
 End Namespace

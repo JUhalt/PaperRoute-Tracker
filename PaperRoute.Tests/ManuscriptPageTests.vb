@@ -481,6 +481,53 @@ Public Class ManuscriptPageTests
             End Sub)
     End Sub
 
+    ' The plain error dialog (#121) keeps the unsaved page reachable: Close
+    ' PaperRoute goes through the normal close, Keep Working changes nothing.
+    <TestMethod>
+    Public Sub AnUnexpectedErrorOffersKeepWorkingOrTheNormalClose()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard()
+                    Dim manuscript As Manuscript = Sample("Original title")
+                    board.Prepare(manuscript)
+                    board.Open(manuscript)
+                    board.Field("Title").Text = "Edited title"
+
+                    Dim reported As Exception = Nothing
+                    Dim unsavedShown As Boolean = False
+                    Dim choice As DialogResult = DialogResult.Abort
+                    board.SetErrorPrompt(Function(failure, unsaved)
+                                             reported = failure
+                                             unsavedShown = unsaved
+                                             Return choice
+                                         End Function)
+                    Dim asked As Integer = 0
+                    board.SetPrompt(Function(title)
+                                       asked += 1
+                                       Return DialogResult.Cancel
+                                   End Function)
+
+                    Dim problem As New InvalidOperationException("The route map could not be drawn.")
+                    board.ReportUnhandledError(problem)
+                    Assert.AreSame(problem, reported)
+                    Assert.IsTrue(unsavedShown, "The dialog is told the page has unsaved edits.")
+                    Assert.AreEqual(1, asked, "Close PaperRoute goes through the normal close, which asks about the edits.")
+                    Assert.IsFalse(board.IsDisposed, "Cancel there keeps PaperRoute open.")
+                    Assert.AreEqual("Edited title", board.Field("Title").Text, "The edits are still there.")
+
+                    choice = DialogResult.Cancel
+                    board.ReportUnhandledError(problem)
+                    Assert.AreEqual(1, asked, "Keep Working asks nothing.")
+                    Assert.IsFalse(board.IsDisposed)
+                    Assert.AreEqual("Manuscript", board.PageName, "Keep Working returns to the page.")
+                    Assert.AreEqual("Edited title", board.Field("Title").Text, "The page is intact.")
+
+                    board.SetPrompt(Function(title) DialogResult.No)
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
     <TestMethod>
     Public Sub DeletingFromThePageRemovesTheManuscriptAndReturns()
         RunOnStaThread(
@@ -1640,6 +1687,10 @@ Public Class ManuscriptPageTests
         ' A method rather than a property, which WinForms would try to serialize.
         Public Sub SetPrompt(value As Func(Of String, DialogResult))
             unsavedChangesPrompt = value
+        End Sub
+
+        Public Sub SetErrorPrompt(value As Func(Of Exception, Boolean, DialogResult))
+            unhandledErrorPrompt = value
         End Sub
 
         Public ReadOnly Property SaveBarVisible As Boolean

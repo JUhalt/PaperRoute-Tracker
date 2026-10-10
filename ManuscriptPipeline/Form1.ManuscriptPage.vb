@@ -29,6 +29,10 @@ Partial Public Class Form1
     ' Asks what to do with unsaved manuscript changes. Tests replace it.
     Friend unsavedChangesPrompt As Func(Of String, DialogResult) = Nothing
 
+    ' Shows an unexpected error, given whether there are unsaved changes;
+    ' Abort means Close PaperRoute (#121). Tests replace it.
+    Friend unhandledErrorPrompt As Func(Of Exception, Boolean, DialogResult) = Nothing
+
 
     ' Creates the page's editor. Tests supply a disposable author library.
     Protected Overridable Function CreateManuscriptEditor(
@@ -655,10 +659,7 @@ Partial Public Class Form1
         noHint As String
     ) As Boolean
 
-        If currentPage <> WorkspacePage.Manuscript OrElse
-           manuscriptEditor Is Nothing OrElse
-           manuscriptEditor.IsDisposed OrElse
-           Not manuscriptEditor.HasUnsavedChanges() Then
+        If Not HasUnsavedPageEdits() Then
             Return True
         End If
 
@@ -687,6 +688,43 @@ Partial Public Class Form1
         End Select
 
     End Function
+
+
+    Private Function HasUnsavedPageEdits() As Boolean
+
+        Return currentPage = WorkspacePage.Manuscript AndAlso
+            manuscriptEditor IsNot Nothing AndAlso
+            Not manuscriptEditor.IsDisposed AndAlso
+            manuscriptEditor.HasUnsavedChanges()
+
+    End Function
+
+
+    ' An error on the UI thread (#121): one plain dialog that says what
+    ' happened and whether there are unsaved changes. Keep Working returns
+    ' to the window; Close PaperRoute closes it the normal way, so the Save
+    ' or Discard question still appears.
+    Friend Sub ReportUnhandledError(
+        failure As Exception
+    )
+
+        Dim unsavedChanges As Boolean = HasUnsavedPageEdits() OrElse librarySaveFailed
+
+        Dim choice As DialogResult
+
+        If unhandledErrorPrompt IsNot Nothing Then
+            choice = unhandledErrorPrompt(failure, unsavedChanges)
+        Else
+            Using dialog As New UnexpectedErrorForm(failure, unsavedChanges, UnexpectedErrorForm.LogFolder())
+                choice = dialog.ShowDialog(Me)
+            End Using
+        End If
+
+        If choice = DialogResult.Abort Then
+            Close()
+        End If
+
+    End Sub
 
 
     ' A save failed since the last good one (#113): closing would lose the
