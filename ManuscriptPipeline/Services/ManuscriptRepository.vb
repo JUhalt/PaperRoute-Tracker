@@ -144,6 +144,29 @@ Namespace Services
         End Property
 
 
+        ' Where the copies taken before an import go (#122).
+        Public ReadOnly Property PreImportBackupDirectory As String
+            Get
+                Return Path.Combine(
+                    _dataDirectory,
+                    "backups"
+                )
+            End Get
+        End Property
+
+
+        ' Where a load from the safety backup keeps the file it could not
+        ' read. The load names the folder itself; this is for Diagnostics.
+        Public ReadOnly Property RecoveryDirectory As String
+            Get
+                Return Path.Combine(
+                    _dataDirectory,
+                    "recovery"
+                )
+            End Get
+        End Property
+
+
         Public ReadOnly Property LastLoadRecoveredFromBackup As Boolean
             Get
                 Return _lastLoadRecoveredFromBackup
@@ -1148,48 +1171,70 @@ Namespace Services
         ' Pre-import safety backup
         ' =====================================================
 
+        ' Copies manuscripts.json, and authors.json beside it (#122), into the
+        ' backups folder under one time stamp, so an import that changed both
+        ' can be put back whole. Returns the folder when a copy was made, or
+        ' an empty string when there is no library file to copy yet.
         Public Function CreatePreImportBackup() As String
 
-            If Not File.Exists(
-                _dataFilePath
-            ) Then
+            Dim authorsFilePath As String =
+                Path.Combine(
+                    _dataDirectory,
+                    "authors.json"
+                )
+
+            If Not File.Exists(_dataFilePath) AndAlso
+               Not File.Exists(authorsFilePath) Then
 
                 Return String.Empty
 
             End If
 
-            Dim backupDirectory As String =
-                Path.Combine(
-                    _dataDirectory,
-                    "backups"
-                )
-
             Directory.CreateDirectory(
-                backupDirectory
+                PreImportBackupDirectory
             )
 
-            Dim backupName As String =
-                "manuscripts_pre-import_" &
+            Dim stamp As String =
+                "_pre-import_" &
                 DateTime.Now.ToString(
                     "yyyyMMdd_HHmmss"
                 ) &
                 ".json"
 
-            Dim backupPath As String =
-                Path.Combine(
-                    backupDirectory,
-                    backupName
-                )
+            CopyBeforeImport(
+                _dataFilePath,
+                "manuscripts" & stamp
+            )
+
+            CopyBeforeImport(
+                authorsFilePath,
+                "authors" & stamp
+            )
+
+            Return PreImportBackupDirectory
+
+        End Function
+
+
+        Private Sub CopyBeforeImport(
+            sourcePath As String,
+            copyName As String
+        )
+
+            If Not File.Exists(sourcePath) Then
+                Return
+            End If
 
             File.Copy(
-                _dataFilePath,
-                backupPath,
+                sourcePath,
+                Path.Combine(
+                    PreImportBackupDirectory,
+                    copyName
+                ),
                 False
             )
 
-            Return backupPath
-
-        End Function
+        End Sub
 
 
         ' =====================================================

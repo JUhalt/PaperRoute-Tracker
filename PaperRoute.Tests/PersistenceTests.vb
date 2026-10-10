@@ -1195,4 +1195,79 @@ Public Class PersistenceTests
     End Function
 
 
+    ' The pre-import copy is whole (#122): manuscripts.json and authors.json
+    ' together, in the backups folder the guide names, so a bibliography
+    ' import that also changed authors can be put back. The import itself
+    ' runs in the main window; this is the copy it takes first.
+    <TestMethod>
+    Public Sub PreImportBackup_CopiesManuscriptsAndAuthorsTogether()
+
+        Directory.CreateDirectory(
+            _dataDirectory
+        )
+
+        File.WriteAllText(
+            Path.Combine(_dataDirectory, "manuscripts.json"),
+            "[]"
+        )
+
+        File.WriteAllText(
+            Path.Combine(_dataDirectory, "authors.json"),
+            "{""Authors"":[]}"
+        )
+
+        Dim repository As New ManuscriptRepository(
+            _dataDirectory,
+            _managedLibrary
+        )
+
+        Dim backups As String =
+            Path.Combine(
+                _dataDirectory,
+                "backups"
+            )
+
+        Assert.AreEqual(
+            backups,
+            repository.CreatePreImportBackup(),
+            "The copies go to the backups folder, which the import message names."
+        )
+
+        Dim manuscriptCopies As String() =
+            Directory.GetFiles(backups, "manuscripts_pre-import_*.json")
+
+        Assert.AreEqual(
+            1,
+            manuscriptCopies.Length,
+            "One copy of manuscripts.json."
+        )
+
+        Dim authorCopies As String() =
+            Directory.GetFiles(backups, "authors_pre-import_*.json")
+
+        Assert.AreEqual(
+            1,
+            authorCopies.Length,
+            "One copy of authors.json beside it."
+        )
+
+        Assert.AreEqual(
+            "[]",
+            File.ReadAllText(manuscriptCopies(0))
+        )
+
+        Assert.AreEqual(
+            "{""Authors"":[]}",
+            File.ReadAllText(authorCopies(0))
+        )
+
+        ' Both copies are of the same moment: the same time in their names.
+        Assert.AreEqual(
+            Path.GetFileName(manuscriptCopies(0)).Replace("manuscripts_", String.Empty),
+            Path.GetFileName(authorCopies(0)).Replace("authors_", String.Empty)
+        )
+
+    End Sub
+
+
 End Class

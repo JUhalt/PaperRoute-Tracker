@@ -3974,9 +3974,13 @@ Public Class Form1
             End If
 
 
+            Dim preImportCopies As String =
+                String.Empty
+
             Try
 
-                repository.CreatePreImportBackup()
+                preImportCopies =
+                    repository.CreatePreImportBackup()
 
             Catch ex As Exception
 
@@ -4029,14 +4033,29 @@ Public Class Form1
 
             RenderManuscripts()
 
-            MessageBox.Show(
-            Me,
+            Dim completeMessage As String =
             manuscriptsToAdd.Count.ToString() &
             " manuscript(s) were imported successfully." &
             Environment.NewLine &
             Environment.NewLine &
             "Format: " &
-            detectedFormat,
+            detectedFormat
+
+            ' Where to find the library as it was (#122).
+            If preImportCopies.Length > 0 Then
+
+                completeMessage &=
+                Environment.NewLine &
+                Environment.NewLine &
+                "A copy of your library from before this import is in:" &
+                Environment.NewLine &
+                preImportCopies
+
+            End If
+
+            MessageBox.Show(
+            Me,
+            completeMessage,
             "Import Complete",
             MessageBoxButtons.OK,
             MessageBoxIcon.Information

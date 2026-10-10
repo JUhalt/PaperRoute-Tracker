@@ -542,9 +542,13 @@ Namespace Forms
                     Dim selectedWorkCount As Integer =
                         dialog.Options.SelectedWorkPutCodes.Count
 
+                    Dim preImportCopies As String =
+                        String.Empty
+
                     If selectedWorkCount > 0 Then
 
-                        _manuscriptRepository.CreatePreImportBackup()
+                        preImportCopies =
+                            _manuscriptRepository.CreatePreImportBackup()
 
                     End If
 
@@ -587,6 +591,18 @@ Namespace Forms
                             Environment.NewLine &
                             "Duplicate works skipped: " &
                             result.DuplicateWorksSkipped.ToString()
+
+                    End If
+
+                    ' Where to find the library as it was (#122).
+                    If preImportCopies.Length > 0 Then
+
+                        message &=
+                            Environment.NewLine &
+                            Environment.NewLine &
+                            "A copy of your library from before this import is in:" &
+                            Environment.NewLine &
+                            preImportCopies
 
                     End If
 
