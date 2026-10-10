@@ -1164,6 +1164,20 @@ Public Class Form1
 
                 End If
 
+                ' Staged folders this backup does not reference were kept, in
+                ' case the set-aside primary file needs them. Nothing failed,
+                ' so this rides on the recovery dialog, not a warning.
+                If Not String.IsNullOrWhiteSpace(
+                repository.LastRecoveryKeptStagingNotice
+            ) Then
+
+                    recoveryMessage &=
+                    Environment.NewLine &
+                    Environment.NewLine &
+                    repository.LastRecoveryKeptStagingNotice
+
+                End If
+
                 recoveryMessage &=
                 Environment.NewLine &
                 Environment.NewLine &
@@ -1358,6 +1372,18 @@ Public Class Form1
             lblStatus.Text =
             "Saved locally - " &
             DateTime.Now.ToString("h:mm tt")
+
+            ' A folder a file in use kept in place is named here; the save
+            ' itself went through, so there is no dialog.
+            If Not String.IsNullOrWhiteSpace(
+                repository.LastSaveWarning
+            ) Then
+
+                lblStatus.Text &=
+                ". " &
+                repository.LastSaveWarning
+
+            End If
 
             Return True
 

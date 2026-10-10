@@ -3,6 +3,7 @@ Imports System.Collections.Generic
 Imports System.IO
 Imports System.Text.Json
 Imports System.Text.Json.Serialization
+Imports System.Text.RegularExpressions
 Imports ManuscriptPipeline.Models
 
 Friend Module TestSupport
@@ -38,6 +39,54 @@ Friend Module TestSupport
         End Try
 
     End Sub
+
+
+    ' Where a save or a load puts a managed folder the library no longer
+    ' needs: under removed\<date>, keeping the folder's path in the library.
+    ' Exactly one dated folder is expected.
+    Public Function RemovedCopyOf(
+        managedDirectory As String,
+        originalDirectory As String
+    ) As String
+
+        Dim removedRoot As String =
+            Path.Combine(
+                managedDirectory,
+                "removed"
+            )
+
+        Dim dated As String() =
+            If(
+                Directory.Exists(removedRoot),
+                Directory.GetDirectories(removedRoot),
+                Array.Empty(Of String)()
+            )
+
+        If dated.Length <> 1 OrElse
+           Not Regex.IsMatch(
+               Path.GetFileName(dated(0)),
+               "^\d{4}-\d{2}-\d{2}$"
+           ) Then
+
+            Throw New InvalidOperationException(
+                "Expected one dated folder under " &
+                removedRoot &
+                ", found " &
+                dated.Length.ToString() &
+                "."
+            )
+
+        End If
+
+        Return Path.Combine(
+            dated(0),
+            Path.GetRelativePath(
+                managedDirectory,
+                originalDirectory
+            )
+        )
+
+    End Function
 
 
     Public Function CreateJsonOptions() As JsonSerializerOptions

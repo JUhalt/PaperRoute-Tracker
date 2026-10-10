@@ -21,6 +21,23 @@ Namespace Services
             String.Empty
         Private _lastManagedLibraryRecoveryWarning As String =
             String.Empty
+        Private _lastRecoveryKeptStagingNotice As String =
+            String.Empty
+        Private _lastSaveWarning As String =
+            String.Empty
+
+        ' The managed folders this library referenced when it was last
+        ' loaded or saved. A save stages only a folder in this baseline that
+        ' the library no longer references, so folders another computer's
+        ' library, a set-aside newer file, or a library never loaded from
+        ' disk may still need are left alone. Nothing until a load or save,
+        ' and then a save stages nothing.
+        Private _baselineVersions As Dictionary(Of Guid, HashSet(Of Guid)) =
+            Nothing
+        Private _baselinePacketFiles As Dictionary(Of Guid, Dictionary(Of Guid, HashSet(Of Guid))) =
+            Nothing
+        Private _baselineCorrespondence As Dictionary(Of Guid, HashSet(Of (SubmissionId As Guid, ItemId As Guid))) =
+            Nothing
 
 
         Public Sub New()
@@ -163,6 +180,26 @@ Namespace Services
         End Property
 
 
+        ' Set by a load from the safety backup that kept staged folders the
+        ' backup does not reference, in case the set-aside primary file
+        ' needs them; empty otherwise. Nothing failed and nothing is missing,
+        ' so this is a notice, apart from the recovery warning.
+        Public ReadOnly Property LastRecoveryKeptStagingNotice As String
+            Get
+                Return _lastRecoveryKeptStagingNotice
+            End Get
+        End Property
+
+
+        ' Set by a save that went through but left a managed folder in
+        ' place because a file in it was in use; empty otherwise.
+        Public ReadOnly Property LastSaveWarning As String
+            Get
+                Return _lastSaveWarning
+            End Get
+        End Property
+
+
         ' =====================================================
         ' Load
         ' =====================================================
@@ -212,6 +249,10 @@ Namespace Services
                         primary
                     )
 
+                    RecordBaseline(
+                        primary
+                    )
+
                     Return primary
 
                 End If
@@ -236,6 +277,11 @@ Namespace Services
                         )
 
                         TryRecoverManagedLibraryStaging(
+                            backup,
+                            keepUnreferenced:=True
+                        )
+
+                        RecordBaseline(
                             backup
                         )
 
@@ -289,6 +335,11 @@ Namespace Services
             )
 
             TryRecoverManagedLibraryStaging(
+                recovered,
+                keepUnreferenced:=True
+            )
+
+            RecordBaseline(
                 recovered
             )
 
@@ -563,17 +614,35 @@ Namespace Services
         End Function
 
 
+        ' A library recovered from its safety backup can be older than the
+        ' set-aside primary file, so its recovery keeps the staged folders it
+        ' does not reference and reports them instead of discarding them.
         Private Sub TryRecoverManagedLibraryStaging(
-            manuscripts As IEnumerable(Of Manuscript)
+            manuscripts As IEnumerable(Of Manuscript),
+            Optional keepUnreferenced As Boolean = False
         )
 
             Dim failures As New List(Of String)()
+            Dim kept As New List(Of String)()
 
             Try
 
-                _managedLibrary.RecoverStagedVersionDeletions(
-                    manuscripts
-                )
+                If keepUnreferenced Then
+
+                    kept.AddRange(
+                        _managedLibrary.RecoverStagedVersionDeletions(
+                            manuscripts,
+                            keepUnreferenced:=True
+                        )
+                    )
+
+                Else
+
+                    _managedLibrary.RecoverStagedVersionDeletions(
+                        manuscripts
+                    )
+
+                End If
 
             Catch ex As Exception When TypeOf ex Is UnauthorizedAccessException OrElse TypeOf ex Is IOException
 
@@ -589,15 +658,34 @@ Namespace Services
                     _managedLibrary.RootDirectory
                 )
 
-                packetDeletionService.RecoverStagedDeletions(
-                    manuscripts
-                )
+                If keepUnreferenced Then
+
+                    kept.AddRange(
+                        packetDeletionService.RecoverStagedDeletions(
+                            manuscripts,
+                            keepUnreferenced:=True
+                        )
+                    )
+
+                Else
+
+                    packetDeletionService.RecoverStagedDeletions(
+                        manuscripts
+                    )
+
+                End If
 
             Catch ex As Exception When TypeOf ex Is UnauthorizedAccessException OrElse TypeOf ex Is IOException
 
                 failures.Add("Submission Packets: " & ex.Message)
 
             End Try
+
+            If kept.Count > 0 Then
+                _lastRecoveryKeptStagingNotice = BuildKeptStagingNotice(
+                    kept
+                )
+            End If
 
             If failures.Count > 0 Then
                 _lastManagedLibraryRecoveryWarning = BuildManagedLibraryRecoveryWarning(
@@ -641,6 +729,197 @@ Namespace Services
             _lastManagedLibraryRecoveryWarning =
                 String.Empty
 
+            _lastRecoveryKeptStagingNotice =
+                String.Empty
+
+        End Sub
+
+
+        ' A notice, not a warning: nothing failed, nothing is missing, and
+        ' the kept folders hold the only copy of their files.
+        Private Shared Function BuildKeptStagingNotice(
+            kept As List(Of String)
+        ) As String
+
+            Return (
+                "PaperRoute kept " &
+                If(
+                    kept.Count = 1,
+                    "a staged folder",
+                    kept.Count.ToString() & " staged folders"
+                ) &
+                " that this safety backup does not reference, in case the set-aside primary file needs " &
+                If(kept.Count = 1, "it", "them") &
+                ":" &
+                Environment.NewLine &
+                String.Join(Environment.NewLine, kept) &
+                Environment.NewLine &
+                Environment.NewLine &
+                "Nothing is missing. Leave " &
+                If(kept.Count = 1, "it", "them") &
+                " where " &
+                If(kept.Count = 1, "it is", "they are") &
+                "."
+            )
+
+        End Function
+
+
+        ' =====================================================
+        ' Save baseline
+        ' =====================================================
+
+        Private Sub RecordBaseline(
+            manuscripts As IEnumerable(Of Manuscript)
+        )
+
+            _baselineVersions =
+                ManagedLibraryService.BuildReferencedVersionMap(
+                    manuscripts
+                )
+
+            _baselinePacketFiles =
+                ManagedPacketDeletionService.BuildReferencedPacketFileMap(
+                    manuscripts
+                )
+
+            _baselineCorrespondence =
+                ManagedLibraryService.BuildReferencedCorrespondenceMap(
+                    manuscripts
+                )
+
+        End Sub
+
+
+        ' Folders a sweep could not move because a file in them was in use
+        ' stay in the baseline, so the next save tries them again, and are
+        ' named on the status line.
+        Private Sub KeepFoldersLeftInPlace(
+            versionTransaction As ManagedLibraryService.ManagedVersionDeletionTransaction,
+            packetTransaction As ManagedPacketDeletionService.ManagedPacketDeletionTransaction
+        )
+
+            Dim folders As New List(Of String)()
+
+            For Each skipped In versionTransaction.SkippedFolders
+
+                AddBaselineVersion(
+                    skipped.ManuscriptId,
+                    skipped.VersionId
+                )
+
+                folders.Add(
+                    skipped.Folder
+                )
+
+            Next
+
+            For Each skipped In packetTransaction.SkippedFolders
+
+                AddBaselinePacketFile(
+                    skipped.ManuscriptId,
+                    skipped.PacketId,
+                    skipped.PacketFileId
+                )
+
+                folders.Add(
+                    skipped.Folder
+                )
+
+            Next
+
+            If folders.Count = 0 Then
+                Return
+            End If
+
+            If folders.Count = 1 Then
+
+                _lastSaveWarning =
+                    "A folder stayed in place because a file in it is in use: " &
+                    folders(0)
+
+            Else
+
+                _lastSaveWarning =
+                    folders.Count.ToString() &
+                    " folders stayed in place because files in them are in use: " &
+                    String.Join("; ", folders)
+
+            End If
+
+        End Sub
+
+
+        Private Sub AddBaselineVersion(
+            manuscriptId As Guid,
+            versionId As Guid
+        )
+
+            Dim versions As HashSet(Of Guid) =
+                Nothing
+
+            If Not _baselineVersions.TryGetValue(
+                manuscriptId,
+                versions
+            ) Then
+
+                versions =
+                    New HashSet(Of Guid)()
+
+                _baselineVersions(manuscriptId) =
+                    versions
+
+            End If
+
+            versions.Add(
+                versionId
+            )
+
+        End Sub
+
+
+        Private Sub AddBaselinePacketFile(
+            manuscriptId As Guid,
+            packetId As Guid,
+            packetFileId As Guid
+        )
+
+            Dim packets As Dictionary(Of Guid, HashSet(Of Guid)) =
+                Nothing
+
+            If Not _baselinePacketFiles.TryGetValue(
+                manuscriptId,
+                packets
+            ) Then
+
+                packets =
+                    New Dictionary(Of Guid, HashSet(Of Guid))()
+
+                _baselinePacketFiles(manuscriptId) =
+                    packets
+
+            End If
+
+            Dim files As HashSet(Of Guid) =
+                Nothing
+
+            If Not packets.TryGetValue(
+                packetId,
+                files
+            ) Then
+
+                files =
+                    New HashSet(Of Guid)()
+
+                packets(packetId) =
+                    files
+
+            End If
+
+            files.Add(
+                packetFileId
+            )
+
         End Sub
 
 
@@ -659,6 +938,9 @@ Namespace Services
                 )
 
             End If
+
+            _lastSaveWarning =
+                String.Empty
 
             ' Reject dangling packet/readiness references before copying or
             ' staging managed files, or replacing the authoritative database.
@@ -710,9 +992,19 @@ Namespace Services
                 ' are moved into reversible staging before authoritative JSON
                 ' changes. A failed save restores those snapshots; a
                 ' successful save commits their removal.
+                ' Only folders the last load or save referenced are staged;
+                ' without a baseline, nothing is.
                 deletionTransaction =
                     _managedLibrary.BeginVersionDeletionTransaction(
-                        manuscripts
+                        manuscripts,
+                        If(
+                            _baselineVersions,
+                            New Dictionary(Of Guid, HashSet(Of Guid))()
+                        ),
+                        If(
+                            _baselineCorrespondence,
+                            New Dictionary(Of Guid, HashSet(Of (SubmissionId As Guid, ItemId As Guid)))()
+                        )
                     )
 
                 Dim packetDeletionService As New ManagedPacketDeletionService(
@@ -721,7 +1013,11 @@ Namespace Services
 
                 packetDeletionTransaction =
                     packetDeletionService.BeginDeletionTransaction(
-                        manuscripts
+                        manuscripts,
+                        If(
+                            _baselinePacketFiles,
+                            New Dictionary(Of Guid, Dictionary(Of Guid, HashSet(Of Guid)))()
+                        )
                     )
 
                 Using stream As New FileStream(
@@ -766,6 +1062,18 @@ Namespace Services
                     )
 
                 End If
+
+                ' The saved library is now the authority, so it is the next
+                ' save's baseline, together with the folders left in place
+                ' this time, which the next save tries again.
+                RecordBaseline(
+                    manuscripts
+                )
+
+                KeepFoldersLeftInPlace(
+                    deletionTransaction,
+                    packetDeletionTransaction
+                )
 
                 packetDeletionTransaction.Commit()
                 deletionTransaction.Commit()

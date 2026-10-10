@@ -199,9 +199,12 @@ Namespace Services
                             "files"
                         )
 
+                    ' Files PaperRoute no longer needs wait in the library's
+                    ' removed folder; a backup leaves them out.
                     CopyDirectory(
                         _managedLibrary.RootDirectory,
-                        filesDestination
+                        filesDestination,
+                        excludedSubdirectory:=ManagedLibraryService.RemovedFolderName
                     )
 
                 End If
@@ -437,7 +440,8 @@ Namespace Services
 
         Private Sub CopyDirectory(
             sourceDirectory As String,
-            destinationDirectory As String
+            destinationDirectory As String,
+            Optional excludedSubdirectory As String = Nothing
         )
 
             Directory.CreateDirectory(destinationDirectory)
@@ -459,6 +463,17 @@ Namespace Services
             Next
 
             For Each sourceSubdirectory As String In Directory.GetDirectories(sourceDirectory)
+
+                If excludedSubdirectory IsNot Nothing AndAlso
+                   String.Equals(
+                       Path.GetFileName(sourceSubdirectory),
+                       excludedSubdirectory,
+                       StringComparison.OrdinalIgnoreCase
+                   ) Then
+
+                    Continue For
+
+                End If
 
                 Dim destinationSubdirectory As String =
                     Path.Combine(

@@ -549,6 +549,114 @@ Public Class BackupRestoreTests
     End Sub
 
 
+    ' Files PaperRoute no longer needs wait under removed\<date> in the
+    ' managed library (#110). A backup leaves that folder out, and a restore
+    ' never writes into it.
+    <TestMethod>
+    Public Sub Backup_LeavesOutTheRemovedFolderAndRestoreNeverWritesIntoIt()
+
+        Dim dataDirectory As String = Path.Combine(_root, "removed-data")
+        Dim managedDirectory As String = Path.Combine(_root, "removed-library")
+        Dim repository As New ManuscriptRepository(dataDirectory, managedDirectory)
+        Dim manuscripts As List(Of Manuscript) = CreateRepresentativeLibrary()
+
+        AddManagedFixture(manuscripts, managedDirectory)
+        repository.Save(manuscripts)
+
+        Dim removedFile As String =
+            Path.Combine(
+                managedDirectory,
+                "removed",
+                "2026-10-09",
+                Guid.NewGuid().ToString("N"),
+                "versions",
+                Guid.NewGuid().ToString("N"),
+                "old-snapshot.txt"
+            )
+
+        Directory.CreateDirectory(Path.GetDirectoryName(removedFile))
+        File.WriteAllText(removedFile, "No longer needed.")
+
+        Dim backupPath As String = Path.Combine(_root, "removed.zip")
+        Call New PortableBackupService(managedDirectory).CreateBackup(backupPath, manuscripts, repository)
+
+        Using archive As ZipArchive = ZipFile.OpenRead(backupPath)
+            Assert.IsTrue(
+                archive.Entries.Any(
+                    Function(entry) entry.FullName.Replace("\", "/").StartsWith("files/", StringComparison.OrdinalIgnoreCase)
+                ),
+                "The managed files are still backed up."
+            )
+            Assert.IsFalse(
+                archive.Entries.Any(
+                    Function(entry) entry.FullName.Replace("\", "/").StartsWith("files/removed/", StringComparison.OrdinalIgnoreCase)
+                ),
+                "A backup leaves out the removed folder."
+            )
+        End Using
+
+        Assert.AreEqual(1, New PortableRestoreService(managedDirectory).InspectBackup(backupPath).ManagedFileCount)
+
+        Dim targetManaged As String = Path.Combine(_root, "removed-target-library")
+        Dim targetRepository As New ManuscriptRepository(Path.Combine(_root, "removed-target-data"), targetManaged)
+        Dim current As New List(Of Manuscript)()
+        targetRepository.Save(current)
+        Call New PortableRestoreService(targetManaged).RestoreBackup(backupPath, current, targetRepository)
+
+        Assert.AreEqual(3, targetRepository.Load().Count)
+        Assert.IsFalse(Directory.Exists(Path.Combine(targetManaged, "removed")), "A restore never writes into removed.")
+        Assert.AreEqual("No longer needed.", File.ReadAllText(removedFile), "The source's removed files stay where they are.")
+
+    End Sub
+
+
+    ' A restore replaces the managed library with the backup's. The library's
+    ' removed folder is the one copy of every file a sweep moved, and no
+    ' backup holds it (#110), so it comes across to the restored library
+    ' instead of going with the old one.
+    <TestMethod>
+    Public Sub Restore_OverTheSameLibraryKeepsItsRemovedFolder()
+
+        Dim dataDirectory As String = Path.Combine(_root, "in-place-data")
+        Dim managedDirectory As String = Path.Combine(_root, "in-place-library")
+        Dim repository As New ManuscriptRepository(dataDirectory, managedDirectory)
+        Dim manuscripts As List(Of Manuscript) = CreateRepresentativeLibrary()
+
+        AddManagedFixture(manuscripts, managedDirectory)
+        repository.Save(manuscripts)
+
+        Dim removedFile As String =
+            Path.Combine(
+                managedDirectory,
+                "removed",
+                "2026-10-09",
+                Guid.NewGuid().ToString("N"),
+                "versions",
+                Guid.NewGuid().ToString("N"),
+                "old-snapshot.txt"
+            )
+
+        Directory.CreateDirectory(Path.GetDirectoryName(removedFile))
+        File.WriteAllText(removedFile, "The one copy.")
+
+        Dim backupPath As String = Path.Combine(_root, "in-place.zip")
+        Call New PortableBackupService(managedDirectory).CreateBackup(backupPath, manuscripts, repository)
+
+        Dim result As RestoreResult =
+            New PortableRestoreService(managedDirectory).RestoreBackup(backupPath, manuscripts, repository)
+
+        Assert.AreEqual(3, result.ManuscriptCount)
+        Assert.AreEqual(3, repository.Load().Count)
+        Assert.AreEqual("The one copy.", File.ReadAllText(removedFile), "The removed folder comes across to the restored library.")
+        Assert.AreEqual(
+            0,
+            Directory.GetDirectories(_root, "PaperRoute Library.restore-rollback-*").Length,
+            "Nothing of the old library is left beside the new one."
+        )
+
+    End Sub
+
+
     Private Sub AddManagedFixture(
         manuscripts As List(Of Manuscript),
         managedDirectory As String
