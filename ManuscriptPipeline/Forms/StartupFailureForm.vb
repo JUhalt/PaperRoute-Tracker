@@ -53,7 +53,7 @@ Namespace Forms
 
             Return New StartupFailure(
                 "PaperRoute could not prepare its local storage.",
-                "The storage format could not be verified, so PaperRoute closed rather than open or rewrite data in an unknown format. Your files were not changed.",
+                "The storage format could not be verified, so PaperRoute closed rather than open or rewrite data in an unknown format. Existing files were left in place wherever possible.",
                 schemaFilePath,
                 cause
             )
