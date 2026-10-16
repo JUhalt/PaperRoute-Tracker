@@ -2,8 +2,6 @@ Imports System
 Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.Linq
-Imports System.Runtime.ExceptionServices
-Imports System.Threading
 Imports System.Windows.Forms
 Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Forms
@@ -64,20 +62,9 @@ Public Class AboutFormTests
         Next
     End Function
 
+    ' Its own sixty seconds, on the shared runner (#134).
     Private Shared Sub RunOnStaThread(action As Action)
-        Dim failure As ExceptionDispatchInfo = Nothing
-        Dim thread As New Thread(
-            Sub()
-                Try
-                    action()
-                Catch ex As Exception
-                    failure = ExceptionDispatchInfo.Capture(ex)
-                End Try
-            End Sub) With {.IsBackground = True}
-        thread.SetApartmentState(ApartmentState.STA)
-        thread.Start()
-        Assert.IsTrue(thread.Join(TimeSpan.FromSeconds(60)), "The dialog test timed out.")
-        failure?.Throw()
+        StaRunner.Run(action, TimeSpan.FromSeconds(60))
     End Sub
 
 End Class

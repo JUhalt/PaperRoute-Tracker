@@ -484,6 +484,53 @@ Public Class ManuscriptPageTests
             End Sub)
     End Sub
 
+    ' A Windows shutdown after a failed save (#113 with #123): there is no one
+    ' to answer the question a close asks, and the page's recovery draft does
+    ' not hold what the save missed, since it is already in the model. The
+    ' save is tried once more without a question. Before the change the
+    ' shutdown closed with neither, and the changes were lost.
+    <TestMethod>
+    Public Sub AShutdownAfterAFailedSaveTriesTheSaveOnceWithoutAsking()
+        RunOnStaThread(
+            Sub()
+                Dim root As String = CreateTemporaryRoot()
+                Try
+                    Using board As New PageBoard(), dialogs As New DialogWatcher()
+                        board.UseRepository(root)
+                        Dim blocker As String = Path.Combine(root, "data")
+                        File.WriteAllText(blocker, "in the way")
+                        Dim manuscript As Manuscript = Sample("Original title")
+                        board.Prepare(manuscript)
+                        board.Open(manuscript)
+                        board.Field("Title").Text = "Edited title"
+                        board.PressCommandKey(Keys.Control Or Keys.S)
+                        Assert.IsTrue(board.LibrarySaveFailed)
+                        Assert.AreEqual(1, board.SaveCount)
+
+                        File.Delete(blocker)
+                        Dim asked As Integer = 0
+                        board.SetPrompt(Function(title)
+                                           asked += 1
+                                           Return DialogResult.Cancel
+                                       End Function)
+                        Dim closing As New FormClosingEventArgs(CloseReason.WindowsShutDown, False)
+                        board.SimulateClosing(closing)
+
+                        Assert.AreEqual(0, asked, "Shutdown is not held up by a question.")
+                        Assert.IsFalse(closing.Cancel)
+                        Assert.AreEqual(2, board.SaveCount, "The failed save is tried once more.")
+                        Assert.IsFalse(board.LibrarySaveFailed)
+                        StringAssert.Contains(File.ReadAllText(Path.Combine(root, "data", "manuscripts.json")), "Edited title", "The retried save reached the disk.")
+
+                        board.Close()
+                        Assert.AreEqual(0, asked, "Nothing is left to ask about.")
+                    End Using
+                Finally
+                    DeleteTemporaryRoot(root)
+                End Try
+            End Sub)
+    End Sub
+
     ' The plain error dialog (#121) keeps the unsaved page reachable: Close
     ' PaperRoute goes through the normal close, Keep Working changes nothing.
     <TestMethod>
@@ -1824,6 +1871,11 @@ Public Class ManuscriptPageTests
             GetType(Form1).GetMethod(name, BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(Me, args)
         End Sub
 
+        ' The close Windows sends at shutdown, without closing the window.
+        Public Sub SimulateClosing(e As FormClosingEventArgs)
+            OnFormClosing(e)
+        End Sub
+
         Protected Overrides Sub Dispose(disposing As Boolean)
             MyBase.Dispose(disposing)
             Try
@@ -1930,39 +1982,8 @@ Public Class ManuscriptPageTests
     End Sub
 
     Private Shared Sub RunOnStaThread(action As Action)
-        Dim failure As Exception = Nothing
-        Dim nativeThreadId As Integer = 0
-        Dim thread As New Thread(
-            Sub()
-                nativeThreadId = GetCurrentThreadId()
-                Try
-                    action()
-                Catch ex As Exception
-                    failure = ex
-                End Try
-            End Sub) With {.IsBackground = True}
-        thread.SetApartmentState(ApartmentState.STA)
-        thread.Start()
-        If Not thread.Join(TimeSpan.FromSeconds(90)) Then
-            ' A modal message box would block the test silently; name what is open.
-            Assert.Fail("Manuscript page test timed out. Windows open on its thread: " & DescribeThreadWindows(nativeThreadId))
-        End If
-        If failure IsNot Nothing Then ExceptionDispatchInfo.Capture(failure).Throw()
+        StaRunner.Run(action)
     End Sub
-
-    Private Shared Function DescribeThreadWindows(threadId As Integer) As String
-        Dim windows As New List(Of String)()
-        EnumThreadWindows(threadId,
-            Function(handle, parameter)
-                Dim title As New System.Text.StringBuilder(256)
-                Dim className As New System.Text.StringBuilder(256)
-                GetWindowText(handle, title, title.Capacity)
-                GetClassName(handle, className, className.Capacity)
-                windows.Add($"'{title}' ({className}{If(IsWindowVisible(handle), ", visible", "")})")
-                Return True
-            End Function, IntPtr.Zero)
-        Return If(windows.Count = 0, "none", String.Join("; ", windows))
-    End Function
 
     Private Delegate Function EnumWindowsCallback(handle As IntPtr, parameter As IntPtr) As Boolean
 

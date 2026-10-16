@@ -166,7 +166,7 @@ PaperRoute edits a working copy while the page is open. Every tab, and every foc
 - **Save** (or **Ctrl+S**) stores the manuscript; managed-file copies and deletions happen only when this save succeeds.
 - **Discard** returns the page to the last saved version.
 
-If you go to another page, open another manuscript, or close PaperRoute while there are unsaved changes, PaperRoute asks whether to save them, discard them, or stay. Nothing is lost silently.
+If you go to another page, open another manuscript, or close PaperRoute while there are unsaved changes, PaperRoute asks whether to save them, discard them, or stay. When there is no one to ask, because Windows is shutting down or an error has stopped PaperRoute, it keeps them in a recovery draft instead, and the next start offers to open the manuscript with them or to discard them; the draft changes nothing in your library until you save. Nothing is lost silently.
 
 ### Version History and the Route
 
@@ -865,8 +865,9 @@ Managed document copies, including version and packet snapshots, are included. E
 1. validates the selected archive;
 2. previews record/file counts;
 3. asks for confirmation;
-4. creates an emergency backup of the current library; and
-5. restores the selected backup.
+4. creates an emergency backup of the current library;
+5. restores the selected backup; and
+6. then restarts PaperRoute on the restored library.
 
 Restoring a backup that includes `citations.json` replaces your saved citation figures; a backup without it leaves them as they are.
 
@@ -1136,9 +1137,14 @@ PaperRoute keeps these copies on its own:
 
 - `manuscripts.bak` and `authors.bak`, beside the two files, are the previous save of each; every save makes them. If PaperRoute cannot read a file when it starts, it loads this copy, tells you so, and keeps the unreadable file in the `recovery` folder, renamed with the time, so nothing is lost. There is nothing to do unless the window that opens says the copy could not be read either; then the files in the data folder and in `recovery` are what a bug report needs.
 - Before every spreadsheet or bibliography import, and before an ORCID import that adds manuscripts, a copy of both files goes into the `backups` folder, named manuscripts_pre-import_ and authors_pre-import_ followed by the time; the import's final message names the folder. To undo an import, close PaperRoute, copy the two files from `backups` over `manuscripts.json` and `authors.json` in the data folder, and start PaperRoute again. There is no undo button for an import.
-- Before **Restore Backup...** replaces your library, a ZIP of the whole library, PaperRoute_PreRestore_ followed by the time, goes into the same `backups` folder. If the restored library was not what you wanted, restore that ZIP like any other backup.
+- Before **Restore Backup...** replaces your library, a ZIP of the whole library, PaperRoute_PreRestore_ followed by the time, goes into the same `backups` folder, and after the restore PaperRoute restarts on the restored library. If the restored library was not what you wanted, restore that ZIP like any other backup.
 
-If PaperRoute cannot start, the window that opens names the file it could not read and its folder, links here, and its **Copy Details** gives a bug report what it needs. Do not delete or edit the data folder while troubleshooting.
+If PaperRoute cannot start, the window that opens names the file it could not read and its folder, links here, and its **Copy Details** gives a bug report what it needs. Where the library itself is damaged, the window can also put it right, and PaperRoute then opens the recovered library, restarting if it needs to:
+
+- **Use the Previous Save** appears when `manuscripts.json` cannot be read but `manuscripts.bak` can. It puts the previous save in place and keeps the replaced file in `recovery`, as a start does on its own; changes made in the last save are not in it.
+- **Restore From Backup...** asks for a backup ZIP, shows what it holds, and asks before it replaces your library. A ZIP of the files as they were, PaperRoute_PreRestore_ followed by the time, goes into `backups` first. Unlike the one Restore Backup... makes, it is a plain copy, damage included, so Restore Backup... may refuse it: to go back to it, close PaperRoute and unzip it by hand, its data files into the data folder and the contents of its files folder into the PaperRoute Library folder.
+
+Neither is offered for a file another program is using, or for a library from a newer version of PaperRoute; update PaperRoute instead. Do not delete or edit the data folder while troubleshooting.
 
 ### Removed files
 

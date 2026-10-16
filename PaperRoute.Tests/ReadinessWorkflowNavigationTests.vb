@@ -211,19 +211,7 @@ Public Class ReadinessWorkflowNavigationTests
     End Sub
 
     Private Shared Sub RunOnStaThread(action As Action)
-        Dim failure As Exception = Nothing
-        Dim thread As New Thread(
-            Sub()
-                Try
-                    action()
-                Catch ex As Exception
-                    failure = ex
-                End Try
-            End Sub) With {.IsBackground = True}
-        thread.SetApartmentState(ApartmentState.STA)
-        thread.Start()
-        Assert.IsTrue(thread.Join(TimeSpan.FromSeconds(20)), "The isolated readiness navigation test timed out.")
-        If failure IsNot Nothing Then ExceptionDispatchInfo.Capture(failure).Throw()
+        StaRunner.Run(action)
     End Sub
 
     Private NotInheritable Class NavigationFixture

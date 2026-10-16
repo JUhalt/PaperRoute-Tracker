@@ -89,6 +89,22 @@ Friend Module TestSupport
     End Function
 
 
+    ' Runs a window test on the shared STA runner (#134), which rethrows
+    ' what it threw. A modal box would hold the thread; after ninety
+    ' seconds the runner closes what that thread left open and fails the
+    ' test, so the run reports it instead.
+    Public Sub RunOnStaThread(
+        action As Action
+    )
+
+        StaRunner.Run(
+            action,
+            TimeSpan.FromSeconds(90)
+        )
+
+    End Sub
+
+
     Public Function CreateJsonOptions() As JsonSerializerOptions
 
         Dim options As New JsonSerializerOptions With {

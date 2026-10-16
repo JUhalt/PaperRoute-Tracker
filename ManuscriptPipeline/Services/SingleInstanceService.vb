@@ -25,6 +25,7 @@ Namespace Services
         Private ReadOnly _activate As EventWaitHandle
         Private ReadOnly _stop As New ManualResetEvent(False)
         Private _listener As Thread
+        Private _disposed As Boolean
 
         Private Sub New(mutex As Mutex, activate As EventWaitHandle)
             _mutex = mutex
@@ -93,8 +94,12 @@ Namespace Services
         End Sub
 
 
-        ' Must run on the thread that started the instance, which owns the mutex.
+        ' Must run on the thread that started the instance, which owns the
+        ' mutex. A second call, as when a restart released the instance early
+        ' (#116), does nothing.
         Public Sub Dispose() Implements IDisposable.Dispose
+            If _disposed Then Return
+            _disposed = True
             _stop.Set()
             _listener?.Join(TimeSpan.FromSeconds(2))
             Try
