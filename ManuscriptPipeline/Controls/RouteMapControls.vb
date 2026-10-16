@@ -48,10 +48,11 @@ Namespace Controls
             End Select
         End Function
 
-        ' Those lines: a darker shade of the fill, or the window color under
-        ' a contrast theme.
+        ' Those lines: a shade of the fill dark enough to show against it,
+        ' 2:1 or more like the hatch of time not recorded, or the window
+        ' color under a contrast theme.
         Public Shared Function Stripe(kind As RouteSegmentKind) As Color
-            Return If(UiTheme.IsHighContrast(), SystemColors.Window, UiTheme.Blend(Fill(kind), Color.Black, 0.3F))
+            Return If(UiTheme.IsHighContrast(), SystemColors.Window, UiTheme.Blend(Fill(kind), Color.Black, 0.6F))
         End Function
 
         Public Shared Sub FillSegment(g As Graphics, bounds As RectangleF, kind As RouteSegmentKind, background As Color)

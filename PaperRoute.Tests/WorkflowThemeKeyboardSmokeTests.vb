@@ -102,9 +102,9 @@ Public Class WorkflowThemeKeyboardSmokeTests
     ' Time with the journal, time with the author, production, and time not
     ' recorded can be told apart without their colors, in greyscale or by a
     ' reader who cannot tell the hues apart (#140): each pair of kinds, as
-    ' the route map paints them, differs by 3:1 in luminance or in pattern.
-    ' Under a contrast theme the colors are the user's, so only a pattern
-    ' counts.
+    ' the route map paints them, differs by 3:1 in luminance or in a
+    ' pattern whose lines show. Under a contrast theme the colors are the
+    ' user's, so only a pattern counts.
     <TestMethod>
     <DataRow(SystemColorMode.Classic, False)>
     <DataRow(SystemColorMode.Dark, False)>
@@ -434,11 +434,15 @@ Public Class WorkflowThemeKeyboardSmokeTests
 
     ' Two swatches share a pattern, whatever their colors, when nearly the
     ' same pixels are in each one's commonest color, or nearly the same
-    ' pixels are not.
+    ' pixels are not. A pixel within 2:1 of that color counts as in it:
+    ' lines fainter than about the hatch of time not recorded (2.24:1 in
+    ' Light) are no pattern a reader can see.
     Private Shared Function SamePattern(one As Integer(), other As Integer()) As Boolean
-        Dim oneColor As Integer = Commonest(one)
-        Dim otherColor As Integer = Commonest(other)
-        Dim differing As Double = Enumerable.Range(0, one.Length).Count(Function(index) (one(index) = oneColor) <> (other(index) = otherColor)) / CDbl(one.Length)
+        Dim oneColor As Color = Color.FromArgb(Commonest(one))
+        Dim otherColor As Color = Color.FromArgb(Commonest(other))
+        Dim inOne As Boolean() = one.Select(Function(pixel) ContrastRatio(Color.FromArgb(pixel), oneColor) < 2.0).ToArray()
+        Dim inOther As Boolean() = other.Select(Function(pixel) ContrastRatio(Color.FromArgb(pixel), otherColor) < 2.0).ToArray()
+        Dim differing As Double = Enumerable.Range(0, one.Length).Count(Function(index) inOne(index) <> inOther(index)) / CDbl(one.Length)
         Return differing < 0.1 OrElse differing > 0.9
     End Function
 
@@ -543,10 +547,10 @@ Public Class WorkflowThemeKeyboardSmokeTests
         "Route.LabelColor(Journal) FFFFFF FFFFFF",
         "Route.Fill(Author) B45309 B45309",
         "Route.LabelColor(Author) FFFFFF FFFFFF",
-        "Route.Stripe(Author) 7E3A06 7E3A06",
+        "Route.Stripe(Author) 482104 482104",
         "Route.Fill(Production) 475569 64748B",
         "Route.LabelColor(Production) FFFFFF FFFFFF",
-        "Route.Stripe(Production) 323C4A 465161",
+        "Route.Stripe(Production) 1C222A 282E38",
         "Route.Fill(NotRecorded) A0B0B5 5C7076",
         "Route.LabelColor(NotRecorded) FFFFFF FFFFFF",
         "Route.MarkerColor(Submitted) 1D4ED8 1D4ED8",
