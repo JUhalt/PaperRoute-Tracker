@@ -161,7 +161,7 @@ Public Class Form1
             BeginInvoke(
             New Action(
                 Sub()
-                    Close()
+                    EndFailedStartup()
                 End Sub
             )
         )
@@ -175,7 +175,7 @@ Public Class Form1
             BeginInvoke(
                 New Action(
                     Sub()
-                        Close()
+                        EndFailedStartup()
                     End Sub
                 )
             )
@@ -1259,12 +1259,12 @@ Public Class Form1
             manuscripts =
             New List(Of Manuscript)()
 
-            StartupFailureForm.ShowFailure(
+            startupRecovered =
+            ShowStartupFailure(
                 StartupFailure.ForLibraryInUse(
                     ex,
                     repository.DataFilePath
-                ),
-                Me
+                )
             )
 
             lblStatus.Text =
@@ -1277,13 +1277,14 @@ Public Class Form1
             manuscripts =
             New List(Of Manuscript)()
 
-            ' What failed and where, in place of the message box (#119).
-            StartupFailureForm.ShowFailure(
+            ' What failed and where, in place of the message box (#119),
+            ' with the previous save or a backup to put in place (#124).
+            startupRecovered =
+            ShowStartupFailure(
                 StartupFailure.ForManuscriptLibrary(
                     ex,
                     repository.DataFilePath
-                ),
-                Me
+                )
             )
 
             lblStatus.Text =
@@ -1346,20 +1347,60 @@ Public Class Form1
 
         Catch ex As Exception
 
-            ' What failed and where, in place of the message box (#119).
-            StartupFailureForm.ShowFailure(
-                StartupFailure.ForAuthorLibrary(
-                    ex,
-                    authorRepository.DataFilePath
-                ),
-                Me
-            )
+            ' What failed and where, in place of the message box (#119),
+            ' with a backup to put in place (#124).
+            startupRecovered =
+                ShowStartupFailure(
+                    StartupFailure.ForAuthorLibrary(
+                        ex,
+                        authorRepository.DataFilePath
+                    )
+                )
 
             Return False
 
         End Try
 
     End Function
+
+
+    ' Set when the startup window put the previous save or a backup in
+    ' place (#124).
+    Private startupRecovered As Boolean = False
+
+
+    ' Shows the startup window over this one (#119); True when it put the
+    ' previous save or a backup in place (#124). Tests answer instead.
+    Protected Overridable Function ShowStartupFailure(
+        failure As StartupFailure
+    ) As Boolean
+
+        Return StartupFailureForm.ShowFailure(
+            failure,
+            Me
+        )
+
+    End Function
+
+
+    ' A start whose library could not be loaded ends here. When the startup
+    ' window recovered the library, PaperRoute starts again on it, as a
+    ' restore does (#116): this window holds nothing of it, so it hands
+    ' over without asking or saving, and no second window opens on the
+    ' same library. Otherwise this window closes.
+    Private Sub EndFailedStartup()
+
+        If startupRecovered Then
+
+            handingOverAfterRestore = True
+            RestartOnTheLibraryOnDisk()
+            Return
+
+        End If
+
+        Close()
+
+    End Sub
 
 
     ' Overridable so tests never write a real library.
@@ -3815,11 +3856,7 @@ Public Class Form1
 
 
     ' Says the restore finished and starts PaperRoute again, which opens the
-    ' restored library. The running instance is released first: the new
-    ' process starts before this one has unwound, and would otherwise find
-    ' the library still held and exit. Nothing here can cancel the close
-    ' (handingOverAfterRestore), so no second window can follow. Tests
-    ' record the notice instead.
+    ' restored library. Tests record the notice instead.
     Protected Overridable Sub RestartAfterRestore(
         notice As String
     )
@@ -3831,6 +3868,19 @@ Public Class Form1
             MessageBoxButtons.OK,
             MessageBoxIcon.Information
         )
+
+        RestartOnTheLibraryOnDisk()
+
+    End Sub
+
+
+    ' Starts PaperRoute again on the library now on disk, after a restore
+    ' (#116) or a recovery in the startup window (#124). The running
+    ' instance is released first: the new process starts before this one
+    ' has unwound, and would otherwise find the library still held and
+    ' exit. Nothing here can cancel the close (handingOverAfterRestore is
+    ' set first), so no second window can follow. Tests record it instead.
+    Protected Overridable Sub RestartOnTheLibraryOnDisk()
 
         Program.ReleaseInstanceForRestart()
         Application.Restart()

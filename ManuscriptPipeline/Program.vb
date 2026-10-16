@@ -74,26 +74,14 @@ Friend Module Program
 
     Private Sub Run(args As String(), instance As SingleInstanceService)
 
-        Try
-
-            ' Validate and migrate PaperRoute storage before settings,
-            ' repositories, or the main application are constructed.
-            StorageMigrationService.EnsureCurrentStorage()
-
-        Catch ex As Exception
-
-            ' What failed and where, with the actions Diagnostics would
-            ' offer if PaperRoute could start (#119).
-            StartupFailureForm.ShowBeforeStartup(
-                StartupFailure.ForStorage(
-                    ex,
-                    StorageMigrationService.SchemaFilePath()
-                )
-            )
-
+        ' Validate and migrate PaperRoute storage before settings,
+        ' repositories, or the main application are constructed.
+        If Not PrepareStorage(
+            AddressOf StorageMigrationService.EnsureCurrentStorage,
+            AddressOf StartupFailureForm.ShowBeforeStartup
+        ) Then
             Return
-
-        End Try
+        End If
 
         If ExampleLibraryService.IsActive Then ExampleLibraryService.Seed(DateTime.Today, ExampleLibraryService.OnlineSettingsFrom(args))
 
@@ -117,5 +105,44 @@ Friend Module Program
         )
 
     End Sub
+
+
+    ' Runs the storage step. When it fails, the startup window says what
+    ' failed and where, with the actions Diagnostics would offer (#119);
+    ' when the window has put the previous save or a backup in place
+    ' (#124), the step runs once more and startup goes on in this process,
+    ' which still holds the library, so no restart is needed. A window
+    ' closed without recovering ends startup. Tests pass their own steps.
+    Friend Function PrepareStorage(
+        prepare As Action,
+        showFailure As Func(Of StartupFailure, Boolean)
+    ) As Boolean
+
+        Do
+
+            Try
+
+                prepare()
+
+                Return True
+
+            Catch ex As Exception
+
+                If Not showFailure(
+                    StartupFailure.ForStorage(
+                        ex,
+                        StorageMigrationService.SchemaFilePath()
+                    )
+                ) Then
+
+                    Return False
+
+                End If
+
+            End Try
+
+        Loop
+
+    End Function
 
 End Module
