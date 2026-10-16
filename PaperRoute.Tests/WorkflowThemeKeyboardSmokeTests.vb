@@ -450,8 +450,7 @@ Public Class WorkflowThemeKeyboardSmokeTests
         Dim add As Action(Of String, Func(Of Color)) = Sub(name, value) tokens.Add((name, value))
         For Each token As MethodInfo In GetType(UiTheme).GetMethods(BindingFlags.Public Or BindingFlags.Static).
             Where(Function(method) method.ReturnType = GetType(Color) AndAlso method.GetParameters().Length = 0)
-            Dim method As MethodInfo = token
-            add(method.Name, Function() DirectCast(method.Invoke(Nothing, Nothing), Color))
+            add(token.Name, Function() DirectCast(token.Invoke(Nothing, Nothing), Color))
         Next
         For Each stage As PaperStage In [Enum].GetValues(GetType(PaperStage))
             add($"StageBackground({stage})", Function() UiTheme.StageBackground(stage))

@@ -76,7 +76,6 @@ Namespace Controls
             If Not UiTheme.IsHighContrast() Then Return Color.White
             Select Case kind
                 Case RouteSegmentKind.Journal : Return SystemColors.HighlightText
-                Case RouteSegmentKind.NotRecorded : Return SystemColors.WindowText
                 Case Else : Return SystemColors.Window
             End Select
         End Function
