@@ -907,8 +907,8 @@ Partial Public Class Form1
 
         grid.DefaultCellStyle.BackColor = UiTheme.CardBackground()
         grid.DefaultCellStyle.ForeColor = UiTheme.PrimaryText()
-        grid.DefaultCellStyle.SelectionBackColor = UiTheme.AccentMutedBackground()
-        grid.DefaultCellStyle.SelectionForeColor = UiTheme.PrimaryText()
+        grid.DefaultCellStyle.SelectionBackColor = UiTheme.SelectedRowBackground(UiTheme.AccentMutedBackground())
+        grid.DefaultCellStyle.SelectionForeColor = UiTheme.SelectedRowText()
         grid.DefaultCellStyle.Padding = New Padding(UiTheme.Px(6, DeviceDpi), 0, UiTheme.Px(6, DeviceDpi), 0)
         grid.ColumnHeadersDefaultCellStyle.BackColor = UiTheme.HeaderBackground()
         grid.ColumnHeadersDefaultCellStyle.ForeColor = UiTheme.SecondaryText()
