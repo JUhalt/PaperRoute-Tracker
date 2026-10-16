@@ -19,6 +19,11 @@ Namespace Services
         ' and cleared in TestCleanup by classes that do not run in parallel.
         Friend Shared RootOverride As String = Nothing
 
+        ' For tests (#135): how many times the default root answered, that
+        ' is, neither an isolated session nor RootOverride stood in. The
+        ' view catalog resets it before each view and expects zero after.
+        Friend Shared DefaultRootUses As Integer = 0
+
 
         Private Sub New()
         End Sub
@@ -84,6 +89,7 @@ Namespace Services
                 If RootOverride IsNot Nothing Then
                     Return Path.Combine(RootOverride, isolatedFolderName)
                 End If
+                DefaultRootUses += 1
                 Return normalRoot()
             End SyncLock
 

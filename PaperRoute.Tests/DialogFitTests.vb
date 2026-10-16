@@ -51,36 +51,27 @@ Public Class DialogFitTests
     ' drew Save over Cancel and cut both off when it wasn't.
     <TestMethod>
     Public Sub ButtonsAreLaidOutAtTheSizeTheyAreDrawn()
-        Dim failure As Exception = Nothing
-        Dim thread As New Threading.Thread(
+        StaRunner.Run(
             Sub()
-                Try
-                    Using host As New Form With {.StartPosition = FormStartPosition.Manual, .Location = New Point(-20000, -20000), .ShowInTaskbar = False, .ClientSize = New Size(600, 200)}
-                        Dim row As New FlowLayoutPanel With {.AutoSize = True, .FlowDirection = FlowDirection.RightToLeft, .WrapContents = False, .Dock = DockStyle.Top}
-                        Dim save As New ManuscriptPipeline.Controls.ActionButton With {.Text = "Save", .AutoSize = True, .MinimumSize = New Size(144, 51)}
-                        Dim cancel As New ManuscriptPipeline.Controls.ActionButton With {.Text = "Cancel", .AutoSize = True, .MinimumSize = New Size(144, 51), .Margin = New Padding(0, 0, 12, 0)}
-                        row.Controls.Add(save)
-                        row.Controls.Add(cancel)
-                        host.Controls.Add(row)
-                        host.Show()
-                        Application.DoEvents()
-                        row.PerformLayout()
+                Using host As New Form With {.StartPosition = FormStartPosition.Manual, .Location = New Point(-20000, -20000), .ShowInTaskbar = False, .ClientSize = New Size(600, 200)}
+                    Dim row As New FlowLayoutPanel With {.AutoSize = True, .FlowDirection = FlowDirection.RightToLeft, .WrapContents = False, .Dock = DockStyle.Top}
+                    Dim save As New ManuscriptPipeline.Controls.ActionButton With {.Text = "Save", .AutoSize = True, .MinimumSize = New Size(144, 51)}
+                    Dim cancel As New ManuscriptPipeline.Controls.ActionButton With {.Text = "Cancel", .AutoSize = True, .MinimumSize = New Size(144, 51), .Margin = New Padding(0, 0, 12, 0)}
+                    row.Controls.Add(save)
+                    row.Controls.Add(cancel)
+                    host.Controls.Add(row)
+                    host.Show()
+                    Application.DoEvents()
+                    row.PerformLayout()
 
-                        Assert.IsTrue(save.GetPreferredSize(Size.Empty).Width >= 144 AndAlso save.GetPreferredSize(Size.Empty).Height >= 51)
-                        Assert.IsFalse(save.Bounds.IntersectsWith(cancel.Bounds), "Save " & save.Bounds.ToString() & " overlaps Cancel " & cancel.Bounds.ToString())
-                        For Each button As Control In {save, cancel}
-                            Assert.IsTrue(row.ClientRectangle.Contains(button.Bounds), button.Text & " " & button.Bounds.ToString() & " fits its row " & row.ClientRectangle.ToString())
-                        Next
-                        host.Close()
-                    End Using
-                Catch ex As Exception
-                    failure = ex
-                End Try
-            End Sub) With {.IsBackground = True}
-        thread.SetApartmentState(Threading.ApartmentState.STA)
-        thread.Start()
-        Assert.IsTrue(thread.Join(TimeSpan.FromMinutes(2)), "Timed out.")
-        If failure IsNot Nothing Then Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw()
+                    Assert.IsTrue(save.GetPreferredSize(Size.Empty).Width >= 144 AndAlso save.GetPreferredSize(Size.Empty).Height >= 51)
+                    Assert.IsFalse(save.Bounds.IntersectsWith(cancel.Bounds), "Save " & save.Bounds.ToString() & " overlaps Cancel " & cancel.Bounds.ToString())
+                    For Each button As Control In {save, cancel}
+                        Assert.IsTrue(row.ClientRectangle.Contains(button.Bounds), button.Text & " " & button.Bounds.ToString() & " fits its row " & row.ClientRectangle.ToString())
+                    Next
+                    host.Close()
+                End Using
+            End Sub)
     End Sub
 
 End Class

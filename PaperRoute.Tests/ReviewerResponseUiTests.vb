@@ -344,24 +344,7 @@ Public Class ReviewerResponseUiTests
     End Function
 
     Private Shared Sub RunOnSta(action As Action, Optional mode As SystemColorMode = SystemColorMode.Classic)
-        Dim failure As Exception = Nothing
-        Dim thread As New Thread(
-            Sub()
-                Dim priorMode As SystemColorMode = Application.ColorMode
-                Try
-                    Application.EnableVisualStyles()
-                    Application.SetColorMode(mode)
-                    action()
-                Catch ex As Exception
-                    failure = ex
-                Finally
-                    Application.SetColorMode(priorMode)
-                End Try
-            End Sub) With {.IsBackground = True}
-        thread.SetApartmentState(ApartmentState.STA)
-        thread.Start()
-        Assert.IsTrue(thread.Join(TimeSpan.FromSeconds(30)), "Reviewer response UI test timed out.")
-        If failure IsNot Nothing Then ExceptionDispatchInfo.Capture(failure).Throw()
+        StaRunner.Run(action, mode:=mode)
     End Sub
 
     Private Class MatrixProbe

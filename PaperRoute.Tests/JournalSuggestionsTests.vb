@@ -619,19 +619,7 @@ Public Class JournalSuggestionsTests
     End Sub
 
     Private Shared Sub RunOnStaThread(action As Action)
-        Dim failure As ExceptionDispatchInfo = Nothing
-        Dim thread As New Thread(
-            Sub()
-                Try
-                    action()
-                Catch ex As Exception
-                    failure = ExceptionDispatchInfo.Capture(ex)
-                End Try
-            End Sub)
-        thread.SetApartmentState(ApartmentState.STA)
-        thread.Start()
-        thread.Join()
-        failure?.Throw()
+        StaRunner.Run(action)
     End Sub
 
 End Class
