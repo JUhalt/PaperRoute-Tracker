@@ -164,6 +164,110 @@ Public Class RecoveryDraftTests
     End Sub
 
 
+    ' The UI-thread error handler (#121) writes the open page's unsaved
+    ' edits to the draft before it shows anything, so they are offered at
+    ' the next start whatever follows; Keep Working then leaves the page as
+    ' it was. The real handler runs, its error report under this test's
+    ' root so the user's profile is never touched.
+    <TestMethod>
+    Public Sub TheErrorHandlerWritesTheDraftBeforeItShowsTheDialog()
+        Dim draftWhenAsked As Boolean = False
+        Dim e As New Microsoft.VisualBasic.ApplicationServices.UnhandledExceptionEventArgs(True, New InvalidOperationException("The route map could not be drawn."))
+
+        StorageEnvironment.RootOverride = _root
+        Try
+            RunOnStaThread(
+                Sub()
+                    Using board As New DraftBoard(_dataDirectory, _managedDirectory)
+                        board.Prepare()
+                        board.Open(board.Library(0))
+                        board.Field("Title").Text = "Edited before the error"
+                        board.SetErrorPrompt(Function(failure, unsaved)
+                                                 draftWhenAsked = File.Exists(DraftPath)
+                                                 Return DialogResult.Cancel
+                                             End Function)
+
+                        RaiseUnhandledError(board, e)
+
+                        Assert.IsFalse(board.IsDisposed, "Keep Working goes on.")
+                        Assert.AreEqual("Edited before the error", board.Field("Title").Text, "The page is intact.")
+
+                        board.SetPrompt(Function(title) DialogResult.No)
+                        board.Close()
+                    End Using
+                End Sub)
+
+            Assert.AreEqual(1, Directory.GetFiles(ErrorReportService.DefaultDirectory(), "error-report_*").Length, "The report comes first (#120).")
+        Finally
+            StorageEnvironment.RootOverride = Nothing
+        End Try
+
+        Assert.IsTrue(draftWhenAsked, "The draft was there before the dialog was shown.")
+        Assert.IsFalse(e.ExitApplication)
+        StringAssert.Contains(File.ReadAllText(DraftPath), "Edited before the error")
+        StringAssert.Contains(File.ReadAllText(DraftPath), "an error ended the session")
+    End Sub
+
+
+    ' A draft that cannot be written (data\recovery is a file here) does
+    ' not keep the error dialog from being shown.
+    <TestMethod>
+    Public Sub ADraftThatCannotBeWrittenDoesNotHideTheErrorDialog()
+        Dim asked As Integer = 0
+        File.WriteAllText(Path.Combine(_dataDirectory, "recovery"), "in the way")
+
+        StorageEnvironment.RootOverride = _root
+        Try
+            RunOnStaThread(
+                Sub()
+                    Using board As New DraftBoard(_dataDirectory, _managedDirectory)
+                        board.Prepare()
+                        board.Open(board.Library(0))
+                        board.Field("Title").Text = "Edited before the error"
+                        board.SetErrorPrompt(Function(failure, unsaved)
+                                                 asked += 1
+                                                 Return DialogResult.Cancel
+                                             End Function)
+
+                        RaiseUnhandledError(board, New Microsoft.VisualBasic.ApplicationServices.UnhandledExceptionEventArgs(True, New InvalidOperationException("The route map could not be drawn.")))
+
+                        board.SetPrompt(Function(title) DialogResult.No)
+                        board.Close()
+                    End Using
+                End Sub)
+        Finally
+            StorageEnvironment.RootOverride = Nothing
+        End Try
+
+        Assert.AreEqual(1, asked, "The error dialog is still shown.")
+        Assert.IsFalse(File.Exists(DraftPath))
+    End Sub
+
+
+    ' The handler as the application framework calls it, with the board as
+    ' the one main window open. A session's window is listed in
+    ' Application.OpenForms by Form.OnLoad, which the board skips with
+    ' Form1's own load, so it is listed here for the call and unlisted
+    ' after, whatever happens.
+    Private Shared Sub RaiseUnhandledError(board As Form1, e As Microsoft.VisualBasic.ApplicationServices.UnhandledExceptionEventArgs)
+        Dim openForms As FormCollection = Application.OpenForms
+        Dim list As MethodInfo = GetType(FormCollection).GetMethod("Add", BindingFlags.Instance Or BindingFlags.NonPublic, Nothing, {GetType(Form)}, Nothing)
+        Dim unlist As MethodInfo = GetType(FormCollection).GetMethod("Remove", BindingFlags.Instance Or BindingFlags.NonPublic, Nothing, {GetType(Form)}, Nothing)
+
+        list.Invoke(openForms, New Object() {board})
+        Try
+            Assert.AreSame(board, openForms.OfType(Of Form1)().Single(), "The board is the one main window open.")
+            ' Not named application: that would hide Application above.
+            Dim host As New ManuscriptPipeline.My.MyApplication()
+            GetType(ManuscriptPipeline.My.MyApplication).GetMethod("MyApplication_UnhandledException", BindingFlags.Instance Or BindingFlags.NonPublic).
+                Invoke(host, New Object() {host, e})
+            Application.DoEvents()
+        Finally
+            unlist.Invoke(openForms, New Object() {board})
+        End Try
+    End Sub
+
+
     ' A draft for a manuscript no longer in the library cannot be opened; it
     ' is neither offered nor deleted.
     <TestMethod>
@@ -333,6 +437,10 @@ Public Class RecoveryDraftTests
 
         Public Sub SetDraftPrompt(value As Func(Of String, DialogResult))
             recoveryDraftPrompt = value
+        End Sub
+
+        Public Sub SetErrorPrompt(value As Func(Of Exception, Boolean, DialogResult))
+            unhandledErrorPrompt = value
         End Sub
 
         ' What a session does right after it has loaded and rendered.
