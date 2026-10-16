@@ -50,6 +50,12 @@ function New-Case([string] $Name) {
     foreach ($document in @('docs/releases/0.4.0.md','docs/USER_GUIDE.md','UPGRADE_NOTES.md','LICENSE.txt','NOTICE.md')) {
         Write-Bytes (Join-Path $root $document) (Text-Bytes "Synthetic $document`nContent for fixture $Name.`n")
     }
+    # The self-contained publish the workflow verifies before packaging; only
+    # its runtimeconfig.json is read, for the bundled runtime version (#144).
+    Write-Bytes (Join-Path $root 'publish/win-x64/PaperRouteTracker.runtimeconfig.json') (Text-Bytes (ConvertTo-Json -Depth 6 -InputObject @{
+        runtimeOptions = @{ tfm = 'net10.0'; includedFrameworks = @(
+            @{ name = 'Microsoft.NETCore.App'; version = '10.0.12' }, @{ name = 'Microsoft.WindowsDesktop.App'; version = '10.0.12' }) }
+    }))
     $local = Join-Path $root 'Releases'
     $remote = [ordered]@{}
     $build = [Collections.Generic.List[object]]::new()
@@ -179,9 +185,16 @@ Run-Case 'valid-filtered-formatted-feed-stage-and-verify' {
     if (Test-Path -LiteralPath (Join-Path $c.Stage 'assets.stable.json')) { throw 'Internal build manifest was staged.' }
     if (Test-Path -LiteralPath (Join-Path $c.Stage 'JUhalt.PaperRouteTracker-0.3.0-stable-full.nupkg')) { throw 'Prior package seed was staged.' }
     if ((Get-Content -LiteralPath (Join-Path $c.Root 'github-output.txt')) -cne 'release_id=404') { throw 'Stage did not return the verified draft ID.' }
+    $evidence = Get-Content -LiteralPath (Join-Path $c.Evidence 'Stage-verification.json') -Raw | ConvertFrom-Json
+    if ($null -eq $evidence.PSObject.Properties['RuntimeVersion'] -or $evidence.RuntimeVersion -cne '10.0.12') { throw 'Stage did not record the bundled runtime version.' }
     Publish-LocalStageToMock $c
     Invoke-Verifier $c Verify
 }
+Run-Case 'missing-published-runtimeconfig' {
+    param($c)
+    [IO.File]::Delete((Join-Path $c.Root 'publish/win-x64/PaperRouteTracker.runtimeconfig.json'))
+    Invoke-Verifier $c Stage
+} '*runtimeconfig.json*'
 Run-Case 'valid-no-server-digest-still-compares-bytes' {
     param($c)
     $c.OmitDigest = $true

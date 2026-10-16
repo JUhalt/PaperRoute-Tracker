@@ -144,6 +144,22 @@ function Get-Sha256([string] $Path) {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
+# The .NET runtime the self-contained publish bundles, read from its
+# runtimeconfig.json, so the candidate record says which runtime shipped (#144).
+function Get-BundledRuntimeVersion([string] $PublishRoot) {
+    $configPath = Join-Path $PublishRoot 'PaperRouteTracker.runtimeconfig.json'
+    if (-not (Test-Path -LiteralPath $configPath -PathType Leaf)) {
+        throw "The published PaperRouteTracker.runtimeconfig.json was not found at '$configPath'."
+    }
+    $options = (Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json).runtimeOptions
+    $included = if ($null -ne $options.PSObject.Properties['includedFrameworks']) { @($options.includedFrameworks) } else { @() }
+    $runtime = @($included | Where-Object { $_.name -ceq 'Microsoft.NETCore.App' })
+    if ($runtime.Count -ne 1 -or [string]::IsNullOrWhiteSpace($runtime[0].version)) {
+        throw "'$configPath' does not name one bundled Microsoft.NETCore.App; the publish must be self-contained."
+    }
+    return [string] $runtime[0].version
+}
+
 function Assert-ArchivePayload([string] $Path, [string] $ExpectedDllHash, [switch] $CheckNuspec) {
     $archive = [IO.Compression.ZipFile]::OpenRead($Path)
     try {
@@ -218,6 +234,7 @@ try {
             throw "The self-contained publish payload is missing '$required'."
         }
     }
+    $runtimeVersion = Get-BundledRuntimeVersion $publishRoot
     $dllPath = Join-Path $publishRoot 'PaperRouteTracker.dll'
     $versionInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo($dllPath)
     $assemblyVersion = [Reflection.AssemblyName]::GetAssemblyName($dllPath).Version.ToString()
@@ -271,7 +288,7 @@ try {
     }
     $evidence = [ordered]@{
         Status = 'VerifiedLocalCandidate'; Version = $Version; NumericVersion = $numericVersion
-        Channel = $channel; PackageId = $packId; VelopackVersion = '1.2.0'; DotnetSdk = $sdk
+        Channel = $channel; PackageId = $packId; VelopackVersion = '1.2.0'; DotnetSdk = $sdk; RuntimeVersion = $runtimeVersion
         Commit = $commit; DirtyCheckout = ($sourceStatus.Count -gt 0); SourceStatusFile = 'source-status.txt'
         SourceSnapshotFile = 'source-files.json'; SourceSnapshotSha256 = (Get-Sha256 (Join-Path $candidateRoot 'source-files.json'))
         StartedAtUtc = $startedAt.ToString('o'); CompletedAtUtc = [DateTime]::UtcNow.ToString('o')
@@ -287,6 +304,6 @@ try {
     }
     [IO.File]::WriteAllText((Join-Path $candidateRoot 'candidate-verification.json'), ($evidence | ConvertTo-Json -Depth 8), $utf8)
     Write-Host "Verified local candidate: $candidateRoot"
-    Write-Host "Tests: $($evidence.TestsPassed) passed. Installer signature: $($evidence.InstallerSignatureStatus)."
+    Write-Host "Tests: $($evidence.TestsPassed) passed. Installer signature: $($evidence.InstallerSignatureStatus). Bundled .NET runtime: $runtimeVersion."
 }
 finally { Pop-Location }

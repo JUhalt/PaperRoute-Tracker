@@ -1,0 +1,14 @@
+# Monthly so one maintainer is not flooded; security advisories still arrive
+# as they are published (#144). Dependabot pull requests are reviewed like any
+# other; nothing here or in the repository merges them automatically.
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: monthly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

@@ -17,6 +17,7 @@ param(
     [string] $ReleaseDirectory = 'Releases',
     [string] $StageDirectory = 'ReleaseAssets',
     [string] $EvidenceDirectory = 'ReleaseVerification',
+    [string] $PublishDirectory = 'publish/win-x64',
     [long] $ExpectedReleaseId = 0
 )
 
@@ -27,6 +28,7 @@ $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $releaseRoot = [IO.Path]::GetFullPath($ReleaseDirectory, $repoRoot)
 $stageRoot = [IO.Path]::GetFullPath($StageDirectory, $repoRoot)
 $evidenceRoot = [IO.Path]::GetFullPath($EvidenceDirectory, $repoRoot)
+$publishRoot = [IO.Path]::GetFullPath($PublishDirectory, $repoRoot)
 $downloadRoot = Join-Path $evidenceRoot $Mode.ToLowerInvariant()
 $notesPath = Join-Path $repoRoot "docs/releases/$Version.md"
 $tag = "v$Version"
@@ -77,6 +79,23 @@ function Get-AssetSnapshot([object[]] $Assets) {
     return ConvertTo-Json -InputObject @($Assets | Sort-Object name | Select-Object id,name,size,state,updated_at,digest) -Compress
 }
 
+# The .NET runtime a self-contained publish bundles, read from its
+# runtimeconfig.json, so the release record says which runtime shipped (#144).
+function Get-BundledRuntimeVersion([string] $PublishRoot) {
+    $configPath = Join-Path $PublishRoot 'PaperRouteTracker.runtimeconfig.json'
+    if (-not (Test-Path -LiteralPath $configPath -PathType Leaf)) {
+        throw "The published PaperRouteTracker.runtimeconfig.json was not found at '$configPath'."
+    }
+    $options = (Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json).runtimeOptions
+    $included = if ($null -ne $options.PSObject.Properties['includedFrameworks']) { @($options.includedFrameworks) } else { @() }
+    $runtime = @($included | Where-Object { $_.name -ceq 'Microsoft.NETCore.App' })
+    if ($runtime.Count -ne 1 -or [string]::IsNullOrWhiteSpace($runtime[0].version)) {
+        throw "'$configPath' does not name one bundled Microsoft.NETCore.App; the publish must be self-contained."
+    }
+    return [string] $runtime[0].version
+}
+
+$runtimeVersion = Get-BundledRuntimeVersion $publishRoot
 $release = Get-DraftRelease
 $ExpectedReleaseId = [long] $release.databaseId
 $remoteAssets = @(Get-RemoteAssets $ExpectedReleaseId)
@@ -211,7 +230,7 @@ if ($after.body -cne $release.body -or (Get-AssetSnapshot $afterAssets) -cne $re
 }
 [IO.File]::WriteAllText((Join-Path $evidenceRoot "$Mode-verification.json"),
     (ConvertTo-Json -Depth 6 -InputObject ([ordered]@{
-        Tag = $tag; ReleaseId = $ExpectedReleaseId; Draft = $true
+        Tag = $tag; ReleaseId = $ExpectedReleaseId; Draft = $true; RuntimeVersion = $runtimeVersion
         VerifiedAtUtc = [DateTime]::UtcNow.ToString('o'); Assets = ($remoteSnapshot | ConvertFrom-Json)
     })), $utf8)
 Write-Host "$Mode verification passed for draft $tag ($ExpectedReleaseId)."
