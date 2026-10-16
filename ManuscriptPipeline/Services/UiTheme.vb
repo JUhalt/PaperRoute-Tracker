@@ -45,9 +45,11 @@ Namespace Services
         End Function
 
 
-        ' Never true under a contrast theme, even a dark one.
+        ' Never true under a contrast theme, even a dark one. The brightness
+        ' check comes first: it is the cheaper of the two, and in Light it
+        ' settles the answer without asking Windows for the contrast setting.
         Public Shared Function IsDark() As Boolean
-            Return Not IsHighContrast() AndAlso SystemColors.Window.GetBrightness() < 0.5F
+            Return SystemColors.Window.GetBrightness() < 0.5F AndAlso Not IsHighContrast()
         End Function
 
 
