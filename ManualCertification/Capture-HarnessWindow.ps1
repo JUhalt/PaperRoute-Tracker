@@ -11,13 +11,14 @@ blank window; the marker's time goes into the evidence JSON (#146). PrintWindow 
 pixels, so other windows may overlap it. Evidence goes to a fresh directory under the ignored artifacts
 folder unless -OutputDirectory says otherwise. The harness process is ended when the script finishes.
 #>
-[CmdletBinding()]
+[CmdletBinding(PositionalBinding = $false)]
 param(
     [Parameter(Mandatory)]
     [ValidateNotNullOrEmpty()]
     [string] $HarnessPath,
 
     # The harness's own arguments (surface and options), given after the named parameters.
+    # They are the only positional arguments, so a surface never binds to -Name.
     [Parameter(Mandatory, ValueFromRemainingArguments)]
     [ValidateNotNullOrEmpty()]
     [string[]] $HarnessArguments,

@@ -26,7 +26,7 @@ Real 150% display scaling gets one calibration session and one session per conve
 
 ## 6. Capture only after the window is ready
 
-The harness writes a "painted" marker when a window's background load has finished and its message loop is idle (`--painted <file>`; the marker carries the UTC time, `Application.HighDpiMode` and the window's `DeviceDpi`). `Capture-HarnessWindow.ps1` passes that option, waits for the marker, and fails on timeout instead of capturing; there is no fixed settle time. The marker time goes into the capture's evidence JSON. A capture taken any other way is not evidence.
+The harness writes a "painted" marker when a window's background load has finished and its message loop is idle (`--painted <file>`; the marker carries the UTC time, `Application.HighDpiMode` and the window's `DeviceDpi`). `Capture-HarnessWindow.ps1` passes that option, waits for the marker, and fails on timeout instead of capturing; there is no fixed settle time. The marker time goes into the capture's evidence JSON.
 
 ## 7. A quiet host
 

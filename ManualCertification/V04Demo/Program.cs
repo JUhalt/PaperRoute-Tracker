@@ -441,6 +441,10 @@ internal static class Program
             EventHandler? onIdle = null;
             onIdle = (_, _) =>
             {
+                // Export Submission Packet checks its files off the UI thread
+                // after Shown; Idle comes round again once that check has
+                // filled the window.
+                if (form is PacketExportForm { Loading.IsCompleted: false }) return;
                 Application.Idle -= onIdle;
                 var marker = JsonSerializer.Serialize(new
                 {
