@@ -408,10 +408,13 @@ Public Class OnlineServicesTests
     ' #128: the startup update check is the one request PaperRoute makes by
     ' itself. README.md and the guide both carry one pinned sentence saying
     ' so, and neither, nor ROADMAP.md, still says every request waits for
-    ' the user. Plain Contains, so a failure doesn't print a whole file.
+    ' the user. Both send the reader to the checkbox that turns it off in
+    ' the card Preferences builds it in, Updates, not Online services.
+    ' Plain Contains, so a failure doesn't print a whole file.
     <TestMethod>
     Public Sub TheReadmeAndTheGuideSayTheStartupUpdateCheckIsAutomatic()
         Const pinned As String = "The one request PaperRoute makes by itself is the update check when it starts: it reads the list of PaperRoute releases and sends nothing about you or your library."
+        Const underUpdates As String = "**Check for updates when PaperRoute starts**, under **Updates**"
         Dim root As String = RepositoryRoot()
         Dim readme As String = IO.File.ReadAllText(Path.Combine(root, "README.md"))
         Dim guide As String = IO.File.ReadAllText(UserGuideService.GuideFilePath())
@@ -419,6 +422,8 @@ Public Class OnlineServicesTests
 
         Assert.IsTrue(readme.Contains(pinned, StringComparison.Ordinal), "README.md says the startup update check is automatic, in the pinned sentence.")
         Assert.IsTrue(guide.Contains(pinned, StringComparison.Ordinal), "docs/USER_GUIDE.md says the startup update check is automatic, in the pinned sentence.")
+        Assert.IsTrue(readme.Contains(underUpdates, StringComparison.Ordinal), "README.md puts the startup-check checkbox in the Updates card, where Preferences builds it.")
+        Assert.IsTrue(guide.Contains(underUpdates, StringComparison.Ordinal), "docs/USER_GUIDE.md puts the startup-check checkbox in the Updates card, where Preferences builds it.")
         Assert.IsFalse(readme.Contains("Every online feature is optional and starts only when you ask", StringComparison.Ordinal), "README.md no longer says every online feature waits for you.")
         Assert.IsFalse(guide.Contains("contact an online service, and only when you use them", StringComparison.Ordinal), "The guide no longer says every online service waits for you.")
         Assert.IsFalse(roadmap.Contains("the user starts it, lookups are read-only", StringComparison.Ordinal), "ROADMAP.md no longer says the user starts every online feature.")
