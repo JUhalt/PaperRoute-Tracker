@@ -193,15 +193,6 @@ Public Class UserGuideServiceTests
 
         StringAssert.EndsWith(
             UserGuideService.GitHubGuideUrlFor(
-                "0.9.2+1a2b3c4",
-                developmentBuild:=False
-            ),
-            "/blob/v0.9.2/docs/USER_GUIDE.md",
-            "Build metadata is not part of the tag."
-        )
-
-        StringAssert.EndsWith(
-            UserGuideService.GitHubGuideUrlFor(
                 "1.0.0-rc.1",
                 developmentBuild:=False
             ),

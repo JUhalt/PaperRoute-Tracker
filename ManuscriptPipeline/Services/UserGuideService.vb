@@ -45,19 +45,10 @@ Namespace Services
             If Not developmentBuild AndAlso
                Not String.IsNullOrWhiteSpace(version) Then
 
-                ' The tag is "v" and the version without build metadata.
-                Dim tag As String =
-                    version.Trim()
-
-                Dim metadataIndex As Integer =
-                    tag.IndexOf("+"c)
-
-                If metadataIndex >= 0 Then
-                    tag = tag.Substring(0, metadataIndex)
-                End If
-
+                ' The tag is "v" and the version; CurrentVersionText has
+                ' already dropped any build metadata.
                 reference =
-                    "v" & tag
+                    "v" & version.Trim()
 
             End If
 
