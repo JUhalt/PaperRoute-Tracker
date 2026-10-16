@@ -116,7 +116,7 @@ Namespace Services
                             owner,
                             "Update checking is available in installed PaperRoute builds." &
                             Environment.NewLine & Environment.NewLine &
-                            "This copy appears to be running from Visual Studio or as a portable build. " &
+                            "This copy appears to be running from Visual Studio or as a developer build. " &
                             "Install PaperRoute using the Setup program from a GitHub release to test automatic updates.",
                             "Updates Unavailable",
                             MessageBoxIcon.Information
