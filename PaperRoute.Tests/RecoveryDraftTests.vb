@@ -191,6 +191,20 @@ Public Class RecoveryDraftTests
     End Sub
 
 
+    ' Guard: the window tests call OfferRecoveryDraft directly, so the one
+    ' call that wires it into startup, after the board is rendered, is
+    ' checked in the source, as the online gate's wiring is. It fails only
+    ' if that call is removed; it passed before any change here.
+    <TestMethod>
+    Public Sub StartupOffersTheDraftAfterTheBoardIsRendered()
+        Dim startup As String = File.ReadAllText(Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManuscriptPipeline", "Form1.vb"))
+        Dim loading As Integer = startup.IndexOf("Private Sub Form1_Load(", StringComparison.Ordinal)
+        Dim rendering As Integer = startup.IndexOf("RenderManuscripts()", loading, StringComparison.Ordinal)
+        Dim offering As Integer = startup.IndexOf("OfferRecoveryDraft()", loading, StringComparison.Ordinal)
+        Assert.IsTrue(loading >= 0 AndAlso rendering > loading AndAlso offering > rendering, "Startup offers the draft once the board is rendered.")
+    End Sub
+
+
     ' A session edits the one manuscript and ends without asking.
     Private Sub LeaveADraft(editedTitle As String)
         RunOnStaThread(

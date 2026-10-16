@@ -59,13 +59,6 @@ Namespace Services
         End Sub
 
 
-        Public ReadOnly Property DraftFilePath As String
-            Get
-                Return _path
-            End Get
-        End Property
-
-
         ' Flushed and swapped in like the library's own files (#125), so a
         ' shutdown that cuts the write short leaves no half-written draft.
         Public Sub Write(
