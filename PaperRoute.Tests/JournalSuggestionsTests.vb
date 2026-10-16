@@ -511,7 +511,8 @@ Public Class JournalSuggestionsTests
     ' Helpers
     ' ---------------------------------------------------------------
 
-    Private Shared Function AnchoringRequest() As JournalSuggestionRequest
+    ' Shared with ResponsivenessBudgetTests, which times the window on them.
+    Friend Shared Function AnchoringRequest() As JournalSuggestionRequest
         Return New JournalSuggestionRequest With {.Keywords = New List(Of String) From {"anchoring effects", "clinical judgment"}, .MatchAll = True, .SinceDate = New DateTime(2021, 9, 30)}
     End Function
 
@@ -520,7 +521,7 @@ Public Class JournalSuggestionsTests
     End Function
 
     ' The recorded answer for each of the four requests.
-    Private Shared Function Recorded(uri As Uri) As HttpResponseMessage
+    Friend Shared Function Recorded(uri As Uri) As HttpResponseMessage
         Dim address As String = uri.AbsoluteUri
         If address.Contains("/sources?", StringComparison.Ordinal) Then Return Answer(HttpStatusCode.OK, Fixture("details.json"))
         If address.Contains("sort=publication_date", StringComparison.Ordinal) Then Return Answer(HttpStatusCode.OK, Fixture("examples.json"))
@@ -559,11 +560,11 @@ Public Class JournalSuggestionsTests
         Return network
     End Function
 
-    Private NotInheritable Class SentRequest
+    Friend NotInheritable Class SentRequest
         Public Property Uri As Uri
     End Class
 
-    Private NotInheritable Class FixtureNetwork
+    Friend NotInheritable Class FixtureNetwork
         Inherits HttpMessageHandler
 
         Public ReadOnly Requests As New List(Of SentRequest)()
@@ -579,7 +580,7 @@ Public Class JournalSuggestionsTests
         End Function
     End Class
 
-    Private NotInheritable Class RecordedSuggestions
+    Friend NotInheritable Class RecordedSuggestions
         Implements IJournalSuggestionsSource
 
         Private ReadOnly _result As JournalSuggestionsResult
