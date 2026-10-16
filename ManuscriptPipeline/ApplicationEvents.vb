@@ -28,6 +28,10 @@ Namespace My
         ' An unexpected error on the UI thread is recorded on this computer
         ' first (#120); nothing is sent. The stock dialog stays until
         ' PaperRoute's own lands: Quit closes PaperRoute, Continue goes on.
+        ' Quit ends the process the way the stock handler does: the open
+        ' windows get their FormClosing, and then the process exits whether
+        ' or not one of them cancelled, because a faulted PaperRoute must
+        ' not stay running behind a window that asked about unsaved edits.
         Private Sub MyApplication_UnhandledException(
             sender As Object,
             e As Microsoft.VisualBasic.ApplicationServices.UnhandledExceptionEventArgs
@@ -40,12 +44,23 @@ Namespace My
                 "main window"
             )
 
+            Dim quit As Boolean
+
             Using dialog As New ThreadExceptionDialog(e.Exception)
 
-                e.ExitApplication =
+                quit =
                     dialog.ShowDialog() = DialogResult.Abort
 
             End Using
+
+            e.ExitApplication = False
+
+            If quit Then
+
+                Application.Exit()
+                Environment.Exit(1)
+
+            End If
 
         End Sub
 
