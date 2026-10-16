@@ -1,5 +1,4 @@
 ﻿Imports System
-Imports System.Diagnostics
 Imports System.Drawing
 Imports System.IO
 Imports System.Text
@@ -247,14 +246,7 @@ Namespace Forms
 
             Try
 
-                Directory.CreateDirectory(_logFolder)
-
-                Process.Start(
-                    New ProcessStartInfo With {
-                        .FileName = _logFolder,
-                        .UseShellExecute = True
-                    }
-                )
+                DiagnosticsForm.OpenFolder(_logFolder)
 
             Catch ex As Exception
 
