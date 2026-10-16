@@ -128,19 +128,28 @@ Public Class UserGuideServiceTests
             "The section names the removed folder."
         )
 
+        ' #122: the copies PaperRoute makes on its own, each one findable.
+        For Each expected As String In {"manuscripts.bak", "authors.bak", "backups", "recovery"}
+
+            CollectionAssert.Contains(
+                named,
+                expected,
+                "The section names " & expected & "."
+            )
+
+        Next
+
         Dim report As String =
             String.Empty
 
-        Dim keysRoot As String =
+        ' Every default root under a temporary folder: the report reads the
+        ' schema marker and lists the logs and key folders, which would
+        ' otherwise be the user's own.
+        Dim root As String =
             CreateTemporaryRoot()
 
-        OnlineAccess.KeyStoreFactory =
-            Function() New ProtectedKeyStore(
-                Path.Combine(
-                    keysRoot,
-                    "keys"
-                )
-            )
+        StorageEnvironment.RootOverride =
+            root
 
         Try
 
@@ -161,11 +170,11 @@ Public Class UserGuideServiceTests
 
         Finally
 
-            OnlineAccess.KeyStoreFactory =
+            StorageEnvironment.RootOverride =
                 Nothing
 
             DeleteTemporaryRoot(
-                keysRoot
+                root
             )
 
         End Try
@@ -191,6 +200,58 @@ Public Class UserGuideServiceTests
             )
 
         Next
+
+    End Sub
+
+
+    ' #122: the move-to-another-computer answer links to the section that
+    ' says where the files are.
+    <TestMethod>
+    Public Sub MoveToAnotherComputer_LinksToRecoveringYourLibrary()
+
+        Dim guide As String =
+            File.ReadAllText(
+                UserGuideService.GuideFilePath()
+            ).Replace(
+                vbCrLf,
+                vbLf
+            )
+
+        Dim start As Integer =
+            guide.IndexOf(
+                vbLf & "## How do I move PaperRoute to another computer?" & vbLf,
+                StringComparison.Ordinal
+            )
+
+        Assert.IsTrue(
+            start >= 0,
+            "The guide answers how to move to another computer."
+        )
+
+        Dim finish As Integer =
+            guide.IndexOf(
+                vbLf & "## ",
+                start + 1,
+                StringComparison.Ordinal
+            )
+
+        Dim answer As String =
+            guide.Substring(
+                start,
+                finish - start
+            )
+
+        StringAssert.Contains(
+            answer,
+            "[Recovering your library](",
+            "The answer links to the section."
+        )
+
+        StringAssert.Contains(
+            answer,
+            "#recovering-your-library)",
+            "The link goes to the section's heading."
+        )
 
     End Sub
 

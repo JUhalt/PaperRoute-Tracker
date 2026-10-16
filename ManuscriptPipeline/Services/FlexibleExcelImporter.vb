@@ -1,5 +1,6 @@
 ﻿Imports System
 Imports System.Collections.Generic
+Imports System.Globalization
 Imports System.IO
 Imports System.Text
 Imports ClosedXML.Excel
@@ -668,6 +669,16 @@ Namespace Services
                     ": submission-related data had no readable submission date. Today's date was used."
                 )
 
+                ' On the record too (#126), so the made-up date is not taken
+                ' for a real one once the import's warnings are gone.
+                notes =
+                    AppendNote(
+                        notes,
+                        "No submission date was given; the import date, " &
+                        submittedDate.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) &
+                        ", was used."
+                    )
+
             End If
 
             Dim submission As New JournalSubmission With {
@@ -699,6 +710,9 @@ Namespace Services
                             ExcelImportField.DecisionDate
                         )
 
+                    Dim decisionNotes As String =
+                        "Imported from mapped spreadsheet."
+
                     If Not decisionDate.HasValue Then
 
                         decisionDate = submittedDate.Value.Date
@@ -708,6 +722,16 @@ Namespace Services
                             ": decision '" & decisionText &
                             "' had no readable decision date. The submission date was used."
                         )
+
+                        ' On the record too (#126): Insights would otherwise
+                        ' count this as a same-day decision without saying so.
+                        decisionNotes =
+                            AppendNote(
+                                decisionNotes,
+                                "No decision date was given; the submission date, " &
+                                decisionDate.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) &
+                                ", was used."
+                            )
 
                     End If
 
@@ -725,7 +749,7 @@ Namespace Services
                             .DecisionDate = decisionDate.Value.Date,
                             .Decision = decision,
                             .RevisionDeadline = revisionDeadline,
-                            .Notes = "Imported from mapped spreadsheet."
+                            .Notes = decisionNotes
                         }
                     )
 
@@ -1054,6 +1078,21 @@ Namespace Services
             End If
 
             Return Nothing
+
+        End Function
+
+
+        ' A sentence added to a record's notes, after whatever the row gave.
+        Private Shared Function AppendNote(
+            notes As String,
+            sentence As String
+        ) As String
+
+            If String.IsNullOrWhiteSpace(notes) Then
+                Return sentence
+            End If
+
+            Return notes.TrimEnd() & Environment.NewLine & sentence
 
         End Function
 

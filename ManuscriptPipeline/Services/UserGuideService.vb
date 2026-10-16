@@ -11,6 +11,10 @@ Namespace Services
         Public Const GitHubGuideUrl As String =
             "https://github.com/JUhalt/PaperRoute-Tracker/blob/master/docs/USER_GUIDE.md"
 
+        ' The section the startup window points to (#119).
+        Public Const RecoveringYourLibraryUrl As String =
+            GitHubGuideUrl & "#recovering-your-library"
+
 
         Private Sub New()
         End Sub

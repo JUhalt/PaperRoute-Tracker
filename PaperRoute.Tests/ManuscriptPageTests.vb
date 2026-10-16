@@ -533,21 +533,35 @@ Public Class ManuscriptPageTests
 
     ' With no window open (#121), an error while PaperRoute starts or after
     ' the window closed is still said out loud before PaperRoute exits. The
-    ' real handler runs, so the box is the one a researcher would see.
+    ' real handler runs, so the box is the one a researcher would see, and
+    ' the report of #120 is written first, under a root of this test's own
+    ' so the user's profile is never touched.
     <TestMethod>
     Public Sub AnErrorWithNoWindowOpenIsShownBeforePaperRouteExits()
         RunOnStaThread(
             Sub()
                 Assert.IsFalse(Application.OpenForms.OfType(Of Form1)().Any(), "This test needs no window open.")
-                Using dialogs As New DialogWatcher()
-                    ' Not named application: that would hide Application above.
-                    Dim host As New ManuscriptPipeline.My.MyApplication()
-                    Dim e As New Microsoft.VisualBasic.ApplicationServices.UnhandledExceptionEventArgs(True, New InvalidOperationException("The library folder could not be located."))
-                    GetType(ManuscriptPipeline.My.MyApplication).GetMethod("MyApplication_UnhandledException", BindingFlags.Instance Or BindingFlags.NonPublic).
-                        Invoke(host, New Object() {host, e})
-                    CollectionAssert.AreEqual({"PaperRoute"}, dialogs.Closed, "The error is shown even with nothing to keep working in.")
-                    Assert.IsTrue(e.ExitApplication, "PaperRoute still exits afterwards.")
-                End Using
+                Dim root As String = Path.Combine(Path.GetTempPath(), "PaperRoute-PageTests-" & Guid.NewGuid().ToString("N"))
+                StorageEnvironment.RootOverride = root
+                Try
+                    Using dialogs As New DialogWatcher()
+                        ' Not named application: that would hide Application above.
+                        Dim host As New ManuscriptPipeline.My.MyApplication()
+                        Dim e As New Microsoft.VisualBasic.ApplicationServices.UnhandledExceptionEventArgs(True, New InvalidOperationException("The library folder could not be located."))
+                        GetType(ManuscriptPipeline.My.MyApplication).GetMethod("MyApplication_UnhandledException", BindingFlags.Instance Or BindingFlags.NonPublic).
+                            Invoke(host, New Object() {host, e})
+                        CollectionAssert.AreEqual({"PaperRoute"}, dialogs.Closed, "The error is shown even with nothing to keep working in.")
+                        Assert.IsTrue(e.ExitApplication, "PaperRoute still exits afterwards.")
+                    End Using
+
+                    Assert.AreEqual(1, Directory.GetFiles(ErrorReportService.DefaultDirectory(), "error-report_*").Length, "The error is recorded on this computer before anything is shown (#120).")
+                Finally
+                    StorageEnvironment.RootOverride = Nothing
+                    Try
+                        Directory.Delete(root, True)
+                    Catch
+                    End Try
+                End Try
             End Sub)
     End Sub
 
