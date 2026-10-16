@@ -145,7 +145,8 @@ Partial Public Class Form1
         }
 
         Dim lblPrivacy As New Label With {
-            .Text = "PaperRoute keeps your library on this computer. No account is needed, and your library is never uploaded.",
+            .Text = "PaperRoute keeps your library on this computer. No account is needed, and your library is never uploaded. " &
+                    "The one request PaperRoute makes by itself is a check for updates when it starts; it sends nothing about you, and Preferences turns it off.",
             .AutoSize = True,
             .UseMnemonic = False,
             .MaximumSize = New Size(textWidth - privacy.Padding.Horizontal, 0),

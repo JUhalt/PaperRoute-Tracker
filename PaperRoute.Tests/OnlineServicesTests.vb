@@ -405,6 +405,26 @@ Public Class OnlineServicesTests
         Assert.AreEqual(OnlineServiceCatalog.Services.Count, OnlineServiceCatalog.Services.Select(Function(item) item.Id).Distinct().Count())
     End Sub
 
+    ' #128: the startup update check is the one request PaperRoute makes by
+    ' itself. README.md and the guide both carry one pinned sentence saying
+    ' so, and neither, nor ROADMAP.md, still says every request waits for
+    ' the user. Plain Contains, so a failure doesn't print a whole file.
+    <TestMethod>
+    Public Sub TheReadmeAndTheGuideSayTheStartupUpdateCheckIsAutomatic()
+        Const pinned As String = "The one request PaperRoute makes by itself is the update check when it starts: it reads the list of PaperRoute releases and sends nothing about you or your library."
+        Dim root As String = RepositoryRoot()
+        Dim readme As String = IO.File.ReadAllText(Path.Combine(root, "README.md"))
+        Dim guide As String = IO.File.ReadAllText(UserGuideService.GuideFilePath())
+        Dim roadmap As String = IO.File.ReadAllText(Path.Combine(root, "ROADMAP.md"))
+
+        Assert.IsTrue(readme.Contains(pinned, StringComparison.Ordinal), "README.md says the startup update check is automatic, in the pinned sentence.")
+        Assert.IsTrue(guide.Contains(pinned, StringComparison.Ordinal), "docs/USER_GUIDE.md says the startup update check is automatic, in the pinned sentence.")
+        Assert.IsFalse(readme.Contains("Every online feature is optional and starts only when you ask", StringComparison.Ordinal), "README.md no longer says every online feature waits for you.")
+        Assert.IsFalse(guide.Contains("contact an online service, and only when you use them", StringComparison.Ordinal), "The guide no longer says every online service waits for you.")
+        Assert.IsFalse(roadmap.Contains("the user starts it, lookups are read-only", StringComparison.Ordinal), "ROADMAP.md no longer says the user starts every online feature.")
+        StringAssert.StartsWith(OnlineServiceCatalog.Find(OnlineServiceCatalog.Updates).WhenUsed, "At startup, if automatic checks are on", "The table's row, which the guide copies, says so too.")
+    End Sub
+
 
     ' ---------------------------------------------------------------
     ' Preferences and the main window
