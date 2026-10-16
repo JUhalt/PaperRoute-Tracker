@@ -58,6 +58,26 @@ Namespace Services
         End Function
 
 
+        ' Applying an update ends PaperRoute at once (#132). A save, backup or
+        ' restore processes the window's messages while it runs, so a download
+        ' can finish during one; the update waits until that work has ended.
+        Friend Shared Async Function WaitForLibraryWorkAsync(
+            owner As IWin32Window,
+            Optional interval As Integer = 250
+        ) As Task
+
+            Dim window As Form1 = TryCast(owner, Form1)
+
+            While window IsNot Nothing AndAlso
+                  window.IsLibraryWorkInProgress
+
+                Await Task.Delay(interval)
+
+            End While
+
+        End Function
+
+
         Public Shared Function ChannelDisplayName(
             channel As AppUpdateChannel
         ) As String
@@ -188,6 +208,11 @@ Namespace Services
                     Await manager.DownloadUpdatesAsync(
                         updateInfo,
                         progressCallback
+                    )
+
+                    ' A save, backup or restore still running ends first.
+                    Await WaitForLibraryWorkAsync(
+                        owner
                     )
 
                     progressDialog.SetProgress(100)

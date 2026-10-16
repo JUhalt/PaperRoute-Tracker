@@ -1,7 +1,9 @@
 Imports System
+Imports System.Diagnostics
 Imports System.IO
 Imports System.Runtime.ExceptionServices
 Imports System.Threading
+Imports System.Threading.Tasks
 Imports System.Windows.Forms
 Imports ManuscriptPipeline.Services
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
@@ -9,7 +11,9 @@ Imports Microsoft.VisualStudio.TestTools.UnitTesting
 ' Backup, Restore and Save behind the disabled window (#132): the window
 ' keeps processing messages while the work runs on a worker thread, the
 ' status line says what is happening, and a second piece of library work
-' cannot start before the first ends. Each test opens the 500 library.
+' cannot start before the first ends, nor an update restart PaperRoute.
+' Each test opens the 500 library, except the update's, where the work is
+' the test's own.
 ' Before #132 the handlers ran inline and held the UI thread for the whole
 ' run (the before table shows UI time equal to wall time for all three), so
 ' no tick could land; the seams these tests call did not exist then.
@@ -106,6 +110,51 @@ Public Class BackgroundLibraryWorkTests
                     StringAssert.StartsWith(board.StatusText, "Saved locally", "The status line reports the save that went through.")
                     Assert.IsFalse(board.IsLibraryWorkInProgress)
                     Assert.IsTrue(IsWindowEnabled(board.Handle), "The window is enabled again.")
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+
+    ' Applying an update ends PaperRoute at once. An update whose download
+    ' finished during a restore ran in the restore's message loop and could
+    ' end it partway, between moving the library aside and putting the
+    ' backup's in place; the update now waits for the work to end.
+    <TestMethod>
+    Public Sub AnUpdateWaitsForLibraryWorkToEndBeforeItRestarts()
+        RunOnStaThread(
+            Sub()
+                Dim example As LargeLibraryFixture.SyntheticLibrary = LargeLibraryFixture.WriteExample(Path.Combine(_root, "library"))
+                Using board As New LibraryBoard(example, Path.Combine(_root, "settings"))
+                    board.Start()
+                    Dim update As Task = Nothing
+
+                    Using posted As New ManualResetEventSlim(False)
+                        Assert.IsTrue(board.RunWork("Restoring the backup...",
+                            Sub()
+                                ' Posted to the window, as the download's
+                                ' continuation is, and run by the work's loop.
+                                board.BeginInvoke(
+                                    New Action(
+                                        Sub()
+                                            update = UpdateService.WaitForLibraryWorkAsync(board, interval:=10)
+                                            posted.Set()
+                                        End Sub))
+                                Assert.IsTrue(posted.Wait(TimeSpan.FromSeconds(30)), "The window ran the posted update.")
+                                ' The update checks a few more times while the work runs.
+                                Thread.Sleep(100)
+                            End Sub))
+                    End Using
+
+                    Assert.IsFalse(update.IsCompleted, "The update did not go ahead while the work ran.")
+
+                    Dim limit As Stopwatch = Stopwatch.StartNew()
+                    While Not update.IsCompleted AndAlso limit.Elapsed < TimeSpan.FromSeconds(30)
+                        Application.DoEvents()
+                        Thread.Sleep(1)
+                    End While
+
+                    Assert.IsTrue(update.IsCompleted, "Once the work ended, the update went ahead.")
                     board.Close()
                 End Using
             End Sub)

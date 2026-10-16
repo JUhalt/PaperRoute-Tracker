@@ -126,10 +126,11 @@ Friend NotInheritable Class LibraryBoard
     End Sub
 
 
-    Public Sub ReloadLibrary()
-        SetField("manuscripts", _library.Repository.Load())
-        CallPrivate("RenderManuscripts")
-    End Sub
+    ' Work of the test's own behind the disabled window, as a save, backup
+    ' or restore runs (#132).
+    Public Function RunWork(status As String, work As Action) As Boolean
+        Return CBool(CallPrivate("RunLibraryWork", status, work))
+    End Function
 
 
     Public Function SaveNow() As Boolean
