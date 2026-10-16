@@ -57,7 +57,7 @@ Namespace My
 
             If quit Then
 
-                Application.Exit()
+                System.Windows.Forms.Application.Exit()
                 Environment.Exit(1)
 
             End If
