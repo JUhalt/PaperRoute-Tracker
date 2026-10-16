@@ -31,8 +31,9 @@ Namespace Services
 
     Public Class PortableRestoreService
 
-        Private Const MaximumArchiveEntries As Integer = 20000
-        Private Const MaximumUncompressedBytes As Long = 21474836480L
+        ' Backup reports a library over these at backup time (#114).
+        Friend Const MaximumArchiveEntries As Integer = 20000
+        Friend Const MaximumUncompressedBytes As Long = 21474836480L
 
         Private ReadOnly _jsonOptions As JsonSerializerOptions
         Private ReadOnly _managedLibrary As ManagedLibraryService
@@ -451,10 +452,14 @@ Namespace Services
 
                     Dim backupService As New PortableBackupService(managedRoot)
 
+                    ' A copy of the library being replaced, which may be the
+                    ' reason for the restore: not held to Restore's
+                    ' acceptance checks (#114).
                     backupService.CreateBackup(
                         emergencyBackupPath,
                         currentManuscripts,
-                        repository
+                        repository,
+                        proveRestorable:=False
                     )
 
                 End If

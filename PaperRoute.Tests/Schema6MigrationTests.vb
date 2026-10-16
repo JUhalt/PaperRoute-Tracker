@@ -111,7 +111,7 @@ Public Class Schema6MigrationTests
         End Using
         Assert.AreEqual(5, StorageMigrationService.ReadSchemaVersion(_schema))
         Assert.AreEqual("previous recovery marker", File.ReadAllText(backupPath))
-        Assert.AreEqual(0, Directory.GetFiles(_data, "schema.json.tmp-*").Length)
+        Assert.AreEqual(0, Directory.GetFiles(_data, "schema.json.tmp*").Length)
     End Sub
 
     <TestMethod>

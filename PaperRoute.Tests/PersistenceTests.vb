@@ -753,6 +753,289 @@ Public Class PersistenceTests
     End Sub
 
 
+    ' A file another program holds for a moment, such as a sync client,
+    ' is tried again. It is not damage: the backup is never installed and
+    ' nothing is set aside (#111).
+    <TestMethod>
+    Public Sub Load_FileInUseOnceIsTriedAgainWithoutRecovery()
+
+        Dim repository As New ManuscriptRepository(
+            _dataDirectory,
+            _managedLibrary
+        )
+
+        Dim manuscripts As List(Of Manuscript) =
+            CreateRepresentativeLibrary()
+
+        repository.Save(manuscripts)
+
+        manuscripts(0).Title =
+            "Second Version"
+
+        repository.Save(manuscripts)
+
+        Dim primaryBefore As Byte() =
+            File.ReadAllBytes(repository.DataFilePath)
+
+        Dim backupBefore As Byte() =
+            File.ReadAllBytes(repository.BackupFilePath)
+
+        Dim opener As New HeldFileOpener(
+            repository.DataFilePath,
+            failures:=1
+        )
+
+        Dim held As New ManuscriptRepository(
+            _dataDirectory,
+            _managedLibrary,
+            openFile:=AddressOf opener.Open
+        )
+
+        Dim loaded As List(Of Manuscript) =
+            held.Load()
+
+        Assert.AreEqual(
+            "Second Version",
+            loaded(0).Title
+        )
+
+        Assert.IsFalse(
+            held.LastLoadRecoveredFromBackup
+        )
+
+        Assert.AreEqual(
+            2,
+            opener.Opens
+        )
+
+        CollectionAssert.AreEqual(
+            primaryBefore,
+            File.ReadAllBytes(repository.DataFilePath)
+        )
+
+        CollectionAssert.AreEqual(
+            backupBefore,
+            File.ReadAllBytes(repository.BackupFilePath)
+        )
+
+        Assert.IsFalse(
+            Directory.Exists(
+                Path.Combine(_dataDirectory, "recovery")
+            )
+        )
+
+    End Sub
+
+
+    ' Held for the whole launch, the file is reported in use and both files
+    ' are left alone. Before #111 the backup was taken for the library, or
+    ' "found a valid safety backup, but could not restore it".
+    <TestMethod>
+    Public Sub Load_FileInUseOnEveryAttemptStopsAndChangesNothing()
+
+        Dim repository As New ManuscriptRepository(
+            _dataDirectory,
+            _managedLibrary
+        )
+
+        Dim manuscripts As List(Of Manuscript) =
+            CreateRepresentativeLibrary()
+
+        repository.Save(manuscripts)
+
+        manuscripts(0).Title =
+            "Second Version"
+
+        repository.Save(manuscripts)
+
+        Dim primaryBefore As Byte() =
+            File.ReadAllBytes(repository.DataFilePath)
+
+        Dim backupBefore As Byte() =
+            File.ReadAllBytes(repository.BackupFilePath)
+
+        Dim opener As New HeldFileOpener(
+            repository.DataFilePath,
+            failures:=Integer.MaxValue
+        )
+
+        Dim held As New ManuscriptRepository(
+            _dataDirectory,
+            _managedLibrary,
+            openFile:=AddressOf opener.Open
+        )
+
+        Dim failure As StorageFileInUseException =
+            Assert.ThrowsExactly(Of StorageFileInUseException)(
+                Sub()
+                    Dim ignored As List(Of Manuscript) =
+                        held.Load()
+                End Sub
+            )
+
+        StringAssert.Contains(
+            failure.Message,
+            "manuscripts.json"
+        )
+
+        StringAssert.Contains(
+            failure.Message,
+            "in use by another program"
+        )
+
+        Assert.IsTrue(
+            opener.Opens > 1,
+            "Tried again before giving up."
+        )
+
+        Assert.IsFalse(
+            held.LastLoadRecoveredFromBackup
+        )
+
+        CollectionAssert.AreEqual(
+            primaryBefore,
+            File.ReadAllBytes(repository.DataFilePath)
+        )
+
+        CollectionAssert.AreEqual(
+            backupBefore,
+            File.ReadAllBytes(repository.BackupFilePath)
+        )
+
+        Assert.IsFalse(
+            Directory.Exists(
+                Path.Combine(_dataDirectory, "recovery")
+            )
+        )
+
+    End Sub
+
+
+    ' The same against the error Windows really raises: manuscripts.json
+    ' held open by another program for the whole load.
+    <TestMethod>
+    Public Sub Load_FileHeldOpenByAnotherProgramIsReportedInUse()
+
+        Dim repository As New ManuscriptRepository(
+            _dataDirectory,
+            _managedLibrary
+        )
+
+        Dim manuscripts As List(Of Manuscript) =
+            CreateRepresentativeLibrary()
+
+        repository.Save(manuscripts)
+
+        manuscripts(0).Title =
+            "Second Version"
+
+        repository.Save(manuscripts)
+
+        Dim primaryBefore As Byte() =
+            File.ReadAllBytes(repository.DataFilePath)
+
+        Dim backupBefore As Byte() =
+            File.ReadAllBytes(repository.BackupFilePath)
+
+        Using holder As New FileStream(
+            repository.DataFilePath,
+            FileMode.Open,
+            FileAccess.ReadWrite,
+            FileShare.None
+        )
+
+            Assert.ThrowsExactly(Of StorageFileInUseException)(
+                Sub()
+                    Dim ignored As List(Of Manuscript) =
+                        repository.Load()
+                End Sub
+            )
+
+        End Using
+
+        Assert.IsFalse(
+            repository.LastLoadRecoveredFromBackup
+        )
+
+        CollectionAssert.AreEqual(
+            primaryBefore,
+            File.ReadAllBytes(repository.DataFilePath)
+        )
+
+        CollectionAssert.AreEqual(
+            backupBefore,
+            File.ReadAllBytes(repository.BackupFilePath)
+        )
+
+        Assert.IsFalse(
+            Directory.Exists(
+                Path.Combine(_dataDirectory, "recovery")
+            )
+        )
+
+    End Sub
+
+
+    ' An in-use error raised while reading, after the open succeeded (another
+    ' program holds a byte-range lock), is in use too: the loader stops and
+    ' nothing turns to the backup (#111).
+    <TestMethod>
+    Public Sub Load_FileInUseWhileReadingStopsAndChangesNothing()
+
+        Dim repository As New ManuscriptRepository(
+            _dataDirectory,
+            _managedLibrary
+        )
+
+        Dim manuscripts As List(Of Manuscript) =
+            CreateRepresentativeLibrary()
+
+        repository.Save(manuscripts)
+
+        repository.Save(manuscripts)
+
+        Dim primaryBefore As Byte() =
+            File.ReadAllBytes(repository.DataFilePath)
+
+        Dim backupBefore As Byte() =
+            File.ReadAllBytes(repository.BackupFilePath)
+
+        Dim held As New ManuscriptRepository(
+            _dataDirectory,
+            _managedLibrary,
+            openFile:=AddressOf LockedReadStream.Open
+        )
+
+        Assert.ThrowsExactly(Of StorageFileInUseException)(
+            Sub()
+                Dim ignored As List(Of Manuscript) =
+                    held.Load()
+            End Sub
+        )
+
+        Assert.IsFalse(
+            held.LastLoadRecoveredFromBackup
+        )
+
+        CollectionAssert.AreEqual(
+            primaryBefore,
+            File.ReadAllBytes(repository.DataFilePath)
+        )
+
+        CollectionAssert.AreEqual(
+            backupBefore,
+            File.ReadAllBytes(repository.BackupFilePath)
+        )
+
+        Assert.IsFalse(
+            Directory.Exists(
+                Path.Combine(_dataDirectory, "recovery")
+            )
+        )
+
+    End Sub
+
+
     <TestMethod>
     Public Sub Save_AfterLoadFromBackupKeepsFoldersOnlyTheSetAsidePrimaryReferenced()
 
