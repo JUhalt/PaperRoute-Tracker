@@ -43,7 +43,7 @@ The two must match; case doesn't matter.
 
 ### "Install Partially Succeeded"
 
-Setup's last step starts PaperRoute once, briefly, to finish installing, and waits 30 seconds for it. On a slow or busy computer that first start can take longer, most often while Windows Defender scans the new files, and Setup then reports **Install Partially Succeeded**. It stopped waiting; nothing failed. PaperRoute is installed: open it from the Start menu.
+Setup's last step starts PaperRoute once, briefly, to finish installing, and waits 30 seconds for it. On a slow or busy computer that first start can take longer, and Setup then reports **Install Partially Succeeded**. It stopped waiting; nothing failed. PaperRoute is installed: open it from the Start menu.
 
 ### Updates and the Preview channel
 
@@ -51,7 +51,7 @@ An installed PaperRoute checks GitHub Releases for a newer version when it start
 
 ## Uninstalling
 
-Uninstall PaperRoute from Windows **Settings > Apps > Installed apps** (**PaperRoute Tracker**), as you would any app. That removes the Apps entry and the install folder, `%LocalAppData%\JUhalt.PaperRouteTracker`, and nothing else.
+Uninstall PaperRoute from Windows **Settings > Apps > Installed apps** (**PaperRoute Tracker**), as you would any app. That removes the Apps entry, PaperRoute's shortcuts, and the install folder, `%LocalAppData%\JUhalt.PaperRouteTracker`, and nothing else.
 
 Your library stays, so a reinstall finds it again:
 

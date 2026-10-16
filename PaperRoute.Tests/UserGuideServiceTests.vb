@@ -373,7 +373,7 @@ Public Class UserGuideServiceTests
         Dim readme As String =
             File.ReadAllText(
                 Path.Combine(
-                    RepositoryRoot(),
+                    AssistantCoreTests.RepositoryRoot(),
                     "README.md"
                 )
             )
@@ -469,37 +469,6 @@ Public Class UserGuideServiceTests
             start,
             If(finish < 0, guide.Length, finish) - start
         )
-
-    End Function
-
-
-    ' The checkout the tests were built from, where README.md lives.
-    Private Shared Function RepositoryRoot() As String
-
-        Dim folder As DirectoryInfo =
-            New DirectoryInfo(
-                AppContext.BaseDirectory
-            )
-
-        While folder IsNot Nothing AndAlso
-              Not File.Exists(
-                  Path.Combine(
-                      folder.FullName,
-                      "ManuscriptPipeline.slnx"
-                  )
-              )
-
-            folder =
-                folder.Parent
-
-        End While
-
-        Assert.IsNotNull(
-            folder,
-            "The repository root was not found."
-        )
-
-        Return folder.FullName
 
     End Function
 
