@@ -8,7 +8,7 @@ This guide describes **PaperRoute v0.9.1 — Journal Choice & Guidance**. See th
 
 If you only read one section, read this one.
 
-1. Open PaperRoute. An empty library opens on a welcome: choose **+ Add Manuscript** for a paper you are working on, or **Import Existing Work** to bring in published work from ORCID, BibTeX or RIS, or a spreadsheet.
+1. Open PaperRoute. An empty library opens on a welcome: choose **+ Add Manuscript** for a paper you are working on, or **Import Existing Work** to bring in published work from ORCID, BibTeX or RIS, or a spreadsheet. To see a whole library first, choose **Explore an example library** on the welcome: a fictional research group's manuscripts open in a separate window, and your own library is not changed (see **Teaching with PaperRoute**).
 2. Give the manuscript a title and place it at the stage that best matches reality.
 3. Open the manuscript from its card to add structured authors, a target journal, metadata, links, and submission history.
 4. Before submitting, record the exact manuscript snapshot in **Version History**, use **Submission Readiness...** for the journal's checklist, and assemble **Submission Packets...** for the files you intend to send.
@@ -20,6 +20,45 @@ If you only read one section, read this one.
 10. Use **Settings > Backup Library...** before major changes or moving PaperRoute to another computer.
 
 PaperRoute does not require an account for its core workflow, and the manuscript-tracking database is stored locally.
+
+---
+
+## Installing
+
+PaperRoute runs on Windows 11 (x64). Windows 10 and Windows on ARM may work, but they are not tested.
+
+Setup is published only on this repository's [Releases page](https://github.com/JUhalt/PaperRoute-Tracker/releases): download `JUhalt.PaperRouteTracker-stable-Setup.exe` from the latest Stable release and run it. PaperRoute is installed for your Windows account, under `%LocalAppData%\JUhalt.PaperRouteTracker`, with a Start menu entry; no administrator password is needed.
+
+### What Windows shows
+
+Setup is not code-signed, so Windows warns before it runs. Your browser may say the file isn't commonly downloaded and offer to delete it; keep it. When you open the file, Microsoft Defender SmartScreen shows **Windows protected your PC** ("Microsoft Defender SmartScreen prevented an unrecognized app from starting"). Choose **More info**, check that the app is `JUhalt.PaperRouteTracker-stable-Setup.exe` and the publisher is unknown, and choose **Run anyway**.
+
+To check the download first, compare its SHA-256 hash with the line for the Setup file in the release's `SHA256SUMS.txt`. In PowerShell, in the folder you downloaded to:
+
+```powershell
+Get-FileHash -Algorithm SHA256 -LiteralPath .\JUhalt.PaperRouteTracker-stable-Setup.exe
+```
+
+The two must match; case doesn't matter.
+
+### "Install Partially Succeeded"
+
+Setup's last step starts PaperRoute once, briefly, to finish installing, and waits 30 seconds for it. On a slow or busy computer that first start can take longer, and Setup then reports **Install Partially Succeeded**. It stopped waiting; nothing failed. PaperRoute is installed: open it from the Start menu.
+
+### Updates and the Preview channel
+
+An installed PaperRoute checks GitHub Releases for a newer version when it starts, and **Settings > Check for Updates...** checks now; see **Updates** under Preferences, Updates, and Diagnostics. If you tested a Preview release, switch back to Stable under **Settings > Preferences... > Update channel** once the release is out: a Preview install is not offered the Stable release that follows it.
+
+## Uninstalling
+
+Uninstall PaperRoute from Windows **Settings > Apps > Installed apps** (**PaperRoute Tracker**), as you would any app. That removes the Apps entry, PaperRoute's shortcuts, and the install folder, `%LocalAppData%\JUhalt.PaperRouteTracker`, and nothing else.
+
+Your library stays, so a reinstall finds it again:
+
+- `%LocalAppData%\PaperRoute\`: the library, its automatic backup, your settings, and any keys you added (encrypted, in its `keys` folder);
+- `Documents\PaperRoute Library`: the managed copies of your files, including the `removed` folder.
+
+To remove everything, delete those two folders after uninstalling. If you may want the library back, make a backup first (**Settings > Backup Library...**); a backup holds the library and its files, not your preferences or keys.
 
 ---
 
@@ -876,7 +915,7 @@ Use **Settings > Diagnostics...** when troubleshooting storage, environment, or 
 
 ## Online Services and Working Offline
 
-PaperRoute keeps your library on this computer and works without the internet. A few features contact an online service, and only when you use them. Choose **Settings > Preferences... > Online services** to see each service, what it sends, and when, and to turn any of them off.
+PaperRoute keeps your library on this computer and works without the internet. The one request PaperRoute makes by itself is the update check when it starts: it reads the list of PaperRoute releases and sends nothing about you or your library. Every other feature that contacts an online service does so only when you use it. Choose **Settings > Preferences... > Online services** to see each service, what it sends, and when, and to turn any of them off; **Check for updates when PaperRoute starts**, under **Updates** on the same page, turns off the startup check.
 
 - **Work offline** stops every online service, update checks included, until you turn it off. Choose **Settings > Work Offline**, or check it in Online services.
 - Above **Settings**, the rail shows **Online** in green, or **Working offline** in blue. Choose it to review Online services.

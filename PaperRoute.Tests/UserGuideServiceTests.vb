@@ -75,6 +75,157 @@ Public Class UserGuideServiceTests
     End Sub
 
 
+    ' #129: a Markdown table reaches Help as "Header: value" lines, one
+    ' row per paragraph, never as raw pipe rows.
+    <TestMethod>
+    Public Sub ToPlainText_WritesTableRowsAsHeaderValueLines()
+
+        Dim markdown As String =
+            "| Service | Sends |" & vbLf &
+            "| --- | --- |" & vbLf &
+            "| Update check | Nothing about you. |" & vbLf &
+            "| DOI lookup (**Crossref**) | A DOI. |"
+
+        Assert.AreEqual(
+            "Service: Update check" & Environment.NewLine &
+            "Sends: Nothing about you." & Environment.NewLine &
+            Environment.NewLine &
+            "Service: DOI lookup (Crossref)" & Environment.NewLine &
+            "Sends: A DOI.",
+            UserGuideService.ToPlainText(
+                markdown
+            )
+        )
+
+    End Sub
+
+
+    <TestMethod>
+    Public Sub ToPlainText_OverTheRealGuide_LeavesNoRawTableRow()
+
+        Dim plain As String =
+            UserGuideService.ToPlainText(
+                File.ReadAllText(
+                    UserGuideService.GuideFilePath()
+                )
+            )
+
+        Dim raw As List(Of String) =
+            plain.Replace(
+                vbCrLf,
+                vbLf
+            ).Split(
+                ChrW(10)
+            ).Where(
+                Function(line) line.TrimStart().StartsWith(
+                    "|",
+                    StringComparison.Ordinal
+                )
+            ).ToList()
+
+        Assert.AreEqual(
+            0,
+            raw.Count,
+            "Raw table rows reached Help, such as: " &
+            String.Join(
+                " / ",
+                raw.Take(2)
+            )
+        )
+
+    End Sub
+
+
+    ' #129: the built-in fallback, shown when the shipped guide can't be
+    ' read, names no surface that v0.6 removed, and the ones that replaced
+    ' them.
+    <TestMethod>
+    Public Sub BuiltInFallback_NamesNoRemovedSurface()
+
+        Dim fallback As String =
+            UserGuideService.BuiltInFallback()
+
+        For Each removed As String In {
+            "Use Data",
+            "Manuscript Details"
+        }
+
+            Assert.IsFalse(
+                fallback.Contains(
+                    removed,
+                    StringComparison.Ordinal
+                ),
+                "The fallback names a removed surface: " & removed
+            )
+
+        Next
+
+        For Each current As String In {
+            "Import & Export",
+            "Library page",
+            "Journals page",
+            "Settings > Backup Library"
+        }
+
+            StringAssert.Contains(
+                fallback,
+                current
+            )
+
+        Next
+
+    End Sub
+
+
+    ' #129: Open Guide on GitHub shows the running version's guide, from
+    ' its release tag; a copy Setup did not install, which no tag need
+    ' match, shows master's.
+    <TestMethod>
+    Public Sub GitHubGuideUrl_IsTheRunningVersionsTag()
+
+        StringAssert.EndsWith(
+            UserGuideService.GitHubGuideUrlFor(
+                "0.9.2",
+                developmentBuild:=False
+            ),
+            "/blob/v0.9.2/docs/USER_GUIDE.md"
+        )
+
+        StringAssert.EndsWith(
+            UserGuideService.GitHubGuideUrlFor(
+                "1.0.0-rc.1",
+                developmentBuild:=False
+            ),
+            "/blob/v1.0.0-rc.1/docs/USER_GUIDE.md",
+            "A Preview release has its own tag."
+        )
+
+        StringAssert.EndsWith(
+            UserGuideService.GitHubGuideUrlFor(
+                "0.9.2",
+                developmentBuild:=True
+            ),
+            "/blob/master/docs/USER_GUIDE.md"
+        )
+
+        StringAssert.EndsWith(
+            UserGuideService.GitHubGuideUrlFor(
+                String.Empty,
+                developmentBuild:=False
+            ),
+            "/blob/master/docs/USER_GUIDE.md",
+            "No version, no tag."
+        )
+
+        StringAssert.StartsWith(
+            UserGuideService.GitHubGuideUrl,
+            "https://github.com/JUhalt/PaperRoute-Tracker/blob/",
+            "The link Help opens is built the same way."
+        )
+
+    End Sub
+
+
     ' Shared with #122: every folder the "Recovering your library" section
     ' names in backticks is one Diagnostics prints, so a reader can find it.
     ' The section therefore puts only file and folder names in backticks.
@@ -202,6 +353,124 @@ Public Class UserGuideServiceTests
         Next
 
     End Sub
+
+
+    ' #127: the guide has Installing and Uninstalling sections, and the
+    ' README's own Installing section points at both. What they say about
+    ' the Windows prompt and uninstalling is matched against the release
+    ' certification record by hand (#147); it is not pinned here.
+    <TestMethod>
+    Public Sub TheGuideHasInstallingAndUninstallingSections()
+
+        Dim guide As String =
+            File.ReadAllText(
+                UserGuideService.GuideFilePath()
+            ).Replace(
+                vbCrLf,
+                vbLf
+            )
+
+        Dim readme As String =
+            File.ReadAllText(
+                Path.Combine(
+                    AssistantCoreTests.RepositoryRoot(),
+                    "README.md"
+                )
+            )
+
+        For Each section As String In {
+            "Installing",
+            "Uninstalling"
+        }
+
+            StringAssert.Contains(
+                guide,
+                vbLf & "## " & section & vbLf,
+                "The guide has a section: " & section
+            )
+
+            StringAssert.Contains(
+                readme,
+                "docs/USER_GUIDE.md#" & section.ToLowerInvariant(),
+                "The README points at the guide's section: " & section
+            )
+
+        Next
+
+        Dim installing As String =
+            SectionText(
+                guide,
+                "Installing"
+            )
+
+        For Each named As String In {
+            "SHA256SUMS.txt",
+            "Get-FileHash",
+            "Install Partially Succeeded",
+            "Windows 11",
+            "Preview"
+        }
+
+            StringAssert.Contains(
+                installing,
+                named,
+                "Installing covers: " & named
+            )
+
+        Next
+
+        Dim uninstalling As String =
+            SectionText(
+                guide,
+                "Uninstalling"
+            )
+
+        For Each kept As String In {
+            "%LocalAppData%\PaperRoute\",
+            "Documents\PaperRoute Library"
+        }
+
+            StringAssert.Contains(
+                uninstalling,
+                kept,
+                "Uninstalling names what stays: " & kept
+            )
+
+        Next
+
+    End Sub
+
+
+    ' One "## " section of the guide, heading to the next "## ".
+    Private Shared Function SectionText(
+        guide As String,
+        heading As String
+    ) As String
+
+        Dim start As Integer =
+            guide.IndexOf(
+                vbLf & "## " & heading & vbLf,
+                StringComparison.Ordinal
+            )
+
+        Assert.IsTrue(
+            start >= 0,
+            "The guide has a section: " & heading
+        )
+
+        Dim finish As Integer =
+            guide.IndexOf(
+                vbLf & "## ",
+                start + 1,
+                StringComparison.Ordinal
+            )
+
+        Return guide.Substring(
+            start,
+            If(finish < 0, guide.Length, finish) - start
+        )
+
+    End Function
 
 
     ' #122: the move-to-another-computer answer links to the section that
