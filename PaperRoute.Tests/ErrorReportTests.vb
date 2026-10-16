@@ -27,16 +27,17 @@ Public Class ErrorReportTests
         _root =
             CreateTemporaryRoot()
 
+        ' Every default root under the temporary folder, so the reports,
+        ' and the Diagnostics report that names the newest one, never touch
+        ' the user's own profile.
+        StorageEnvironment.RootOverride =
+            _root
+
         _logs =
-            Path.Combine(
-                _root,
-                "logs"
-            )
+            ErrorReportService.DefaultDirectory()
 
         _reports =
-            New ErrorReportService(
-                _logs
-            )
+            New ErrorReportService()
 
     End Sub
 
@@ -44,10 +45,7 @@ Public Class ErrorReportTests
     <TestCleanup>
     Public Sub Cleanup()
 
-        ErrorReportService.DirectoryOverride =
-            Nothing
-
-        OnlineAccess.KeyStoreFactory =
+        StorageEnvironment.RootOverride =
             Nothing
 
         DeleteTemporaryRoot(
@@ -273,17 +271,6 @@ Public Class ErrorReportTests
 
     <TestMethod>
     Public Sub Diagnostics_ShowTheLastReportPath()
-
-        ErrorReportService.DirectoryOverride =
-            _logs
-
-        OnlineAccess.KeyStoreFactory =
-            Function() New ProtectedKeyStore(
-                Path.Combine(
-                    _root,
-                    "keys"
-                )
-            )
 
         StringAssert.Contains(
             DiagnosticsForm.BuildReport(New AppSettings()),

@@ -18,22 +18,19 @@ Namespace Services
 
         Private Const ReportPrefix As String = "error-report_"
 
-        ' For tests: reports in a folder of their own.
-        Friend Shared DirectoryOverride As String = Nothing
-
         Private ReadOnly _directory As String
 
 
         Public Sub New()
 
             Me.New(
-                If(DirectoryOverride, DefaultDirectory())
+                DefaultDirectory()
             )
 
         End Sub
 
 
-        Friend Sub New(
+        Private Sub New(
             directory As String
         )
 

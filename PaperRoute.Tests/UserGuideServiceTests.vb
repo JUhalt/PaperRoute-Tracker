@@ -142,16 +142,14 @@ Public Class UserGuideServiceTests
         Dim report As String =
             String.Empty
 
-        Dim keysRoot As String =
+        ' Every default root under a temporary folder: the report reads the
+        ' schema marker and lists the logs and key folders, which would
+        ' otherwise be the user's own.
+        Dim root As String =
             CreateTemporaryRoot()
 
-        OnlineAccess.KeyStoreFactory =
-            Function() New ProtectedKeyStore(
-                Path.Combine(
-                    keysRoot,
-                    "keys"
-                )
-            )
+        StorageEnvironment.RootOverride =
+            root
 
         Try
 
@@ -172,11 +170,11 @@ Public Class UserGuideServiceTests
 
         Finally
 
-            OnlineAccess.KeyStoreFactory =
+            StorageEnvironment.RootOverride =
                 Nothing
 
             DeleteTemporaryRoot(
-                keysRoot
+                root
             )
 
         End Try

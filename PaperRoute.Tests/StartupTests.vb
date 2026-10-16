@@ -25,15 +25,11 @@ Public Class StartupTests
         _root =
             CreateTemporaryRoot()
 
-        ' The Diagnostics report the window copies asks whether keys are
-        ' stored; never the user's own key folder.
-        OnlineAccess.KeyStoreFactory =
-            Function() New ProtectedKeyStore(
-                Path.Combine(
-                    _root,
-                    "keys"
-                )
-            )
+        ' The Diagnostics report the window copies reads the settings and
+        ' the schema marker and lists the logs and key folders: all under
+        ' the temporary root, never the user's own profile.
+        StorageEnvironment.RootOverride =
+            _root
 
     End Sub
 
@@ -41,7 +37,7 @@ Public Class StartupTests
     <TestCleanup>
     Public Sub Cleanup()
 
-        OnlineAccess.KeyStoreFactory =
+        StorageEnvironment.RootOverride =
             Nothing
 
         DeleteTemporaryRoot(
