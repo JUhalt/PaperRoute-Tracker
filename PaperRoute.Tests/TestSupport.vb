@@ -3,6 +3,7 @@ Imports System.Collections.Generic
 Imports System.IO
 Imports System.Text.Json
 Imports System.Text.Json.Serialization
+Imports System.Text.RegularExpressions
 Imports ManuscriptPipeline.Models
 
 Friend Module TestSupport
@@ -38,6 +39,54 @@ Friend Module TestSupport
         End Try
 
     End Sub
+
+
+    ' Where a save or a load puts a managed folder the library no longer
+    ' needs: under removed\<date>, keeping the folder's path in the library.
+    ' Exactly one dated folder is expected.
+    Public Function RemovedCopyOf(
+        managedDirectory As String,
+        originalDirectory As String
+    ) As String
+
+        Dim removedRoot As String =
+            Path.Combine(
+                managedDirectory,
+                "removed"
+            )
+
+        Dim dated As String() =
+            If(
+                Directory.Exists(removedRoot),
+                Directory.GetDirectories(removedRoot),
+                Array.Empty(Of String)()
+            )
+
+        If dated.Length <> 1 OrElse
+           Not Regex.IsMatch(
+               Path.GetFileName(dated(0)),
+               "^\d{4}-\d{2}-\d{2}$"
+           ) Then
+
+            Throw New InvalidOperationException(
+                "Expected one dated folder under " &
+                removedRoot &
+                ", found " &
+                dated.Length.ToString() &
+                "."
+            )
+
+        End If
+
+        Return Path.Combine(
+            dated(0),
+            Path.GetRelativePath(
+                managedDirectory,
+                originalDirectory
+            )
+        )
+
+    End Function
 
 
     Public Function CreateJsonOptions() As JsonSerializerOptions
@@ -125,3 +174,169 @@ Friend Module TestSupport
     End Function
 
 End Module
+
+
+' Opens storage files as a repository does, except that the first
+' `failures` opens of `heldPath` fail the way Windows fails when another
+' program holds the file open (#111). No test waits on a real lock.
+Friend Class HeldFileOpener
+
+    Private ReadOnly _heldPath As String
+    Private ReadOnly _failures As Integer
+
+
+    Public Sub New(
+        heldPath As String,
+        failures As Integer
+    )
+
+        _heldPath = heldPath
+        _failures = failures
+
+    End Sub
+
+
+    ' How many times the held file was asked for.
+    Public Property Opens As Integer
+
+
+    Public Function Open(
+        filePath As String
+    ) As Stream
+
+        If String.Equals(
+            filePath,
+            _heldPath,
+            StringComparison.OrdinalIgnoreCase
+        ) Then
+
+            Opens += 1
+
+            If Opens <= _failures Then
+
+                Throw New IOException(
+                    "The process cannot access the file because it is being used by another process.",
+                    &H80070020
+                )
+
+            End If
+
+        End If
+
+        Return New FileStream(
+            filePath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read
+        )
+
+    End Function
+
+End Class
+
+
+' Opens a storage file as a repository does, except that reading it fails
+' the way Windows fails when another program holds a byte-range lock on
+' the file (ERROR_LOCK_VIOLATION): the open itself succeeded (#111).
+Friend Class LockedReadStream
+    Inherits Stream
+
+    Private _position As Long
+
+
+    Public Shared Function Open(
+        filePath As String
+    ) As Stream
+
+        Return New LockedReadStream()
+
+    End Function
+
+
+    Public Overrides ReadOnly Property CanRead As Boolean
+        Get
+            Return True
+        End Get
+    End Property
+
+
+    Public Overrides ReadOnly Property CanSeek As Boolean
+        Get
+            Return True
+        End Get
+    End Property
+
+
+    Public Overrides ReadOnly Property CanWrite As Boolean
+        Get
+            Return False
+        End Get
+    End Property
+
+
+    ' Not empty, so a loader goes on to read it.
+    Public Overrides ReadOnly Property Length As Long
+        Get
+            Return 1
+        End Get
+    End Property
+
+
+    Public Overrides Property Position As Long
+        Get
+            Return _position
+        End Get
+        Set(value As Long)
+            _position = value
+        End Set
+    End Property
+
+
+    Public Overrides Function Read(
+        buffer As Byte(),
+        offset As Integer,
+        count As Integer
+    ) As Integer
+
+        Throw New IOException(
+            "The process cannot access the file because another process has locked a portion of the file.",
+            &H80070021
+        )
+
+    End Function
+
+
+    Public Overrides Sub Flush()
+    End Sub
+
+
+    Public Overrides Function Seek(
+        offset As Long,
+        origin As SeekOrigin
+    ) As Long
+
+        Return _position
+
+    End Function
+
+
+    Public Overrides Sub SetLength(
+        value As Long
+    )
+
+        Throw New NotSupportedException()
+
+    End Sub
+
+
+    Public Overrides Sub Write(
+        buffer As Byte(),
+        offset As Integer,
+        count As Integer
+    )
+
+        Throw New NotSupportedException()
+
+    End Sub
+
+End Class

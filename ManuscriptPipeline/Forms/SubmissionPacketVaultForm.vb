@@ -1,6 +1,5 @@
 Imports System
 Imports System.Collections.Generic
-Imports System.Diagnostics
 Imports System.Drawing
 Imports System.IO
 Imports System.Linq
@@ -1423,12 +1422,9 @@ Namespace Forms
 
             Try
 
-                Process.Start(
-                    New ProcessStartInfo(
-                        packetFile.LocalFilePath
-                    ) With {
-                        .UseShellExecute = True
-                    }
+                FileOpenService.OpenRecordedFile(
+                    Me,
+                    packetFile.LocalFilePath
                 )
 
             Catch ex As Exception

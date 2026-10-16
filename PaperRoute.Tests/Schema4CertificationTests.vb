@@ -175,7 +175,7 @@ Public Class Schema4CertificationTests
         Using lockedSchema As New FileStream(SchemaPath(), FileMode.Open, FileAccess.Read, FileShare.Read)
             Assert.ThrowsExactly(Of IOException)(Sub() Migrate())
             AssertFileSnapshotEqual(before, SnapshotFiles(_root))
-            Assert.AreEqual(0, Directory.GetFiles(_dataDirectory, "schema.json.tmp-*").Length)
+            Assert.AreEqual(0, Directory.GetFiles(_dataDirectory, "schema.json.tmp*").Length)
         End Using
 
         Migrate()
@@ -184,7 +184,7 @@ Public Class Schema4CertificationTests
         CollectionAssert.AreEqual(oldSchema, File.ReadAllBytes(backupPath))
         CollectionAssert.AreEqual(before(Path.Combine(_dataDirectory, "manuscripts.json")), File.ReadAllBytes(Path.Combine(_dataDirectory, "manuscripts.json")))
         CollectionAssert.AreEqual(before(Path.Combine(_dataDirectory, "authors.json")), File.ReadAllBytes(Path.Combine(_dataDirectory, "authors.json")))
-        Assert.AreEqual(0, Directory.GetFiles(_dataDirectory, "schema.json.tmp-*").Length)
+        Assert.AreEqual(0, Directory.GetFiles(_dataDirectory, "schema.json.tmp*").Length)
     End Sub
 
     <TestMethod>

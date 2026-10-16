@@ -1086,11 +1086,15 @@ The safest approach is:
 
 Backups hold your library and its files, not your preferences or OpenAlex key. On the new computer, review **Settings > Preferences...** and add the key again.
 
-## How do I recover from a bad import or restore?
+## Recovering your library
 
 PaperRoute creates safety backups around high-risk operations.
 
 Do not overwrite or manually delete the PaperRoute data directory while troubleshooting. Use Diagnostics and the recovery/backup workflow first.
+
+### Removed files
+
+When you delete a manuscript, a version, or a packet file and save, PaperRoute does not delete the copies it manages. It moves them into the `removed` folder inside your PaperRoute Library folder, under a folder named for the day, keeping each file's manuscript, version, and packet folders; **Settings > Diagnostics...** shows the path. Nothing empties that folder: the files stay on disk, and in a synced Documents folder, until you delete them. Backups leave it out. To put a file back, add it again as a version or packet file of the manuscript it belongs to (create the manuscript again first if you deleted it); PaperRoute makes a fresh managed copy.
 
 ---
 

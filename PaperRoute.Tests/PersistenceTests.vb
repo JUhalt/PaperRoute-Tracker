@@ -753,4 +753,729 @@ Public Class PersistenceTests
     End Sub
 
 
+    ' A file another program holds for a moment, such as a sync client,
+    ' is tried again. It is not damage: the backup is never installed and
+    ' nothing is set aside (#111).
+    <TestMethod>
+    Public Sub Load_FileInUseOnceIsTriedAgainWithoutRecovery()
+
+        Dim repository As New ManuscriptRepository(
+            _dataDirectory,
+            _managedLibrary
+        )
+
+        Dim manuscripts As List(Of Manuscript) =
+            CreateRepresentativeLibrary()
+
+        repository.Save(manuscripts)
+
+        manuscripts(0).Title =
+            "Second Version"
+
+        repository.Save(manuscripts)
+
+        Dim primaryBefore As Byte() =
+            File.ReadAllBytes(repository.DataFilePath)
+
+        Dim backupBefore As Byte() =
+            File.ReadAllBytes(repository.BackupFilePath)
+
+        Dim opener As New HeldFileOpener(
+            repository.DataFilePath,
+            failures:=1
+        )
+
+        Dim held As New ManuscriptRepository(
+            _dataDirectory,
+            _managedLibrary,
+            openFile:=AddressOf opener.Open
+        )
+
+        Dim loaded As List(Of Manuscript) =
+            held.Load()
+
+        Assert.AreEqual(
+            "Second Version",
+            loaded(0).Title
+        )
+
+        Assert.IsFalse(
+            held.LastLoadRecoveredFromBackup
+        )
+
+        Assert.AreEqual(
+            2,
+            opener.Opens
+        )
+
+        CollectionAssert.AreEqual(
+            primaryBefore,
+            File.ReadAllBytes(repository.DataFilePath)
+        )
+
+        CollectionAssert.AreEqual(
+            backupBefore,
+            File.ReadAllBytes(repository.BackupFilePath)
+        )
+
+        Assert.IsFalse(
+            Directory.Exists(
+                Path.Combine(_dataDirectory, "recovery")
+            )
+        )
+
+    End Sub
+
+
+    ' Held for the whole launch, the file is reported in use and both files
+    ' are left alone. Before #111 the backup was taken for the library, or
+    ' "found a valid safety backup, but could not restore it".
+    <TestMethod>
+    Public Sub Load_FileInUseOnEveryAttemptStopsAndChangesNothing()
+
+        Dim repository As New ManuscriptRepository(
+            _dataDirectory,
+            _managedLibrary
+        )
+
+        Dim manuscripts As List(Of Manuscript) =
+            CreateRepresentativeLibrary()
+
+        repository.Save(manuscripts)
+
+        manuscripts(0).Title =
+            "Second Version"
+
+        repository.Save(manuscripts)
+
+        Dim primaryBefore As Byte() =
+            File.ReadAllBytes(repository.DataFilePath)
+
+        Dim backupBefore As Byte() =
+            File.ReadAllBytes(repository.BackupFilePath)
+
+        Dim opener As New HeldFileOpener(
+            repository.DataFilePath,
+            failures:=Integer.MaxValue
+        )
+
+        Dim held As New ManuscriptRepository(
+            _dataDirectory,
+            _managedLibrary,
+            openFile:=AddressOf opener.Open
+        )
+
+        Dim failure As StorageFileInUseException =
+            Assert.ThrowsExactly(Of StorageFileInUseException)(
+                Sub()
+                    Dim ignored As List(Of Manuscript) =
+                        held.Load()
+                End Sub
+            )
+
+        StringAssert.Contains(
+            failure.Message,
+            "manuscripts.json"
+        )
+
+        StringAssert.Contains(
+            failure.Message,
+            "in use by another program"
+        )
+
+        Assert.IsTrue(
+            opener.Opens > 1,
+            "Tried again before giving up."
+        )
+
+        Assert.IsFalse(
+            held.LastLoadRecoveredFromBackup
+        )
+
+        CollectionAssert.AreEqual(
+            primaryBefore,
+            File.ReadAllBytes(repository.DataFilePath)
+        )
+
+        CollectionAssert.AreEqual(
+            backupBefore,
+            File.ReadAllBytes(repository.BackupFilePath)
+        )
+
+        Assert.IsFalse(
+            Directory.Exists(
+                Path.Combine(_dataDirectory, "recovery")
+            )
+        )
+
+    End Sub
+
+
+    ' The same against the error Windows really raises: manuscripts.json
+    ' held open by another program for the whole load.
+    <TestMethod>
+    Public Sub Load_FileHeldOpenByAnotherProgramIsReportedInUse()
+
+        Dim repository As New ManuscriptRepository(
+            _dataDirectory,
+            _managedLibrary
+        )
+
+        Dim manuscripts As List(Of Manuscript) =
+            CreateRepresentativeLibrary()
+
+        repository.Save(manuscripts)
+
+        manuscripts(0).Title =
+            "Second Version"
+
+        repository.Save(manuscripts)
+
+        Dim primaryBefore As Byte() =
+            File.ReadAllBytes(repository.DataFilePath)
+
+        Dim backupBefore As Byte() =
+            File.ReadAllBytes(repository.BackupFilePath)
+
+        Using holder As New FileStream(
+            repository.DataFilePath,
+            FileMode.Open,
+            FileAccess.ReadWrite,
+            FileShare.None
+        )
+
+            Assert.ThrowsExactly(Of StorageFileInUseException)(
+                Sub()
+                    Dim ignored As List(Of Manuscript) =
+                        repository.Load()
+                End Sub
+            )
+
+        End Using
+
+        Assert.IsFalse(
+            repository.LastLoadRecoveredFromBackup
+        )
+
+        CollectionAssert.AreEqual(
+            primaryBefore,
+            File.ReadAllBytes(repository.DataFilePath)
+        )
+
+        CollectionAssert.AreEqual(
+            backupBefore,
+            File.ReadAllBytes(repository.BackupFilePath)
+        )
+
+        Assert.IsFalse(
+            Directory.Exists(
+                Path.Combine(_dataDirectory, "recovery")
+            )
+        )
+
+    End Sub
+
+
+    ' An in-use error raised while reading, after the open succeeded (another
+    ' program holds a byte-range lock), is in use too: the loader stops and
+    ' nothing turns to the backup (#111).
+    <TestMethod>
+    Public Sub Load_FileInUseWhileReadingStopsAndChangesNothing()
+
+        Dim repository As New ManuscriptRepository(
+            _dataDirectory,
+            _managedLibrary
+        )
+
+        Dim manuscripts As List(Of Manuscript) =
+            CreateRepresentativeLibrary()
+
+        repository.Save(manuscripts)
+
+        repository.Save(manuscripts)
+
+        Dim primaryBefore As Byte() =
+            File.ReadAllBytes(repository.DataFilePath)
+
+        Dim backupBefore As Byte() =
+            File.ReadAllBytes(repository.BackupFilePath)
+
+        Dim held As New ManuscriptRepository(
+            _dataDirectory,
+            _managedLibrary,
+            openFile:=AddressOf LockedReadStream.Open
+        )
+
+        Assert.ThrowsExactly(Of StorageFileInUseException)(
+            Sub()
+                Dim ignored As List(Of Manuscript) =
+                    held.Load()
+            End Sub
+        )
+
+        Assert.IsFalse(
+            held.LastLoadRecoveredFromBackup
+        )
+
+        CollectionAssert.AreEqual(
+            primaryBefore,
+            File.ReadAllBytes(repository.DataFilePath)
+        )
+
+        CollectionAssert.AreEqual(
+            backupBefore,
+            File.ReadAllBytes(repository.BackupFilePath)
+        )
+
+        Assert.IsFalse(
+            Directory.Exists(
+                Path.Combine(_dataDirectory, "recovery")
+            )
+        )
+
+    End Sub
+
+
+    <TestMethod>
+    Public Sub Save_AfterLoadFromBackupKeepsFoldersOnlyTheSetAsidePrimaryReferenced()
+
+        Dim scenario =
+            CreateDamagedPrimaryBesideOlderBackup()
+
+        ' A restart falls back to the older safety backup. The newer primary
+        ' file is set aside under data\recovery and still references the
+        ' later version and packet file.
+        Dim repository As New ManuscriptRepository(
+            _dataDirectory,
+            _managedLibrary
+        )
+
+        Dim loaded As List(Of Manuscript) =
+            repository.Load()
+
+        Assert.IsTrue(
+            repository.LastLoadRecoveredFromBackup
+        )
+
+        Assert.AreEqual(
+            1,
+            loaded(0).Versions.Count
+        )
+
+        Assert.AreEqual(
+            1,
+            loaded(0).SubmissionPackets(0).Files.Count
+        )
+
+        repository.Save(
+            loaded
+        )
+
+        Assert.IsTrue(
+            File.Exists(
+                scenario.NewerVersion.LocalFilePath
+            ),
+            "A save after a backup recovery must keep the version snapshot only the set-aside primary references."
+        )
+
+        Assert.IsTrue(
+            File.Exists(
+                scenario.NewerPacketFile.LocalFilePath
+            ),
+            "A save after a backup recovery must keep the packet file only the set-aside primary references."
+        )
+
+        Assert.IsTrue(
+            File.Exists(
+                scenario.OlderVersion.LocalFilePath
+            )
+        )
+
+    End Sub
+
+
+    <TestMethod>
+    Public Sub Load_FromBackupKeepsStagedFoldersItDoesNotReferenceAndReportsThem()
+
+        Dim scenario =
+            CreateDamagedPrimaryBesideOlderBackup()
+
+        ' An interrupted save staged the later version and packet file.
+        Dim stagedVersion As String =
+            Path.Combine(
+                _managedLibrary,
+                ".paperroute-version-delete",
+                Guid.NewGuid().ToString("N"),
+                scenario.Manuscript.Id.ToString("N"),
+                scenario.NewerVersion.Id.ToString("N")
+            )
+
+        Directory.CreateDirectory(
+            Path.GetDirectoryName(
+                stagedVersion
+            )
+        )
+
+        Directory.Move(
+            Path.GetDirectoryName(
+                scenario.NewerVersion.LocalFilePath
+            ),
+            stagedVersion
+        )
+
+        Dim stagedPacket As String =
+            Path.Combine(
+                _managedLibrary,
+                ManagedPacketDeletionService.StagingFolderName,
+                Guid.NewGuid().ToString("N"),
+                scenario.Manuscript.Id.ToString("N"),
+                scenario.Manuscript.SubmissionPackets(0).Id.ToString("N"),
+                scenario.NewerPacketFile.Id.ToString("N")
+            )
+
+        Directory.CreateDirectory(
+            Path.GetDirectoryName(
+                stagedPacket
+            )
+        )
+
+        Directory.Move(
+            Path.GetDirectoryName(
+                scenario.NewerPacketFile.LocalFilePath
+            ),
+            stagedPacket
+        )
+
+        Dim repository As New ManuscriptRepository(
+            _dataDirectory,
+            _managedLibrary
+        )
+
+        Dim loaded As List(Of Manuscript) =
+            repository.Load()
+
+        Assert.IsTrue(
+            repository.LastLoadRecoveredFromBackup
+        )
+
+        Assert.AreEqual(
+            1,
+            loaded.Count
+        )
+
+        Assert.IsTrue(
+            File.Exists(
+                Path.Combine(
+                    stagedVersion,
+                    "snapshot.txt"
+                )
+            ),
+            "A load from the safety backup must keep a staged version it does not reference."
+        )
+
+        Assert.IsTrue(
+            File.Exists(
+                Path.Combine(
+                    stagedPacket,
+                    "packet.txt"
+                )
+            ),
+            "A load from the safety backup must keep a staged packet file it does not reference."
+        )
+
+        StringAssert.Contains(
+            repository.LastRecoveryKeptStagingNotice,
+            stagedVersion
+        )
+
+        StringAssert.Contains(
+            repository.LastRecoveryKeptStagingNotice,
+            stagedPacket
+        )
+
+        ' A deliberate keep is not a recovery failure: nothing is missing,
+        ' and the warning that steers the user to clear the staging folder,
+        ' which holds the only copy of these files, stays off.
+        Assert.AreEqual(
+            String.Empty,
+            repository.LastManagedLibraryRecoveryWarning
+        )
+
+    End Sub
+
+
+    <TestMethod>
+    Public Sub Save_WithoutLoadStagesNothing()
+
+        ' AuthorLibraryForm and ExampleLibraryService.Seed save through a
+        ' repository that never loaded. Such a save knows nothing about the
+        ' managed folder, so it must leave every unreferenced folder alone.
+        Dim manuscript As New Manuscript With {
+            .Title = "Saved without a load"
+        }
+
+        Dim version As ManuscriptVersion =
+            AddManagedVersion(
+                manuscript,
+                "Kept version"
+            )
+
+        Dim packet As New SubmissionPacket With {
+            .Label = "Packet",
+            .ManuscriptVersionId = version.Id
+        }
+
+        manuscript.SubmissionPackets.Add(
+            packet
+        )
+
+        AddManagedPacketFile(
+            manuscript,
+            packet,
+            "Kept packet file"
+        )
+
+        ' Folders no record references, left by an earlier library.
+        Dim orphanVersion As ManuscriptVersion =
+            AddManagedVersion(
+                manuscript,
+                "Orphan version"
+            )
+
+        manuscript.Versions.Remove(
+            orphanVersion
+        )
+
+        Dim orphanPacketFile As SubmissionPacketFile =
+            AddManagedPacketFile(
+                manuscript,
+                packet,
+                "Orphan packet file"
+            )
+
+        packet.Files.Remove(
+            orphanPacketFile
+        )
+
+        Dim repository As New ManuscriptRepository(
+            _dataDirectory,
+            _managedLibrary
+        )
+
+        Dim library As New List(Of Manuscript) From {
+            manuscript
+        }
+
+        repository.Save(
+            library
+        )
+
+        Assert.IsTrue(
+            File.Exists(
+                orphanVersion.LocalFilePath
+            ),
+            "A save without a load must not remove a version folder it never knew."
+        )
+
+        Assert.IsTrue(
+            File.Exists(
+                orphanPacketFile.LocalFilePath
+            ),
+            "A save without a load must not remove a packet file folder it never knew."
+        )
+
+        ' The save gave the repository a baseline, which does not include
+        ' the orphans either.
+        manuscript.Title =
+            "Saved again"
+
+        repository.Save(
+            library
+        )
+
+        Assert.IsTrue(
+            File.Exists(
+                orphanVersion.LocalFilePath
+            )
+        )
+
+        Assert.IsTrue(
+            File.Exists(
+                orphanPacketFile.LocalFilePath
+            )
+        )
+
+    End Sub
+
+
+    ' Two saves, so manuscripts.bak holds the first library and
+    ' manuscripts.json the second, which adds a version and a packet file;
+    ' then manuscripts.json is damaged, so the next load falls back to the
+    ' older backup while the newer file is set aside under data\recovery.
+    Private Function CreateDamagedPrimaryBesideOlderBackup() As (
+        Manuscript As Manuscript,
+        OlderVersion As ManuscriptVersion,
+        NewerVersion As ManuscriptVersion,
+        NewerPacketFile As SubmissionPacketFile
+    )
+
+        Dim manuscript As New Manuscript With {
+            .Title = "Recovered from backup"
+        }
+
+        Dim olderVersion As ManuscriptVersion =
+            AddManagedVersion(
+                manuscript,
+                "Older version"
+            )
+
+        Dim packet As New SubmissionPacket With {
+            .Label = "Packet",
+            .ManuscriptVersionId = olderVersion.Id
+        }
+
+        manuscript.SubmissionPackets.Add(
+            packet
+        )
+
+        AddManagedPacketFile(
+            manuscript,
+            packet,
+            "Older packet file"
+        )
+
+        Dim repository As New ManuscriptRepository(
+            _dataDirectory,
+            _managedLibrary
+        )
+
+        Dim library As New List(Of Manuscript) From {
+            manuscript
+        }
+
+        repository.Save(
+            library
+        )
+
+        Dim newerVersion As ManuscriptVersion =
+            AddManagedVersion(
+                manuscript,
+                "Newer version"
+            )
+
+        Dim newerPacketFile As SubmissionPacketFile =
+            AddManagedPacketFile(
+                manuscript,
+                packet,
+                "Newer packet file"
+            )
+
+        repository.Save(
+            library
+        )
+
+        File.WriteAllText(
+            repository.DataFilePath,
+            "{ damaged primary"
+        )
+
+        Return (
+            manuscript,
+            olderVersion,
+            newerVersion,
+            newerPacketFile
+        )
+
+    End Function
+
+
+    ' A version whose snapshot already sits in the managed library, as a
+    ' saved library leaves it.
+    Private Function AddManagedVersion(
+        manuscript As Manuscript,
+        label As String
+    ) As ManuscriptVersion
+
+        Dim version As New ManuscriptVersion With {
+            .Label = label,
+            .IsManagedCopy = True
+        }
+
+        Dim versionDirectory As String =
+            Path.Combine(
+                _managedLibrary,
+                manuscript.Id.ToString("N"),
+                "versions",
+                version.Id.ToString("N")
+            )
+
+        Directory.CreateDirectory(
+            versionDirectory
+        )
+
+        version.LocalFilePath =
+            Path.Combine(
+                versionDirectory,
+                "snapshot.txt"
+            )
+
+        File.WriteAllText(
+            version.LocalFilePath,
+            label
+        )
+
+        manuscript.Versions.Add(
+            version
+        )
+
+        Return version
+
+    End Function
+
+
+    Private Function AddManagedPacketFile(
+        manuscript As Manuscript,
+        packet As SubmissionPacket,
+        label As String
+    ) As SubmissionPacketFile
+
+        Dim packetFile As New SubmissionPacketFile With {
+            .Role = SubmissionPacketFileRole.Manuscript,
+            .Label = label,
+            .StorageMode = SubmissionPacketFileStorageMode.ManagedCopy
+        }
+
+        Dim fileDirectory As String =
+            Path.Combine(
+                _managedLibrary,
+                manuscript.Id.ToString("N"),
+                "packets",
+                packet.Id.ToString("N"),
+                packetFile.Id.ToString("N")
+            )
+
+        Directory.CreateDirectory(
+            fileDirectory
+        )
+
+        packetFile.LocalFilePath =
+            Path.Combine(
+                fileDirectory,
+                "packet.txt"
+            )
+
+        File.WriteAllText(
+            packetFile.LocalFilePath,
+            label
+        )
+
+        packet.Files.Add(
+            packetFile
+        )
+
+        Return packetFile
+
+    End Function
+
+
 End Class

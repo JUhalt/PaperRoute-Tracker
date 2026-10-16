@@ -57,20 +57,7 @@ Namespace Services
             If snapshot Is Nothing Then Throw New ArgumentNullException(NameOf(snapshot))
             Normalize(snapshot)
             Directory.CreateDirectory(Path.GetDirectoryName(_path))
-            Dim temporary As String = _path & ".tmp"
-            Try
-                File.WriteAllText(temporary, JsonSerializer.Serialize(snapshot, Options))
-                If File.Exists(_path) Then
-                    File.Replace(temporary, _path, _backupPath, True)
-                Else
-                    File.Move(temporary, _path)
-                End If
-            Finally
-                Try
-                    If File.Exists(temporary) Then File.Delete(temporary)
-                Catch ex As IOException
-                End Try
-            End Try
+            StorageFile.Write(_path, _backupPath, Sub(stream) JsonSerializer.Serialize(stream, snapshot, Options))
         End Sub
 
 

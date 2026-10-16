@@ -13,6 +13,7 @@ Namespace Services
         Private ReadOnly _dataFilePath As String
         Private ReadOnly _backupFilePath As String
         Private ReadOnly _jsonOptions As JsonSerializerOptions
+        Private ReadOnly _openFile As Func(Of String, Stream)
 
         Private _lastLoadRecoveredFromBackup As Boolean
         Private _lastRecoveryPreservedFilePath As String =
@@ -28,8 +29,10 @@ Namespace Services
         End Sub
 
 
+        ' openFile stands in for the file system in tests (#111).
         Friend Sub New(
-            dataDirectory As String
+            dataDirectory As String,
+            Optional openFile As Func(Of String, Stream) = Nothing
         )
 
             If String.IsNullOrWhiteSpace(
@@ -40,6 +43,18 @@ Namespace Services
                     "A data directory is required.",
                     NameOf(dataDirectory)
                 )
+
+            End If
+
+            If openFile IsNot Nothing Then
+
+                _openFile =
+                    openFile
+
+            Else
+
+                _openFile =
+                    AddressOf StorageFile.OpenRead
 
             End If
 
@@ -150,10 +165,6 @@ Namespace Services
 
                 If primary IsNot Nothing Then
 
-                    NormalizeLoadedData(
-                        primary
-                    )
-
                     Return primary
 
                 End If
@@ -173,10 +184,6 @@ Namespace Services
 
                         RecoverPrimaryFromBackup(
                             preserveExistingPrimary:=True
-                        )
-
-                        NormalizeLoadedData(
-                            backup
                         )
 
                         _lastLoadRecoveredFromBackup =
@@ -225,10 +232,6 @@ Namespace Services
 
             RecoverPrimaryFromBackup(
                 preserveExistingPrimary:=False
-            )
-
-            NormalizeLoadedData(
-                recovered
             )
 
             _lastLoadRecoveredFromBackup =
@@ -289,62 +292,19 @@ Namespace Services
                 _dataDirectory
             )
 
-            Dim json As String =
-                JsonSerializer.Serialize(
-                    library,
-                    _jsonOptions
-                )
+            StorageFile.Write(
+                _dataFilePath,
+                _backupFilePath,
+                Sub(stream)
 
-            Dim tempFilePath As String =
-                Path.Combine(
-                    _dataDirectory,
-                    "authors.tmp"
-                )
-
-            Try
-
-                File.WriteAllText(
-                    tempFilePath,
-                    json
-                )
-
-                If File.Exists(
-                    _dataFilePath
-                ) Then
-
-                    File.Replace(
-                        tempFilePath,
-                        _dataFilePath,
-                        _backupFilePath,
-                        True
+                    JsonSerializer.Serialize(
+                        stream,
+                        library,
+                        _jsonOptions
                     )
 
-                Else
-
-                    File.Move(
-                        tempFilePath,
-                        _dataFilePath
-                    )
-
-                End If
-
-            Finally
-
-                If File.Exists(
-                    tempFilePath
-                ) Then
-
-                    Try
-                        File.Delete(
-                            tempFilePath
-                        )
-                    Catch
-                        ' Best-effort cleanup only.
-                    End Try
-
-                End If
-
-            End Try
+                End Sub
+            )
 
         End Sub
 
@@ -359,10 +319,19 @@ Namespace Services
 
             Try
 
-                Dim json As String =
-                    File.ReadAllText(
-                        filePath
+                Dim json As String
+
+                Using reader As New StreamReader(
+                    StorageFile.OpenReadWithRetry(
+                        filePath,
+                        _openFile
                     )
+                )
+
+                    json =
+                        reader.ReadToEnd()
+
+                End Using
 
                 If String.IsNullOrWhiteSpace(
                     json
@@ -390,7 +359,27 @@ Namespace Services
 
                 End If
 
+                ' Validate here, so a backup is proved before it may replace
+                ' the primary. Valid JSON can still hold an unusable library.
+                NormalizeLoadedData(
+                    loaded
+                )
+
                 Return loaded
+
+            Catch ex As StorageFileInUseException
+
+                ' Not damage: stop here, before anything turns to the backup.
+                Throw
+
+            Catch ex As Exception When StorageFile.IsInUse(ex)
+
+                ' The same error raised while reading, after the open
+                ' succeeded: another program holds part of the file.
+                Throw New StorageFileInUseException(
+                    filePath,
+                    ex
+                )
 
             Catch ex As Exception
 
