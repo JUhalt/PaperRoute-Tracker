@@ -168,41 +168,26 @@ Public Class WorkflowThemeKeyboardSmokeTests
 
     End Sub
 
+    ' The runner changes only the test process's color mode, before this
+    ' thread constructs its forms, and puts it back. The current Windows
+    ' theme and all saved application settings are untouched. Only this
+    ' thread's forms count: one another test left open elsewhere is that
+    ' test's failure.
     Private Shared Sub RunWithColorMode(mode As SystemColorMode, action As Action)
-        Dim failure As Exception = Nothing
-        Dim thread As New Thread(
+        StaRunner.Run(
             Sub()
-                Dim priorMode As SystemColorMode = Application.ColorMode
-                Try
-                    Assert.AreEqual(0, Application.OpenForms.Count, "Theme smoke tests require no existing forms in the test process.")
-                    If SystemInformation.HighContrast Then
-                        Assert.Inconclusive("Windows high-contrast themes require separate certification; these checks do not change OS settings.")
-                    End If
-                    If mode = SystemColorMode.Dark AndAlso Not OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000) Then
-                        Assert.Inconclusive("Native WinForms dark mode requires Windows 11 or later.")
-                    End If
-                    ' This changes only the test process, before constructing its forms.
-                    ' The current Windows theme and all saved application settings are untouched.
-                    Application.EnableVisualStyles()
-                    Application.SetColorMode(mode)
-                    Dim expectedDark As Boolean = mode = SystemColorMode.Dark OrElse
-                        (mode = SystemColorMode.System AndAlso Application.SystemColorMode = SystemColorMode.Dark)
-                    Assert.AreEqual(expectedDark, UiTheme.IsDark())
-                    action()
-                Catch ex As Exception
-                    failure = ex
-                Finally
-                    Try
-                        Application.SetColorMode(priorMode)
-                    Catch ex As Exception
-                        If failure Is Nothing Then failure = ex
-                    End Try
-                End Try
-            End Sub) With {.IsBackground = True}
-        thread.SetApartmentState(ApartmentState.STA)
-        thread.Start()
-        Assert.IsTrue(thread.Join(TimeSpan.FromSeconds(30)), "The invisible theme/keyboard smoke test timed out.")
-        If failure IsNot Nothing Then ExceptionDispatchInfo.Capture(failure).Throw()
+                If SystemInformation.HighContrast Then
+                    Assert.Inconclusive("Windows high-contrast themes require separate certification; these checks do not change OS settings.")
+                End If
+                If mode = SystemColorMode.Dark AndAlso Not OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000) Then
+                    Assert.Inconclusive("Native WinForms dark mode requires Windows 11 or later.")
+                End If
+                Dim expectedDark As Boolean = mode = SystemColorMode.Dark OrElse
+                    (mode = SystemColorMode.System AndAlso Application.SystemColorMode = SystemColorMode.Dark)
+                Assert.AreEqual(expectedDark, UiTheme.IsDark())
+                action()
+                Assert.AreEqual(0, StaRunner.OpenFormsOnThisThread().Count, "Theme smoke tests leave no form open.")
+            End Sub, mode:=mode)
     End Sub
 
     Private Shared Sub ShowInvisible(dialog As Form)

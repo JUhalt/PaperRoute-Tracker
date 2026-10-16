@@ -1897,39 +1897,8 @@ Public Class ManuscriptPageTests
     End Sub
 
     Private Shared Sub RunOnStaThread(action As Action)
-        Dim failure As Exception = Nothing
-        Dim nativeThreadId As Integer = 0
-        Dim thread As New Thread(
-            Sub()
-                nativeThreadId = GetCurrentThreadId()
-                Try
-                    action()
-                Catch ex As Exception
-                    failure = ex
-                End Try
-            End Sub) With {.IsBackground = True}
-        thread.SetApartmentState(ApartmentState.STA)
-        thread.Start()
-        If Not thread.Join(TimeSpan.FromSeconds(90)) Then
-            ' A modal message box would block the test silently; name what is open.
-            Assert.Fail("Manuscript page test timed out. Windows open on its thread: " & DescribeThreadWindows(nativeThreadId))
-        End If
-        If failure IsNot Nothing Then ExceptionDispatchInfo.Capture(failure).Throw()
+        StaRunner.Run(action)
     End Sub
-
-    Private Shared Function DescribeThreadWindows(threadId As Integer) As String
-        Dim windows As New List(Of String)()
-        EnumThreadWindows(threadId,
-            Function(handle, parameter)
-                Dim title As New System.Text.StringBuilder(256)
-                Dim className As New System.Text.StringBuilder(256)
-                GetWindowText(handle, title, title.Capacity)
-                GetClassName(handle, className, className.Capacity)
-                windows.Add($"'{title}' ({className}{If(IsWindowVisible(handle), ", visible", "")})")
-                Return True
-            End Function, IntPtr.Zero)
-        Return If(windows.Count = 0, "none", String.Join("; ", windows))
-    End Function
 
     Private Delegate Function EnumWindowsCallback(handle As IntPtr, parameter As IntPtr) As Boolean
 
