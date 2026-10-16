@@ -3,6 +3,7 @@ Imports System.Collections.Generic
 Imports System.IO
 Imports System.IO.Compression
 Imports System.Linq
+Imports System.Text.Json
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
@@ -781,6 +782,145 @@ Public Class BackupRestoreTests
             Directory.GetFileSystemEntries(_root, "*restore-*", SearchOption.AllDirectories).Length,
             "Nothing of the restore is left beside the library."
         )
+
+    End Sub
+
+
+    ' A backup says what made it (#115): backup.json beside backup-info.txt,
+    ' which stays for people who read it.
+    <TestMethod>
+    Public Sub Backup_WritesAManifestBesideBackupInfo()
+
+        Dim dataDirectory As String = Path.Combine(_root, "source-data")
+        Dim managedDirectory As String = Path.Combine(_root, "source-library")
+        Dim repository As New ManuscriptRepository(dataDirectory, managedDirectory)
+        Dim manuscripts As List(Of Manuscript) = CreateRepresentativeLibrary()
+        AddManagedFixture(manuscripts, managedDirectory)
+        repository.Save(manuscripts)
+
+        Dim backupPath As String = Path.Combine(_root, "backup.zip")
+        Dim started As DateTime = DateTime.UtcNow
+        Call New PortableBackupService(managedDirectory).CreateBackup(backupPath, manuscripts, repository)
+        Dim finished As DateTime = DateTime.UtcNow
+
+        Using archive As ZipArchive = ZipFile.OpenRead(backupPath)
+
+            Assert.IsNotNull(archive.GetEntry("backup-info.txt"), "backup-info.txt is still written.")
+
+            Dim entry As ZipArchiveEntry = archive.GetEntry("backup.json")
+            Assert.IsNotNull(entry, "The backup carries backup.json.")
+
+            Using reader As New StreamReader(entry.Open())
+                Using manifest As JsonDocument = JsonDocument.Parse(reader.ReadToEnd())
+
+                    Dim root As JsonElement = manifest.RootElement
+                    Assert.AreEqual(1, root.GetProperty("FormatVersion").GetInt32())
+                    Assert.AreEqual(StorageMigrationService.CurrentSchemaVersion, root.GetProperty("SchemaVersion").GetInt32())
+                    Assert.AreEqual(PacketExportService.AppVersion(), root.GetProperty("AppVersion").GetString())
+
+                    Dim created As DateTime = root.GetProperty("CreatedUtc").GetDateTimeOffset().UtcDateTime
+                    Assert.IsTrue(created >= started AndAlso created <= finished, "Created " & created.ToString("O") & " is when the backup was made.")
+
+                    Assert.AreEqual(3, root.GetProperty("Manuscripts").GetInt32())
+                    Assert.AreEqual(2, root.GetProperty("Submissions").GetInt32())
+                    Assert.AreEqual(2, root.GetProperty("EditorialDecisions").GetInt32())
+                    Assert.AreEqual(1, root.GetProperty("CorrespondenceRecords").GetInt32())
+
+                End Using
+            End Using
+
+        End Using
+
+    End Sub
+
+
+    ' A backup from a newer storage schema is refused before anything
+    ' changes (#115): this build would drop what it does not know when it
+    ' rewrites the restored library. Inspect and both restores stop, and
+    ' every file and folder under the test root, the backup and the target
+    ' library included, is as it was. Before the change all three went ahead.
+    <TestMethod>
+    Public Sub ANewerBackup_IsRefusedByInspectAndRestoreWithNothingChanged()
+
+        Dim scenario As RestoreScenario = CreateRestoreScenario()
+
+        ' Schema 10, while this build is at 9.
+        SetBackupManifest(scenario.BackupPath, BackupManifestJson(StorageMigrationService.CurrentSchemaVersion + 1))
+
+        Dim before As Dictionary(Of String, Byte()) = SnapshotTree(_root)
+        Dim service As New PortableRestoreService(scenario.TargetManaged)
+
+        Dim inspect As InvalidOperationException =
+            Assert.ThrowsExactly(Of InvalidOperationException)(Sub() service.InspectBackup(scenario.BackupPath))
+        StringAssert.Contains(inspect.Message, "Update PaperRoute")
+        AssertSameTree(before, _root, "After the inspection")
+
+        Dim restore As InvalidOperationException =
+            Assert.ThrowsExactly(Of InvalidOperationException)(Sub() service.RestoreBackup(scenario.BackupPath, scenario.Current, scenario.TargetRepository))
+        StringAssert.Contains(restore.Message, "Update PaperRoute")
+        AssertSameTree(before, _root, "After the main window's restore")
+
+        Assert.ThrowsExactly(Of InvalidOperationException)(Sub() service.RestoreBackup(scenario.BackupPath, scenario.TargetRepository))
+        AssertSameTree(before, _root, "After the restore with no library loaded")
+
+    End Sub
+
+
+    ' A manifest that is not valid JSON, or in a format this build does not
+    ' know, is refused with a plain message before anything changes (#115).
+    ' Before the change each was ignored and the backup restored.
+    <TestMethod>
+    <DataRow("{ not json", "could not be read")>
+    <DataRow("[]", "could not be read")>
+    <DataRow("{""SchemaVersion"":9}", "could not be read")>
+    <DataRow("{""FormatVersion"":1,""SchemaVersion"":""nine""}", "could not be read")>
+    <DataRow("{""FormatVersion"":2,""SchemaVersion"":9}", "format 2")>
+    Public Sub AManifestThatCannotBeReadOrIsInAnUnknownFormat_IsRefusedWithNothingChanged(manifest As String, expected As String)
+
+        Dim scenario As RestoreScenario = CreateRestoreScenario()
+        SetBackupManifest(scenario.BackupPath, manifest)
+
+        Dim before As Dictionary(Of String, Byte()) = SnapshotTree(_root)
+        Dim service As New PortableRestoreService(scenario.TargetManaged)
+
+        Dim inspect As InvalidDataException =
+            Assert.ThrowsExactly(Of InvalidDataException)(Sub() service.InspectBackup(scenario.BackupPath))
+        StringAssert.Contains(inspect.Message, "backup.json")
+        StringAssert.Contains(inspect.Message, expected)
+
+        Assert.ThrowsExactly(Of InvalidDataException)(Sub() service.RestoreBackup(scenario.BackupPath, scenario.Current, scenario.TargetRepository))
+        Assert.ThrowsExactly(Of InvalidDataException)(Sub() service.RestoreBackup(scenario.BackupPath, scenario.TargetRepository))
+
+        AssertSameTree(before, _root, "After a refused manifest")
+
+    End Sub
+
+
+    ' Guard: a backup made by PaperRoute 0.9.0 or 0.9.1 has no backup.json,
+    ' which means storage schema 9 or older, and restores as it always has
+    ' (#115). Its shape is today's backup without the manifest: the
+    ' manuscripts.json, authors.json, citations.json, library.xlsx,
+    ' backup-info.txt and files that v0.9.0 wrote. It passed before the
+    ' change as well.
+    <TestMethod>
+    Public Sub ABackupWithNoManifest_RestoresAsBefore()
+
+        Dim scenario As RestoreScenario = CreateRestoreScenario()
+        SetBackupManifest(scenario.BackupPath, Nothing)
+
+        Using archive As ZipArchive = ZipFile.OpenRead(scenario.BackupPath)
+            Assert.IsNull(archive.GetEntry("backup.json"))
+            Assert.IsNotNull(archive.GetEntry("backup-info.txt"))
+        End Using
+
+        Dim service As New PortableRestoreService(scenario.TargetManaged)
+        Assert.AreEqual(3, service.InspectBackup(scenario.BackupPath).ManuscriptCount)
+
+        Dim result As RestoreResult = service.RestoreBackup(scenario.BackupPath, scenario.Current, scenario.TargetRepository)
+
+        Assert.AreEqual(3, result.ManuscriptCount)
+        Assert.AreEqual(3, scenario.TargetRepository.Load().Count)
+        Assert.AreEqual("Jane Researcher", New AuthorLibraryRepository(scenario.TargetData).Load().Authors.Single().DisplayName)
 
     End Sub
 

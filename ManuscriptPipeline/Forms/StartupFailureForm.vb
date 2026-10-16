@@ -659,7 +659,8 @@ Namespace Forms
         End Sub
 
 
-        ' One question with what the archive holds; Yes restores.
+        ' One question with the backup's date and version (#115) and what
+        ' the archive holds; Yes restores.
         Private Function ConfirmRestore(
             inspection As BackupInspection
         ) As Boolean
@@ -667,6 +668,8 @@ Namespace Forms
             Dim question As String =
                 "Restore this backup?" &
                 Environment.NewLine &
+                Environment.NewLine &
+                inspection.DescribeOrigin() &
                 Environment.NewLine &
                 "Manuscripts: " & inspection.ManuscriptCount.ToString() &
                 Environment.NewLine &
