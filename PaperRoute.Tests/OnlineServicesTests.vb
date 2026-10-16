@@ -527,6 +527,9 @@ Public Class OnlineServicesTests
                     Assert.IsTrue(indicator.Visible)
                     Assert.AreEqual(RailTone.Success, indicator.Tone, "Online is green.")
                     Assert.AreEqual(RailGlyph.Online, indicator.Glyph)
+                    ' #128: the startup update check is one of those features, so the
+                    ' tooltip no longer claims PaperRoute goes online only when asked.
+                    StringAssert.StartsWith(indicator.AccessibleDescription, "Online: PaperRoute goes online for the features listed in Online services")
 
                     board.SetWorkOffline(True)
                     Application.DoEvents()
