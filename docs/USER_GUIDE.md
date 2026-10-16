@@ -749,6 +749,7 @@ How the numbers work:
 
 - Days are calendar days between dates recorded in PaperRoute. A first decision is the earliest decision recorded for a submission.
 - A missing or inconsistent date (a decision dated before its submission, for example) leaves that value out. Nothing is estimated.
+- A date PaperRoute had to fill in during a spreadsheet import (a missing submission date becomes the day of the import, and a missing decision date the submission date) is noted on the record and counts here as written, so figures that include imported records are approximate to that extent.
 - On the route maps, time with you after a revision request ends at the next recorded Submitted or Under Review history entry. Without one, that stretch is drawn as not recorded.
 - Submissions count under a Journal Library record when they are linked to it or use exactly its name (ignoring capitals and spacing). A different spelling is shown on its own line rather than merged by guess.
 
@@ -1125,11 +1126,19 @@ The safest approach is:
 
 Backups hold your library and its files, not your preferences or OpenAlex key. On the new computer, review **Settings > Preferences...** and add the key again.
 
+Where the library's files are, and which copies PaperRoute keeps of them, is in [Recovering your library](https://github.com/JUhalt/PaperRoute-Tracker/blob/master/docs/USER_GUIDE.md#recovering-your-library).
+
 ## Recovering your library
 
-PaperRoute creates safety backups around high-risk operations.
+Your library is two files in PaperRoute's data folder: `manuscripts.json`, the record of your manuscripts, and `authors.json`, your reusable authors, affiliations, and journals. The files PaperRoute manages for you, version snapshots, packet files, and correspondence copies, are in the PaperRoute Library folder in your Documents. **Settings > Diagnostics...** prints every path named here, and its **Open Data Folder** opens the data folder. A library belongs to one computer: to move it, use backup and restore as in **How do I move PaperRoute to another computer?**, not a copy of the folders.
 
-Do not overwrite or manually delete the PaperRoute data directory while troubleshooting. Use Diagnostics and the recovery/backup workflow first.
+PaperRoute keeps these copies on its own:
+
+- `manuscripts.bak` and `authors.bak`, beside the two files, are the previous save of each; every save makes them. If PaperRoute cannot read a file when it starts, it loads this copy, tells you so, and keeps the unreadable file in the `recovery` folder, renamed with the time, so nothing is lost. There is nothing to do unless the window that opens says the copy could not be read either; then the files in the data folder and in `recovery` are what a bug report needs.
+- Before every spreadsheet or bibliography import, and before an ORCID import that adds manuscripts, a copy of both files goes into the `backups` folder, named manuscripts_pre-import_ and authors_pre-import_ followed by the time; the import's final message names the folder. To undo an import, close PaperRoute, copy the two files from `backups` over `manuscripts.json` and `authors.json` in the data folder, and start PaperRoute again. There is no undo button for an import.
+- Before **Restore Backup...** replaces your library, a ZIP of the whole library, PaperRoute_PreRestore_ followed by the time, goes into the same `backups` folder. If the restored library was not what you wanted, restore that ZIP like any other backup.
+
+If PaperRoute cannot start, the window that opens names the file it could not read and its folder, links here, and its **Copy Details** gives a bug report what it needs. Do not delete or edit the data folder while troubleshooting.
 
 ### Removed files
 

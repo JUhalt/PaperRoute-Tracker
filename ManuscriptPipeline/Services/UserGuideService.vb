@@ -11,6 +11,14 @@ Namespace Services
         Private Const GitHubGuideUrlFormat As String =
             "https://github.com/JUhalt/PaperRoute-Tracker/blob/{0}/docs/USER_GUIDE.md"
 
+        ' The section the startup window points to (#119), in the guide of
+        ' the running version (#129).
+        Public Shared ReadOnly Property RecoveringYourLibraryUrl As String
+            Get
+                Return GitHubGuideUrl & "#recovering-your-library"
+            End Get
+        End Property
+
 
         Private Sub New()
         End Sub
