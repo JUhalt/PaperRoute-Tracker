@@ -3576,7 +3576,9 @@ Public Class Form1
                 Return
             End If
 
-            Dim restoreService As New PortableRestoreService()
+            Dim restoreService As PortableRestoreService =
+            CreateRestoreService()
+
             Dim inspection As BackupInspection
 
             Try
@@ -3676,71 +3678,106 @@ Public Class Form1
 
             End If
 
-            Try
+            RestoreFromArchive(
+            dialog.FileName,
+            restoreService
+        )
 
-                Dim restoreResult As RestoreResult =
+        End Using
+
+    End Sub
+
+
+    ' Restores the archive and hands over to a new session (#116): the next
+    ' start reads the restored library from disk, so nothing this session
+    ' holds in memory, such as the author library, can be saved over it.
+    ' Tests call this with a throwaway archive.
+    Private Sub RestoreFromArchive(
+        backupZipPath As String,
+        restoreService As PortableRestoreService
+    )
+
+        Try
+
+            Dim restoreResult As RestoreResult =
                 restoreService.RestoreBackup(
-                    dialog.FileName,
+                    backupZipPath,
                     manuscripts,
                     repository
                 )
 
-                manuscripts =
-                repository.Load()
-
-                RenderManuscripts()
-
-                Dim completionMessage As String =
-                "The PaperRoute backup was restored successfully." &
-                Environment.NewLine &
-                Environment.NewLine &
+            Dim notice As String =
+                "Restored " &
                 restoreResult.ManuscriptCount.ToString() &
-                " manuscript(s) restored."
+                " manuscript(s). PaperRoute will now restart to open the restored library."
 
-                If Not String.IsNullOrWhiteSpace(
+            If Not String.IsNullOrWhiteSpace(
                 restoreResult.EmergencyBackupPath
             ) Then
 
-                    completionMessage &=
+                notice &=
                     Environment.NewLine &
                     Environment.NewLine &
-                    "Your previous library was backed up automatically to:" &
+                    "Your library from before the restore is at:" &
                     Environment.NewLine &
                     restoreResult.EmergencyBackupPath
 
-                End If
+            End If
 
-                MessageBox.Show(
-                Me,
-                completionMessage,
-                "Restore Complete",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information
+            RestartAfterRestore(
+                notice
             )
 
-                lblStatus.Text =
-                "Backup restored - " &
-                DateTime.Now.ToString("h:mm tt")
+        Catch ex As Exception
 
-            Catch ex As Exception
-
-                MessageBox.Show(
+            ' A failure during the swap says what was put back and names the
+            ' emergency ZIP (#116); before the swap, nothing was changed.
+            MessageBox.Show(
                 Me,
-                "PaperRoute could not restore the backup." &
-                Environment.NewLine &
-                Environment.NewLine &
-                ex.Message &
-                Environment.NewLine &
-                Environment.NewLine &
-                "The existing library was preserved or rolled back where possible.",
+                If(
+                    TypeOf ex Is RestoreFailedException,
+                    ex.Message,
+                    "PaperRoute could not restore the backup." &
+                    Environment.NewLine &
+                    Environment.NewLine &
+                    ex.Message &
+                    Environment.NewLine &
+                    Environment.NewLine &
+                    "Your library was not changed."
+                ),
                 "Restore Error",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error
             )
 
-            End Try
+        End Try
 
-        End Using
+    End Sub
+
+
+    ' Tests restore into a throwaway managed library.
+    Protected Overridable Function CreateRestoreService() As PortableRestoreService
+
+        Return New PortableRestoreService()
+
+    End Function
+
+
+    ' Says the restore finished and starts PaperRoute again, which opens the
+    ' restored library. Tests record the notice instead.
+    Protected Overridable Sub RestartAfterRestore(
+        notice As String
+    )
+
+        MessageBox.Show(
+            Me,
+            notice,
+            "Restore Complete",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information
+        )
+
+        Application.Restart()
 
     End Sub
 

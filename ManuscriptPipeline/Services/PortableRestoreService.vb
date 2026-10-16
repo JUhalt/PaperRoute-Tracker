@@ -29,6 +29,92 @@ Namespace Services
     End Class
 
 
+    ' A restore that failed while the library was being swapped (#116). The
+    ' message says that the rollback put the library back, names anything
+    ' it could not, and names the emergency ZIP of the library from just
+    ' before the restore.
+    Public Class RestoreFailedException
+        Inherits IOException
+
+        Public ReadOnly Property EmergencyBackupPath As String
+        Public ReadOnly Property LeftBehind As IReadOnlyList(Of String)
+
+
+        Friend Sub New(
+            cause As Exception,
+            emergencyBackupPath As String,
+            leftBehind As List(Of String)
+        )
+
+            MyBase.New(
+                BuildMessage(
+                    cause,
+                    emergencyBackupPath,
+                    leftBehind
+                ),
+                cause
+            )
+
+            Me.EmergencyBackupPath =
+                If(emergencyBackupPath, String.Empty)
+
+            Me.LeftBehind =
+                leftBehind.AsReadOnly()
+
+        End Sub
+
+
+        Private Shared Function BuildMessage(
+            cause As Exception,
+            emergencyBackupPath As String,
+            leftBehind As List(Of String)
+        ) As String
+
+            Dim message As String =
+                "PaperRoute could not restore the backup." &
+                Environment.NewLine &
+                Environment.NewLine &
+                cause.Message
+
+            If leftBehind.Count = 0 Then
+
+                message &=
+                    Environment.NewLine &
+                    Environment.NewLine &
+                    "Your library was put back as it was."
+
+            Else
+
+                message &=
+                    Environment.NewLine &
+                    Environment.NewLine &
+                    "Your library could not be fully put back. What was set aside is at:" &
+                    Environment.NewLine &
+                    String.Join(
+                        Environment.NewLine,
+                        leftBehind
+                    )
+
+            End If
+
+            If Not String.IsNullOrWhiteSpace(emergencyBackupPath) Then
+
+                message &=
+                    Environment.NewLine &
+                    Environment.NewLine &
+                    "A copy of your library from just before the restore is at:" &
+                    Environment.NewLine &
+                    emergencyBackupPath
+
+            End If
+
+            Return message
+
+        End Function
+
+    End Class
+
+
     Public Class PortableRestoreService
 
         ' Backup reports a library over these at backup time (#114).
@@ -273,6 +359,12 @@ Namespace Services
                     "restore-rollback-" & restoreId & "-authors.json"
                 )
 
+            Dim authorsBackupPath As String =
+                Path.Combine(
+                    dataDirectory,
+                    "authors.bak"
+                )
+
             Dim citationsPath As String =
                 Path.Combine(
                     dataDirectory,
@@ -489,7 +581,7 @@ Namespace Services
                             Directory.Delete(rollbackFilesDirectory, True)
                         End If
 
-                        Directory.Move(
+                        MoveDirectory(
                             managedRoot,
                             rollbackFilesDirectory
                         )
@@ -499,7 +591,7 @@ Namespace Services
 
                     End If
 
-                    Directory.Move(
+                    MoveDirectory(
                         stagedFilesDirectory,
                         managedRoot
                     )
@@ -513,28 +605,25 @@ Namespace Services
 
                     If originalJsonExisted Then
 
-                        File.Copy(
+                        CopyFile(
                             repository.DataFilePath,
-                            rollbackJsonPath,
-                            True
+                            rollbackJsonPath
                         )
 
                     End If
 
-                    File.Copy(
+                    CopyFile(
                         stagedJsonPath,
-                        repository.DataFilePath,
-                        True
+                        repository.DataFilePath
                     )
 
                     If restoreAuthorLibrary Then
 
                         If originalAuthorsExisted Then
 
-                            File.Copy(
+                            CopyFile(
                                 authorLibraryPath,
-                                rollbackAuthorsPath,
-                                True
+                                rollbackAuthorsPath
                             )
 
                         End If
@@ -542,10 +631,9 @@ Namespace Services
                         authorsInstalled =
                             True
 
-                        File.Copy(
+                        CopyFile(
                             stagedAuthorsPath,
-                            authorLibraryPath,
-                            True
+                            authorLibraryPath
                         )
 
                     End If
@@ -554,10 +642,9 @@ Namespace Services
 
                         If originalCitationsExisted Then
 
-                            File.Copy(
+                            CopyFile(
                                 citationsPath,
-                                rollbackCitationsPath,
-                                True
+                                rollbackCitationsPath
                             )
 
                         End If
@@ -565,15 +652,19 @@ Namespace Services
                         citationsInstalled =
                             True
 
-                        File.Copy(
+                        CopyFile(
                             stagedCitationsPath,
-                            citationsPath,
-                            True
+                            citationsPath
                         )
 
                     End If
 
-                Catch
+                Catch ex As Exception
+
+                    ' Each step is undone from its own copy. A copy that
+                    ' cannot be put back stays where it is, and the message
+                    ' names it (#116).
+                    Dim leftBehind As New List(Of String)()
 
                     ' =========================================
                     ' Roll back saved citations.
@@ -603,8 +694,17 @@ Namespace Services
 
                         End If
 
+                        SafeDeleteFile(
+                            rollbackCitationsPath
+                        )
+
                     Catch
-                        ' Best-effort rollback.
+
+                        KeepLeftBehind(
+                            leftBehind,
+                            rollbackCitationsPath
+                        )
+
                     End Try
 
                     ' =========================================
@@ -635,8 +735,17 @@ Namespace Services
 
                         End If
 
+                        SafeDeleteFile(
+                            rollbackAuthorsPath
+                        )
+
                     Catch
-                        ' Best-effort rollback.
+
+                        KeepLeftBehind(
+                            leftBehind,
+                            rollbackAuthorsPath
+                        )
+
                     End Try
 
                     ' =========================================
@@ -663,8 +772,17 @@ Namespace Services
 
                         End If
 
+                        SafeDeleteFile(
+                            rollbackJsonPath
+                        )
+
                     Catch
-                        ' Best-effort rollback.
+
+                        KeepLeftBehind(
+                            leftBehind,
+                            rollbackJsonPath
+                        )
+
                     End Try
 
                     ' =========================================
@@ -694,10 +812,19 @@ Namespace Services
                         End If
 
                     Catch
-                        ' Best-effort rollback.
+
+                        KeepLeftBehind(
+                            leftBehind,
+                            rollbackFilesDirectory
+                        )
+
                     End Try
 
-                    Throw
+                    Throw New RestoreFailedException(
+                        ex,
+                        emergencyBackupPath,
+                        leftBehind
+                    )
 
                 End Try
 
@@ -731,6 +858,24 @@ Namespace Services
                     rollbackCitationsPath
                 )
 
+                ' Left as they were, manuscripts.bak and authors.bak would
+                ' hold the pre-restore library, and a later fallback would
+                ' bring it back as the previous save (#116): they become
+                ' copies of the restored files.
+                ReplaceSafetyBackup(
+                    repository.DataFilePath,
+                    repository.BackupFilePath
+                )
+
+                If restoreAuthorLibrary Then
+
+                    ReplaceSafetyBackup(
+                        authorLibraryPath,
+                        authorsBackupPath
+                    )
+
+                End If
+
                 Return New RestoreResult With {
                     .ManuscriptCount = restoredManuscripts.Count,
                     .EmergencyBackupPath = emergencyBackupPath
@@ -755,15 +900,7 @@ Namespace Services
                 )
 
                 SafeDeleteFile(
-                    rollbackAuthorsPath
-                )
-
-                SafeDeleteFile(
                     stagedCitationsPath
-                )
-
-                SafeDeleteFile(
-                    rollbackCitationsPath
                 )
 
             End Try
@@ -1689,6 +1826,76 @@ Namespace Services
             End Try
 
         End Function
+
+
+        ' The swap's two file-system operations, overridable so a test can
+        ' fail each step of the swap (#116). The rollback does not go
+        ' through them.
+        Friend Overridable Sub MoveDirectory(
+            sourceDirectory As String,
+            destinationDirectory As String
+        )
+
+            Directory.Move(
+                sourceDirectory,
+                destinationDirectory
+            )
+
+        End Sub
+
+
+        Friend Overridable Sub CopyFile(
+            sourceFile As String,
+            destinationFile As String
+        )
+
+            File.Copy(
+                sourceFile,
+                destinationFile,
+                True
+            )
+
+        End Sub
+
+
+        ' A rollback copy the rollback could not put back, if it is still there.
+        Private Shared Sub KeepLeftBehind(
+            leftBehind As List(Of String),
+            path As String
+        )
+
+            If File.Exists(path) OrElse Directory.Exists(path) Then
+                leftBehind.Add(path)
+            End If
+
+        End Sub
+
+
+        ' A safety backup becomes a copy of the restored file. One that
+        ' cannot be written is removed: no safety backup is a known state,
+        ' and a stale one is not.
+        Private Sub ReplaceSafetyBackup(
+            restoredPath As String,
+            backupPath As String
+        )
+
+            Try
+
+                File.Copy(
+                    restoredPath,
+                    backupPath,
+                    True
+                )
+
+            Catch
+
+                SafeDeleteFile(
+                    backupPath
+                )
+
+            End Try
+
+        End Sub
 
 
         Private Sub SafeDeleteDirectory(
