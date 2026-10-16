@@ -140,6 +140,7 @@ Public Class ResponsivenessBudgetTests
             rows.Add(Time(library, "Deadlines to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
 
             rows.Add(Time(library, "Board to Insights", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Insights)))
+            rows.Add(Time(library, "Insights: figures ready (calculated off the UI thread)", UiThread, Sub() board.WaitForInsights()))
             rows.Add(Time(library, "Insights to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
 
             rows.Add(Time(library, "Board to Import & Export", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.ImportExport)))
@@ -153,18 +154,10 @@ Public Class ResponsivenessBudgetTests
 
             rows.Add(Time(library, "Board render (RenderManuscripts)", UiThread, Sub() board.Render()))
 
-            ' The handler calls the service after Save and the file dialog.
-            rows.Add(Time(library, "Backup (PortableBackupService.CreateBackup)", UiThread,
-                          Sub() Call New PortableBackupService(library.ManagedDirectory).CreateBackup(backupPath, board.Library, library.Repository)))
-
-            ' The handler inspects, asks twice, then restores and reloads.
-            rows.Add(Time(library, "Restore: inspect the backup", UiThread,
-                          Sub() Call New PortableRestoreService(library.ManagedDirectory).InspectBackup(backupPath)))
-            rows.Add(Time(library, "Restore: replace the library, reload, render", UiThread,
-                          Sub()
-                              Call New PortableRestoreService(library.ManagedDirectory).RestoreBackup(backupPath, board.Library, library.Repository)
-                              board.ReloadLibrary()
-                          End Sub))
+            ' The handlers' work after their dialogs, behind the disabled window (#132).
+            rows.Add(Time(library, "Backup", UiThread, Sub() Assert.IsTrue(board.WriteBackup(backupPath), "The backup was written.")))
+            rows.Add(Time(library, "Restore: inspect the backup", UiThread, Sub() Assert.IsNotNull(board.InspectBackupFile(backupPath), "The backup was read.")))
+            rows.Add(Time(library, "Restore: replace the library, reload, render", UiThread, Sub() Assert.IsNotNull(board.ReplaceLibraryFrom(backupPath), "The library was restored.")))
 
             Dim suggestions As JournalSuggestionsForm = Nothing
             Dim recorded As JournalSuggestionsResult = RecordedSuggestions()

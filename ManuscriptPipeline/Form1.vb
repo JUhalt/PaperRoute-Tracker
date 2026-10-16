@@ -1365,9 +1365,16 @@ Public Class Form1
 
         Try
 
-            repository.Save(
-            manuscripts
-        )
+            ' The sweep of the managed root and the write run on a worker
+            ' thread behind the disabled window (#132).
+            If Not RunLibraryWork(
+                "Saving your library...",
+                Sub() repository.Save(manuscripts)
+            ) Then
+
+                Return False
+
+            End If
 
             lblStatus.Text =
             "Saved locally - " &
@@ -3502,13 +3509,13 @@ Public Class Form1
 
             Try
 
-                Dim backupService As New PortableBackupService()
+                If Not WriteBackup(
+                    dialog.FileName
+                ) Then
 
-                backupService.CreateBackup(
-                dialog.FileName,
-                manuscripts,
-                repository
-            )
+                    Return
+
+                End If
 
                 MessageBox.Show(
                 Me,
@@ -3576,13 +3583,12 @@ Public Class Form1
                 Return
             End If
 
-            Dim restoreService As New PortableRestoreService()
             Dim inspection As BackupInspection
 
             Try
 
                 inspection =
-                restoreService.InspectBackup(
+                InspectBackupFile(
                     dialog.FileName
                 )
 
@@ -3602,6 +3608,10 @@ Public Class Form1
                 Return
 
             End Try
+
+            If inspection Is Nothing Then
+                Return
+            End If
 
             Dim sizeInMb As Double =
             inspection.UncompressedBytes / 1024.0 / 1024.0
@@ -3679,16 +3689,13 @@ Public Class Form1
             Try
 
                 Dim restoreResult As RestoreResult =
-                restoreService.RestoreBackup(
-                    dialog.FileName,
-                    manuscripts,
-                    repository
+                ReplaceLibraryFrom(
+                    dialog.FileName
                 )
 
-                manuscripts =
-                repository.Load()
-
-                RenderManuscripts()
+                If restoreResult Is Nothing Then
+                    Return
+                End If
 
                 Dim completionMessage As String =
                 "The PaperRoute backup was restored successfully." &

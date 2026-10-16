@@ -679,6 +679,11 @@ Partial Public Class Form1
 
     Protected Overrides Sub OnFormClosing(e As FormClosingEventArgs)
 
+        ' The window closes once its library work has ended (#132).
+        If libraryWorkInProgress Then
+            e.Cancel = True
+        End If
+
         If Not e.Cancel AndAlso Not ConfirmLeaveManuscript() Then
             e.Cancel = True
         End If

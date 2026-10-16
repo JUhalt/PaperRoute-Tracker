@@ -687,6 +687,7 @@ Public Class ManuscriptPageTests
                     board.Prepare(routed, Sample("Unsubmitted idea"))
 
                     board.PressCommandKey(Keys.Control Or Keys.D5)
+                    board.WaitForInsights()
                     Assert.AreEqual("Insights", board.PageName)
                     Dim tiles As List(Of String) = Descendants(board).OfType(Of RoundedPanel)().Select(Function(tile) tile.AccessibleName).Where(Function(name) name IsNot Nothing).ToList()
                     Assert.IsTrue(tiles.Contains("2 submissions  ·  0 accepted"), String.Join(" | ", tiles))
@@ -702,6 +703,7 @@ Public Class ManuscriptPageTests
                     journals.CurrentCell = second.Cells(0)
                     GetType(Control).GetMethod("OnKeyDown", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(journals, New Object() {New KeyEventArgs(Keys.Enter)})
                     Application.DoEvents()
+                    board.WaitForInsights()
                     Dim routes As DataGridView = Descendants(board).OfType(Of DataGridView)().Single()
                     Assert.AreEqual(1, routes.Rows.Count, "Enter on a journal shows the routes that went through it.")
                     Assert.AreEqual("Routed manuscript", CStr(routes.Rows(0).Cells("Title").Value))
@@ -732,8 +734,10 @@ Public Class ManuscriptPageTests
                     board.routeViewOpener = Sub(item) opened.Add(item)
 
                     board.PressCommandKey(Keys.Control Or Keys.D5)
+                    board.WaitForInsights()
                     Descendants(board).OfType(Of ShelfTabButton)().Single(Function(item) item.Text = "Route Map").Checked = True
                     Application.DoEvents()
+                    board.WaitForInsights()
                     Dim chart As RouteMapChart = Descendants(board).OfType(Of RouteMapChart)().Single()
                     CollectionAssert.AreEqual({published}, chart.Routes.Select(Function(item) item.Manuscript).ToList(), "Published routes by default.")
                     Assert.IsTrue(Descendants(board).OfType(Of Label)().Any(Function(label) label.Text = "1 published route lined up at day 0. Median 264 days from first submission to publication."))
@@ -743,6 +747,7 @@ Public Class ManuscriptPageTests
                     GetType(LinkLabel).GetMethod("OnLinkClicked", BindingFlags.Instance Or BindingFlags.NonPublic).
                         Invoke(toggle, New Object() {New LinkLabelLinkClickedEventArgs(toggle.Links(0))})
                     Application.DoEvents()
+                    board.WaitForInsights()
                     chart = Descendants(board).OfType(Of RouteMapChart)().Single()
                     CollectionAssert.AreEquivalent({published, routed}, chart.Routes.Select(Function(item) item.Manuscript).ToList(), "Work in progress runs to today; an idea has no route.")
                     Assert.IsTrue(chart.Routes.Single(Function(item) item.Manuscript Is routed).Map.Ongoing)
@@ -791,8 +796,10 @@ Public Class ManuscriptPageTests
 
                         ' Without an ORCID iD, the tab says where to add one.
                         board.PressCommandKey(Keys.Control Or Keys.D5)
+                        board.WaitForInsights()
                         Descendants(board).OfType(Of ShelfTabButton)().Single(Function(item) item.Text = "Your Citations").Checked = True
                         Application.DoEvents()
+                        board.WaitForInsights()
                         Assert.IsTrue(Descendants(board).OfType(Of Button)().Any(Function(button) button.Text = "Open Authors && Affiliations"))
                         Assert.IsFalse(Descendants(board).OfType(Of Label)().Single(Function(label) label.Text.StartsWith("Days are calendar days")).Visible, "The route footnote belongs to the other views.")
 
@@ -800,6 +807,7 @@ Public Class ManuscriptPageTests
                         Descendants(board).OfType(Of ShelfTabButton)().Single(Function(item) item.Text.StartsWith("Your Journals")).Checked = True
                         Descendants(board).OfType(Of ShelfTabButton)().Single(Function(item) item.Text = "Your Citations").Checked = True
                         Application.DoEvents()
+                        board.WaitForInsights()
                         Assert.IsTrue(Descendants(board).OfType(Of Label)().Any(Function(label) label.Text.StartsWith("See how your published work has been cited, from OpenAlex") AndAlso label.Text.Contains("(0000-0002-1825-0097)")))
                         Dim update As Button = Descendants(board).OfType(Of Button)().Single(Function(button) button.Text = "Update from OpenAlex...")
                         Assert.IsTrue(update.Enabled)
@@ -833,6 +841,7 @@ Public Class ManuscriptPageTests
                         Descendants(board).OfType(Of ShelfTabButton)().Single(Function(item) item.Text.StartsWith("Your Routes")).Checked = True
                         Descendants(board).OfType(Of ShelfTabButton)().Single(Function(item) item.Text = "Your Citations").Checked = True
                         Application.DoEvents()
+                        board.WaitForInsights()
                         Assert.IsFalse(Descendants(board).OfType(Of Button)().Single(Function(button) button.Text = "Update from OpenAlex...").Enabled)
                         Assert.AreEqual(2, Descendants(board).OfType(Of DataGridView)().Single().Rows.Count)
                         Assert.IsTrue(Descendants(board).OfType(Of Label)().Any(Function(label) label.Text.StartsWith("You're working offline, so updating is off.")))
@@ -1295,6 +1304,18 @@ Public Class ManuscriptPageTests
 
         Public Sub Tick()
             CallPrivate("ManuscriptDirtyTimer_Tick", Nothing, EventArgs.Empty)
+        End Sub
+
+        ' The Insights figures are worked out off the UI thread (#132); pumps
+        ' until they are shown.
+        Public Sub WaitForInsights()
+            Dim limit As System.Diagnostics.Stopwatch = System.Diagnostics.Stopwatch.StartNew()
+            While InsightsCalculating AndAlso limit.Elapsed < TimeSpan.FromSeconds(30)
+                Application.DoEvents()
+                Thread.Sleep(1)
+            End While
+            Application.DoEvents()
+            Assert.IsFalse(InsightsCalculating, "Insights finished calculating.")
         End Sub
 
         Public Sub Discard()

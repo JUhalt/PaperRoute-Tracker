@@ -1,8 +1,10 @@
 Imports System
 Imports System.Collections.Generic
+Imports System.Diagnostics
 Imports System.Drawing
 Imports System.Linq
 Imports System.Reflection
+Imports System.Threading
 Imports System.Windows.Forms
 Imports ManuscriptPipeline
 Imports ManuscriptPipeline.Forms
@@ -52,6 +54,29 @@ Friend NotInheritable Class LibraryBoard
         Return New Form()
     End Function
 
+
+    ' Backup and Restore on the test's managed root, never the user's (#132).
+    Protected Overrides Function CreateBackupService() As PortableBackupService
+        Return New PortableBackupService(_library.ManagedDirectory)
+    End Function
+
+
+    Protected Overrides Function CreateRestoreService() As PortableRestoreService
+        Return New PortableRestoreService(_library.ManagedDirectory)
+    End Function
+
+
+    ' The Insights figures are worked out off the UI thread (#132); pumps
+    ' until they are shown.
+    Public Sub WaitForInsights()
+        Dim limit As Stopwatch = Stopwatch.StartNew()
+        While InsightsCalculating AndAlso limit.Elapsed < TimeSpan.FromSeconds(60)
+            Application.DoEvents()
+            Thread.Sleep(1)
+        End While
+        Application.DoEvents()
+        Assert.IsFalse(InsightsCalculating, "Insights finished calculating.")
+    End Sub
 
 
     ' Form1_Load's sequence, without the online gate, the update check and
