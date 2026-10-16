@@ -113,9 +113,7 @@ When legacy ManuscriptPipeline storage is migrated, PaperRoute retains the legac
 
 ## Installing PaperRoute
 
-### Recommended: GitHub Release installer
-
-On the GitHub **Releases** page, download and run the PaperRoute Setup executable from the latest stable release. Installed builds can then check GitHub Releases for future PaperRoute updates.
+Download the PaperRoute Setup executable from the latest Stable release on this repository's [Releases page](https://github.com/JUhalt/PaperRoute-Tracker/releases) and run it. Setup is not code-signed, so Windows warns before it runs; the User Guide's [Installing](docs/USER_GUIDE.md#installing) section explains the prompt, how to check the download against `SHA256SUMS.txt`, which Windows versions are supported, and what "Install Partially Succeeded" means. [Uninstalling](docs/USER_GUIDE.md#uninstalling) says what is removed and what stays.
 
 Fresh installations default to the **Stable** update channel. Users who intentionally want prerelease builds can choose **Preview** under **Settings → Preferences... → Update channel**. Use **Settings → Check for Updates...** to check immediately.
 

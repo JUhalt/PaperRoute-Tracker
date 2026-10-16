@@ -195,6 +195,155 @@ Public Class UserGuideServiceTests
     End Sub
 
 
+    ' #127: the guide has Installing and Uninstalling sections, and the
+    ' README's own Installing section points at both. What they say about
+    ' the Windows prompt and uninstalling is matched against the release
+    ' certification record by hand (#147); it is not pinned here.
+    <TestMethod>
+    Public Sub TheGuideHasInstallingAndUninstallingSections()
+
+        Dim guide As String =
+            File.ReadAllText(
+                UserGuideService.GuideFilePath()
+            ).Replace(
+                vbCrLf,
+                vbLf
+            )
+
+        Dim readme As String =
+            File.ReadAllText(
+                Path.Combine(
+                    RepositoryRoot(),
+                    "README.md"
+                )
+            )
+
+        For Each section As String In {
+            "Installing",
+            "Uninstalling"
+        }
+
+            StringAssert.Contains(
+                guide,
+                vbLf & "## " & section & vbLf,
+                "The guide has a section: " & section
+            )
+
+            StringAssert.Contains(
+                readme,
+                "docs/USER_GUIDE.md#" & section.ToLowerInvariant(),
+                "The README points at the guide's section: " & section
+            )
+
+        Next
+
+        Dim installing As String =
+            SectionText(
+                guide,
+                "Installing"
+            )
+
+        For Each named As String In {
+            "SHA256SUMS.txt",
+            "Get-FileHash",
+            "Install Partially Succeeded",
+            "Windows 11",
+            "Preview"
+        }
+
+            StringAssert.Contains(
+                installing,
+                named,
+                "Installing covers: " & named
+            )
+
+        Next
+
+        Dim uninstalling As String =
+            SectionText(
+                guide,
+                "Uninstalling"
+            )
+
+        For Each kept As String In {
+            "%LocalAppData%\PaperRoute\",
+            "Documents\PaperRoute Library"
+        }
+
+            StringAssert.Contains(
+                uninstalling,
+                kept,
+                "Uninstalling names what stays: " & kept
+            )
+
+        Next
+
+    End Sub
+
+
+    ' One "## " section of the guide, heading to the next "## ".
+    Private Shared Function SectionText(
+        guide As String,
+        heading As String
+    ) As String
+
+        Dim start As Integer =
+            guide.IndexOf(
+                vbLf & "## " & heading & vbLf,
+                StringComparison.Ordinal
+            )
+
+        Assert.IsTrue(
+            start >= 0,
+            "The guide has a section: " & heading
+        )
+
+        Dim finish As Integer =
+            guide.IndexOf(
+                vbLf & "## ",
+                start + 1,
+                StringComparison.Ordinal
+            )
+
+        Return guide.Substring(
+            start,
+            If(finish < 0, guide.Length, finish) - start
+        )
+
+    End Function
+
+
+    ' The checkout the tests were built from, where README.md lives.
+    Private Shared Function RepositoryRoot() As String
+
+        Dim folder As DirectoryInfo =
+            New DirectoryInfo(
+                AppContext.BaseDirectory
+            )
+
+        While folder IsNot Nothing AndAlso
+              Not File.Exists(
+                  Path.Combine(
+                      folder.FullName,
+                      "ManuscriptPipeline.slnx"
+                  )
+              )
+
+            folder =
+                folder.Parent
+
+        End While
+
+        Assert.IsNotNull(
+            folder,
+            "The repository root was not found."
+        )
+
+        Return folder.FullName
+
+    End Function
+
+
     Private Shared Sub RunOnSta(
         action As Action
     )
