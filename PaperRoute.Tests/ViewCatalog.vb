@@ -510,13 +510,15 @@ Public Class ViewCatalogTests
 
 
     ' The listing has teeth: a Form subclass known to neither list is
-    ' reported, as an app form without a factory would be.
+    ' reported, as an app form without a factory would be. Beside it are
+    ' one form from each list, HelpForm with a factory and
+    ' AddCorrespondenceForm on the not-yet list, and neither is reported.
     <TestMethod>
     Public Sub AFormWithNoFactoryAndNoReasonIsReported()
 
         CollectionAssert.AreEqual(
             {GetType(UnlistedProbeForm)},
-            ViewCatalog.Unlisted({GetType(UnlistedProbeForm), GetType(AboutForm), GetType(HelpForm)})
+            ViewCatalog.Unlisted({GetType(UnlistedProbeForm), GetType(AddCorrespondenceForm), GetType(HelpForm)})
         )
 
     End Sub
