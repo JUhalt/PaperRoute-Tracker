@@ -872,8 +872,9 @@ Public Class AuthorInstructionsTests
         Next
     End Function
 
+    ' Five minutes, as before #134, so a loaded machine does not fail these.
     Private Shared Sub RunOnSta(action As Action, Optional mode As SystemColorMode = SystemColorMode.Classic)
-        StaRunner.Run(action, mode:=mode)
+        StaRunner.Run(action, TimeSpan.FromMinutes(5), mode)
     End Sub
 
 

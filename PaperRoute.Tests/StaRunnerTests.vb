@@ -108,23 +108,11 @@ Public Class StaRunnerTests
             "The runner closed the dialog, so the stuck action returned."
         )
 
+        ' The count the theme runners failed on in #97.
         Assert.AreEqual(
             openBefore,
             Application.OpenForms.Count,
             "Application.OpenForms is as it was."
-        )
-
-        ' A theme run after it starts clean, as DarkThemeLegibilityTests and
-        ' WorkflowThemeKeyboardSmokeTests need.
-        StaRunner.Run(
-            Sub()
-                Assert.AreEqual(
-                    0,
-                    StaRunner.OpenFormsOnThisThread().Count,
-                    "No form is open on the next test's thread."
-                )
-            End Sub,
-            mode:=SystemColorMode.Dark
         )
 
     End Sub

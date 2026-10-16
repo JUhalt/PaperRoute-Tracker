@@ -111,12 +111,10 @@ Friend NotInheritable Class StaRunner
 
         If Not thread.Join(limit) Then
 
-            Dim threadId As Integer =
-                Volatile.Read(nativeThreadId)
-
             ' Again and again through the grace: a window that opens after
             ' the first pass, such as a message box a closing form shows,
-            ' is closed by the next.
+            ' is closed by the next. The thread's id is read on every pass,
+            ' as a thread that only just started may not have written it.
             Dim grace As Stopwatch =
                 Stopwatch.StartNew()
 
@@ -124,7 +122,7 @@ Friend NotInheritable Class StaRunner
                 False
 
             Do
-                CloseWindowsOf(threadId)
+                CloseWindowsOf(Volatile.Read(nativeThreadId))
                 finished = thread.Join(TimeSpan.FromMilliseconds(250))
             Loop Until finished OrElse grace.Elapsed >= CloseGrace
 
@@ -133,7 +131,7 @@ Friend NotInheritable Class StaRunner
                 If(
                     finished,
                     "Its windows were closed and it has now finished.",
-                    "Its windows were told to close; still open on its thread: " & DescribeWindowsOf(threadId) & "."
+                    "Its windows were told to close; still open on its thread: " & DescribeWindowsOf(Volatile.Read(nativeThreadId)) & "."
                 )
             )
 

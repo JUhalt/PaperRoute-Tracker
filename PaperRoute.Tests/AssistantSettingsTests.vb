@@ -903,8 +903,10 @@ Public Class AssistantSettingsTests
         Next
     End Function
 
+    ' Five minutes, as before #134: one of these tests takes over a minute
+    ' on a slow machine.
     Private Shared Sub RunOnSta(action As Action, Optional mode As SystemColorMode = SystemColorMode.Classic)
-        StaRunner.Run(action, mode:=mode)
+        StaRunner.Run(action, TimeSpan.FromMinutes(5), mode)
     End Sub
 
 End Class
