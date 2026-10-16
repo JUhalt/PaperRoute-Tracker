@@ -144,6 +144,22 @@ function Get-Sha256([string] $Path) {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
+# The .NET runtime the self-contained publish bundles, read from its
+# runtimeconfig.json, so the candidate record says which runtime shipped (#144).
+function Get-BundledRuntimeVersion([string] $PublishRoot) {
+    $configPath = Join-Path $PublishRoot 'PaperRouteTracker.runtimeconfig.json'
+    if (-not (Test-Path -LiteralPath $configPath -PathType Leaf)) {
+        throw "The published PaperRouteTracker.runtimeconfig.json was not found at '$configPath'."
+    }
+    $options = (Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json).runtimeOptions
+    $included = if ($null -ne $options.PSObject.Properties['includedFrameworks']) { @($options.includedFrameworks) } else { @() }
+    $runtime = @($included | Where-Object { $_.name -ceq 'Microsoft.NETCore.App' })
+    if ($runtime.Count -ne 1 -or [string]::IsNullOrWhiteSpace($runtime[0].version)) {
+        throw "'$configPath' does not name one bundled Microsoft.NETCore.App; the publish must be self-contained."
+    }
+    return [string] $runtime[0].version
+}
+
 function Assert-ArchivePayload([string] $Path, [string] $ExpectedDllHash, [switch] $CheckNuspec) {
     $archive = [IO.Compression.ZipFile]::OpenRead($Path)
     try {
@@ -156,7 +172,7 @@ function Assert-ArchivePayload([string] $Path, [string] $ExpectedDllHash, [switc
         try { $dllHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($stream)).ToLowerInvariant() }
         finally { $stream.Dispose() }
         if ($dllHash -cne $ExpectedDllHash) { throw "The application DLL in '$Path' differs from the published DLL." }
-        foreach ($legalName in @('LICENSE.txt', 'NOTICE.md')) {
+        foreach ($legalName in @('LICENSE.txt', 'NOTICE.md', 'THIRD-PARTY-NOTICES.txt')) {
             $legalEntries = @($archive.Entries | Where-Object { $_.Name -ceq $legalName })
             if ($legalEntries.Count -ne 1) { throw "'$Path' must contain exactly one '$legalName'." }
             $legalStream = $legalEntries[0].Open()
@@ -213,11 +229,12 @@ try {
 
     foreach ($required in @('PaperRouteTracker.exe', 'PaperRouteTracker.dll', 'PaperRouteTracker.deps.json',
         'PaperRouteTracker.runtimeconfig.json', 'coreclr.dll', 'hostfxr.dll', 'System.Windows.Forms.dll',
-        'docs/USER_GUIDE.md', 'LICENSE.txt', 'NOTICE.md')) {
+        'docs/USER_GUIDE.md', 'LICENSE.txt', 'NOTICE.md', 'THIRD-PARTY-NOTICES.txt')) {
         if (-not (Test-Path -LiteralPath (Join-Path $publishRoot $required) -PathType Leaf)) {
             throw "The self-contained publish payload is missing '$required'."
         }
     }
+    $runtimeVersion = Get-BundledRuntimeVersion $publishRoot
     $dllPath = Join-Path $publishRoot 'PaperRouteTracker.dll'
     $versionInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo($dllPath)
     $assemblyVersion = [Reflection.AssemblyName]::GetAssemblyName($dllPath).Version.ToString()
@@ -231,17 +248,18 @@ try {
         '--packDir', $publishRoot, '--mainExe', 'PaperRouteTracker.exe', '--packTitle', 'PaperRoute Tracker',
         '--packAuthors', 'Joshua Uhalt', '--icon', (Join-Path $repoRoot 'ManuscriptPipeline/Assets/PaperRoute.ico'),
         '--releaseNotes', $releaseNotes, '--channel', $channel, '--outputDir', $releaseRoot,
-        '--skip-updates', 'true', '--legacyConsole', 'true'
+        '--skip-updates', 'true', '--legacyConsole', 'true', '--noPortable', 'true'
     )
 
+    # No portable bundle from v0.9.2 (#149): it never carried the library with
+    # it and was never run in certification. One in the directory is refused.
     $packages = @(Get-ChildItem -LiteralPath $releaseRoot -File -Filter '*-full.nupkg')
     $installers = @(Get-ChildItem -LiteralPath $releaseRoot -File -Filter '*Setup.exe')
     $portable = @(Get-ChildItem -LiteralPath $releaseRoot -File -Filter '*Portable.zip')
-    if ($packages.Count -ne 1 -or $installers.Count -ne 1 -or $portable.Count -ne 1 -or $installers[0].Length -le 0) {
-        throw 'Expected exactly one full package, installer, and portable ZIP in the fresh release directory.'
+    if ($packages.Count -ne 1 -or $installers.Count -ne 1 -or $portable.Count -ne 0 -or $installers[0].Length -le 0) {
+        throw 'Expected exactly one full package and one installer, and no portable ZIP, in the fresh release directory.'
     }
     $packageProof = Assert-ArchivePayload $packages[0].FullName $dllHash -CheckNuspec
-    $portableProof = Assert-ArchivePayload $portable[0].FullName $dllHash
     $feedPath = Join-Path $releaseRoot "releases.$channel.json"
     $feed = Get-Content -LiteralPath $feedPath -Raw | ConvertFrom-Json
     $fullAsset = @($feed.Assets | Where-Object { $_.FileName -ceq $packages[0].Name })
@@ -271,7 +289,7 @@ try {
     }
     $evidence = [ordered]@{
         Status = 'VerifiedLocalCandidate'; Version = $Version; NumericVersion = $numericVersion
-        Channel = $channel; PackageId = $packId; VelopackVersion = '1.2.0'; DotnetSdk = $sdk
+        Channel = $channel; PackageId = $packId; VelopackVersion = '1.2.0'; DotnetSdk = $sdk; RuntimeVersion = $runtimeVersion
         Commit = $commit; DirtyCheckout = ($sourceStatus.Count -gt 0); SourceStatusFile = 'source-status.txt'
         SourceSnapshotFile = 'source-files.json'; SourceSnapshotSha256 = (Get-Sha256 (Join-Path $candidateRoot 'source-files.json'))
         StartedAtUtc = $startedAt.ToString('o'); CompletedAtUtc = [DateTime]::UtcNow.ToString('o')
@@ -279,7 +297,7 @@ try {
         ProductVersion = $versionInfo.ProductVersion; AssemblyVersion = $assemblyVersion
         FileVersion = $versionInfo.FileVersion; PublishedDllSha256 = $dllHash
         ReleaseNotesSha256 = (Get-Sha256 $releaseNotes)
-        Package = $packageProof; Portable = $portableProof; Assets = $assetProof
+        Package = $packageProof; Assets = $assetProof
         ChecksumFileSha256 = (Get-Sha256 $checksumPath); InstallerSignatureStatus = $signature.Status.ToString()
         Invocations = @($invocations.ToArray())
         Limitations = @('No installer or app launch certification', 'No live GitHub update-feed certification',
@@ -287,6 +305,6 @@ try {
     }
     [IO.File]::WriteAllText((Join-Path $candidateRoot 'candidate-verification.json'), ($evidence | ConvertTo-Json -Depth 8), $utf8)
     Write-Host "Verified local candidate: $candidateRoot"
-    Write-Host "Tests: $($evidence.TestsPassed) passed. Installer signature: $($evidence.InstallerSignatureStatus)."
+    Write-Host "Tests: $($evidence.TestsPassed) passed. Installer signature: $($evidence.InstallerSignatureStatus). Bundled .NET runtime: $runtimeVersion."
 }
 finally { Pop-Location }

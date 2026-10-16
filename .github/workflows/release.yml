@@ -44,7 +44,7 @@ jobs:
 
           $notesPath = "docs/releases/$version.md"
 
-          foreach ($requiredPath in @($notesPath, 'docs/USER_GUIDE.md', 'UPGRADE_NOTES.md', 'LICENSE.txt', 'NOTICE.md')) {
+          foreach ($requiredPath in @($notesPath, 'docs/USER_GUIDE.md', 'UPGRADE_NOTES.md', 'LICENSE.txt', 'NOTICE.md', 'THIRD-PARTY-NOTICES.txt')) {
               if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf) -or
                   (Get-Item -LiteralPath $requiredPath).Length -le 0) {
                   throw "Required release document '$requiredPath' is missing or empty."
@@ -194,7 +194,7 @@ jobs:
           if ($assemblyVersion -cne $numeric -or $versionInfo.FileVersion -cne $numeric) {
               throw "Assembly/FileVersion must both equal '$numeric'."
           }
-          foreach ($relativePath in @('docs/USER_GUIDE.md', 'LICENSE.txt', 'NOTICE.md')) {
+          foreach ($relativePath in @('docs/USER_GUIDE.md', 'LICENSE.txt', 'NOTICE.md', 'THIRD-PARTY-NOTICES.txt')) {
               $source = Join-Path $env:GITHUB_WORKSPACE $relativePath
               $payload = Join-Path "$env:GITHUB_WORKSPACE/publish/win-x64" $relativePath
               if (-not (Test-Path -LiteralPath $payload -PathType Leaf) -or
@@ -230,6 +230,8 @@ jobs:
           --channel stable
           --outputDir "${{ github.workspace }}/Releases"
 
+      # No portable bundle: it never carried the library with it and was never
+      # run in certification (#149). The installer and update packages remain.
       - name: Build Velopack installer and update packages
         shell: pwsh
         run: >
@@ -244,6 +246,7 @@ jobs:
           --releaseNotes "${{ github.workspace }}/${{ steps.meta.outputs.notes_path }}"
           --channel "${{ steps.meta.outputs.channel }}"
           --outputDir "${{ github.workspace }}/Releases"
+          --noPortable true
 
       - name: Upload Preview assets to a new GitHub draft
         if: steps.meta.outputs.is_prerelease == 'true'
@@ -299,7 +302,7 @@ jobs:
           if (-not $draft.isDraft -or $draft.databaseId -ne [long] '${{ steps.assets.outputs.release_id }}') {
               throw 'The verified draft was published or replaced; no further assets will be uploaded.'
           }
-          $required = @('RELEASE_NOTES.md', 'USER_GUIDE.md', 'UPGRADE_NOTES.md', 'LICENSE.txt', 'NOTICE.md', 'SHA256SUMS.txt')
+          $required = @('RELEASE_NOTES.md', 'USER_GUIDE.md', 'UPGRADE_NOTES.md', 'LICENSE.txt', 'NOTICE.md', 'THIRD-PARTY-NOTICES.txt', 'SHA256SUMS.txt')
           $paths = @($required | ForEach-Object {
               $path = Join-Path "$env:GITHUB_WORKSPACE/ReleaseAssets" $_
               if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Required asset '$_' is missing." }

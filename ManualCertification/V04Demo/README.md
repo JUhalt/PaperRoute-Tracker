@@ -120,6 +120,15 @@ Check that:
 
 The directory and the .zip are left in place as evidence; remove that specific directory afterward.
 
+## Capturing a window for evidence
+
+```powershell
+dotnet build ManualCertification/V04Demo/PaperRoute.V04Demo.csproj
+pwsh -NoProfile -File .\ManualCertification\Capture-HarnessWindow.ps1 -HarnessPath .\ManualCertification\V04Demo\bin\Debug\net10.0-windows\PaperRoute.V04Demo.exe board --primary
+```
+
+With `--painted <file>`, any surface writes a small JSON marker (the UTC time, `Application.HighDpiMode`, the window's `DeviceDpi`, and its title) once the shown window has finished loading and its message loop is idle. `Capture-HarnessWindow.ps1` passes that option, waits for the marker, captures each titled window with `PrintWindow`, and writes `<name>.png` and `<name>.json` (the marker time, how long it waited, the harness and application DLL hashes, and each capture's size and SHA-256) under `artifacts/captures/` unless `-OutputDirectory` says otherwise. It fails on timeout (`-TimeoutSeconds`, 120 by default) instead of capturing a window that is still loading. `--load-delay <ms>` is a test hook that holds the shown window's load that long, so the timeout can be checked. See [Release-Certification.md](../Release-Certification.md), step 6.
+
 ## Suggested visual checks
 
 The demo defaults to Light. Add `--dark` for Dark or `--system` for Follow Windows on any surface; these flags are mutually exclusive and affect only the demo process. They never change Windows settings or saved PaperRoute preferences. Native dark mode requires a supported Windows version; record the effective appearance when certifying it.

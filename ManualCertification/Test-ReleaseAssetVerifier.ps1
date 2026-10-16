@@ -47,9 +47,15 @@ function New-Case([string] $Name) {
     $root = Join-Path $runRoot $Name
     $script = Join-Path $root '.github/scripts/Verify-ReleaseAssets.ps1'
     Write-Bytes $script ([IO.File]::ReadAllBytes($sourceScript))
-    foreach ($document in @('docs/releases/0.4.0.md','docs/USER_GUIDE.md','UPGRADE_NOTES.md','LICENSE.txt','NOTICE.md')) {
+    foreach ($document in @('docs/releases/0.4.0.md','docs/USER_GUIDE.md','UPGRADE_NOTES.md','LICENSE.txt','NOTICE.md','THIRD-PARTY-NOTICES.txt')) {
         Write-Bytes (Join-Path $root $document) (Text-Bytes "Synthetic $document`nContent for fixture $Name.`n")
     }
+    # The self-contained publish the workflow verifies before packaging; only
+    # its runtimeconfig.json is read, for the bundled runtime version (#144).
+    Write-Bytes (Join-Path $root 'publish/win-x64/PaperRouteTracker.runtimeconfig.json') (Text-Bytes (ConvertTo-Json -Depth 6 -InputObject @{
+        runtimeOptions = @{ tfm = 'net10.0'; includedFrameworks = @(
+            @{ name = 'Microsoft.NETCore.App'; version = '10.0.12' }, @{ name = 'Microsoft.WindowsDesktop.App'; version = '10.0.12' }) }
+    }))
     $local = Join-Path $root 'Releases'
     $remote = [ordered]@{}
     $build = [Collections.Generic.List[object]]::new()
@@ -57,8 +63,7 @@ function New-Case([string] $Name) {
     foreach ($item in @(
         @('JUhalt.PaperRouteTracker-0.4.0-stable-full.nupkg', 'Full'),
         @('JUhalt.PaperRouteTracker-0.4.0-stable-delta.nupkg', 'Delta'),
-        @('JUhalt.PaperRouteTracker-stable-Setup.exe', 'Installer'),
-        @('JUhalt.PaperRouteTracker-stable-Portable.zip', 'Portable'))) {
+        @('JUhalt.PaperRouteTracker-stable-Setup.exe', 'Installer'))) {
         $name = $item[0]; $bytes = Text-Bytes "Synthetic binary $name; never execute.`n"
         Write-Bytes (Join-Path $local $name) $bytes
         $remote[$name] = $bytes
@@ -179,7 +184,23 @@ Run-Case 'valid-filtered-formatted-feed-stage-and-verify' {
     if (Test-Path -LiteralPath (Join-Path $c.Stage 'assets.stable.json')) { throw 'Internal build manifest was staged.' }
     if (Test-Path -LiteralPath (Join-Path $c.Stage 'JUhalt.PaperRouteTracker-0.3.0-stable-full.nupkg')) { throw 'Prior package seed was staged.' }
     if ((Get-Content -LiteralPath (Join-Path $c.Root 'github-output.txt')) -cne 'release_id=404') { throw 'Stage did not return the verified draft ID.' }
+    $evidence = Get-Content -LiteralPath (Join-Path $c.Evidence 'Stage-verification.json') -Raw | ConvertFrom-Json
+    if ($null -eq $evidence.PSObject.Properties['RuntimeVersion'] -or $evidence.RuntimeVersion -cne '10.0.12') { throw 'Stage did not record the bundled runtime version.' }
     Publish-LocalStageToMock $c
+    Invoke-Verifier $c Verify
+}
+Run-Case 'missing-published-runtimeconfig' {
+    param($c)
+    [IO.File]::Delete((Join-Path $c.Root 'publish/win-x64/PaperRouteTracker.runtimeconfig.json'))
+    Invoke-Verifier $c Stage
+} '*runtimeconfig.json*'
+Run-Case 'valid-verify-without-publish-folder' {
+    param($c)
+    Invoke-Verifier $c Stage
+    Publish-LocalStageToMock $c
+    # Verify checks only the draft and the staged assets, so a rerun by hand
+    # from a fresh checkout needs no publish folder.
+    [IO.Directory]::Delete((Join-Path $c.Root 'publish'), $true)
     Invoke-Verifier $c Verify
 }
 Run-Case 'valid-no-server-digest-still-compares-bytes' {
@@ -242,6 +263,24 @@ Run-Case 'missing-source-document' {
     [IO.File]::Move((Join-Path $c.Root 'NOTICE.md'), (Join-Path $c.Root 'NOTICE-fixture-hidden.md'))
     Invoke-Verifier $c Stage
 } '*NOTICE.md*does not exist*'
+Run-Case 'missing-source-third-party-notices' {
+    param($c)
+    [IO.File]::Move((Join-Path $c.Root 'THIRD-PARTY-NOTICES.txt'), (Join-Path $c.Root 'THIRD-PARTY-NOTICES-fixture-hidden.txt'))
+    Invoke-Verifier $c Stage
+} '*THIRD-PARTY-NOTICES.txt*does not exist*'
+Run-Case 'unexpected-portable-zip-built' {
+    param($c)
+    # The portable build is skipped from v0.9.2 (#149); a build that still
+    # produces one is refused rather than published.
+    $name = 'JUhalt.PaperRouteTracker-stable-Portable.zip'
+    $bytes = Text-Bytes "Synthetic binary $name; never execute.`n"
+    Write-Bytes (Join-Path $c.Local $name) $bytes
+    $c.Remote[$name] = $bytes
+    $manifestPath = Join-Path $c.Local 'assets.stable.json'
+    $manifest = @(Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json) + @([pscustomobject]@{ RelativeFileName = $name; Type = 'Portable' })
+    Write-Bytes $manifestPath (Text-Bytes (ConvertTo-Json -InputObject $manifest -Depth 6))
+    Invoke-Verifier $c Stage
+} '*Portable.zip*'
 Run-Case 'final-uploaded-bytes-changed' {
     param($c)
     Invoke-Verifier $c Stage

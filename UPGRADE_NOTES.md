@@ -11,7 +11,7 @@ For normal upgrades, use an installed PaperRoute build rather than replacing app
 - Automatic update checks can be enabled or disabled in PaperRoute settings.
 - Manual update checks are available from **Settings → Check for Updates...**.
 
-Portable and developer builds intentionally do not replace themselves in place.
+Developer builds, including the CI smoke-test artifact, intentionally do not replace themselves in place.
 
 ## Before upgrading
 

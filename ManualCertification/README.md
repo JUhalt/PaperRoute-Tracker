@@ -2,6 +2,11 @@
 
 This directory contains disposable import fixtures used for repeatable F5/manual certification.
 
+## Release certification
+
+- [How releases are certified](Release-Certification.md): the standing procedure every release certification issue follows, from v0.9.2 on
+- [Capture-HarnessWindow.ps1](Capture-HarnessWindow.ps1): captures a harness window once it reports itself painted, with evidence JSON
+
 ## v0.4 release records
 
 - [Release closure and published-asset verification](v0.4-Release-Closure.md)

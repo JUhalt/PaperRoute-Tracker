@@ -2,6 +2,7 @@ using ManuscriptPipeline.Forms;
 using ManuscriptPipeline.Models;
 using ManuscriptPipeline.Services;
 using System.Text;
+using System.Text.Json;
 
 namespace PaperRoute.V04Demo;
 
@@ -9,10 +10,16 @@ internal static class Program
 {
     private const string Usage = "PaperRoute workflow manual demo\n\n" +
         "Surfaces: vault (default), readiness, packet, packet-new, file, file-new, notes, submission, responses, workflow, board, publications, fill, about, route, update, report, candidate, online, key, journals, lookup, suggest, suggest-results, citations, citations-update, assistant-settings, assistant-consent, letter, letter-read, decision-prefill, draft-response, cover-letter, cover-letter-result, author-instructions, author-instructions-read, journal-checklist, packet-export, packet-export-blinded\n" +
-        "Options: --minimum, --primary, --empty (vault/readiness/board), --offline and --collapsed (board, journals, citations), --integrity (populated vault only), --dark or --system, --help\n\n" +
+        "Options: --minimum, --primary, --empty (vault/readiness/board), --offline and --collapsed (board, journals, citations), --integrity (populated vault only), --dark or --system, --help\n" +
+        "Capture: --painted <file> writes a JSON marker (UTC time, HighDpiMode, DeviceDpi) once the shown window has loaded and its message loop is idle; --load-delay <ms> is a test hook that holds the shown window's load that long first. With --painted nobody is assumed to be watching: a failure is written to standard error with a non-zero exit code (2 arguments, 3 setup, 4 marker) and no dialog is shown.\n\n" +
         "Default surfaces discard manuscript changes when the window closes.\n" +
         "workflow and board save only in a new disposable temporary session.\n" +
         "--integrity creates and retains disposable files in a unique temporary directory.";
+
+    // Capture support (#146): where to write the painted marker, and the test
+    // hook's delay in milliseconds.
+    private static string? paintedPath;
+    private static int loadDelay;
 
     [STAThread]
     private static void Main(string[] args)
@@ -26,6 +33,24 @@ internal static class Program
             MessageBox.Show(Usage, "PaperRoute workflow demo");
             return;
         }
+
+        // The two valued options are taken out first; the rest are flags.
+        var arguments = args.ToList();
+        paintedPath = TakeValue(arguments, "--painted");
+        var delayText = TakeValue(arguments, "--load-delay");
+        if (paintedPath == "" || delayText == "" ||
+            (delayText is not null && (!int.TryParse(delayText, out loadDelay) || loadDelay < 0)))
+        {
+            Report("Invalid demo arguments", Usage, MessageBoxIcon.Information, 2);
+            return;
+        }
+        // A marker that cannot be written is refused before any window opens.
+        if (paintedPath is not null && !Directory.Exists(Path.GetDirectoryName(Path.GetFullPath(paintedPath))))
+        {
+            Report("Invalid demo arguments", "The folder for the painted marker does not exist: " + paintedPath, MessageBoxIcon.Information, 2);
+            return;
+        }
+        args = arguments.ToArray();
 
         var surfaces = new[] { "vault", "readiness", "packet", "packet-new", "file", "file-new", "notes", "submission", "responses", "workflow", "board", "publications", "fill", "about", "route", "update", "report", "candidate", "online", "key", "journals", "lookup", "suggest", "suggest-results", "citations", "citations-update", "assistant-settings", "assistant-consent", "letter", "letter-read", "decision-prefill", "draft-response", "cover-letter", "cover-letter-result", "author-instructions", "author-instructions-read", "journal-checklist", "packet-export", "packet-export-blinded" };
         var positional = args.Where(argument => !argument.StartsWith("--")).ToArray();
@@ -54,7 +79,7 @@ internal static class Program
             (empty && surface != "vault" && surface != "readiness" && surface != "board") ||
             (integrity && (surface != "vault" || empty)))
         {
-            MessageBox.Show(Usage, "Invalid demo arguments", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            Report("Invalid demo arguments", Usage, MessageBoxIcon.Information, 2);
             return;
         }
 
@@ -325,8 +350,8 @@ internal static class Program
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            MessageBox.Show("The disposable demo fixtures could not be prepared.\r\n\r\n" + ex.Message,
-                "Demo setup failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Report("Demo setup failed", "The disposable demo fixtures could not be prepared.\r\n\r\n" + ex.Message,
+                MessageBoxIcon.Error, 3);
             return;
         }
         if (empty)
@@ -377,8 +402,20 @@ internal static class Program
         form.ShowDialog();
     }
 
+    // Removes "--name <value>" from the arguments: null when the option is
+    // absent, "" when it has no value.
+    private static string? TakeValue(List<string> arguments, string name)
+    {
+        var index = arguments.FindIndex(argument => argument.Equals(name, StringComparison.OrdinalIgnoreCase));
+        if (index < 0) return null;
+        var value = index + 1 < arguments.Count && !arguments[index + 1].StartsWith("--") ? arguments[index + 1] : "";
+        arguments.RemoveRange(index, value.Length > 0 ? 2 : 1);
+        return value;
+    }
+
     private static void ConfigureDisplayEvidence(Form form, bool primary)
     {
+        ConfigurePaintedMarker(form);
         if (!primary) return;
 
         // Keep native Windows scaling tests on the display whose scale was changed.
@@ -392,6 +429,68 @@ internal static class Program
                 area.Top + Math.Max(0, (area.Height - form.Height) / 2));
             form.Text += $" [DPI {form.DeviceDpi}; primary display]";
         }));
+    }
+
+    // Capture support (#146): once the shown window's load has finished and
+    // the message loop is idle, write the marker the capture script waits for,
+    // so a capture never shows a window that is still loading.
+    private static void ConfigurePaintedMarker(Form form)
+    {
+        if (paintedPath is null && loadDelay == 0) return;
+
+        form.Shown += (_, _) =>
+        {
+            // Test hook: a slow load keeps the window blank and the marker unwritten.
+            if (loadDelay > 0) Thread.Sleep(loadDelay);
+            if (paintedPath is null) return;
+
+            EventHandler? onIdle = null;
+            onIdle = (_, _) =>
+            {
+                // Export Submission Packet checks its files off the UI thread
+                // after Shown; Idle comes round again once that check has
+                // filled the window.
+                if (form is PacketExportForm { Loading.IsCompleted: false }) return;
+                Application.Idle -= onIdle;
+                var marker = JsonSerializer.Serialize(new
+                {
+                    PaintedAtUtc = DateTime.UtcNow,
+                    HighDpiMode = Application.HighDpiMode.ToString(),
+                    form.DeviceDpi,
+                    Title = form.Text
+                }, new JsonSerializerOptions { WriteIndented = true });
+                // Written whole, then moved: the capture script is already polling the path.
+                // A failure here is the marker's, not the fixtures': it is reported as such
+                // and the window closes, so the script sees the exit code at once.
+                try
+                {
+                    var temporary = paintedPath + ".tmp";
+                    File.WriteAllText(temporary, marker);
+                    File.Move(temporary, paintedPath, overwrite: true);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    Report("Painted marker not written", "The painted marker could not be written to " + paintedPath + ": " + ex.Message,
+                        MessageBoxIcon.Error, 4);
+                    form.Close();
+                }
+            };
+            Application.Idle += onIdle;
+        };
+    }
+
+    // Under --painted a script runs the harness and nobody is watching the
+    // desktop: a failure goes to standard error with a non-zero exit code, not
+    // to a dialog that would wait there for OK. Otherwise it is shown as before.
+    private static void Report(string title, string message, MessageBoxIcon icon, int exitCode)
+    {
+        if (paintedPath is null)
+        {
+            MessageBox.Show(message, title, MessageBoxButtons.OK, icon);
+            return;
+        }
+        Console.Error.WriteLine(title + ": " + message.Replace("\r\n", " ").Replace("\n", " "));
+        Environment.ExitCode = exitCode;
     }
 }
 

@@ -27,7 +27,7 @@ Namespace Services
         ' The guide of the running version, from its release tag, so an
         ' installed release opens its own guide and not whatever master says
         ' that day (#129). A copy Setup did not install, from Visual Studio
-        ' or the portable build, opens master's.
+        ' or a developer build, opens master's.
         Public Shared ReadOnly Property GitHubGuideUrl As String
             Get
 
