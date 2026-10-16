@@ -412,9 +412,6 @@ Namespace Services
                 preserveExistingPrimary:=File.Exists(_dataFilePath)
             )
 
-            _lastLoadRecoveredFromBackup =
-                True
-
         End Sub
 
 

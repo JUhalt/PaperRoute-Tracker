@@ -97,16 +97,65 @@ Public Class StartupRecoveryTests
         Assert.IsTrue(recovery.PreviousSaveIsValid(), "The previous save is offered.")
         AssertSameData(before, "The offer touches no data.")
 
-        recovery.UsePreviousSave()
+        Dim preserved As String = recovery.UsePreviousSave()
 
         Assert.AreEqual(StorageMigrationService.CurrentSchemaVersion, StorageMigrationService.ReadSchemaVersion(_schema))
         Assert.AreEqual(String.Empty, File.ReadAllText(Path.Combine(_data, "schema.previous.bak")), "The marker it replaced is kept.")
-        StringAssert.StartsWith(repository.LastRecoveryPreservedFilePath, Path.Combine(_data, "recovery"), "The unreadable primary is kept under data\recovery.")
-        Assert.AreEqual("{ damaged", File.ReadAllText(repository.LastRecoveryPreservedFilePath))
+        Assert.AreEqual(repository.LastRecoveryPreservedFilePath, preserved, "The window is told where the replaced file went.")
+        StringAssert.StartsWith(preserved, Path.Combine(_data, "recovery"), "The unreadable primary is kept under data\recovery.")
+        Assert.AreEqual("{ damaged", File.ReadAllText(preserved))
 
         EnsureStorage()
         Assert.AreEqual("The previous save", repository.Load().Single().Title, "The library opens.")
         Assert.IsFalse(repository.LastLoadRecoveredFromBackup, "As the primary, with no fallback needed.")
+
+    End Sub
+
+
+    ' A marker from a newer PaperRoute: the previous save reads with this
+    ' build's rules only because it skips what it does not know, so it is not
+    ' offered, and asking anyway changes nothing. The marker stays for the
+    ' newer PaperRoute.
+    <TestMethod>
+    Public Sub NewerMarker_IsNotOfferedThePreviousSaveAndNothingChanges()
+
+        Dim repository As ManuscriptRepository = SaveTwice("Saved by a newer PaperRoute")
+        File.WriteAllText(Path.Combine(_data, "manuscripts.json"), "{ damaged")
+        File.WriteAllText(_schema, "{""SchemaVersion"":10}")
+        Dim before As Dictionary(Of String, Byte()) = SnapshotData()
+
+        Dim recovery As New StartupRecoveryService(repository, _library, _schema)
+        Assert.IsFalse(recovery.PreviousSaveIsValid(), "Not offered.")
+
+        Dim failure As InvalidOperationException = Assert.ThrowsExactly(Of InvalidOperationException)(Sub() recovery.UsePreviousSave())
+        StringAssert.Contains(failure.Message, "Update PaperRoute")
+        AssertSameData(before, "Nothing was changed.")
+
+    End Sub
+
+
+    ' A readable marker at or below the current version is left as it is:
+    ' the next start's upgrade runs from there over the recovered primary,
+    ' instead of being skipped by a stamped marker.
+    <TestMethod>
+    Public Sub OlderMarker_UsePreviousSaveLeavesTheMarkerForTheNextStartToUpgrade()
+
+        Dim repository As ManuscriptRepository = SaveTwice("The previous save")
+        File.WriteAllText(Path.Combine(_data, "manuscripts.json"), "{ damaged")
+
+        Dim recovery As New StartupRecoveryService(repository, _library, _schema)
+        Assert.IsTrue(recovery.PreviousSaveIsValid())
+
+        recovery.UsePreviousSave()
+
+        Assert.AreEqual(8, StorageMigrationService.ReadSchemaVersion(_schema), "The marker is left for the upgrade.")
+        Assert.IsFalse(File.Exists(Path.Combine(_data, "schema.previous.bak")))
+        Assert.AreEqual("{ damaged", File.ReadAllText(repository.LastRecoveryPreservedFilePath))
+
+        EnsureStorage()
+        Assert.AreEqual(StorageMigrationService.CurrentSchemaVersion, StorageMigrationService.ReadSchemaVersion(_schema))
+        Assert.AreEqual("The previous save", repository.Load().Single().Title, "The upgrade ran over the recovered primary.")
+        Assert.IsFalse(repository.LastLoadRecoveredFromBackup)
 
     End Sub
 

@@ -1820,7 +1820,15 @@ Namespace Services
 
             Dim dataFiles As New List(Of String)()
 
-            For Each name As String In {"manuscripts.json", "manuscripts.bak", "authors.json", "authors.bak", CitationStore.FileName, "citations.bak", "schema.json"}
+            For Each name As String In {
+                "manuscripts.json",
+                "manuscripts.bak",
+                "authors.json",
+                "authors.bak",
+                CitationStore.FileName,
+                "citations.bak",
+                "schema.json"
+            }
 
                 Dim filePath As String =
                     Path.Combine(

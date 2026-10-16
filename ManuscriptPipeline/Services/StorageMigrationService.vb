@@ -285,7 +285,8 @@ Namespace Services
         End Sub
 
 
-        Private Shared Sub ValidateSupportedSchemaVersion(
+        ' Also the startup recovery's check before it uses the previous save (#124).
+        Friend Shared Sub ValidateSupportedSchemaVersion(
             existingVersion As Integer
         )
 
