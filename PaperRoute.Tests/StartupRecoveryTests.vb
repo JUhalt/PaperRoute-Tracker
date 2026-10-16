@@ -226,6 +226,75 @@ Public Class StartupRecoveryTests
     End Sub
 
 
+    ' A library from a newer PaperRoute is not damage, and updating
+    ' PaperRoute is the fix: a restore asked for anyway stops with the
+    ' message startup gave, before anything changes. Before the change it
+    ' replaced the newer library and stamped this build's marker on it.
+    <TestMethod>
+    Public Sub NewerMarker_RestoreFromBackupIsRefusedAndNothingChanges()
+
+        Dim backupPath As String = CreateBackup()
+        Dim repository As ManuscriptRepository = SaveTwice("Saved by a newer PaperRoute")
+        File.WriteAllText(_schema, "{""SchemaVersion"":10}")
+        Dim before As Dictionary(Of String, Byte()) = SnapshotData()
+
+        Dim recovery As New StartupRecoveryService(repository, _library, _schema)
+        Assert.IsTrue(recovery.LibraryIsFromANewerPaperRoute())
+
+        Dim failure As InvalidOperationException = Assert.ThrowsExactly(Of InvalidOperationException)(Sub() recovery.RestoreFromBackup(backupPath))
+        StringAssert.Contains(failure.Message, "Update PaperRoute")
+        AssertSameData(before, "Nothing was changed.")
+        Assert.IsFalse(Directory.Exists(Path.Combine(_data, "backups")), "Not even an emergency copy was made.")
+
+    End Sub
+
+
+    ' A marker that cannot be written once the library step has changed
+    ' the library must not read as a recovery that changed nothing: the
+    ' message says what is in place and where the replaced files are, and
+    ' carries the cause. Here schema.json's temporary sibling is a folder.
+    <TestMethod>
+    Public Sub AMarkerThatCannotBeWritten_SaysWhatIsAlreadyInPlace()
+
+        Dim repository As ManuscriptRepository = SaveTwice("The previous save")
+        File.WriteAllText(Path.Combine(_data, "manuscripts.json"), "{ damaged")
+        File.WriteAllText(_schema, String.Empty)
+        Directory.CreateDirectory(_schema & ".tmp")
+
+        Dim recovery As New StartupRecoveryService(repository, _library, _schema)
+
+        Dim previous As InvalidOperationException = Assert.ThrowsExactly(Of InvalidOperationException)(Sub() recovery.UsePreviousSave())
+        StringAssert.StartsWith(previous.Message, "The previous save is in place")
+        StringAssert.Contains(previous.Message, repository.LastRecoveryPreservedFilePath)
+        StringAssert.Contains(previous.Message, "storage marker")
+        Assert.IsNotNull(previous.InnerException)
+        Assert.AreEqual("The previous save", repository.Load().Single().Title, "The previous save is in place.")
+
+        Dim restore As InvalidOperationException = Assert.ThrowsExactly(Of InvalidOperationException)(Sub() recovery.RestoreFromBackup(CreateBackup()))
+        StringAssert.StartsWith(restore.Message, "The backup was restored")
+        StringAssert.Contains(restore.Message, Directory.GetFiles(Path.Combine(_data, "backups"), "PaperRoute_PreRestore_*.zip").Single())
+        StringAssert.Contains(restore.Message, "storage marker")
+        Assert.IsNotNull(restore.InnerException)
+        Assert.AreEqual(3, repository.Load().Count, "The backup is in place.")
+
+    End Sub
+
+
+    ' A backup of the three-manuscript library, made elsewhere under the root.
+    Private Function CreateBackup() As String
+
+        Dim sourceData As String = Path.Combine(_root, "source-data-" & Guid.NewGuid().ToString("N"))
+        Dim sourceLibrary As String = Path.Combine(_root, "source-library-" & Guid.NewGuid().ToString("N"))
+        Dim sourceRepository As New ManuscriptRepository(sourceData, sourceLibrary)
+        Dim sourceManuscripts As List(Of Manuscript) = CreateRepresentativeLibrary()
+        sourceRepository.Save(sourceManuscripts)
+        Dim backupPath As String = Path.Combine(_root, "backup-" & Guid.NewGuid().ToString("N") & ".zip")
+        Call New PortableBackupService(sourceLibrary).CreateBackup(backupPath, sourceManuscripts, sourceRepository)
+        Return backupPath
+
+    End Function
+
+
     Private Function SnapshotData() As Dictionary(Of String, Byte())
 
         Dim files As New Dictionary(Of String, Byte())(StringComparer.OrdinalIgnoreCase)

@@ -4,8 +4,6 @@ Imports System.Drawing
 Imports System.IO
 Imports System.Linq
 Imports System.Reflection
-Imports System.Runtime.ExceptionServices
-Imports System.Threading
 Imports System.Windows.Forms
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
 Imports ManuscriptPipeline
@@ -368,6 +366,80 @@ Public Class StartupTests
             "The manuscript library, beside a damaged previous save."
         )
 
+        ' A library from a newer PaperRoute is not damage: updating
+        ' PaperRoute is the fix, and a restore would replace the library.
+        ' Before the change a backup was offered here.
+        File.WriteAllText(
+            StorageMigrationService.SchemaFilePath(),
+            "{""SchemaVersion"":10}"
+        )
+
+        CollectionAssert.AreEquivalent(
+            Array.Empty(Of String)(),
+            RecoveryActions(StartupFailure.ForStorage(cause, StorageMigrationService.SchemaFilePath())),
+            "Storage written by a newer PaperRoute."
+        )
+
+    End Sub
+
+
+    ' Use the Previous Save over a manuscripts.json that reads would only
+    ' roll the library back, setting the newest save aside as unreadable,
+    ' and would not mend a failure elsewhere, here an empty schema.json. It
+    ' is not offered, and asked for anyway it changes nothing (#124). Before
+    ' the change it was offered here.
+    <TestMethod>
+    Public Sub AReadableLibrary_IsNotOfferedThePreviousSave()
+
+        Dim repository As New ManuscriptRepository()
+
+        repository.Save(
+            New List(Of Manuscript) From {New Manuscript With {.Title = "The previous save"}}
+        )
+
+        repository.Save(
+            New List(Of Manuscript) From {New Manuscript With {.Title = "The newest save"}}
+        )
+
+        Assert.IsTrue(
+            repository.HasValidBackup(),
+            "The previous save reads."
+        )
+
+        File.WriteAllText(
+            StorageMigrationService.SchemaFilePath(),
+            String.Empty
+        )
+
+        Dim before As Dictionary(Of String, Byte()) =
+            SnapshotData()
+
+        CollectionAssert.AreEquivalent(
+            {RestoreAction},
+            RecoveryActions(StartupFailure.ForStorage(New InvalidDataException("The test's failure."), StorageMigrationService.SchemaFilePath())),
+            "Only a backup is offered beside a library file that reads."
+        )
+
+        Dim refused As InvalidOperationException =
+            Assert.ThrowsExactly(Of InvalidOperationException)(
+                Sub() Call New StartupRecoveryService().UsePreviousSave()
+            )
+
+        StringAssert.Contains(
+            refused.Message,
+            "can be read"
+        )
+
+        AssertSameData(
+            before,
+            "manuscripts.json and everything beside it are as they were."
+        )
+
+        Assert.AreEqual(
+            "The newest save",
+            New ManuscriptRepository().Load().Single().Title
+        )
+
     End Sub
 
 
@@ -461,9 +533,9 @@ Public Class StartupTests
 
 
     ' Neither library file reads, so only a backup is offered (#124). The
-    ' archive chosen in the window is restored with no library loaded; the
-    ' window says so, names the copy of the files it replaced, and closes,
-    ' and the library opens.
+    ' archive chosen in the window is counted and asked about first, then
+    ' restored with no library loaded; the window says so, names the copy
+    ' of the files it replaced, and closes, and the library opens.
     <TestMethod>
     Public Sub RestoreFromBackup_EndsWithALibraryThatOpens()
 
@@ -495,6 +567,7 @@ Public Class StartupTests
         )
 
         Dim messages As New List(Of String)()
+        Dim questions As New List(Of String)()
         Dim recovered As Boolean = False
 
         RunOnStaThread(
@@ -505,7 +578,8 @@ Public Class StartupTests
                         StartupFailure.ForManuscriptLibrary(failure, repository.DataFilePath),
                         RestoreAction,
                         messages,
-                        backupPath
+                        backupPath,
+                        questions
                     )
 
             End Sub
@@ -513,6 +587,18 @@ Public Class StartupTests
 
         Assert.IsTrue(
             recovered
+        )
+
+        StringAssert.Contains(
+            questions.Single(),
+            "Manuscripts: 3",
+            "The question says what the archive holds."
+        )
+
+        StringAssert.Contains(
+            questions.Single(),
+            "backups folder",
+            "And that the files it replaces are zipped first."
         )
 
         Dim emergencyCopy As String =
@@ -547,7 +633,8 @@ Public Class StartupTests
 
 
     ' A recovery that fails shows the error, leaves the window open with
-    ' nothing recovered, and changes nothing (#124).
+    ' nothing recovered, and changes nothing (#124). An archive that is not
+    ' a backup fails its check before anything is asked.
     <TestMethod>
     Public Sub ARecoveryThatFails_SaysWhyAndChangesNothing()
 
@@ -576,6 +663,7 @@ Public Class StartupTests
             SnapshotData()
 
         Dim messages As New List(Of String)()
+        Dim questions As New List(Of String)()
         Dim recovered As Boolean = True
 
         RunOnStaThread(
@@ -586,7 +674,8 @@ Public Class StartupTests
                         StartupFailure.ForManuscriptLibrary(New InvalidDataException("The test's failure."), repository.DataFilePath),
                         RestoreAction,
                         messages,
-                        notABackup
+                        notABackup,
+                        questions
                     )
 
             End Sub
@@ -602,11 +691,17 @@ Public Class StartupTests
             "A failed restore changes nothing."
         )
 
+        Assert.AreEqual(
+            0,
+            questions.Count,
+            "An archive that fails its check is not asked about."
+        )
+
         Dim expected As Exception =
             Nothing
 
         Try
-            Call New StartupRecoveryService().RestoreFromBackup(notABackup)
+            Call New StartupRecoveryService().InspectBackup(notABackup)
         Catch ex As Exception
             expected = ex
         End Try
@@ -615,10 +710,82 @@ Public Class StartupTests
             expected
         )
 
-        Assert.AreEqual(
-            expected.Message,
+        StringAssert.StartsWith(
             messages.Single(),
+            "This backup could not be validated. Nothing was changed."
+        )
+
+        StringAssert.Contains(
+            messages.Single(),
+            expected.Message,
             "The window shows the error's message."
+        )
+
+    End Sub
+
+
+    ' Restore From Backup... says what the archive holds and asks first, as
+    ' Settings > Restore Backup... does (#124); No changes nothing and
+    ' leaves the window open. Before the change choosing the archive
+    ' replaced the library at once.
+    <TestMethod>
+    Public Sub RestoreFromBackup_AsksFirstAndNoChangesNothing()
+
+        Dim backupPath As String =
+            CreateBackupOfThreeManuscripts()
+
+        Dim repository As ManuscriptRepository =
+            LibraryWithADamagedPrimary(
+                "Lost to both files"
+            )
+
+        File.WriteAllText(
+            repository.BackupFilePath,
+            "[null]"
+        )
+
+        Dim before As Dictionary(Of String, Byte()) =
+            SnapshotData()
+
+        Dim messages As New List(Of String)()
+        Dim questions As New List(Of String)()
+        Dim recovered As Boolean = True
+
+        RunOnStaThread(
+            Sub()
+
+                recovered =
+                    ClickRecovery(
+                        StartupFailure.ForManuscriptLibrary(New InvalidDataException("The test's failure."), repository.DataFilePath),
+                        RestoreAction,
+                        messages,
+                        backupPath,
+                        questions,
+                        confirms:=False
+                    )
+
+            End Sub
+        )
+
+        Assert.IsFalse(
+            recovered,
+            "No leaves the window open with nothing recovered."
+        )
+
+        StringAssert.Contains(
+            questions.Single(),
+            "Manuscripts: 3"
+        )
+
+        Assert.AreEqual(
+            0,
+            messages.Count,
+            "There is nothing to report."
+        )
+
+        AssertSameData(
+            before,
+            "No changes nothing."
         )
 
     End Sub
@@ -724,6 +891,260 @@ Public Class StartupTests
     End Sub
 
 
+    ' An authors.json another program holds is not damage (#111), as for
+    ' the manuscript library: the window offers nothing to put right.
+    ' Before the change it was shown as a damaged author library, with
+    ' Restore From Backup....
+    <TestMethod>
+    Public Sub AnAuthorLibraryInUse_OffersNothingToPutRight()
+
+        Dim authorsPath As String =
+            New AuthorLibraryRepository().DataFilePath
+
+        Directory.CreateDirectory(
+            Path.GetDirectoryName(authorsPath)
+        )
+
+        File.WriteAllText(
+            authorsPath,
+            "{""Authors"":[]}"
+        )
+
+        Dim opener As New HeldFileOpener(
+            authorsPath,
+            failures:=Integer.MaxValue
+        )
+
+        RunOnStaThread(
+            Sub()
+
+                Using board As New FailedStart(recovers:=True)
+
+                    board.SetField(
+                        "authorRepository",
+                        New AuthorLibraryRepository(
+                            Path.GetDirectoryName(authorsPath),
+                            openFile:=AddressOf opener.Open
+                        )
+                    )
+
+                    Assert.IsFalse(
+                        CBool(board.CallPrivate("LoadAuthorLibrary")),
+                        "The author library does not load."
+                    )
+
+                    Dim failure As StartupFailure =
+                        board.Failures.Single()
+
+                    StringAssert.Contains(
+                        failure.Heading,
+                        "another program"
+                    )
+
+                    Assert.AreEqual(
+                        authorsPath,
+                        failure.FilePath
+                    )
+
+                    Assert.IsFalse(
+                        failure.OffersRestore OrElse failure.OffersPreviousSave,
+                        "Nothing is offered for a file in use."
+                    )
+
+                    Assert.IsFalse(
+                        CBool(board.FieldValue("startupRecovered"))
+                    )
+
+                End Using
+
+            End Sub
+        )
+
+    End Sub
+
+
+    ' The author library is read again mid-session: after every page save,
+    ' on leaving a hosted editor, after Add Manuscript. A restore there would
+    ' replace the library under a session that goes on with the old one in
+    ' memory, so once startup is over its failure offers nothing, and
+    ' nothing acts on it (#124). While starting, a backup is still offered.
+    ' Before the change Restore From Backup... was offered mid-session too.
+    <TestMethod>
+    Public Sub AnAuthorLibraryFailureAfterStartup_OffersNoRecovery()
+
+        Dim authorsPath As String =
+            New AuthorLibraryRepository().DataFilePath
+
+        Directory.CreateDirectory(
+            Path.GetDirectoryName(authorsPath)
+        )
+
+        File.WriteAllText(
+            authorsPath,
+            "{""Authors"":"
+        )
+
+        RunOnStaThread(
+            Sub()
+
+                Using starting As New FailedStart(recovers:=True), started As New FailedStart(recovers:=True)
+
+                    Assert.IsFalse(
+                        CBool(starting.CallPrivate("LoadAuthorLibrary"))
+                    )
+
+                    Assert.IsTrue(
+                        starting.Failures.Single().OffersRestore,
+                        "While starting, a backup is offered."
+                    )
+
+                    Assert.IsTrue(
+                        CBool(starting.FieldValue("startupRecovered")),
+                        "And a recovery there ends startup with a restart."
+                    )
+
+                    started.SetField(
+                        "startupComplete",
+                        True
+                    )
+
+                    Assert.IsFalse(
+                        CBool(started.CallPrivate("LoadAuthorLibrary"))
+                    )
+
+                    Dim failure As StartupFailure =
+                        started.Failures.Single()
+
+                    Assert.IsFalse(
+                        failure.OffersRestore OrElse failure.OffersPreviousSave,
+                        "Mid-session the window offers nothing to put right."
+                    )
+
+                    Assert.IsFalse(
+                        CBool(started.FieldValue("startupRecovered")),
+                        "Nothing acts on the window's answer."
+                    )
+
+                    Assert.IsFalse(
+                        CBool(started.FieldValue("handingOverAfterRestore"))
+                    )
+
+                    Assert.IsFalse(
+                        started.Restarted
+                    )
+
+                End Using
+
+            End Sub
+        )
+
+    End Sub
+
+
+    ' The window must open whatever failed (#119). Building its recovery
+    ' fails where the Documents folder cannot be found, which may be why
+    ' startup failed: the window then opens with neither recovery action.
+    ' Before the change that failure escaped the constructor, and no window
+    ' opened.
+    <TestMethod>
+    Public Sub ARecoveryThatCannotBeBuilt_StillOpensTheWindow()
+
+        Dim buttons As New List(Of String)()
+
+        Dim cannotBeBuilt As Func(Of StartupRecoveryService) =
+            Function() As StartupRecoveryService
+                Throw New InvalidOperationException("The user's Documents folder could not be located.")
+            End Function
+
+        RunOnStaThread(
+            Sub()
+
+                Using window As New StartupFailureForm(
+                    StartupFailure.ForStorage(New InvalidDataException("The test's failure."), StorageMigrationService.SchemaFilePath()),
+                    cannotBeBuilt
+                )
+
+                    buttons.AddRange(
+                        Descendants(window).
+                            OfType(Of Button)().
+                            Select(Function(button) button.Text)
+                    )
+
+                End Using
+
+            End Sub
+        )
+
+        CollectionAssert.Contains(buttons, "Close")
+        CollectionAssert.Contains(buttons, "Copy Details")
+        CollectionAssert.DoesNotContain(buttons, PreviousSaveAction)
+        CollectionAssert.DoesNotContain(buttons, RestoreAction)
+
+    End Sub
+
+
+    ' Guard: the harnesses skip Form1_Load, so its wiring is checked in the
+    ' source, as the recovery draft's offer is. Both load failures post
+    ' EndFailedStartup and neither closes the window itself; that half
+    ' passed before this change and fails only if either goes back to
+    ' Close(). Startup is marked complete once both libraries have loaded,
+    ' before anything else reads them, so a later failure offers nothing.
+    <TestMethod>
+    Public Sub Form1Load_EndsAFailedLoadThroughEndFailedStartupAndThenMarksStartupComplete()
+
+        Dim source As String =
+            File.ReadAllText(
+                Path.Combine(
+                    AssistantCoreTests.RepositoryRoot(),
+                    "ManuscriptPipeline",
+                    "Form1.vb"
+                )
+            )
+
+        Dim loading As Integer =
+            source.IndexOf("Private Sub Form1_Load(", StringComparison.Ordinal)
+
+        Dim rendering As Integer =
+            source.IndexOf("RenderManuscripts()", Math.Max(loading, 0), StringComparison.Ordinal)
+
+        Assert.IsTrue(
+            loading >= 0 AndAlso rendering > loading,
+            "Form1_Load renders the board."
+        )
+
+        Dim startup As String =
+            source.Substring(
+                loading,
+                rendering - loading
+            )
+
+        Dim posts As New List(Of Integer)()
+        Dim found As Integer = startup.IndexOf("EndFailedStartup()", StringComparison.Ordinal)
+
+        While found >= 0
+            posts.Add(found)
+            found = startup.IndexOf("EndFailedStartup()", found + 1, StringComparison.Ordinal)
+        End While
+
+        Assert.AreEqual(
+            2,
+            posts.Count,
+            "Both load failures end through EndFailedStartup."
+        )
+
+        Assert.IsFalse(
+            startup.Contains("Close()", StringComparison.Ordinal),
+            "Neither closes the window itself."
+        )
+
+        Assert.IsTrue(
+            startup.IndexOf("startupComplete = True", StringComparison.Ordinal) > posts.Last(),
+            "Startup is marked complete after both loads."
+        )
+
+    End Sub
+
+
     Private Const PreviousSaveAction As String =
         "Use the Previous Save"
 
@@ -807,13 +1228,17 @@ Public Class StartupTests
 
 
     ' Shows the window off-screen, clicks the action, and returns whether
-    ' the window recovered the library. The backup chosen and the messages
-    ' shown are the test's; the window is closed either way.
+    ' the window recovered the library. The backup chosen, the answer to
+    ' the restore's question, and the messages shown are the test's; the
+    ' questions asked are kept when the test passes a list. The window is
+    ' closed either way.
     Private Shared Function ClickRecovery(
         failure As StartupFailure,
         action As String,
         messages As List(Of String),
-        Optional backupPath As String = Nothing
+        Optional backupPath As String = Nothing,
+        Optional questions As List(Of String) = Nothing,
+        Optional confirms As Boolean = True
     ) As Boolean
 
         Using window As New OffScreenStartupWindow(failure)
@@ -823,6 +1248,12 @@ Public Class StartupTests
 
             window.backupFilePrompt =
                 Function() backupPath
+
+            window.restoreConfirmPrompt =
+                Function(question)
+                    questions?.Add(question)
+                    Return confirms
+                End Function
 
             window.Show()
             Application.DoEvents()
@@ -931,6 +1362,10 @@ Public Class StartupTests
             Return GetType(Form1).GetField(name, BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me)
         End Function
 
+        Public Sub SetField(name As String, value As Object)
+            GetType(Form1).GetField(name, BindingFlags.Instance Or BindingFlags.NonPublic).SetValue(Me, value)
+        End Sub
+
         Public Function CallPrivate(name As String, ParamArray args As Object()) As Object
             Return GetType(Form1).GetMethod(name, BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(Me, args)
         End Function
@@ -946,7 +1381,7 @@ Public Class StartupTests
         expectedPath As String
     )
 
-        RunOnSta(
+        RunOnStaThread(
             Sub()
 
                 Using window As New StartupFailureForm(
@@ -1041,34 +1476,5 @@ Public Class StartupTests
         Next
 
     End Function
-
-
-    Private Shared Sub RunOnSta(
-        action As Action
-    )
-
-        Dim failure As ExceptionDispatchInfo =
-            Nothing
-
-        Dim thread As New Thread(
-            Sub()
-                Try
-                    action()
-                Catch ex As Exception
-                    failure = ExceptionDispatchInfo.Capture(ex)
-                End Try
-            End Sub
-        )
-
-        thread.SetApartmentState(
-            ApartmentState.STA
-        )
-
-        thread.Start()
-        thread.Join()
-
-        failure?.Throw()
-
-    End Sub
 
 End Class

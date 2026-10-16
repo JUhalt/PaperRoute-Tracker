@@ -184,6 +184,10 @@ Public Class Form1
 
         End If
 
+        ' From here a library that fails to load offers no recovery (#124):
+        ' only the two loads above end in EndFailedStartup.
+        startupComplete = True
+
         RenderManuscripts()
 
         ' A draft a shutdown or an error left behind is offered first (#123).
@@ -1345,17 +1349,38 @@ Public Class Form1
 
             Return True
 
+        Catch ex As StorageFileInUseException
+
+            ' Not damage, so the window offers nothing to put right, as for
+            ' the manuscript library (#111, #124).
+            ShowStartupFailure(
+                StartupFailure.ForLibraryInUse(
+                    ex,
+                    authorRepository.DataFilePath
+                )
+            )
+
+            Return False
+
         Catch ex As Exception
 
             ' What failed and where, in place of the message box (#119),
-            ' with a backup to put in place (#124).
-            startupRecovered =
+            ' with a backup to put in place (#124) while starting. This is
+            ' also read mid-session, after every page save among others,
+            ' where a restore would replace the library under a session that
+            ' goes on with the old one in memory: then nothing is offered.
+            Dim recovered As Boolean =
                 ShowStartupFailure(
                     StartupFailure.ForAuthorLibrary(
                         ex,
-                        authorRepository.DataFilePath
+                        authorRepository.DataFilePath,
+                        offersRestore:=Not startupComplete
                     )
                 )
+
+            If Not startupComplete Then
+                startupRecovered = recovered
+            End If
 
             Return False
 
@@ -1367,6 +1392,10 @@ Public Class Form1
     ' Set when the startup window put the previous save or a backup in
     ' place (#124).
     Private startupRecovered As Boolean = False
+
+    ' Set once Form1_Load has read both libraries; a load failure after
+    ' that is shown without recovery actions, and nothing acts on it.
+    Private startupComplete As Boolean = False
 
 
     ' Shows the startup window over this one (#119); True when it put the

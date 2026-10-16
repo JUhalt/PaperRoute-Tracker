@@ -112,9 +112,14 @@ Namespace Forms
         End Function
 
 
+        ' The author library is also read mid-session, where a restore would
+        ' replace the library under a window that goes on with the old one
+        ' in memory, so once startup is over the main window builds this
+        ' without the offer.
         Public Shared Function ForAuthorLibrary(
             cause As Exception,
-            dataFilePath As String
+            dataFilePath As String,
+            Optional offersRestore As Boolean = True
         ) As StartupFailure
 
             Return New StartupFailure(
@@ -123,7 +128,7 @@ Namespace Forms
                 dataFilePath,
                 cause,
                 offersPreviousSave:=False,
-                offersRestore:=True
+                offersRestore:=offersRestore
             )
 
         End Function
@@ -136,7 +141,8 @@ Namespace Forms
     ' Folder, Copy Details, a link to the guide's Recovering your library
     ' section, and Close. Where the library itself failed, it also offers
     ' Use the Previous Save, when manuscripts.bak reads with the current
-    ' rules, and Restore From Backup... (#124). Either one that succeeds
+    ' rules, and Restore From Backup..., which shows what the archive holds
+    ' and asks first (#124). Either one that succeeds
     ' says what it did and closes the window recovered, and the caller
     ' opens the recovered library; one that fails says why and changes
     ' nothing here.
@@ -148,13 +154,29 @@ Namespace Forms
         Private ReadOnly txtDetails As New TextBox()
         Private _recovered As Boolean = False
 
-        ' Choose the backup archive and show a message; tests answer instead.
+        ' Choose the backup archive, confirm the restore and show a message;
+        ' tests answer instead.
         Friend backupFilePrompt As Func(Of String) = Nothing
+        Friend restoreConfirmPrompt As Func(Of String, Boolean) = Nothing
         Friend messagePrompt As Action(Of String, String, MessageBoxIcon) = Nothing
 
 
         Public Sub New(
             failure As StartupFailure
+        )
+
+            Me.New(
+                failure,
+                Function() New StartupRecoveryService()
+            )
+
+        End Sub
+
+
+        ' Tests pass a recovery that cannot be built.
+        Friend Sub New(
+            failure As StartupFailure,
+            createRecovery As Func(Of StartupRecoveryService)
         )
 
             If failure Is Nothing Then
@@ -163,8 +185,18 @@ Namespace Forms
 
             _failure = failure
 
+            ' This window must open whatever failed. Storage that cannot be
+            ' located, such as a Documents folder that is not there, may be
+            ' why startup failed; then nothing is offered, but the window
+            ' still says what failed.
             If failure.OffersPreviousSave OrElse failure.OffersRestore Then
-                _recovery = New StartupRecoveryService()
+
+                Try
+                    _recovery = createRecovery()
+                Catch ex As Exception
+                    _recovery = Nothing
+                End Try
+
             End If
 
             BuildInterface()
@@ -243,8 +275,11 @@ Namespace Forms
             Dim offersPreviousSave As Boolean =
                 PreviousSaveCanBeOffered()
 
+            Dim offersRestore As Boolean =
+                RestoreCanBeOffered()
+
             Dim offersRecovery As Boolean =
-                offersPreviousSave OrElse _failure.OffersRestore
+                offersPreviousSave OrElse offersRestore
 
             Me.Text = "PaperRoute could not start"
             Me.StartPosition = FormStartPosition.CenterParent
@@ -358,7 +393,7 @@ Namespace Forms
             buttons.Controls.Add(btnOpenData)
 
             ' The ways to put the library right (#124), at the left.
-            If _failure.OffersRestore Then
+            If offersRestore Then
 
                 Dim btnRestore As New Button With {
                     .Text = "Restore From Backup...",
@@ -506,18 +541,36 @@ Namespace Forms
         End Sub
 
 
-        ' Offered only when manuscripts.bak reads with the current rules and
-        ' the marker is not from a newer PaperRoute. A check that cannot be
-        ' made offers nothing: this window is what PaperRoute shows when it
-        ' cannot start, so it must open.
+        ' Offered only when manuscripts.bak reads with the current rules,
+        ' manuscripts.json does not, and the marker is not from a newer
+        ' PaperRoute. A check that cannot be made offers nothing: this window
+        ' is what PaperRoute shows when it cannot start, so it must open.
         Private Function PreviousSaveCanBeOffered() As Boolean
 
-            If Not _failure.OffersPreviousSave Then
+            If Not _failure.OffersPreviousSave OrElse _recovery Is Nothing Then
                 Return False
             End If
 
             Try
                 Return _recovery.PreviousSaveIsValid()
+            Catch ex As Exception
+                Return False
+            End Try
+
+        End Function
+
+
+        ' Offered where the library itself failed, unless a newer PaperRoute
+        ' wrote it: that is not damage, and updating PaperRoute is the fix.
+        ' A check that cannot be made offers nothing.
+        Private Function RestoreCanBeOffered() As Boolean
+
+            If Not _failure.OffersRestore OrElse _recovery Is Nothing Then
+                Return False
+            End If
+
+            Try
+                Return Not _recovery.LibraryIsFromANewerPaperRoute()
             Catch ex As Exception
                 Return False
             End Try
@@ -561,6 +614,28 @@ Namespace Forms
                 Return
             End If
 
+            ' Checked and counted before anything changes, as Settings >
+            ' Restore Backup... does, so a wrong archive is caught here.
+            Dim inspection As BackupInspection
+
+            Try
+                inspection = _recovery.InspectBackup(backupPath)
+            Catch ex As Exception
+                ShowMessage(
+                    "This backup could not be validated. Nothing was changed." &
+                    Environment.NewLine &
+                    Environment.NewLine &
+                    ex.Message,
+                    "Restore From Backup",
+                    MessageBoxIcon.Error
+                )
+                Return
+            End Try
+
+            If Not ConfirmRestore(inspection) Then
+                Return
+            End If
+
             Dim result As RestoreResult
 
             Try
@@ -582,6 +657,39 @@ Namespace Forms
             )
 
         End Sub
+
+
+        ' One question with what the archive holds; Yes restores.
+        Private Function ConfirmRestore(
+            inspection As BackupInspection
+        ) As Boolean
+
+            Dim question As String =
+                "Restore this backup?" &
+                Environment.NewLine &
+                Environment.NewLine &
+                "Manuscripts: " & inspection.ManuscriptCount.ToString() &
+                Environment.NewLine &
+                "Submissions: " & inspection.SubmissionCount.ToString() &
+                Environment.NewLine &
+                "Managed files: " & inspection.ManagedFileCount.ToString() &
+                Environment.NewLine &
+                Environment.NewLine &
+                "This replaces your library files and the PaperRoute Library folder. A ZIP of them as they are now goes into the backups folder first."
+
+            If restoreConfirmPrompt IsNot Nothing Then
+                Return restoreConfirmPrompt(question)
+            End If
+
+            Return MessageBox.Show(
+                Me,
+                question,
+                "Restore From Backup",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning
+            ) = DialogResult.Yes
+
+        End Function
 
 
         Private Function ChooseBackupFile() As String

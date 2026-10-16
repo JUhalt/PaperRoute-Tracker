@@ -403,6 +403,36 @@ Namespace Services
         End Function
 
 
+        ' True when manuscripts.json is there and reads with the current
+        ' rules, so the previous save is not needed (#124): putting it in
+        ' place would set the newest save aside as unreadable. Nothing is
+        ' changed; a file in use by another program is not damage, so it
+        ' counts as readable.
+        Public Function PrimaryReads() As Boolean
+
+            If Not File.Exists(_dataFilePath) Then
+                Return False
+            End If
+
+            Try
+
+                Dim failure As Exception =
+                    Nothing
+
+                Return TryLoadLibraryFile(
+                    _dataFilePath,
+                    failure
+                ) IsNot Nothing
+
+            Catch ex As StorageFileInUseException
+
+                Return True
+
+            End Try
+
+        End Function
+
+
         ' Puts the safety backup in the primary file's place on request
         ' (#124), as a load does when the primary cannot be read: the file
         ' it replaces is kept under data\recovery. The next load reads the
