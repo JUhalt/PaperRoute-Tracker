@@ -54,13 +54,6 @@ Namespace Services
         End Function
 
 
-        Public ReadOnly Property ReportDirectory As String
-            Get
-                Return _directory
-            End Get
-        End Property
-
-
         ' Writes a report and returns its path, or an empty string when the
         ' disk refuses: recording an error must never add a failure to it.
         Public Function Write(

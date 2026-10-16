@@ -7,7 +7,6 @@ Imports System.Threading
 Imports System.Windows.Forms
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
 Imports ManuscriptPipeline.Forms
-Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
 ' The window PaperRoute shows when it cannot start (#119), built from the

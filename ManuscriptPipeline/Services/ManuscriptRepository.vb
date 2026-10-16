@@ -455,19 +455,13 @@ Namespace Services
                 If preserveExistingPrimary AndAlso
                    File.Exists(_dataFilePath) Then
 
-                    Dim recoveryDirectory As String =
-                        Path.Combine(
-                            _dataDirectory,
-                            "recovery"
-                        )
-
                     Directory.CreateDirectory(
-                        recoveryDirectory
+                        RecoveryDirectory
                     )
 
                     Dim preservedPath As String =
                         CreateUniqueRecoveryPath(
-                            recoveryDirectory
+                            RecoveryDirectory
                         )
 
                     File.Replace(

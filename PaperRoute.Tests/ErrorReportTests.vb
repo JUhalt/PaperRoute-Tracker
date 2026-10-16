@@ -146,10 +146,14 @@ Public Class ErrorReportTests
 
                 For Each decision As EditorialDecisionEvent In submission.Decisions
 
-                    Assert.IsFalse(
-                        text.Contains(decision.Notes, StringComparison.OrdinalIgnoreCase),
-                        "No decision note in the report: " & decision.Notes
-                    )
+                    If Not String.IsNullOrWhiteSpace(decision.Notes) Then
+
+                        Assert.IsFalse(
+                            text.Contains(decision.Notes, StringComparison.OrdinalIgnoreCase),
+                            "No decision note in the report: " & decision.Notes
+                        )
+
+                    End If
 
                 Next
 
