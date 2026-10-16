@@ -172,7 +172,7 @@ function Assert-ArchivePayload([string] $Path, [string] $ExpectedDllHash, [switc
         try { $dllHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($stream)).ToLowerInvariant() }
         finally { $stream.Dispose() }
         if ($dllHash -cne $ExpectedDllHash) { throw "The application DLL in '$Path' differs from the published DLL." }
-        foreach ($legalName in @('LICENSE.txt', 'NOTICE.md')) {
+        foreach ($legalName in @('LICENSE.txt', 'NOTICE.md', 'THIRD-PARTY-NOTICES.txt')) {
             $legalEntries = @($archive.Entries | Where-Object { $_.Name -ceq $legalName })
             if ($legalEntries.Count -ne 1) { throw "'$Path' must contain exactly one '$legalName'." }
             $legalStream = $legalEntries[0].Open()
@@ -229,7 +229,7 @@ try {
 
     foreach ($required in @('PaperRouteTracker.exe', 'PaperRouteTracker.dll', 'PaperRouteTracker.deps.json',
         'PaperRouteTracker.runtimeconfig.json', 'coreclr.dll', 'hostfxr.dll', 'System.Windows.Forms.dll',
-        'docs/USER_GUIDE.md', 'LICENSE.txt', 'NOTICE.md')) {
+        'docs/USER_GUIDE.md', 'LICENSE.txt', 'NOTICE.md', 'THIRD-PARTY-NOTICES.txt')) {
         if (-not (Test-Path -LiteralPath (Join-Path $publishRoot $required) -PathType Leaf)) {
             throw "The self-contained publish payload is missing '$required'."
         }
@@ -248,17 +248,18 @@ try {
         '--packDir', $publishRoot, '--mainExe', 'PaperRouteTracker.exe', '--packTitle', 'PaperRoute Tracker',
         '--packAuthors', 'Joshua Uhalt', '--icon', (Join-Path $repoRoot 'ManuscriptPipeline/Assets/PaperRoute.ico'),
         '--releaseNotes', $releaseNotes, '--channel', $channel, '--outputDir', $releaseRoot,
-        '--skip-updates', 'true', '--legacyConsole', 'true'
+        '--skip-updates', 'true', '--legacyConsole', 'true', '--noPortable', 'true'
     )
 
+    # No portable bundle from v0.9.2 (#149): it never carried the library with
+    # it and was never run in certification. One in the directory is refused.
     $packages = @(Get-ChildItem -LiteralPath $releaseRoot -File -Filter '*-full.nupkg')
     $installers = @(Get-ChildItem -LiteralPath $releaseRoot -File -Filter '*Setup.exe')
     $portable = @(Get-ChildItem -LiteralPath $releaseRoot -File -Filter '*Portable.zip')
-    if ($packages.Count -ne 1 -or $installers.Count -ne 1 -or $portable.Count -ne 1 -or $installers[0].Length -le 0) {
-        throw 'Expected exactly one full package, installer, and portable ZIP in the fresh release directory.'
+    if ($packages.Count -ne 1 -or $installers.Count -ne 1 -or $portable.Count -ne 0 -or $installers[0].Length -le 0) {
+        throw 'Expected exactly one full package and one installer, and no portable ZIP, in the fresh release directory.'
     }
     $packageProof = Assert-ArchivePayload $packages[0].FullName $dllHash -CheckNuspec
-    $portableProof = Assert-ArchivePayload $portable[0].FullName $dllHash
     $feedPath = Join-Path $releaseRoot "releases.$channel.json"
     $feed = Get-Content -LiteralPath $feedPath -Raw | ConvertFrom-Json
     $fullAsset = @($feed.Assets | Where-Object { $_.FileName -ceq $packages[0].Name })
@@ -296,7 +297,7 @@ try {
         ProductVersion = $versionInfo.ProductVersion; AssemblyVersion = $assemblyVersion
         FileVersion = $versionInfo.FileVersion; PublishedDllSha256 = $dllHash
         ReleaseNotesSha256 = (Get-Sha256 $releaseNotes)
-        Package = $packageProof; Portable = $portableProof; Assets = $assetProof
+        Package = $packageProof; Assets = $assetProof
         ChecksumFileSha256 = (Get-Sha256 $checksumPath); InstallerSignatureStatus = $signature.Status.ToString()
         Invocations = @($invocations.ToArray())
         Limitations = @('No installer or app launch certification', 'No live GitHub update-feed certification',

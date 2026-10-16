@@ -47,7 +47,7 @@ function New-Case([string] $Name) {
     $root = Join-Path $runRoot $Name
     $script = Join-Path $root '.github/scripts/Verify-ReleaseAssets.ps1'
     Write-Bytes $script ([IO.File]::ReadAllBytes($sourceScript))
-    foreach ($document in @('docs/releases/0.4.0.md','docs/USER_GUIDE.md','UPGRADE_NOTES.md','LICENSE.txt','NOTICE.md')) {
+    foreach ($document in @('docs/releases/0.4.0.md','docs/USER_GUIDE.md','UPGRADE_NOTES.md','LICENSE.txt','NOTICE.md','THIRD-PARTY-NOTICES.txt')) {
         Write-Bytes (Join-Path $root $document) (Text-Bytes "Synthetic $document`nContent for fixture $Name.`n")
     }
     # The self-contained publish the workflow verifies before packaging; only
@@ -63,8 +63,7 @@ function New-Case([string] $Name) {
     foreach ($item in @(
         @('JUhalt.PaperRouteTracker-0.4.0-stable-full.nupkg', 'Full'),
         @('JUhalt.PaperRouteTracker-0.4.0-stable-delta.nupkg', 'Delta'),
-        @('JUhalt.PaperRouteTracker-stable-Setup.exe', 'Installer'),
-        @('JUhalt.PaperRouteTracker-stable-Portable.zip', 'Portable'))) {
+        @('JUhalt.PaperRouteTracker-stable-Setup.exe', 'Installer'))) {
         $name = $item[0]; $bytes = Text-Bytes "Synthetic binary $name; never execute.`n"
         Write-Bytes (Join-Path $local $name) $bytes
         $remote[$name] = $bytes
@@ -255,6 +254,24 @@ Run-Case 'missing-source-document' {
     [IO.File]::Move((Join-Path $c.Root 'NOTICE.md'), (Join-Path $c.Root 'NOTICE-fixture-hidden.md'))
     Invoke-Verifier $c Stage
 } '*NOTICE.md*does not exist*'
+Run-Case 'missing-source-third-party-notices' {
+    param($c)
+    [IO.File]::Move((Join-Path $c.Root 'THIRD-PARTY-NOTICES.txt'), (Join-Path $c.Root 'THIRD-PARTY-NOTICES-fixture-hidden.txt'))
+    Invoke-Verifier $c Stage
+} '*THIRD-PARTY-NOTICES.txt*does not exist*'
+Run-Case 'unexpected-portable-zip-built' {
+    param($c)
+    # The portable build is skipped from v0.9.2 (#149); a build that still
+    # produces one is refused rather than published.
+    $name = 'JUhalt.PaperRouteTracker-stable-Portable.zip'
+    $bytes = Text-Bytes "Synthetic binary $name; never execute.`n"
+    Write-Bytes (Join-Path $c.Local $name) $bytes
+    $c.Remote[$name] = $bytes
+    $manifestPath = Join-Path $c.Local 'assets.stable.json'
+    $manifest = @(Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json) + @([pscustomobject]@{ RelativeFileName = $name; Type = 'Portable' })
+    Write-Bytes $manifestPath (Text-Bytes (ConvertTo-Json -InputObject $manifest -Depth 6))
+    Invoke-Verifier $c Stage
+} '*Portable.zip*'
 Run-Case 'final-uploaded-bytes-changed' {
     param($c)
     Invoke-Verifier $c Stage

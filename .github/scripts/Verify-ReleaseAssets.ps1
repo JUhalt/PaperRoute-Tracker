@@ -113,10 +113,15 @@ if ($Mode -eq 'Stage') {
     $buildAssets = @(Get-Content -LiteralPath (Join-Path $releaseRoot "assets.$Channel.json") -Raw | ConvertFrom-Json)
     $buildNames = @($buildAssets | ForEach-Object { [string] $_.RelativeFileName })
     foreach ($name in $buildNames) { Assert-FileName $name }
-    foreach ($pattern in @('*-full.nupkg', '*Setup.exe', '*Portable.zip')) {
+    foreach ($pattern in @('*-full.nupkg', '*Setup.exe')) {
         if (@($buildNames | Where-Object { $_ -like $pattern }).Count -ne 1) {
             throw "Expected exactly one '$pattern' asset from this Velopack build."
         }
+    }
+    # The portable bundle is not built from v0.9.2 (#149); one here means the
+    # pack step changed, and it is refused rather than published.
+    if (@($buildNames | Where-Object { $_ -like '*Portable.zip' }).Count -ne 0) {
+        throw "Expected no '*Portable.zip' asset from this Velopack build; the portable bundle is no longer released."
     }
     Assert-SameNames ($buildNames + $feedName) @($remoteAssets.name)
 } else {
@@ -193,6 +198,7 @@ if ($Mode -eq 'Stage') {
         'UPGRADE_NOTES.md' = (Join-Path $repoRoot 'UPGRADE_NOTES.md')
         'LICENSE.txt' = (Join-Path $repoRoot 'LICENSE.txt')
         'NOTICE.md' = (Join-Path $repoRoot 'NOTICE.md')
+        'THIRD-PARTY-NOTICES.txt' = (Join-Path $repoRoot 'THIRD-PARTY-NOTICES.txt')
     }
     foreach ($entry in $documents.GetEnumerator()) {
         $source = Get-Item -LiteralPath $entry.Value

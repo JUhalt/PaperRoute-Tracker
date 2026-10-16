@@ -867,7 +867,7 @@ Installed builds can check GitHub Releases for PaperRoute updates.
 
 Stable installations default to the Stable channel. To opt into Preview, choose **Settings > Preferences... > Update channel**. Use **Settings > Check for Updates...** to check immediately.
 
-Portable/developer builds are intended for development and smoke testing and do not behave exactly like an installed updater-enabled build.
+Developer builds, including the CI smoke-test artifact, are intended for development and smoke testing and do not behave exactly like an installed updater-enabled build.
 
 ### Diagnostics
 
