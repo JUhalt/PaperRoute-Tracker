@@ -172,27 +172,35 @@ Public Class ResponsivenessBudgetTests
             rows.Add(Time(library, "Restore: inspect the backup", UiThread, Sub() Assert.IsNotNull(board.InspectBackupFile(backupPath), "The backup was read."), enforced:=enforce))
             rows.Add(Time(library, "Restore: replace the library, reload, render", UiThread, Sub() Assert.IsNotNull(board.ReplaceLibraryFrom(backupPath), "The library was restored.")))
 
+            ' Each form is created inside its timed step and closed even when a
+            ' step fails, so no window outlives the test.
             Dim suggestions As JournalSuggestionsForm = Nothing
             Dim recorded As JournalSuggestionsResult = RecordedSuggestions()
-            rows.Add(Time(library, "Find Journals: click to first paint", UiThread,
-                          Sub()
-                              suggestions = New JournalSuggestionsForm(title, keywords, New JournalSuggestionsTests.RecordedSuggestions(recorded), Nothing, Nothing, LargeLibraryFixture.Today)
-                              ShowOffscreen(suggestions)
-                          End Sub))
-            rows.Add(Time(library, "Find Journals: results rendered (fixture responses)", UiThread, Sub() Pump(suggestions.SearchAsync())))
-            suggestions.Close()
-            suggestions.Dispose()
+            Try
+                rows.Add(Time(library, "Find Journals: click to first paint", UiThread,
+                              Sub()
+                                  suggestions = New JournalSuggestionsForm(title, keywords, New JournalSuggestionsTests.RecordedSuggestions(recorded), Nothing, Nothing, LargeLibraryFixture.Today)
+                                  ShowOffscreen(suggestions)
+                              End Sub))
+                rows.Add(Time(library, "Find Journals: results rendered (fixture responses)", UiThread, Sub() Pump(suggestions.SearchAsync())))
+            Finally
+                suggestions?.Close()
+                suggestions?.Dispose()
+            End Try
 
             Dim facts As JournalFactsForm = Nothing
             Dim record As New JournalRecord With {.Name = "PLOS ONE", .Issns = New List(Of String) From {"1932-6203"}}
-            rows.Add(Time(library, "Look Up Journal Facts: click to first paint", UiThread,
-                          Sub()
-                              facts = New JournalFactsForm(record, New JournalFactsTests.RecordedFacts(JournalFactsTests.PlosLookup()))
-                              ShowOffscreen(facts)
-                          End Sub))
-            rows.Add(Time(library, "Look Up Journal Facts: results rendered (fixture responses)", UiThread, Sub() Pump(facts.LookUpAsync())))
-            facts.Close()
-            facts.Dispose()
+            Try
+                rows.Add(Time(library, "Look Up Journal Facts: click to first paint", UiThread,
+                              Sub()
+                                  facts = New JournalFactsForm(record, New JournalFactsTests.RecordedFacts(JournalFactsTests.PlosLookup()))
+                                  ShowOffscreen(facts)
+                              End Sub))
+                rows.Add(Time(library, "Look Up Journal Facts: results rendered (fixture responses)", UiThread, Sub() Pump(facts.LookUpAsync())))
+            Finally
+                facts?.Close()
+                facts?.Dispose()
+            End Try
 
             Dim dpi As Integer = board.DeviceDpi
             board.Close()

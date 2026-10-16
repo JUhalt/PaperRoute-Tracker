@@ -71,12 +71,10 @@ Friend NotInheritable Class LargeLibraryFixture
     Friend NotInheritable Class SyntheticLibrary
 
         Public Property Name As String = String.Empty
-        Public Property DataDirectory As String = String.Empty
         Public Property ManagedDirectory As String = String.Empty
         Public Property Repository As ManuscriptRepository
         Public Property AuthorRepository As AuthorLibraryRepository
         Public Property Manuscripts As New List(Of Manuscript)()
-        Public Property Library As New AuthorLibraryData()
 
         ' Leaf folders under the managed root that hold a file.
         Public Property ManagedFolderCount As Integer
@@ -162,12 +160,10 @@ Friend NotInheritable Class LargeLibraryFixture
 
         Return New SyntheticLibrary With {
             .Name = name,
-            .DataDirectory = dataDirectory,
             .ManagedDirectory = managedDirectory,
             .Repository = repository,
             .AuthorRepository = authorRepository,
-            .Manuscripts = manuscripts,
-            .Library = library
+            .Manuscripts = manuscripts
         }
 
     End Function
