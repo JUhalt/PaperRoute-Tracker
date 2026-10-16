@@ -11,7 +11,8 @@ Namespace Forms
     ' What stopped PaperRoute from starting (#119): one line saying what
     ' failed, the explanation the message box used to give, the file being
     ' read when it failed, and the error. Program builds one when storage
-    ' cannot be prepared; the main window when a library cannot be read.
+    ' cannot be prepared; the main window when a library cannot be read or
+    ' is held open by another program.
     Public NotInheritable Class StartupFailure
 
         Public ReadOnly Property Heading As String
@@ -76,6 +77,23 @@ Namespace Forms
         End Function
 
 
+        ' A library file another program holds open (#111): not damage, so
+        ' the loader stopped before reading it or turning to its backup.
+        Public Shared Function ForLibraryInUse(
+            cause As Exception,
+            dataFilePath As String
+        ) As StartupFailure
+
+            Return New StartupFailure(
+                "PaperRoute could not open a library file that another program is using.",
+                "This is not a sign of damage. PaperRoute stopped before reading the file or turning to its backup, so nothing was read, recovered or changed. Close the program that has the file open, then start PaperRoute again.",
+                dataFilePath,
+                cause
+            )
+
+        End Function
+
+
         Public Shared Function ForAuthorLibrary(
             cause As Exception,
             dataFilePath As String
@@ -93,10 +111,11 @@ Namespace Forms
     End Class
 
 
-    ' Shown in place of the three startup message boxes (#119): what failed,
-    ' which file and folder, Open Data Folder, Copy Details, a link to the
-    ' guide's Recovering your library section, and Close. Nothing is
-    ' restored or recovered from here; that is its own issue.
+    ' Shown in place of the startup message boxes (#119), the in-use one
+    ' (#111) among them: what failed, which file and folder, Open Data
+    ' Folder, Copy Details, a link to the guide's Recovering your library
+    ' section, and Close. Nothing is restored or recovered from here; that
+    ' is its own issue.
     Public Class StartupFailureForm
         Inherits Form
 

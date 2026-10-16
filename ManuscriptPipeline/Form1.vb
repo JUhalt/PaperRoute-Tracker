@@ -1234,18 +1234,19 @@ Public Class Form1
 
         Catch ex As StorageFileInUseException
 
-            ' Not damage, and nothing was recovered: the message already
-            ' says what to do (#111).
+            ' Not damage, and nothing was recovered (#111): the window says
+            ' so and names the file and folder, like every other startup
+            ' failure that ends in exit (#119).
             manuscripts =
             New List(Of Manuscript)()
 
-            MessageBox.Show(
-            Me,
-            ex.Message,
-            "Library File In Use",
-            MessageBoxButtons.OK,
-            MessageBoxIcon.Warning
-        )
+            StartupFailureForm.ShowFailure(
+                StartupFailure.ForLibraryInUse(
+                    ex,
+                    repository.DataFilePath
+                ),
+                Me
+            )
 
             lblStatus.Text =
             "The library file is in use by another program."

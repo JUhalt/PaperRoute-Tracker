@@ -10,7 +10,9 @@ Imports ManuscriptPipeline.Forms
 Imports ManuscriptPipeline.Services
 
 ' The window PaperRoute shows when it cannot start (#119), built from the
-' three failures that used to end in a message box naming no file.
+' three failures that used to end in a message box naming no file, and
+' from the library file another program holds open (#111), whose message
+' box named the file but offered none of the actions.
 <TestClass>
 <DoNotParallelize>
 Public Class StartupTests
@@ -211,6 +213,74 @@ Public Class StartupTests
                 failure,
                 repository.DataFilePath
             ),
+            repository.DataFilePath
+        )
+
+    End Sub
+
+
+    <TestMethod>
+    Public Sub LibraryInUse_WindowNamesTheHeldFileAndOffersTheFourActions()
+
+        Dim dataDirectory As String =
+            Path.Combine(
+                _root,
+                "data"
+            )
+
+        Directory.CreateDirectory(
+            dataDirectory
+        )
+
+        Dim dataFilePath As String =
+            Path.Combine(
+                dataDirectory,
+                "manuscripts.json"
+            )
+
+        File.WriteAllText(
+            dataFilePath,
+            "[]"
+        )
+
+        ' Every open fails the way Windows fails when another program holds
+        ' the file; no test waits on a real lock.
+        Dim opener As New HeldFileOpener(
+            dataFilePath,
+            failures:=Integer.MaxValue
+        )
+
+        Dim repository As New ManuscriptRepository(
+            dataDirectory,
+            Path.Combine(_root, "managed"),
+            openFile:=AddressOf opener.Open
+        )
+
+        Dim failure As StorageFileInUseException =
+            Assert.ThrowsExactly(Of StorageFileInUseException)(
+                Sub() repository.Load()
+            )
+
+        Dim inUse As StartupFailure =
+            StartupFailure.ForLibraryInUse(
+                failure,
+                repository.DataFilePath
+            )
+
+        StringAssert.Contains(
+            inUse.Heading,
+            "another program",
+            "The window says the file is in use, not damaged."
+        )
+
+        StringAssert.Contains(
+            inUse.Explanation,
+            "nothing was read, recovered or changed",
+            "The window says the loader stopped before the file or its backup."
+        )
+
+        AssertWindow(
+            inUse,
             repository.DataFilePath
         )
 
