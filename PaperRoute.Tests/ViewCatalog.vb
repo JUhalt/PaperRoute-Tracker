@@ -515,31 +515,16 @@ Public Class ViewCatalogTests
 
             Try
 
-                StaRunner.Run(
-                    Sub()
-
-                        Using shown As Form = view.Build(root)
-
-                            ShowOffscreen(shown)
-
-                            Assert.IsTrue(
-                                shown.Visible,
-                                view.Name & " shows."
-                            )
-
-                            shown.Close()
-
-                        End Using
-
-                        Assert.AreEqual(
-                            0,
-                            StaRunner.OpenFormsOnThisThread().Count,
-                            view.Name & " leaves no form open."
-                        )
-
-                    End Sub
+                ShowAndClose(
+                    view.Name,
+                    Function() view.Build(root)
                 )
 
+                ' A guard that cannot fail while RootOverride stands: every
+                ' default root resolves through ResolveStorageRoot, so the
+                ' override is what keeps the view off the user's profile. This
+                ' catches only a view that clears the override as it builds;
+                ' TheGuardCountsAnAnswerFromTheDefaultRoot proves the count.
                 Assert.AreEqual(
                     0,
                     StorageEnvironment.DefaultRootUses,
@@ -568,6 +553,50 @@ Public Class ViewCatalogTests
             0,
             failures.Count,
             Environment.NewLine & String.Join(Environment.NewLine, failures)
+        )
+
+    End Sub
+
+
+    ' A view that fails after it has shown, as the welcome and the hosted
+    ' views do when their check fails, fails only itself: its window is not
+    ' left in Application.OpenForms, where ManuscriptPageTests and the
+    ' unexpected-error path look for a main window.
+    <TestMethod>
+    Public Sub AViewThatFailsAfterItShowsIsClosedAllTheSame()
+
+        Dim openBefore As Integer =
+            Application.OpenForms.Count
+
+        Dim failure As InvalidOperationException =
+            Assert.ThrowsExactly(Of InvalidOperationException)(
+                Sub()
+                    ShowAndClose(
+                        "The probe",
+                        Function()
+                            Dim probe As New Form With {
+                                .Text = "Failing probe",
+                                .StartPosition = FormStartPosition.Manual,
+                                .Location = New Point(-20000, -20000),
+                                .ShowInTaskbar = False
+                            }
+                            probe.Show()
+                            Application.DoEvents()
+                            Throw New InvalidOperationException("The probe failed after it showed.")
+                        End Function
+                    )
+                End Sub
+            )
+
+        Assert.AreEqual(
+            "The probe failed after it showed.",
+            failure.Message
+        )
+
+        Assert.AreEqual(
+            openBefore,
+            Application.OpenForms.Count,
+            "The failed view's window is not left open."
         )
 
     End Sub
@@ -639,6 +668,52 @@ Public Class ViewCatalogTests
         Return String.Join(", ", types.Select(Function(type) type.Name))
 
     End Function
+
+
+    ' Builds the view, shows it and closes it on the shared runner.
+    Private Shared Sub ShowAndClose(
+        name As String,
+        build As Func(Of Form)
+    )
+
+        StaRunner.Run(
+            Sub()
+
+                Try
+
+                    Using shown As Form = build()
+
+                        ShowOffscreen(shown)
+
+                        Assert.IsTrue(
+                            shown.Visible,
+                            name & " shows."
+                        )
+
+                        shown.Close()
+
+                    End Using
+
+                    Assert.AreEqual(
+                        0,
+                        StaRunner.OpenFormsOnThisThread().Count,
+                        name & " leaves no form open."
+                    )
+
+                Finally
+
+                    ' A view that failed after it showed is closed too, so it
+                    ' fails only itself.
+                    For Each left As Form In StaRunner.OpenFormsOnThisThread()
+                        left.Dispose()
+                    Next
+
+                End Try
+
+            End Sub
+        )
+
+    End Sub
 
 
     ' A view the factory may already have shown, such as a page of the main
