@@ -19,10 +19,10 @@ Imports Microsoft.VisualStudio.TestTools.UnitTesting
 
 ' Responsiveness budgets (#131): every named action under a Stopwatch, on
 ' the example library and on the synthetic 500-manuscript library, against
-' the budgets the issue proposes. Report-only: the table is written to the
-' test output and each row is marked within or over its budget; a budget
-' fails the test only once it is marked Enforced, which #133 does for each
-' action it fixes.
+' the budgets the issue proposes. The table is written to the test output
+' and each row is marked within or over its budget; a row fails the test
+' only when it is enforced, which #133 did for each action it fixed with
+' room to spare on a busy host. The rest stay report-only.
 '
 ' Wall is the Stopwatch around the action. UI is the longest stretch in
 ' which the window processed no messages during the action: a probe timer
@@ -86,15 +86,18 @@ Public Class ResponsivenessBudgetTests
                 Dim large = LargeLibraryFixture.Create(Path.Combine(_root, "large"), 500)
                 libraries.Add(example)
                 libraries.Add(large)
-                dpi = MeasureLibrary(example, rows)
-                MeasureLibrary(large, rows)
+                ' The example library runs first and carries the process's
+                ' first-time costs (JIT, the first text change), so its rows
+                ' stay report-only; the budgets are held on the 500 library.
+                dpi = MeasureLibrary(example, rows, enforce:=False)
+                MeasureLibrary(large, rows, enforce:=True)
             End Sub)
 
         Report(libraries, rows, dpi)
 
         Dim multiplier As Double = BudgetMultiplier()
         Dim failures As List(Of String) =
-            rows.Where(Function(row) row.Budget.Enforced AndAlso Not row.Within(multiplier)).
+            rows.Where(Function(row) row.Enforced AndAlso Not row.Within(multiplier)).
                  Select(Function(row) row.Library & ": " & row.Action & " took " & Ms(row.Ui) & " ms against " & Ms(row.Budget.Milliseconds * multiplier) & " ms").
                  ToList()
 
@@ -103,11 +106,13 @@ Public Class ResponsivenessBudgetTests
     End Sub
 
 
-    ' Every measured action, in the order a researcher would meet them.
-    ' Returns the window's DPI for the report.
+    ' Every measured action, in the order a researcher would meet them, with
+    ' the budgets #133 holds enforced when asked. Returns the window's DPI
+    ' for the report.
     Private Function MeasureLibrary(
         library As LargeLibraryFixture.SyntheticLibrary,
-        rows As List(Of Row)
+        rows As List(Of Row),
+        enforce As Boolean
     ) As Integer
 
         Dim subject As Manuscript =
@@ -127,7 +132,8 @@ Public Class ResponsivenessBudgetTests
             _paintObserved(library.Name) = board.PaintObserved
 
             rows.Add(Time(library, "Board to Library", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Library)))
-            rows.Add(Time(library, "One Library filter keystroke", FilterKeystroke, Sub() board.TypeInLibraryFilter("a")))
+            rows.Add(Time(library, "One Library filter keystroke", FilterKeystroke, Sub() board.TypeInLibraryFilter("a"), enforced:=enforce))
+            rows.Add(Time(library, "Library filter: refill once typing pauses", UiThread, Sub() board.PauseTyping()))
             rows.Add(Time(library, "Library to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
 
             ' ShowPage builds the Journals page from the user's author library;
@@ -137,7 +143,10 @@ Public Class ResponsivenessBudgetTests
             rows.Add(Time(library, "Journals to Board", PageSwitch, Sub() board.LeaveJournals()))
 
             rows.Add(Time(library, "Board to Deadlines", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Deadlines)))
+            rows.Add(Time(library, "Deadlines: one filter keystroke", UiThread, Sub() board.TypeInDeadlinesFilter("a")))
             rows.Add(Time(library, "Deadlines to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
+            rows.Add(Time(library, "Board to Deadlines (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Deadlines)))
+            rows.Add(Time(library, "Deadlines to Board (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
 
             rows.Add(Time(library, "Board to Insights", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Insights)))
             rows.Add(Time(library, "Insights: figures ready (calculated off the UI thread)", UiThread, Sub() board.WaitForInsights()))
@@ -145,18 +154,22 @@ Public Class ResponsivenessBudgetTests
 
             rows.Add(Time(library, "Board to Import & Export", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.ImportExport)))
             rows.Add(Time(library, "Import & Export to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
+            rows.Add(Time(library, "Board to Import & Export (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.ImportExport)))
+            rows.Add(Time(library, "Import & Export to Board (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
 
             rows.Add(Time(library, "Board to a manuscript page", PageSwitch, Sub() board.Open(subject)))
             rows.Add(TimeMedian(library, "One dirty-timer tick (median of 10)", DirtyTick, 10, Sub() board.Tick()))
             board.Field("Title").Text = title & " (edited)"
-            rows.Add(Time(library, "Save from the manuscript page", Save, Sub() Assert.IsTrue(board.SaveManuscriptPage(), "The page saved.")))
+            rows.Add(Time(library, "Save from the manuscript page", Save, Sub() Assert.IsTrue(board.SaveManuscriptPage(), "The page saved."), enforced:=enforce))
             rows.Add(Time(library, "Manuscript page to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
 
-            rows.Add(Time(library, "Board render (RenderManuscripts)", UiThread, Sub() board.Render()))
+            rows.Add(Time(library, "Board render (RenderManuscripts)", UiThread, Sub() board.Render(), enforced:=enforce))
 
-            ' The handlers' work after their dialogs, behind the disabled window (#132).
+            ' The handlers' work after their dialogs, behind the disabled window
+            ' (#132). Backup's stall varied from 61 to 419 ms across runs on
+            ' this busy host, so it is reported, not enforced.
             rows.Add(Time(library, "Backup", UiThread, Sub() Assert.IsTrue(board.WriteBackup(backupPath), "The backup was written.")))
-            rows.Add(Time(library, "Restore: inspect the backup", UiThread, Sub() Assert.IsNotNull(board.InspectBackupFile(backupPath), "The backup was read.")))
+            rows.Add(Time(library, "Restore: inspect the backup", UiThread, Sub() Assert.IsNotNull(board.InspectBackupFile(backupPath), "The backup was read."), enforced:=enforce))
             rows.Add(Time(library, "Restore: replace the library, reload, render", UiThread, Sub() Assert.IsNotNull(board.ReplaceLibraryFrom(backupPath), "The library was restored.")))
 
             Dim suggestions As JournalSuggestionsForm = Nothing
@@ -199,13 +212,9 @@ Public Class ResponsivenessBudgetTests
         Public ReadOnly Name As String
         Public ReadOnly Milliseconds As Double
 
-        ' Set by #133 for each action it fixes; a report-only budget never fails.
-        Public ReadOnly Enforced As Boolean
-
-        Public Sub New(name As String, milliseconds As Double, Optional enforced As Boolean = False)
+        Public Sub New(name As String, milliseconds As Double)
             Me.Name = name
             Me.Milliseconds = milliseconds
-            Me.Enforced = enforced
         End Sub
 
     End Class
@@ -219,6 +228,9 @@ Public Class ResponsivenessBudgetTests
         Public Property Ui As Double
         Public Property Budget As Budget
 
+        ' Set for an action #133 fixed; a report-only row never fails the test.
+        Public Property Enforced As Boolean
+
         Public Function Within(multiplier As Double) As Boolean
             Return Ui <= Budget.Milliseconds * multiplier
         End Function
@@ -230,7 +242,8 @@ Public Class ResponsivenessBudgetTests
         library As LargeLibraryFixture.SyntheticLibrary,
         action As String,
         budget As Budget,
-        work As Action
+        work As Action,
+        Optional enforced As Boolean = False
     ) As Row
 
         Using probe As New UiThreadProbe()
@@ -238,7 +251,7 @@ Public Class ResponsivenessBudgetTests
             work()
             watch.Stop()
             Dim wall As Double = watch.Elapsed.TotalMilliseconds
-            Return New Row With {.Library = library.Name, .Action = action, .Wall = wall, .Ui = Math.Min(wall, probe.Finish()), .Budget = budget}
+            Return New Row With {.Library = library.Name, .Action = action, .Wall = wall, .Ui = Math.Min(wall, probe.Finish()), .Budget = budget, .Enforced = enforced}
         End Using
 
     End Function
@@ -360,7 +373,7 @@ Public Class ResponsivenessBudgetTests
         For Each row In rows
             text.AppendLine("| " & row.Library & " | " & row.Action & " | " & Ms(row.Wall) & " | " & Ms(row.Ui) & " | " &
                             Ms(row.Budget.Milliseconds) & " (" & row.Budget.Name & ") | " &
-                            If(row.Within(multiplier), "within", "OVER") & If(row.Budget.Enforced, ", enforced", String.Empty) & " |")
+                            If(row.Within(multiplier), "within", "OVER") & If(row.Enforced, ", enforced", String.Empty) & " |")
         Next
 
         TestContext.WriteLine(text.ToString())

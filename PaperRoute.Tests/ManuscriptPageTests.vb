@@ -380,16 +380,22 @@ Public Class ManuscriptPageTests
                     Assert.AreEqual(3, grid.Rows.Count)
                     Assert.IsFalse(hint.Visible)
 
+                    ' The grid refills once typing pauses (#133); the pause is
+                    ' the debounce timer's tick.
                     filter.Text = "revisions"
+                    Assert.AreEqual(3, grid.Rows.Count, "A keystroke alone leaves the grid as it is.")
+                    board.PauseTyping()
                     Assert.AreEqual(1, grid.Rows.Count, "The filter matches the target journal.")
                     Assert.AreSame(revising, grid.Rows(0).Tag)
 
                     filter.Text = "no such paper"
+                    board.PauseTyping()
                     Assert.AreEqual(0, grid.Rows.Count)
                     Assert.IsTrue(hint.Visible)
                     StringAssert.Contains(hint.Text, "no such paper")
 
                     filter.Text = String.Empty
+                    board.PauseTyping()
                     Assert.AreEqual(3, grid.Rows.Count)
                     Assert.IsFalse(hint.Visible)
 
@@ -1304,6 +1310,11 @@ Public Class ManuscriptPageTests
 
         Public Sub Tick()
             CallPrivate("ManuscriptDirtyTimer_Tick", Nothing, EventArgs.Empty)
+        End Sub
+
+        ' The Library filter's debounce timer firing (#133).
+        Public Sub PauseTyping()
+            CallPrivate("LibraryFilterDebounceElapsed", Nothing, EventArgs.Empty)
         End Sub
 
         ' The Insights figures are worked out off the UI thread (#132); pumps

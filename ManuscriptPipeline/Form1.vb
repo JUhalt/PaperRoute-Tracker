@@ -77,6 +77,17 @@ Public Class Form1
 
     Private ReadOnly cardToolTip As New ToolTip()
 
+    ' Every card built this session, by manuscript, kept between renders: a
+    ' card whose text is unchanged is shown again rather than rebuilt, since
+    ' building one and its window handles costs tens of milliseconds on a
+    ' slow machine (#133). A card not on a shelf waits, parked, for the next
+    ' render that shows it. Each card's Tag is the text it was built from.
+    Private ReadOnly manuscriptCards As New Dictionary(Of Guid, RoundedPanel)()
+
+    ' Counts the shared fonts' rebuilds; a card built with earlier fonts is
+    ' not reused.
+    Private cardFontsVersion As Integer = 0
+
 
     Private NotInheritable Class StageFilterOption
 
@@ -258,6 +269,8 @@ Public Class Form1
         contentHost.Margin = New Padding(0)
         contentHost.BackColor = UiTheme.BoardBackground()
         contentHost.Controls.Clear()
+        importExportPage?.Dispose()
+        importExportPage = Nothing
 
         boardPage.Dock = DockStyle.Fill
         boardPage.BackColor = UiTheme.BoardBackground()
@@ -2148,29 +2161,10 @@ Public Class Form1
     End Function
 
 
-    Private Sub ClearAndDisposeControls(
-        panel As Control
-    )
-
-        While panel.Controls.Count > 0
-
-            Dim child As Control =
-                panel.Controls(0)
-
-            panel.Controls.RemoveAt(
-                0
-            )
-
-            child.Dispose()
-
-        End While
-
-    End Sub
-
-
     Private Sub ResetSharedDashboardFonts()
 
         DisposeSharedDashboardFonts()
+        cardFontsVersion += 1
 
         ' Card and strip text sizes follow the board font, so larger text
         ' settings scale the cards with everything else.
@@ -2311,8 +2305,18 @@ Public Class Form1
         boardSearchDebounceTimer.Dispose()
         manuscriptDirtyTimer.Stop()
         manuscriptDirtyTimer.Dispose()
+        libraryFilterDebounceTimer.Stop()
+        libraryFilterDebounceTimer.Dispose()
         cardToolTip.Dispose()
         DisposeSharedDashboardFonts()
+
+        ' Parked cards and the kept page are not in the window's control tree.
+        For Each card As RoundedPanel In manuscriptCards.Values
+            card.Dispose()
+        Next
+
+        manuscriptCards.Clear()
+        importExportPage?.Dispose()
 
         MyBase.OnFormClosed(
             e
@@ -2338,17 +2342,7 @@ Public Class Form1
         publishedPanel.SuspendLayout()
         fileDrawerPanel.SuspendLayout()
 
-        ClearAndDisposeControls(
-            pipelinePanel
-        )
-
-        ClearAndDisposeControls(
-            publishedPanel
-        )
-
-        ClearAndDisposeControls(
-            fileDrawerPanel
-        )
+        DropStaleCards()
 
 
         ' =================================================
@@ -2384,9 +2378,10 @@ Public Class Form1
         Dim visibleManuscripts As List(Of Manuscript) =
         GetVisibleManuscripts()
 
-        Dim pipelineCount As Integer = 0
-        Dim publishedCount As Integer = 0
-        Dim drawerCount As Integer = 0
+        ' Each shelf's cards in order; they go on the shelf together, below.
+        Dim pipelineCards As New List(Of Control)()
+        Dim publishedCards As New List(Of Control)()
+        Dim drawerCards As New List(Of Control)()
 
 
         For Each manuscript As Manuscript In visibleManuscripts
@@ -2395,51 +2390,40 @@ Public Class Form1
 
                 Case ManuscriptLocation.Pipeline
 
-                    Dim card As Panel =
-                    CreateManuscriptCard(
-                        manuscript,
-                        pipelinePanel
+                    pipelineCards.Add(
+                        CardFor(
+                            manuscript,
+                            pipelinePanel
+                        )
                     )
-
-                    pipelinePanel.Controls.Add(
-                    card
-                )
-
-                    pipelineCount += 1
 
 
                 Case ManuscriptLocation.Published
 
-                    Dim card As Panel =
-                    CreateManuscriptCard(
-                        manuscript,
-                        publishedPanel
+                    publishedCards.Add(
+                        CardFor(
+                            manuscript,
+                            publishedPanel
+                        )
                     )
-
-                    publishedPanel.Controls.Add(
-                    card
-                )
-
-                    publishedCount += 1
 
 
                 Case ManuscriptLocation.FileDrawer
 
-                    Dim card As Panel =
-                    CreateManuscriptCard(
-                        manuscript,
-                        fileDrawerPanel
+                    drawerCards.Add(
+                        CardFor(
+                            manuscript,
+                            fileDrawerPanel
+                        )
                     )
-
-                    fileDrawerPanel.Controls.Add(
-                    card
-                )
-
-                    drawerCount += 1
 
             End Select
 
         Next
+
+        Dim pipelineCount As Integer = pipelineCards.Count
+        Dim publishedCount As Integer = publishedCards.Count
+        Dim drawerCount As Integer = drawerCards.Count
 
 
         ' =================================================
@@ -2488,7 +2472,7 @@ Public Class Form1
 
             End If
 
-            pipelinePanel.Controls.Add(
+            pipelineCards.Add(
             CreateEmptyLabel(
                 pipelineMessage
             )
@@ -2513,7 +2497,7 @@ Public Class Form1
 
             End If
 
-            publishedPanel.Controls.Add(
+            publishedCards.Add(
             CreateEmptyLabel(
                 publishedMessage
             )
@@ -2538,7 +2522,7 @@ Public Class Form1
 
             End If
 
-            fileDrawerPanel.Controls.Add(
+            drawerCards.Add(
             CreateEmptyLabel(
                 drawerMessage
             )
@@ -2546,6 +2530,10 @@ Public Class Form1
 
         End If
 
+
+        FillShelf(pipelinePanel, pipelineCards)
+        FillShelf(publishedPanel, publishedCards)
+        FillShelf(fileDrawerPanel, drawerCards)
 
         btnClearBoardFilters.Enabled =
         HasActiveBoardFilters()
@@ -2586,6 +2574,142 @@ Public Class Form1
         UpdateRailCounts()
         ShowWelcomeWhenEmpty()
         RefreshOpenPage()
+
+    End Sub
+
+
+    ' The card for a manuscript: the one built before, when the text it
+    ' shows is unchanged, or a new one in its place.
+    Private Function CardFor(
+        manuscript As Manuscript,
+        shelf As ManuscriptShelfPanel
+    ) As RoundedPanel
+
+        Dim key As String = CardKey(manuscript)
+        Dim card As RoundedPanel = Nothing
+
+        If manuscriptCards.TryGetValue(manuscript.Id, card) Then
+
+            If String.Equals(TryCast(card.Tag, String), key, StringComparison.Ordinal) Then
+
+                ' Tag colors come from the reusable library, which may have
+                ' been reloaded since the card was built.
+                For Each strip As TagStrip In card.Controls.OfType(Of TagStrip)()
+                    strip.Library = authorLibrary
+                Next
+
+                Return card
+
+            End If
+
+            card.Dispose()
+
+        End If
+
+        card = DirectCast(CreateManuscriptCard(manuscript, shelf), RoundedPanel)
+        card.Tag = key
+        manuscriptCards(manuscript.Id) = card
+        Return card
+
+    End Function
+
+
+    ' Runs an action on a card's manuscript as the library holds it when the
+    ' card is used, not as it was when the card was built: a restore replaces
+    ' the records while their cards stay.
+    Private Sub WithLiveManuscript(
+        id As Guid,
+        action As Action(Of Manuscript)
+    )
+
+        Dim live As Manuscript = FindManuscript(id)
+
+        If live IsNot Nothing Then
+            action(live)
+        End If
+
+    End Sub
+
+
+    ' Everything a card shows, so a change in any of it rebuilds the card:
+    ' the texts CreateManuscriptCard derives, and the fonts it was built with.
+    Private Function CardKey(
+        manuscript As Manuscript
+    ) As String
+
+        Dim insightColor As Color
+        Dim insightText As String = BuildManuscriptInsight(manuscript, insightColor)
+        Dim statusIsUrgent As Boolean = insightText.Length > 0 AndAlso insightText <> MissingTargetInsight
+        Dim route As RouteSummary = RouteSummaryService.Describe(manuscript)
+
+        Return String.Join(
+            ChrW(31),
+            cardFontsVersion.ToString(),
+            manuscript.Title,
+            manuscript.CurrentStage.ToString(),
+            manuscript.Location.ToString(),
+            manuscript.TargetJournal,
+            String.Join(",", If(manuscript.Tags, New List(Of String)())),
+            If(statusIsUrgent, insightText, StageClockService.Describe(manuscript, DateTime.Today)),
+            insightColor.ToArgb().ToString(),
+            route.Text,
+            String.Join(",", route.Dots.Select(Function(dot) dot.ToString())))
+
+    End Function
+
+
+    ' Disposes the cards of manuscripts the library no longer holds.
+    Private Sub DropStaleCards()
+
+        Dim current As New HashSet(Of Guid)(
+            manuscripts.Where(Function(item) item IsNot Nothing).Select(Function(item) item.Id))
+
+        For Each id As Guid In manuscriptCards.Keys.ToList()
+
+            If Not current.Contains(id) Then
+                manuscriptCards(id).Dispose()
+                manuscriptCards.Remove(id)
+            End If
+
+        Next
+
+    End Sub
+
+
+    ' Puts a shelf's cards on it in order, touching nothing when they are
+    ' already there in that order. Messages such as an empty shelf are
+    ' disposed; cards leaving the shelf wait, parked, for a render that
+    ' shows them again.
+    Private Sub FillShelf(
+        shelf As ManuscriptShelfPanel,
+        cards As List(Of Control)
+    )
+
+        If shelf.Controls.Count = cards.Count Then
+
+            Dim same As Boolean = True
+
+            For index As Integer = 0 To cards.Count - 1
+                If shelf.Controls(index) IsNot cards(index) Then
+                    same = False
+                    Exit For
+                End If
+            Next
+
+            If same Then
+                Return
+            End If
+
+        End If
+
+        For Each child As Control In shelf.Controls.Cast(Of Control)().ToList()
+            If Not TypeOf child Is RoundedPanel Then
+                child.Dispose()
+            End If
+        Next
+
+        shelf.Controls.Clear()
+        shelf.Controls.AddRange(cards.ToArray())
 
     End Sub
 
@@ -2804,21 +2928,24 @@ Public Class Form1
         ' Behavior
         ' =================================================
 
+        ' The card may outlive this record (#133): act on the library's.
+        Dim id As Guid = manuscript.Id
+
         Dim openOnLeftClick As MouseEventHandler =
             Sub(sender, e)
                 If e.Button = MouseButtons.Left Then
-                    OpenManuscript(manuscript)
+                    WithLiveManuscript(id, Sub(live) OpenManuscript(live))
                 End If
             End Sub
 
         AddHandler lblTitle.LinkClicked,
             Sub(sender, e)
-                OpenManuscript(manuscript)
+                WithLiveManuscript(id, Sub(live) OpenManuscript(live))
             End Sub
 
         AddHandler lblRoute.LinkClicked,
             Sub(sender, e)
-                OpenRouteView(manuscript)
+                WithLiveManuscript(id, Sub(live) OpenRouteView(live))
             End Sub
 
         ' Hovering anywhere on the card, or focusing its title, highlights it.
@@ -2911,11 +3038,14 @@ Public Class Form1
 
         Dim cardMenu As New ContextMenuStrip()
 
+        ' The menu may outlive this record (#133): act on the library's.
+        Dim id As Guid = manuscript.Id
+
         cardMenu.Items.Add(
             "Open",
             Nothing,
             Sub(sender, e)
-                OpenManuscript(manuscript)
+                WithLiveManuscript(id, Sub(live) OpenManuscript(live))
             End Sub
         )
 
@@ -2923,7 +3053,7 @@ Public Class Form1
             "View Route",
             Nothing,
             Sub(sender, e)
-                OpenRouteView(manuscript)
+                WithLiveManuscript(id, Sub(live) OpenRouteView(live))
             End Sub
         )
 
@@ -2934,7 +3064,7 @@ Public Class Form1
                 "Move to File Drawer...",
                 Nothing,
                 Sub(sender, e)
-                    MoveToFileDrawer(manuscript)
+                    WithLiveManuscript(id, Sub(live) MoveToFileDrawer(live))
                 End Sub
             )
 
@@ -2945,7 +3075,7 @@ Public Class Form1
                 "Restore to Pipeline",
                 Nothing,
                 Sub(sender, e)
-                    RestoreToPipeline(manuscript)
+                    WithLiveManuscript(id, Sub(live) RestoreToPipeline(live))
                 End Sub
             )
 
@@ -2958,7 +3088,7 @@ Public Class Form1
                 "Delete...",
                 Nothing,
                 Sub(sender, e)
-                    DeleteManuscript(manuscript)
+                    WithLiveManuscript(id, Sub(live) DeleteManuscript(live))
                 End Sub
             )
 

@@ -55,6 +55,13 @@ Partial Public Class Form1
     Private tabLibraryManuscripts As ShelfTabButton = Nothing
     Private tabLibraryAuthors As ShelfTabButton = Nothing
 
+    ' The grid refills once typing pauses, as the Board's search does (#133).
+    Private WithEvents libraryFilterDebounceTimer As New Timer With {.Interval = 200}
+
+    ' The Import & Export page is the same every time, so it is built once
+    ' and kept while the window lives (#133).
+    Private importExportPage As Control = Nothing
+
 
     ' =====================================================
     ' Rail
@@ -528,6 +535,7 @@ Partial Public Class Form1
     Private Sub LeaveCurrentPage()
 
         manuscriptDirtyTimer.Stop()
+        libraryFilterDebounceTimer.Stop()
         manuscriptEditor = Nothing
         manuscriptSaveBar = Nothing
 
@@ -536,7 +544,12 @@ Partial Public Class Form1
         End If
 
         contentHost.Controls.Remove(currentPageView)
-        currentPageView.Dispose()
+
+        ' The Import & Export page keeps its controls for its next visit.
+        If currentPageView IsNot importExportPage Then
+            currentPageView.Dispose()
+        End If
+
         currentPageView = Nothing
         libraryGrid = Nothing
         libraryContent = Nothing
@@ -584,7 +597,10 @@ Partial Public Class Form1
             Case WorkspacePage.Insights
                 view = BuildInsightsPage()
             Case Else
-                view = BuildImportExportPage()
+                If importExportPage Is Nothing OrElse importExportPage.IsDisposed Then
+                    importExportPage = BuildImportExportPage()
+                End If
+                view = importExportPage
         End Select
 
         view.Dock = DockStyle.Fill
@@ -757,7 +773,8 @@ Partial Public Class Form1
 
         AddHandler libraryFilter.TextChanged,
             Sub(sender, e)
-                FillLibraryGrid()
+                libraryFilterDebounceTimer.Stop()
+                libraryFilterDebounceTimer.Start()
             End Sub
 
         Dim frame As TableLayoutPanel = CreatePageFrame(
@@ -961,6 +978,14 @@ Partial Public Class Form1
     End Sub
 
 
+    Private Sub LibraryFilterDebounceElapsed(sender As Object, e As EventArgs) Handles libraryFilterDebounceTimer.Tick
+
+        libraryFilterDebounceTimer.Stop()
+        FillLibraryGrid()
+
+    End Sub
+
+
     Private Sub FillLibraryGrid()
 
         If libraryGrid Is Nothing OrElse libraryGrid.IsDisposed Then
@@ -970,10 +995,15 @@ Partial Public Class Form1
         Dim sortColumn As DataGridViewColumn = libraryGrid.SortedColumn
         Dim sortOrder As SortOrder = libraryGrid.SortOrder
         Dim selected As Manuscript = TryCast(libraryGrid.CurrentRow?.Tag, Manuscript)
+        Dim selectedRow As DataGridViewRow = Nothing
 
         libraryGrid.Rows.Clear()
 
         Dim filter As String = If(libraryFilter?.Text, String.Empty).Trim()
+
+        ' The rows go in together: adding them one at a time lays the grid
+        ' out once per row (#133).
+        Dim rows As New List(Of DataGridViewRow)()
 
         For Each manuscript As Manuscript In manuscripts
             Dim route As String = RouteSummaryService.Describe(manuscript).Text
@@ -992,7 +1022,10 @@ Partial Public Class Form1
                    CObj((DateTime.Today - entered).Days),
                    Nothing)
 
-            Dim index As Integer = libraryGrid.Rows.Add(
+            Dim row As New DataGridViewRow()
+
+            row.CreateCells(
+                libraryGrid,
                 manuscript.Title,
                 FormatStage(manuscript.CurrentStage),
                 FormatShelf(manuscript.Location),
@@ -1002,12 +1035,19 @@ Partial Public Class Form1
                 tags,
                 days)
 
-            libraryGrid.Rows(index).Tag = manuscript
+            row.Tag = manuscript
+            rows.Add(row)
 
             If manuscript Is selected Then
-                libraryGrid.CurrentCell = libraryGrid.Rows(index).Cells(0)
+                selectedRow = row
             End If
         Next
+
+        libraryGrid.Rows.AddRange(rows.ToArray())
+
+        If selectedRow IsNot Nothing Then
+            libraryGrid.CurrentCell = selectedRow.Cells(0)
+        End If
 
         If sortColumn IsNot Nothing AndAlso sortOrder <> SortOrder.None Then
             libraryGrid.Sort(sortColumn, If(sortOrder = SortOrder.Descending, System.ComponentModel.ListSortDirection.Descending, System.ComponentModel.ListSortDirection.Ascending))

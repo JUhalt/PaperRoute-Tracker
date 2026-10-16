@@ -152,6 +152,17 @@ Friend NotInheritable Class LibraryBoard
     End Sub
 
 
+    ' The Library filter's debounce timer firing (#133).
+    Public Sub PauseTyping()
+        CallPrivate("LibraryFilterDebounceElapsed", Nothing, EventArgs.Empty)
+    End Sub
+
+
+    Public Sub TypeInDeadlinesFilter(text As String)
+        DirectCast(GetField("deadlinesFilter"), TextBox).Text = text
+    End Sub
+
+
     Public Function Field(name As String) As TextBox
         Dim editor As Control = DirectCast(GetField("manuscriptEditor"), Control)
         Return Descendants(editor).OfType(Of TextBox)().Single(Function(box) box.AccessibleName = name)
