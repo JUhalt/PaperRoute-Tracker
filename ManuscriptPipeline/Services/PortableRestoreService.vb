@@ -2036,26 +2036,42 @@ Namespace Services
         End Sub
 
 
-        ' A safety backup becomes a copy of the restored file. One that
-        ' cannot be written is removed: no safety backup is a known state,
-        ' and a stale one is not.
+        ' A safety backup becomes a copy of the restored file, swapped in
+        ' whole from a sibling (#125) so a cut partway leaves the old backup
+        ' or the new one, never a torn one. One that cannot be written is
+        ' removed: no safety backup is a known state, and a stale one is not.
         Private Sub ReplaceSafetyBackup(
             restoredPath As String,
             backupPath As String
         )
 
+            Dim tempPath As String =
+                backupPath & ".tmp"
+
             Try
 
                 File.Copy(
                     restoredPath,
-                    backupPath,
+                    tempPath,
                     True
+                )
+
+                StorageFile.Replace(
+                    tempPath,
+                    backupPath,
+                    Nothing
                 )
 
             Catch
 
                 SafeDeleteFile(
                     backupPath
+                )
+
+            Finally
+
+                SafeDeleteFile(
+                    tempPath
                 )
 
             End Try

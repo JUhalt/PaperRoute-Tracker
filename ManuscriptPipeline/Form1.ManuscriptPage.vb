@@ -688,6 +688,14 @@ Partial Public Class Form1
             Return
         End If
 
+        ' A restore has replaced the library on disk and is handing over to
+        ' a new session (#116): what is in memory is the replaced library,
+        ' so nothing is asked and nothing is saved.
+        If handingOverAfterRestore Then
+            MyBase.OnFormClosing(e)
+            Return
+        End If
+
         If Not e.Cancel AndAlso Not ConfirmLeaveManuscript() Then
             e.Cancel = True
         End If

@@ -5,6 +5,9 @@ Imports ManuscriptPipeline.Services
 
 Friend Module Program
 
+    ' The running instance, kept so a restart can release it (#116).
+    Private _instance As SingleInstanceService = Nothing
+
     <STAThread>
     Public Sub Main(
         args As String()
@@ -31,6 +34,8 @@ Friend Module Program
             Return
         End If
 
+        _instance = instance
+
         Try
             Using instance
                 Run(args, instance)
@@ -38,6 +43,17 @@ Friend Module Program
         Finally
             If isExample Then ExampleLibraryService.EndSession()
         End Try
+
+    End Sub
+
+
+    ' Frees the library for the PaperRoute a restart is about to start,
+    ' which runs before this process has unwound and would otherwise find
+    ' the library still held and exit (#116). The release as this process
+    ' ends then does nothing. Must run on the main thread, like Main.
+    Friend Sub ReleaseInstanceForRestart()
+
+        _instance?.Dispose()
 
     End Sub
 

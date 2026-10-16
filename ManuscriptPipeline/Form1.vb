@@ -3691,6 +3691,12 @@ Public Class Form1
     End Sub
 
 
+    ' Set once a restore has replaced the library on disk: until the restart,
+    ' what is in memory is the replaced library, so the close the restart
+    ' sends neither asks about the open page nor saves anything.
+    Private handingOverAfterRestore As Boolean = False
+
+
     ' Restores the archive and hands over to a new session (#116): the next
     ' start reads the restored library from disk, so nothing this session
     ' holds in memory, such as the author library, can be saved over it.
@@ -3700,36 +3706,16 @@ Public Class Form1
         restoreService As PortableRestoreService
     )
 
+        Dim restoreResult As RestoreResult
+
         Try
 
-            Dim restoreResult As RestoreResult =
+            restoreResult =
                 restoreService.RestoreBackup(
                     backupZipPath,
                     manuscripts,
                     repository
                 )
-
-            Dim notice As String =
-                "Restored " &
-                restoreResult.ManuscriptCount.ToString() &
-                " manuscript(s). PaperRoute will now restart to open the restored library."
-
-            If Not String.IsNullOrWhiteSpace(
-                restoreResult.EmergencyBackupPath
-            ) Then
-
-                notice &=
-                    Environment.NewLine &
-                    Environment.NewLine &
-                    "Your library from before the restore is at:" &
-                    Environment.NewLine &
-                    restoreResult.EmergencyBackupPath
-
-            End If
-
-            RestartAfterRestore(
-                notice
-            )
 
         Catch ex As Exception
 
@@ -3753,7 +3739,33 @@ Public Class Form1
                 MessageBoxIcon.Error
             )
 
+            Return
+
         End Try
+
+        handingOverAfterRestore = True
+
+        Dim notice As String =
+            "Restored " &
+            restoreResult.ManuscriptCount.ToString() &
+            " manuscript(s). PaperRoute will now restart to open the restored library."
+
+        If Not String.IsNullOrWhiteSpace(
+            restoreResult.EmergencyBackupPath
+        ) Then
+
+            notice &=
+                Environment.NewLine &
+                Environment.NewLine &
+                "Your library from before the restore is at:" &
+                Environment.NewLine &
+                restoreResult.EmergencyBackupPath
+
+        End If
+
+        RestartAfterRestore(
+            notice
+        )
 
     End Sub
 
@@ -3767,7 +3779,11 @@ Public Class Form1
 
 
     ' Says the restore finished and starts PaperRoute again, which opens the
-    ' restored library. Tests record the notice instead.
+    ' restored library. The running instance is released first: the new
+    ' process starts before this one has unwound, and would otherwise find
+    ' the library still held and exit. Nothing here can cancel the close
+    ' (handingOverAfterRestore), so no second window can follow. Tests
+    ' record the notice instead.
     Protected Overridable Sub RestartAfterRestore(
         notice As String
     )
@@ -3780,6 +3796,7 @@ Public Class Form1
             MessageBoxIcon.Information
         )
 
+        Program.ReleaseInstanceForRestart()
         Application.Restart()
 
     End Sub

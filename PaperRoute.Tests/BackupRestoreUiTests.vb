@@ -128,8 +128,56 @@ Public Class BackupRestoreUiTests
     End Sub
 
 
+    ' Restore Backup... is on every page's Settings menu. With a manuscript
+    ' page open and unsaved, the close the restart sends must neither ask
+    ' (Cancel would leave this session running on a library no longer on
+    ' disk) nor save (Yes would write the replaced library over the restored
+    ' one): what this session holds in memory is the library just replaced.
+    <TestMethod>
+    <DataRow(DialogResult.Yes)>
+    <DataRow(DialogResult.Cancel)>
+    Public Sub ADirtyManuscriptPageIsNeitherAskedAboutNorSavedOverTheRestoredLibrary(answer As DialogResult)
+        Dim asked As Integer = 0
+
+        RunOnStaThread(
+            Sub()
+                Using session As New RestoreSession(_dataDirectory, _managedDirectory)
+                    session.Prepare()
+                    session.OpenFirstManuscript()
+                    session.Field("Title").Text = "Edited before the restore"
+                    session.SetPrompt(Function(title)
+                                          asked += 1
+                                          Return answer
+                                      End Function)
+
+                    session.Restore(_backupPath)
+                    Assert.IsTrue(session.RestartRequested)
+
+                    session.Close()
+                    Assert.IsTrue(session.IsDisposed, "The close the restart sends is not held up.")
+                End Using
+            End Sub)
+
+        Assert.AreEqual(0, asked, "The page is not asked about.")
+        CollectionAssert.AreEquivalent(
+            {"Active Study", "Published Study", "Filed Study"},
+            New ManuscriptRepository(_dataDirectory, _managedDirectory).Load().Select(Function(manuscript) manuscript.Title).ToList(),
+            "The restored library is what is on disk.")
+    End Sub
+
+
     Private Function DataFile(name As String) As String
         Return Path.Combine(_dataDirectory, name)
+    End Function
+
+
+    Private Shared Iterator Function Descendants(parent As Control) As IEnumerable(Of Control)
+        For Each child As Control In parent.Controls
+            Yield child
+            For Each descendant As Control In Descendants(child)
+                Yield descendant
+            Next
+        Next
     End Function
 
 
@@ -184,6 +232,20 @@ Public Class BackupRestoreUiTests
         Public Sub Restore(backupZipPath As String)
             CallPrivate("RestoreFromArchive", backupZipPath, CreateRestoreService())
             Application.DoEvents()
+        End Sub
+
+        Public Sub OpenFirstManuscript()
+            CallPrivate("OpenManuscript", DirectCast(FieldValue("manuscripts"), List(Of Manuscript))(0), Nothing)
+            Application.DoEvents()
+        End Sub
+
+        Public Function Field(name As String) As TextBox
+            Return Descendants(DirectCast(FieldValue("manuscriptEditor"), Control)).OfType(Of TextBox)().Single(Function(box) box.AccessibleName = name)
+        End Function
+
+        ' A method rather than a property, which WinForms would try to serialize.
+        Public Sub SetPrompt(value As Func(Of String, DialogResult))
+            unsavedChangesPrompt = value
         End Sub
 
         ' The save a bibliography import ends with (Form1.Bibliography.vb):

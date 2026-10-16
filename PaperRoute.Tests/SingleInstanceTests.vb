@@ -31,6 +31,24 @@ Public Class SingleInstanceTests
         Assert.IsFalse(SingleInstanceService.SignalExisting(SingleInstanceService.KeyFor("C:\Nobody\" & Guid.NewGuid().ToString("N"))))
     End Sub
 
+    ' A restart hands the library over before the old process has unwound
+    ' (#116): the instance is released early, and once more as the process
+    ' ends. The second release is harmless and frees nothing of the new one's.
+    <TestMethod>
+    Public Sub ReleasingTheInstanceTwiceFreesTheLibraryOnce()
+        Dim key As String = SingleInstanceService.KeyFor("C:\Test\PaperRoute-" & Guid.NewGuid().ToString("N"))
+        Dim first As SingleInstanceService = SingleInstanceService.TryStart(key)
+        Assert.IsNotNull(first)
+
+        first.Dispose()
+
+        Using restarted As SingleInstanceService = SingleInstanceService.TryStart(key)
+            Assert.IsNotNull(restarted, "The restarted PaperRoute opens the library.")
+            first.Dispose()
+            Assert.IsNull(SingleInstanceService.TryStart(key), "The restarted PaperRoute still has it.")
+        End Using
+    End Sub
+
     <TestMethod>
     Public Sub TheKeyIgnoresCaseAndTrailingSeparators()
         Assert.AreEqual(SingleInstanceService.KeyFor("C:\Users\A\AppData\Local\PaperRoute\"), SingleInstanceService.KeyFor("c:\users\a\appdata\local\paperroute"))
