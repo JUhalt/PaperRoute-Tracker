@@ -27,9 +27,12 @@ Namespace My
 
         ' An error on the UI thread is recorded on this computer first (#120);
         ' nothing is sent, and a report that cannot be written costs nothing.
-        ' Then the main window shows one plain dialog and decides whether
-        ' PaperRoute closes (#121). With no window left to keep working in,
-        ' PaperRoute says why and exits as the stock dialog's Quit did.
+        ' The open manuscript page's unsaved edits go to a recovery draft
+        ' next (#123), before anything is shown, so the next start offers
+        ' them however this ends. Then the main window shows one plain dialog
+        ' and decides whether PaperRoute closes (#121). With no window left
+        ' to keep working in, PaperRoute says why and exits as the stock
+        ' dialog's Quit did.
         Private Sub MyApplication_UnhandledException(
             sender As Object,
             e As UnhandledExceptionEventArgs
@@ -44,6 +47,13 @@ Namespace My
 
             Dim window As Form1 =
                 Application.OpenForms.OfType(Of Form1)().FirstOrDefault()
+
+            ' A draft that cannot be written must never stand between the
+            ' error and its dialog.
+            Try
+                window?.WriteRecoveryDraft("an error ended the session")
+            Catch ex As Exception
+            End Try
 
             If window Is Nothing OrElse window.IsDisposed Then
 

@@ -285,7 +285,8 @@ Namespace Services
         End Sub
 
 
-        Private Shared Sub ValidateSupportedSchemaVersion(
+        ' Also the startup recovery's check before it uses the previous save (#124).
+        Friend Shared Sub ValidateSupportedSchemaVersion(
             existingVersion As Integer
         )
 
@@ -980,6 +981,29 @@ Namespace Services
                     )
 
                 End Sub
+            )
+
+        End Sub
+
+
+        ' A recovery at startup (#124) puts a library that reads with the
+        ' current rules in place, so the marker it was under, readable or
+        ' not, gives way to the current one and is kept as schema.previous.bak.
+        Friend Shared Sub WriteCurrentSchemaVersionReplacingExisting(
+            schemaPath As String
+        )
+
+            Directory.CreateDirectory(
+                Path.GetDirectoryName(schemaPath)
+            )
+
+            WriteSchemaVersionReplacingExisting(
+                schemaPath,
+                CurrentSchemaVersion,
+                Path.Combine(
+                    Path.GetDirectoryName(schemaPath),
+                    "schema.previous.bak"
+                )
             )
 
         End Sub

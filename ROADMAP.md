@@ -335,7 +335,7 @@ Milestone: **[v0.9.0 — Journal Choice & Guidance](https://github.com/JUhalt/Pa
 
 Help researchers decide where a manuscript should go and what that journal will ask of them, and let anyone new learn the route, before the 1.0 hardening pass. Offline guidance comes first; connected help adds facts and suggestions without making the library depend on the network.
 
-**Connected, but local-first.** Every online feature follows the rules the Crossref publication check already keeps: the user starts it, lookups are read-only, results are previewed before anything is applied, and anything stored records its source and the date it was retrieved. One settings page lists every service and exactly what it sends, and **Work offline** turns them all off. PaperRoute stays complete without them.
+**Connected, but local-first.** Every online feature follows the rules the Crossref publication check already keeps: the user starts it, except the startup update check, which is on by default and can be turned off, lookups are read-only, results are previewed before anything is applied, and anything stored records its source and the date it was retrieved. One settings page lists every service and exactly what it sends, and **Work offline** turns them all off. PaperRoute stays complete without them.
 
 Offline:
 

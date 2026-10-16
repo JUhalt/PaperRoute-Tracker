@@ -17,6 +17,7 @@ param(
     [string] $ReleaseDirectory = 'Releases',
     [string] $StageDirectory = 'ReleaseAssets',
     [string] $EvidenceDirectory = 'ReleaseVerification',
+    [string] $PublishDirectory = 'publish/win-x64',
     [long] $ExpectedReleaseId = 0
 )
 
@@ -27,6 +28,7 @@ $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $releaseRoot = [IO.Path]::GetFullPath($ReleaseDirectory, $repoRoot)
 $stageRoot = [IO.Path]::GetFullPath($StageDirectory, $repoRoot)
 $evidenceRoot = [IO.Path]::GetFullPath($EvidenceDirectory, $repoRoot)
+$publishRoot = [IO.Path]::GetFullPath($PublishDirectory, $repoRoot)
 $downloadRoot = Join-Path $evidenceRoot $Mode.ToLowerInvariant()
 $notesPath = Join-Path $repoRoot "docs/releases/$Version.md"
 $tag = "v$Version"
@@ -77,6 +79,25 @@ function Get-AssetSnapshot([object[]] $Assets) {
     return ConvertTo-Json -InputObject @($Assets | Sort-Object name | Select-Object id,name,size,state,updated_at,digest) -Compress
 }
 
+# The .NET runtime a self-contained publish bundles, read from its
+# runtimeconfig.json, so the release record says which runtime shipped (#144).
+function Get-BundledRuntimeVersion([string] $PublishRoot) {
+    $configPath = Join-Path $PublishRoot 'PaperRouteTracker.runtimeconfig.json'
+    if (-not (Test-Path -LiteralPath $configPath -PathType Leaf)) {
+        throw "The published PaperRouteTracker.runtimeconfig.json was not found at '$configPath'."
+    }
+    $options = (Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json).runtimeOptions
+    $included = if ($null -ne $options.PSObject.Properties['includedFrameworks']) { @($options.includedFrameworks) } else { @() }
+    $runtime = @($included | Where-Object { $_.name -ceq 'Microsoft.NETCore.App' })
+    if ($runtime.Count -ne 1 -or [string]::IsNullOrWhiteSpace($runtime[0].version)) {
+        throw "'$configPath' does not name one bundled Microsoft.NETCore.App; the publish must be self-contained."
+    }
+    return [string] $runtime[0].version
+}
+
+# Stage records the runtime; Verify checks only the draft and the staged
+# assets, so it needs no publish folder.
+$runtimeVersion = if ($Mode -eq 'Stage') { Get-BundledRuntimeVersion $publishRoot } else { $null }
 $release = Get-DraftRelease
 $ExpectedReleaseId = [long] $release.databaseId
 $remoteAssets = @(Get-RemoteAssets $ExpectedReleaseId)
@@ -94,10 +115,15 @@ if ($Mode -eq 'Stage') {
     $buildAssets = @(Get-Content -LiteralPath (Join-Path $releaseRoot "assets.$Channel.json") -Raw | ConvertFrom-Json)
     $buildNames = @($buildAssets | ForEach-Object { [string] $_.RelativeFileName })
     foreach ($name in $buildNames) { Assert-FileName $name }
-    foreach ($pattern in @('*-full.nupkg', '*Setup.exe', '*Portable.zip')) {
+    foreach ($pattern in @('*-full.nupkg', '*Setup.exe')) {
         if (@($buildNames | Where-Object { $_ -like $pattern }).Count -ne 1) {
             throw "Expected exactly one '$pattern' asset from this Velopack build."
         }
+    }
+    # The portable bundle is not built from v0.9.2 (#149); one here means the
+    # pack step changed, and it is refused rather than published.
+    if (@($buildNames | Where-Object { $_ -like '*Portable.zip' }).Count -ne 0) {
+        throw "Expected no '*Portable.zip' asset from this Velopack build; the portable bundle is no longer released."
     }
     Assert-SameNames ($buildNames + $feedName) @($remoteAssets.name)
 } else {
@@ -174,6 +200,7 @@ if ($Mode -eq 'Stage') {
         'UPGRADE_NOTES.md' = (Join-Path $repoRoot 'UPGRADE_NOTES.md')
         'LICENSE.txt' = (Join-Path $repoRoot 'LICENSE.txt')
         'NOTICE.md' = (Join-Path $repoRoot 'NOTICE.md')
+        'THIRD-PARTY-NOTICES.txt' = (Join-Path $repoRoot 'THIRD-PARTY-NOTICES.txt')
     }
     foreach ($entry in $documents.GetEnumerator()) {
         $source = Get-Item -LiteralPath $entry.Value
@@ -211,7 +238,7 @@ if ($after.body -cne $release.body -or (Get-AssetSnapshot $afterAssets) -cne $re
 }
 [IO.File]::WriteAllText((Join-Path $evidenceRoot "$Mode-verification.json"),
     (ConvertTo-Json -Depth 6 -InputObject ([ordered]@{
-        Tag = $tag; ReleaseId = $ExpectedReleaseId; Draft = $true
+        Tag = $tag; ReleaseId = $ExpectedReleaseId; Draft = $true; RuntimeVersion = $runtimeVersion
         VerifiedAtUtc = [DateTime]::UtcNow.ToString('o'); Assets = ($remoteSnapshot | ConvertFrom-Json)
     })), $utf8)
 Write-Host "$Mode verification passed for draft $tag ($ExpectedReleaseId)."

@@ -7,6 +7,9 @@ Imports ManuscriptPipeline.Services
 
 Friend Module Program
 
+    ' The running instance, kept so a restart can release it (#116).
+    Private _instance As SingleInstanceService = Nothing
+
     <STAThread>
     Public Sub Main(
         args As String()
@@ -45,6 +48,8 @@ Friend Module Program
             Return
         End If
 
+        _instance = instance
+
         Try
             Using instance
                 Run(args, instance)
@@ -56,28 +61,27 @@ Friend Module Program
     End Sub
 
 
+    ' Frees the library for the PaperRoute a restart is about to start,
+    ' which runs before this process has unwound and would otherwise find
+    ' the library still held and exit (#116). The release as this process
+    ' ends then does nothing. Must run on the main thread, like Main.
+    Friend Sub ReleaseInstanceForRestart()
+
+        _instance?.Dispose()
+
+    End Sub
+
+
     Private Sub Run(args As String(), instance As SingleInstanceService)
 
-        Try
-
-            ' Validate and migrate PaperRoute storage before settings,
-            ' repositories, or the main application are constructed.
-            StorageMigrationService.EnsureCurrentStorage()
-
-        Catch ex As Exception
-
-            ' What failed and where, with the actions Diagnostics would
-            ' offer if PaperRoute could start (#119).
-            StartupFailureForm.ShowBeforeStartup(
-                StartupFailure.ForStorage(
-                    ex,
-                    StorageMigrationService.SchemaFilePath()
-                )
-            )
-
+        ' Validate and migrate PaperRoute storage before settings,
+        ' repositories, or the main application are constructed.
+        If Not PrepareStorage(
+            AddressOf StorageMigrationService.EnsureCurrentStorage,
+            AddressOf StartupFailureForm.ShowBeforeStartup
+        ) Then
             Return
-
-        End Try
+        End If
 
         If ExampleLibraryService.IsActive Then ExampleLibraryService.Seed(DateTime.Today, ExampleLibraryService.OnlineSettingsFrom(args))
 
@@ -101,5 +105,44 @@ Friend Module Program
         )
 
     End Sub
+
+
+    ' Runs the storage step. When it fails, the startup window says what
+    ' failed and where, with the actions Diagnostics would offer (#119);
+    ' when the window has put the previous save or a backup in place
+    ' (#124), the step runs once more and startup goes on in this process,
+    ' which still holds the library, so no restart is needed. A window
+    ' closed without recovering ends startup. Tests pass their own steps.
+    Friend Function PrepareStorage(
+        prepare As Action,
+        showFailure As Func(Of StartupFailure, Boolean)
+    ) As Boolean
+
+        Do
+
+            Try
+
+                prepare()
+
+                Return True
+
+            Catch ex As Exception
+
+                If Not showFailure(
+                    StartupFailure.ForStorage(
+                        ex,
+                        StorageMigrationService.SchemaFilePath()
+                    )
+                ) Then
+
+                    Return False
+
+                End If
+
+            End Try
+
+        Loop
+
+    End Function
 
 End Module

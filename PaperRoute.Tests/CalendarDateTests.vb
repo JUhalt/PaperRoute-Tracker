@@ -147,4 +147,64 @@ Public Class CalendarDateTests
 
     End Sub
 
+
+    ' The recovery draft (#123) holds a manuscript too, read at the next
+    ' start, perhaps in another zone: it is written without offsets, and a
+    ' date written at any offset reads as the day written. The WrittenAtUtc
+    ' stamp stays an instant. Before the change the draft was written with
+    ' the machine's offset, so this failed on every host.
+    <TestMethod>
+    Public Sub RecoveryDraft_KeepsCalendarDatesAsWritten()
+
+        Dim store As New RecoveryDraftStore(
+            _dataDirectory
+        )
+
+        Dim manuscript As New Manuscript With {
+            .Title = "Zones",
+            .StageEnteredDate = DateTime.SpecifyKind(New DateTime(2026, 10, 9, 0, 30, 0), DateTimeKind.Local)
+        }
+
+        store.Write(
+            New RecoveryDraft With {
+                .ManuscriptId = manuscript.Id,
+                .WrittenAtUtc = New DateTime(2026, 10, 8, 10, 0, 0, DateTimeKind.Utc),
+                .Reason = "test",
+                .Manuscript = manuscript
+            }
+        )
+
+        Dim draftPath As String =
+            Path.Combine(
+                _dataDirectory,
+                "recovery",
+                RecoveryDraftStore.FileName
+            )
+
+        Dim json As String =
+            File.ReadAllText(
+                draftPath
+            )
+
+        StringAssert.Contains(json, """StageEnteredDate"": ""2026-10-09T00:30:00""", "A local-kind value is written as its wall-clock date and time, with no offset.")
+        StringAssert.Contains(json, """WrittenAtUtc"": ""2026-10-08T10:00:00Z""", "The stamp is written in UTC as before.")
+
+        ' A draft written in a zone fourteen hours ahead.
+        File.WriteAllText(
+            draftPath,
+            json.Replace(
+                """StageEnteredDate"": ""2026-10-09T00:30:00""",
+                """StageEnteredDate"": ""2026-10-09T00:30:00+14:00"""
+            )
+        )
+
+        Dim read As RecoveryDraft =
+            store.Read()
+
+        Assert.AreEqual(New DateTime(2026, 10, 9, 0, 30, 0), read.Manuscript.StageEnteredDate, "The day written, whatever the offset.")
+        Assert.AreEqual(New DateTime(2026, 10, 8, 10, 0, 0, DateTimeKind.Utc), read.WrittenAtUtc)
+        Assert.AreEqual(DateTimeKind.Utc, read.WrittenAtUtc.Kind)
+
+    End Sub
+
 End Class

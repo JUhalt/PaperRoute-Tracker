@@ -14,9 +14,10 @@ This project-specific notice selects version 3 only. The instructional example i
 
 PaperRoute Tracker includes these components, each under the MIT License:
 
-- ClosedXML, ClosedXML.Parser, DocumentFormat.OpenXml, ExcelNumberFormat, and RBush (Excel workbooks)
+- ClosedXML, ClosedXML.Parser, DocumentFormat.OpenXml, DocumentFormat.OpenXml.Framework, ExcelNumberFormat, and RBush (Excel workbooks)
 - Velopack (installation and updates)
 - Anthropic .NET SDK, copyright 2026 Anthropic (the optional AI assistant's Claude requests)
 - Microsoft.Extensions.AI.Abstractions, copyright .NET Foundation and contributors (used by the Anthropic SDK)
+- the .NET runtime (Microsoft.NETCore.App and Microsoft.WindowsDesktop.App), copyright .NET Foundation and Contributors, which the installed app bundles
 
-and SixLabors.Fonts, under the Apache License 2.0. Their license texts are distributed with their packages on nuget.org.
+and SixLabors.Fonts, under the Apache License 2.0. Their license texts, the package versions they cover, and the .NET runtime's own third-party notices are in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt), installed beside this notice.
