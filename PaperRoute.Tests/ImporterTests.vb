@@ -327,12 +327,15 @@ Public Class ImporterTests
             New FlexibleExcelImporter().Import(workbookPath, "Tracker", 1, mappings)
 
         Dim submission As JournalSubmission = result.Manuscripts(0).Submissions(0)
-        Dim today As String = DateTime.Today.ToString("yyyy-MM-dd")
 
         Assert.AreEqual(DateTime.Today, submission.SubmittedDate)
+
+        ' The note names the date the importer stored, whatever day it is now.
+        Dim today As String = submission.SubmittedDate.ToString("yyyy-MM-dd")
+
         Assert.IsTrue(result.Warnings.Any(Function(warning) warning.Contains("no readable submission date")), "The import-time warning stays.")
         StringAssert.StartsWith(submission.Notes, "Synthetic comment.", "The row's own notes come first.")
-        StringAssert.Contains(submission.Notes, "no submission date", "The record says the date was missing.")
+        StringAssert.Contains(submission.Notes, "No submission date was given", "The record says the date was missing.")
         StringAssert.Contains(submission.Notes, "import", "The record says where the date came from.")
         StringAssert.Contains(submission.Notes, today, "The record names the date that was used.")
 
@@ -377,7 +380,7 @@ Public Class ImporterTests
         StringAssert.Contains(decision.Notes, "No decision date was given", "The record says the date was missing.")
         StringAssert.Contains(decision.Notes, "submission date", "The record says where the date came from.")
         StringAssert.Contains(decision.Notes, "2026-05-01", "The record names the date that was used.")
-        Assert.IsFalse(submission.Notes.Contains("no submission date"), "A submission that had its date gets no such note.")
+        Assert.IsFalse(submission.Notes.Contains("No submission date"), "A submission that had its date gets no such note.")
 
     End Sub
 

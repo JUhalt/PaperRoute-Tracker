@@ -674,7 +674,7 @@ Namespace Services
                 notes =
                     AppendNote(
                         notes,
-                        "Imported with no submission date; the import date, " &
+                        "No submission date was given; the import date, " &
                         submittedDate.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) &
                         ", was used."
                     )
