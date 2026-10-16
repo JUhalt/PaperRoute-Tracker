@@ -41,7 +41,8 @@ Namespace My
 
         ' An error on the UI thread (#121): the main window shows one plain
         ' dialog and decides whether PaperRoute closes. With no window left
-        ' to keep working in, PaperRoute exits as the stock dialog's Quit did.
+        ' to keep working in, PaperRoute says why and exits as the stock
+        ' dialog's Quit did.
         Private Sub MyApplication_UnhandledException(
             sender As Object,
             e As UnhandledExceptionEventArgs
@@ -51,7 +52,22 @@ Namespace My
                 Application.OpenForms.OfType(Of Form1)().FirstOrDefault()
 
             If window Is Nothing OrElse window.IsDisposed Then
+
+                ' Informational only: ExitApplication stays True, so the
+                ' framework exits once this returns. Keep Working would be
+                ' a false promise here.
+                MessageBox.Show(
+                    "PaperRoute ran into a problem and has to close." &
+                    Environment.NewLine &
+                    Environment.NewLine &
+                    e.Exception.Message,
+                    "PaperRoute",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                )
+
                 Return
+
             End If
 
             e.ExitApplication = False

@@ -19,10 +19,20 @@ Partial Public Class Form1
 
     Private manuscriptEditor As EditManuscriptForm = Nothing
     Private manuscriptSaveBar As Control = Nothing
+    Private manuscriptSaveHint As Label = Nothing
     Private manuscriptTitleLabel As Label = Nothing
     Private manuscriptStagePill As PillLabel = Nothing
     Private manuscriptMetaLabel As Label = Nothing
     Private manuscriptShelfLabel As Label = Nothing
+
+    Private Const SaveBarHint As String =
+        "Save keeps them. Discard returns to the last saved version."
+
+    ' After a failed save with nothing edited since, there is no saved
+    ' version for Discard to return to, so the bar says what Save does
+    ' instead (#113).
+    Private Const SaveFailedHint As String =
+        "Your last save did not finish. Save tries again."
 
     Private WithEvents manuscriptDirtyTimer As New Timer With {.Interval = 300}
 
@@ -420,8 +430,8 @@ Partial Public Class Form1
             .ForeColor = UiTheme.PrimaryText()
         }
 
-        Dim lblHint As New Label With {
-            .Text = "Save keeps them. Discard returns to the last saved version.",
+        manuscriptSaveHint = New Label With {
+            .Text = SaveBarHint,
             .AutoSize = True,
             .AutoEllipsis = True,
             .Anchor = AnchorStyles.Left,
@@ -470,7 +480,7 @@ Partial Public Class Form1
 
         bar.Controls.Add(lblDot, 0, 0)
         bar.Controls.Add(lblMessage, 1, 0)
-        bar.Controls.Add(lblHint, 2, 0)
+        bar.Controls.Add(manuscriptSaveHint, 2, 0)
         bar.Controls.Add(buttons, 3, 0)
 
         Return bar
@@ -534,7 +544,25 @@ Partial Public Class Form1
             Return
         End If
 
-        Dim dirty As Boolean = manuscriptEditor.HasUnsavedChanges() OrElse librarySaveFailed
+        RefreshSaveBar()
+
+    End Sub
+
+
+    ' Shows the Unsaved changes bar while the editor differs from the model
+    ' or the last save did not reach the disk (#113), with a hint for each.
+    Private Sub RefreshSaveBar()
+
+        Dim edited As Boolean = manuscriptEditor.HasUnsavedChanges()
+
+        Dim hint As String =
+            If(librarySaveFailed AndAlso Not edited, SaveFailedHint, SaveBarHint)
+
+        If manuscriptSaveHint.Text <> hint Then
+            manuscriptSaveHint.Text = hint
+        End If
+
+        Dim dirty As Boolean = edited OrElse librarySaveFailed
 
         If manuscriptSaveBar.Visible <> dirty Then
             manuscriptSaveBar.Visible = dirty
@@ -568,7 +596,7 @@ Partial Public Class Form1
         RefreshManuscriptHeader()
 
         If manuscriptSaveBar IsNot Nothing AndAlso Not manuscriptSaveBar.IsDisposed Then
-            manuscriptSaveBar.Visible = manuscriptEditor.HasUnsavedChanges() OrElse librarySaveFailed
+            RefreshSaveBar()
         End If
 
         Return saved
@@ -715,9 +743,17 @@ Partial Public Class Form1
         If unhandledErrorPrompt IsNot Nothing Then
             choice = unhandledErrorPrompt(failure, unsavedChanges)
         Else
-            Using dialog As New UnexpectedErrorForm(failure, unsavedChanges, UnexpectedErrorForm.LogFolder())
-                choice = dialog.ShowDialog(Me)
-            End Using
+            ' A guard no test can fail before it: this runs inside the error
+            ' handler, where a second failure would end PaperRoute with
+            ' nothing shown. A plain box offers the same two ways out, and
+            ' nothing escapes from here.
+            Try
+                Using dialog As New UnexpectedErrorForm(failure, unsavedChanges, UnexpectedErrorForm.LogFolder())
+                    choice = dialog.ShowDialog(Me)
+                End Using
+            Catch ex As Exception
+                choice = FallbackErrorChoice(failure, unsavedChanges)
+            End Try
         End If
 
         If choice = DialogResult.Abort Then
@@ -725,6 +761,39 @@ Partial Public Class Form1
         End If
 
     End Sub
+
+
+    ' The error dialog could not be shown: a message box cannot name its
+    ' buttons, so the text does. Yes keeps working (Cancel), No closes
+    ' PaperRoute (Abort). Should even the box fail, keep working.
+    Private Function FallbackErrorChoice(
+        failure As Exception,
+        unsavedChanges As Boolean
+    ) As DialogResult
+
+        Try
+            Dim answer As DialogResult =
+                MessageBox.Show(
+                    Me,
+                    "PaperRoute ran into a problem." &
+                    Environment.NewLine &
+                    Environment.NewLine &
+                    If(String.IsNullOrWhiteSpace(failure?.Message), "An unexpected error occurred.", failure.Message) &
+                    Environment.NewLine &
+                    Environment.NewLine &
+                    If(unsavedChanges, "There are unsaved changes. ", "") &
+                    "Keep working? Choose No to close PaperRoute.",
+                    "PaperRoute",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Error,
+                    MessageBoxDefaultButton.Button1)
+
+            Return If(answer = DialogResult.No, DialogResult.Abort, DialogResult.Cancel)
+        Catch ex As Exception
+            Return DialogResult.Cancel
+        End Try
+
+    End Function
 
 
     ' A save failed since the last good one (#113): closing would lose the

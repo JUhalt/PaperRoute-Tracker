@@ -3688,6 +3688,10 @@ Public Class Form1
                 manuscripts =
                 repository.Load()
 
+                ' The restored library is what is on disk, so nothing is
+                ' waiting to be saved any more (#113).
+                librarySaveFailed = False
+
                 ' The open manuscript page shows the restored library.
                 If currentPage = WorkspacePage.Manuscript Then
                     LeaveCurrentPage()

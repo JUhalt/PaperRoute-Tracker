@@ -379,6 +379,7 @@ Public Class ManuscriptPageTests
                         Assert.IsTrue(board.SaveBarVisible, "The bar stays after a failed save.")
                         board.Tick()
                         Assert.IsTrue(board.SaveBarVisible, "The bar stays after the dirty check too.")
+                        Assert.AreEqual("Your last save did not finish. Save tries again.", board.SaveBarHint, "There is no saved version to return to, so the hint says what Save does.")
                         Assert.IsTrue(board.LibrarySaveFailed)
                         Assert.AreEqual("Warning: latest changes were not saved.", board.StatusText)
                         board.SetStatus("Citation copied.")
@@ -432,6 +433,8 @@ Public Class ManuscriptPageTests
                         board.PressCommandKey(Keys.Control Or Keys.S)
                         Assert.IsFalse(board.LibrarySaveFailed, "A save that succeeds clears the flag.")
                         Assert.IsFalse(board.SaveBarVisible, "A save that succeeds clears the bar.")
+                        ' A guard: the hint never changed before #113's fix, so this passed before it too.
+                        Assert.AreEqual("Save keeps them. Discard returns to the last saved version.", board.SaveBarHint, "The usual hint comes back.")
                         StringAssert.StartsWith(board.StatusText, "Saved locally")
                         StringAssert.Contains(File.ReadAllText(Path.Combine(root, "data", "manuscripts.json")), "Edited title")
 
@@ -524,6 +527,26 @@ Public Class ManuscriptPageTests
 
                     board.SetPrompt(Function(title) DialogResult.No)
                     board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    ' With no window open (#121), an error while PaperRoute starts or after
+    ' the window closed is still said out loud before PaperRoute exits. The
+    ' real handler runs, so the box is the one a researcher would see.
+    <TestMethod>
+    Public Sub AnErrorWithNoWindowOpenIsShownBeforePaperRouteExits()
+        RunOnStaThread(
+            Sub()
+                Assert.IsFalse(Application.OpenForms.OfType(Of Form1)().Any(), "This test needs no window open.")
+                Using dialogs As New DialogWatcher()
+                    ' Not named application: that would hide Application above.
+                    Dim host As New ManuscriptPipeline.My.MyApplication()
+                    Dim e As New Microsoft.VisualBasic.ApplicationServices.UnhandledExceptionEventArgs(True, New InvalidOperationException("The library folder could not be located."))
+                    GetType(ManuscriptPipeline.My.MyApplication).GetMethod("MyApplication_UnhandledException", BindingFlags.Instance Or BindingFlags.NonPublic).
+                        Invoke(host, New Object() {host, e})
+                    CollectionAssert.AreEqual({"PaperRoute"}, dialogs.Closed, "The error is shown even with nothing to keep working in.")
+                    Assert.IsTrue(e.ExitApplication, "PaperRoute still exits afterwards.")
                 End Using
             End Sub)
     End Sub
@@ -1697,6 +1720,14 @@ Public Class ManuscriptPageTests
             Get
                 Dim bar = DirectCast(GetType(Form1).GetField("manuscriptSaveBar", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me), Control)
                 Return bar IsNot Nothing AndAlso bar.Visible
+            End Get
+        End Property
+
+        ' The bar's hint is its one label that shortens with an ellipsis.
+        Public ReadOnly Property SaveBarHint As String
+            Get
+                Dim bar = DirectCast(GetType(Form1).GetField("manuscriptSaveBar", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me), Control)
+                Return Descendants(bar).OfType(Of Label)().Single(Function(label) label.AutoEllipsis).Text
             End Get
         End Property
 
