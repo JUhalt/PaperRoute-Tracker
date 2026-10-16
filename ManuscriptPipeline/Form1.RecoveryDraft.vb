@@ -18,6 +18,11 @@ Partial Public Class Form1
     ' The recovered copy the page being built opens with, if any.
     Private pendingRecoveredCopy As Manuscript = Nothing
 
+    ' Set when this session wrote the draft on disk, so the session can
+    ' remove it once its edits are saved or closed away; a draft an earlier
+    ' session left is not this session's to remove.
+    Private recoveryDraftWritten As Boolean = False
+
 
     Private Function RecoveryDrafts() As RecoveryDraftStore
 
@@ -36,10 +41,7 @@ Partial Public Class Form1
         reason As String
     ) As Boolean
 
-        If currentPage <> WorkspacePage.Manuscript OrElse
-           manuscriptEditor Is Nothing OrElse
-           manuscriptEditor.IsDisposed OrElse
-           Not manuscriptEditor.HasUnsavedChanges() Then
+        If Not HasUnsavedPageEdits() Then
             Return False
         End If
 
@@ -54,6 +56,8 @@ Partial Public Class Form1
                 }
             )
 
+            recoveryDraftWritten = True
+
             Return True
 
         Catch ex As Exception
@@ -63,6 +67,25 @@ Partial Public Class Form1
         End Try
 
     End Function
+
+
+    ' The draft this session wrote holds edits that were since saved, or
+    ' that a close the user answered has let go: offered at the next start,
+    ' it would put stale edits over the saved manuscript. A draft that
+    ' cannot be removed stays; the next start offers it, and No discards it.
+    Private Sub DiscardRecoveryDraft()
+
+        If Not recoveryDraftWritten Then
+            Return
+        End If
+
+        Try
+            RecoveryDrafts().Delete()
+            recoveryDraftWritten = False
+        Catch ex As Exception When TypeOf ex Is IOException OrElse TypeOf ex Is UnauthorizedAccessException
+        End Try
+
+    End Sub
 
 
     ' At startup, a draft for a manuscript still in the library is offered

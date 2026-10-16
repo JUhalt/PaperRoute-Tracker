@@ -61,6 +61,8 @@ Namespace Services
 
         ' Flushed and swapped in like the library's own files (#125), so a
         ' shutdown that cuts the write short leaves no half-written draft.
+        ' Calendar dates are written and read as the library file has them
+        ' (#118), so a draft read after a time-zone change keeps its days.
         Public Sub Write(
             draft As RecoveryDraft
         )
@@ -82,10 +84,14 @@ Namespace Services
                 Nothing,
                 Sub(stream)
 
-                    JsonSerializer.Serialize(
+                    CalendarDateJson.Write(
                         stream,
-                        draft,
-                        _jsonOptions
+                        JsonSerializer.Serialize(
+                            Of RecoveryDraft
+                        )(
+                            draft,
+                            _jsonOptions
+                        )
                     )
 
                 End Sub
@@ -108,7 +114,7 @@ Namespace Services
 
                     Dim draft As RecoveryDraft =
                         JsonSerializer.Deserialize(Of RecoveryDraft)(
-                            stream,
+                            CalendarDateJson.Read(stream),
                             _jsonOptions
                         )
 

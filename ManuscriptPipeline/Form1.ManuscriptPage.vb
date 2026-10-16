@@ -591,6 +591,11 @@ Partial Public Class Form1
 
         Dim saved As Boolean = SaveManuscripts()
 
+        ' What a draft of this session held is now saved (#123).
+        If saved Then
+            DiscardRecoveryDraft()
+        End If
+
         ' The editor may have saved new reusable authors.
         LoadAuthorLibrary()
         RenderManuscripts()
@@ -834,17 +839,27 @@ Partial Public Class Form1
     Protected Overrides Sub OnFormClosing(e As FormClosingEventArgs)
 
         ' Windows is shutting down (#123): a prompt would hold it up, so the
-        ' open page's working copy goes to a recovery draft instead.
+        ' open page's working copy goes to a recovery draft instead. A save
+        ' that failed (#113) left its changes in the model, not the page, so
+        ' no draft holds them: the save is tried once more, without a
+        ' question, and only a second failure shows its message.
         If e.CloseReason = CloseReason.WindowsShutDown Then
             WriteRecoveryDraft("Windows was shutting down")
+
+            If librarySaveFailed Then
+                SaveManuscripts()
+            End If
+
             MyBase.OnFormClosing(e)
             Return
         End If
 
         ' A restore has replaced the library on disk and is handing over to
         ' a new session (#116): what is in memory is the replaced library,
-        ' so nothing is asked and nothing is saved.
+        ' so nothing is asked and nothing is saved, and a draft this session
+        ' wrote of it goes too.
         If handingOverAfterRestore Then
+            DiscardRecoveryDraft()
             MyBase.OnFormClosing(e)
             Return
         End If
@@ -855,6 +870,12 @@ Partial Public Class Form1
 
         If Not e.Cancel AndAlso Not ConfirmCloseUnsavedLibrary() Then
             e.Cancel = True
+        End If
+
+        ' The page's edits were saved or let go, so a draft an error wrote
+        ' earlier in this session is stale (#123).
+        If Not e.Cancel Then
+            DiscardRecoveryDraft()
         End If
 
         MyBase.OnFormClosing(e)

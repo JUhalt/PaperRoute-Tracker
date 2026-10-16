@@ -167,7 +167,8 @@ Public Class RecoveryDraftTests
     ' The UI-thread error handler (#121) writes the open page's unsaved
     ' edits to the draft before it shows anything, so they are offered at
     ' the next start whatever follows; Keep Working then leaves the page as
-    ' it was. The real handler runs, its error report under this test's
+    ' it was. A close the user then answers lets the edits go, and the draft
+    ' with them. The real handler runs, its error report under this test's
     ' root so the user's profile is never touched.
     <TestMethod>
     Public Sub TheErrorHandlerWritesTheDraftBeforeItShowsTheDialog()
@@ -191,6 +192,8 @@ Public Class RecoveryDraftTests
 
                         Assert.IsFalse(board.IsDisposed, "Keep Working goes on.")
                         Assert.AreEqual("Edited before the error", board.Field("Title").Text, "The page is intact.")
+                        StringAssert.Contains(File.ReadAllText(DraftPath), "Edited before the error")
+                        StringAssert.Contains(File.ReadAllText(DraftPath), "an error ended the session")
 
                         board.SetPrompt(Function(title) DialogResult.No)
                         board.Close()
@@ -204,13 +207,109 @@ Public Class RecoveryDraftTests
 
         Assert.IsTrue(draftWhenAsked, "The draft was there before the dialog was shown.")
         Assert.IsFalse(e.ExitApplication)
-        StringAssert.Contains(File.ReadAllText(DraftPath), "Edited before the error")
-        StringAssert.Contains(File.ReadAllText(DraftPath), "an error ended the session")
+        Assert.IsFalse(File.Exists(DraftPath), "Discarding at the close lets the draft go; the next start offers nothing.")
+    End Sub
+
+
+    ' After an error and Keep Working, the draft holds the page's edits only
+    ' until they are saved or discarded; then it goes, and the next start
+    ' offers nothing. Before the change it outlived the session, and the
+    ' next start offered the stale edits over the saved manuscript.
+    <TestMethod>
+    <DataRow("Save")>
+    <DataRow("Discard")>
+    Public Sub AfterAnErrorTheDraftGoesOnceThePageIsSavedOrDiscarded(resolution As String)
+        StorageEnvironment.RootOverride = _root
+        Try
+            RunOnStaThread(
+                Sub()
+                    Using board As New DraftBoard(_dataDirectory, _managedDirectory)
+                        board.Prepare()
+                        board.Open(board.Library(0))
+                        board.Field("Title").Text = "Edited before the error"
+                        board.SetErrorPrompt(Function(failure, unsaved) DialogResult.Cancel)
+
+                        RaiseUnhandledError(board, New Microsoft.VisualBasic.ApplicationServices.UnhandledExceptionEventArgs(True, New InvalidOperationException("The route map could not be drawn.")))
+                        Assert.IsTrue(File.Exists(DraftPath), "The error wrote the draft.")
+
+                        board.Field("Title").Text = "Edited after the error"
+
+                        If resolution = "Save" Then
+                            board.PressCommandKey(Keys.Control Or Keys.S)
+                        Else
+                            board.Discard()
+                        End If
+
+                        Assert.IsFalse(board.Editor.HasUnsavedChanges())
+                        Assert.IsFalse(File.Exists(DraftPath), "Nothing is left to recover after " & resolution & ".")
+
+                        board.SetPrompt(Function(title) DialogResult.No)
+                        board.Close()
+                    End Using
+                End Sub)
+        Finally
+            StorageEnvironment.RootOverride = Nothing
+        End Try
+
+        Dim offered As Integer = 0
+
+        RunOnStaThread(
+            Sub()
+                Using board As New DraftBoard(_dataDirectory, _managedDirectory)
+                    board.Prepare()
+                    board.SetDraftPrompt(Function(title)
+                                             offered += 1
+                                             Return DialogResult.Yes
+                                         End Function)
+                    board.Offer()
+                    Assert.AreEqual("Board", board.PageName)
+                    board.Close()
+                End Using
+            End Sub)
+
+        Assert.AreEqual(0, offered, "The next start offers nothing.")
+        Assert.AreEqual(
+            If(resolution = "Save", "Edited after the error", "Saved title"),
+            New ManuscriptRepository(_dataDirectory, _managedDirectory).Load().Single().Title)
+    End Sub
+
+
+    ' A restore hands over to a new session (#116) with the library it
+    ' replaced still in memory: a draft this session wrote of that library
+    ' would be offered over the restored one at the next start, so the
+    ' hand-over takes it, still without asking.
+    <TestMethod>
+    Public Sub AHandOverAfterARestoreTakesTheSessionsDraftWithIt()
+        Dim asked As Integer = 0
+
+        RunOnStaThread(
+            Sub()
+                Using board As New DraftBoard(_dataDirectory, _managedDirectory)
+                    board.Prepare()
+                    board.Open(board.Library(0))
+                    board.Field("Title").Text = "Edited before the restore"
+                    Assert.IsTrue(board.WriteDraft("an error ended the session"))
+                    board.SetPrompt(Function(title)
+                                       asked += 1
+                                       Return DialogResult.Cancel
+                                   End Function)
+
+                    board.HandOver()
+                    board.Close()
+                    Assert.IsTrue(board.IsDisposed, "The hand-over close goes through.")
+                End Using
+            End Sub)
+
+        Assert.AreEqual(0, asked)
+        Assert.IsFalse(File.Exists(DraftPath))
     End Sub
 
 
     ' A draft that cannot be written (data\recovery is a file here) does
-    ' not keep the error dialog from being shown.
+    ' not keep the error dialog from being shown. A guard: it passed before
+    ' the handler wrote any draft, and it proves only that a failed write
+    ' never suppresses the dialog, since WriteRecoveryDraft catches its own
+    ' write failures before the handler's Try sees them.
     <TestMethod>
     Public Sub ADraftThatCannotBeWrittenDoesNotHideTheErrorDialog()
         Dim asked As Integer = 0
@@ -309,19 +408,20 @@ Public Class RecoveryDraftTests
     End Sub
 
 
-    ' A session edits the one manuscript and ends without asking.
+    ' A session edited the one manuscript and ended without asking, so its
+    ' draft is on disk. Written through the store: a session's own close
+    ' removes the draft it wrote.
     Private Sub LeaveADraft(editedTitle As String)
-        RunOnStaThread(
-            Sub()
-                Using board As New DraftBoard(_dataDirectory, _managedDirectory)
-                    board.Prepare()
-                    board.Open(board.Library(0))
-                    board.Field("Title").Text = editedTitle
-                    Assert.IsTrue(board.WriteDraft("test"))
-                    board.SetPrompt(Function(title) DialogResult.No)
-                    board.Close()
-                End Using
-            End Sub)
+        Dim edited As Manuscript = New ManuscriptRepository(_dataDirectory, _managedDirectory).Load().Single()
+        edited.Title = editedTitle
+
+        Call New RecoveryDraftStore(_dataDirectory).Write(
+            New RecoveryDraft With {
+                .ManuscriptId = edited.Id,
+                .WrittenAtUtc = DateTime.UtcNow,
+                .Reason = "test",
+                .Manuscript = edited
+            })
     End Sub
 
 
@@ -428,6 +528,17 @@ Public Class RecoveryDraftTests
 
         Public Sub Tick()
             CallPrivate("ManuscriptDirtyTimer_Tick", Nothing, EventArgs.Empty)
+        End Sub
+
+        ' The Discard button of the Unsaved changes bar.
+        Public Sub Discard()
+            CallPrivate("DiscardManuscriptChanges")
+            Application.DoEvents()
+        End Sub
+
+        ' The state a restore that succeeded leaves before its restart.
+        Public Sub HandOver()
+            SetField("handingOverAfterRestore", True)
         End Sub
 
         ' A method rather than a property, which WinForms would try to serialize.
