@@ -2,7 +2,6 @@ Imports System
 Imports System.Diagnostics
 Imports System.IO
 Imports System.Linq
-Imports System.Runtime.ExceptionServices
 Imports System.Threading
 Imports System.Threading.Tasks
 Imports System.Windows.Forms
@@ -314,21 +313,10 @@ Public Class BackgroundLibraryWorkTests
     End Function
 
 
+    ' The shared runner (#134), given the time the 500 library's backup and
+    ' restore take on a slow host.
     Private Shared Sub RunOnStaThread(action As Action)
-        Dim failure As Exception = Nothing
-        Dim thread As New Thread(
-            Sub()
-                Try
-                    action()
-                Catch ex As Exception
-                    failure = ex
-                End Try
-            End Sub) With {.IsBackground = True}
-        thread.SetApartmentState(ApartmentState.STA)
-        thread.Start()
-        ' The 500 library's backup and restore take their time on a slow host.
-        Assert.IsTrue(thread.Join(TimeSpan.FromMinutes(10)), "Background library work test timed out.")
-        If failure IsNot Nothing Then ExceptionDispatchInfo.Capture(failure).Throw()
+        StaRunner.Run(action, TimeSpan.FromMinutes(10))
     End Sub
 
 End Class
