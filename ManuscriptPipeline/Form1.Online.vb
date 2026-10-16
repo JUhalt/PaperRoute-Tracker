@@ -59,7 +59,7 @@ Partial Public Class Form1
         Dim description As String =
             If(offline,
                "Working offline: PaperRoute contacts no online service.",
-               "Online: PaperRoute goes online only when you use a feature listed in Online services" &
+               "Online: PaperRoute goes online for the features listed in Online services" &
                If(turnedOff.Length = 0, ".", " (turned off: " & turnedOff & ").") &
                If(assistant Is Nothing, String.Empty, " AI assistant: on (" & assistant.ProviderName & ")."))
 

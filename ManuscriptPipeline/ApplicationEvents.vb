@@ -17,36 +17,30 @@ Namespace My
             Dim settings As AppSettings =
                 settingsService.Load()
 
-            Select Case settings.Appearance
-
-                Case AppAppearance.Light
-
-                    e.ColorMode =
-                        SystemColorMode.Classic
-
-                Case AppAppearance.Dark
-
-                    e.ColorMode =
-                        SystemColorMode.Dark
-
-                Case Else
-
-                    e.ColorMode =
-                        SystemColorMode.System
-
-            End Select
+            e.ColorMode =
+                UiTheme.ColorModeFor(
+                    settings.Appearance
+                )
 
         End Sub
 
 
-        ' An error on the UI thread (#121): the main window shows one plain
-        ' dialog and decides whether PaperRoute closes. With no window left
-        ' to keep working in, PaperRoute says why and exits as the stock
-        ' dialog's Quit did.
+        ' An error on the UI thread is recorded on this computer first (#120);
+        ' nothing is sent, and a report that cannot be written costs nothing.
+        ' Then the main window shows one plain dialog and decides whether
+        ' PaperRoute closes (#121). With no window left to keep working in,
+        ' PaperRoute says why and exits as the stock dialog's Quit did.
         Private Sub MyApplication_UnhandledException(
             sender As Object,
             e As UnhandledExceptionEventArgs
         ) Handles Me.UnhandledException
+
+            Dim reports As New ErrorReportService()
+
+            reports.Write(
+                e.Exception,
+                "main window"
+            )
 
             Dim window As Form1 =
                 Application.OpenForms.OfType(Of Form1)().FirstOrDefault()

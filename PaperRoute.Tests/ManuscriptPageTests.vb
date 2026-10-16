@@ -533,21 +533,35 @@ Public Class ManuscriptPageTests
 
     ' With no window open (#121), an error while PaperRoute starts or after
     ' the window closed is still said out loud before PaperRoute exits. The
-    ' real handler runs, so the box is the one a researcher would see.
+    ' real handler runs, so the box is the one a researcher would see, and
+    ' the report of #120 is written first, under a root of this test's own
+    ' so the user's profile is never touched.
     <TestMethod>
     Public Sub AnErrorWithNoWindowOpenIsShownBeforePaperRouteExits()
         RunOnStaThread(
             Sub()
                 Assert.IsFalse(Application.OpenForms.OfType(Of Form1)().Any(), "This test needs no window open.")
-                Using dialogs As New DialogWatcher()
-                    ' Not named application: that would hide Application above.
-                    Dim host As New ManuscriptPipeline.My.MyApplication()
-                    Dim e As New Microsoft.VisualBasic.ApplicationServices.UnhandledExceptionEventArgs(True, New InvalidOperationException("The library folder could not be located."))
-                    GetType(ManuscriptPipeline.My.MyApplication).GetMethod("MyApplication_UnhandledException", BindingFlags.Instance Or BindingFlags.NonPublic).
-                        Invoke(host, New Object() {host, e})
-                    CollectionAssert.AreEqual({"PaperRoute"}, dialogs.Closed, "The error is shown even with nothing to keep working in.")
-                    Assert.IsTrue(e.ExitApplication, "PaperRoute still exits afterwards.")
-                End Using
+                Dim root As String = Path.Combine(Path.GetTempPath(), "PaperRoute-PageTests-" & Guid.NewGuid().ToString("N"))
+                StorageEnvironment.RootOverride = root
+                Try
+                    Using dialogs As New DialogWatcher()
+                        ' Not named application: that would hide Application above.
+                        Dim host As New ManuscriptPipeline.My.MyApplication()
+                        Dim e As New Microsoft.VisualBasic.ApplicationServices.UnhandledExceptionEventArgs(True, New InvalidOperationException("The library folder could not be located."))
+                        GetType(ManuscriptPipeline.My.MyApplication).GetMethod("MyApplication_UnhandledException", BindingFlags.Instance Or BindingFlags.NonPublic).
+                            Invoke(host, New Object() {host, e})
+                        CollectionAssert.AreEqual({"PaperRoute"}, dialogs.Closed, "The error is shown even with nothing to keep working in.")
+                        Assert.IsTrue(e.ExitApplication, "PaperRoute still exits afterwards.")
+                    End Using
+
+                    Assert.AreEqual(1, Directory.GetFiles(ErrorReportService.DefaultDirectory(), "error-report_*").Length, "The error is recorded on this computer before anything is shown (#120).")
+                Finally
+                    StorageEnvironment.RootOverride = Nothing
+                    Try
+                        Directory.Delete(root, True)
+                    Catch
+                    End Try
+                End Try
             End Sub)
     End Sub
 
@@ -737,6 +751,39 @@ Public Class ManuscriptPageTests
                     board.Library.Clear()
                     board.Render()
                     Assert.IsTrue(board.Welcome.Visible)
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    ' #130: the welcome links to the guide's Quick Start, which opens Help at
+    ' that section. The dialog is modal, so the test looks at the window the
+    ' link creates through the welcome's helpShower seam.
+    <TestMethod>
+    Public Sub TheWelcomeLinksToTheQuickStart()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard()
+                    board.Prepare()
+
+                    Dim opened As String = Nothing
+                    board.helpShower =
+                        Sub(help)
+                            ShowOffscreen(help)
+                            Application.DoEvents()
+                            opened = help.GuideText.Substring(help.GuideSelectionStart)
+                            help.Close()
+                        End Sub
+                    Dim quickStart As LinkLabel = Descendants(board.Welcome).OfType(Of LinkLabel)().Single(Function(link) link.Text = "Read the Quick Start")
+                    GetType(LinkLabel).GetMethod("OnLinkClicked", BindingFlags.Instance Or BindingFlags.NonPublic).
+                        Invoke(quickStart, New Object() {New LinkLabelLinkClickedEventArgs(quickStart.Links(0))})
+
+                    Assert.IsNotNull(opened, "The link opens Help.")
+                    Assert.IsTrue(opened.StartsWith("Quick Start", StringComparison.Ordinal),
+                        "Help opens at the Quick Start section, not at: " & opened.Substring(0, Math.Min(60, opened.Length)))
+                    Assert.AreEqual(0, board.Library.Count, "Reading the guide adds nothing to the library.")
+                    Assert.AreEqual(0, board.SaveCount)
 
                     board.Close()
                 End Using

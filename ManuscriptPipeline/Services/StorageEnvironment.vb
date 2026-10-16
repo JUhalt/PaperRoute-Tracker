@@ -13,6 +13,12 @@ Namespace Services
         Private Shared _isolatedSessionRoot As String
         Private Shared _storageRootResolved As Boolean
 
+        ' For tests: every default root under a folder of their own, so a
+        ' test that builds the Diagnostics report or loads settings never
+        ' reads, lists or writes the user's profile. Set in TestInitialize
+        ' and cleared in TestCleanup by classes that do not run in parallel.
+        Friend Shared RootOverride As String = Nothing
+
 
         Private Sub New()
         End Sub
@@ -74,6 +80,9 @@ Namespace Services
                 _storageRootResolved = True
                 If _isolatedSessionRoot IsNot Nothing Then
                     Return Path.Combine(_isolatedSessionRoot, isolatedFolderName)
+                End If
+                If RootOverride IsNot Nothing Then
+                    Return Path.Combine(RootOverride, isolatedFolderName)
                 End If
                 Return normalRoot()
             End SyncLock
