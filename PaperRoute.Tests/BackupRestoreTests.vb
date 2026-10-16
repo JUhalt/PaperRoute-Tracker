@@ -844,7 +844,6 @@ Public Class BackupRestoreTests
 
         Dim scenario As RestoreScenario = CreateRestoreScenario()
 
-        ' Schema 10, while this build is at 9.
         SetBackupManifest(scenario.BackupPath, BackupManifestJson(StorageMigrationService.CurrentSchemaVersion + 1))
 
         Dim before As Dictionary(Of String, Byte()) = SnapshotTree(_root)
@@ -868,12 +867,16 @@ Public Class BackupRestoreTests
 
     ' A manifest that is not valid JSON, or in a format this build does not
     ' know, is refused with a plain message before anything changes (#115).
-    ' Before the change each was ignored and the backup restored.
+    ' The last three each reach one check: a schema that is not a number in
+    ' an otherwise whole manifest, a manifest with no date or version for
+    ' the restore questions, and an unknown format. Before the change each
+    ' was ignored and the backup restored.
     <TestMethod>
     <DataRow("{ not json", "could not be read")>
     <DataRow("[]", "could not be read")>
     <DataRow("{""SchemaVersion"":9}", "could not be read")>
-    <DataRow("{""FormatVersion"":1,""SchemaVersion"":""nine""}", "could not be read")>
+    <DataRow("{""FormatVersion"":1,""SchemaVersion"":""nine"",""AppVersion"":""0.9.2"",""CreatedUtc"":""2026-10-12T15:30:00Z""}", "could not be read")>
+    <DataRow("{""FormatVersion"":1,""SchemaVersion"":9}", "could not be read")>
     <DataRow("{""FormatVersion"":2,""SchemaVersion"":9}", "format 2")>
     Public Sub AManifestThatCannotBeReadOrIsInAnUnknownFormat_IsRefusedWithNothingChanged(manifest As String, expected As String)
 

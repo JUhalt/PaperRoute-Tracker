@@ -19,32 +19,42 @@ Namespace Services
         Public Property ArchiveEntryCount As Integer
         Public Property UncompressedBytes As Long
 
-        ' From the backup's backup.json (#115); Nothing and empty for a
-        ' backup without one.
+        ' From the backup's backup.json (#115). A backup without one has the
+        ' date its backup-info.txt records, if any, and no version.
         Public Property CreatedUtc As DateTime?
         Public Property AppVersion As String = String.Empty
 
 
         ' The backup's date and the PaperRoute that made it, as both restore
-        ' questions show them (#115).
+        ' questions show them (#115), each "not recorded" when the backup
+        ' does not say.
         Public Function DescribeOrigin() As String
 
-            If Not CreatedUtc.HasValue Then
+            Dim created As String =
+                "not recorded"
 
-                Return "Created: not recorded" &
-                    Environment.NewLine &
-                    "PaperRoute version: not recorded"
+            If CreatedUtc.HasValue Then
+
+                created =
+                    CreatedUtc.Value.ToLocalTime().ToString(
+                        "MMM d, yyyy h:mm tt",
+                        CultureInfo.CurrentCulture
+                    )
 
             End If
 
+            Dim version As String =
+                If(
+                    String.IsNullOrWhiteSpace(AppVersion),
+                    "not recorded",
+                    AppVersion
+                )
+
             Return "Created: " &
-                CreatedUtc.Value.ToLocalTime().ToString(
-                    "MMM d, yyyy h:mm tt",
-                    CultureInfo.CurrentCulture
-                ) &
+                created &
                 Environment.NewLine &
                 "PaperRoute version: " &
-                AppVersion
+                version
 
         End Function
 
@@ -274,6 +284,15 @@ Namespace Services
 
                     inspection.AppVersion =
                         manifest.AppVersion
+
+                Else
+
+                    ' PaperRoute 0.9.1 and earlier wrote no backup.json, but
+                    ' their backup-info.txt says when the backup was made.
+                    inspection.CreatedUtc =
+                        ReadBackupInfoCreated(
+                            extractionDirectory
+                        )
 
                 End If
 
@@ -1216,6 +1235,55 @@ Namespace Services
             End If
 
             Return value
+
+        End Function
+
+
+        ' The Created line of an extracted backup-info.txt, which every
+        ' backup has written in round-trip form, with its offset. Nothing
+        ' when there is no such file or line, or it does not parse, as in the
+        ' copy a restore makes of a library that could not be loaded.
+        Private Shared Function ReadBackupInfoCreated(
+            extractionDirectory As String
+        ) As DateTime?
+
+            Const CreatedPrefix As String = "Created: "
+
+            Dim infoPath As String =
+                Path.Combine(
+                    extractionDirectory,
+                    "backup-info.txt"
+                )
+
+            If Not File.Exists(infoPath) Then
+                Return Nothing
+            End If
+
+            For Each line As String In File.ReadLines(infoPath)
+
+                If Not line.StartsWith(
+                    CreatedPrefix,
+                    StringComparison.Ordinal
+                ) Then
+                    Continue For
+                End If
+
+                Dim created As DateTimeOffset
+
+                If DateTimeOffset.TryParse(
+                    line.Substring(CreatedPrefix.Length),
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    created
+                ) Then
+                    Return created.UtcDateTime
+                End If
+
+                Return Nothing
+
+            Next
+
+            Return Nothing
 
         End Function
 

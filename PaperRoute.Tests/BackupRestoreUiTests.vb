@@ -201,9 +201,12 @@ Public Class BackupRestoreUiTests
 
     ' Restore Backup... asks with the backup's date and the PaperRoute that
     ' made it, as its backup.json records them (#115), and with what it
-    ' holds. A backup with no backup.json says they were not recorded.
-    ' Before the change a backup carried neither and the preview showed
-    ' only the counts.
+    ' holds. A backup with no backup.json, as PaperRoute 0.9.1 and earlier
+    ' made, shows the date its backup-info.txt records and says the version
+    ' was not recorded; an archive with neither file says neither was. Before
+    ' the change a backup carried neither and the preview showed only the
+    ' counts, and then a backup without backup.json showed "Created: not
+    ' recorded" although its backup-info.txt held the date.
     <TestMethod>
     Public Sub TheRestorePreviewShowsTheBackupsDateAndVersion()
 
@@ -226,6 +229,26 @@ Public Class BackupRestoreUiTests
         StringAssert.Contains(preview, "Manuscripts: 3", "What the backup holds is still shown.")
 
         SetBackupManifest(_backupPath, Nothing)
+
+        Dim recorded As DateTimeOffset
+
+        Using archive As ZipArchive = ZipFile.OpenRead(_backupPath)
+            Using reader As New StreamReader(archive.GetEntry("backup-info.txt").Open())
+                Dim line As String = reader.ReadToEnd().Split({Environment.NewLine}, StringSplitOptions.None).Single(Function(text) text.StartsWith("Created: "))
+                recorded = DateTimeOffset.Parse(line.Substring("Created: ".Length), CultureInfo.InvariantCulture)
+            End Using
+        End Using
+
+        preview = RestorePreview(_backupPath)
+
+        StringAssert.Contains(preview, "Created: " & recorded.UtcDateTime.ToLocalTime().ToString("MMM d, yyyy h:mm tt", CultureInfo.CurrentCulture))
+        StringAssert.Contains(preview, "PaperRoute version: not recorded")
+        StringAssert.Contains(preview, "Manuscripts: 3")
+
+        Using archive As ZipArchive = ZipFile.Open(_backupPath, ZipArchiveMode.Update)
+            archive.GetEntry("backup-info.txt").Delete()
+        End Using
+
         preview = RestorePreview(_backupPath)
 
         StringAssert.Contains(preview, "Created: not recorded")

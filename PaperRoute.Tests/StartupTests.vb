@@ -870,7 +870,6 @@ Public Class StartupTests
         Dim backupPath As String =
             CreateBackupOfThreeManuscripts()
 
-        ' Schema 10, while this build is at 9.
         SetBackupManifest(
             backupPath,
             BackupManifestJson(

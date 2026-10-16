@@ -260,7 +260,6 @@ Public Class StartupRecoveryTests
 
         Dim backupPath As String = CreateBackup()
 
-        ' Schema 10, while this build is at 9.
         SetBackupManifest(backupPath, BackupManifestJson(StorageMigrationService.CurrentSchemaVersion + 1))
 
         Dim repository As ManuscriptRepository = SaveTwice("The library before the restore")
