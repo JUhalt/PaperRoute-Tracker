@@ -58,29 +58,20 @@ Public Class UiTextMnemonicTests
     <TestMethod>
     Public Sub UpdatePrompt_OpensOnItsDefaultButtonWithNothingSelected()
 
-        Dim failure As Exception = Nothing
-        Dim thread As New Threading.Thread(
+        StaRunner.Run(
             Sub()
-                Try
-                    Using prompt As New UpdatePromptForm("0.6.0", "0.7.0", "Stable", "First line." & Environment.NewLine & "Second line.")
-                        prompt.StartPosition = FormStartPosition.Manual
-                        prompt.Location = New Drawing.Point(-20000, -20000)
-                        prompt.ShowInTaskbar = False
-                        prompt.Show()
-                        Application.DoEvents()
-                        Dim notes As TextBox = Descendants(prompt).OfType(Of TextBox)().Single()
-                        Assert.AreEqual(0, notes.SelectionLength, "No text is selected.")
-                        Assert.AreEqual("Download & Restart", prompt.ActiveControl.Text.Replace("&&", "&"))
-                        prompt.Close()
-                    End Using
-                Catch ex As Exception
-                    failure = ex
-                End Try
+                Using prompt As New UpdatePromptForm("0.6.0", "0.7.0", "Stable", "First line." & Environment.NewLine & "Second line.")
+                    prompt.StartPosition = FormStartPosition.Manual
+                    prompt.Location = New Drawing.Point(-20000, -20000)
+                    prompt.ShowInTaskbar = False
+                    prompt.Show()
+                    Application.DoEvents()
+                    Dim notes As TextBox = Descendants(prompt).OfType(Of TextBox)().Single()
+                    Assert.AreEqual(0, notes.SelectionLength, "No text is selected.")
+                    Assert.AreEqual("Download & Restart", prompt.ActiveControl.Text.Replace("&&", "&"))
+                    prompt.Close()
+                End Using
             End Sub)
-        thread.SetApartmentState(Threading.ApartmentState.STA)
-        thread.Start()
-        thread.Join()
-        If failure IsNot Nothing Then Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw()
 
     End Sub
 

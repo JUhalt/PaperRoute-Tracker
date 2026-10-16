@@ -81,19 +81,7 @@ Public Class UnexpectedErrorFormTests
     End Function
 
     Private Shared Sub RunOnStaThread(action As Action)
-        Dim failure As ExceptionDispatchInfo = Nothing
-        Dim thread As New Thread(
-            Sub()
-                Try
-                    action()
-                Catch ex As Exception
-                    failure = ExceptionDispatchInfo.Capture(ex)
-                End Try
-            End Sub) With {.IsBackground = True}
-        thread.SetApartmentState(ApartmentState.STA)
-        thread.Start()
-        Assert.IsTrue(thread.Join(TimeSpan.FromSeconds(60)), "The dialog test timed out.")
-        failure?.Throw()
+        StaRunner.Run(action)
     End Sub
 
 End Class

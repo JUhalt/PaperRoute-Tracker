@@ -602,24 +602,7 @@ Public Class AssistantDraftingTests
     End Sub
 
     Private Shared Sub RunOnSta(action As Action, Optional mode As SystemColorMode = SystemColorMode.Classic)
-        Dim failure As ExceptionDispatchInfo = Nothing
-        Dim thread As New Thread(
-            Sub()
-                Dim priorMode As SystemColorMode = Application.ColorMode
-                Try
-                    Application.EnableVisualStyles()
-                    Application.SetColorMode(mode)
-                    action()
-                Catch ex As Exception
-                    failure = ExceptionDispatchInfo.Capture(ex)
-                Finally
-                    Application.SetColorMode(priorMode)
-                End Try
-            End Sub)
-        thread.SetApartmentState(ApartmentState.STA)
-        thread.Start()
-        thread.Join()
-        failure?.Throw()
+        StaRunner.Run(action, mode:=mode)
     End Sub
 
 End Class

@@ -348,21 +348,7 @@ Public Class IsolatedSessionStorageTests
     End Function
 
     Private Shared Sub RunOnStaThread(action As Action)
-        Dim failure As Exception = Nothing
-        Dim worker As New Thread(
-            Sub()
-                Try
-                    action()
-                Catch ex As Exception
-                    failure = ex
-                End Try
-            End Sub) With {.IsBackground = True}
-        worker.SetApartmentState(ApartmentState.STA)
-        worker.Start()
-        If Not worker.Join(TimeSpan.FromSeconds(90)) Then
-            Assert.Fail("The example window test timed out; a message box may be open on its thread.")
-        End If
-        If failure IsNot Nothing Then ExceptionDispatchInfo.Capture(failure).Throw()
+        StaRunner.Run(action)
     End Sub
 
     ' A fresh collectible assembly context exercises the real process-wide seam
