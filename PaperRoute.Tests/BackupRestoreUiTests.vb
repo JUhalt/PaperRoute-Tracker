@@ -166,6 +166,36 @@ Public Class BackupRestoreUiTests
     End Sub
 
 
+    ' Until the restart, a save from anywhere in the session, such as an
+    ' update check's question answered behind the Restore Complete box,
+    ' writes nothing: what is in memory is the library just replaced. Before
+    ' the change the page's Save wrote it over the restored manuscripts.json.
+    <TestMethod>
+    Public Sub ASaveWhileTheRestoreHandsOverWritesNothing()
+        RunOnStaThread(
+            Sub()
+                Using session As New RestoreSession(_dataDirectory, _managedDirectory)
+                    session.Prepare()
+                    session.OpenFirstManuscript()
+                    session.Field("Title").Text = "Edited before the restore"
+                    session.Restore(_backupPath)
+                    Assert.IsTrue(session.RestartRequested)
+                    Dim restored As Byte() = File.ReadAllBytes(DataFile("manuscripts.json"))
+
+                    Assert.IsFalse(session.SaveManuscriptPage(), "Nothing is saved while the restore hands over.")
+                    CollectionAssert.AreEqual(restored, File.ReadAllBytes(DataFile("manuscripts.json")))
+
+                    session.Close()
+                End Using
+            End Sub)
+
+        CollectionAssert.AreEquivalent(
+            {"Active Study", "Published Study", "Filed Study"},
+            New ManuscriptRepository(_dataDirectory, _managedDirectory).Load().Select(Function(manuscript) manuscript.Title).ToList(),
+            "The restored library is what is on disk.")
+    End Sub
+
+
     Private Function DataFile(name As String) As String
         Return Path.Combine(_dataDirectory, name)
     End Function

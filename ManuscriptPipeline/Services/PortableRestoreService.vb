@@ -917,6 +917,20 @@ Namespace Services
 
                 End If
 
+                ' citations.json falls back to citations.bak without a word,
+                ' so it too becomes a copy of what was restored.
+                If restoreCitations Then
+
+                    ReplaceSafetyBackup(
+                        citationsPath,
+                        Path.Combine(
+                            dataDirectory,
+                            "citations.bak"
+                        )
+                    )
+
+                End If
+
                 Return New RestoreResult With {
                     .ManuscriptCount = restoredManuscripts.Count,
                     .EmergencyBackupPath = emergencyBackupPath

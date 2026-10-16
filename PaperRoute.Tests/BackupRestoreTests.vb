@@ -736,6 +736,13 @@ Public Class BackupRestoreTests
             File.ReadAllBytes(Path.Combine(scenario.TargetData, "authors.bak")),
             "authors.bak equals the restored authors.json."
         )
+        ' CitationStore falls back to citations.bak without a word, so a
+        ' stale one would bring the pre-restore figures back.
+        CollectionAssert.AreEqual(
+            File.ReadAllBytes(Path.Combine(scenario.TargetData, CitationStore.FileName)),
+            File.ReadAllBytes(Path.Combine(scenario.TargetData, "citations.bak")),
+            "citations.bak equals the restored citations.json."
+        )
         Assert.AreEqual("Jane Researcher", New AuthorLibraryRepository(scenario.TargetData).Load().Authors.Single().DisplayName)
 
     End Sub
@@ -834,6 +841,7 @@ Public Class BackupRestoreTests
 
         Assert.IsTrue(File.Exists(Path.Combine(scenario.TargetData, "manuscripts.bak")))
         Assert.IsTrue(File.Exists(Path.Combine(scenario.TargetData, "authors.bak")))
+        Assert.IsTrue(File.Exists(Path.Combine(scenario.TargetData, "citations.bak")))
 
         Return scenario
 

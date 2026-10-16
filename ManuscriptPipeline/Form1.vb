@@ -1435,6 +1435,14 @@ Public Class Form1
     ' Overridable so tests never write a real library.
     Protected Overridable Function SaveManuscripts() As Boolean
 
+        ' While a restore hands over (#116), what is in memory is the library
+        ' it replaced: a save from anywhere, such as an update check's
+        ' question answered behind the Restore Complete box, would write it
+        ' over the restored one.
+        If handingOverAfterRestore Then
+            Return False
+        End If
+
         Try
 
             repository.Save(
