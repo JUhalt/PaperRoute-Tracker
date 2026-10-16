@@ -30,8 +30,24 @@ Namespace Services
         End Function
 
 
+        ' Test seam: whether a Windows contrast theme is on, in place of what
+        ' Windows says. Tests cannot switch the theme.
+        Friend Shared HighContrastOverride As Boolean? = Nothing
+
+
+        ' Under a Windows contrast theme every token is one of the user's own
+        ' system colors (#138): surfaces and tints are the window color; text,
+        ' borders, and warning, success, and error inks the window text; quiet
+        ' text and dividers the inactive text; the accent the selection color,
+        ' and the secondary accent the hyperlink color.
+        Public Shared Function IsHighContrast() As Boolean
+            Return If(HighContrastOverride, SystemInformation.HighContrast)
+        End Function
+
+
+        ' Never true under a contrast theme, even a dark one.
         Public Shared Function IsDark() As Boolean
-            Return SystemColors.Window.GetBrightness() < 0.5F
+            Return Not IsHighContrast() AndAlso SystemColors.Window.GetBrightness() < 0.5F
         End Function
 
 
@@ -61,6 +77,10 @@ Namespace Services
         ' Dividers inside a card, one step quieter than CardBorder.
         Public Shared Function SubtleBorder() As Color
 
+            If IsHighContrast() Then
+                Return SystemColors.GrayText
+            End If
+
             If IsDark() Then
                 Return Color.FromArgb(50, 56, 65)
             End If
@@ -74,6 +94,10 @@ Namespace Services
         ' Still 4.5:1 on both the board and card backgrounds.
         Public Shared Function MutedText() As Color
 
+            If IsHighContrast() Then
+                Return SystemColors.GrayText
+            End If
+
             If IsDark() Then
                 Return Color.FromArgb(138, 149, 161)
             End If
@@ -86,6 +110,10 @@ Namespace Services
         ' Text and icons drawn on a filled accent (primary) surface.
         Public Shared Function OnAccentText() As Color
 
+            If IsHighContrast() Then
+                Return SystemColors.HighlightText
+            End If
+
             If IsDark() Then
                 Return Color.FromArgb(7, 32, 29)
             End If
@@ -97,6 +125,10 @@ Namespace Services
 
         Public Shared Function WarningMutedBackground() As Color
 
+            If IsHighContrast() Then
+                Return SystemColors.Window
+            End If
+
             If IsDark() Then
                 Return Color.FromArgb(92, 63, 21)
             End If
@@ -107,6 +139,10 @@ Namespace Services
 
 
         Public Shared Function DangerMutedBackground() As Color
+
+            If IsHighContrast() Then
+                Return SystemColors.Window
+            End If
 
             If IsDark() Then
                 Return Color.FromArgb(91, 33, 38)
@@ -139,6 +175,10 @@ Namespace Services
 
         Public Shared Function BoardBackground() As Color
 
+            If IsHighContrast() Then
+                Return SystemColors.Window
+            End If
+
             If IsDark() Then
                 Return Color.FromArgb(24, 27, 32)
             End If
@@ -149,6 +189,10 @@ Namespace Services
 
 
         Public Shared Function HeaderBackground() As Color
+
+            If IsHighContrast() Then
+                Return SystemColors.Window
+            End If
 
             If IsDark() Then
                 Return Color.FromArgb(31, 35, 41)
@@ -161,6 +205,10 @@ Namespace Services
 
         Public Shared Function CardBackground() As Color
 
+            If IsHighContrast() Then
+                Return SystemColors.Window
+            End If
+
             If IsDark() Then
                 Return Color.FromArgb(40, 44, 51)
             End If
@@ -171,6 +219,10 @@ Namespace Services
 
 
         Public Shared Function CardBorder() As Color
+
+            If IsHighContrast() Then
+                Return SystemColors.WindowText
+            End If
 
             If IsDark() Then
                 Return Color.FromArgb(61, 68, 79)
@@ -183,6 +235,10 @@ Namespace Services
 
         Public Shared Function HoverBackground() As Color
 
+            If IsHighContrast() Then
+                Return SystemColors.Window
+            End If
+
             If IsDark() Then
                 Return Color.FromArgb(50, 56, 65)
             End If
@@ -193,11 +249,21 @@ Namespace Services
 
 
         Public Shared Function PrimaryText() As Color
+
+            If IsHighContrast() Then
+                Return SystemColors.WindowText
+            End If
+
             Return SystemColors.ControlText
+
         End Function
 
 
         Public Shared Function SecondaryText() As Color
+
+            If IsHighContrast() Then
+                Return SystemColors.WindowText
+            End If
 
             If IsDark() Then
                 Return Color.FromArgb(172, 181, 192)
@@ -209,11 +275,21 @@ Namespace Services
 
 
         Public Shared Function BrandNavy() As Color
+
+            If IsHighContrast() Then
+                Return SystemColors.WindowText
+            End If
+
             Return Color.FromArgb(15, 23, 42)
+
         End Function
 
 
         Public Shared Function AccentColor() As Color
+
+            If IsHighContrast() Then
+                Return SystemColors.Highlight
+            End If
 
             If IsDark() Then
                 Return Color.FromArgb(45, 212, 191)
@@ -228,6 +304,10 @@ Namespace Services
 
         Public Shared Function AccentSecondaryColor() As Color
 
+            If IsHighContrast() Then
+                Return SystemColors.HotTrack
+            End If
+
             If IsDark() Then
                 Return Color.FromArgb(34, 211, 238)
             End If
@@ -239,6 +319,10 @@ Namespace Services
 
         Public Shared Function AccentMutedBackground() As Color
 
+            If IsHighContrast() Then
+                Return SystemColors.Window
+            End If
+
             If IsDark() Then
                 Return Color.FromArgb(20, 69, 68)
             End If
@@ -248,7 +332,38 @@ Namespace Services
         End Function
 
 
+        ' A grid's selected rows: a tint behind the primary text, or under a
+        ' contrast theme the user's selection colors, since a tint there is
+        ' the window color and would hide the selection.
+        Public Shared Function SelectedRowBackground(
+            tint As Color
+        ) As Color
+
+            If IsHighContrast() Then
+                Return SystemColors.Highlight
+            End If
+
+            Return tint
+
+        End Function
+
+
+        Public Shared Function SelectedRowText() As Color
+
+            If IsHighContrast() Then
+                Return SystemColors.HighlightText
+            End If
+
+            Return PrimaryText()
+
+        End Function
+
+
         Public Shared Function DangerColor() As Color
+
+            If IsHighContrast() Then
+                Return SystemColors.WindowText
+            End If
 
             If IsDark() Then
                 ' Preserve readable destructive-action text on dark hover states.
@@ -262,6 +377,10 @@ Namespace Services
 
         Public Shared Function WarningColor() As Color
 
+            If IsHighContrast() Then
+                Return SystemColors.WindowText
+            End If
+
             If IsDark() Then
                 Return Color.FromArgb(251, 191, 36)
             End If
@@ -272,6 +391,10 @@ Namespace Services
 
 
         Public Shared Function SuccessColor() As Color
+
+            If IsHighContrast() Then
+                Return SystemColors.WindowText
+            End If
 
             If IsDark() Then
                 Return Color.FromArgb(110, 231, 183)
@@ -287,6 +410,10 @@ Namespace Services
         ' A quiet green behind SuccessColor, such as the rail's Online status.
         Public Shared Function SuccessMutedBackground() As Color
 
+            If IsHighContrast() Then
+                Return SystemColors.Window
+            End If
+
             If IsDark() Then
                 Return Color.FromArgb(21, 59, 43)
             End If
@@ -300,6 +427,10 @@ Namespace Services
         ' blues match the Submitted stage badge.
         Public Shared Function InfoColor() As Color
 
+            If IsHighContrast() Then
+                Return SystemColors.WindowText
+            End If
+
             If IsDark() Then
                 Return Color.FromArgb(147, 197, 253)
             End If
@@ -310,6 +441,10 @@ Namespace Services
 
 
         Public Shared Function InfoMutedBackground() As Color
+
+            If IsHighContrast() Then
+                Return SystemColors.Window
+            End If
 
             If IsDark() Then
                 Return Color.FromArgb(30, 58, 100)
@@ -323,6 +458,10 @@ Namespace Services
         Public Shared Function StageBackground(
             stage As PaperStage
         ) As Color
+
+            If IsHighContrast() Then
+                Return SystemColors.Window
+            End If
 
             If IsDark() Then
 
@@ -394,6 +533,10 @@ Namespace Services
         Public Shared Function StageForeground(
             stage As PaperStage
         ) As Color
+
+            If IsHighContrast() Then
+                Return SystemColors.WindowText
+            End If
 
             If IsDark() Then
 

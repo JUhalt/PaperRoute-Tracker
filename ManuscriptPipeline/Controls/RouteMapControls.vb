@@ -13,13 +13,22 @@ Namespace Controls
 
     ' Colors and wording shared by the route map views (#82). The three
     ' kinds differ in lightness as well as hue, and white text on each fill
-    ' meets 4.5:1.
+    ' meets 4.5:1. Under a contrast theme every color is one of the user's
+    ' own, with the text that goes on it (#138).
     Friend NotInheritable Class RouteMapStyle
 
         Private Sub New()
         End Sub
 
         Public Shared Function Fill(kind As RouteSegmentKind) As Color
+            If UiTheme.IsHighContrast() Then
+                Select Case kind
+                    Case RouteSegmentKind.Journal : Return SystemColors.Highlight
+                    Case RouteSegmentKind.Author : Return SystemColors.HotTrack
+                    Case RouteSegmentKind.Production : Return SystemColors.WindowText
+                    Case Else : Return SystemColors.GrayText
+                End Select
+            End If
             Select Case kind
                 Case RouteSegmentKind.Journal : Return Color.FromArgb(15, 118, 110)
                 Case RouteSegmentKind.Author : Return Color.FromArgb(180, 83, 9)
@@ -41,7 +50,18 @@ Namespace Controls
             End If
         End Sub
 
+        ' The day count drawn on a kind's fill.
+        Public Shared Function LabelColor(kind As RouteSegmentKind) As Color
+            If Not UiTheme.IsHighContrast() Then Return Color.White
+            Select Case kind
+                Case RouteSegmentKind.Journal : Return SystemColors.HighlightText
+                Case RouteSegmentKind.NotRecorded : Return SystemColors.WindowText
+                Case Else : Return SystemColors.Window
+            End Select
+        End Function
+
         Public Shared Function MarkerColor(marker As RouteMarker) As Color
+            If UiTheme.IsHighContrast() Then Return SystemColors.WindowText
             Select Case marker.Kind
                 Case RouteMarkerKind.Published : Return Color.FromArgb(15, 118, 110)
                 Case RouteMarkerKind.Decision
@@ -53,6 +73,11 @@ Namespace Controls
                     End Select
                 Case Else : Return Color.FromArgb(29, 78, 216)
             End Select
+        End Function
+
+        ' The number drawn on an event's marker.
+        Public Shared Function NumberColor() As Color
+            Return If(UiTheme.IsHighContrast(), SystemColors.Window, Color.White)
         End Function
 
         ' "105 days with the journals", one per kind on the route.
@@ -297,7 +322,7 @@ Namespace Controls
                     Dim label As String = segment.Days.ToString(CultureInfo.CurrentCulture) & If(segment.Days = 1, " day", " days")
                     If TextRenderer.MeasureText(label, Font).Width + 6 * unit > bounds.Width Then label = segment.Days.ToString(CultureInfo.CurrentCulture) & "d"
                     If TextRenderer.MeasureText(label, Font).Width + 2 * unit <= bounds.Width Then
-                        TextRenderer.DrawText(g, label, Font, Rectangle.Round(bounds), Color.White,
+                        TextRenderer.DrawText(g, label, Font, Rectangle.Round(bounds), RouteMapStyle.LabelColor(segment.Kind),
                             TextFormatFlags.HorizontalCenter Or TextFormatFlags.VerticalCenter Or flags)
                     End If
                 End If
@@ -382,7 +407,7 @@ Namespace Controls
                 g.FillEllipse(fill, circle)
                 g.DrawEllipse(ring, circle)
             End Using
-            TextRenderer.DrawText(g, item.Number.ToString(CultureInfo.CurrentCulture), numberFont, Rectangle.Round(circle), Color.White,
+            TextRenderer.DrawText(g, item.Number.ToString(CultureInfo.CurrentCulture), numberFont, Rectangle.Round(circle), RouteMapStyle.NumberColor(),
                 TextFormatFlags.HorizontalCenter Or TextFormatFlags.VerticalCenter Or TextFormatFlags.NoPadding Or TextFormatFlags.NoPrefix)
         End Sub
 
