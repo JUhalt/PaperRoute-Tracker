@@ -99,6 +99,42 @@ Public Class WorkflowThemeKeyboardSmokeTests
 
     End Sub
 
+    ' Time with the journal, time with the author, production, and time not
+    ' recorded can be told apart without their colors, in greyscale or by a
+    ' reader who cannot tell the hues apart (#140): each pair of kinds, as
+    ' the route map paints them, differs by 3:1 in luminance or in pattern.
+    ' Under a contrast theme the colors are the user's, so only a pattern
+    ' counts.
+    <TestMethod>
+    <DataRow(SystemColorMode.Classic, False)>
+    <DataRow(SystemColorMode.Dark, False)>
+    <DataRow(SystemColorMode.Classic, True)>
+    <DataRow(SystemColorMode.Dark, True)>
+    Public Sub RouteMapKinds_CanBeToldApartWithoutColor(mode As SystemColorMode, contrastTheme As Boolean)
+
+        RunWithColorMode(mode,
+            Sub()
+                UiTheme.HighContrastOverride = contrastTheme
+                Try
+                    Dim kinds As RouteSegmentKind() = [Enum].GetValues(Of RouteSegmentKind)()
+                    Dim painted As Dictionary(Of RouteSegmentKind, Integer()) = kinds.ToDictionary(Function(kind) kind, Function(kind) PaintedSwatch(kind))
+                    Dim alike As New List(Of String)()
+                    For first As Integer = 0 To kinds.Length - 2
+                        For second As Integer = first + 1 To kinds.Length - 1
+                            Dim one As Integer() = painted(kinds(first))
+                            Dim other As Integer() = painted(kinds(second))
+                            Dim ratio As Double = ContrastRatio(Color.FromArgb(Commonest(one)), Color.FromArgb(Commonest(other)))
+                            If SamePattern(one, other) AndAlso (contrastTheme OrElse ratio < 3.0) Then alike.Add($"{kinds(first)} and {kinds(second)} ({ratio:F2}:1)")
+                        Next
+                    Next
+                    Assert.AreEqual(0, alike.Count, $"Same pattern and too little luminance contrast in {mode}{If(contrastTheme, " under a contrast theme", String.Empty)}: {String.Join(", ", alike)}.")
+                Finally
+                    UiTheme.HighContrastOverride = Nothing
+                End Try
+            End Sub)
+
+    End Sub
+
     <TestMethod>
     <DataRow(SystemColorMode.Classic)>
     <DataRow(SystemColorMode.Dark)>
@@ -381,6 +417,31 @@ Public Class WorkflowThemeKeyboardSmokeTests
         Return If(value <= 0.04045, value / 12.92, Math.Pow((value + 0.055) / 1.055, 2.4))
     End Function
 
+    ' A kind's pixels as the route map paints it on a card.
+    Private Shared Function PaintedSwatch(kind As RouteSegmentKind) As Integer()
+        Using image As New Bitmap(48, 24)
+            Using g As Graphics = Graphics.FromImage(image)
+                g.Clear(UiTheme.CardBackground())
+                RouteMapStyle.FillSegment(g, New RectangleF(0, 0, image.Width, image.Height), kind, UiTheme.CardBackground())
+            End Using
+            Return Enumerable.Range(0, image.Width * image.Height).Select(Function(index) image.GetPixel(index Mod image.Width, index \ image.Width).ToArgb()).ToArray()
+        End Using
+    End Function
+
+    Private Shared Function Commonest(pixels As Integer()) As Integer
+        Return pixels.GroupBy(Function(pixel) pixel).OrderByDescending(Function(group) group.Count()).First().Key
+    End Function
+
+    ' Two swatches share a pattern, whatever their colors, when nearly the
+    ' same pixels are in each one's commonest color, or nearly the same
+    ' pixels are not.
+    Private Shared Function SamePattern(one As Integer(), other As Integer()) As Boolean
+        Dim oneColor As Integer = Commonest(one)
+        Dim otherColor As Integer = Commonest(other)
+        Dim differing As Double = Enumerable.Range(0, one.Length).Count(Function(index) (one(index) = oneColor) <> (other(index) = otherColor)) / CDbl(one.Length)
+        Return differing < 0.1 OrElse differing > 0.9
+    End Function
+
     ' Every color the app chooses for itself, by name: each of the theme's
     ' tokens, a stage's badge, a tag's chip as a card paints it, a grid's
     ' selected rows, and the route map's fills, labels, and markers.
@@ -405,6 +466,7 @@ Public Class WorkflowThemeKeyboardSmokeTests
         For Each kind As RouteSegmentKind In [Enum].GetValues(GetType(RouteSegmentKind))
             add($"Route.Fill({kind})", Function() RouteMapStyle.Fill(kind))
             add($"Route.LabelColor({kind})", Function() RouteMapStyle.LabelColor(kind))
+            If RouteMapStyle.Pattern(kind).HasValue Then add($"Route.Stripe({kind})", Function() RouteMapStyle.Stripe(kind))
         Next
         For Each marker In {("Submitted", RouteMarkerKind.Submitted, EditorialDecision.None), ("Resubmitted", RouteMarkerKind.Resubmitted, EditorialDecision.None),
                             ("Published", RouteMarkerKind.Published, EditorialDecision.None), ("Accepted", RouteMarkerKind.Decision, EditorialDecision.Accepted),
@@ -418,7 +480,8 @@ Public Class WorkflowThemeKeyboardSmokeTests
     End Function
 
     ' Each token's color before #138, recorded from that code: its name,
-    ' then Light, then Dark. "system" is the system's control text.
+    ' then Light, then Dark. "system" is the system's control text. The
+    ' route map's stripes came later, with #140.
     Private Shared ReadOnly TokensBefore As String() = {
         "SubtleBorder E7EEF0 323841",
         "MutedText 64717D 8A95A1",
@@ -481,8 +544,10 @@ Public Class WorkflowThemeKeyboardSmokeTests
         "Route.LabelColor(Journal) FFFFFF FFFFFF",
         "Route.Fill(Author) B45309 B45309",
         "Route.LabelColor(Author) FFFFFF FFFFFF",
+        "Route.Stripe(Author) 7E3A06 7E3A06",
         "Route.Fill(Production) 475569 64748B",
         "Route.LabelColor(Production) FFFFFF FFFFFF",
+        "Route.Stripe(Production) 323C4A 465161",
         "Route.Fill(NotRecorded) A0B0B5 5C7076",
         "Route.LabelColor(NotRecorded) FFFFFF FFFFFF",
         "Route.MarkerColor(Submitted) 1D4ED8 1D4ED8",
