@@ -19,15 +19,29 @@ Partial Public Class Form1
 
     Private manuscriptEditor As EditManuscriptForm = Nothing
     Private manuscriptSaveBar As Control = Nothing
+    Private manuscriptSaveHint As Label = Nothing
     Private manuscriptTitleLabel As Label = Nothing
     Private manuscriptStagePill As PillLabel = Nothing
     Private manuscriptMetaLabel As Label = Nothing
     Private manuscriptShelfLabel As Label = Nothing
 
+    Private Const SaveBarHint As String =
+        "Save keeps them. Discard returns to the last saved version."
+
+    ' After a failed save with nothing edited since, there is no saved
+    ' version for Discard to return to, so the bar says what Save does
+    ' instead (#113).
+    Private Const SaveFailedHint As String =
+        "Your last save did not finish. Save tries again."
+
     Private WithEvents manuscriptDirtyTimer As New Timer With {.Interval = 300}
 
     ' Asks what to do with unsaved manuscript changes. Tests replace it.
     Friend unsavedChangesPrompt As Func(Of String, DialogResult) = Nothing
+
+    ' Shows an unexpected error, given whether there are unsaved changes;
+    ' Abort means Close PaperRoute (#121). Tests replace it.
+    Friend unhandledErrorPrompt As Func(Of Exception, Boolean, DialogResult) = Nothing
 
 
     ' Creates the page's editor. Tests supply a disposable author library.
@@ -417,8 +431,8 @@ Partial Public Class Form1
             .ForeColor = UiTheme.PrimaryText()
         }
 
-        Dim lblHint As New Label With {
-            .Text = "Save keeps them. Discard returns to the last saved version.",
+        manuscriptSaveHint = New Label With {
+            .Text = SaveBarHint,
             .AutoSize = True,
             .AutoEllipsis = True,
             .Anchor = AnchorStyles.Left,
@@ -467,7 +481,7 @@ Partial Public Class Form1
 
         bar.Controls.Add(lblDot, 0, 0)
         bar.Controls.Add(lblMessage, 1, 0)
-        bar.Controls.Add(lblHint, 2, 0)
+        bar.Controls.Add(manuscriptSaveHint, 2, 0)
         bar.Controls.Add(buttons, 3, 0)
 
         Return bar
@@ -531,7 +545,25 @@ Partial Public Class Form1
             Return
         End If
 
-        Dim dirty As Boolean = manuscriptEditor.HasUnsavedChanges()
+        RefreshSaveBar()
+
+    End Sub
+
+
+    ' Shows the Unsaved changes bar while the editor differs from the model
+    ' or the last save did not reach the disk (#113), with a hint for each.
+    Private Sub RefreshSaveBar()
+
+        Dim edited As Boolean = manuscriptEditor.HasUnsavedChanges()
+
+        Dim hint As String =
+            If(librarySaveFailed AndAlso Not edited, SaveFailedHint, SaveBarHint)
+
+        If manuscriptSaveHint.Text <> hint Then
+            manuscriptSaveHint.Text = hint
+        End If
+
+        Dim dirty As Boolean = edited OrElse librarySaveFailed
 
         If manuscriptSaveBar.Visible <> dirty Then
             manuscriptSaveBar.Visible = dirty
@@ -565,7 +597,7 @@ Partial Public Class Form1
         RefreshManuscriptHeader()
 
         If manuscriptSaveBar IsNot Nothing AndAlso Not manuscriptSaveBar.IsDisposed Then
-            manuscriptSaveBar.Visible = manuscriptEditor.HasUnsavedChanges()
+            RefreshSaveBar()
         End If
 
         Return saved
@@ -644,10 +676,19 @@ Partial Public Class Form1
     ' False to stay.
     Friend Function ConfirmLeaveManuscript() As Boolean
 
-        If currentPage <> WorkspacePage.Manuscript OrElse
-           manuscriptEditor Is Nothing OrElse
-           manuscriptEditor.IsDisposed OrElse
-           Not manuscriptEditor.HasUnsavedChanges() Then
+        Return ConfirmUnsavedChanges("Choose No to discard them.")
+
+    End Function
+
+
+    ' Asks about unsaved manuscript changes before an action that would
+    ' otherwise miss them (#112): Yes saves first, No goes on without them
+    ' as the hint says, Cancel stops. Returns False to stop.
+    Friend Function ConfirmUnsavedChanges(
+        noHint As String
+    ) As Boolean
+
+        If Not HasUnsavedPageEdits() Then
             Return True
         End If
 
@@ -661,7 +702,7 @@ Partial Public Class Form1
                    "Save your changes to '" & title & "'?" &
                    Environment.NewLine &
                    Environment.NewLine &
-                   "Choose No to discard them.",
+                   noHint,
                    "Unsaved Changes",
                    MessageBoxButtons.YesNoCancel,
                    MessageBoxIcon.Warning))
@@ -669,6 +710,118 @@ Partial Public Class Form1
         Select Case choice
             Case DialogResult.Yes
                 Return SaveManuscriptPage()
+            Case DialogResult.No
+                Return True
+            Case Else
+                Return False
+        End Select
+
+    End Function
+
+
+    Private Function HasUnsavedPageEdits() As Boolean
+
+        Return currentPage = WorkspacePage.Manuscript AndAlso
+            manuscriptEditor IsNot Nothing AndAlso
+            Not manuscriptEditor.IsDisposed AndAlso
+            manuscriptEditor.HasUnsavedChanges()
+
+    End Function
+
+
+    ' An error on the UI thread (#121): one plain dialog that says what
+    ' happened and whether there are unsaved changes. Keep Working returns
+    ' to the window; Close PaperRoute closes it the normal way, so the Save
+    ' or Discard question still appears.
+    Friend Sub ReportUnhandledError(
+        failure As Exception
+    )
+
+        Dim unsavedChanges As Boolean = HasUnsavedPageEdits() OrElse librarySaveFailed
+
+        Dim choice As DialogResult
+
+        If unhandledErrorPrompt IsNot Nothing Then
+            choice = unhandledErrorPrompt(failure, unsavedChanges)
+        Else
+            ' A guard no test can fail before it: this runs inside the error
+            ' handler, where a second failure would end PaperRoute with
+            ' nothing shown. A plain box offers the same two ways out, and
+            ' nothing escapes from here.
+            Try
+                Using dialog As New UnexpectedErrorForm(failure, unsavedChanges, UnexpectedErrorForm.LogFolder())
+                    choice = dialog.ShowDialog(Me)
+                End Using
+            Catch ex As Exception
+                choice = FallbackErrorChoice(failure, unsavedChanges)
+            End Try
+        End If
+
+        If choice = DialogResult.Abort Then
+            Close()
+        End If
+
+    End Sub
+
+
+    ' The error dialog could not be shown: a message box cannot name its
+    ' buttons, so the text does. Yes keeps working (Cancel), No closes
+    ' PaperRoute (Abort). Should even the box fail, keep working.
+    Private Function FallbackErrorChoice(
+        failure As Exception,
+        unsavedChanges As Boolean
+    ) As DialogResult
+
+        Try
+            Dim answer As DialogResult =
+                MessageBox.Show(
+                    Me,
+                    "PaperRoute ran into a problem." &
+                    Environment.NewLine &
+                    Environment.NewLine &
+                    If(String.IsNullOrWhiteSpace(failure?.Message), "An unexpected error occurred.", failure.Message) &
+                    Environment.NewLine &
+                    Environment.NewLine &
+                    If(unsavedChanges, "There are unsaved changes. ", "") &
+                    "Keep working? Choose No to close PaperRoute.",
+                    "PaperRoute",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Error,
+                    MessageBoxDefaultButton.Button1)
+
+            Return If(answer = DialogResult.No, DialogResult.Abort, DialogResult.Cancel)
+        Catch ex As Exception
+            Return DialogResult.Cancel
+        End Try
+
+    End Function
+
+
+    ' A save failed since the last good one (#113): closing would lose the
+    ' changes it did not write, so closing asks first. Yes tries the save
+    ' again, No closes without saving, Cancel stays. Returns False to stay.
+    Friend Function ConfirmCloseUnsavedLibrary() As Boolean
+
+        If Not librarySaveFailed Then
+            Return True
+        End If
+
+        Dim choice As DialogResult =
+            If(unsavedChangesPrompt IsNot Nothing,
+               unsavedChangesPrompt("your library"),
+               MessageBox.Show(
+                   Me,
+                   "Your latest changes have not been saved." &
+                   Environment.NewLine &
+                   Environment.NewLine &
+                   "Save again before closing? Choose No to close without saving.",
+                   "Unsaved Changes",
+                   MessageBoxButtons.YesNoCancel,
+                   MessageBoxIcon.Warning))
+
+        Select Case choice
+            Case DialogResult.Yes
+                Return SaveManuscripts()
             Case DialogResult.No
                 Return True
             Case Else
@@ -697,6 +850,10 @@ Partial Public Class Form1
         End If
 
         If Not e.Cancel AndAlso Not ConfirmLeaveManuscript() Then
+            e.Cancel = True
+        End If
+
+        If Not e.Cancel AndAlso Not ConfirmCloseUnsavedLibrary() Then
             e.Cancel = True
         End If
 

@@ -16,8 +16,6 @@ Namespace Forms
 
         Private ReadOnly _settings As AppSettings
         Private ReadOnly _repository As New ManuscriptRepository()
-        Private ReadOnly _authorRepository As New AuthorLibraryRepository()
-        Private ReadOnly _managedLibrary As New ManagedLibraryService()
         Private ReadOnly txtReport As New TextBox()
 
 
@@ -85,7 +83,7 @@ Namespace Forms
             txtReport.ScrollBars = ScrollBars.Both
             txtReport.WordWrap = False
             txtReport.Font = New Font("Consolas", 9.5F)
-            txtReport.Text = BuildDiagnosticReport()
+            txtReport.Text = BuildReport(_settings)
             txtReport.Margin = New Padding(0)
 
             Dim buttons As New FlowLayoutPanel With {
@@ -148,9 +146,9 @@ Namespace Forms
         End Sub
 
 
-        Private Function TurnedOffServices() As String
+        Private Shared Function TurnedOffServices(settings As AppSettings) As String
 
-            Dim turnedOff As List(Of String) = If(_settings.OnlineServices?.TurnedOff, New List(Of String)())
+            Dim turnedOff As List(Of String) = If(settings.OnlineServices?.TurnedOff, New List(Of String)())
             Dim names As New List(Of String)()
 
             For Each service As OnlineService In OnlineServiceCatalog.Services
@@ -200,7 +198,19 @@ Namespace Forms
         End Property
 
 
-        Private Function BuildDiagnosticReport() As String
+        ' The report needs no loaded library: the startup window copies it
+        ' when PaperRoute cannot start (#119).
+        Friend Shared Function BuildReport(
+            settings As AppSettings
+        ) As String
+
+            If settings Is Nothing Then
+                settings = New AppSettings()
+            End If
+
+            Dim repository As New ManuscriptRepository()
+            Dim authorRepository As New AuthorLibraryRepository()
+            Dim managedLibrary As New ManagedLibraryService()
 
             Dim builder As New StringBuilder()
 
@@ -208,18 +218,18 @@ Namespace Forms
             builder.AppendLine("======================")
             builder.AppendLine()
             builder.AppendLine("Version: " & UpdateService.CurrentVersionText())
-            builder.AppendLine("Update channel: " & UpdateService.ChannelDisplayName(_settings.UpdateChannel))
-            builder.AppendLine("Installed build: " & If(UpdateService.IsInstalledBuild(_settings.UpdateChannel), "Yes", "No (developer/portable)"))
+            builder.AppendLine("Update channel: " & UpdateService.ChannelDisplayName(settings.UpdateChannel))
+            builder.AppendLine("Installed build: " & If(UpdateService.IsInstalledBuild(settings.UpdateChannel), "Yes", "No (developer/portable)"))
             builder.AppendLine("Storage profile: " & StorageEnvironment.ProfileDisplayName())
-            builder.AppendLine("Automatic update checks: " & If(_settings.CheckForUpdatesAutomatically, "On", "Off"))
+            builder.AppendLine("Automatic update checks: " & If(settings.CheckForUpdatesAutomatically, "On", "Off"))
             builder.AppendLine("Work offline: " & If(OnlineAccess.IsWorkingOffline, "On", "Off"))
-            builder.AppendLine("Online services turned off: " & TurnedOffServices())
+            builder.AppendLine("Online services turned off: " & TurnedOffServices(settings))
             ' Whether a key is stored, never the key.
             builder.AppendLine("OpenAlex key: " & If(OnlineAccess.KeyStore().HasKey(ProtectedKeyStore.OpenAlex), "Added", "Not added"))
-            For Each line As String In AssistantLines(_settings.OnlineServices?.Assistant, OnlineAccess.KeyStore())
+            For Each line As String In AssistantLines(settings.OnlineServices?.Assistant, OnlineAccess.KeyStore())
                 builder.AppendLine(line)
             Next
-            builder.AppendLine("Storage schema: " & StorageMigrationService.ReadSchemaVersion().ToString())
+            builder.AppendLine("Storage schema: " & SchemaVersionText())
             builder.AppendLine()
             builder.AppendLine("OS: " & RuntimeInformation.OSDescription)
             builder.AppendLine("Architecture: " & RuntimeInformation.OSArchitecture.ToString())
@@ -228,15 +238,43 @@ Namespace Forms
             builder.AppendLine("64-bit process: " & Environment.Is64BitProcess.ToString())
             builder.AppendLine()
             builder.AppendLine("Executable: " & Application.ExecutablePath)
-            builder.AppendLine("Data file: " & _repository.DataFilePath)
-            builder.AppendLine("Backup file: " & _repository.BackupFilePath)
-            builder.AppendLine("Reusable metadata library: " & _authorRepository.DataFilePath)
-            builder.AppendLine("Managed library: " & _managedLibrary.RootDirectory)
-            builder.AppendLine("Removed files: " & _managedLibrary.RemovedDirectory)
+            builder.AppendLine("Data file: " & repository.DataFilePath)
+            builder.AppendLine("Backup file: " & repository.BackupFilePath)
+            builder.AppendLine("Pre-import copies: " & repository.PreImportBackupDirectory)
+            builder.AppendLine("Recovery folder: " & repository.RecoveryDirectory)
+            builder.AppendLine("Reusable metadata library: " & authorRepository.DataFilePath)
+            builder.AppendLine("Reusable metadata backup: " & authorRepository.BackupFilePath)
+            builder.AppendLine("Managed library: " & managedLibrary.RootDirectory)
+            builder.AppendLine("Removed files: " & managedLibrary.RemovedDirectory)
+            builder.AppendLine("Last error report: " & LastErrorReportText())
             builder.AppendLine("Legacy data retained: " & If(Directory.Exists(StorageMigrationService.LegacyDataRoot()), "Yes", "No"))
             builder.AppendLine("Legacy library retained: " & If(Directory.Exists(StorageMigrationService.LegacyManagedLibraryRoot()), "Yes", "No"))
 
             Return builder.ToString()
+
+        End Function
+
+
+        ' The newest local error report (#120), or None.
+        Private Shared Function LastErrorReportText() As String
+
+            Dim reportPath As String =
+                New ErrorReportService().LastReportPath()
+
+            Return If(reportPath.Length = 0, "None", reportPath)
+
+        End Function
+
+
+        ' Startup can fail on this very file, so the report says so rather
+        ' than failing with it.
+        Private Shared Function SchemaVersionText() As String
+
+            Try
+                Return StorageMigrationService.ReadSchemaVersion().ToString()
+            Catch
+                Return "Could not be read"
+            End Try
 
         End Function
 
@@ -332,37 +370,61 @@ Namespace Forms
             e As EventArgs
         )
 
+            OpenFolder(
+                Me,
+                Path.GetDirectoryName(_repository.DataFilePath),
+                "Diagnostics Error"
+            )
+
+        End Sub
+
+
+        ' Shared with the startup window (#119).
+        Friend Shared Sub OpenFolder(
+            owner As IWin32Window,
+            folder As String,
+            errorCaption As String
+        )
+
             Try
 
-                Dim dataFolder As String =
-                    Path.GetDirectoryName(_repository.DataFilePath)
-
-                If String.IsNullOrWhiteSpace(dataFolder) Then
+                If String.IsNullOrWhiteSpace(folder) Then
                     Return
                 End If
 
-                Directory.CreateDirectory(dataFolder)
-
-                Process.Start(
-                    New ProcessStartInfo With {
-                        .FileName = dataFolder,
-                        .UseShellExecute = True
-                    }
-                )
+                OpenFolder(folder)
 
             Catch ex As Exception
 
                 MessageBox.Show(
-                    Me,
+                    owner,
                     "PaperRoute could not open the data folder." &
                     Environment.NewLine & Environment.NewLine &
                     ex.Message,
-                    "Diagnostics Error",
+                    errorCaption,
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error
                 )
 
             End Try
+
+        End Sub
+
+
+        ' The one place a folder is handed to the shell (the safe-opener
+        ' test counts it), so the error dialog can show its log folder too.
+        Friend Shared Sub OpenFolder(
+            folder As String
+        )
+
+            Directory.CreateDirectory(folder)
+
+            Process.Start(
+                New ProcessStartInfo With {
+                    .FileName = folder,
+                    .UseShellExecute = True
+                }
+            )
 
         End Sub
 

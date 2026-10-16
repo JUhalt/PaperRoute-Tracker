@@ -8,12 +8,64 @@ Namespace Services
 
     Public NotInheritable Class UserGuideService
 
-        Public Const GitHubGuideUrl As String =
-            "https://github.com/JUhalt/PaperRoute-Tracker/blob/master/docs/USER_GUIDE.md"
+        Private Const GitHubGuideUrlFormat As String =
+            "https://github.com/JUhalt/PaperRoute-Tracker/blob/{0}/docs/USER_GUIDE.md"
+
+        ' The section the startup window points to (#119), in the guide of
+        ' the running version (#129).
+        Public Shared ReadOnly Property RecoveringYourLibraryUrl As String
+            Get
+                Return GitHubGuideUrl & "#recovering-your-library"
+            End Get
+        End Property
 
 
         Private Sub New()
         End Sub
+
+
+        ' The guide of the running version, from its release tag, so an
+        ' installed release opens its own guide and not whatever master says
+        ' that day (#129). A copy Setup did not install, from Visual Studio
+        ' or the portable build, opens master's.
+        Public Shared ReadOnly Property GitHubGuideUrl As String
+            Get
+
+                Return GitHubGuideUrlFor(
+                    UpdateService.CurrentVersionText(),
+                    developmentBuild:=Not UpdateService.IsInstalledBuild(
+                        Models.AppUpdateChannel.Stable
+                    )
+                )
+
+            End Get
+        End Property
+
+
+        Friend Shared Function GitHubGuideUrlFor(
+            version As String,
+            developmentBuild As Boolean
+        ) As String
+
+            Dim reference As String =
+                "master"
+
+            If Not developmentBuild AndAlso
+               Not String.IsNullOrWhiteSpace(version) Then
+
+                ' The tag is "v" and the version; CurrentVersionText has
+                ' already dropped any build metadata.
+                reference =
+                    "v" & version.Trim()
+
+            End If
+
+            Return String.Format(
+                GitHubGuideUrlFormat,
+                reference
+            )
+
+        End Function
 
 
         Public Shared Function GuideFilePath() As String
@@ -77,6 +129,14 @@ Namespace Services
             Dim inCodeFence As Boolean =
                 False
 
+            ' The header row of the table being read, or Nothing outside
+            ' one, and how many of its rows have been written.
+            Dim tableHeaders As List(Of String) =
+                Nothing
+
+            Dim tableRows As Integer =
+                0
+
             Dim normalized As String =
                 markdown.
                     Replace(
@@ -125,6 +185,68 @@ Namespace Services
 
                 Dim trimmed As String =
                     line.Trim()
+
+                ' A table row (#129). The first row names the columns, the
+                ' separator row is dropped, and each later row becomes one
+                ' "Header: value" line per column, one row per paragraph.
+                If trimmed.Length >= 2 AndAlso
+                   trimmed.StartsWith(
+                       "|",
+                       StringComparison.Ordinal
+                   ) AndAlso
+                   trimmed.EndsWith(
+                       "|",
+                       StringComparison.Ordinal
+                   ) Then
+
+                    Dim cells As List(Of String) =
+                        TableCells(
+                            trimmed
+                        )
+
+                    If tableHeaders Is Nothing Then
+
+                        tableHeaders =
+                            cells
+
+                        tableRows =
+                            0
+
+                    ElseIf Not Regex.IsMatch(
+                        trimmed,
+                        "^\|(\s*:?-+:?\s*\|)+$"
+                    ) Then
+
+                        If tableRows > 0 Then
+                            output.AppendLine()
+                        End If
+
+                        Dim columns As Integer =
+                            Math.Min(
+                                cells.Count,
+                                tableHeaders.Count
+                            )
+
+                        For index As Integer = 0 To columns - 1
+
+                            output.AppendLine(
+                                tableHeaders(index) &
+                                ": " &
+                                cells(index)
+                            )
+
+                        Next
+
+                        tableRows += 1
+
+                    End If
+
+                    Continue For
+
+                End If
+
+                tableHeaders =
+                    Nothing
 
                 If trimmed.StartsWith(
                     "# ",
@@ -288,7 +410,37 @@ Namespace Services
         End Function
 
 
-        Private Shared Function BuiltInFallback() As String
+        ' The cells of one "| a | b |" row, trimmed and cleaned.
+        Private Shared Function TableCells(
+            row As String
+        ) As List(Of String)
+
+            Dim cells As New List(Of String)()
+
+            For Each cell As String In
+                row.Substring(
+                    1,
+                    row.Length - 2
+                ).Split(
+                    "|"c
+                )
+
+                cells.Add(
+                    CleanInlineMarkdown(
+                        cell.Trim()
+                    )
+                )
+
+            Next
+
+            Return cells
+
+        End Function
+
+
+        ' Shown when the shipped guide can't be read; Friend for the test
+        ' that keeps it naming today's pages (#129).
+        Friend Shared Function BuiltInFallback() As String
 
             Return String.Join(
                 Environment.NewLine,
@@ -301,7 +453,7 @@ Namespace Services
                     String.Empty,
                     "1. Add a manuscript from the PaperRoute board.",
                     "2. Open a manuscript from its card to add authors, target journal, metadata, submissions, decisions, and files.",
-                    "3. Use Data for import/export, reusable authors and journals, bibliography interchange, CV exports, backup, and restore.",
+                    "3. Use Import & Export in the left rail for spreadsheets, BibTeX and RIS, and CV exports; the Library page for reusable authors and affiliations; the Journals page for your journals and their checklists; and Settings > Backup Library and Restore Backup for a portable backup.",
                     "4. Open Deadlines in the left rail (Ctrl+4) for revision deadlines, journal follow-ups, your reminders, and calendar export.",
                     "5. Use Settings > Backup Library before major changes or moving PaperRoute to another computer.",
                     String.Empty,

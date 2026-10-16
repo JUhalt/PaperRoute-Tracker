@@ -1,6 +1,8 @@
 Imports System
+Imports System.Threading.Tasks
 Imports System.Windows.Forms
 Imports Velopack
+Imports ManuscriptPipeline.Forms
 Imports ManuscriptPipeline.Services
 
 Friend Module Program
@@ -23,6 +25,18 @@ Friend Module Program
         ' user's library is never opened.
         Dim isExample As Boolean = ExampleLibraryService.IsExampleLaunch(args)
         If isExample Then ExampleLibraryService.StartSession()
+
+        ' Unexpected errors are recorded on this computer and never sent
+        ' (#120): a crash anywhere in the process, and a faulted task nobody
+        ' awaited, which gets a report only. After the example session is
+        ' configured, so its reports go to the disposable session too.
+        Dim errorReports As New ErrorReportService()
+
+        AddHandler AppDomain.CurrentDomain.UnhandledException,
+            AddressOf errorReports.OnUnhandledException
+
+        AddHandler TaskScheduler.UnobservedTaskException,
+            AddressOf errorReports.OnUnobservedTaskException
 
         ' One window per library (#77): a second launch brings the running
         ' window forward and exits before touching storage.
@@ -68,22 +82,13 @@ Friend Module Program
 
         Catch ex As Exception
 
-            MessageBox.Show(
-                "PaperRoute could not safely prepare its local storage." &
-                Environment.NewLine &
-                Environment.NewLine &
-                "The storage format could not be verified, so PaperRoute will close rather than risk opening or rewriting data with an unknown format." &
-                Environment.NewLine &
-                Environment.NewLine &
-                "Existing source data has been preserved wherever possible." &
-                Environment.NewLine &
-                Environment.NewLine &
-                "Error details:" &
-                Environment.NewLine &
-                ex.Message,
-                "PaperRoute Storage Error",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error
+            ' What failed and where, with the actions Diagnostics would
+            ' offer if PaperRoute could start (#119).
+            StartupFailureForm.ShowBeforeStartup(
+                StartupFailure.ForStorage(
+                    ex,
+                    StorageMigrationService.SchemaFilePath()
+                )
             )
 
             Return

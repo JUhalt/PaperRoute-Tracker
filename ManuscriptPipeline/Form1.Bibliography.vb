@@ -58,7 +58,8 @@ Partial Public Class Form1
                         Return
                     End If
 
-                    repository.CreatePreImportBackup()
+                    Dim preImportCopies As String =
+                        repository.CreatePreImportBackup()
 
                     Dim existingManuscriptIds As New System.Collections.Generic.HashSet(Of Guid)()
 
@@ -114,8 +115,7 @@ Partial Public Class Form1
                     repository.Save(manuscripts)
                     RenderManuscripts()
 
-                    MessageBox.Show(
-                        Me,
+                    Dim completeMessage As String =
                         "Bibliography import complete." &
                         Environment.NewLine &
                         Environment.NewLine &
@@ -129,7 +129,23 @@ Partial Public Class Form1
                         result.AuthorsCreated.ToString() &
                         Environment.NewLine &
                         "Record warnings reviewed: " &
-                        result.WarningCount.ToString(),
+                        result.WarningCount.ToString()
+
+                    ' Where to find the library as it was (#122).
+                    If preImportCopies.Length > 0 Then
+
+                        completeMessage &=
+                            Environment.NewLine &
+                            Environment.NewLine &
+                            "A copy of your library from before this import is in:" &
+                            Environment.NewLine &
+                            preImportCopies
+
+                    End If
+
+                    MessageBox.Show(
+                        Me,
+                        completeMessage,
                         "Import Complete",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Information

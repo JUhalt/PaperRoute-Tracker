@@ -579,7 +579,7 @@ Namespace Services
 
                 File.WriteAllText(
                     stagedJsonPath,
-                    restoredJson
+                    CalendarDateJson.WithoutOffsets(restoredJson)
                 )
 
                 ' =============================================
@@ -1184,8 +1184,14 @@ Namespace Services
 
             End If
 
+            ' Calendar dates as written (#118): a backup made before the
+            ' repository dropped offsets carries the ones its machine wrote,
+            ' and a restore in another zone must not move its dates.
             Dim restoredManuscripts As List(Of Manuscript) =
-                JsonSerializer.Deserialize(Of List(Of Manuscript))(json, _jsonOptions)
+                JsonSerializer.Deserialize(Of List(Of Manuscript))(
+                    CalendarDateJson.WithoutOffsets(json),
+                    _jsonOptions
+                )
 
             If restoredManuscripts Is Nothing Then
 
