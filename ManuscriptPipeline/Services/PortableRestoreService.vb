@@ -266,14 +266,6 @@ Namespace Services
             repository As ManuscriptRepository
         ) As RestoreResult
 
-            ValidateBackupPath(
-                backupZipPath
-            )
-
-            ValidateArchiveLimits(
-                backupZipPath
-            )
-
             If currentManuscripts Is Nothing Then
                 Throw New ArgumentNullException(NameOf(currentManuscripts))
             End If
@@ -281,6 +273,78 @@ Namespace Services
             If repository Is Nothing Then
                 Throw New ArgumentNullException(NameOf(repository))
             End If
+
+            Return Restore(
+                backupZipPath,
+                repository,
+                Function(backupDirectory)
+
+                    If Not File.Exists(repository.DataFilePath) Then
+                        Return String.Empty
+                    End If
+
+                    Dim emergencyBackupPath As String =
+                        EmergencyBackupPathIn(
+                            backupDirectory
+                        )
+
+                    ' A copy of the library being replaced, which may be the
+                    ' reason for the restore: not held to Restore's
+                    ' acceptance checks (#114).
+                    Call New PortableBackupService(
+                        _managedLibrary.RootDirectory
+                    ).CreateBackup(
+                        emergencyBackupPath,
+                        currentManuscripts,
+                        repository,
+                        proveRestorable:=False
+                    )
+
+                    Return emergencyBackupPath
+
+                End Function
+            )
+
+        End Function
+
+
+        ' Restores over the library on disk when it could not be loaded
+        ' (#124): the emergency copy is of the storage files as they are,
+        ' safety backups included.
+        Public Function RestoreBackup(
+            backupZipPath As String,
+            repository As ManuscriptRepository
+        ) As RestoreResult
+
+            If repository Is Nothing Then
+                Throw New ArgumentNullException(NameOf(repository))
+            End If
+
+            Return Restore(
+                backupZipPath,
+                repository,
+                Function(backupDirectory) ZipStorageFiles(backupDirectory, repository)
+            )
+
+        End Function
+
+
+        ' writeEmergencyBackup writes a copy of the current library into the
+        ' backups folder and returns its path, or an empty string when there
+        ' was nothing to copy.
+        Private Function Restore(
+            backupZipPath As String,
+            repository As ManuscriptRepository,
+            writeEmergencyBackup As Func(Of String, String)
+        ) As RestoreResult
+
+            ValidateBackupPath(
+                backupZipPath
+            )
+
+            ValidateArchiveLimits(
+                backupZipPath
+            )
 
             Dim extractionDirectory As String =
                 CreateTemporaryDirectory()
@@ -522,39 +586,16 @@ Namespace Services
                 ' Emergency backup of current state.
                 ' =============================================
 
-                If File.Exists(repository.DataFilePath) Then
-
-                    Dim backupDirectory As String =
-                        Path.Combine(
-                            dataDirectory,
-                            "backups"
-                        )
-
-                    Directory.CreateDirectory(
-                        backupDirectory
+                emergencyBackupPath =
+                    If(
+                        writeEmergencyBackup(
+                            Path.Combine(
+                                dataDirectory,
+                                "backups"
+                            )
+                        ),
+                        String.Empty
                     )
-
-                    emergencyBackupPath =
-                        Path.Combine(
-                            backupDirectory,
-                            "PaperRoute_PreRestore_" &
-                            DateTime.Now.ToString("yyyy-MM-dd_HHmmss") &
-                            ".zip"
-                        )
-
-                    Dim backupService As New PortableBackupService(managedRoot)
-
-                    ' A copy of the library being replaced, which may be the
-                    ' reason for the restore: not held to Restore's
-                    ' acceptance checks (#114).
-                    backupService.CreateBackup(
-                        emergencyBackupPath,
-                        currentManuscripts,
-                        repository,
-                        proveRestorable:=False
-                    )
-
-                End If
 
                 ' =============================================
                 ' Swap live managed library.
@@ -1744,9 +1785,122 @@ Namespace Services
         End Function
 
 
+        ' Where a restore keeps its copy of the library being replaced.
+        Private Shared Function EmergencyBackupPathIn(
+            backupDirectory As String
+        ) As String
+
+            Directory.CreateDirectory(
+                backupDirectory
+            )
+
+            Return Path.Combine(
+                backupDirectory,
+                "PaperRoute_PreRestore_" &
+                DateTime.Now.ToString("yyyy-MM-dd_HHmmss") &
+                ".zip"
+            )
+
+        End Function
+
+
+        ' The storage files as they are, zipped with no checks, for a restore
+        ' when the library could not be loaded (#124): the data files with
+        ' their safety backups and marker, and the managed files. Empty when
+        ' there is nothing to copy.
+        Private Function ZipStorageFiles(
+            backupDirectory As String,
+            repository As ManuscriptRepository
+        ) As String
+
+            Dim dataDirectory As String =
+                Path.GetDirectoryName(
+                    repository.DataFilePath
+                )
+
+            Dim dataFiles As New List(Of String)()
+
+            For Each name As String In {"manuscripts.json", "manuscripts.bak", "authors.json", "authors.bak", CitationStore.FileName, "citations.bak", "schema.json"}
+
+                Dim filePath As String =
+                    Path.Combine(
+                        dataDirectory,
+                        name
+                    )
+
+                If File.Exists(filePath) Then
+                    dataFiles.Add(filePath)
+                End If
+
+            Next
+
+            Dim managedRoot As String =
+                _managedLibrary.RootDirectory
+
+            If dataFiles.Count = 0 AndAlso Not Directory.Exists(managedRoot) Then
+                Return String.Empty
+            End If
+
+            Dim stagingDirectory As String =
+                CreateTemporaryDirectory()
+
+            Try
+
+                For Each filePath As String In dataFiles
+
+                    File.Copy(
+                        filePath,
+                        Path.Combine(
+                            stagingDirectory,
+                            Path.GetFileName(filePath)
+                        ),
+                        True
+                    )
+
+                Next
+
+                If Directory.Exists(managedRoot) Then
+
+                    CopyDirectory(
+                        managedRoot,
+                        Path.Combine(
+                            stagingDirectory,
+                            "files"
+                        ),
+                        excludedSubdirectory:=ManagedLibraryService.RemovedFolderName
+                    )
+
+                End If
+
+                Dim emergencyBackupPath As String =
+                    EmergencyBackupPathIn(
+                        backupDirectory
+                    )
+
+                ZipFile.CreateFromDirectory(
+                    stagingDirectory,
+                    emergencyBackupPath,
+                    CompressionLevel.Optimal,
+                    False
+                )
+
+                Return emergencyBackupPath
+
+            Finally
+
+                SafeDeleteDirectory(
+                    stagingDirectory
+                )
+
+            End Try
+
+        End Function
+
+
         Private Sub CopyDirectory(
             sourceDirectory As String,
-            destinationDirectory As String
+            destinationDirectory As String,
+            Optional excludedSubdirectory As String = Nothing
         )
 
             Directory.CreateDirectory(
@@ -1767,6 +1921,17 @@ Namespace Services
             Next
 
             For Each sourceSubdirectory As String In Directory.GetDirectories(sourceDirectory)
+
+                If excludedSubdirectory IsNot Nothing AndAlso
+                   String.Equals(
+                       Path.GetFileName(sourceSubdirectory),
+                       excludedSubdirectory,
+                       StringComparison.OrdinalIgnoreCase
+                   ) Then
+
+                    Continue For
+
+                End If
 
                 CopyDirectory(
                     sourceSubdirectory,
