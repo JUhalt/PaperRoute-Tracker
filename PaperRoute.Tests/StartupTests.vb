@@ -1,6 +1,7 @@
 ﻿Imports System
 Imports System.Collections.Generic
 Imports System.Drawing
+Imports System.Globalization
 Imports System.IO
 Imports System.Linq
 Imports System.Reflection
@@ -786,6 +787,153 @@ Public Class StartupTests
         AssertSameData(
             before,
             "No changes nothing."
+        )
+
+    End Sub
+
+
+    ' The window's question shows the backup's date and the PaperRoute that
+    ' made it, as its backup.json records them, as Settings > Restore
+    ' Backup... does (#115). Before the change it showed only the counts.
+    <TestMethod>
+    Public Sub RestoreFromBackup_AsksWithTheBackupsDateAndVersion()
+
+        Dim backupPath As String =
+            CreateBackupOfThreeManuscripts()
+
+        SetBackupManifest(
+            backupPath,
+            BackupManifestJson(
+                StorageMigrationService.CurrentSchemaVersion,
+                createdUtc:="2026-10-12T15:30:00Z",
+                appVersion:="0.9.2"
+            )
+        )
+
+        Dim repository As ManuscriptRepository =
+            LibraryWithADamagedPrimary(
+                "Lost to both files"
+            )
+
+        File.WriteAllText(
+            repository.BackupFilePath,
+            "[null]"
+        )
+
+        Dim questions As New List(Of String)()
+
+        RunOnStaThread(
+            Sub()
+
+                ClickRecovery(
+                    StartupFailure.ForManuscriptLibrary(New InvalidDataException("The test's failure."), repository.DataFilePath),
+                    RestoreAction,
+                    New List(Of String)(),
+                    backupPath,
+                    questions,
+                    confirms:=False
+                )
+
+            End Sub
+        )
+
+        Dim created As String =
+            New DateTime(2026, 10, 12, 15, 30, 0, DateTimeKind.Utc).
+                ToLocalTime().
+                ToString("MMM d, yyyy h:mm tt", CultureInfo.CurrentCulture)
+
+        StringAssert.Contains(
+            questions.Single(),
+            "Created: " & created
+        )
+
+        StringAssert.Contains(
+            questions.Single(),
+            "PaperRoute version: 0.9.2"
+        )
+
+        StringAssert.Contains(
+            questions.Single(),
+            "Manuscripts: 3"
+        )
+
+    End Sub
+
+
+    ' A backup from a newer storage schema fails the window's check, before
+    ' anything is asked or changed, with the Update PaperRoute message
+    ' (#115). Before the change the window asked, and Yes replaced the
+    ' library with it.
+    <TestMethod>
+    Public Sub ANewerBackup_IsRefusedBeforeAnythingIsAskedOrChanged()
+
+        Dim backupPath As String =
+            CreateBackupOfThreeManuscripts()
+
+        SetBackupManifest(
+            backupPath,
+            BackupManifestJson(
+                StorageMigrationService.CurrentSchemaVersion + 1
+            )
+        )
+
+        Dim repository As ManuscriptRepository =
+            LibraryWithADamagedPrimary(
+                "Lost to both files"
+            )
+
+        File.WriteAllText(
+            repository.BackupFilePath,
+            "[null]"
+        )
+
+        Dim before As Dictionary(Of String, Byte()) =
+            SnapshotTree(_root)
+
+        Dim messages As New List(Of String)()
+        Dim questions As New List(Of String)()
+        Dim recovered As Boolean = True
+
+        RunOnStaThread(
+            Sub()
+
+                recovered =
+                    ClickRecovery(
+                        StartupFailure.ForManuscriptLibrary(New InvalidDataException("The test's failure."), repository.DataFilePath),
+                        RestoreAction,
+                        messages,
+                        backupPath,
+                        questions
+                    )
+
+            End Sub
+        )
+
+        Assert.IsFalse(
+            recovered,
+            "Nothing was recovered, and the window stays open."
+        )
+
+        Assert.AreEqual(
+            0,
+            questions.Count,
+            "A newer backup is not asked about."
+        )
+
+        StringAssert.StartsWith(
+            messages.Single(),
+            "This backup could not be validated. Nothing was changed."
+        )
+
+        StringAssert.Contains(
+            messages.Single(),
+            "Update PaperRoute"
+        )
+
+        AssertSameTree(
+            before,
+            _root,
+            "A newer backup changes nothing"
         )
 
     End Sub
