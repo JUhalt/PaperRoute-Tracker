@@ -392,14 +392,7 @@ Namespace Forms
                     Return
                 End If
 
-                Directory.CreateDirectory(folder)
-
-                Process.Start(
-                    New ProcessStartInfo With {
-                        .FileName = folder,
-                        .UseShellExecute = True
-                    }
-                )
+                OpenFolder(folder)
 
             Catch ex As Exception
 
@@ -414,6 +407,24 @@ Namespace Forms
                 )
 
             End Try
+
+        End Sub
+
+
+        ' The one place a folder is handed to the shell (the safe-opener
+        ' test counts it), so the error dialog can show its log folder too.
+        Friend Shared Sub OpenFolder(
+            folder As String
+        )
+
+            Directory.CreateDirectory(folder)
+
+            Process.Start(
+                New ProcessStartInfo With {
+                    .FileName = folder,
+                    .UseShellExecute = True
+                }
+            )
 
         End Sub
 

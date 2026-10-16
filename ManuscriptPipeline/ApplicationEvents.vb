@@ -25,16 +25,14 @@ Namespace My
         End Sub
 
 
-        ' An unexpected error on the UI thread is recorded on this computer
-        ' first (#120); nothing is sent. The stock dialog stays until
-        ' PaperRoute's own lands: Quit closes PaperRoute, Continue goes on.
-        ' Quit ends the process the way the stock handler does: the open
-        ' windows get their FormClosing, and then the process exits whether
-        ' or not one of them cancelled, because a faulted PaperRoute must
-        ' not stay running behind a window that asked about unsaved edits.
+        ' An error on the UI thread is recorded on this computer first (#120);
+        ' nothing is sent, and a report that cannot be written costs nothing.
+        ' Then the main window shows one plain dialog and decides whether
+        ' PaperRoute closes (#121). With no window left to keep working in,
+        ' PaperRoute says why and exits as the stock dialog's Quit did.
         Private Sub MyApplication_UnhandledException(
             sender As Object,
-            e As Microsoft.VisualBasic.ApplicationServices.UnhandledExceptionEventArgs
+            e As UnhandledExceptionEventArgs
         ) Handles Me.UnhandledException
 
             Dim reports As New ErrorReportService()
@@ -44,23 +42,30 @@ Namespace My
                 "main window"
             )
 
-            Dim quit As Boolean
+            Dim window As Form1 =
+                Application.OpenForms.OfType(Of Form1)().FirstOrDefault()
 
-            Using dialog As New ThreadExceptionDialog(e.Exception)
+            If window Is Nothing OrElse window.IsDisposed Then
 
-                quit =
-                    dialog.ShowDialog() = DialogResult.Abort
+                ' Informational only: ExitApplication stays True, so the
+                ' framework exits once this returns. Keep Working would be
+                ' a false promise here.
+                MessageBox.Show(
+                    "PaperRoute ran into a problem and has to close." &
+                    Environment.NewLine &
+                    Environment.NewLine &
+                    e.Exception.Message,
+                    "PaperRoute",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                )
 
-            End Using
-
-            e.ExitApplication = False
-
-            If quit Then
-
-                System.Windows.Forms.Application.Exit()
-                Environment.Exit(1)
+                Return
 
             End If
+
+            e.ExitApplication = False
+            window.ReportUnhandledError(e.Exception)
 
         End Sub
 

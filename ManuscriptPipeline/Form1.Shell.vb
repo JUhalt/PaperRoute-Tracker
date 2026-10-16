@@ -530,6 +530,7 @@ Partial Public Class Form1
         manuscriptDirtyTimer.Stop()
         manuscriptEditor = Nothing
         manuscriptSaveBar = Nothing
+        manuscriptSaveHint = Nothing
 
         If currentPageView Is Nothing Then
             Return
