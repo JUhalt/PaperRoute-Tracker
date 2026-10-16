@@ -123,15 +123,19 @@ function Get-Sha256([string] $Path) {
 
 $startInfo = [Diagnostics.ProcessStartInfo]::new($harness.FullName)
 $startInfo.UseShellExecute = $false
+# Under --painted the harness reports failures here instead of in a dialog.
+$startInfo.RedirectStandardError = $true
 foreach ($argument in $HarnessArguments + @('--painted', $markerPath)) { $startInfo.ArgumentList.Add($argument) }
 $startedAt = [DateTime]::UtcNow
 $process = [Diagnostics.Process]::Start($startInfo)
+$harnessErrors = $process.StandardError.ReadToEndAsync()
 try {
     $deadline = $startedAt.AddSeconds($TimeoutSeconds)
     $marker = $null
     while ($null -eq $marker) {
         if ($process.HasExited) {
-            throw "The harness exited with code $($process.ExitCode) before it reported the window painted; nothing was captured."
+            $said = $harnessErrors.GetAwaiter().GetResult().Trim()
+            throw "The harness exited with code $($process.ExitCode) before it reported the window painted; nothing was captured.$(if ($said) { " The harness said: $said" })"
         }
         if ([DateTime]::UtcNow -ge $deadline) {
             # Say whether a window was up: still loading, or never shown.

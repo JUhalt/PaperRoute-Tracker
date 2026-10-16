@@ -11,7 +11,7 @@ internal static class Program
     private const string Usage = "PaperRoute workflow manual demo\n\n" +
         "Surfaces: vault (default), readiness, packet, packet-new, file, file-new, notes, submission, responses, workflow, board, publications, fill, about, route, update, report, candidate, online, key, journals, lookup, suggest, suggest-results, citations, citations-update, assistant-settings, assistant-consent, letter, letter-read, decision-prefill, draft-response, cover-letter, cover-letter-result, author-instructions, author-instructions-read, journal-checklist, packet-export, packet-export-blinded\n" +
         "Options: --minimum, --primary, --empty (vault/readiness/board), --offline and --collapsed (board, journals, citations), --integrity (populated vault only), --dark or --system, --help\n" +
-        "Capture: --painted <file> writes a JSON marker (UTC time, HighDpiMode, DeviceDpi) once the shown window has loaded and its message loop is idle; --load-delay <ms> is a test hook that holds the shown window's load that long first.\n\n" +
+        "Capture: --painted <file> writes a JSON marker (UTC time, HighDpiMode, DeviceDpi) once the shown window has loaded and its message loop is idle; --load-delay <ms> is a test hook that holds the shown window's load that long first. With --painted nobody is assumed to be watching: a failure is written to standard error with a non-zero exit code (2 arguments, 3 setup, 4 marker) and no dialog is shown.\n\n" +
         "Default surfaces discard manuscript changes when the window closes.\n" +
         "workflow and board save only in a new disposable temporary session.\n" +
         "--integrity creates and retains disposable files in a unique temporary directory.";
@@ -41,7 +41,13 @@ internal static class Program
         if (paintedPath == "" || delayText == "" ||
             (delayText is not null && (!int.TryParse(delayText, out loadDelay) || loadDelay < 0)))
         {
-            MessageBox.Show(Usage, "Invalid demo arguments", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            Report("Invalid demo arguments", Usage, MessageBoxIcon.Information, 2);
+            return;
+        }
+        // A marker that cannot be written is refused before any window opens.
+        if (paintedPath is not null && !Directory.Exists(Path.GetDirectoryName(Path.GetFullPath(paintedPath))))
+        {
+            Report("Invalid demo arguments", "The folder for the painted marker does not exist: " + paintedPath, MessageBoxIcon.Information, 2);
             return;
         }
         args = arguments.ToArray();
@@ -73,7 +79,7 @@ internal static class Program
             (empty && surface != "vault" && surface != "readiness" && surface != "board") ||
             (integrity && (surface != "vault" || empty)))
         {
-            MessageBox.Show(Usage, "Invalid demo arguments", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            Report("Invalid demo arguments", Usage, MessageBoxIcon.Information, 2);
             return;
         }
 
@@ -344,8 +350,8 @@ internal static class Program
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            MessageBox.Show("The disposable demo fixtures could not be prepared.\r\n\r\n" + ex.Message,
-                "Demo setup failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Report("Demo setup failed", "The disposable demo fixtures could not be prepared.\r\n\r\n" + ex.Message,
+                MessageBoxIcon.Error, 3);
             return;
         }
         if (empty)
@@ -454,12 +460,37 @@ internal static class Program
                     Title = form.Text
                 }, new JsonSerializerOptions { WriteIndented = true });
                 // Written whole, then moved: the capture script is already polling the path.
-                var temporary = paintedPath + ".tmp";
-                File.WriteAllText(temporary, marker);
-                File.Move(temporary, paintedPath, overwrite: true);
+                // A failure here is the marker's, not the fixtures': it is reported as such
+                // and the window closes, so the script sees the exit code at once.
+                try
+                {
+                    var temporary = paintedPath + ".tmp";
+                    File.WriteAllText(temporary, marker);
+                    File.Move(temporary, paintedPath, overwrite: true);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    Report("Painted marker not written", "The painted marker could not be written to " + paintedPath + ": " + ex.Message,
+                        MessageBoxIcon.Error, 4);
+                    form.Close();
+                }
             };
             Application.Idle += onIdle;
         };
+    }
+
+    // Under --painted a script runs the harness and nobody is watching the
+    // desktop: a failure goes to standard error with a non-zero exit code, not
+    // to a dialog that would wait there for OK. Otherwise it is shown as before.
+    private static void Report(string title, string message, MessageBoxIcon icon, int exitCode)
+    {
+        if (paintedPath is null)
+        {
+            MessageBox.Show(message, title, MessageBoxButtons.OK, icon);
+            return;
+        }
+        Console.Error.WriteLine(title + ": " + message.Replace("\r\n", " ").Replace("\n", " "));
+        Environment.ExitCode = exitCode;
     }
 }
 
