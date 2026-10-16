@@ -178,6 +178,9 @@ Public Class Form1
 
         RenderManuscripts()
 
+        ' A draft a shutdown or an error left behind is offered first (#123).
+        OfferRecoveryDraft()
+
         If settingsService.LoadFailed Then
             lblStatus.Text = "PaperRoute couldn't read your settings, so it's working offline until you review Settings > Preferences > Online services."
         End If

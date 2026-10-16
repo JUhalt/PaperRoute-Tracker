@@ -39,7 +39,8 @@ Partial Public Class Form1
             manuscript,
             manuscripts,
             authorRepository,
-            pageMode:=True
+            pageMode:=True,
+            workingCopy:=pendingRecoveredCopy
         )
 
     End Function
@@ -678,6 +679,14 @@ Partial Public Class Form1
 
 
     Protected Overrides Sub OnFormClosing(e As FormClosingEventArgs)
+
+        ' Windows is shutting down (#123): a prompt would hold it up, so the
+        ' open page's working copy goes to a recovery draft instead.
+        If e.CloseReason = CloseReason.WindowsShutDown Then
+            WriteRecoveryDraft("Windows was shutting down")
+            MyBase.OnFormClosing(e)
+            Return
+        End If
 
         If Not e.Cancel AndAlso Not ConfirmLeaveManuscript() Then
             e.Cancel = True
