@@ -95,7 +95,9 @@ function Get-BundledRuntimeVersion([string] $PublishRoot) {
     return [string] $runtime[0].version
 }
 
-$runtimeVersion = Get-BundledRuntimeVersion $publishRoot
+# Stage records the runtime; Verify checks only the draft and the staged
+# assets, so it needs no publish folder.
+$runtimeVersion = if ($Mode -eq 'Stage') { Get-BundledRuntimeVersion $publishRoot } else { $null }
 $release = Get-DraftRelease
 $ExpectedReleaseId = [long] $release.databaseId
 $remoteAssets = @(Get-RemoteAssets $ExpectedReleaseId)

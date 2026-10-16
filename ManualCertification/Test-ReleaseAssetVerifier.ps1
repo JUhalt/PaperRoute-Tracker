@@ -194,6 +194,15 @@ Run-Case 'missing-published-runtimeconfig' {
     [IO.File]::Delete((Join-Path $c.Root 'publish/win-x64/PaperRouteTracker.runtimeconfig.json'))
     Invoke-Verifier $c Stage
 } '*runtimeconfig.json*'
+Run-Case 'valid-verify-without-publish-folder' {
+    param($c)
+    Invoke-Verifier $c Stage
+    Publish-LocalStageToMock $c
+    # Verify checks only the draft and the staged assets, so a rerun by hand
+    # from a fresh checkout needs no publish folder.
+    [IO.Directory]::Delete((Join-Path $c.Root 'publish'), $true)
+    Invoke-Verifier $c Verify
+}
 Run-Case 'valid-no-server-digest-still-compares-bytes' {
     param($c)
     $c.OmitDigest = $true
