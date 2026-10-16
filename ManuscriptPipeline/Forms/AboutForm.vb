@@ -1,6 +1,7 @@
 Imports System
 Imports System.Drawing
 Imports System.Windows.Forms
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Services
 
 Namespace Forms
@@ -49,27 +50,16 @@ Namespace Forms
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 40))
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 48))
 
-            Dim logo As New PictureBox With {
-                .Dock = DockStyle.Top,
-                .Height = 104,
-                .Width = 104,
-                .SizeMode = PictureBoxSizeMode.Zoom,
+            ' The rail's mark, drawn from the embedded 256-pixel logo, so it
+            ' stays sharp at every scale (#169); the program icon's 32-pixel
+            ' frame was stretched to fill this box.
+            Dim logo As New RailLogo With {
+                .Size = New Size(104, 104),
+                .Anchor = AnchorStyles.Top Or AnchorStyles.Left,
                 .Margin = New Padding(0, 4, 12, 0),
-                .BackColor = Color.Transparent
+                .Cursor = Cursors.Default,
+                .AccessibleName = "PaperRoute logo"
             }
-
-            Try
-
-                Dim appIcon As Icon =
-                    Icon.ExtractAssociatedIcon(Application.ExecutablePath)
-
-                If appIcon IsNot Nothing Then
-                    logo.Image = appIcon.ToBitmap()
-                End If
-
-            Catch
-                ' Branding image is optional at runtime.
-            End Try
 
             Dim lblTitle As New Label With {
                 .Text = "PaperRoute",

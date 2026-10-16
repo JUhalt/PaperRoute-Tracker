@@ -872,25 +872,9 @@ Public Class AuthorInstructionsTests
         Next
     End Function
 
+    ' Five minutes, as before #134, so a loaded machine does not fail these.
     Private Shared Sub RunOnSta(action As Action, Optional mode As SystemColorMode = SystemColorMode.Classic)
-        Dim failure As Exception = Nothing
-        Dim thread As New Thread(
-            Sub()
-                Dim priorMode As SystemColorMode = Application.ColorMode
-                Try
-                    Application.EnableVisualStyles()
-                    Application.SetColorMode(mode)
-                    action()
-                Catch ex As Exception
-                    failure = ex
-                Finally
-                    Application.SetColorMode(priorMode)
-                End Try
-            End Sub) With {.IsBackground = True}
-        thread.SetApartmentState(ApartmentState.STA)
-        thread.Start()
-        Assert.IsTrue(thread.Join(TimeSpan.FromMinutes(5)), "The author instructions UI test timed out.")
-        If failure IsNot Nothing Then ExceptionDispatchInfo.Capture(failure).Throw()
+        StaRunner.Run(action, TimeSpan.FromMinutes(5), mode)
     End Sub
 
 

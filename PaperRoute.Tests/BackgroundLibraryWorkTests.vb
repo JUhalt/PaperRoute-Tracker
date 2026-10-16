@@ -1,6 +1,7 @@
 Imports System
 Imports System.Diagnostics
 Imports System.IO
+Imports System.Linq
 Imports System.Runtime.ExceptionServices
 Imports System.Threading
 Imports System.Threading.Tasks
@@ -11,9 +12,10 @@ Imports Microsoft.VisualStudio.TestTools.UnitTesting
 ' Backup, Restore and Save behind the disabled window (#132): the window
 ' keeps processing messages while the work runs on a worker thread, the
 ' status line says what is happening, and a second piece of library work
-' cannot start before the first ends, nor an update restart PaperRoute.
-' Each test opens the 500 library, except the update's, where the work is
-' the test's own.
+' cannot start before the first ends, nor an update restart PaperRoute;
+' Windows shutting down lets the work end first. The tests that time the
+' window open the 500 library; the update's and the shutdown's open the
+' example library.
 ' Before #132 the handlers ran inline and held the UI thread for the whole
 ' run (the before table shows UI time equal to wall time for all three), so
 ' no tick could land; the seams these tests call did not exist then.
@@ -62,6 +64,8 @@ Public Class BackgroundLibraryWorkTests
     End Sub
 
 
+    ' The restore's swap runs behind the disabled window; the notice and the
+    ' restart that follow it on the UI thread (#116) are recorded.
     <TestMethod>
     Public Sub TheWindowKeepsTickingDuringARestoreAndASecondRestoreCannotStart()
         RunOnStaThread(
@@ -69,23 +73,20 @@ Public Class BackgroundLibraryWorkTests
                 Using board As LibraryBoard = OpenLargeLibrary()
                     Dim backup As String = Path.Combine(_root, "backup.zip")
                     Assert.IsTrue(board.WriteBackup(backup))
-                    Dim secondRestore As RestoreResult = New RestoreResult()
                     Dim secondBackup As Boolean = True
 
                     Using probe As New WorkProbe(board,
                                                  Sub()
-                                                     secondRestore = board.ReplaceLibraryFrom(backup)
+                                                     board.Restore(backup)
                                                      secondBackup = board.WriteBackup(Path.Combine(_root, "during.zip"))
                                                  End Sub)
-                        Dim result As RestoreResult = board.ReplaceLibraryFrom(backup)
-                        Assert.IsNotNull(result, "The restore went through.")
-                        Assert.AreEqual(500, result.ManuscriptCount)
+                        board.Restore(backup)
                         probe.AssertTickedDuringWork("Restoring the backup...")
                     End Using
 
-                    Assert.IsNull(secondRestore, "A second restore cannot start before the first ends.")
+                    Assert.AreEqual(1, board.RestoreNotices.Count, "One restore went through: a second cannot start before the first ends.")
+                    StringAssert.StartsWith(board.RestoreNotices(0), "Restored 500 manuscript(s).")
                     Assert.IsFalse(secondBackup, "Nor can a backup.")
-                    Assert.AreEqual(500, board.Library.Count, "The restored library is the one shown.")
                     Assert.IsFalse(board.IsLibraryWorkInProgress)
                     Assert.IsTrue(IsWindowEnabled(board.Handle), "The window is enabled again.")
                     board.Close()
@@ -155,6 +156,97 @@ Public Class BackgroundLibraryWorkTests
                     End While
 
                     Assert.IsTrue(update.IsCompleted, "Once the work ended, the update went ahead.")
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+
+    ' Windows shutting down sends its close into the work's message loop. A
+    ' user's close then is refused, as before; the shutdown's is not, but
+    ' it lets the work end before it writes the open page's recovery draft
+    ' (#123), so neither the work nor the draft is lost. Before the change
+    ' the shutdown went on at once, with the work still running.
+    <TestMethod>
+    Public Sub AWindowsShutdownDuringLibraryWorkLetsItEndAndThenWritesTheDraft()
+        RunOnStaThread(
+            Sub()
+                Dim example As LargeLibraryFixture.SyntheticLibrary = LargeLibraryFixture.WriteExample(Path.Combine(_root, "library"))
+                Dim draft As String = Path.Combine(_root, "library", "data", "recovery", "manuscript-page-draft.json")
+
+                Using board As New LibraryBoard(example, Path.Combine(_root, "settings"))
+                    board.Start()
+                    board.Open(board.Library(0))
+                    board.Field("Title").Text = "Edited before the shutdown"
+
+                    Dim userClose As New FormClosingEventArgs(CloseReason.UserClosing, False)
+                    Dim shutdown As New FormClosingEventArgs(CloseReason.WindowsShutDown, False)
+                    Dim workEnded As Boolean = False
+                    Dim workEndedFirst As Boolean = False
+
+                    Using closing As New ManualResetEventSlim(False)
+                        Assert.IsTrue(board.RunWork("Backing up your library...",
+                            Sub()
+                                ' Both closes arrive in the work's loop, as
+                                ' Windows' messages do.
+                                board.BeginInvoke(
+                                    New Action(
+                                        Sub()
+                                            closing.Set()
+                                            board.SimulateClosing(userClose)
+                                            board.SimulateClosing(shutdown)
+                                            workEndedFirst = workEnded
+                                        End Sub))
+                                Assert.IsTrue(closing.Wait(TimeSpan.FromSeconds(30)), "The window took the closes.")
+                                ' The work goes on a while after the shutdown began.
+                                Thread.Sleep(200)
+                                workEnded = True
+                            End Sub))
+                    End Using
+
+                    Assert.IsTrue(userClose.Cancel, "A user's close waits for the work.")
+                    Assert.IsFalse(shutdown.Cancel, "Windows' close is not refused.")
+                    Assert.IsTrue(workEndedFirst, "The work ended before the shutdown went on.")
+                    Assert.IsTrue(File.Exists(draft), "The open page's working copy was written to data\recovery.")
+                    StringAssert.Contains(File.ReadAllText(draft), "Edited before the shutdown")
+                    Assert.IsFalse(board.IsLibraryWorkInProgress)
+
+                    board.SetPrompt(Function(title) DialogResult.No)
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+
+    ' A restore whose swap goes through while Windows shuts down has put the
+    ' backup's library on disk, and what is in memory is the library it
+    ' replaced: the shutdown hands over to the restored library as the
+    ' restart would (#116). Its retry of a failed save (#113) writes
+    ' nothing, where it would have written the replaced library over the
+    ' restored one.
+    <TestMethod>
+    Public Sub AWindowsShutdownDuringARestoreSavesNothingOverTheRestoredLibrary()
+        RunOnStaThread(
+            Sub()
+                Dim example As LargeLibraryFixture.SyntheticLibrary = LargeLibraryFixture.WriteExample(Path.Combine(_root, "library"))
+                Dim backup As String = Path.Combine(_root, "backup.zip")
+                Call New PortableBackupService(example.ManagedDirectory).CreateBackup(backup, example.Manuscripts, example.Repository)
+
+                Using board As New LibraryBoard(example, Path.Combine(_root, "settings"))
+                    board.Start()
+                    board.Library.Add(New ManuscriptPipeline.Models.Manuscript With {.Title = "Only in memory"})
+                    board.MarkLastSaveFailed()
+                    Dim shutdown As New FormClosingEventArgs(CloseReason.WindowsShutDown, False)
+
+                    Using probe As New WorkProbe(board, Sub() board.SimulateClosing(shutdown))
+                        board.Restore(backup)
+                        Assert.IsTrue(probe.TicksDuringWork > 0, "Windows' close arrived during the restore.")
+                    End Using
+
+                    Assert.IsFalse(shutdown.Cancel)
+                    Assert.IsFalse(example.Repository.Load().Any(Function(item) item.Title = "Only in memory"), "The restored library is what is on disk.")
+                    Assert.AreEqual(1, board.RestoreNotices.Count, "The restore went on to its notice.")
+                    Assert.IsFalse(board.SaveNow(), "Nothing is saved while the restore hands over.")
                     board.Close()
                 End Using
             End Sub)

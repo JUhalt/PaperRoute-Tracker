@@ -35,6 +35,29 @@ Namespace Services
         End Function
 
 
+        ' The Windows Forms color mode for the appearance the user chose: the
+        ' application framework applies it at startup, and the startup window
+        ' before the framework has run (#119).
+        Public Shared Function ColorModeFor(
+            appearance As AppAppearance
+        ) As SystemColorMode
+
+            Select Case appearance
+
+                Case AppAppearance.Light
+                    Return SystemColorMode.Classic
+
+                Case AppAppearance.Dark
+                    Return SystemColorMode.Dark
+
+                Case Else
+                    Return SystemColorMode.System
+
+            End Select
+
+        End Function
+
+
         ' Dividers inside a card, one step quieter than CardBorder.
         Public Shared Function SubtleBorder() As Color
 

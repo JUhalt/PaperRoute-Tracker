@@ -8,7 +8,7 @@ This guide describes **PaperRoute v0.9.1 — Journal Choice & Guidance**. See th
 
 If you only read one section, read this one.
 
-1. Open PaperRoute. An empty library opens on a welcome: choose **+ Add Manuscript** for a paper you are working on, or **Import Existing Work** to bring in published work from ORCID, BibTeX or RIS, or a spreadsheet.
+1. Open PaperRoute. An empty library opens on a welcome: choose **+ Add Manuscript** for a paper you are working on, or **Import Existing Work** to bring in published work from ORCID, BibTeX or RIS, or a spreadsheet. To see a whole library first, choose **Explore an example library** on the welcome: a fictional research group's manuscripts open in a separate window, and your own library is not changed (see **Teaching with PaperRoute**).
 2. Give the manuscript a title and place it at the stage that best matches reality.
 3. Open the manuscript from its card to add structured authors, a target journal, metadata, links, and submission history.
 4. Before submitting, record the exact manuscript snapshot in **Version History**, use **Submission Readiness...** for the journal's checklist, and assemble **Submission Packets...** for the files you intend to send.
@@ -20,6 +20,45 @@ If you only read one section, read this one.
 10. Use **Settings > Backup Library...** before major changes or moving PaperRoute to another computer.
 
 PaperRoute does not require an account for its core workflow, and the manuscript-tracking database is stored locally.
+
+---
+
+## Installing
+
+PaperRoute runs on Windows 11 (x64). Windows 10 and Windows on ARM may work, but they are not tested.
+
+Setup is published only on this repository's [Releases page](https://github.com/JUhalt/PaperRoute-Tracker/releases): download `JUhalt.PaperRouteTracker-stable-Setup.exe` from the latest Stable release and run it. PaperRoute is installed for your Windows account, under `%LocalAppData%\JUhalt.PaperRouteTracker`, with a Start menu entry; no administrator password is needed.
+
+### What Windows shows
+
+Setup is not code-signed, so Windows warns before it runs. Your browser may say the file isn't commonly downloaded and offer to delete it; keep it. When you open the file, Microsoft Defender SmartScreen shows **Windows protected your PC** ("Microsoft Defender SmartScreen prevented an unrecognized app from starting"). Choose **More info**, check that the app is `JUhalt.PaperRouteTracker-stable-Setup.exe` and the publisher is unknown, and choose **Run anyway**.
+
+To check the download first, compare its SHA-256 hash with the line for the Setup file in the release's `SHA256SUMS.txt`. In PowerShell, in the folder you downloaded to:
+
+```powershell
+Get-FileHash -Algorithm SHA256 -LiteralPath .\JUhalt.PaperRouteTracker-stable-Setup.exe
+```
+
+The two must match; case doesn't matter.
+
+### "Install Partially Succeeded"
+
+Setup's last step starts PaperRoute once, briefly, to finish installing, and waits 30 seconds for it. On a slow or busy computer that first start can take longer, and Setup then reports **Install Partially Succeeded**. It stopped waiting; nothing failed. PaperRoute is installed: open it from the Start menu.
+
+### Updates and the Preview channel
+
+An installed PaperRoute checks GitHub Releases for a newer version when it starts, and **Settings > Check for Updates...** checks now; see **Updates** under Preferences, Updates, and Diagnostics. If you tested a Preview release, switch back to Stable under **Settings > Preferences... > Update channel** once the release is out: a Preview install is not offered the Stable release that follows it.
+
+## Uninstalling
+
+Uninstall PaperRoute from Windows **Settings > Apps > Installed apps** (**PaperRoute Tracker**), as you would any app. That removes the Apps entry, PaperRoute's shortcuts, and the install folder, `%LocalAppData%\JUhalt.PaperRouteTracker`, and nothing else.
+
+Your library stays, so a reinstall finds it again:
+
+- `%LocalAppData%\PaperRoute\`: the library, its automatic backup, your settings, and any keys you added (encrypted, in its `keys` folder);
+- `Documents\PaperRoute Library`: the managed copies of your files, including the `removed` folder.
+
+To remove everything, delete those two folders after uninstalling. If you may want the library back, make a backup first (**Settings > Backup Library...**); a backup holds the library and its files, not your preferences or keys.
 
 ---
 
@@ -127,7 +166,7 @@ PaperRoute edits a working copy while the page is open. Every tab, and every foc
 - **Save** (or **Ctrl+S**) stores the manuscript; managed-file copies and deletions happen only when this save succeeds.
 - **Discard** returns the page to the last saved version.
 
-If you go to another page, open another manuscript, or close PaperRoute while there are unsaved changes, PaperRoute asks whether to save them, discard them, or stay. Nothing is lost silently.
+If you go to another page, open another manuscript, or close PaperRoute while there are unsaved changes, PaperRoute asks whether to save them, discard them, or stay. When there is no one to ask, because Windows is shutting down or an error has stopped PaperRoute, it keeps them in a recovery draft instead, and the next start offers to open the manuscript with them or to discard them; the draft changes nothing in your library until you save. Nothing is lost silently.
 
 ### Version History and the Route
 
@@ -710,6 +749,7 @@ How the numbers work:
 
 - Days are calendar days between dates recorded in PaperRoute. A first decision is the earliest decision recorded for a submission.
 - A missing or inconsistent date (a decision dated before its submission, for example) leaves that value out. Nothing is estimated.
+- A date PaperRoute had to fill in during a spreadsheet import (a missing submission date becomes the day of the import, and a missing decision date the submission date) is noted on the record and counts here as written, so figures that include imported records are approximate to that extent.
 - On the route maps, time with you after a revision request ends at the next recorded Submitted or Under Review history entry. Without one, that stretch is drawn as not recorded.
 - Submissions count under a Journal Library record when they are linked to it or use exactly its name (ignoring capitals and spacing). A different spelling is shown on its own line rather than merged by guess.
 
@@ -825,8 +865,9 @@ Managed document copies, including version and packet snapshots, are included. E
 1. validates the selected archive;
 2. previews record/file counts;
 3. asks for confirmation;
-4. creates an emergency backup of the current library; and
-5. restores the selected backup.
+4. creates an emergency backup of the current library;
+5. restores the selected backup; and
+6. then restarts PaperRoute on the restored library.
 
 Restoring a backup that includes `citations.json` replaces your saved citation figures; a backup without it leaves them as they are.
 
@@ -867,7 +908,7 @@ Installed builds can check GitHub Releases for PaperRoute updates.
 
 Stable installations default to the Stable channel. To opt into Preview, choose **Settings > Preferences... > Update channel**. Use **Settings > Check for Updates...** to check immediately.
 
-Portable/developer builds are intended for development and smoke testing and do not behave exactly like an installed updater-enabled build.
+Developer builds, including the CI smoke-test artifact, are intended for development and smoke testing and do not behave exactly like an installed updater-enabled build.
 
 ### Diagnostics
 
@@ -875,7 +916,7 @@ Use **Settings > Diagnostics...** when troubleshooting storage, environment, or 
 
 ## Online Services and Working Offline
 
-PaperRoute keeps your library on this computer and works without the internet. A few features contact an online service, and only when you use them. Choose **Settings > Preferences... > Online services** to see each service, what it sends, and when, and to turn any of them off.
+PaperRoute keeps your library on this computer and works without the internet. The one request PaperRoute makes by itself is the update check when it starts: it reads the list of PaperRoute releases and sends nothing about you or your library. Every other feature that contacts an online service does so only when you use it. Choose **Settings > Preferences... > Online services** to see each service, what it sends, and when, and to turn any of them off; **Check for updates when PaperRoute starts**, under **Updates** on the same page, turns off the startup check.
 
 - **Work offline** stops every online service, update checks included, until you turn it off. Choose **Settings > Work Offline**, or check it in Online services.
 - Above **Settings**, the rail shows **Online** in green, or **Working offline** in blue. Choose it to review Online services.
@@ -1086,11 +1127,24 @@ The safest approach is:
 
 Backups hold your library and its files, not your preferences or OpenAlex key. On the new computer, review **Settings > Preferences...** and add the key again.
 
+Where the library's files are, and which copies PaperRoute keeps of them, is in [Recovering your library](https://github.com/JUhalt/PaperRoute-Tracker/blob/master/docs/USER_GUIDE.md#recovering-your-library).
+
 ## Recovering your library
 
-PaperRoute creates safety backups around high-risk operations.
+Your library is two files in PaperRoute's data folder: `manuscripts.json`, the record of your manuscripts, and `authors.json`, your reusable authors, affiliations, and journals. The files PaperRoute manages for you, version snapshots, packet files, and correspondence copies, are in the PaperRoute Library folder in your Documents. **Settings > Diagnostics...** prints every path named here, and its **Open Data Folder** opens the data folder. A library belongs to one computer: to move it, use backup and restore as in **How do I move PaperRoute to another computer?**, not a copy of the folders.
 
-Do not overwrite or manually delete the PaperRoute data directory while troubleshooting. Use Diagnostics and the recovery/backup workflow first.
+PaperRoute keeps these copies on its own:
+
+- `manuscripts.bak` and `authors.bak`, beside the two files, are the previous save of each; every save makes them. If PaperRoute cannot read a file when it starts, it loads this copy, tells you so, and keeps the unreadable file in the `recovery` folder, renamed with the time, so nothing is lost. There is nothing to do unless the window that opens says the copy could not be read either; then the files in the data folder and in `recovery` are what a bug report needs.
+- Before every spreadsheet or bibliography import, and before an ORCID import that adds manuscripts, a copy of both files goes into the `backups` folder, named manuscripts_pre-import_ and authors_pre-import_ followed by the time; the import's final message names the folder. To undo an import, close PaperRoute, copy the two files from `backups` over `manuscripts.json` and `authors.json` in the data folder, and start PaperRoute again. There is no undo button for an import.
+- Before **Restore Backup...** replaces your library, a ZIP of the whole library, PaperRoute_PreRestore_ followed by the time, goes into the same `backups` folder, and after the restore PaperRoute restarts on the restored library. If the restored library was not what you wanted, restore that ZIP like any other backup.
+
+If PaperRoute cannot start, the window that opens names the file it could not read and its folder, links here, and its **Copy Details** gives a bug report what it needs. Where the library itself is damaged, the window can also put it right, and PaperRoute then opens the recovered library, restarting if it needs to:
+
+- **Use the Previous Save** appears when `manuscripts.json` cannot be read but `manuscripts.bak` can. It puts the previous save in place and keeps the replaced file in `recovery`, as a start does on its own; changes made in the last save are not in it.
+- **Restore From Backup...** asks for a backup ZIP, shows what it holds, and asks before it replaces your library. A ZIP of the files as they were, PaperRoute_PreRestore_ followed by the time, goes into `backups` first. Unlike the one Restore Backup... makes, it is a plain copy, damage included, so Restore Backup... may refuse it: to go back to it, close PaperRoute and unzip it by hand, its data files into the data folder and the contents of its files folder into the PaperRoute Library folder.
+
+Neither is offered for a file another program is using, or for a library from a newer version of PaperRoute; update PaperRoute instead. Do not delete or edit the data folder while troubleshooting.
 
 ### Removed files
 

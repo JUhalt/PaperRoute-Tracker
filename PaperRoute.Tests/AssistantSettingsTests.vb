@@ -34,6 +34,10 @@ Public Class AssistantSettingsTests
         AssistantService.ProviderFactory = Nothing
         AssistantRunner.ConsentPrompt = Nothing
         _directory = TestSupport.CreateTemporaryRoot()
+        ' The Diagnostics report reads the settings and the schema marker
+        ' and lists the logs folder under the default roots: all under the
+        ' temporary folder, never the user's own profile.
+        StorageEnvironment.RootOverride = _directory
         _keys = New ProtectedKeyStore(Path.Combine(_directory, "keys"))
         OnlineAccess.KeyStoreFactory = Function() _keys
     End Sub
@@ -43,6 +47,7 @@ Public Class AssistantSettingsTests
         OnlineAccess.ResetForTests()
         AssistantService.ProviderFactory = Nothing
         AssistantRunner.ConsentPrompt = Nothing
+        StorageEnvironment.RootOverride = Nothing
         TestSupport.DeleteTemporaryRoot(_directory)
     End Sub
 
@@ -898,24 +903,10 @@ Public Class AssistantSettingsTests
         Next
     End Function
 
+    ' Five minutes, as before #134: one of these tests takes over a minute
+    ' on a slow machine.
     Private Shared Sub RunOnSta(action As Action, Optional mode As SystemColorMode = SystemColorMode.Classic)
-        Dim failure As ExceptionDispatchInfo = Nothing
-        Dim thread As New Thread(
-            Sub()
-                Dim priorMode As SystemColorMode = Application.ColorMode
-                Try
-                    Application.SetColorMode(mode)
-                    action()
-                Catch ex As Exception
-                    failure = ExceptionDispatchInfo.Capture(ex)
-                Finally
-                    Application.SetColorMode(priorMode)
-                End Try
-            End Sub) With {.IsBackground = True}
-        thread.SetApartmentState(ApartmentState.STA)
-        thread.Start()
-        Assert.IsTrue(thread.Join(TimeSpan.FromMinutes(5)), "The AI assistant settings test timed out.")
-        failure?.Throw()
+        StaRunner.Run(action, TimeSpan.FromMinutes(5), mode)
     End Sub
 
 End Class

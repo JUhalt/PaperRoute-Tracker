@@ -165,6 +165,65 @@ Public Class BackupRestoreTests
 
     End Sub
 
+    ' A backup made before #118 carries the offsets its machine wrote. Restored
+    ' in another zone, its dates stay where they were written: 9 October at
+    ' +14:00 and at -12:00 is 9 October here too, in the file and on load.
+    ' One of the two is a day off under the default reader unless this host
+    ' sits at that offset, so the test fails somewhere for everyone.
+    <TestMethod>
+    Public Sub Restore_KeepsCalendarDatesWhereTheBackupWroteThem()
+
+        Dim staging As String = Path.Combine(_root, "zones-staging")
+        Directory.CreateDirectory(staging)
+
+        File.WriteAllText(
+            Path.Combine(staging, "manuscripts.json"),
+            "[" & vbLf &
+            "  {" & vbLf &
+            "    ""Title"": ""Zones""," & vbLf &
+            "    ""StageEnteredDate"": ""2026-10-09T00:00:00+14:00""," & vbLf &
+            "    ""Submissions"": [" & vbLf &
+            "      {" & vbLf &
+            "        ""JournalName"": ""Journal of Zones""," & vbLf &
+            "        ""SubmittedDate"": ""2026-10-09T00:00:00+14:00""," & vbLf &
+            "        ""FollowUpDate"": ""2026-10-09T00:00:00-12:00""," & vbLf &
+            "        ""RecordedAtUtc"": ""2026-10-08T10:00:00Z""," & vbLf &
+            "        ""Decisions"": [" & vbLf &
+            "          { ""DecisionDate"": ""2026-10-09T00:00:00-12:00"", ""Decision"": ""Rejected"" }" & vbLf &
+            "        ]" & vbLf &
+            "      }" & vbLf &
+            "    ]" & vbLf &
+            "  }" & vbLf &
+            "]"
+        )
+
+        Dim backupPath As String = Path.Combine(_root, "zones.zip")
+        ZipFile.CreateFromDirectory(staging, backupPath)
+
+        Dim targetManaged As String = Path.Combine(_root, "zones-library")
+        Dim targetRepository As New ManuscriptRepository(Path.Combine(_root, "zones-data"), targetManaged)
+        Dim current As New List(Of Manuscript)()
+        targetRepository.Save(current)
+
+        Call New PortableRestoreService(targetManaged).RestoreBackup(backupPath, current, targetRepository)
+
+        Dim json As String = File.ReadAllText(targetRepository.DataFilePath)
+        StringAssert.Contains(json, """SubmittedDate"": ""2026-10-09T00:00:00""", "The restored file holds the date as the backup wrote it, with no offset.")
+        StringAssert.Contains(json, """DecisionDate"": ""2026-10-09T00:00:00""", "The restored file holds the date as the backup wrote it, with no offset.")
+        StringAssert.Contains(json, """RecordedAtUtc"": ""2026-10-08T10:00:00Z""", "The audit stamp stays an instant.")
+
+        Dim restored As Manuscript = targetRepository.Load().Single()
+        Dim submission As JournalSubmission = restored.Submissions(0)
+        Dim ninth As New DateTime(2026, 10, 9)
+
+        Assert.AreEqual(ninth, restored.StageEnteredDate.Date, "StageEnteredDate written at +14:00")
+        Assert.AreEqual(ninth, submission.SubmittedDate.Date, "SubmittedDate written at +14:00")
+        Assert.AreEqual(ninth, submission.FollowUpDate.Value, "FollowUpDate written at -12:00, cut to the day on load")
+        Assert.AreEqual(ninth, submission.Decisions(0).DecisionDate.Date, "DecisionDate written at -12:00")
+        Assert.AreEqual(New DateTime(2026, 10, 8, 10, 0, 0, DateTimeKind.Utc), submission.RecordedAtUtc.Value)
+
+    End Sub
+
     <TestMethod>
     Public Sub InspectBackup_RejectsArchiveWithoutManuscriptsJson()
 
@@ -657,6 +716,138 @@ Public Class BackupRestoreTests
     End Sub
 
 
+    ' After a restore the safety backups still held the pre-restore library,
+    ' which a later fallback would bring back as "the previous save" (#116):
+    ' they are copies of the restored files instead.
+    <TestMethod>
+    Public Sub Restore_ReplacesTheSafetyBackupsWithTheRestoredFiles()
+
+        Dim scenario As RestoreScenario = CreateRestoreScenario()
+
+        Call New PortableRestoreService(scenario.TargetManaged).RestoreBackup(scenario.BackupPath, scenario.Current, scenario.TargetRepository)
+
+        CollectionAssert.AreEqual(
+            File.ReadAllBytes(Path.Combine(scenario.TargetData, "manuscripts.json")),
+            File.ReadAllBytes(Path.Combine(scenario.TargetData, "manuscripts.bak")),
+            "manuscripts.bak equals the restored manuscripts.json."
+        )
+        CollectionAssert.AreEqual(
+            File.ReadAllBytes(Path.Combine(scenario.TargetData, "authors.json")),
+            File.ReadAllBytes(Path.Combine(scenario.TargetData, "authors.bak")),
+            "authors.bak equals the restored authors.json."
+        )
+        ' CitationStore falls back to citations.bak without a word, so a
+        ' stale one would bring the pre-restore figures back.
+        CollectionAssert.AreEqual(
+            File.ReadAllBytes(Path.Combine(scenario.TargetData, CitationStore.FileName)),
+            File.ReadAllBytes(Path.Combine(scenario.TargetData, "citations.bak")),
+            "citations.bak equals the restored citations.json."
+        )
+        Assert.AreEqual("Jane Researcher", New AuthorLibraryRepository(scenario.TargetData).Load().Authors.Single().DisplayName)
+
+    End Sub
+
+
+    ' A failure at each step of the swap leaves the library as it was and
+    ' names the emergency ZIP (#116). The failing step is the one whose
+    ' destination is named: the restored managed folder taking the live
+    ' folder's place, then each file taking its place.
+    <TestMethod>
+    <DataRow("files")>
+    <DataRow("manuscripts.json")>
+    <DataRow("authors.json")>
+    <DataRow("citations.json")>
+    Public Sub Restore_FailureAtEachSwapStepLeavesTheLibraryAsItWasAndNamesTheEmergencyZip(swapStep As String)
+
+        Dim scenario As RestoreScenario = CreateRestoreScenario()
+        Dim before As Dictionary(Of String, Byte()) = SnapshotLibrary(scenario)
+        Dim failAt As String = If(swapStep = "files", scenario.TargetManaged, Path.Combine(scenario.TargetData, swapStep))
+        Dim service As New FailingRestoreService(scenario.TargetManaged, failAt)
+
+        Dim failure As RestoreFailedException =
+            Assert.ThrowsExactly(Of RestoreFailedException)(
+                Sub() service.RestoreBackup(scenario.BackupPath, scenario.Current, scenario.TargetRepository))
+
+        Dim emergencyZip As String = Directory.GetFiles(Path.Combine(scenario.TargetData, "backups"), "PaperRoute_PreRestore_*.zip").Single()
+        Assert.AreEqual(emergencyZip, failure.EmergencyBackupPath)
+        StringAssert.Contains(failure.Message, emergencyZip, "The message names the emergency ZIP.")
+        StringAssert.Contains(failure.Message, "put back as it was")
+        StringAssert.Contains(failure.Message, Path.GetFileName(failAt), "The message carries the cause.")
+        Assert.AreEqual(0, failure.LeftBehind.Count)
+
+        AssertSameFiles(before, SnapshotLibrary(scenario), "The library on disk after failing at " & swapStep)
+        Assert.AreEqual(
+            0,
+            Directory.GetFileSystemEntries(_root, "*restore-*", SearchOption.AllDirectories).Length,
+            "Nothing of the restore is left beside the library."
+        )
+
+    End Sub
+
+
+    ' A backup of a three-manuscript library with reusable authors, saved
+    ' citations and a managed file, and a one-manuscript target library with
+    ' its own authors, citations and managed file, saved twice so its .bak
+    ' files exist.
+    Private Structure RestoreScenario
+        Public BackupPath As String
+        Public TargetData As String
+        Public TargetManaged As String
+        Public TargetRepository As ManuscriptRepository
+        Public Current As List(Of Manuscript)
+    End Structure
+
+
+    Private Function CreateRestoreScenario() As RestoreScenario
+
+        Dim sourceData As String = Path.Combine(_root, "scenario-source-data")
+        Dim sourceManaged As String = Path.Combine(_root, "scenario-source-library")
+        Dim sourceRepository As New ManuscriptRepository(sourceData, sourceManaged)
+        Dim sourceManuscripts As List(Of Manuscript) = CreateRepresentativeLibrary()
+        AddManagedFixture(sourceManuscripts, sourceManaged)
+        sourceRepository.Save(sourceManuscripts)
+
+        Dim sourceAuthors As New AuthorLibraryData()
+        sourceAuthors.Authors.Add(New AuthorRecord With {.GivenName = "Jane", .FamilyName = "Researcher"})
+        Call New AuthorLibraryRepository(sourceData).Save(sourceAuthors)
+        Call New CitationStore(sourceData).Save(New CitationSnapshot With {.Orcid = "0000-0002-1825-0097", .Source = "Example"})
+
+        Dim scenario As New RestoreScenario With {
+            .BackupPath = Path.Combine(_root, "scenario.zip"),
+            .TargetData = Path.Combine(_root, "scenario-target-data"),
+            .TargetManaged = Path.Combine(_root, "scenario-target-library")
+        }
+
+        Call New PortableBackupService(sourceManaged).CreateBackup(scenario.BackupPath, sourceManuscripts, sourceRepository)
+
+        scenario.TargetRepository = New ManuscriptRepository(scenario.TargetData, scenario.TargetManaged)
+        scenario.Current = New List(Of Manuscript) From {
+            New Manuscript With {.Title = "Current Before Restore", .CurrentStage = PaperStage.Draft, .Location = ManuscriptLocation.Pipeline}
+        }
+        scenario.Current(0).Submissions.Add(New JournalSubmission With {.JournalName = "Current Journal", .SubmittedDate = New DateTime(2026, 8, 1)})
+        AddManagedFixture(scenario.Current, scenario.TargetManaged)
+
+        Dim targetAuthors As New AuthorLibraryData()
+        targetAuthors.Authors.Add(New AuthorRecord With {.GivenName = "Old", .FamilyName = "Author"})
+        Dim targetAuthorRepository As New AuthorLibraryRepository(scenario.TargetData)
+        Dim targetCitations As New CitationStore(scenario.TargetData)
+
+        ' Twice, so the .bak files hold the pre-restore library.
+        For pass As Integer = 1 To 2
+            scenario.TargetRepository.Save(scenario.Current)
+            targetAuthorRepository.Save(targetAuthors)
+            targetCitations.Save(New CitationSnapshot With {.Orcid = "0000-0001-5000-0007", .Source = "Example"})
+        Next
+
+        Assert.IsTrue(File.Exists(Path.Combine(scenario.TargetData, "manuscripts.bak")))
+        Assert.IsTrue(File.Exists(Path.Combine(scenario.TargetData, "authors.bak")))
+        Assert.IsTrue(File.Exists(Path.Combine(scenario.TargetData, "citations.bak")))
+
+        Return scenario
+
+    End Function
+
+
     Private Sub AddManagedFixture(
         manuscripts As List(Of Manuscript),
         managedDirectory As String
@@ -686,5 +877,66 @@ Public Class BackupRestoreTests
         manuscripts(0).Submissions(0).Correspondence.Add(correspondence)
 
     End Sub
+
+
+    ' Every file under the data and managed folders, except the emergency
+    ' ZIP a restore adds under data\backups.
+    Private Shared Function SnapshotLibrary(scenario As RestoreScenario) As Dictionary(Of String, Byte())
+
+        Dim files As New Dictionary(Of String, Byte())(StringComparer.OrdinalIgnoreCase)
+        Dim backups As String = Path.Combine(scenario.TargetData, "backups")
+
+        For Each folder As String In {scenario.TargetData, scenario.TargetManaged}
+            If Not Directory.Exists(folder) Then Continue For
+            For Each filePath As String In Directory.GetFiles(folder, "*", SearchOption.AllDirectories)
+                If filePath.StartsWith(backups, StringComparison.OrdinalIgnoreCase) Then Continue For
+                files(filePath) = File.ReadAllBytes(filePath)
+            Next
+        Next
+
+        Return files
+
+    End Function
+
+
+    Private Shared Sub AssertSameFiles(expected As Dictionary(Of String, Byte()), actual As Dictionary(Of String, Byte()), message As String)
+
+        CollectionAssert.AreEquivalent(expected.Keys.ToList(), actual.Keys.ToList(), message & ": the same files.")
+
+        For Each pair As KeyValuePair(Of String, Byte()) In expected
+            CollectionAssert.AreEqual(pair.Value, actual(pair.Key), message & ": " & Path.GetFileName(pair.Key) & " is unchanged.")
+        Next
+
+    End Sub
+
+
+    ' Fails the swap step whose destination is the given path (#116). The
+    ' rollback does not go through these seams, so it runs as it would.
+    Private NotInheritable Class FailingRestoreService
+        Inherits PortableRestoreService
+
+        Private ReadOnly _failAt As String
+
+        Public Sub New(managedLibraryRootDirectory As String, failAt As String)
+            MyBase.New(managedLibraryRootDirectory)
+            _failAt = Path.GetFullPath(failAt)
+        End Sub
+
+        Friend Overrides Sub MoveDirectory(sourceDirectory As String, destinationDirectory As String)
+            FailAtTarget(destinationDirectory)
+            MyBase.MoveDirectory(sourceDirectory, destinationDirectory)
+        End Sub
+
+        Friend Overrides Sub CopyFile(sourceFile As String, destinationFile As String)
+            FailAtTarget(destinationFile)
+            MyBase.CopyFile(sourceFile, destinationFile)
+        End Sub
+
+        Private Sub FailAtTarget(destination As String)
+            If String.Equals(Path.GetFullPath(destination), _failAt, StringComparison.OrdinalIgnoreCase) Then
+                Throw New IOException("There is not enough space on the disk: " & Path.GetFileName(destination))
+            End If
+        End Sub
+    End Class
 
 End Class

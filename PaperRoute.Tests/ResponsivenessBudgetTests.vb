@@ -169,12 +169,18 @@ Public Class ResponsivenessBudgetTests
             ' The handlers' work after their dialogs, behind the disabled window
             ' (#132). Backup's stall varied from 61 to 419 ms across runs on
             ' this busy host. The restore's replace step, whose re-render #133
-            ' cut from 13 s, varied from 50 to 331 ms. Both pump for 30 to 60 s,
+            ' cut from 13 s, varied from 50 to 331 ms; since #116 a restore
+            ' ends in a restart rather than a reload, so the step is the swap
+            ' and the notice, the restart recorded. Both pump for 30 to 60 s,
             ' long enough to meet one of the host's own stalls, so both are
             ' reported, not enforced.
             rows.Add(Time(library, "Backup", UiThread, Sub() Assert.IsTrue(board.WriteBackup(backupPath), "The backup was written.")))
             rows.Add(Time(library, "Restore: inspect the backup", UiThread, Sub() Assert.IsNotNull(board.InspectBackupFile(backupPath), "The backup was read."), enforced:=enforce))
-            rows.Add(Time(library, "Restore: replace the library, reload, render", UiThread, Sub() Assert.IsNotNull(board.ReplaceLibraryFrom(backupPath), "The library was restored.")))
+            rows.Add(Time(library, "Restore: replace the library (the window then restarts)", UiThread,
+                          Sub()
+                              board.Restore(backupPath)
+                              Assert.AreEqual(1, board.RestoreNotices.Count, "The library was restored.")
+                          End Sub))
 
             ' Each form is created inside its timed step and closed even when a
             ' step fails, so no window outlives the test.

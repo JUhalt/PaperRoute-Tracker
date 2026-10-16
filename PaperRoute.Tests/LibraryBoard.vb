@@ -66,6 +66,30 @@ Friend NotInheritable Class LibraryBoard
     End Function
 
 
+    ' A failed load is recorded rather than shown in the startup window
+    ' (#119), which offers nothing to put right, so EndFailedStartup closes.
+    Protected Overrides Function ShowStartupFailure(failure As StartupFailure) As Boolean
+        StartupFailures.Add(failure)
+        Return False
+    End Function
+
+
+    ' A restore ends in a restart (#116); its notice is recorded instead,
+    ' and nothing restarts the test host.
+    Protected Overrides Sub RestartAfterRestore(notice As String)
+        RestoreNotices.Add(notice)
+    End Sub
+
+
+    Protected Overrides Sub RestartOnTheLibraryOnDisk()
+        Assert.Fail("Nothing in these tests restarts PaperRoute.")
+    End Sub
+
+
+    Public ReadOnly StartupFailures As New List(Of StartupFailure)()
+    Public ReadOnly RestoreNotices As New List(Of String)()
+
+
     ' The Insights figures are worked out off the UI thread (#132); pumps
     ' until they are shown.
     Public Sub WaitForInsights()
@@ -81,15 +105,23 @@ Friend NotInheritable Class LibraryBoard
 
     ' Form1_Load's sequence, without the online gate, the update check and
     ' the reminder notification, then Show and one drained message queue:
-    ' the Board is interactive. Whether a Paint arrived is recorded; an
+    ' the Board is interactive. A library that does not load ends the start
+    ' through EndFailedStartup, as Form1_Load does (#124); once both have
+    ' loaded, startup is complete, and a recovery draft is offered and
+    ' answered No (#123). Whether a Paint arrived is recorded; an
     ' off-screen window may get none.
     Public Sub Start()
         SetField("appSettings", DirectCast(GetField("settingsService"), AppSettingsService).Load())
         CallPrivate("BuildInterface")
         CallPrivate("RefreshOnlineIndicators")
-        Assert.IsTrue(CBool(CallPrivate("LoadManuscripts")), "The library loaded.")
-        Assert.IsTrue(LoadAuthorLibrary(), "The author library loaded.")
+        If Not CBool(CallPrivate("LoadManuscripts")) OrElse Not LoadAuthorLibrary() Then
+            CallPrivate("EndFailedStartup")
+            Assert.Fail("The library did not load: " & String.Join(" | ", StartupFailures.Select(Function(failure) failure.Heading)))
+        End If
+        SetField("startupComplete", True)
         CallPrivate("RenderManuscripts")
+        recoveryDraftPrompt = Function(title) DialogResult.No
+        CallPrivate("OfferRecoveryDraft")
         StartPosition = FormStartPosition.Manual
         Location = New Point(-20000, -20000)
         ShowInTaskbar = False
@@ -129,13 +161,40 @@ Friend NotInheritable Class LibraryBoard
     ' Work of the test's own behind the disabled window, as a save, backup
     ' or restore runs (#132).
     Public Function RunWork(status As String, work As Action) As Boolean
-        Return CBool(CallPrivate("RunLibraryWork", status, work))
+        Return CBool(CallPrivate("RunLibraryWork", status, work, Nothing))
     End Function
 
 
     Public Function SaveNow() As Boolean
         Return SaveManuscripts()
     End Function
+
+
+    ' What Restore Backup... does after its dialogs (#116): the swap behind
+    ' the disabled window (#132), then the notice and the restart, recorded
+    ' in RestoreNotices.
+    Public Sub Restore(backupPath As String)
+        CallPrivate("RestoreFromArchive", backupPath, CreateRestoreService())
+    End Sub
+
+
+    ' The close Windows sends at shutdown, or any other, without closing
+    ' the window.
+    Public Sub SimulateClosing(e As FormClosingEventArgs)
+        OnFormClosing(e)
+    End Sub
+
+
+    ' A method rather than a property, which WinForms would try to serialize.
+    Public Sub SetPrompt(value As Func(Of String, DialogResult))
+        unsavedChangesPrompt = value
+    End Sub
+
+
+    ' The state a save that failed leaves (#113).
+    Public Sub MarkLastSaveFailed()
+        SetField("librarySaveFailed", True)
+    End Sub
 
 
     Public Sub Open(manuscript As Manuscript)

@@ -534,10 +534,17 @@ Partial Public Class Form1
 
     Private Sub LeaveCurrentPage()
 
+        ' A manuscript page is left only once its edits were saved or let go
+        ' (#123), so a draft an error wrote of them earlier is stale.
+        If currentPage = WorkspacePage.Manuscript Then
+            DiscardRecoveryDraft()
+        End If
+
         manuscriptDirtyTimer.Stop()
         libraryFilterDebounceTimer.Stop()
         manuscriptEditor = Nothing
         manuscriptSaveBar = Nothing
+        manuscriptSaveHint = Nothing
 
         If currentPageView Is Nothing Then
             Return

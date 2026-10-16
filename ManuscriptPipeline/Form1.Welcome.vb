@@ -2,6 +2,7 @@ Imports System
 Imports System.Drawing
 Imports System.Windows.Forms
 Imports ManuscriptPipeline.Controls
+Imports ManuscriptPipeline.Forms
 Imports ManuscriptPipeline.Services
 
 ' An empty library opens on a welcome that explains the two ways in, rather
@@ -11,6 +12,10 @@ Partial Public Class Form1
 
     Private boardBody As Control = Nothing
     Private boardWelcome As Control = Nothing
+
+    ' Shows the Help the welcome opens; tests replace it to look at the
+    ' window instead of the modal dialog.
+    Friend helpShower As Action(Of HelpForm) = Nothing
 
 
     Private Sub ShowWelcomeWhenEmpty()
@@ -145,7 +150,8 @@ Partial Public Class Form1
         }
 
         Dim lblPrivacy As New Label With {
-            .Text = "PaperRoute keeps your library on this computer. No account is needed, and your library is never uploaded.",
+            .Text = "PaperRoute keeps your library on this computer. No account is needed, and your library is never uploaded. " &
+                    "The one request PaperRoute makes by itself is a check for updates when it starts; it sends nothing about you, and Preferences turns it off.",
             .AutoSize = True,
             .UseMnemonic = False,
             .MaximumSize = New Size(textWidth - privacy.Padding.Horizontal, 0),
@@ -164,6 +170,22 @@ Partial Public Class Form1
         column.Controls.Add(ways)
         column.Controls.Add(privacy)
 
+        ' Two ways to learn PaperRoute, which point at each other: the
+        ' guide's Quick Start, and a whole library to explore (#130).
+        Dim lnkQuickStart As New LinkLabel With {
+            .Text = "Read the Quick Start",
+            .AutoSize = True,
+            .UseMnemonic = False,
+            .Margin = New Padding(0, UiTheme.Px(16, dpi), 0, 0),
+            .BackColor = UiTheme.BoardBackground(),
+            .LinkColor = UiTheme.AccentColor(),
+            .ActiveLinkColor = UiTheme.AccentColor(),
+            .VisitedLinkColor = UiTheme.AccentColor(),
+            .AccessibleDescription = "Opens Help at the Quick Start."
+        }
+        AddHandler lnkQuickStart.LinkClicked, Sub(sender, e) OpenQuickStart()
+        column.Controls.Add(lnkQuickStart)
+
         ' New to PaperRoute, or teaching with it: see a whole library first.
         Dim exampleText As String = "New to PaperRoute, or teaching with it? Explore an example library"
         Dim lnkExample As New LinkLabel With {
@@ -171,7 +193,7 @@ Partial Public Class Form1
             .AutoSize = True,
             .UseMnemonic = False,
             .MaximumSize = New Size(textWidth, 0),
-            .Margin = New Padding(0, UiTheme.Px(16, dpi), 0, 0),
+            .Margin = New Padding(0, UiTheme.Px(6, dpi), 0, 0),
             .BackColor = UiTheme.BoardBackground(),
             .ForeColor = UiTheme.SecondaryText(),
             .LinkColor = UiTheme.AccentColor(),
@@ -188,6 +210,21 @@ Partial Public Class Form1
         Return page
 
     End Function
+
+
+    ' Help, open at the Quick Start. It offers the example library except
+    ' inside the example, as Help from the rail does.
+    Private Sub OpenQuickStart()
+
+        Using dialog As New HelpForm("Quick Start", openExample:=If(ExampleLibraryService.IsActive, Nothing, New Action(AddressOf OpenExampleLibrary)))
+            If helpShower IsNot Nothing Then
+                helpShower(dialog)
+            Else
+                dialog.ShowDialog(Me)
+            End If
+        End Using
+
+    End Sub
 
 
     ' ORCID works are imported for a reusable author, from the author's

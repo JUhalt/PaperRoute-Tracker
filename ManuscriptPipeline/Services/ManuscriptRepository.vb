@@ -159,6 +159,29 @@ Namespace Services
         End Property
 
 
+        ' Where the copies taken before an import go (#122).
+        Public ReadOnly Property PreImportBackupDirectory As String
+            Get
+                Return Path.Combine(
+                    _dataDirectory,
+                    "backups"
+                )
+            End Get
+        End Property
+
+
+        ' Where a load from the safety backup keeps the file it could not
+        ' read. The load names the folder itself; this is for Diagnostics.
+        Public ReadOnly Property RecoveryDirectory As String
+            Get
+                Return Path.Combine(
+                    _dataDirectory,
+                    "recovery"
+                )
+            End Get
+        End Property
+
+
         Public ReadOnly Property LastLoadRecoveredFromBackup As Boolean
             Get
                 Return _lastLoadRecoveredFromBackup
@@ -351,6 +374,100 @@ Namespace Services
         End Function
 
 
+        ' True when the safety backup reads with the current rules, so a
+        ' start that failed can offer it as the previous save (#124).
+        ' Nothing is changed; a backup in use by another program counts as
+        ' unavailable rather than invalid.
+        Public Function HasValidBackup() As Boolean
+
+            If Not File.Exists(_backupFilePath) Then
+                Return False
+            End If
+
+            Try
+
+                Dim failure As Exception =
+                    Nothing
+
+                Return TryLoadLibraryFile(
+                    _backupFilePath,
+                    failure
+                ) IsNot Nothing
+
+            Catch ex As StorageFileInUseException
+
+                Return False
+
+            End Try
+
+        End Function
+
+
+        ' True when manuscripts.json is there and reads with the current
+        ' rules, so the previous save is not needed (#124): putting it in
+        ' place would set the newest save aside as unreadable. Nothing is
+        ' changed; a file in use by another program is not damage, so it
+        ' counts as readable.
+        Public Function PrimaryReads() As Boolean
+
+            If Not File.Exists(_dataFilePath) Then
+                Return False
+            End If
+
+            Try
+
+                Dim failure As Exception =
+                    Nothing
+
+                Return TryLoadLibraryFile(
+                    _dataFilePath,
+                    failure
+                ) IsNot Nothing
+
+            Catch ex As StorageFileInUseException
+
+                Return True
+
+            End Try
+
+        End Function
+
+
+        ' Puts the safety backup in the primary file's place on request
+        ' (#124), as a load does when the primary cannot be read: the file
+        ' it replaces is kept under data\recovery. The next load reads the
+        ' recovered library as the primary.
+        Public Sub UseBackup()
+
+            Directory.CreateDirectory(
+                _dataDirectory
+            )
+
+            ResetRecoveryState()
+
+            Dim failure As Exception =
+                Nothing
+
+            If TryLoadLibraryFile(
+                _backupFilePath,
+                failure
+            ) Is Nothing Then
+
+                Throw New InvalidDataException(
+                    "PaperRoute could not read the safety backup, so the " &
+                    "previous save cannot be used. Nothing has been changed.",
+                    failure
+                )
+
+            End If
+
+            RecoverPrimaryFromBackup(
+                preserveExistingPrimary:=File.Exists(_dataFilePath)
+            )
+
+        End Sub
+
+
         Private Function TryLoadLibraryFile(
             filePath As String,
             ByRef failure As Exception
@@ -375,11 +492,12 @@ Namespace Services
 
                     End If
 
+                    ' Calendar dates as written, whatever zone wrote them (#118).
                     Dim loaded As List(Of Manuscript) =
                         JsonSerializer.Deserialize(
                             Of List(Of Manuscript)
                         )(
-                            stream,
+                            CalendarDateJson.Read(stream),
                             _jsonOptions
                         )
 
@@ -457,19 +575,13 @@ Namespace Services
                 If preserveExistingPrimary AndAlso
                    File.Exists(_dataFilePath) Then
 
-                    Dim recoveryDirectory As String =
-                        Path.Combine(
-                            _dataDirectory,
-                            "recovery"
-                        )
-
                     Directory.CreateDirectory(
-                        recoveryDirectory
+                        RecoveryDirectory
                     )
 
                     Dim preservedPath As String =
                         CreateUniqueRecoveryPath(
-                            recoveryDirectory
+                            RecoveryDirectory
                         )
 
                     File.Replace(
@@ -1029,12 +1141,15 @@ Namespace Services
                     options:=FileOptions.SequentialScan
                 )
 
-                    JsonSerializer.Serialize(
-                        Of List(Of Manuscript)
-                    )(
+                    ' Calendar dates without the machine's offset (#118).
+                    CalendarDateJson.Write(
                         stream,
-                        manuscripts,
-                        _jsonOptions
+                        JsonSerializer.Serialize(
+                            Of List(Of Manuscript)
+                        )(
+                            manuscripts,
+                            _jsonOptions
+                        )
                     )
 
                     stream.Flush(
@@ -1170,48 +1285,70 @@ Namespace Services
         ' Pre-import safety backup
         ' =====================================================
 
+        ' Copies manuscripts.json, and authors.json beside it (#122), into the
+        ' backups folder under one time stamp, so an import that changed both
+        ' can be put back whole. Returns the folder when a copy was made, or
+        ' an empty string when there is no library file to copy yet.
         Public Function CreatePreImportBackup() As String
 
-            If Not File.Exists(
-                _dataFilePath
-            ) Then
+            Dim authorsFilePath As String =
+                Path.Combine(
+                    _dataDirectory,
+                    "authors.json"
+                )
+
+            If Not File.Exists(_dataFilePath) AndAlso
+               Not File.Exists(authorsFilePath) Then
 
                 Return String.Empty
 
             End If
 
-            Dim backupDirectory As String =
-                Path.Combine(
-                    _dataDirectory,
-                    "backups"
-                )
-
             Directory.CreateDirectory(
-                backupDirectory
+                PreImportBackupDirectory
             )
 
-            Dim backupName As String =
-                "manuscripts_pre-import_" &
+            Dim stamp As String =
+                "_pre-import_" &
                 DateTime.Now.ToString(
                     "yyyyMMdd_HHmmss"
                 ) &
                 ".json"
 
-            Dim backupPath As String =
-                Path.Combine(
-                    backupDirectory,
-                    backupName
-                )
+            CopyBeforeImport(
+                _dataFilePath,
+                "manuscripts" & stamp
+            )
+
+            CopyBeforeImport(
+                authorsFilePath,
+                "authors" & stamp
+            )
+
+            Return PreImportBackupDirectory
+
+        End Function
+
+
+        Private Sub CopyBeforeImport(
+            sourcePath As String,
+            copyName As String
+        )
+
+            If Not File.Exists(sourcePath) Then
+                Return
+            End If
 
             File.Copy(
-                _dataFilePath,
-                backupPath,
+                sourcePath,
+                Path.Combine(
+                    PreImportBackupDirectory,
+                    copyName
+                ),
                 False
             )
 
-            Return backupPath
-
-        End Function
+        End Sub
 
 
         ' =====================================================

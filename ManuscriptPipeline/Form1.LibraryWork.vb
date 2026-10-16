@@ -4,7 +4,6 @@ Imports System.Linq
 Imports System.Runtime.InteropServices
 Imports System.Threading.Tasks
 Imports System.Windows.Forms
-Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
 ' Library work that takes seconds on a large library in a synced folder
@@ -13,9 +12,15 @@ Imports ManuscriptPipeline.Services
 ' says what is happening. The window keeps painting and its timers keep
 ' ticking; nothing else can start until the work ends; a failure arrives on
 ' the UI thread, in the caller's Catch, as it did when the work ran inline.
+' The window closes only once the work has ended (OnFormClosing).
 Partial Public Class Form1
 
     Private libraryWorkInProgress As Boolean = False
+
+    ' The work on the worker thread now, and what a Windows shutdown that
+    ' waits for it makes of its outcome; Nothing between pieces of work.
+    Private runningLibraryWork As Task = Nothing
+    Private runningLibraryWorkAtShutdown As Action(Of Task) = Nothing
 
 
     ' Disables a window the way a modal dialog disables its owner: input
@@ -37,29 +42,16 @@ Partial Public Class Form1
     End Property
 
 
-    ' Tests supply services on a temporary root.
-    Protected Overridable Function CreateBackupService() As PortableBackupService
-
-        Return New PortableBackupService()
-
-    End Function
-
-
-    Protected Overridable Function CreateRestoreService() As PortableRestoreService
-
-        Return New PortableRestoreService()
-
-    End Function
-
-
     ' Runs work on a worker thread behind the disabled window, processing
     ' messages until it ends, as a modal dialog does for its owner. Returns
     ' False, without running the work, while other library work is still in
     ' progress: a second save, backup or restore cannot start before the
-    ' first ends.
+    ' first ends. Should Windows shut down meanwhile, atShutdown is given
+    ' the ended work (FinishLibraryWorkForShutdown).
     Private Function RunLibraryWork(
         status As String,
-        work As Action
+        work As Action,
+        Optional atShutdown As Action(Of Task) = Nothing
     ) As Boolean
 
         If libraryWorkInProgress Then
@@ -96,6 +88,9 @@ Partial Public Class Form1
 
             Dim pending As Task = Task.Run(work)
 
+            runningLibraryWork = pending
+            runningLibraryWorkAtShutdown = atShutdown
+
             While Not pending.IsCompleted
                 Application.DoEvents()
                 DirectCast(pending, IAsyncResult).AsyncWaitHandle.WaitOne(10)
@@ -107,6 +102,9 @@ Partial Public Class Form1
             Return True
 
         Finally
+
+            runningLibraryWork = Nothing
+            runningLibraryWorkAtShutdown = Nothing
 
             lblStatus.Text = previousStatus
 
@@ -162,34 +160,30 @@ Partial Public Class Form1
     End Function
 
 
-    ' Restores the backup and reloads the library behind the disabled
-    ' window, then shows it. Nothing when other library work is still
-    ' running.
-    Friend Function ReplaceLibraryFrom(
-        backupPath As String
-    ) As RestoreResult
+    ' Windows is shutting down while a save, backup or restore runs: its
+    ' message arrives in the work's message loop. Cut off partway, the work
+    ' could leave the library half-written, so this thread waits for it to
+    ' end, without processing messages, so nothing else starts meanwhile.
+    ' What it ended in is then what the shutdown acts on (a failed save is
+    ' tried again, a restore that went through is handed over to), and the
+    ' shutdown's own save can start. The loop that started the work finishes
+    ' once the close returns.
+    Private Sub FinishLibraryWorkForShutdown()
 
-        Dim service As PortableRestoreService = CreateRestoreService()
-        Dim result As RestoreResult = Nothing
-        Dim restored As List(Of Manuscript) = Nothing
+        Dim pending As Task = runningLibraryWork
 
-        If Not RunLibraryWork(
-            "Restoring the backup...",
-            Sub()
-                result = service.RestoreBackup(backupPath, manuscripts, repository)
-                restored = repository.Load()
-            End Sub
-        ) Then
-
-            Return Nothing
-
+        If pending Is Nothing Then
+            Return
         End If
 
-        manuscripts = restored
-        RenderManuscripts()
+        DirectCast(pending, IAsyncResult).AsyncWaitHandle.WaitOne()
 
-        Return result
+        runningLibraryWorkAtShutdown?.Invoke(pending)
 
-    End Function
+        runningLibraryWork = Nothing
+        runningLibraryWorkAtShutdown = Nothing
+        libraryWorkInProgress = False
+
+    End Sub
 
 End Class

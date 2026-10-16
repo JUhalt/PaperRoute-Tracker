@@ -17,24 +17,65 @@ Namespace My
             Dim settings As AppSettings =
                 settingsService.Load()
 
-            Select Case settings.Appearance
+            e.ColorMode =
+                UiTheme.ColorModeFor(
+                    settings.Appearance
+                )
 
-                Case AppAppearance.Light
+        End Sub
 
-                    e.ColorMode =
-                        SystemColorMode.Classic
 
-                Case AppAppearance.Dark
+        ' An error on the UI thread is recorded on this computer first (#120);
+        ' nothing is sent, and a report that cannot be written costs nothing.
+        ' The open manuscript page's unsaved edits go to a recovery draft
+        ' next (#123), before anything is shown, so the next start offers
+        ' them however this ends. Then the main window shows one plain dialog
+        ' and decides whether PaperRoute closes (#121). With no window left
+        ' to keep working in, PaperRoute says why and exits as the stock
+        ' dialog's Quit did.
+        Private Sub MyApplication_UnhandledException(
+            sender As Object,
+            e As UnhandledExceptionEventArgs
+        ) Handles Me.UnhandledException
 
-                    e.ColorMode =
-                        SystemColorMode.Dark
+            Dim reports As New ErrorReportService()
 
-                Case Else
+            reports.Write(
+                e.Exception,
+                "main window"
+            )
 
-                    e.ColorMode =
-                        SystemColorMode.System
+            Dim window As Form1 =
+                Application.OpenForms.OfType(Of Form1)().FirstOrDefault()
 
-            End Select
+            ' A draft that cannot be written must never stand between the
+            ' error and its dialog.
+            Try
+                window?.WriteRecoveryDraft("an error ended the session")
+            Catch ex As Exception
+            End Try
+
+            If window Is Nothing OrElse window.IsDisposed Then
+
+                ' Informational only: ExitApplication stays True, so the
+                ' framework exits once this returns. Keep Working would be
+                ' a false promise here.
+                MessageBox.Show(
+                    "PaperRoute ran into a problem and has to close." &
+                    Environment.NewLine &
+                    Environment.NewLine &
+                    e.Exception.Message,
+                    "PaperRoute",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                )
+
+                Return
+
+            End If
+
+            e.ExitApplication = False
+            window.ReportUnhandledError(e.Exception)
 
         End Sub
 

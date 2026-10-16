@@ -1593,27 +1593,9 @@ Public Class ManagedPacketDeletionTests
         action As Action
     )
 
-        Dim failure As ExceptionDispatchInfo =
-            Nothing
-
-        Dim thread As New Thread(
-            Sub()
-                Try
-                    action()
-                Catch ex As Exception
-                    failure = ExceptionDispatchInfo.Capture(ex)
-                End Try
-            End Sub
+        StaRunner.Run(
+            action
         )
-
-        thread.SetApartmentState(
-            ApartmentState.STA
-        )
-
-        thread.Start()
-        thread.Join()
-
-        failure?.Throw()
 
     End Sub
 

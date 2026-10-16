@@ -1,9 +1,14 @@
 Imports System
+Imports System.Threading.Tasks
 Imports System.Windows.Forms
 Imports Velopack
+Imports ManuscriptPipeline.Forms
 Imports ManuscriptPipeline.Services
 
 Friend Module Program
+
+    ' The running instance, kept so a restart can release it (#116).
+    Private _instance As SingleInstanceService = Nothing
 
     <STAThread>
     Public Sub Main(
@@ -21,6 +26,18 @@ Friend Module Program
         Dim isExample As Boolean = ExampleLibraryService.IsExampleLaunch(args)
         If isExample Then ExampleLibraryService.StartSession()
 
+        ' Unexpected errors are recorded on this computer and never sent
+        ' (#120): a crash anywhere in the process, and a faulted task nobody
+        ' awaited, which gets a report only. After the example session is
+        ' configured, so its reports go to the disposable session too.
+        Dim errorReports As New ErrorReportService()
+
+        AddHandler AppDomain.CurrentDomain.UnhandledException,
+            AddressOf errorReports.OnUnhandledException
+
+        AddHandler TaskScheduler.UnobservedTaskException,
+            AddressOf errorReports.OnUnobservedTaskException
+
         ' One window per library (#77): a second launch brings the running
         ' window forward and exits before touching storage.
         Dim instanceKey As String = SingleInstanceService.KeyFor(StorageMigrationService.CurrentDataRoot())
@@ -30,6 +47,8 @@ Friend Module Program
             SingleInstanceService.SignalExisting(instanceKey)
             Return
         End If
+
+        _instance = instance
 
         Try
             Using instance
@@ -42,37 +61,27 @@ Friend Module Program
     End Sub
 
 
+    ' Frees the library for the PaperRoute a restart is about to start,
+    ' which runs before this process has unwound and would otherwise find
+    ' the library still held and exit (#116). The release as this process
+    ' ends then does nothing. Must run on the main thread, like Main.
+    Friend Sub ReleaseInstanceForRestart()
+
+        _instance?.Dispose()
+
+    End Sub
+
+
     Private Sub Run(args As String(), instance As SingleInstanceService)
 
-        Try
-
-            ' Validate and migrate PaperRoute storage before settings,
-            ' repositories, or the main application are constructed.
-            StorageMigrationService.EnsureCurrentStorage()
-
-        Catch ex As Exception
-
-            MessageBox.Show(
-                "PaperRoute could not safely prepare its local storage." &
-                Environment.NewLine &
-                Environment.NewLine &
-                "The storage format could not be verified, so PaperRoute will close rather than risk opening or rewriting data with an unknown format." &
-                Environment.NewLine &
-                Environment.NewLine &
-                "Existing source data has been preserved wherever possible." &
-                Environment.NewLine &
-                Environment.NewLine &
-                "Error details:" &
-                Environment.NewLine &
-                ex.Message,
-                "PaperRoute Storage Error",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error
-            )
-
+        ' Validate and migrate PaperRoute storage before settings,
+        ' repositories, or the main application are constructed.
+        If Not PrepareStorage(
+            AddressOf StorageMigrationService.EnsureCurrentStorage,
+            AddressOf StartupFailureForm.ShowBeforeStartup
+        ) Then
             Return
-
-        End Try
+        End If
 
         If ExampleLibraryService.IsActive Then ExampleLibraryService.Seed(DateTime.Today, ExampleLibraryService.OnlineSettingsFrom(args))
 
@@ -96,5 +105,44 @@ Friend Module Program
         )
 
     End Sub
+
+
+    ' Runs the storage step. When it fails, the startup window says what
+    ' failed and where, with the actions Diagnostics would offer (#119);
+    ' when the window has put the previous save or a backup in place
+    ' (#124), the step runs once more and startup goes on in this process,
+    ' which still holds the library, so no restart is needed. A window
+    ' closed without recovering ends startup. Tests pass their own steps.
+    Friend Function PrepareStorage(
+        prepare As Action,
+        showFailure As Func(Of StartupFailure, Boolean)
+    ) As Boolean
+
+        Do
+
+            Try
+
+                prepare()
+
+                Return True
+
+            Catch ex As Exception
+
+                If Not showFailure(
+                    StartupFailure.ForStorage(
+                        ex,
+                        StorageMigrationService.SchemaFilePath()
+                    )
+                ) Then
+
+                    Return False
+
+                End If
+
+            End Try
+
+        Loop
+
+    End Function
 
 End Module
