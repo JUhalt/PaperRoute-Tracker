@@ -56,6 +56,14 @@ Public Class Form1
     Private uiInitialized As Boolean = False
     Private suppressBoardFilterEvents As Boolean = False
 
+    ' A save failed since the last good one (#113): closing would lose the
+    ' changes it did not write, so the status line and the manuscript page's
+    ' Unsaved changes bar say so until a save succeeds.
+    Private librarySaveFailed As Boolean = False
+
+    Private Const SaveFailedStatus As String =
+        "Warning: latest changes were not saved."
+
     Private ReadOnly boardSearchDebounceTimer As New Timer With {
         .Interval = 200
     }
@@ -533,6 +541,14 @@ Public Class Form1
         lblStatus.Margin = New Padding(0)
         lblStatus.ForeColor = UiTheme.MutedText()
         lblStatus.Text = "Local storage enabled."
+
+        ' While a save has failed, the status line keeps saying so (#113).
+        AddHandler lblStatus.TextChanged,
+            Sub(sender, e)
+                If librarySaveFailed AndAlso lblStatus.Text <> SaveFailedStatus Then
+                    lblStatus.Text = SaveFailedStatus
+                End If
+            End Sub
 
         content.Controls.Add(contentHost, 0, 0)
         content.Controls.Add(lblStatus, 0, 1)
@@ -1369,6 +1385,8 @@ Public Class Form1
             manuscripts
         )
 
+            librarySaveFailed = False
+
             lblStatus.Text =
             "Saved locally - " &
             DateTime.Now.ToString("h:mm tt")
@@ -1389,6 +1407,8 @@ Public Class Form1
 
         Catch ex As Exception
 
+            librarySaveFailed = True
+
             MessageBox.Show(
             Me,
             "PaperRoute could not save your data." &
@@ -1401,7 +1421,7 @@ Public Class Form1
         )
 
             lblStatus.Text =
-            "Warning: latest changes were not saved."
+            SaveFailedStatus
 
             Return False
 
@@ -3469,10 +3489,72 @@ Public Class Form1
 
         End If
 
+        ' Unsaved page edits (#112): Yes saves and backs them up, No backs up
+        ' the last saved version, Cancel stops.
+        If Not ConfirmUnsavedChanges("Choose No to back up the last saved version.") Then
+            Return
+        End If
+
         ' Make absolutely sure JSON and managed copies are current.
         If Not SaveManuscripts() Then
             Return
         End If
+
+        Dim destination As String = ChooseBackupPath()
+
+        If String.IsNullOrEmpty(destination) Then
+            Return
+        End If
+
+        Try
+
+            CreateBackupService().CreateBackup(
+            destination,
+            manuscripts,
+            repository
+        )
+
+            MessageBox.Show(
+            Me,
+            "Your PaperRoute library was backed up successfully." &
+            Environment.NewLine &
+            Environment.NewLine &
+            destination &
+            Environment.NewLine &
+            Environment.NewLine &
+            "The backup contains:" &
+            Environment.NewLine &
+            "- Native PaperRoute data" &
+            Environment.NewLine &
+            "- Excel library export" &
+            Environment.NewLine &
+            "- Managed document files",
+            "Backup Complete",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information
+        )
+
+        Catch ex As Exception
+
+            MessageBox.Show(
+            Me,
+            "PaperRoute could not create the backup." &
+            Environment.NewLine &
+            Environment.NewLine &
+            ex.Message,
+            "Backup Error",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Error
+        )
+
+        End Try
+
+    End Sub
+
+
+    ' Asks where to write the backup; Nothing when the user cancels. Tests
+    ' answer with a throwaway path.
+    Protected Overridable Function ChooseBackupPath() As String
 
         Using dialog As New SaveFileDialog()
 
@@ -3497,57 +3579,22 @@ Public Class Form1
             True
 
             If dialog.ShowDialog(Me) <> DialogResult.OK Then
-                Return
+                Return Nothing
             End If
 
-            Try
-
-                Dim backupService As New PortableBackupService()
-
-                backupService.CreateBackup(
-                dialog.FileName,
-                manuscripts,
-                repository
-            )
-
-                MessageBox.Show(
-                Me,
-                "Your PaperRoute library was backed up successfully." &
-                Environment.NewLine &
-                Environment.NewLine &
-                dialog.FileName &
-                Environment.NewLine &
-                Environment.NewLine &
-                "The backup contains:" &
-                Environment.NewLine &
-                "- Native PaperRoute data" &
-                Environment.NewLine &
-                "- Excel library export" &
-                Environment.NewLine &
-                "- Managed document files",
-                "Backup Complete",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information
-            )
-
-            Catch ex As Exception
-
-                MessageBox.Show(
-                Me,
-                "PaperRoute could not create the backup." &
-                Environment.NewLine &
-                Environment.NewLine &
-                ex.Message,
-                "Backup Error",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error
-            )
-
-            End Try
+            Return dialog.FileName
 
         End Using
 
-    End Sub
+    End Function
+
+
+    ' Tests back up a throwaway managed library.
+    Protected Overridable Function CreateBackupService() As PortableBackupService
+
+        Return New PortableBackupService()
+
+    End Function
 
     ' =====================================================
     ' Portable restore
@@ -3557,6 +3604,12 @@ Public Class Form1
     sender As Object,
     e As EventArgs
 )
+
+        ' Unsaved page edits (#112): Yes saves them, No lets the restore
+        ' replace them, Cancel stops.
+        If Not ConfirmLeaveManuscript() Then
+            Return
+        End If
 
         Using dialog As New OpenFileDialog()
 
@@ -3687,6 +3740,16 @@ Public Class Form1
 
                 manuscripts =
                 repository.Load()
+
+                ' The restored library is what is on disk, so nothing is
+                ' waiting to be saved any more (#113).
+                librarySaveFailed = False
+
+                ' The open manuscript page shows the restored library.
+                If currentPage = WorkspacePage.Manuscript Then
+                    LeaveCurrentPage()
+                    ShowPage(CurrentRequest)
+                End If
 
                 RenderManuscripts()
 
@@ -4100,11 +4163,7 @@ Public Class Form1
         ' Let the main window finish rendering before any update prompt appears.
         Await Task.Delay(1500)
 
-        Await UpdateService.CheckAndOfferUpdateAsync(
-            Me,
-            appSettings.UpdateChannel,
-            False
-        )
+        Await OfferUpdateAsync(interactive:=False)
 
     End Sub
 
@@ -4114,13 +4173,26 @@ Public Class Form1
         e As EventArgs
     )
 
-        Await UpdateService.CheckAndOfferUpdateAsync(
-            Me,
-            appSettings.UpdateChannel,
-            True
-        )
+        Await OfferUpdateAsync(interactive:=True)
 
     End Sub
+
+
+    ' Both checks: the page's unsaved edits (#112), then a failed library
+    ' save (#113), are asked about after the user accepts the update and
+    ' before it downloads. The restart is a close.
+    Private Function OfferUpdateAsync(
+        interactive As Boolean
+    ) As Task(Of Boolean)
+
+        Return UpdateService.CheckAndOfferUpdateAsync(
+            Me,
+            appSettings.UpdateChannel,
+            interactive,
+            Function() ConfirmLeaveManuscript() AndAlso ConfirmCloseUnsavedLibrary()
+        )
+
+    End Function
 
 
     ' =====================================================
