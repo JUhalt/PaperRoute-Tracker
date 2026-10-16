@@ -165,6 +165,65 @@ Public Class BackupRestoreTests
 
     End Sub
 
+    ' A backup made before #118 carries the offsets its machine wrote. Restored
+    ' in another zone, its dates stay where they were written: 9 October at
+    ' +14:00 and at -12:00 is 9 October here too, in the file and on load.
+    ' One of the two is a day off under the default reader unless this host
+    ' sits at that offset, so the test fails somewhere for everyone.
+    <TestMethod>
+    Public Sub Restore_KeepsCalendarDatesWhereTheBackupWroteThem()
+
+        Dim staging As String = Path.Combine(_root, "zones-staging")
+        Directory.CreateDirectory(staging)
+
+        File.WriteAllText(
+            Path.Combine(staging, "manuscripts.json"),
+            "[" & vbLf &
+            "  {" & vbLf &
+            "    ""Title"": ""Zones""," & vbLf &
+            "    ""StageEnteredDate"": ""2026-10-09T00:00:00+14:00""," & vbLf &
+            "    ""Submissions"": [" & vbLf &
+            "      {" & vbLf &
+            "        ""JournalName"": ""Journal of Zones""," & vbLf &
+            "        ""SubmittedDate"": ""2026-10-09T00:00:00+14:00""," & vbLf &
+            "        ""FollowUpDate"": ""2026-10-09T00:00:00-12:00""," & vbLf &
+            "        ""RecordedAtUtc"": ""2026-10-08T10:00:00Z""," & vbLf &
+            "        ""Decisions"": [" & vbLf &
+            "          { ""DecisionDate"": ""2026-10-09T00:00:00-12:00"", ""Decision"": ""Rejected"" }" & vbLf &
+            "        ]" & vbLf &
+            "      }" & vbLf &
+            "    ]" & vbLf &
+            "  }" & vbLf &
+            "]"
+        )
+
+        Dim backupPath As String = Path.Combine(_root, "zones.zip")
+        ZipFile.CreateFromDirectory(staging, backupPath)
+
+        Dim targetManaged As String = Path.Combine(_root, "zones-library")
+        Dim targetRepository As New ManuscriptRepository(Path.Combine(_root, "zones-data"), targetManaged)
+        Dim current As New List(Of Manuscript)()
+        targetRepository.Save(current)
+
+        Call New PortableRestoreService(targetManaged).RestoreBackup(backupPath, current, targetRepository)
+
+        Dim json As String = File.ReadAllText(targetRepository.DataFilePath)
+        StringAssert.Contains(json, """SubmittedDate"": ""2026-10-09T00:00:00""", "The restored file holds the date as the backup wrote it, with no offset.")
+        StringAssert.Contains(json, """DecisionDate"": ""2026-10-09T00:00:00""", "The restored file holds the date as the backup wrote it, with no offset.")
+        StringAssert.Contains(json, """RecordedAtUtc"": ""2026-10-08T10:00:00Z""", "The audit stamp stays an instant.")
+
+        Dim restored As Manuscript = targetRepository.Load().Single()
+        Dim submission As JournalSubmission = restored.Submissions(0)
+        Dim ninth As New DateTime(2026, 10, 9)
+
+        Assert.AreEqual(ninth, restored.StageEnteredDate.Date, "StageEnteredDate written at +14:00")
+        Assert.AreEqual(ninth, submission.SubmittedDate.Date, "SubmittedDate written at +14:00")
+        Assert.AreEqual(ninth, submission.FollowUpDate.Value, "FollowUpDate written at -12:00, cut to the day on load")
+        Assert.AreEqual(ninth, submission.Decisions(0).DecisionDate.Date, "DecisionDate written at -12:00")
+        Assert.AreEqual(New DateTime(2026, 10, 8, 10, 0, 0, DateTimeKind.Utc), submission.RecordedAtUtc.Value)
+
+    End Sub
+
     <TestMethod>
     Public Sub InspectBackup_RejectsArchiveWithoutManuscriptsJson()
 
