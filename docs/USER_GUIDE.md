@@ -8,7 +8,7 @@ This guide describes **PaperRoute v0.9.1 — Journal Choice & Guidance**. See th
 
 If you only read one section, read this one.
 
-1. Open PaperRoute. An empty library opens on a welcome: choose **+ Add Manuscript** for a paper you are working on, or **Import Existing Work** to bring in published work from ORCID, BibTeX or RIS, or a spreadsheet.
+1. Open PaperRoute. An empty library opens on a welcome: choose **+ Add Manuscript** for a paper you are working on, or **Import Existing Work** to bring in published work from ORCID, BibTeX or RIS, or a spreadsheet. To see a whole library first, choose **Explore an example library** on the welcome: a fictional research group's manuscripts open in a separate window, and your own library is not changed (see **Teaching with PaperRoute**).
 2. Give the manuscript a title and place it at the stage that best matches reality.
 3. Open the manuscript from its card to add structured authors, a target journal, metadata, links, and submission history.
 4. Before submitting, record the exact manuscript snapshot in **Version History**, use **Submission Readiness...** for the journal's checklist, and assemble **Submission Packets...** for the files you intend to send.

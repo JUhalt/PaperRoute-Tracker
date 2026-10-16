@@ -362,6 +362,39 @@ Public Class ManuscriptPageTests
             End Sub)
     End Sub
 
+    ' #130: the welcome links to the guide's Quick Start, which opens Help at
+    ' that section. The dialog is modal, so the test looks at the window the
+    ' link creates through the welcome's helpShower seam.
+    <TestMethod>
+    Public Sub TheWelcomeLinksToTheQuickStart()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard()
+                    board.Prepare()
+
+                    Dim opened As String = Nothing
+                    board.helpShower =
+                        Sub(help)
+                            ShowOffscreen(help)
+                            Application.DoEvents()
+                            opened = help.GuideText.Substring(help.GuideSelectionStart)
+                            help.Close()
+                        End Sub
+                    Dim quickStart As LinkLabel = Descendants(board.Welcome).OfType(Of LinkLabel)().Single(Function(link) link.Text = "Read the Quick Start")
+                    GetType(LinkLabel).GetMethod("OnLinkClicked", BindingFlags.Instance Or BindingFlags.NonPublic).
+                        Invoke(quickStart, New Object() {New LinkLabelLinkClickedEventArgs(quickStart.Links(0))})
+
+                    Assert.IsNotNull(opened, "The link opens Help.")
+                    Assert.IsTrue(opened.StartsWith("Quick Start", StringComparison.Ordinal),
+                        "Help opens at the Quick Start section, not at: " & opened.Substring(0, Math.Min(60, opened.Length)))
+                    Assert.AreEqual(0, board.Library.Count, "Reading the guide adds nothing to the library.")
+                    Assert.AreEqual(0, board.SaveCount)
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
     ' #54 and #59: the Library filters as you type and says when nothing matches.
     <TestMethod>
     Public Sub LibraryFilterNarrowsTheTableAndExplainsNoMatches()
