@@ -724,43 +724,21 @@ Namespace Services
                 .WriteIndented = True
             }
 
-            Dim tempPath As String =
-                schemaPath &
-                ".tmp-" &
-                Guid.NewGuid().ToString("N")
+            ' Flushed and swapped in, keeping the old marker as the backup:
+            ' a power cut must never leave an empty schema.json (#125).
+            StorageFile.Write(
+                schemaPath,
+                backupPath,
+                Sub(stream)
 
-            Try
-
-                File.WriteAllText(
-                    tempPath,
                     JsonSerializer.Serialize(
+                        stream,
                         payload,
                         options
                     )
-                )
 
-                ' File.Replace handles an existing backup. Removing it first
-                ' would destroy recovery metadata if the schema is locked.
-                File.Replace(
-                    tempPath,
-                    schemaPath,
-                    backupPath,
-                    True
-                )
-
-            Finally
-
-                If File.Exists(tempPath) Then
-
-                    Try
-                        File.Delete(tempPath)
-                    Catch
-                        ' Best-effort cleanup only.
-                    End Try
-
-                End If
-
-            End Try
+                End Sub
+            )
 
         End Sub
 
@@ -989,39 +967,20 @@ Namespace Services
                 .WriteIndented = True
             }
 
-            Dim tempPath As String =
-                schemaPath &
-                ".tmp-" &
-                Guid.NewGuid().ToString("N")
+            ' A new marker, with no previous one to keep (#125).
+            StorageFile.Write(
+                schemaPath,
+                Nothing,
+                Sub(stream)
 
-            Try
-
-                File.WriteAllText(
-                    tempPath,
                     JsonSerializer.Serialize(
+                        stream,
                         payload,
                         options
                     )
-                )
 
-                File.Move(
-                    tempPath,
-                    schemaPath
-                )
-
-            Finally
-
-                If File.Exists(tempPath) Then
-
-                    Try
-                        File.Delete(tempPath)
-                    Catch
-                        ' Best-effort cleanup only.
-                    End Try
-
-                End If
-
-            End Try
+                End Sub
+            )
 
         End Sub
 
