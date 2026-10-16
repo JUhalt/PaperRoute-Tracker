@@ -50,6 +50,7 @@ Friend NotInheritable Class ViewCatalog
     ' window is its Board page.
     Public Shared ReadOnly Dialogs As New Dictionary(Of Type, Func(Of String, Form)) From {
         {GetType(Form1), Function(root) BoardOn(CreateRepresentativeLibrary())},
+        {GetType(AboutForm), Function(root) New AboutForm()},
         {GetType(AddDecisionForm), Function(root) New AddDecisionForm()},
         {GetType(AddManuscriptForm), Function(root) New AddManuscriptForm()},
         {GetType(AddSubmissionForm), Function(root) New AddSubmissionForm()},
@@ -84,7 +85,7 @@ Friend NotInheritable Class ViewCatalog
         {GetType(ReviewerResponseItemForm), Function(root) New ReviewerResponseItemForm(Routed().Submissions(0))},
         {GetType(ReviewerResponseMatrixForm), Function(root) Matrix()},
         {GetType(SettingsForm), Function(root) New SettingsForm(New AppSettings())},
-        {GetType(StartupFailureForm), Function(root) New StartupFailureForm(StartupFailure.ForStorage(New InvalidOperationException("The schema is newer than this build."), Path.Combine(root, "schema.json")))},
+        {GetType(StartupFailureForm), Function(root) StartupWindow(root)},
         {GetType(SubmissionDetailsForm), Function(root) Details()},
         {GetType(SubmissionPacketEditForm), Function(root) PacketEditor()},
         {GetType(SubmissionPacketVaultForm), Function(root) New SubmissionPacketVaultForm(WithPackets())},
@@ -114,7 +115,6 @@ Friend NotInheritable Class ViewCatalog
     ' Forms no test builds yet, each with what its factory will need. Each
     ' sweep shrinks this list; the catalog test fails when an entry is stale.
     Public Shared ReadOnly NotYet As (View As Type, Reason As String)() = {
-        (GetType(AboutForm), "New AboutForm() needs nothing; no test builds it yet."),
         (GetType(AddCorrespondenceForm), "New AddCorrespondenceForm() needs nothing; no test builds it yet."),
         (GetType(AffiliationEditForm), "Needs an AffiliationRecord; no test builds it yet."),
         (GetType(AuthorEditForm), "Needs an AuthorRecord; no test builds it yet."),
@@ -263,6 +263,38 @@ Friend NotInheritable Class ViewCatalog
     Private Shared Function Matrix() As ReviewerResponseMatrixForm
         Dim manuscript As Manuscript = Routed()
         Return New ReviewerResponseMatrixForm(manuscript, manuscript.Submissions(0))
+    End Function
+
+
+    ' The window PaperRoute shows when it cannot start, over a damaged
+    ' library beside a previous save that reads, so both of its ways to put
+    ' the library right (#124) are on it. Its recovery is the app's, built
+    ' on files under the root, never on the default storage, through the
+    ' constructor tests use; a window without both ways fails the catalog.
+    Private Shared Function StartupWindow(root As String) As StartupFailureForm
+
+        Dim current As String = Path.Combine(root, "current")
+        Dim library As String = Path.Combine(root, "library")
+        Dim repository As New ManuscriptRepository(Path.Combine(current, "data"), library)
+        Dim saved As New List(Of Manuscript) From {New Manuscript With {.Title = "A preregistered replication of anchoring effects"}}
+        repository.Save(saved)
+        repository.Save(saved)
+        File.WriteAllText(repository.DataFilePath, "{ damaged")
+
+        Dim window As New StartupFailureForm(
+            StartupFailure.ForManuscriptLibrary(New InvalidDataException("The library file could not be read."), repository.DataFilePath),
+            Function() New StartupRecoveryService(repository, library, StorageMigrationService.SchemaFilePath(current)))
+
+        Dim offered As Integer = Descendants(window).OfType(Of Button)().
+            Count(Function(button) button.Text = "Use the Previous Save" OrElse button.Text = "Restore From Backup...")
+
+        If offered <> 2 Then
+            window.Dispose()
+            Throw New InvalidOperationException("StartupFailureForm offers " & offered & " of its two ways to put the library right.")
+        End If
+
+        Return window
+
     End Function
 
 
