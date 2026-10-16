@@ -1183,10 +1183,12 @@ Namespace Services
 
             If formatVersion <> BackupManifest.CurrentFormatVersion Then
 
+                ' Format 1 is the first, so any other was written by a newer
+                ' PaperRoute: say so, as a newer schema does.
                 Throw New InvalidDataException(
                     "The backup's manifest (backup.json) is in format " &
                     formatVersion.ToString() &
-                    ", which this version of PaperRoute cannot read."
+                    ", from a newer PaperRoute. Update PaperRoute before restoring it."
                 )
 
             End If

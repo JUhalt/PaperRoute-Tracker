@@ -877,7 +877,7 @@ Public Class BackupRestoreTests
     <DataRow("{""SchemaVersion"":9}", "could not be read")>
     <DataRow("{""FormatVersion"":1,""SchemaVersion"":""nine"",""AppVersion"":""0.9.2"",""CreatedUtc"":""2026-10-12T15:30:00Z""}", "could not be read")>
     <DataRow("{""FormatVersion"":1,""SchemaVersion"":9}", "could not be read")>
-    <DataRow("{""FormatVersion"":2,""SchemaVersion"":9}", "format 2")>
+    <DataRow("{""FormatVersion"":2,""SchemaVersion"":9}", "format 2, from a newer PaperRoute. Update PaperRoute before restoring it.")>
     Public Sub AManifestThatCannotBeReadOrIsInAnUnknownFormat_IsRefusedWithNothingChanged(manifest As String, expected As String)
 
         Dim scenario As RestoreScenario = CreateRestoreScenario()
