@@ -1105,6 +1105,76 @@ Public Class ManuscriptPageTests
             End Sub)
     End Sub
 
+    ' Two records with the same Id, which a manuscripts.json merged or edited
+    ' by hand can hold and the library loads, each keep their own card on
+    ' the Board (#133): one never replaces the other's in the same render.
+    <TestMethod>
+    Public Sub TwoRecordsWithTheSameIdEachHaveACard()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard()
+                    Dim first As Manuscript = Sample("First copy")
+                    Dim second As Manuscript = ManuscriptCloneService.CloneManuscript(first)
+                    second.Title = "Second copy"
+                    board.Prepare(first, second)
+
+                    For Each pass As String In {"shown", "rendered again"}
+                        CollectionAssert.AreEquivalent({"First copy", "Second copy"}, board.Cards().Select(Function(card) card.AccessibleName).ToList(),
+                                                       "Both records are on the Board once " & pass & ".")
+                        Assert.IsFalse(board.Cards().Any(Function(card) card.IsDisposed), "No card on a shelf is disposed once " & pass & ".")
+                        board.Render()
+                    Next
+
+                    second.Title = first.Title
+                    board.Render()
+                    Assert.AreEqual(2, board.Cards().Count, "Records that show the same text still have a card each.")
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    ' Board cards are kept between renders (#133). A kept card acts on the
+    ' record the library holds when the card is used, as after a restore
+    ' replaces every record, and a card is rebuilt when its title or its
+    ' shelf changes. A guard: #133 already behaves so; the test fails if a
+    ' card acts on the record it was built from, or if the title or the
+    ' location leaves the text a card is kept by.
+    <TestMethod>
+    Public Sub KeptCardsActOnTheLibrarysRecordAndShowItsChanges()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard()
+                    Dim filed As Manuscript = Sample("Filed manuscript")
+                    filed.Location = ManuscriptLocation.FileDrawer
+                    board.Prepare(filed)
+                    Dim card As RoundedPanel = board.Card("Filed manuscript")
+
+                    ' A restore puts an equal record with the same Id in its place.
+                    Dim restored As Manuscript = ManuscriptCloneService.CloneManuscript(filed)
+                    board.ReplaceLibrary(restored)
+                    Assert.AreSame(card, board.Card("Filed manuscript"), "The card is kept: what it shows is unchanged.")
+
+                    MenuItem(card, "Restore to Pipeline").PerformClick()
+                    Application.DoEvents()
+                    Assert.AreEqual(ManuscriptLocation.Pipeline, restored.Location, "The kept card restored the library's record.")
+                    Assert.AreEqual(ManuscriptLocation.FileDrawer, filed.Location, "The record from before the restore is left alone.")
+                    Assert.AreEqual(1, board.SaveCount)
+                    Assert.IsNotNull(MenuItem(board.Card("Filed manuscript"), "Move to File Drawer..."), "On the Pipeline the card offers the Pipeline's menu.")
+
+                    restored.Title = "Renamed manuscript"
+                    board.Render()
+                    CollectionAssert.AreEqual({"Renamed manuscript"}, board.Cards().Select(Function(item) item.AccessibleName).ToList(), "The card shows the new title.")
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    Private Shared Function MenuItem(card As Control, text As String) As ToolStripItem
+        Return card.ContextMenuStrip.Items.Cast(Of ToolStripItem)().SingleOrDefault(Function(item) item.Text = text)
+    End Function
+
     Private Shared Function DeadlineRows(board As PageBoard) As List(Of DeadlineRow)
         Return Descendants(board).OfType(Of DeadlineRow)().ToList()
     End Function
@@ -1264,6 +1334,23 @@ Public Class ManuscriptPageTests
                 Return DirectCast(GetType(Form1).GetField("manuscripts", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me), List(Of Manuscript))
             End Get
         End Property
+
+        ' As a restore leaves it: the library's records replaced, then a render.
+        Public Sub ReplaceLibrary(ParamArray records As Manuscript())
+            GetType(Form1).GetField("manuscripts", BindingFlags.Instance Or BindingFlags.NonPublic).SetValue(Me, records.ToList())
+            Render()
+        End Sub
+
+        ' The cards on the Board's three shelves.
+        Public Function Cards() As List(Of RoundedPanel)
+            Return {"pipelinePanel", "publishedPanel", "fileDrawerPanel"}.
+                SelectMany(Function(name) DirectCast(GetType(Form1).GetField(name, BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me), Control).Controls.OfType(Of RoundedPanel)()).
+                ToList()
+        End Function
+
+        Public Function Card(title As String) As RoundedPanel
+            Return Cards().Single(Function(item) item.AccessibleName = title)
+        End Function
 
         Public Sub Open(manuscript As Manuscript)
             CallPrivate("OpenManuscript", manuscript, Nothing)

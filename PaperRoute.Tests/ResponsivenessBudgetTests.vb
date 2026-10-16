@@ -139,6 +139,8 @@ Public Class ResponsivenessBudgetTests
             ' here it is built the same way from the test's, since no seam
             ' lets a test supply one.
             rows.Add(Time(library, "Board to Journals (built as ShowPage builds it, from the test's author library)", PageSwitch, Sub() board.ShowJournals()))
+            ' #133 brought this from 8.9 s to about 90 ms; against a 100 ms
+            ' budget that leaves no room on a busy host, so it is reported.
             rows.Add(Time(library, "Journals to Board", PageSwitch, Sub() board.LeaveJournals()))
 
             rows.Add(Time(library, "Board to Deadlines", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Deadlines)))
@@ -166,7 +168,10 @@ Public Class ResponsivenessBudgetTests
 
             ' The handlers' work after their dialogs, behind the disabled window
             ' (#132). Backup's stall varied from 61 to 419 ms across runs on
-            ' this busy host, so it is reported, not enforced.
+            ' this busy host. The restore's replace step, whose re-render #133
+            ' cut from 13 s, varied from 50 to 331 ms. Both pump for 30 to 60 s,
+            ' long enough to meet one of the host's own stalls, so both are
+            ' reported, not enforced.
             rows.Add(Time(library, "Backup", UiThread, Sub() Assert.IsTrue(board.WriteBackup(backupPath), "The backup was written.")))
             rows.Add(Time(library, "Restore: inspect the backup", UiThread, Sub() Assert.IsNotNull(board.InspectBackupFile(backupPath), "The backup was read."), enforced:=enforce))
             rows.Add(Time(library, "Restore: replace the library, reload, render", UiThread, Sub() Assert.IsNotNull(board.ReplaceLibraryFrom(backupPath), "The library was restored.")))

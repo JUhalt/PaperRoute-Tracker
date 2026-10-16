@@ -82,11 +82,8 @@ Public Class Form1
     ' building one and its window handles costs tens of milliseconds on a
     ' slow machine (#133). A card not on a shelf waits, parked, for the next
     ' render that shows it. Each card's Tag is the text it was built from.
-    Private ReadOnly manuscriptCards As New Dictionary(Of Guid, RoundedPanel)()
-
-    ' Counts the shared fonts' rebuilds; a card built with earlier fonts is
-    ' not reused.
-    Private cardFontsVersion As Integer = 0
+    ' Cards are kept by CardSlot, so records sharing an Id each have one.
+    Private ReadOnly manuscriptCards As New Dictionary(Of (Id As Guid, Occurrence As Integer), RoundedPanel)()
 
 
     Private NotInheritable Class StageFilterOption
@@ -269,8 +266,6 @@ Public Class Form1
         contentHost.Margin = New Padding(0)
         contentHost.BackColor = UiTheme.BoardBackground()
         contentHost.Controls.Clear()
-        importExportPage?.Dispose()
-        importExportPage = Nothing
 
         boardPage.Dock = DockStyle.Fill
         boardPage.BackColor = UiTheme.BoardBackground()
@@ -2164,7 +2159,6 @@ Public Class Form1
     Private Sub ResetSharedDashboardFonts()
 
         DisposeSharedDashboardFonts()
-        cardFontsVersion += 1
 
         ' Card and strip text sizes follow the board font, so larger text
         ' settings scale the cards with everything else.
@@ -2382,9 +2376,16 @@ Public Class Form1
         Dim pipelineCards As New List(Of Control)()
         Dim publishedCards As New List(Of Control)()
         Dim drawerCards As New List(Of Control)()
+        Dim seen As New Dictionary(Of Guid, Integer)()
 
 
         For Each manuscript As Manuscript In visibleManuscripts
+
+            Dim slot As (Id As Guid, Occurrence As Integer) =
+                CardSlot(
+                    manuscript,
+                    seen
+                )
 
             Select Case manuscript.Location
 
@@ -2393,6 +2394,7 @@ Public Class Form1
                     pipelineCards.Add(
                         CardFor(
                             manuscript,
+                            slot,
                             pipelinePanel
                         )
                     )
@@ -2403,6 +2405,7 @@ Public Class Form1
                     publishedCards.Add(
                         CardFor(
                             manuscript,
+                            slot,
                             publishedPanel
                         )
                     )
@@ -2413,6 +2416,7 @@ Public Class Form1
                     drawerCards.Add(
                         CardFor(
                             manuscript,
+                            slot,
                             fileDrawerPanel
                         )
                     )
@@ -2578,17 +2582,36 @@ Public Class Form1
     End Sub
 
 
-    ' The card for a manuscript: the one built before, when the text it
-    ' shows is unchanged, or a new one in its place.
+    ' Where a record's card is kept: its Id, and how many records with that
+    ' Id came before it in this pass. A library merged or edited by hand can
+    ' hold two records with one Id; each keeps a card of its own, so neither
+    ' replaces a card the other was given in the same render.
+    Private Shared Function CardSlot(
+        manuscript As Manuscript,
+        seen As Dictionary(Of Guid, Integer)
+    ) As (Id As Guid, Occurrence As Integer)
+
+        Dim occurrence As Integer = 0
+        seen.TryGetValue(manuscript.Id, occurrence)
+        seen(manuscript.Id) = occurrence + 1
+
+        Return (manuscript.Id, occurrence)
+
+    End Function
+
+
+    ' The card for a manuscript: the one built before in its slot, when the
+    ' text it shows is unchanged, or a new one in its place.
     Private Function CardFor(
         manuscript As Manuscript,
+        slot As (Id As Guid, Occurrence As Integer),
         shelf As ManuscriptShelfPanel
     ) As RoundedPanel
 
         Dim key As String = CardKey(manuscript)
         Dim card As RoundedPanel = Nothing
 
-        If manuscriptCards.TryGetValue(manuscript.Id, card) Then
+        If manuscriptCards.TryGetValue(slot, card) Then
 
             If String.Equals(TryCast(card.Tag, String), key, StringComparison.Ordinal) Then
 
@@ -2608,7 +2631,7 @@ Public Class Form1
 
         card = DirectCast(CreateManuscriptCard(manuscript, shelf), RoundedPanel)
         card.Tag = key
-        manuscriptCards(manuscript.Id) = card
+        manuscriptCards(slot) = card
         Return card
 
     End Function
@@ -2632,7 +2655,7 @@ Public Class Form1
 
 
     ' Everything a card shows, so a change in any of it rebuilds the card:
-    ' the texts CreateManuscriptCard derives, and the fonts it was built with.
+    ' the texts CreateManuscriptCard derives.
     Private Function CardKey(
         manuscript As Manuscript
     ) As String
@@ -2644,7 +2667,6 @@ Public Class Form1
 
         Return String.Join(
             ChrW(31),
-            cardFontsVersion.ToString(),
             manuscript.Title,
             manuscript.CurrentStage.ToString(),
             manuscript.Location.ToString(),
@@ -2661,14 +2683,15 @@ Public Class Form1
     ' Disposes the cards of manuscripts the library no longer holds.
     Private Sub DropStaleCards()
 
-        Dim current As New HashSet(Of Guid)(
-            manuscripts.Where(Function(item) item IsNot Nothing).Select(Function(item) item.Id))
+        Dim seen As New Dictionary(Of Guid, Integer)()
+        Dim current As New HashSet(Of (Id As Guid, Occurrence As Integer))(
+            manuscripts.Where(Function(item) item IsNot Nothing).Select(Function(item) CardSlot(item, seen)))
 
-        For Each id As Guid In manuscriptCards.Keys.ToList()
+        For Each slot As (Id As Guid, Occurrence As Integer) In manuscriptCards.Keys.ToList()
 
-            If Not current.Contains(id) Then
-                manuscriptCards(id).Dispose()
-                manuscriptCards.Remove(id)
+            If Not current.Contains(slot) Then
+                manuscriptCards(slot).Dispose()
+                manuscriptCards.Remove(slot)
             End If
 
         Next
