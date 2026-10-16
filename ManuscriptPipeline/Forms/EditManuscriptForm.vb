@@ -128,11 +128,14 @@ Namespace Forms
         End Sub
 
 
+        ' workingCopy, when given, is a recovery draft (#123) the page opens
+        ' with in place of a copy of the saved manuscript.
         Friend Sub New(
             manuscript As Manuscript,
             allManuscripts As IEnumerable(Of Manuscript),
             authorRepository As AuthorLibraryRepository,
-            pageMode As Boolean
+            pageMode As Boolean,
+            Optional workingCopy As Manuscript = Nothing
         )
 
             _pageMode =
@@ -145,7 +148,7 @@ Namespace Forms
                 manuscript
 
             _workingManuscript =
-                CloneManuscript(manuscript)
+                CloneManuscript(If(workingCopy, manuscript))
 
             _allManuscripts =
                 If(
@@ -167,8 +170,10 @@ Namespace Forms
             RefreshReadinessSummary()
             RefreshJournalNotes()
 
+            ' A recovered draft counts as unsaved until it is saved or
+            ' discarded, so its baseline matches nothing.
             _baseline =
-                Snapshot()
+                If(workingCopy Is Nothing, Snapshot(), String.Empty)
 
         End Sub
 
@@ -201,6 +206,40 @@ Namespace Forms
             End If
 
             Return Not String.Equals(Snapshot(), _baseline, StringComparison.Ordinal)
+
+        End Function
+
+
+        ' The working copy as it stands, with the title, target journal and
+        ' File Drawer reason still in their fields, for a recovery draft
+        ' (#123). Nothing is committed, and a stage change waits for Save,
+        ' which completes it through the stage workflow.
+        Friend Function RecoveryCopy() As Manuscript
+
+            Dim copy As Manuscript =
+                CloneManuscript(_workingManuscript)
+
+            If Not String.IsNullOrWhiteSpace(txtTitle.Text) Then
+                copy.Title = txtTitle.Text.Trim()
+            End If
+
+            Dim journalText As String =
+                txtTargetJournal.Text.Trim()
+
+            copy.TargetJournalId =
+                TargetJournalIdFor(
+                    copy,
+                    journalText
+                )
+
+            copy.TargetJournal =
+                journalText
+
+            If fileDrawerGroup.Visible Then
+                copy.FileDrawerReason = txtFileDrawerReason.Text.Trim()
+            End If
+
+            Return copy
 
         End Function
 
@@ -3757,45 +3796,14 @@ Namespace Forms
             _workingManuscript.Title =
                 txtTitle.Text.Trim()
 
-            Dim oldTargetJournalText As String =
-                If(
-                    _workingManuscript.TargetJournal,
-                    String.Empty
-                ).Trim()
-
             Dim newTargetJournalText As String =
                 txtTargetJournal.Text.Trim()
 
-            If _workingManuscript.TargetJournalId.HasValue AndAlso
-               Not String.Equals(
-                   oldTargetJournalText,
-                   newTargetJournalText,
-                   StringComparison.CurrentCultureIgnoreCase
-               ) Then
-
-                Dim linkedJournal As JournalRecord =
-                    _authorLibrary.Journals.
-                        FirstOrDefault(
-                            Function(item)
-                                Return item IsNot Nothing AndAlso
-                                    item.Id =
-                                        _workingManuscript.TargetJournalId.Value
-                            End Function
-                        )
-
-                If linkedJournal Is Nothing OrElse
-                   Not String.Equals(
-                       linkedJournal.Name,
-                       newTargetJournalText,
-                       StringComparison.CurrentCultureIgnoreCase
-                   ) Then
-
-                    _workingManuscript.TargetJournalId =
-                        Nothing
-
-                End If
-
-            End If
+            _workingManuscript.TargetJournalId =
+                TargetJournalIdFor(
+                    _workingManuscript,
+                    newTargetJournalText
+                )
 
             _workingManuscript.TargetJournal =
                 newTargetJournalText
@@ -3855,6 +3863,51 @@ Namespace Forms
                 Snapshot()
 
             Return True
+
+        End Function
+
+
+        ' The linked journal once the target journal text is applied: kept
+        ' while the text is unchanged or is still the linked journal's name,
+        ' cleared otherwise. Save and the recovery draft (#123) agree on it.
+        Private Function TargetJournalIdFor(
+            manuscript As Manuscript,
+            journalText As String
+        ) As Guid?
+
+            If Not manuscript.TargetJournalId.HasValue OrElse
+               String.Equals(
+                   If(manuscript.TargetJournal, String.Empty).Trim(),
+                   journalText,
+                   StringComparison.CurrentCultureIgnoreCase
+               ) Then
+
+                Return manuscript.TargetJournalId
+
+            End If
+
+            Dim linkedJournal As JournalRecord =
+                _authorLibrary.Journals.
+                    FirstOrDefault(
+                        Function(item)
+                            Return item IsNot Nothing AndAlso
+                                item.Id =
+                                    manuscript.TargetJournalId.Value
+                        End Function
+                    )
+
+            If linkedJournal Is Nothing OrElse
+               Not String.Equals(
+                   linkedJournal.Name,
+                   journalText,
+                   StringComparison.CurrentCultureIgnoreCase
+               ) Then
+
+                Return Nothing
+
+            End If
+
+            Return manuscript.TargetJournalId
 
         End Function
 

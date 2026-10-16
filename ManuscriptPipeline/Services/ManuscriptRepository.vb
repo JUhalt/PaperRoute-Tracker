@@ -374,6 +374,100 @@ Namespace Services
         End Function
 
 
+        ' True when the safety backup reads with the current rules, so a
+        ' start that failed can offer it as the previous save (#124).
+        ' Nothing is changed; a backup in use by another program counts as
+        ' unavailable rather than invalid.
+        Public Function HasValidBackup() As Boolean
+
+            If Not File.Exists(_backupFilePath) Then
+                Return False
+            End If
+
+            Try
+
+                Dim failure As Exception =
+                    Nothing
+
+                Return TryLoadLibraryFile(
+                    _backupFilePath,
+                    failure
+                ) IsNot Nothing
+
+            Catch ex As StorageFileInUseException
+
+                Return False
+
+            End Try
+
+        End Function
+
+
+        ' True when manuscripts.json is there and reads with the current
+        ' rules, so the previous save is not needed (#124): putting it in
+        ' place would set the newest save aside as unreadable. Nothing is
+        ' changed; a file in use by another program is not damage, so it
+        ' counts as readable.
+        Public Function PrimaryReads() As Boolean
+
+            If Not File.Exists(_dataFilePath) Then
+                Return False
+            End If
+
+            Try
+
+                Dim failure As Exception =
+                    Nothing
+
+                Return TryLoadLibraryFile(
+                    _dataFilePath,
+                    failure
+                ) IsNot Nothing
+
+            Catch ex As StorageFileInUseException
+
+                Return True
+
+            End Try
+
+        End Function
+
+
+        ' Puts the safety backup in the primary file's place on request
+        ' (#124), as a load does when the primary cannot be read: the file
+        ' it replaces is kept under data\recovery. The next load reads the
+        ' recovered library as the primary.
+        Public Sub UseBackup()
+
+            Directory.CreateDirectory(
+                _dataDirectory
+            )
+
+            ResetRecoveryState()
+
+            Dim failure As Exception =
+                Nothing
+
+            If TryLoadLibraryFile(
+                _backupFilePath,
+                failure
+            ) Is Nothing Then
+
+                Throw New InvalidDataException(
+                    "PaperRoute could not read the safety backup, so the " &
+                    "previous save cannot be used. Nothing has been changed.",
+                    failure
+                )
+
+            End If
+
+            RecoverPrimaryFromBackup(
+                preserveExistingPrimary:=File.Exists(_dataFilePath)
+            )
+
+        End Sub
+
+
         Private Function TryLoadLibraryFile(
             filePath As String,
             ByRef failure As Exception

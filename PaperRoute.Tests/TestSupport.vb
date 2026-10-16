@@ -1,9 +1,11 @@
 Imports System
 Imports System.Collections.Generic
 Imports System.IO
+Imports System.Runtime.ExceptionServices
 Imports System.Text.Json
 Imports System.Text.Json.Serialization
 Imports System.Text.RegularExpressions
+Imports System.Threading
 Imports ManuscriptPipeline.Models
 
 Friend Module TestSupport
@@ -87,6 +89,36 @@ Friend Module TestSupport
         )
 
     End Function
+
+
+    ' Runs a window test on its own STA thread, as WinForms requires, and
+    ' rethrows what it threw. A modal box would hold the thread; the join
+    ' gives up after ninety seconds so the run reports it instead.
+    Public Sub RunOnStaThread(
+        action As Action
+    )
+
+        Dim failure As ExceptionDispatchInfo = Nothing
+
+        Dim thread As New Thread(
+            Sub()
+                Try
+                    action()
+                Catch ex As Exception
+                    failure = ExceptionDispatchInfo.Capture(ex)
+                End Try
+            End Sub) With {.IsBackground = True}
+
+        thread.SetApartmentState(ApartmentState.STA)
+        thread.Start()
+
+        If Not thread.Join(TimeSpan.FromSeconds(90)) Then
+            Throw New TimeoutException("The window test did not finish in ninety seconds; a modal window may be open on its thread.")
+        End If
+
+        failure?.Throw()
+
+    End Sub
 
 
     Public Function CreateJsonOptions() As JsonSerializerOptions

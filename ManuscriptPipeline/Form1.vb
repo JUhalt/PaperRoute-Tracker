@@ -161,7 +161,7 @@ Public Class Form1
             BeginInvoke(
             New Action(
                 Sub()
-                    Close()
+                    EndFailedStartup()
                 End Sub
             )
         )
@@ -175,7 +175,7 @@ Public Class Form1
             BeginInvoke(
                 New Action(
                     Sub()
-                        Close()
+                        EndFailedStartup()
                     End Sub
                 )
             )
@@ -184,7 +184,14 @@ Public Class Form1
 
         End If
 
+        ' From here a library that fails to load offers no recovery (#124):
+        ' only the two loads above end in EndFailedStartup.
+        startupComplete = True
+
         RenderManuscripts()
+
+        ' A draft a shutdown or an error left behind is offered first (#123).
+        OfferRecoveryDraft()
 
         If settingsService.LoadFailed Then
             lblStatus.Text = "PaperRoute couldn't read your settings, so it's working offline until you review Settings > Preferences > Online services."
@@ -1256,12 +1263,12 @@ Public Class Form1
             manuscripts =
             New List(Of Manuscript)()
 
-            StartupFailureForm.ShowFailure(
+            startupRecovered =
+            ShowStartupFailure(
                 StartupFailure.ForLibraryInUse(
                     ex,
                     repository.DataFilePath
-                ),
-                Me
+                )
             )
 
             lblStatus.Text =
@@ -1274,13 +1281,14 @@ Public Class Form1
             manuscripts =
             New List(Of Manuscript)()
 
-            ' What failed and where, in place of the message box (#119).
-            StartupFailureForm.ShowFailure(
+            ' What failed and where, in place of the message box (#119),
+            ' with the previous save or a backup to put in place (#124).
+            startupRecovered =
+            ShowStartupFailure(
                 StartupFailure.ForManuscriptLibrary(
                     ex,
                     repository.DataFilePath
-                ),
-                Me
+                )
             )
 
             lblStatus.Text =
@@ -1341,16 +1349,38 @@ Public Class Form1
 
             Return True
 
-        Catch ex As Exception
+        Catch ex As StorageFileInUseException
 
-            ' What failed and where, in place of the message box (#119).
-            StartupFailureForm.ShowFailure(
-                StartupFailure.ForAuthorLibrary(
+            ' Not damage, so the window offers nothing to put right, as for
+            ' the manuscript library (#111, #124).
+            ShowStartupFailure(
+                StartupFailure.ForLibraryInUse(
                     ex,
                     authorRepository.DataFilePath
-                ),
-                Me
+                )
             )
+
+            Return False
+
+        Catch ex As Exception
+
+            ' What failed and where, in place of the message box (#119),
+            ' with a backup to put in place (#124) while starting. This is
+            ' also read mid-session, after every page save among others,
+            ' where a restore would replace the library under a session that
+            ' goes on with the old one in memory: then nothing is offered.
+            Dim recovered As Boolean =
+                ShowStartupFailure(
+                    StartupFailure.ForAuthorLibrary(
+                        ex,
+                        authorRepository.DataFilePath,
+                        offersRestore:=Not startupComplete
+                    )
+                )
+
+            If Not startupComplete Then
+                startupRecovered = recovered
+            End If
 
             Return False
 
@@ -1359,8 +1389,59 @@ Public Class Form1
     End Function
 
 
+    ' Set when the startup window put the previous save or a backup in
+    ' place (#124).
+    Private startupRecovered As Boolean = False
+
+    ' Set once Form1_Load has read both libraries; a load failure after
+    ' that is shown without recovery actions, and nothing acts on it.
+    Private startupComplete As Boolean = False
+
+
+    ' Shows the startup window over this one (#119); True when it put the
+    ' previous save or a backup in place (#124). Tests answer instead.
+    Protected Overridable Function ShowStartupFailure(
+        failure As StartupFailure
+    ) As Boolean
+
+        Return StartupFailureForm.ShowFailure(
+            failure,
+            Me
+        )
+
+    End Function
+
+
+    ' A start whose library could not be loaded ends here. When the startup
+    ' window recovered the library, PaperRoute starts again on it, as a
+    ' restore does (#116): this window holds nothing of it, so it hands
+    ' over without asking or saving, and no second window opens on the
+    ' same library. Otherwise this window closes.
+    Private Sub EndFailedStartup()
+
+        If startupRecovered Then
+
+            handingOverAfterRestore = True
+            RestartOnTheLibraryOnDisk()
+            Return
+
+        End If
+
+        Close()
+
+    End Sub
+
+
     ' Overridable so tests never write a real library.
     Protected Overridable Function SaveManuscripts() As Boolean
+
+        ' While a restore hands over (#116), what is in memory is the library
+        ' it replaced: a save from anywhere, such as an update check's
+        ' question answered behind the Restore Complete box, would write it
+        ' over the restored one.
+        If handingOverAfterRestore Then
+            Return False
+        End If
 
         Try
 
@@ -3612,7 +3693,9 @@ Public Class Form1
                 Return
             End If
 
-            Dim restoreService As New PortableRestoreService()
+            Dim restoreService As PortableRestoreService =
+            CreateRestoreService()
+
             Dim inspection As BackupInspection
 
             Try
@@ -3712,81 +3795,132 @@ Public Class Form1
 
             End If
 
-            Try
+            RestoreFromArchive(
+            dialog.FileName,
+            restoreService
+        )
 
-                Dim restoreResult As RestoreResult =
+        End Using
+
+    End Sub
+
+
+    ' Set once a restore has replaced the library on disk: until the restart,
+    ' what is in memory is the replaced library, so the close the restart
+    ' sends neither asks about the open page nor saves anything.
+    Private handingOverAfterRestore As Boolean = False
+
+
+    ' Restores the archive and hands over to a new session (#116): the next
+    ' start reads the restored library from disk, so nothing this session
+    ' holds in memory, such as the author library, can be saved over it.
+    ' Tests call this with a throwaway archive.
+    Private Sub RestoreFromArchive(
+        backupZipPath As String,
+        restoreService As PortableRestoreService
+    )
+
+        Dim restoreResult As RestoreResult
+
+        Try
+
+            restoreResult =
                 restoreService.RestoreBackup(
-                    dialog.FileName,
+                    backupZipPath,
                     manuscripts,
                     repository
                 )
 
-                manuscripts =
-                repository.Load()
+        Catch ex As Exception
 
-                ' The restored library is what is on disk, so nothing is
-                ' waiting to be saved any more (#113).
-                librarySaveFailed = False
-
-                ' The open manuscript page shows the restored library.
-                If currentPage = WorkspacePage.Manuscript Then
-                    LeaveCurrentPage()
-                    ShowPage(CurrentRequest)
-                End If
-
-                RenderManuscripts()
-
-                Dim completionMessage As String =
-                "The PaperRoute backup was restored successfully." &
-                Environment.NewLine &
-                Environment.NewLine &
-                restoreResult.ManuscriptCount.ToString() &
-                " manuscript(s) restored."
-
-                If Not String.IsNullOrWhiteSpace(
-                restoreResult.EmergencyBackupPath
-            ) Then
-
-                    completionMessage &=
-                    Environment.NewLine &
-                    Environment.NewLine &
-                    "Your previous library was backed up automatically to:" &
-                    Environment.NewLine &
-                    restoreResult.EmergencyBackupPath
-
-                End If
-
-                MessageBox.Show(
+            ' A failure during the swap says what was put back and names the
+            ' emergency ZIP (#116); before the swap, nothing was changed.
+            MessageBox.Show(
                 Me,
-                completionMessage,
-                "Restore Complete",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information
-            )
-
-                lblStatus.Text =
-                "Backup restored - " &
-                DateTime.Now.ToString("h:mm tt")
-
-            Catch ex As Exception
-
-                MessageBox.Show(
-                Me,
-                "PaperRoute could not restore the backup." &
-                Environment.NewLine &
-                Environment.NewLine &
-                ex.Message &
-                Environment.NewLine &
-                Environment.NewLine &
-                "The existing library was preserved or rolled back where possible.",
+                If(
+                    TypeOf ex Is RestoreFailedException,
+                    ex.Message,
+                    "PaperRoute could not restore the backup." &
+                    Environment.NewLine &
+                    Environment.NewLine &
+                    ex.Message &
+                    Environment.NewLine &
+                    Environment.NewLine &
+                    "Your library was not changed."
+                ),
                 "Restore Error",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error
             )
 
-            End Try
+            Return
 
-        End Using
+        End Try
+
+        handingOverAfterRestore = True
+
+        Dim notice As String =
+            "Restored " &
+            restoreResult.ManuscriptCount.ToString() &
+            " manuscript(s). PaperRoute will now restart to open the restored library."
+
+        If Not String.IsNullOrWhiteSpace(
+            restoreResult.EmergencyBackupPath
+        ) Then
+
+            notice &=
+                Environment.NewLine &
+                Environment.NewLine &
+                "Your library from before the restore is at:" &
+                Environment.NewLine &
+                restoreResult.EmergencyBackupPath
+
+        End If
+
+        RestartAfterRestore(
+            notice
+        )
+
+    End Sub
+
+
+    ' Tests restore into a throwaway managed library.
+    Protected Overridable Function CreateRestoreService() As PortableRestoreService
+
+        Return New PortableRestoreService()
+
+    End Function
+
+
+    ' Says the restore finished and starts PaperRoute again, which opens the
+    ' restored library. Tests record the notice instead.
+    Protected Overridable Sub RestartAfterRestore(
+        notice As String
+    )
+
+        MessageBox.Show(
+            Me,
+            notice,
+            "Restore Complete",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information
+        )
+
+        RestartOnTheLibraryOnDisk()
+
+    End Sub
+
+
+    ' Starts PaperRoute again on the library now on disk, after a restore
+    ' (#116) or a recovery in the startup window (#124). The running
+    ' instance is released first: the new process starts before this one
+    ' has unwound, and would otherwise find the library still held and
+    ' exit. Nothing here can cancel the close (handingOverAfterRestore is
+    ' set first), so no second window can follow. Tests record it instead.
+    Protected Overridable Sub RestartOnTheLibraryOnDisk()
+
+        Program.ReleaseInstanceForRestart()
+        Application.Restart()
 
     End Sub
 

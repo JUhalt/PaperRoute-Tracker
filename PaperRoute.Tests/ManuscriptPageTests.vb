@@ -484,6 +484,53 @@ Public Class ManuscriptPageTests
             End Sub)
     End Sub
 
+    ' A Windows shutdown after a failed save (#113 with #123): there is no one
+    ' to answer the question a close asks, and the page's recovery draft does
+    ' not hold what the save missed, since it is already in the model. The
+    ' save is tried once more without a question. Before the change the
+    ' shutdown closed with neither, and the changes were lost.
+    <TestMethod>
+    Public Sub AShutdownAfterAFailedSaveTriesTheSaveOnceWithoutAsking()
+        RunOnStaThread(
+            Sub()
+                Dim root As String = CreateTemporaryRoot()
+                Try
+                    Using board As New PageBoard(), dialogs As New DialogWatcher()
+                        board.UseRepository(root)
+                        Dim blocker As String = Path.Combine(root, "data")
+                        File.WriteAllText(blocker, "in the way")
+                        Dim manuscript As Manuscript = Sample("Original title")
+                        board.Prepare(manuscript)
+                        board.Open(manuscript)
+                        board.Field("Title").Text = "Edited title"
+                        board.PressCommandKey(Keys.Control Or Keys.S)
+                        Assert.IsTrue(board.LibrarySaveFailed)
+                        Assert.AreEqual(1, board.SaveCount)
+
+                        File.Delete(blocker)
+                        Dim asked As Integer = 0
+                        board.SetPrompt(Function(title)
+                                           asked += 1
+                                           Return DialogResult.Cancel
+                                       End Function)
+                        Dim closing As New FormClosingEventArgs(CloseReason.WindowsShutDown, False)
+                        board.SimulateClosing(closing)
+
+                        Assert.AreEqual(0, asked, "Shutdown is not held up by a question.")
+                        Assert.IsFalse(closing.Cancel)
+                        Assert.AreEqual(2, board.SaveCount, "The failed save is tried once more.")
+                        Assert.IsFalse(board.LibrarySaveFailed)
+                        StringAssert.Contains(File.ReadAllText(Path.Combine(root, "data", "manuscripts.json")), "Edited title", "The retried save reached the disk.")
+
+                        board.Close()
+                        Assert.AreEqual(0, asked, "Nothing is left to ask about.")
+                    End Using
+                Finally
+                    DeleteTemporaryRoot(root)
+                End Try
+            End Sub)
+    End Sub
+
     ' The plain error dialog (#121) keeps the unsaved page reachable: Close
     ' PaperRoute goes through the normal close, Keep Working changes nothing.
     <TestMethod>
@@ -1822,6 +1869,11 @@ Public Class ManuscriptPageTests
 
         Private Sub CallPrivate(name As String, ParamArray args As Object())
             GetType(Form1).GetMethod(name, BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(Me, args)
+        End Sub
+
+        ' The close Windows sends at shutdown, without closing the window.
+        Public Sub SimulateClosing(e As FormClosingEventArgs)
+            OnFormClosing(e)
         End Sub
 
         Protected Overrides Sub Dispose(disposing As Boolean)
