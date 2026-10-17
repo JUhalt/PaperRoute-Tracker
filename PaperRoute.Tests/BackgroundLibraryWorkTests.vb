@@ -461,6 +461,32 @@ Public Class BackgroundLibraryWorkTests
     End Sub
 
 
+    ' The error dialog's Close PaperRoute (#121), chosen while library work
+    ' runs, closes the window once the work has ended. The work refuses a
+    ' close before then, and nothing asked again, so the window stayed open.
+    <TestMethod>
+    Public Sub CloseChosenAfterAnErrorDuringLibraryWorkClosesOnceTheWorkHasEnded()
+        RunOnStaThread(
+            Sub()
+                Dim example As LargeLibraryFixture.SyntheticLibrary = LargeLibraryFixture.WriteExample(Path.Combine(_root, "library"))
+                Using board As New LibraryBoard(example, Path.Combine(_root, "settings"))
+                    board.Start()
+                    board.unhandledErrorPrompt = Function(failure, unsavedChanges) DialogResult.Abort
+                    Dim closedDuringWork As Boolean = True
+
+                    OnTheWindowDuringWork(board,
+                        Sub()
+                            board.ReportUnhandledError(New InvalidOperationException("A failure of the test's own."))
+                            closedDuringWork = board.IsDisposed
+                        End Sub)
+
+                    Assert.IsFalse(closedDuringWork, "The work was not cut off by the close.")
+                    PumpUntil(Function() board.IsDisposed, "Once the work ended, PaperRoute closed, as the user chose.")
+                End Using
+            End Sub)
+    End Sub
+
+
     Private Function OpenLargeLibrary() As LibraryBoard
         Dim library As LargeLibraryFixture.SyntheticLibrary = LargeLibraryFixture.Create(Path.Combine(_root, "library"), 500)
         Dim board As New LibraryBoard(library, Path.Combine(_root, "settings"))

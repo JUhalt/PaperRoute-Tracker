@@ -34,6 +34,13 @@ Partial Public Class Form1
     End Function
 
 
+    <DllImport("user32.dll")>
+    Private Shared Function IsWindowEnabled(
+        handle As IntPtr
+    ) As Boolean
+    End Function
+
+
     ' True while a save, a backup or a restore is running.
     Friend ReadOnly Property IsLibraryWorkInProgress As Boolean
         Get
@@ -185,6 +192,26 @@ Partial Public Class Form1
         runningLibraryWork = Nothing
         runningLibraryWorkAtShutdown = Nothing
         libraryWorkInProgress = False
+
+    End Sub
+
+
+    ' A close the user chose while library work ran, such as the error
+    ' dialog's Close PaperRoute (#121), which OnFormClosing refuses until
+    ' the work has ended: the window closes the normal way once it has,
+    ' and once no dialog that followed the work still holds the window.
+    Private Async Sub CloseOnceLibraryWorkHasEnded()
+
+        While Not IsDisposed AndAlso
+              (libraryWorkInProgress OrElse (IsHandleCreated AndAlso Not IsWindowEnabled(Handle)))
+
+            Await Task.Delay(100)
+
+        End While
+
+        If Not IsDisposed Then
+            Close()
+        End If
 
     End Sub
 

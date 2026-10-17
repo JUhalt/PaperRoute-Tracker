@@ -744,7 +744,8 @@ Partial Public Class Form1
     ' An error on the UI thread (#121): one plain dialog that says what
     ' happened and whether there are unsaved changes. Keep Working returns
     ' to the window; Close PaperRoute closes it the normal way, so the Save
-    ' or Discard question still appears.
+    ' or Discard question still appears, once any library work running
+    ' has ended (#132), since a close before then is refused.
     Friend Sub ReportUnhandledError(
         failure As Exception
     )
@@ -770,7 +771,11 @@ Partial Public Class Form1
         End If
 
         If choice = DialogResult.Abort Then
-            Close()
+            If libraryWorkInProgress Then
+                CloseOnceLibraryWorkHasEnded()
+            Else
+                Close()
+            End If
         End If
 
     End Sub
