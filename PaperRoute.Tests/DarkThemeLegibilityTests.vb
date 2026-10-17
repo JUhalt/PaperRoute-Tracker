@@ -479,7 +479,13 @@ Public Class DarkThemeLegibilityTests
     ' check-mark painter, and a themed date field on and off, make the same
     ' picture as plain ones, and a window's frame is not asked to be dark.
     ' The seam stands in for the theme. The teeth: in Dark without one,
-    ' each of the four pictures differs from the plain one.
+    ' each of the four pictures differs from the plain one. Built under the
+    ' theme, the list and grid are never attached, as Attach asks first; so
+    ' in Dark a grid is also attached before the theme comes on, with its
+    ' window open, and is then painted as Windows paints it, because the
+    ' painter asks again at each paint. A list's marks are drawn again only
+    ' when Windows makes them anew, on a change of theme the seam does not
+    ' send, so no list is judged that way.
     <TestMethod>
     <DataRow(SystemColorMode.Classic)>
     <DataRow(SystemColorMode.Dark)>
@@ -493,8 +499,21 @@ Public Class DarkThemeLegibilityTests
                     Next
                 End If
 
-                UiTheme.HighContrastOverride = True
                 Try
+                    If mode = SystemColorMode.Dark Then
+                        Dim switched As (List As Bitmap, Grid As Bitmap) = CheckBoxSpecimens(attach:=True, whileOpen:=Sub() UiTheme.HighContrastOverride = True)
+                        Dim plain As (List As Bitmap, Grid As Bitmap) = CheckBoxSpecimens(attach:=False)
+                        Try
+                            Assert.IsTrue(SamePicture(plain.Grid, switched.Grid), "A grid the painter was attached to in Dark, painted after a contrast theme came on, is as Windows draws it.")
+                        Finally
+                            switched.List.Dispose()
+                            switched.Grid.Dispose()
+                            plain.List.Dispose()
+                            plain.Grid.Dispose()
+                        End Try
+                    End If
+
+                    UiTheme.HighContrastOverride = True
                     Assert.IsFalse(UiTheme.IsDark(), "A contrast theme never picks the Dark palette.")
 
                     For Each specimen In SameAsPlain()
@@ -998,8 +1017,9 @@ Public Class DarkThemeLegibilityTests
     End Sub
 
     ' A list and a grid, each with a clear and a checked row, in a window of
-    ' their own, with or without the check-mark painter.
-    Private Shared Function CheckBoxSpecimens(attach As Boolean) As (List As Bitmap, Grid As Bitmap)
+    ' their own, with or without the check-mark painter. Given a change,
+    ' it is made once the window is open and both are painted again.
+    Private Shared Function CheckBoxSpecimens(attach As Boolean, Optional whileOpen As Action = Nothing) As (List As Bitmap, Grid As Bitmap)
         Using font As New Font("Segoe UI", 10.0F), form As New Form With {.ClientSize = New Size(640, 200), .Font = font}
             Dim list As New ListView With {.View = View.Details, .CheckBoxes = True, .Bounds = New Rectangle(8, 8, 300, 150)}
             list.Columns.Add("Work", 200)
@@ -1016,6 +1036,12 @@ Public Class DarkThemeLegibilityTests
                 CheckGlyph.Attach(grid)
             End If
             ShowOffscreen(form)
+            If whileOpen IsNot Nothing Then
+                whileOpen()
+                list.Invalidate()
+                grid.Invalidate()
+                Application.DoEvents()
+            End If
             Return (Picture(list), Picture(grid))
         End Using
     End Function
