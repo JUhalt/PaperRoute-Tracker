@@ -475,8 +475,10 @@ Namespace Forms
                 End Sub
             AddHandler ignore.Click,
                 Sub(sender, e)
-                    Dim target As PublicationMatch = match
-                    If PublicationActions.Commit(_library, manuscript, Sub() PublicationMatchService.Ignore(target), _save) Then
+                    Dim record As Manuscript = Nothing
+                    Dim target As PublicationMatch = HeldMatch(manuscript, match, record)
+                    If target Is Nothing Then Return
+                    If PublicationActions.Commit(_library, record, Sub() PublicationMatchService.Ignore(target), _save) Then
                         Changed = True
                         actions.Visible = False
                         outcome.Text = "Ignored. Later checks will not show this match again."
@@ -497,19 +499,38 @@ Namespace Forms
 
         Friend Function MarkPublished(manuscript As Manuscript, match As PublicationMatch) As Boolean
 
+            Dim record As Manuscript = Nothing
+            Dim target As PublicationMatch = HeldMatch(manuscript, match, record)
+            If target Is Nothing Then Return False
+
             Dim confirmed As Boolean
             If ConfirmMarkPublished IsNot Nothing Then
-                confirmed = ConfirmMarkPublished(manuscript, match)
+                confirmed = ConfirmMarkPublished(record, target)
             Else
-                Using dialog As New MarkPublishedForm(manuscript, match, _today)
+                Using dialog As New MarkPublishedForm(record, target, _today)
                     confirmed = dialog.ShowDialog(Me) = DialogResult.OK
                 End Using
             End If
             If Not confirmed Then Return False
 
-            If Not PublicationActions.Commit(_library, manuscript, Sub() PublicationMatchService.MarkPublished(manuscript, match, _today), _save) Then Return False
+            If Not PublicationActions.Commit(_library, record, Sub() PublicationMatchService.MarkPublished(record, target, _today), _save) Then Return False
             Changed = True
             Return True
+
+        End Function
+
+
+        ' The manuscript the library holds now and its copy of the match,
+        ' looked up on every press, as the Deadlines page does: a failed save
+        ' puts a copy of the manuscript, matches and all, in its place (#184).
+        ' Nothing when the library no longer holds them.
+        Private Function HeldMatch(manuscript As Manuscript, match As PublicationMatch, ByRef record As Manuscript) As PublicationMatch
+
+            record = If(_library.Contains(manuscript), manuscript, _library.FirstOrDefault(Function(item) item IsNot Nothing AndAlso item.Id = manuscript.Id))
+            If record?.PublicationMatches Is Nothing Then Return Nothing
+
+            Return If(record.PublicationMatches.Contains(match), match,
+                      record.PublicationMatches.FirstOrDefault(Function(item) item IsNot Nothing AndAlso item.Id = match.Id))
 
         End Function
 

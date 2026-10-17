@@ -270,7 +270,10 @@ Namespace Forms
         ' All at once: if the save fails, every manuscript goes back.
         Friend Sub ApplyChecked()
 
-            Dim fills As List(Of MetadataFill) = lstChanges.CheckedItems.Cast(Of ListViewItem)().Select(Function(row) DirectCast(row.Tag, MetadataFill)).ToList()
+            ' A fill for a record the library no longer holds could not reach
+            ' the saved library, so it is neither made nor counted (#184).
+            Dim fills As List(Of MetadataFill) = lstChanges.CheckedItems.Cast(Of ListViewItem)().Select(Function(row) DirectCast(row.Tag, MetadataFill)).
+                Where(Function(fill) _library.Contains(fill.Manuscript)).ToList()
             If fills.Count = 0 Then Return
 
             Dim touched As List(Of Manuscript) = fills.Select(Function(fill) fill.Manuscript).Distinct().ToList()
@@ -282,9 +285,18 @@ Namespace Forms
             Next
 
             If Not _save() Then
+                ' The copies put back are the library's records now, so the
+                ' preview's rows point at them: a retry fills what the
+                ' library holds (#184).
                 For Each manuscript As Manuscript In touched
                     Dim index As Integer = _library.IndexOf(manuscript)
-                    If index >= 0 Then _library(index) = JsonSerializer.Deserialize(Of Manuscript)(snapshots(manuscript))
+                    If index < 0 Then Continue For
+                    Dim restored As Manuscript = JsonSerializer.Deserialize(Of Manuscript)(snapshots(manuscript))
+                    _library(index) = restored
+                    For Each fill As MetadataFill In _plan.Where(Function(item) item.Manuscript Is manuscript).ToList()
+                        fill.Manuscript = restored
+                    Next
+                    _works(restored) = _works(manuscript)
                 Next
                 Return
             End If
