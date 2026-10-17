@@ -384,9 +384,6 @@ Namespace Services
                 ' A header never looks selected because a cell below it is.
                 grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = UiTheme.HeaderBackground()
                 grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = UiTheme.PrimaryText()
-                ' A header never looks selected because a cell below it is.
-                grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = UiTheme.HeaderBackground()
-                grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = UiTheme.PrimaryText()
 
                 ' Windows draws check boxes in cells from its Light theme (#106).
                 CheckGlyph.Attach(
