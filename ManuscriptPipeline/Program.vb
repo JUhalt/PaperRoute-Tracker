@@ -52,7 +52,12 @@ Friend Module Program
 
         Try
             Using instance
-                Run(args, instance)
+                ' Message boxes and the Open and Save dialogs take the
+                ' theme's title bar (#188). This is the UI thread: it shows
+                ' every window the app shows, the first to the last.
+                Using WindowChrome.HookDialogs()
+                    Run(args, instance)
+                End Using
             End Using
         Finally
             If isExample Then ExampleLibraryService.EndSession()

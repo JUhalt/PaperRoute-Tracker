@@ -25,14 +25,14 @@ Public Class DarkThemeLegibilityTests
     ' list (#106, plan item 57), with the words the guide's Accessibility
     ' section names it in (#139). The sweep passes over what an entry
     ' matches and nothing else. An entry that matches nothing names what
-    ' the sweep cannot judge: Windows' own windows, which no view in the
-    ' catalog opens, and frames, borders, fills and links, which are never
-    ' most of a control. Matching those by type would pass over the whole
-    ' control, a grid's check marks with its frame.
+    ' the sweep cannot judge: frames, borders, fills and links, which are
+    ' never most of a control. Matching those by type would pass over the
+    ' whole control, a grid's check marks with its frame. Message boxes and
+    ' the file dialogs left the list when the dialog hook gave them the
+    ' theme's title bar (#188); the rest of them is Windows' own, as the
+    ' guide says above its list.
     Private Shared ReadOnly DarkAllowList As (Name As String, Reason As String, Guide As String, Matches As Func(Of Control, Boolean))() = {
         ("The report preview", "A web page that Windows' browser control draws.", "The report preview", Function(control As Control) TypeOf control Is WebBrowser),
-        ("Message boxes", "Windows draws them, title bar included: WindowChrome could set it, but nothing hands it a message box's window (#143).", "Message boxes, title bar included", Function(control As Control) False),
-        ("File dialogs", "Windows draws them.", "The Open and Save dialogs and the folder picker", Function(control As Control) False),
         ("Grid frames", "WinForms draws a white frame one pixel wide round a grid; UiPolish leaves the grid's border as it is.", "The thin white frame around a table", Function(control As Control) False),
         ("Combo and number box borders", "Windows draws them in greys of its own.", "The borders of drop-down lists and number boxes", Function(control As Control) False),
         ("The route map's fills", "The journal and author segments and the numbered events keep their Light fills in Dark; their white labels keep 4.5:1.", "the journal and author segments and the numbered events", Function(control As Control) False),

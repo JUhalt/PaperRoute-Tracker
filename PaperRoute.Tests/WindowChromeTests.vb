@@ -12,7 +12,8 @@ Imports ManuscriptPipeline.Services
 
 ' Windows 11's frame on every top-level window (#143): a title bar that
 ' follows the theme and rounded corners, set by one helper, WindowChrome,
-' from UiPolish.ApplyDialog and from the main window's Load. They were run
+' from UiPolish.ApplyDialog and from the main window's Load, and on
+' message boxes and file dialogs by its dialog hook (#188). They were run
 ' first with the helper in place but called from nowhere.
 <TestClass>
 <DoNotParallelize>
@@ -95,55 +96,172 @@ Public Class WindowChromeTests
 
 
     ' A message box is Windows' own window, made in PaperRoute's process by
-    ' MessageBox.Show. The helper can set both attributes on it when handed
-    ' its window, but nothing hands it one: the box runs its own modal loop,
-    ' where neither UiPolish's idle hook nor a form's Load runs. So in Dark
-    ' a message box keeps Windows' light title bar, and message boxes stay
-    ' on the Dark allow-list.
+    ' MessageBox.Show, in a modal loop of Windows' own where neither
+    ' UiPolish's idle hook nor a form's Load runs (#188). With the dialog
+    ' hook on the thread that shows it, the box is framed as it is
+    ' activated: read back from its window once shown, its title bar is
+    ' dark in Dark and light in Light, and under a contrast theme light,
+    ' which leaves Windows' contrast frame (#138); its corners are round.
     <TestMethod>
-    Public Sub AMessageBoxKeepsWindowsTitleBarThoughTheHelperCouldSetIt()
+    <DataRow(SystemColorMode.Classic, False)>
+    <DataRow(SystemColorMode.Dark, False)>
+    <DataRow(SystemColorMode.Dark, True)>
+    Public Sub AMessageBoxGetsTheThemesTitleBarFromTheDialogHook(mode As SystemColorMode, contrastTheme As Boolean)
 
-        If Not OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000) Then
-            Assert.Inconclusive("The dark title bar needs Windows 11.")
-        End If
+        Dim shown As HookedDialog =
+            ShowWithDialogHook(
+                Sub() MessageBox.Show("A message box for a test.", ProbeTitle, MessageBoxButtons.OK),
+                mode,
+                contrastTheme)
 
-        Dim found As Boolean = False
-        Dim before As Integer = -1
-        Dim frame As WindowChrome.Frame = Nothing
-        Dim after As Integer = -1
-        Dim corners As Integer = -1
+        AssertFramed(shown, mode = SystemColorMode.Dark AndAlso Not contrastTheme)
+
+    End Sub
+
+
+    ' The Open and Save dialogs and the folder picker are Windows' common
+    ' item dialog, made on the thread that shows it like a message box, and
+    ' each takes the frame from the hook in the same way (#188). Each opens
+    ' on a folder the test makes, adds nothing to Windows' recent items and
+    ' is cancelled.
+    <TestMethod>
+    <DataRow(SystemColorMode.Classic, "Open")>
+    <DataRow(SystemColorMode.Dark, "Open")>
+    <DataRow(SystemColorMode.Dark, "Save")>
+    <DataRow(SystemColorMode.Dark, "Folder")>
+    Public Sub TheFileDialogsGetTheThemesTitleBarFromTheDialogHook(mode As SystemColorMode, kind As String)
+
+        Dim folder As String =
+            CreateTemporaryRoot()
+
+        Try
+
+            Dim shown As HookedDialog =
+                ShowWithDialogHook(
+                    Sub()
+                        Using dialog As CommonDialog = FileDialogOf(kind, folder)
+                            dialog.ShowDialog()
+                        End Using
+                    End Sub,
+                    mode,
+                    contrastTheme:=False)
+
+            AssertFramed(shown, mode = SystemColorMode.Dark)
+
+        Finally
+            DeleteTemporaryRoot(folder)
+        End Try
+
+    End Sub
+
+
+    ' The hook hears only of its own thread's windows, so never of another
+    ' process's: in Dark, a message box another thread shows while the
+    ' hook stands is not framed, and keeps Windows' light title bar. A
+    ' guard: before #188 there was no hook to hear of it, so it cannot
+    ' fail before; it fails if the hook ever reaches past its thread.
+    <TestMethod>
+    Public Sub TheDialogHookFramesOnlyItsOwnThreadsDialogs()
+
+        SkipWhereTitleBarsCannotBeChecked()
+
+        Dim heard As New List(Of String)()
+        Dim box As IntPtr = IntPtr.Zero
+        Dim dark As Integer = -1
 
         StaRunner.Run(
             Sub()
-                Using timer As New Timer With {.Interval = 50}
+                Using WindowChrome.HookDialogs(Sub(window, frame) heard.Add(TitleOf(window)))
 
-                    AddHandler timer.Tick,
-                        Sub(sender, e)
-                            Dim box As IntPtr = DialogOfThisThread(ProbeTitle)
-                            If box = IntPtr.Zero Then Return
-                            timer.Stop()
-                            found = True
-                            DwmGetWindowAttribute(box, WindowChrome.DWMWA_USE_IMMERSIVE_DARK_MODE, before, 4)
-                            frame = WindowChrome.SetFrame(box)
-                            DwmGetWindowAttribute(box, WindowChrome.DWMWA_USE_IMMERSIVE_DARK_MODE, after, 4)
-                            DwmGetWindowAttribute(box, WindowChrome.DWMWA_WINDOW_CORNER_PREFERENCE, corners, 4)
-                            PostMessage(box, WM_CLOSE, IntPtr.Zero, IntPtr.Zero)
-                        End Sub
+                    ' Windows' own message box, so no window of WinForms' is
+                    ' made on the other thread.
+                    Dim other As New Threading.Thread(
+                        Sub() MessageBoxW(IntPtr.Zero, "A message box on another thread.", OtherTitle, 0)
+                    ) With {.IsBackground = True}
 
-                    timer.Start()
-                    MessageBox.Show("A message box for a test.", ProbeTitle, MessageBoxButtons.OK)
+                    other.SetApartmentState(Threading.ApartmentState.STA)
+                    other.Start()
+
+                    Dim waited As Diagnostics.Stopwatch = Diagnostics.Stopwatch.StartNew()
+
+                    Do
+                        Application.DoEvents()
+                        Threading.Thread.Sleep(20)
+                        box = FindWindow(DialogBoxClass, OtherTitle)
+                    Loop Until (box <> IntPtr.Zero AndAlso IsWindowVisible(box)) OrElse waited.Elapsed > TimeSpan.FromSeconds(10)
+
+                    ' Give the hook every chance to hear of the box first.
+                    For count As Integer = 1 To 5
+                        Application.DoEvents()
+                        Threading.Thread.Sleep(20)
+                    Next
+
+                    If box <> IntPtr.Zero Then
+                        DwmGetWindowAttribute(box, WindowChrome.DWMWA_USE_IMMERSIVE_DARK_MODE, dark, 4)
+                        PostMessage(box, WM_CLOSE, IntPtr.Zero, IntPtr.Zero)
+                    End If
+
+                    other.Join(TimeSpan.FromSeconds(10))
 
                 End Using
             End Sub,
             TimeSpan.FromSeconds(30),
             SystemColorMode.Dark)
 
-        Assert.IsTrue(found, "The message box opened on the test's thread.")
-        Assert.AreEqual(0, before, "Shown in Dark, the message box's title bar is Windows' light one.")
-        Assert.AreEqual(0, frame.DarkResult, "Handed the box's window, the helper sets the dark title bar.")
-        Assert.AreEqual(1, after, "The box's title bar is then dark.")
-        Assert.AreEqual(0, frame.CornersResult, "And its corners.")
-        Assert.AreEqual(WindowChrome.DWMWCP_ROUND, corners)
+        Assert.AreNotEqual(IntPtr.Zero, box, "The other thread's message box opened.")
+        CollectionAssert.DoesNotContain(heard, OtherTitle, "The hook never heard of the other thread's box.")
+        Assert.AreEqual(0, dark, "In Dark, the other thread's box keeps Windows' light title bar.")
+
+    End Sub
+
+
+    ' Guard: the app's UI thread is the one Main runs on. Main puts the
+    ' hook on it around everything the app shows and removes it as the app
+    ' ends, and nothing else in the app hooks a thread. It fails before
+    ' #188, when nothing put the hook anywhere.
+    <TestMethod>
+    Public Sub MainHooksTheUiThreadsDialogsAroundTheWholeApp()
+
+        Dim app As String =
+            Path.Combine(
+                AssistantCoreTests.RepositoryRoot(),
+                "ManuscriptPipeline"
+            )
+
+        Dim source As String =
+            File.ReadAllText(Path.Combine(app, "Program.vb"))
+
+        Dim main As Integer =
+            source.IndexOf("Public Sub Main(", StringComparison.Ordinal)
+
+        Dim hooking As Integer =
+            source.IndexOf("Using WindowChrome.HookDialogs()", Math.Max(main, 0), StringComparison.Ordinal)
+
+        Dim running As Integer =
+            source.IndexOf("Run(args, instance)", Math.Max(hooking, 0), StringComparison.Ordinal)
+
+        Dim ending As Integer =
+            source.IndexOf("End Sub", Math.Max(main, 0), StringComparison.Ordinal)
+
+        Assert.IsTrue(
+            main >= 0 AndAlso hooking > main AndAlso running > hooking AndAlso running < ending,
+            "Main hooks the dialogs of its own thread around the whole app."
+        )
+
+        Dim callers As List(Of String) =
+            Directory.GetFiles(app, "*.vb", SearchOption.AllDirectories).
+                Where(Function(candidate) Not candidate.Contains("\obj\", StringComparison.OrdinalIgnoreCase) AndAlso
+                                          Not candidate.Contains("\bin\", StringComparison.OrdinalIgnoreCase) AndAlso
+                                          Not candidate.EndsWith("WindowChrome.vb", StringComparison.OrdinalIgnoreCase) AndAlso
+                                          File.ReadAllText(candidate).Contains("HookDialogs(", StringComparison.Ordinal)).
+                Select(Function(candidate) Path.GetFileName(candidate)).
+                ToList()
+
+        CollectionAssert.AreEqual(
+            New List(Of String) From {"Program.vb"},
+            callers,
+            "Only Main hooks a thread: " & String.Join(", ", callers)
+        )
 
     End Sub
 
@@ -184,7 +302,153 @@ Public Class WindowChromeTests
 
     Private Const ProbeTitle As String = "PaperRoute frame probe"
 
+    Private Const OtherTitle As String = "PaperRoute frame probe, another thread"
+
+    Private Const DialogBoxClass As String = "#32770"
+
     Private Const WM_CLOSE As UInteger = &H10
+
+
+    ' What the hook set on the probe's dialog box, and what its window
+    ' answered once shown for each attribute (-1 when never read).
+    Private NotInheritable Class HookedDialog
+        Public Frame As WindowChrome.Frame
+        Public Dark As Integer = -1
+        Public Corners As Integer = -1
+    End Class
+
+
+    Private Shared Sub SkipWhereTitleBarsCannotBeChecked()
+
+        If Not OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000) Then
+            Assert.Inconclusive("Rounded corners and the dark title bar need Windows 11.")
+        End If
+
+        If SystemInformation.HighContrast Then
+            Assert.Inconclusive("Windows high-contrast themes require separate certification; these checks do not change OS settings.")
+        End If
+
+    End Sub
+
+
+    ' Shows a dialog box titled ProbeTitle on the shared runner with the
+    ' dialog hook on its thread, in the mode, and under a contrast theme if
+    ' asked (the seam stands in for one). Once the hook has framed the box
+    ' and it shows, both attributes are read back from its window and it is
+    ' told to close; a box the hook never framed is closed after ten
+    ' seconds. The hook is removed before the runner's thread ends.
+    Private Shared Function ShowWithDialogHook(
+        show As Action,
+        mode As SystemColorMode,
+        contrastTheme As Boolean
+    ) As HookedDialog
+
+        SkipWhereTitleBarsCannotBeChecked()
+
+        Dim shown As New HookedDialog()
+        Dim framed As IntPtr = IntPtr.Zero
+
+        StaRunner.Run(
+            Sub()
+
+                If contrastTheme Then
+                    UiTheme.HighContrastOverride = True
+                End If
+
+                Try
+                    Using poll As New Timer With {.Interval = 50}
+
+                        Dim waited As Diagnostics.Stopwatch = Diagnostics.Stopwatch.StartNew()
+
+                        AddHandler poll.Tick,
+                            Sub(sender, e)
+
+                                If framed <> IntPtr.Zero AndAlso IsWindowVisible(framed) Then
+                                    poll.Stop()
+                                    DwmGetWindowAttribute(framed, WindowChrome.DWMWA_USE_IMMERSIVE_DARK_MODE, shown.Dark, 4)
+                                    DwmGetWindowAttribute(framed, WindowChrome.DWMWA_WINDOW_CORNER_PREFERENCE, shown.Corners, 4)
+                                    PostMessage(framed, WM_CLOSE, IntPtr.Zero, IntPtr.Zero)
+                                ElseIf waited.Elapsed > TimeSpan.FromSeconds(10) Then
+                                    Dim box As IntPtr = DialogOfThisThread(ProbeTitle)
+                                    If box <> IntPtr.Zero Then
+                                        poll.Stop()
+                                        PostMessage(box, WM_CLOSE, IntPtr.Zero, IntPtr.Zero)
+                                    End If
+                                End If
+
+                            End Sub
+
+                        Using WindowChrome.HookDialogs(
+                            Sub(window, frame)
+                                If framed = IntPtr.Zero AndAlso TitleOf(window) = ProbeTitle Then
+                                    framed = window
+                                    shown.Frame = frame
+                                End If
+                            End Sub)
+
+                            poll.Start()
+                            show()
+
+                        End Using
+
+                    End Using
+                Finally
+                    UiTheme.HighContrastOverride = Nothing
+                End Try
+
+            End Sub,
+            TimeSpan.FromSeconds(60),
+            mode)
+
+        Return shown
+
+    End Function
+
+
+    Private Shared Sub AssertFramed(
+        shown As HookedDialog,
+        expectedDark As Boolean
+    )
+
+        Assert.IsNotNull(shown.Frame, "The hook framed the dialog box as it was activated.")
+        Assert.AreEqual(expectedDark, shown.Frame.Dark, "The hook asked for the theme's title bar.")
+        Assert.AreEqual(0, shown.Frame.DarkResult, $"Windows took the title bar: 0x{shown.Frame.DarkResult:X8}.")
+        Assert.AreEqual(0, shown.Frame.CornersResult, $"Windows took the corners: 0x{shown.Frame.CornersResult:X8}.")
+        Assert.AreEqual(If(expectedDark, 1, 0), shown.Dark, "Read back from the box once shown, its title bar is " & If(expectedDark, "dark.", "light."))
+        Assert.AreEqual(WindowChrome.DWMWCP_ROUND, shown.Corners, "Read back, its corners are round.")
+
+    End Sub
+
+
+    ' A file dialog of the kind, titled ProbeTitle, on the folder.
+    Private Shared Function FileDialogOf(
+        kind As String,
+        folder As String
+    ) As CommonDialog
+
+        Select Case kind
+
+            Case "Open"
+                Return New OpenFileDialog With {.Title = ProbeTitle, .InitialDirectory = folder, .AddToRecent = False, .ShowPinnedPlaces = False, .RestoreDirectory = True}
+
+            Case "Save"
+                Return New SaveFileDialog With {.Title = ProbeTitle, .InitialDirectory = folder, .AddToRecent = False, .ShowPinnedPlaces = False, .RestoreDirectory = True, .OverwritePrompt = False}
+
+            Case Else
+                Return New FolderBrowserDialog With {.Description = ProbeTitle, .UseDescriptionForTitle = True, .InitialDirectory = folder, .AddToRecent = False, .ShowPinnedPlaces = False}
+
+        End Select
+
+    End Function
+
+
+    Private Shared Function TitleOf(window As IntPtr) As String
+
+        Dim caption As New StringBuilder(256)
+        GetWindowText(window, caption, caption.Capacity)
+        Return caption.ToString()
+
+    End Function
 
 
     ' Windows' app mode, read and never written: 0 is dark.
@@ -247,6 +511,18 @@ Public Class WindowChromeTests
 
     <DllImport("user32.dll")>
     Private Shared Function PostMessage(window As IntPtr, message As UInteger, wParam As IntPtr, lParam As IntPtr) As Boolean
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function IsWindowVisible(window As IntPtr) As Boolean
+    End Function
+
+    <DllImport("user32.dll", CharSet:=CharSet.Unicode)>
+    Private Shared Function FindWindow(className As String, title As String) As IntPtr
+    End Function
+
+    <DllImport("user32.dll", CharSet:=CharSet.Unicode)>
+    Private Shared Function MessageBoxW(owner As IntPtr, text As String, caption As String, style As UInteger) As Integer
     End Function
 
 End Class
