@@ -1527,6 +1527,9 @@ Namespace Forms
 
             RefreshOnlineCommands()
 
+            ' The rows are new; styled as the page was (#106).
+            UiPolish.ApplyToControls(shortlistRows)
+
         End Sub
 
 

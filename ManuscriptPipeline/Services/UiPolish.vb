@@ -128,6 +128,25 @@ Namespace Services
         End Sub
 
 
+        ' Styles the controls under one control, for those a window adds
+        ' after it was styled, such as rows it builds again (#106): the idle
+        ' hook styles each window once.
+        Public Shared Sub ApplyToControls(
+            parent As Control
+        )
+
+            If parent Is Nothing Then
+                Return
+            End If
+
+            ApplyToControlTree(
+                parent,
+                TryCast(parent.FindForm()?.AcceptButton, Button)
+            )
+
+        End Sub
+
+
         ' =====================================================
         ' Recursive control styling
         ' =====================================================

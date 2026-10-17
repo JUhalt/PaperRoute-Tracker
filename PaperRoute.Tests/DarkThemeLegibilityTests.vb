@@ -31,9 +31,7 @@ Public Class DarkThemeLegibilityTests
         ("The report preview", "A web page that Windows' browser control draws.", Function(control As Control) TypeOf control Is WebBrowser),
         ("Message boxes", "Windows draws them.", Function(control As Control) False),
         ("File dialogs", "Windows draws them.", Function(control As Control) False),
-        ("Date pickers", "Windows draws the field; step 4 of #106 decides whether PaperRoute repaints it.", Function(control As Control) TypeOf control Is DateTimePicker),
-        ("Standard buttons in the main window", "Your Citations' two buttons and the shortlist's rebuilt rows, until step 3 of #106.",
-            Function(control As Control) TypeOf control Is Button AndAlso (TypeOf control.FindForm() Is Form1 OrElse TypeOf control.FindForm() Is EditManuscriptForm))
+        ("Date pickers", "Windows draws the field; step 4 of #106 decides whether PaperRoute repaints it.", Function(control As Control) TypeOf control Is DateTimePicker)
     }
 
     ' ---------------------------------------------------------------
@@ -129,6 +127,104 @@ Public Class DarkThemeLegibilityTests
             End Sub)
 
     End Sub
+
+    ' ---------------------------------------------------------------
+    ' Buttons that escape the theme (#106)
+    ' ---------------------------------------------------------------
+
+    ' UiPolish never styles the main window, so every button on its pages
+    ' paints itself from the tokens: over the board, every page, and Your
+    ' Citations with and without a saved update, no Button outside the
+    ' windows the pages host is anything but an ActionButton, apart from
+    ' the rail's commands, which the rail paints.
+    <TestMethod>
+    Public Sub EveryButtonOnTheMainWindowsPagesIsAnActionButton()
+
+        Dim standard As New List(Of String)()
+        Dim boards As Integer = 0
+
+        For Each view In ViewCatalog.All()
+
+            Dim root As String = CreateTemporaryRoot()
+            StorageEnvironment.RootOverride = root
+
+            Try
+                RunWithColorMode(SystemColorMode.Dark,
+                    Sub()
+                        Try
+                            Using shown As Form = view.Build(root)
+                                If Not TypeOf shown Is Form1 Then Return
+                                boards += 1
+                                For Each button As Button In OwnControls(shown).OfType(Of Button)()
+                                    If Not TypeOf button Is ActionButton AndAlso Not TypeOf button Is RailCommandButton Then
+                                        standard.Add($"{view.Name}: {Describe(button)}")
+                                    End If
+                                Next
+                            End Using
+                        Finally
+                            For Each left As Form In StaRunner.OpenFormsOnThisThread()
+                                left.Dispose()
+                            Next
+                        End Try
+                    End Sub)
+            Finally
+                StorageEnvironment.RootOverride = Nothing
+                DeleteTemporaryRoot(root)
+            End Try
+
+        Next
+
+        Assert.IsTrue(boards >= 10, $"The board, its pages and Your Citations were looked at ({boards}).")
+        Assert.AreEqual(0, standard.Count, Environment.NewLine & String.Join(Environment.NewLine, standard))
+
+    End Sub
+
+    ' The shortlist builds its rows again after the manuscript page was
+    ' styled, and its rows' buttons are styled as the page's are: flat, on
+    ' the card color.
+    <TestMethod>
+    Public Sub TheShortlistsRebuiltRowsAreStyled()
+
+        Dim view = ViewCatalog.Stages.Single(Function(item) item.Name = "EditManuscriptForm as the manuscript page, after its shortlist is rebuilt")
+        Dim root As String = CreateTemporaryRoot()
+        StorageEnvironment.RootOverride = root
+
+        Try
+            RunWithColorMode(SystemColorMode.Dark,
+                Sub()
+                    Try
+                        Using shown As Form = view.Build(root)
+                            Dim names As String() = {"Edit PLOS ONE", "More actions for PLOS ONE", "Edit Collabra: Psychology", "More actions for Collabra: Psychology"}
+                            Dim rows As List(Of Button) = Descendants(shown).OfType(Of Button)().Where(Function(button) names.Contains(button.AccessibleName)).ToList()
+                            Assert.AreEqual(4, rows.Count, "Two rows, each with Edit... and More actions.")
+                            For Each button As Button In rows
+                                Assert.AreEqual(FlatStyle.Flat, button.FlatStyle, $"{Describe(button)} is styled.")
+                                Assert.AreEqual(UiTheme.CardBackground(), button.BackColor, $"{Describe(button)} is on the card color.")
+                            Next
+                        End Using
+                    Finally
+                        For Each left As Form In StaRunner.OpenFormsOnThisThread()
+                            left.Dispose()
+                        Next
+                    End Try
+                End Sub)
+        Finally
+            StorageEnvironment.RootOverride = Nothing
+            DeleteTemporaryRoot(root)
+        End Try
+
+    End Sub
+
+    ' A window's controls, but not those of the windows it hosts.
+    Private Shared Iterator Function OwnControls(parent As Control) As IEnumerable(Of Control)
+        For Each child As Control In parent.Controls
+            If TypeOf child Is Form Then Continue For
+            Yield child
+            For Each descendant As Control In OwnControls(child)
+                Yield descendant
+            Next
+        Next
+    End Function
 
     ' ---------------------------------------------------------------
     ' Check marks in lists and grids (#106)

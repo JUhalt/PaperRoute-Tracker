@@ -101,7 +101,8 @@ Partial Public Class Form1
                            "Your citations is turned off in Settings > Preferences... > Online services, so updating is off."), UiTheme.InfoColor())
             End Sub
 
-        Dim updateButton As New Button With {.Text = "Update from OpenAlex...", .AutoSize = True, .MinimumSize = New Size(UiTheme.Px(96, dpi), UiTheme.Px(34, dpi)), .Margin = New Padding(0, UiTheme.Px(8, dpi), 0, 0)}
+        ' Painted from the theme, as UiPolish never styles the main window (#106).
+        Dim updateButton As New ActionButton With {.Text = "Update from OpenAlex...", .AutoSize = True, .MinimumSize = New Size(UiTheme.Px(96, dpi), UiTheme.Px(34, dpi)), .Margin = New Padding(0, UiTheme.Px(8, dpi), 0, 0)}
         AddHandler updateButton.Click, Sub(sender, e) UpdateCitations()
         updateButton.Enabled = Not isExample AndAlso orcid.Length > 0 AndAlso Not blocked.HasValue
 
@@ -110,7 +111,7 @@ Partial Public Class Form1
         If snapshot Is Nothing AndAlso Not isExample AndAlso orcid.Length = 0 Then
 
             addText("See how your published work has been cited, using open data. Mark yourself in Authors & Affiliations (Edit, then This is me) and add your ORCID iD.", UiTheme.PrimaryText())
-            Dim open As New Button With {.Text = "Open Authors && Affiliations", .AutoSize = True, .MinimumSize = New Size(UiTheme.Px(96, dpi), UiTheme.Px(34, dpi)), .Margin = New Padding(0, UiTheme.Px(8, dpi), 0, 0)}
+            Dim open As New ActionButton With {.Text = "Open Authors && Affiliations", .AutoSize = True, .MinimumSize = New Size(UiTheme.Px(96, dpi), UiTheme.Px(34, dpi)), .Margin = New Padding(0, UiTheme.Px(8, dpi), 0, 0)}
             AddHandler open.Click, Sub(sender, e) ShowOwnAuthorRecord()
             AddRow(card, open)
 
