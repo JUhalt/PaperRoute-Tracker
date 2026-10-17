@@ -146,6 +146,7 @@ Namespace Controls
             Inherits ControlAccessibleObject
 
             Private ReadOnly _glance As DeadlineGlance
+            Private ReadOnly _tiles As AccessibleObject() = New AccessibleObject(3) {}
 
             Public Sub New(owner As DeadlineGlance)
                 MyBase.New(owner)
@@ -162,70 +163,14 @@ Namespace Controls
                 Return 4
             End Function
 
+            ' A line of text for each tile, read as it is now.
             Public Overrides Function GetChild(index As Integer) As AccessibleObject
                 If index < 0 OrElse index > 3 Then Return Nothing
-                Return New TileAccessibleObject(_glance, index)
-            End Function
-
-        End Class
-
-        Private NotInheritable Class TileAccessibleObject
-            Inherits AccessibleObject
-
-            Private ReadOnly _glance As DeadlineGlance
-            Private ReadOnly _index As Integer
-
-            Public Sub New(glance As DeadlineGlance, index As Integer)
-                _glance = glance
-                _index = index
-            End Sub
-
-            Public Overrides Property Name As String
-                Get
-                    Return _glance.TileText(_index)
-                End Get
-                Set(value As String)
-                    ' Named by what it shows.
-                End Set
-            End Property
-
-            Public Overrides ReadOnly Property Role As AccessibleRole
-                Get
-                    Return AccessibleRole.StaticText
-                End Get
-            End Property
-
-            Public Overrides ReadOnly Property State As AccessibleStates
-                Get
-                    Return AccessibleStates.ReadOnly
-                End Get
-            End Property
-
-            Public Overrides ReadOnly Property Bounds As Rectangle
-                Get
-                    If Not _glance.IsHandleCreated Then Return Rectangle.Empty
-                    Return _glance.RectangleToScreen(_glance.TileBounds(_glance.ClientSize.Width)(_index))
-                End Get
-            End Property
-
-            Public Overrides ReadOnly Property Parent As AccessibleObject
-                Get
-                    Return _glance.AccessibilityObject
-                End Get
-            End Property
-
-            Public Overrides Function GetChildCount() As Integer
-                Return 0
-            End Function
-
-            Public Overrides Function Navigate(navdir As AccessibleNavigation) As AccessibleObject
-                Select Case navdir
-                    Case AccessibleNavigation.Next, AccessibleNavigation.Right, AccessibleNavigation.Down
-                        Return _glance.AccessibilityObject.GetChild(_index + 1)
-                    Case AccessibleNavigation.Previous, AccessibleNavigation.Left, AccessibleNavigation.Up
-                        Return _glance.AccessibilityObject.GetChild(_index - 1)
-                End Select
-                Return Nothing
+                If _tiles(index) Is Nothing Then
+                    _tiles(index) = New DrawnTextAccessibleObject(_glance, index, Function() _glance.TileText(index),
+                                                                  Function() _glance.TileBounds(_glance.ClientSize.Width)(index))
+                End If
+                Return _tiles(index)
             End Function
 
         End Class

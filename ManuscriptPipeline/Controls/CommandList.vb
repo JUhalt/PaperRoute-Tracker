@@ -35,6 +35,7 @@ Namespace Controls
         End Class
 
         Private ReadOnly _lines As New List(Of Line)()
+        Private _children As List(Of AccessibleObject) = Nothing
         Private ReadOnly _engine As New Arranger()
         Private _headingFont As Font = Nothing
         Private _buttonWidth As Integer = 0
@@ -80,11 +81,13 @@ Namespace Controls
 
         Friend Sub AddSection(heading As String)
             _lines.Add(New Line With {.Heading = heading})
+            _children = Nothing
             Rearrange()
         End Sub
 
         Friend Sub AddCommand(button As Control, description As String)
             _lines.Add(New Line With {.Button = button, .Description = description})
+            _children = Nothing
             Controls.Add(button)
             Rearrange()
         End Sub
@@ -238,18 +241,22 @@ Namespace Controls
             Return New ListAccessibleObject(Me)
         End Function
 
-        ' Each heading, then each button and its description, in order.
+        ' Each heading, then each button and its description, in order; made
+        ' once, and again only after a section or a command is added.
         Private Function ReadableChildren() As List(Of AccessibleObject)
-            Dim children As New List(Of AccessibleObject)()
-            For Each line As Line In _lines
-                If line.Button Is Nothing Then
-                    children.Add(New TextAccessibleObject(Me, line, line.Heading))
-                Else
-                    children.Add(line.Button.AccessibilityObject)
-                    children.Add(New TextAccessibleObject(Me, line, line.Description))
-                End If
-            Next
-            Return children
+            If _children Is Nothing Then
+                _children = New List(Of AccessibleObject)()
+                For Each line As Line In _lines
+                    Dim drawn As Line = line
+                    If drawn.Button Is Nothing Then
+                        _children.Add(New DrawnTextAccessibleObject(Me, _children.Count, Function() drawn.Heading, Function() Offset(drawn.Text)))
+                    Else
+                        _children.Add(drawn.Button.AccessibilityObject)
+                        _children.Add(New DrawnTextAccessibleObject(Me, _children.Count, Function() drawn.Description, Function() Offset(drawn.Text)))
+                    End If
+                Next
+            End If
+            Return _children
         End Function
 
         Private NotInheritable Class ListAccessibleObject
@@ -263,79 +270,12 @@ Namespace Controls
             End Sub
 
             Public Overrides Function GetChildCount() As Integer
-                Return _list._lines.Count + _list._lines.Where(Function(line) line.Button IsNot Nothing).Count()
+                Return _list.ReadableChildren().Count
             End Function
 
             Public Overrides Function GetChild(index As Integer) As AccessibleObject
                 Dim children As List(Of AccessibleObject) = _list.ReadableChildren()
                 Return If(index >= 0 AndAlso index < children.Count, children(index), Nothing)
-            End Function
-
-        End Class
-
-        Private NotInheritable Class TextAccessibleObject
-            Inherits AccessibleObject
-
-            Private ReadOnly _list As CommandList
-            Private ReadOnly _line As Line
-            Private ReadOnly _text As String
-
-            Public Sub New(list As CommandList, line As Line, text As String)
-                _list = list
-                _line = line
-                _text = text
-            End Sub
-
-            Public Overrides Property Name As String
-                Get
-                    Return _text
-                End Get
-                Set(value As String)
-                    ' Named by what it shows.
-                End Set
-            End Property
-
-            Public Overrides ReadOnly Property Role As AccessibleRole
-                Get
-                    Return AccessibleRole.StaticText
-                End Get
-            End Property
-
-            Public Overrides ReadOnly Property State As AccessibleStates
-                Get
-                    Dim states As AccessibleStates = AccessibleStates.ReadOnly
-                    If Not _list.ClientRectangle.IntersectsWith(_list.Offset(_line.Text)) Then states = states Or AccessibleStates.Offscreen
-                    Return states
-                End Get
-            End Property
-
-            Public Overrides ReadOnly Property Bounds As Rectangle
-                Get
-                    If Not _list.IsHandleCreated Then Return Rectangle.Empty
-                    Return _list.RectangleToScreen(_list.Offset(_line.Text))
-                End Get
-            End Property
-
-            Public Overrides ReadOnly Property Parent As AccessibleObject
-                Get
-                    Return _list.AccessibilityObject
-                End Get
-            End Property
-
-            Public Overrides Function GetChildCount() As Integer
-                Return 0
-            End Function
-
-            Public Overrides Function Navigate(navdir As AccessibleNavigation) As AccessibleObject
-                Dim children As List(Of AccessibleObject) = _list.ReadableChildren()
-                Dim index As Integer = children.FindIndex(Function(child) TypeOf child Is TextAccessibleObject AndAlso DirectCast(child, TextAccessibleObject)._text Is _text AndAlso DirectCast(child, TextAccessibleObject)._line Is _line)
-                Select Case navdir
-                    Case AccessibleNavigation.Next, AccessibleNavigation.Down
-                        If index >= 0 AndAlso index + 1 < children.Count Then Return children(index + 1)
-                    Case AccessibleNavigation.Previous, AccessibleNavigation.Up
-                        If index > 0 Then Return children(index - 1)
-                End Select
-                Return Nothing
             End Function
 
         End Class
