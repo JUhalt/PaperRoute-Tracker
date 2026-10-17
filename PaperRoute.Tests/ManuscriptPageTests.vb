@@ -2039,7 +2039,7 @@ Public Class ManuscriptPageTests
     ' Closes any Windows dialog (a message box or a file dialog, class #32770)
     ' that opens on the test thread while it is alive, and keeps their titles:
     ' a production dialog then fails a test by name instead of blocking it.
-    Private NotInheritable Class DialogWatcher
+    Friend NotInheritable Class DialogWatcher
         Implements IDisposable
 
         Private ReadOnly _threadId As Integer = GetCurrentThreadId()
@@ -2074,14 +2074,17 @@ Public Class ManuscriptPageTests
     End Class
 
     ' An update that is always available and accepted at once, then
-    ' downloaded and applied without Velopack or a network.
-    Private NotInheritable Class ScriptedUpdate
+    ' downloaded and applied without Velopack or a network. A download given
+    ' a gate ends when the test completes it. BackgroundLibraryWorkTests
+    ' drives one too.
+    Friend NotInheritable Class ScriptedUpdate
 
         Public Window As Control
         Public Offered, Downloaded, Applied As Integer
         Public WindowEnabledWhileDownloading As Boolean = True
         Public CheckFailure As Exception
         Public DownloadFailure As Exception
+        Public DownloadGate As Task
         Public ReadOnly Reports As New List(Of String)()
 
         Public Function Steps() As UpdateSteps
@@ -2097,7 +2100,7 @@ Public Class ManuscriptPageTests
                                 Downloaded += 1
                                 WindowEnabledWhileDownloading = Window.Enabled
                                 If DownloadFailure IsNot Nothing Then Return Task.FromException(DownloadFailure)
-                                Return Task.CompletedTask
+                                Return If(DownloadGate, Task.CompletedTask)
                             End Function,
                 .Apply = Sub(manager, release) Applied += 1,
                 .Report = Sub(owner, text, title, icon) Reports.Add(title & ": " & text)

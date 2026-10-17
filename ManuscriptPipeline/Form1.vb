@@ -4553,7 +4553,8 @@ Public Class Form1
 
     ' Both checks: the page's unsaved edits (#112), then a failed library
     ' save (#113), are asked about after the user accepts the update and
-    ' before it downloads. The restart is a close.
+    ' before it downloads; a save that fails while it downloads is asked
+    ' about before the restart. The restart is a close.
     Private Function OfferUpdateAsync(
         interactive As Boolean
     ) As Task(Of Boolean)
@@ -4562,7 +4563,8 @@ Public Class Form1
             Me,
             appSettings.UpdateChannel,
             interactive,
-            Function() ConfirmLeaveManuscript() AndAlso ConfirmCloseUnsavedLibrary()
+            Function() ConfirmLeaveManuscript() AndAlso ConfirmCloseUnsavedLibrary(),
+            AddressOf ConfirmCloseUnsavedLibrary
         )
 
     End Function

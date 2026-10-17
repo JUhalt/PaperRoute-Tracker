@@ -197,6 +197,20 @@ Friend NotInheritable Class LibraryBoard
     End Sub
 
 
+    Public ReadOnly Property LastSaveFailed As Boolean
+        Get
+            Return CBool(GetField("librarySaveFailed"))
+        End Get
+    End Property
+
+
+    ' Check for Updates as the window runs it (#112), through the test's
+    ' UpdateService.Steps; the update goes on as its awaits complete.
+    Public Function StartUpdate() As System.Threading.Tasks.Task(Of Boolean)
+        Return DirectCast(CallPrivate("OfferUpdateAsync", True), System.Threading.Tasks.Task(Of Boolean))
+    End Function
+
+
     Public Sub Open(manuscript As Manuscript)
         CallPrivate("OpenManuscript", manuscript, Nothing)
     End Sub

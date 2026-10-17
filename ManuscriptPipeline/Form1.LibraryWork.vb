@@ -108,8 +108,10 @@ Partial Public Class Form1
 
             lblStatus.Text = previousStatus
 
+            ' A window disabled meanwhile stays so, such as this one while
+            ' an update accepted during the work downloads.
             For Each window As Form In windows
-                If Not window.IsDisposed AndAlso window.IsHandleCreated Then
+                If Not window.IsDisposed AndAlso window.IsHandleCreated AndAlso window.Enabled Then
                     EnableWindow(window.Handle, True)
                 End If
             Next

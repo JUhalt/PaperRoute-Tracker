@@ -2,6 +2,7 @@ Imports System
 Imports System.Diagnostics
 Imports System.IO
 Imports System.Linq
+Imports System.Runtime.ExceptionServices
 Imports System.Threading
 Imports System.Threading.Tasks
 Imports System.Windows.Forms
@@ -13,8 +14,7 @@ Imports Microsoft.VisualStudio.TestTools.UnitTesting
 ' status line says what is happening, and a second piece of library work
 ' cannot start before the first ends, nor an update restart PaperRoute;
 ' Windows shutting down lets the work end first. The tests that time the
-' window open the 500 library; the update's and the shutdown's open the
-' example library.
+' window open the 500 library; the others open the example library.
 ' Before #132 the handlers ran inline and held the UI thread for the whole
 ' run (the before table shows UI time equal to wall time for all three), so
 ' no tick could land; the seams these tests call did not exist then.
@@ -119,7 +119,9 @@ Public Class BackgroundLibraryWorkTests
     ' Applying an update ends PaperRoute at once. An update whose download
     ' finished during a restore ran in the restore's message loop and could
     ' end it partway, between moving the library aside and putting the
-    ' backup's in place; the update now waits for the work to end.
+    ' backup's in place; the update now waits for the work to end, and the
+    ' window it disabled stays disabled until the update is done. Driven
+    ' through Check for Updates, with a download that ends during the work.
     <TestMethod>
     Public Sub AnUpdateWaitsForLibraryWorkToEndBeforeItRestarts()
         RunOnStaThread(
@@ -127,34 +129,138 @@ Public Class BackgroundLibraryWorkTests
                 Dim example As LargeLibraryFixture.SyntheticLibrary = LargeLibraryFixture.WriteExample(Path.Combine(_root, "library"))
                 Using board As New LibraryBoard(example, Path.Combine(_root, "settings"))
                     board.Start()
-                    Dim update As Task = Nothing
 
-                    Using posted As New ManualResetEventSlim(False)
-                        Assert.IsTrue(board.RunWork("Restoring the backup...",
-                            Sub()
-                                ' Posted to the window, as the download's
-                                ' continuation is, and run by the work's loop.
-                                board.BeginInvoke(
-                                    New Action(
-                                        Sub()
-                                            update = UpdateService.WaitForLibraryWorkAsync(board, interval:=10)
-                                            posted.Set()
-                                        End Sub))
-                                Assert.IsTrue(posted.Wait(TimeSpan.FromSeconds(30)), "The window ran the posted update.")
-                                ' The update checks a few more times while the work runs.
-                                Thread.Sleep(100)
-                            End Sub))
-                    End Using
+                    WithScriptedUpdate(board,
+                        Sub(update)
+                            Dim download As New TaskCompletionSource()
+                            update.DownloadGate = download.Task
+                            Dim restarted As Task(Of Boolean) = board.StartUpdate()
+                            Assert.AreEqual(1, update.Downloaded, "The update is downloading.")
 
-                    Assert.IsFalse(update.IsCompleted, "The update did not go ahead while the work ran.")
+                            Assert.IsTrue(board.RunWork("Restoring the backup...",
+                                Sub()
+                                    ' The download's end is posted to the window
+                                    ' and run by the work's loop; once a message
+                                    ' posted after it has run, so has it.
+                                    download.SetResult()
+                                    board.Invoke(New Action(Sub()
+                                                            End Sub))
+                                    ' The update checks a few more times while the work runs.
+                                    Thread.Sleep(100)
+                                End Sub))
 
-                    Dim limit As Stopwatch = Stopwatch.StartNew()
-                    While Not update.IsCompleted AndAlso limit.Elapsed < TimeSpan.FromSeconds(30)
-                        Application.DoEvents()
-                        Thread.Sleep(1)
-                    End While
+                            Assert.AreEqual(0, update.Applied, "The update did not restart PaperRoute while the work ran.")
+                            Assert.IsFalse(IsWindowEnabled(board.Handle), "The window stays disabled while the update finishes.")
 
-                    Assert.IsTrue(update.IsCompleted, "Once the work ended, the update went ahead.")
+                            PumpUntil(Function() restarted.IsCompleted, "The update went on once the work ended.")
+                            Assert.IsTrue(restarted.Result)
+                            Assert.AreEqual(1, update.Applied, "Once the work ended, the update went ahead.")
+                            Assert.IsTrue(IsWindowEnabled(board.Handle), "The window takes clicks again.")
+                        End Sub)
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+
+    ' An update offered while library work runs asks its questions once the
+    ' work has ended (#112 with #132): a save the page's Yes starts then is
+    ' not refused, and a save that failed during the work has been marked
+    ' before the #113 question reads the mark.
+    <TestMethod>
+    Public Sub AnUpdateOfferedDuringLibraryWorkAsksOnceTheWorkHasEnded()
+        RunOnStaThread(
+            Sub()
+                Dim example As LargeLibraryFixture.SyntheticLibrary = LargeLibraryFixture.WriteExample(Path.Combine(_root, "library"))
+                Using board As New LibraryBoard(example, Path.Combine(_root, "settings"))
+                    board.Start()
+                    Dim manuscript As ManuscriptPipeline.Models.Manuscript = board.Library(0)
+                    board.Open(manuscript)
+                    board.Field("Title").Text = "Edited before the update"
+
+                    Dim asked As Integer = 0
+                    Dim askedDuringWork As Boolean = False
+                    board.SetPrompt(Function(title)
+                                        asked += 1
+                                        askedDuringWork = askedDuringWork OrElse board.IsLibraryWorkInProgress
+                                        Return DialogResult.Yes
+                                    End Function)
+
+                    WithScriptedUpdate(board,
+                        Sub(update)
+                            Dim restarted As Task(Of Boolean) = Nothing
+                            Dim offeredDuringWork As Integer = 0
+
+                            OnTheWindowDuringWork(board,
+                                Sub()
+                                    restarted = board.StartUpdate()
+                                    offeredDuringWork = update.Offered
+                                End Sub)
+
+                            Assert.AreEqual(1, offeredDuringWork, "The update was offered while the work ran.")
+                            Assert.AreEqual(0, asked, "The question waited for the work to end.")
+
+                            PumpUntil(Function() restarted.IsCompleted, "The update went on once the work ended.")
+                            Assert.AreEqual(1, asked, "The page's edits were asked about.")
+                            Assert.IsFalse(askedDuringWork)
+                            Assert.IsTrue(restarted.Result, "Yes saved the edits, and the update went ahead.")
+                            Assert.AreEqual(1, update.Applied)
+                            Assert.AreEqual("Edited before the update", manuscript.Title)
+                            StringAssert.Contains(File.ReadAllText(example.Repository.DataFilePath), "Edited before the update", "The edits reached the disk before the restart.")
+                        End Sub)
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+
+    ' A save that fails while an update downloads (#113), such as one from a
+    ' dialog the disabled window owns, is asked about before the update
+    ' restarts PaperRoute: applying it ends PaperRoute with no close to ask,
+    ' and the changes the save missed would be lost. Cancel keeps PaperRoute
+    ' open on them.
+    <TestMethod>
+    Public Sub ASaveThatFailsWhileAnUpdateDownloadsIsAskedAboutBeforeTheRestart()
+        RunOnStaThread(
+            Sub()
+                Dim example As LargeLibraryFixture.SyntheticLibrary = LargeLibraryFixture.WriteExample(Path.Combine(_root, "library"))
+                Using board As New LibraryBoard(example, Path.Combine(_root, "settings")), dialogs As New ManuscriptPageTests.DialogWatcher()
+                    board.Start()
+
+                    Dim asked As Integer = 0
+                    board.SetPrompt(Function(title)
+                                        asked += 1
+                                        Return DialogResult.Cancel
+                                    End Function)
+
+                    WithScriptedUpdate(board,
+                        Sub(update)
+                            Dim download As New TaskCompletionSource()
+                            update.DownloadGate = download.Task
+                            Dim restarted As Task(Of Boolean) = board.StartUpdate()
+                            Assert.AreEqual(1, update.Downloaded, "The update is downloading.")
+                            Assert.AreEqual(0, asked, "Nothing was unsaved when the update was accepted.")
+
+                            ' A file held open where the save writes makes it fail.
+                            Dim inTheWay As String = Path.Combine(Path.GetDirectoryName(example.Repository.DataFilePath), "manuscripts.tmp")
+                            Using blocker As New FileStream(inTheWay, FileMode.Create, FileAccess.Write, FileShare.None)
+                                Assert.IsFalse(board.SaveNow(), "The save failed.")
+                            End Using
+                            Assert.IsTrue(board.LastSaveFailed)
+                            CollectionAssert.AreEqual({"Save Error"}, dialogs.Closed)
+
+                            download.SetResult()
+                            PumpUntil(Function() restarted.IsCompleted, "The update finished its download.")
+                            Assert.AreEqual(1, asked, "The failed save was asked about before the restart.")
+                            Assert.IsFalse(restarted.Result, "Cancel stopped the update.")
+                            Assert.AreEqual(0, update.Applied, "PaperRoute did not restart over the unsaved changes.")
+                            Assert.IsTrue(IsWindowEnabled(board.Handle), "The window takes clicks again.")
+                        End Sub)
+
+                    Assert.IsTrue(board.LastSaveFailed, "The changes are still marked unsaved.")
+                    board.SetPrompt(Function(title) DialogResult.No)
                     board.Close()
                 End Using
             End Sub)
@@ -258,6 +364,59 @@ Public Class BackgroundLibraryWorkTests
         board.Start()
         Return board
     End Function
+
+
+    ' Runs action on the window while library work of the test's own runs,
+    ' as a message the work's loop takes, and rethrows what it threw.
+    Private Shared Sub OnTheWindowDuringWork(board As LibraryBoard, action As Action)
+        Dim failure As ExceptionDispatchInfo = Nothing
+
+        Using done As New ManualResetEventSlim(False)
+            Assert.IsTrue(board.RunWork("Backing up your library...",
+                Sub()
+                    board.BeginInvoke(
+                        New Action(
+                            Sub()
+                                Try
+                                    action()
+                                Catch ex As Exception
+                                    failure = ExceptionDispatchInfo.Capture(ex)
+                                Finally
+                                    done.Set()
+                                End Try
+                            End Sub))
+                    Assert.IsTrue(done.Wait(TimeSpan.FromSeconds(30)), "The window ran the posted action.")
+                End Sub))
+        End Using
+
+        If failure IsNot Nothing Then failure.Throw()
+    End Sub
+
+
+    ' Processes the window's messages until the condition holds.
+    Private Shared Sub PumpUntil(condition As Func(Of Boolean), message As String)
+        Dim limit As Stopwatch = Stopwatch.StartNew()
+        While Not condition() AndAlso limit.Elapsed < TimeSpan.FromSeconds(30)
+            Application.DoEvents()
+            Thread.Sleep(1)
+        End While
+        Assert.IsTrue(condition(), message)
+    End Sub
+
+
+    ' Check for Updates through scripted steps (#112) that apply nothing and
+    ' reach no network; the real steps come back afterwards.
+    Private Shared Sub WithScriptedUpdate(board As LibraryBoard, test As Action(Of ManuscriptPageTests.ScriptedUpdate))
+        Dim update As New ManuscriptPageTests.ScriptedUpdate With {.Window = board}
+        UpdateService.Steps = update.Steps()
+        OnlineAccess.ResetForTests()
+        Try
+            test(update)
+        Finally
+            UpdateService.Steps = New UpdateSteps()
+            OnlineAccess.ResetForTests()
+        End Try
+    End Sub
 
 
     ' A timer on the UI thread. While the board reports library work in
