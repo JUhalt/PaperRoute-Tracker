@@ -292,7 +292,8 @@ Namespace Forms
             root.Controls.Add(
                 CreateFieldLabelWithHelp(
                     "Version date",
-                    WorkflowHelpCatalog.VersionDate
+                    WorkflowHelpCatalog.VersionDate,
+                    dtpVersionDate
                 ),
                 0,
                 1
@@ -324,7 +325,8 @@ Namespace Forms
             root.Controls.Add(
                 CreateFieldLabelWithHelp(
                     "Submission",
-                    WorkflowHelpCatalog.SubmissionAssociation
+                    WorkflowHelpCatalog.SubmissionAssociation,
+                    cboSubmission
                 ),
                 0,
                 4
@@ -348,7 +350,8 @@ Namespace Forms
             root.Controls.Add(
                 CreateFieldLabelWithHelp(
                     "Decision",
-                    WorkflowHelpCatalog.DecisionAssociation
+                    WorkflowHelpCatalog.DecisionAssociation,
+                    cboDecision
                 ),
                 0,
                 5
@@ -432,6 +435,10 @@ Namespace Forms
 
             txtNotes.ScrollBars =
                 ScrollBars.Vertical
+
+            ' A group's caption is not a label WinForms names a field by.
+            txtNotes.AccessibleName =
+                "Version notes"
 
             notesGroup.Controls.Add(
                 txtNotes
@@ -769,7 +776,8 @@ Namespace Forms
             root.Controls.Add(
                 CreateFieldLabelWithHelp(
                     "Revision round",
-                    WorkflowHelpCatalog.RevisionRound
+                    WorkflowHelpCatalog.RevisionRound,
+                    nudRevisionRound
                 ),
                 0,
                 7
@@ -804,32 +812,18 @@ Namespace Forms
 
         Private Function CreateFieldLabelWithHelp(
             text As String,
-            helpText As String
+            helpText As String,
+            Optional field As Control = Nothing
         ) As Control
 
-            Dim host As New FlowLayoutPanel With {
-                .Dock = DockStyle.Fill,
-                .AutoSize = True,
-                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                .FlowDirection = FlowDirection.LeftToRight,
-                .WrapContents = False,
-                .Margin = New Padding(0),
-                .Padding = New Padding(0, 6, 0, 0)
-            }
-
-            host.Controls.Add(
+            Return ContextHelpControl.LabelWithHelp(
                 CreateFieldLabel(
                     text
-                )
+                ),
+                helpText,
+                6,
+                field
             )
-
-            host.Controls.Add(
-                New ContextHelpControl(
-                    helpText
-                )
-            )
-
-            Return host
 
         End Function
 

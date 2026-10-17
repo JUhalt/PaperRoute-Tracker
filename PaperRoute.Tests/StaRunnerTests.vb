@@ -1,5 +1,6 @@
 Imports System
 Imports System.Drawing
+Imports System.Runtime.InteropServices
 Imports System.Threading
 Imports System.Windows.Forms
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
@@ -164,6 +165,66 @@ Public Class StaRunnerTests
     End Sub
 
 
+    ' The app turns visual styles on before its first window, so its lists
+    ' are comctl32 6 lists, which show groups; the runner does the same,
+    ' with or without a color mode. WinForms registers one window class per
+    ' kind of control per process, from the comctl32 active when the first
+    ' such control is created: a list the accessibility sweeps showed
+    ' without visual styles made every later list in the process a comctl32
+    ' 5 list, which has no groups, and Dark's group headings then failed.
+    <TestMethod>
+    Public Sub AListShownWithoutAColorModeShowsItsGroupsAsInTheApp()
+
+        Dim styled As Boolean =
+            False
+
+        Dim grouped As Boolean =
+            False
+
+        StaRunner.Run(
+            Sub()
+
+                styled = Application.RenderWithVisualStyles
+
+                Using host As Form = Offscreen(New Form With {.Text = "A grouped list"})
+
+                    Dim list As New ListView With {
+                        .View = View.Details,
+                        .Dock = DockStyle.Fill
+                    }
+
+                    list.Columns.Add("Work", 200)
+
+                    Dim group As New ListViewGroup("On your ORCID record")
+                    list.Groups.Add(group)
+                    list.Items.Add(New ListViewItem("A work") With {.Group = group})
+
+                    host.Controls.Add(list)
+                    host.Show()
+                    Application.DoEvents()
+
+                    grouped = SendMessage(list.Handle, LVM_ISGROUPVIEWENABLED, IntPtr.Zero, IntPtr.Zero) <> IntPtr.Zero
+
+                    host.Close()
+
+                End Using
+
+            End Sub
+        )
+
+        Assert.IsTrue(
+            styled,
+            "The action runs with visual styles on, as the app does."
+        )
+
+        Assert.IsTrue(
+            grouped,
+            "The list shows its groups, as a comctl32 6 list does."
+        )
+
+    End Sub
+
+
     ' A form held open on another thread, as a stuck test leaves one, is
     ' not counted among this thread's forms.
     <TestMethod>
@@ -240,6 +301,16 @@ Public Class StaRunnerTests
         form.ShowInTaskbar = False
         Return form
 
+    End Function
+
+
+    ' Whether a list view shows its items in groups (commctrl.h); comctl32
+    ' 5 has no groups and answers no.
+    Private Const LVM_ISGROUPVIEWENABLED As Integer =
+        &H10AF
+
+    <DllImport("user32.dll")>
+    Private Shared Function SendMessage(handle As IntPtr, message As Integer, wParam As IntPtr, lParam As IntPtr) As IntPtr
     End Function
 
 End Class

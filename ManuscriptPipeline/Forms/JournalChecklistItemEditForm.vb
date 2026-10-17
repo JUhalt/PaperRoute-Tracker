@@ -135,7 +135,8 @@ Namespace Forms
             root.Controls.Add(
                 CreateLabelWithHelp(
                     "Requirement title",
-                    WorkflowHelpCatalog.ReadinessRequirementTitle
+                    WorkflowHelpCatalog.ReadinessRequirementTitle,
+                    txtTitle
                 ),
                 0,
                 0
@@ -150,7 +151,8 @@ Namespace Forms
             root.Controls.Add(
                 CreateLabelWithHelp(
                     "Category",
-                    WorkflowHelpCatalog.ReadinessCategory
+                    WorkflowHelpCatalog.ReadinessCategory,
+                    txtCategory
                 ),
                 0,
                 1
@@ -165,7 +167,8 @@ Namespace Forms
             root.Controls.Add(
                 CreateLabelWithHelp(
                     "Instructions / details",
-                    WorkflowHelpCatalog.ReadinessInstructions
+                    WorkflowHelpCatalog.ReadinessInstructions,
+                    txtDescription
                 ),
                 0,
                 2
@@ -259,18 +262,9 @@ Namespace Forms
 
         Private Function CreateLabelWithHelp(
             text As String,
-            helpText As String
+            helpText As String,
+            Optional field As Control = Nothing
         ) As Control
-
-            Dim host As New FlowLayoutPanel With {
-                .Dock = DockStyle.Fill,
-                .AutoSize = True,
-                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                .FlowDirection = FlowDirection.LeftToRight,
-                .WrapContents = False,
-                .Margin = New Padding(0),
-                .Padding = New Padding(0, 7, 0, 0)
-            }
 
             Dim label As Label =
                 CreateLabel(text)
@@ -283,15 +277,12 @@ Namespace Forms
                     2
                 )
 
-            host.Controls.Add(label)
-
-            host.Controls.Add(
-                New ContextHelpControl(
-                    helpText
-                )
+            Return ContextHelpControl.LabelWithHelp(
+                label,
+                helpText,
+                7,
+                field
             )
-
-            Return host
 
         End Function
 

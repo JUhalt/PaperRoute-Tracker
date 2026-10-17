@@ -130,6 +130,8 @@ Namespace Forms
             dtpDate.Format = DateTimePickerFormat.Short
             dtpDate.Value = DateTime.Today
             dtpDate.Width = 180
+            ' A date picker takes no name from the label before it (#137).
+            dtpDate.AccessibleName = "Date"
 
             root.Controls.Add(CreateFieldLabel("Date"), 0, 1)
             root.Controls.Add(dtpDate, 1, 1)

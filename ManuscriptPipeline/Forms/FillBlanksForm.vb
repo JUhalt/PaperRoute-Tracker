@@ -27,7 +27,8 @@ Namespace Forms
         Private ReadOnly lstManuscripts As New CheckedListBox()
         Private ReadOnly lstChanges As New ListView()
         Private ReadOnly lblIntro As New Label()
-        Private ReadOnly lblProgress As New Label()
+        ' Announced as it changes, without taking focus (#139).
+        Private ReadOnly lblProgress As New Label() With {.LiveSetting = Automation.AutomationLiveSetting.Polite}
         Private ReadOnly body As New Panel()
         Private ReadOnly btnPrimary As New ActionButton()
         Private ReadOnly btnCancel As New ActionButton()
@@ -92,6 +93,10 @@ Namespace Forms
 
             Controls.Add(root)
             AcceptButton = btnPrimary
+            ' Esc stops a lookup, or closes; a running lookup vetoes closing.
+            ' The button's own handler decides, so Stop never closes the window.
+            CancelButton = btnCancel
+            btnCancel.DialogResult = DialogResult.None
 
             lstManuscripts.Dock = DockStyle.Fill
             lstManuscripts.CheckOnClick = True
@@ -251,6 +256,9 @@ Namespace Forms
                 RemoveHandler btnPrimary.Click, AddressOf PrimaryClicked
                 AddHandler btnPrimary.Click, Sub(sender, e) Close()
                 btnCancel.Visible = False
+                ' Esc closes, as Close does, now Cancel is gone.
+                CancelButton = btnPrimary
+                btnPrimary.DialogResult = DialogResult.None
             Else
                 UpdateButtons()
             End If

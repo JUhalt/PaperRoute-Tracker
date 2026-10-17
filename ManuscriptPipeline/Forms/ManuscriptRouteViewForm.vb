@@ -795,20 +795,23 @@ Namespace Forms
                 waypoint
             )
 
-            Dim lblOpenDetails As New Label With {
+            ' A link, so Tab reaches each waypoint in route order and Enter
+            ' opens it (#136); its name says which waypoint it opens.
+            Dim lnkOpenDetails As New LinkLabel With {
                 .UseMnemonic = False,
                 .Text = "Open in Manuscript →",
                 .AutoSize = True,
                 .Margin = New Padding(8, 2, 0, 0),
-                .ForeColor = UiTheme.AccentSecondaryColor(),
-                .Cursor = Cursors.Hand,
-                .Font = New Font(
-                    Me.Font,
-                    FontStyle.Underline
-                )
+                .AccessibleName =
+                    "Open in Manuscript: " &
+                    WaypointTitle(waypoint) &
+                    ", " &
+                    waypoint.EventDate.ToString(
+                        "MMM d, yyyy"
+                    )
             }
 
-            AddHandler lblOpenDetails.Click,
+            AddHandler lnkOpenDetails.LinkClicked,
                 Sub(sender, e)
                     RequestOpenWaypoint(
                         waypoint
@@ -816,7 +819,7 @@ Namespace Forms
                 End Sub
 
             topRow.Controls.Add(
-                lblOpenDetails
+                lnkOpenDetails
             )
 
             Dim lblTitle As New Label With {
@@ -1017,7 +1020,9 @@ Namespace Forms
                     host.Controls.Add(
                         New ContextHelpControl(
                             WorkflowHelpCatalog.CurrentState
-                        )
+                        ) With {
+                            .AccessibleName = "Help: Current state"
+                        }
                     )
 
                 End If
@@ -1038,7 +1043,9 @@ Namespace Forms
                 host.Controls.Add(
                     New ContextHelpControl(
                         WorkflowHelpCatalog.CurrentVersion
-                    )
+                    ) With {
+                        .AccessibleName = "Help: Current version"
+                    }
                 )
 
             End If

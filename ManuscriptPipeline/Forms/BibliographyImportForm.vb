@@ -108,6 +108,8 @@ Namespace Forms
             lstRecords.Dock = DockStyle.Fill
             lstRecords.CheckOnClick = True
             lstRecords.HorizontalScrollbar = True
+            ' Neither the list nor its details have a label (#137).
+            lstRecords.AccessibleName = "Records to import"
 
             AddHandler lstRecords.SelectedIndexChanged,
                 AddressOf RecordSelectionChanged
@@ -118,6 +120,7 @@ Namespace Forms
             txtDetails.Multiline = True
             txtDetails.ReadOnly = True
             txtDetails.ScrollBars = ScrollBars.Vertical
+            txtDetails.AccessibleName = "Selected record details"
 
             split.Panel2.Controls.Add(txtDetails)
 

@@ -154,6 +154,10 @@ Namespace Forms
             lstJournals.IntegralHeight =
                 False
 
+            ' Not the count WinForms finds before it (#137).
+            lstJournals.AccessibleName =
+                "Journals"
+
             ' The list beside the selected journal's facts (#87).
             factsCard.Dock = DockStyle.Fill
             factsCard.Margin = New Padding(12, 0, 0, 0)
@@ -264,6 +268,9 @@ Namespace Forms
             root.Controls.Add(leftButtons, 0, 3)
 
             Me.AcceptButton =
+                btnClose
+
+            Me.CancelButton =
                 btnClose
 
             Me.Controls.Add(

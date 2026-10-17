@@ -188,7 +188,9 @@ Namespace Forms
             profileBar.Controls.Add(
                 New ContextHelpControl(
                     WorkflowHelpCatalog.ReadinessTemplateRefresh
-                )
+                ) With {
+                    .AccessibleName = "Help: " & btnRefreshTemplate.Text
+                }
             )
             profileBar.Controls.Add(btnDeleteProfile)
             ConfigureWorkflowNavigation(profileBar)
@@ -225,6 +227,8 @@ Namespace Forms
                 DockStyle.Fill
             lstItems.IntegralHeight = False
             lstItems.HorizontalScrollbar = True
+            ' Not the summary WinForms finds before it (#137).
+            lstItems.AccessibleName = "Readiness requirements"
 
             AddHandler lstItems.SelectedIndexChanged,
                 AddressOf ItemSelectionChanged
@@ -322,7 +326,9 @@ Namespace Forms
             itemButtons.Controls.Add(
                 New ContextHelpControl(
                     WorkflowHelpCatalog.ReadinessNotApplicable
-                )
+                ) With {
+                    .AccessibleName = "Help: " & btnNotApplicable.Text
+                }
             )
             itemButtons.Controls.Add(btnReset)
             itemButtons.Controls.Add(btnNotes)
