@@ -169,37 +169,31 @@ Public Class DarkThemeLegibilityTests
 
     ' The shortlist builds its rows again after the manuscript page was
     ' styled, and its rows' buttons are styled as the page's are: flat, on
-    ' the card color.
+    ' the card color. The view is the main window, which the shared loop
+    ' does not style, so only RefreshShortlist can have styled them.
     <TestMethod>
     Public Sub TheShortlistsRebuiltRowsAreStyled()
 
-        Dim view = ViewCatalog.Stages.Single(Function(item) item.Name = "EditManuscriptForm as the manuscript page, after its shortlist is rebuilt")
-        Dim root As String = CreateTemporaryRoot()
-        StorageEnvironment.RootOverride = root
+        SkipWhereThemesCannotBeChecked(SystemColorMode.Dark)
 
-        Try
-            RunWithColorMode(SystemColorMode.Dark,
-                Sub()
-                    Try
-                        Using shown As Form = view.Build(root)
-                            Dim names As String() = {"Edit PLOS ONE", "More actions for PLOS ONE", "Edit Collabra: Psychology", "More actions for Collabra: Psychology"}
-                            Dim rows As List(Of Button) = Descendants(shown).OfType(Of Button)().Where(Function(button) names.Contains(button.AccessibleName)).ToList()
-                            Assert.AreEqual(4, rows.Count, "Two rows, each with Edit... and More actions.")
-                            For Each button As Button In rows
-                                Assert.AreEqual(FlatStyle.Flat, button.FlatStyle, $"{Describe(button)} is styled.")
-                                Assert.AreEqual(UiTheme.CardBackground(), button.BackColor, $"{Describe(button)} is on the card color.")
-                            Next
-                        End Using
-                    Finally
-                        For Each left As Form In StaRunner.OpenFormsOnThisThread()
-                            left.Dispose()
-                        Next
-                    End Try
-                End Sub)
-        Finally
-            StorageEnvironment.RootOverride = Nothing
-            DeleteTemporaryRoot(root)
-        End Try
+        Dim view = ViewCatalog.Stages.Single(Function(item) item.Name = "EditManuscriptForm as the manuscript page, after its shortlist is rebuilt")
+        Dim names As String() = {"Edit PLOS ONE", "More actions for PLOS ONE", "Edit Collabra: Psychology", "More actions for Collabra: Psychology"}
+        Dim found As New List(Of String)()
+
+        Dim failures As List(Of String) = ViewCatalog.ShowEach({(view.Name, view.Build)},
+            Sub(name, shown)
+                If Not UiTheme.IsDark() Then found.Add("The view is not shown in Dark.")
+                Dim rows As List(Of Button) = Descendants(shown).OfType(Of Button)().Where(Function(button) names.Contains(button.AccessibleName)).ToList()
+                If rows.Count <> 4 Then found.Add($"{rows.Count} of the four buttons of two rows, each with Edit... and More actions.")
+                For Each button As Button In rows
+                    If button.FlatStyle <> FlatStyle.Flat Then found.Add($"{Describe(button)} is not styled.")
+                    If button.BackColor <> UiTheme.CardBackground() Then found.Add($"{Describe(button)} is on {button.BackColor}, not the card color.")
+                Next
+            End Sub,
+            mode:=SystemColorMode.Dark)
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
 
     End Sub
 
