@@ -1,5 +1,6 @@
 Imports System.Drawing
 Imports System.Drawing.Drawing2D
+Imports ManuscriptPipeline.Services
 
 Namespace Controls
 
@@ -33,6 +34,38 @@ Namespace Controls
             Return path
 
         End Function
+
+
+        ' Under a contrast theme a filled chip or pill is the window color,
+        ' so it keeps its shape with an outline in its text color (#191),
+        ' one sharp pixel just inside the bounds. In Light and Dark nothing
+        ' is drawn.
+        Public Shared Sub OutlineUnderContrast(
+            g As Graphics,
+            bounds As RectangleF,
+            radius As Single,
+            ink As Color
+        )
+
+            If Not UiTheme.IsHighContrast() Then
+                Return
+            End If
+
+            Dim smoothing As SmoothingMode = g.SmoothingMode
+            Dim offset As PixelOffsetMode = g.PixelOffsetMode
+
+            g.SmoothingMode = SmoothingMode.AntiAlias
+            g.PixelOffsetMode = PixelOffsetMode.Half
+
+            Using path As GraphicsPath = Create(New RectangleF(bounds.X + 0.5F, bounds.Y + 0.5F, bounds.Width - 1.0F, bounds.Height - 1.0F), radius - 0.5F),
+                  pen As New Pen(ink)
+                g.DrawPath(pen, path)
+            End Using
+
+            g.SmoothingMode = smoothing
+            g.PixelOffsetMode = offset
+
+        End Sub
 
     End Class
 
