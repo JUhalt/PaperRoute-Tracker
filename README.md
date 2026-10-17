@@ -99,7 +99,7 @@ The [User Guide](docs/USER_GUIDE.md) explains each workflow in detail.
 
 ## Privacy and local-first design
 
-PaperRoute is designed so that its core manuscript-tracking workflow works offline. No PaperRoute account is required.
+PaperRoute is designed so that its core manuscript-tracking workflow works offline. No PaperRoute account is required, and PaperRoute sends no usage data, telemetry or crash reports; the [privacy policy](PRIVACY.md) lists everything it can contact.
 
 The one request PaperRoute makes by itself is the update check when it starts: it reads the list of PaperRoute releases and sends nothing about you or your library. Every other online feature starts only when you ask: Crossref and ORCID lookups, journal facts from DOAJ and OpenAlex, Find Journals, your citations, and the optional AI assistant. **Settings → Preferences... → Online services** lists each one with the hosts it contacts and exactly what it sends; **Check for updates when PaperRoute starts**, under **Updates** on the same page, turns the startup check off, and **Work offline** stops them all. Lookups are read-only and previewed before anything is applied. The AI assistant is off until you turn it on and shows what it will send, and to whom, before sending. Keys you add, such as an OpenAlex or AI assistant key, are encrypted for your Windows account and never stored in settings, backups, exports, or Diagnostics; PaperRoute includes no keys of its own. PaperRoute stores no ORCID password, OAuth token, or client secret, and no publisher credentials.
 
@@ -113,7 +113,7 @@ When legacy ManuscriptPipeline storage is migrated, PaperRoute retains the legac
 
 ## Installing PaperRoute
 
-Download the PaperRoute Setup executable from the latest Stable release on this repository's [Releases page](https://github.com/JUhalt/PaperRoute-Tracker/releases) and run it. Setup is not code-signed, so Windows warns before it runs; the User Guide's [Installing](docs/USER_GUIDE.md#installing) section explains the prompt, how to check the download against `SHA256SUMS.txt`, which Windows versions are supported, and what "Install Partially Succeeded" means. [Uninstalling](docs/USER_GUIDE.md#uninstalling) says what is removed and what stays.
+Download the PaperRoute Setup executable from the latest Stable release on this repository's [Releases page](https://github.com/JUhalt/PaperRoute-Tracker/releases) and run it. Setup is not code-signed yet (see the [Code signing policy](CODE_SIGNING.md)), so Windows warns before it runs; the User Guide's [Installing](docs/USER_GUIDE.md#installing) section explains the prompt, how to check the download against `SHA256SUMS.txt`, which Windows versions are supported, and what "Install Partially Succeeded" means. [Uninstalling](docs/USER_GUIDE.md#uninstalling) says what is removed and what stays.
 
 Fresh installations default to the **Stable** update channel. Users who intentionally want prerelease builds can choose **Preview** under **Settings → Preferences... → Update channel**. Use **Settings → Check for Updates...** to check immediately.
 
@@ -235,3 +235,9 @@ Bug reports, usability feedback, importer edge cases, and pull requests are welc
 ## License
 
 PaperRoute Tracker is licensed under the **GNU General Public License, version 3 only** (SPDX: `GPL-3.0-only`). See [`LICENSE.txt`](LICENSE.txt) for the complete license and [`NOTICE.md`](NOTICE.md) for the project-specific notice.
+
+## Policies
+
+- [Code signing policy](CODE_SIGNING.md): what is signed, how releases are built, and who approves them.
+- [Privacy policy](PRIVACY.md): what PaperRoute can contact, what it sends, and what it never sends.
+- [Security policy](.github/SECURITY.md): how to report a suspected vulnerability privately.
