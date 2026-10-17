@@ -1020,7 +1020,9 @@ Namespace Forms
                     host.Controls.Add(
                         New ContextHelpControl(
                             WorkflowHelpCatalog.CurrentState
-                        )
+                        ) With {
+                            .AccessibleName = "Help: Current state"
+                        }
                     )
 
                 End If
@@ -1041,7 +1043,9 @@ Namespace Forms
                 host.Controls.Add(
                     New ContextHelpControl(
                         WorkflowHelpCatalog.CurrentVersion
-                    )
+                    ) With {
+                        .AccessibleName = "Help: Current version"
+                    }
                 )
 
             End If

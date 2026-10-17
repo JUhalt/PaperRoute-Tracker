@@ -22,7 +22,8 @@ Public Class AccessibleNameTests
     ' Every visible text, combo, list, grid, number and date control in
     ' every view has a name, and none is named by a link, a button or a
     ' sentence that happens to come before it; every button with no
-    ' letters on its face has an AccessibleName.
+    ' letters on its face has an AccessibleName, and a ? help button's
+    ' says what it helps with, not just "Help".
     <TestMethod>
     Public Sub EveryInputAndEveryButtonWithNoLettersHasAName()
 
@@ -59,8 +60,9 @@ Public Class AccessibleNameTests
     ' The sweep has teeth. A guard: it checks the sweep, not the app, so
     ' it cannot fail before the change. A field after a label is named by
     ' it; one after a help control, one after a check box, one after a
-    ' link and one after a sentence are reported, as is a button whose
-    ' face is an ellipsis; the same button with an AccessibleName is not.
+    ' link and one after a sentence are reported, as are a button whose
+    ' face is an ellipsis and a help control named only "Help"; the same
+    ' button with an AccessibleName is not.
     <TestMethod>
     Public Sub TheSweepReportsWhatWinFormsLeavesUnnamed()
 
@@ -84,7 +86,7 @@ Public Class AccessibleNameTests
                     layout.Controls.Add(New Label With {.Text = "Named field"})
                     layout.Controls.Add(New TextBox With {.Name = "named"})
                     layout.Controls.Add(New Label With {.Text = "Helped field"})
-                    layout.Controls.Add(New ContextHelpControl("Help for the field."))
+                    layout.Controls.Add(New ContextHelpControl("Help for the field.") With {.Name = "bareHelp"})
                     layout.Controls.Add(New TextBox With {.Name = "afterHelp"})
                     layout.Controls.Add(New CheckBox With {.Text = "Use a date"})
                     layout.Controls.Add(New DateTimePicker With {.Name = "afterCheck"})
@@ -109,7 +111,7 @@ Public Class AccessibleNameTests
         )
 
         Dim names As String() =
-            {"afterHelp", "afterCheck", "afterLink", "afterSentence", "ellipsis"}
+            {"bareHelp", "afterHelp", "afterCheck", "afterLink", "afterSentence", "ellipsis"}
 
         Assert.AreEqual(
             names.Length,
@@ -281,6 +283,8 @@ Public Class AccessibleNameTests
 
                 If String.IsNullOrWhiteSpace(control.AccessibleName) Then
                     lines.Add(Describe(control) & " shows """ & control.Text & """ and has no AccessibleName.")
+                ElseIf TypeOf control Is ContextHelpControl AndAlso String.Equals(control.AccessibleName, "Help", StringComparison.Ordinal) Then
+                    lines.Add(Describe(control) & " is named only ""Help"", not for what it helps with.")
                 End If
 
             End If

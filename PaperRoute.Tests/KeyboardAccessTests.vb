@@ -3,6 +3,7 @@ Imports System.Collections.Generic
 Imports System.Diagnostics
 Imports System.Drawing
 Imports System.Linq
+Imports System.Reflection
 Imports System.Runtime.InteropServices
 Imports System.Threading.Tasks
 Imports System.Windows.Forms
@@ -14,9 +15,10 @@ Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
 ' Keyboard access (#136): Route View is operated from the keyboard, and
-' Esc cancels every modal dialog. Keys are posted to the focused control,
-' so they take the path a real key takes, past PreviewKeyDown, the form's
-' command keys and its dialog keys.
+' Esc cancels every modal dialog; and the help keys the guide names work
+' in a dialog (#139). Keys are posted to the focused control, so they
+' take the path a real key takes, past PreviewKeyDown, the form's command
+' keys and its dialog keys.
 <TestClass>
 <DoNotParallelize>
 Public Class KeyboardAccessTests
@@ -42,6 +44,16 @@ Public Class KeyboardAccessTests
         (GetType(SubmissionDetailsForm), DialogResult.OK),
         (GetType(AuthorLibraryForm), DialogResult.OK),
         (GetType(JournalLibraryForm), DialogResult.OK)
+    }
+
+    ' The dialogs with ? help buttons. Each has a default button, which
+    ' Enter presses wherever focus is that is not a button.
+    Private Shared ReadOnly WithHelp As Type() = {
+        GetType(AddSubmissionForm),
+        GetType(JournalChecklistItemEditForm),
+        GetType(ManuscriptReadinessForm),
+        GetType(ManuscriptRouteViewForm),
+        GetType(ManuscriptVersionEditForm)
     }
 
     Private Const WM_KEYDOWN As UInteger =
@@ -393,6 +405,85 @@ Public Class KeyboardAccessTests
     End Sub
 
 
+    ' The guide's line on ? help buttons: in a dialog, Space or F1 on one
+    ' shows its help and a second press hides it, and neither presses the
+    ' dialog's default button. A guard: the keys worked before the guide
+    ' named them, so it cannot fail before; it holds the guide to what
+    ' they do. Enter is not among them: in a dialog it presses the default
+    ' button, as the guide says.
+    <TestMethod>
+    Public Sub SpaceAndF1OnAHelpButtonShowItsHelpInADialog()
+
+        Dim reports As New List(Of String)()
+
+        Dim failures As List(Of String) =
+            ViewCatalog.ShowEach(
+                WithHelp.Select(Function(type) (type.Name, ViewCatalog.Dialogs(type))),
+                Sub(name, shown)
+
+                    Dim helps As List(Of ContextHelpControl) =
+                        ViewCatalog.Descendants(shown).OfType(Of ContextHelpControl)().
+                            Where(Function(help) help.CanSelect).
+                            ToList()
+
+                    Dim defaultButton As Control =
+                        TryCast(shown.AcceptButton, Control)
+
+                    If helps.Count = 0 OrElse defaultButton Is Nothing Then
+                        reports.Add(name & " shows " & helps.Count & " help buttons and " & If(defaultButton Is Nothing, "no", "a") & " default button.")
+                        Return
+                    End If
+
+                    Dim pressed As Integer =
+                        0
+
+                    AddHandler defaultButton.Click,
+                        Sub(sender, e)
+                            pressed += 1
+                        End Sub
+
+                    For Each help As ContextHelpControl In helps
+
+                        For Each key As Keys In {Keys.Space, Keys.F1}
+
+                            shown.ActiveControl = help
+                            Press(shown, key)
+
+                            Dim showed As Boolean =
+                                HelpShowing(help)
+
+                            Press(shown, key)
+
+                            If Not showed OrElse HelpShowing(help) Then
+                                reports.Add(name & ": " & key.ToString() & " on " & help.AccessibleName & " did not show and then hide its help.")
+                            End If
+
+                        Next
+
+                    Next
+
+                    If pressed > 0 OrElse Not shown.Visible Then
+                        reports.Add(name & ": a help key pressed " & defaultButton.Text & ".")
+                    End If
+
+                End Sub
+            )
+
+        Assert.AreEqual(
+            0,
+            failures.Count,
+            Environment.NewLine & String.Join(Environment.NewLine, failures)
+        )
+
+        Assert.AreEqual(
+            0,
+            reports.Count,
+            Environment.NewLine & String.Join(Environment.NewLine, reports)
+        )
+
+    End Sub
+
+
     ' Shows the dialog modally, offscreen, and presses Esc in it once it
     ' has shown. Nothing is returned for a dialog Esc leaves open.
     Private Shared Function EscapeResult(
@@ -597,6 +688,20 @@ Public Class KeyboardAccessTests
         PostMessage(target.Handle, WM_KEYDOWN, New IntPtr(CInt(key)), New IntPtr(1))
 
     End Sub
+
+
+    ' Whether the help control shows the help a press asked for.
+    Private Shared Function HelpShowing(
+        help As ContextHelpControl
+    ) As Boolean
+
+        Return CBool(
+            GetType(ContextHelpControl).
+                GetField("_clickHelpVisible", BindingFlags.Instance Or BindingFlags.NonPublic).
+                GetValue(help)
+        )
+
+    End Function
 
 
     Private Shared Function DeepestActiveControl(

@@ -209,7 +209,8 @@ Namespace Forms
             ' Focus alone should not open a tooltip. This prevents a help
             ' control that happens to receive initial dialog focus from
             ' covering the first field before the user asks for help.
-            ' Keyboard users can still press Enter, Space, or F1.
+            ' Keyboard users can still press Space or F1; in a dialog, Enter
+            ' presses the default button before it reaches this control.
             Invalidate()
 
         End Sub

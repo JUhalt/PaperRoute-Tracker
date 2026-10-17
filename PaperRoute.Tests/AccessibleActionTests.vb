@@ -20,10 +20,12 @@ Imports ManuscriptPipeline.Models
 Public Class AccessibleActionTests
 
     ' Every view's status and progress lines, the fields named lblStatus or
-    ' lblProgress, are polite live regions. They are found by name over the
-    ' catalog, so a new view's status line is held to it as well; the four
-    ' named below must be among them, so the search cannot pass by
-    ' finding nothing.
+    ' lblProgress, are polite live regions, and so are the two lines a
+    ' running check reports in: Test Connection's result and the packet
+    ' vault's integrity summary. They are found by name over the catalog,
+    ' so a new view's status line is held to it as well; the six named
+    ' below must be among them, so the search cannot pass by finding
+    ' nothing.
     <TestMethod>
     Public Sub StatusAndProgressLabelsAreLiveRegions()
 
@@ -58,7 +60,9 @@ Public Class AccessibleActionTests
             "Form1.lblStatus",
             "UpdateProgressForm.lblStatus",
             "FillBlanksForm.lblProgress",
-            "PublicationCheckForm.lblProgress"
+            "PublicationCheckForm.lblProgress",
+            "SettingsForm.lblTestResult",
+            "SubmissionPacketVaultForm.lblIntegritySummary"
         }
 
             CollectionAssert.Contains(
@@ -176,8 +180,8 @@ Public Class AccessibleActionTests
     End Sub
 
 
-    ' The view's Label fields named lblStatus or lblProgress, on its own
-    ' class and those it inherits from.
+    ' The view's Label fields named lblStatus, lblProgress, lblTestResult
+    ' or lblIntegritySummary, on its own class and those it inherits from.
     Private Shared Iterator Function StatusLabels(
         form As Form
     ) As IEnumerable(Of (Field As String, Label As Label))
@@ -190,7 +194,7 @@ Public Class AccessibleActionTests
             For Each field As FieldInfo In type.GetFields(BindingFlags.Instance Or BindingFlags.Public Or BindingFlags.NonPublic Or BindingFlags.DeclaredOnly)
 
                 If GetType(Label).IsAssignableFrom(field.FieldType) AndAlso
-                   Regex.IsMatch(field.Name, "^_?lbl(Status|Progress)$") Then
+                   Regex.IsMatch(field.Name, "^_?lbl(Status|Progress|TestResult|IntegritySummary)$") Then
 
                     Dim label As Label =
                         TryCast(field.GetValue(form), Label)

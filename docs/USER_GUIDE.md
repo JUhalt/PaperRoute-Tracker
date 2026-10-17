@@ -1020,12 +1020,12 @@ In windows, pages, and lists:
 - In the Insights route chart, **Up** and **Down** choose a route, and **Enter** opens it.
 - In **Route View**, **Tab** moves from waypoint to waypoint in route order, and **Enter** opens the one you are on in the manuscript page.
 - In a manuscript's tag box, **Enter**, a comma, or a semicolon adds the tag, and **Backspace** in the empty box removes the last tag. On a tag, **Delete** or **Backspace** removes it.
-- On a **?** help button, **Enter**, **Space**, or **F1** shows its help.
+- On a **?** help button, **Space** or **F1** shows its help.
 - In this guide's window, **Ctrl+F** goes to **Find**, and **Enter** in **Find** finds the next match. In **Look Up Journal Facts**, **Enter** in the search box searches.
 
 ### Screen readers
 
-Every field, list, and table has a name that a screen reader reads, and every button that shows a symbol rather than words, such as **⋯** or **«**, says what it does. A **?** help button names the field it helps with. Status and progress messages, such as the line at the bottom of the main window, a lookup's progress, and an update's progress, are read out as they change, without moving you from where you are. A screen reader presses chips and **?** help buttons as it presses any button.
+Every field, list, and table has a name that a screen reader reads, and every button that shows a symbol rather than words, such as **⋯** or **«**, says what it does. A **?** help button names what it helps with. Status and progress messages, such as the line at the bottom of the main window, a lookup's progress, and an update's progress, are read out as they change, without moving you from where you are. A screen reader presses chips and **?** help buttons as it presses any button.
 
 ### Contrast themes
 

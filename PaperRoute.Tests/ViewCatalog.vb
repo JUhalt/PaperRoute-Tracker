@@ -88,7 +88,7 @@ Friend NotInheritable Class ViewCatalog
         {GetType(ManuscriptAuthorForm), Function(root) New ManuscriptAuthorForm(AuthorLibrary(), Nothing, {})},
         {GetType(ManuscriptLinksForm), Function(root) New ManuscriptLinksForm(Routed(), CreateRepresentativeLibrary())},
         {GetType(ManuscriptReadinessForm), Function(root) New ManuscriptReadinessForm(WithPackets(), New AuthorLibraryData())},
-        {GetType(ManuscriptRouteViewForm), Function(root) New ManuscriptRouteViewForm(Routed())},
+        {GetType(ManuscriptRouteViewForm), Function(root) New ManuscriptRouteViewForm(InRevision())},
         {GetType(ManuscriptVersionEditForm), Function(root) VersionEditor()},
         {GetType(MarkPublishedForm), Function(root) New MarkPublishedForm(Routed(), Found(), DateTime.Today)},
         {GetType(OrcidLookupForm), Function(root) New OrcidLookupForm(AuthorLibrary().Authors(0))},
@@ -334,6 +334,25 @@ Friend NotInheritable Class ViewCatalog
     ' submission and its revision decision.
     Private Shared Function Routed() As Manuscript
         Return CreateRepresentativeLibrary()(0)
+    End Function
+
+
+    ' The study in revision since its decision, with the revised version
+    ' current, so Route View marks the current state and the current
+    ' version on the decision's waypoint, each with its help.
+    Private Shared Function InRevision() As Manuscript
+
+        Dim manuscript As Manuscript = Routed()
+        Dim submission As JournalSubmission = manuscript.Submissions(0)
+        Dim decision As EditorialDecisionEvent = submission.Decisions(0)
+        manuscript.CurrentStage = PaperStage.Revision
+        manuscript.StageEnteredDate = decision.DecisionDate
+
+        Dim version As New ManuscriptVersion With {.Label = "Revised manuscript", .SubmissionId = submission.Id, .DecisionId = decision.Id}
+        manuscript.Versions.Add(version)
+        manuscript.CurrentVersionId = version.Id
+        Return manuscript
+
     End Function
 
 

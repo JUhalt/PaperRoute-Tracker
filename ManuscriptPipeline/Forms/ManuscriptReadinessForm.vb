@@ -188,7 +188,9 @@ Namespace Forms
             profileBar.Controls.Add(
                 New ContextHelpControl(
                     WorkflowHelpCatalog.ReadinessTemplateRefresh
-                )
+                ) With {
+                    .AccessibleName = "Help: " & btnRefreshTemplate.Text
+                }
             )
             profileBar.Controls.Add(btnDeleteProfile)
             ConfigureWorkflowNavigation(profileBar)
@@ -324,7 +326,9 @@ Namespace Forms
             itemButtons.Controls.Add(
                 New ContextHelpControl(
                     WorkflowHelpCatalog.ReadinessNotApplicable
-                )
+                ) With {
+                    .AccessibleName = "Help: " & btnNotApplicable.Text
+                }
             )
             itemButtons.Controls.Add(btnReset)
             itemButtons.Controls.Add(btnNotes)

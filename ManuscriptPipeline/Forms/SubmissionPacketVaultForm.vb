@@ -35,7 +35,8 @@ Namespace Forms
         Private ReadOnly btnOpenFile As New Button()
         Private ReadOnly btnRecordFingerprint As New Button()
         Private ReadOnly btnCheckFiles As New Button()
-        Private ReadOnly lblIntegritySummary As New Label()
+        ' Announced as it changes, without taking focus (#139).
+        Private ReadOnly lblIntegritySummary As New Label() With {.LiveSetting = Automation.AutomationLiveSetting.Polite}
         ' File identifiers are unique within a packet, not across every packet.
         ' Keep observations attached to their exact working-copy file record.
         Private ReadOnly _integrityResults As New Dictionary(Of SubmissionPacketFile, PacketFileIntegrityResult)()

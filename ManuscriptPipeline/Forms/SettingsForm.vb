@@ -62,7 +62,8 @@ Namespace Forms
         ' Test Connection (#96): tries the setup typed here, before Save.
         Private ReadOnly btnTestConnection As New Button()
         Private ReadOnly lblTestSends As New Label()
-        Private ReadOnly lblTestResult As New Label()
+        ' Announced as it changes, without taking focus (#139).
+        Private ReadOnly lblTestResult As New Label() With {.LiveSetting = Automation.AutomationLiveSetting.Polite}
         Private _testCancellation As System.Threading.CancellationTokenSource = Nothing
         ' A result is shown only for the setup it tested.
         Private _testGeneration As Integer = 0
