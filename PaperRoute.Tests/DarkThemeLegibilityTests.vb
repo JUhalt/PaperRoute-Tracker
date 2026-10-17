@@ -452,6 +452,82 @@ Public Class DarkThemeLegibilityTests
     End Sub
 
     ' ---------------------------------------------------------------
+    ' Contrast themes (#138)
+    ' ---------------------------------------------------------------
+
+    ' Under a Windows contrast theme, dark or light, what this file's Dark
+    ' work draws for itself is left to Windows, which draws in the theme's
+    ' colors: IsDark() is never true there. A list and a grid with the
+    ' check-mark painter, and a themed date field on and off, make the same
+    ' picture as plain ones, and a window's frame is not asked to be dark.
+    ' The seam stands in for the theme. The teeth: in Dark without one,
+    ' each of the four pictures differs from the plain one.
+    <TestMethod>
+    <DataRow(SystemColorMode.Classic)>
+    <DataRow(SystemColorMode.Dark)>
+    Public Sub CheckGlyphDatePickerAndFrame_LeaveTheDrawingToWindowsUnderAContrastTheme(mode As SystemColorMode)
+
+        RunWithColorMode(mode,
+            Sub()
+                If mode = SystemColorMode.Dark Then
+                    For Each specimen In SameAsPlain()
+                        Assert.IsFalse(specimen.Same, $"{specimen.Name} in Dark draws its own.")
+                    Next
+                End If
+
+                UiTheme.HighContrastOverride = True
+                Try
+                    Assert.IsFalse(UiTheme.IsDark(), "A contrast theme never picks the Dark palette.")
+
+                    For Each specimen In SameAsPlain()
+                        Assert.IsTrue(specimen.Same, $"{specimen.Name} under a contrast theme in {mode} is as Windows draws it.")
+                    Next
+
+                    Using form As New Form With {.ClientSize = New Size(320, 120)}
+                        WindowChrome.Apply(form)
+                        ShowOffscreen(form)
+                        Assert.IsFalse(WindowChrome.FrameOf(form).Dark, $"Under a contrast theme in {mode} the title bar is Windows' own.")
+                    End Using
+                Finally
+                    UiTheme.HighContrastOverride = Nothing
+                End Try
+            End Sub)
+
+    End Sub
+
+    ' Whether a list and a grid with the check-mark painter, and a themed
+    ' date field on and off, each make the same picture as a plain one.
+    Private Shared Function SameAsPlain() As List(Of (Name As String, Same As Boolean))
+
+        Dim specimens As New List(Of (Name As String, Same As Boolean))()
+
+        Dim plain As (List As Bitmap, Grid As Bitmap) = CheckBoxSpecimens(attach:=False)
+        Dim painted As (List As Bitmap, Grid As Bitmap) = CheckBoxSpecimens(attach:=True)
+        Try
+            specimens.Add(("A list with check boxes", SamePicture(plain.List, painted.List)))
+            specimens.Add(("A grid with check boxes", SamePicture(plain.Grid, painted.Grid)))
+        Finally
+            plain.List.Dispose()
+            plain.Grid.Dispose()
+            painted.List.Dispose()
+            painted.Grid.Dispose()
+        End Try
+
+        For Each enabled As Boolean In {True, False}
+            Using field As Bitmap = DatePickerPicture(New DateTimePicker(), enabled), themed As Bitmap = DatePickerPicture(New ThemedDatePicker(), enabled)
+                specimens.Add(($"A date field, {If(enabled, "on", "off")}", SamePicture(field, themed)))
+            End Using
+        Next
+
+        Return specimens
+
+    End Function
+
+    Private Shared Function SamePicture(expected As Bitmap, actual As Bitmap) As Boolean
+        Return expected.Size = actual.Size AndAlso PixelsOf(expected).SequenceEqual(PixelsOf(actual))
+    End Function
+
+    ' ---------------------------------------------------------------
     ' Group headings
     ' ---------------------------------------------------------------
 
