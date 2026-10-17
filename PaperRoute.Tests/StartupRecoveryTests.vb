@@ -249,6 +249,37 @@ Public Class StartupRecoveryTests
     End Sub
 
 
+    ' A backup from a newer storage schema, chosen in the startup window, is
+    ' refused before anything changes (#115): the window's check and its
+    ' restore both stop with the Update PaperRoute message, and every file
+    ' and folder under the test root is as it was. The marker here is older,
+    ' so only the backup's own version stops it. Before the change both
+    ' went ahead and the restore replaced the library.
+    <TestMethod>
+    Public Sub ANewerBackup_IsRefusedBeforeAnythingChanges()
+
+        Dim backupPath As String = CreateBackup()
+
+        SetBackupManifest(backupPath, BackupManifestJson(StorageMigrationService.CurrentSchemaVersion + 1))
+
+        Dim repository As ManuscriptRepository = SaveTwice("The library before the restore")
+        File.WriteAllText(Path.Combine(_data, "manuscripts.json"), "{ damaged")
+        Dim before As Dictionary(Of String, Byte()) = SnapshotTree(_root)
+
+        Dim recovery As New StartupRecoveryService(repository, _library, _schema)
+        Assert.IsFalse(recovery.LibraryIsFromANewerPaperRoute())
+
+        Dim inspect As InvalidOperationException = Assert.ThrowsExactly(Of InvalidOperationException)(Sub() recovery.InspectBackup(backupPath))
+        StringAssert.Contains(inspect.Message, "Update PaperRoute")
+
+        Dim restore As InvalidOperationException = Assert.ThrowsExactly(Of InvalidOperationException)(Sub() recovery.RestoreFromBackup(backupPath))
+        StringAssert.Contains(restore.Message, "Update PaperRoute")
+
+        AssertSameTree(before, _root, "Nothing was changed")
+
+    End Sub
+
+
     ' A marker that cannot be written once the library step has changed
     ' the library must not read as a recovery that changed nothing: the
     ' message says what is in place and where the replaced files are, and

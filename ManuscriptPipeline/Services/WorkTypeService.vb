@@ -152,7 +152,9 @@ Namespace Services
 
 
         ' Background and text colors with at least 4.5:1 contrast in both themes.
+        ' Under a contrast theme every tag is in the window's own colors (#138).
         Public Shared Function Background(color As TagPalette, dark As Boolean) As Color
+            If UiTheme.IsHighContrast() Then Return SystemColors.Window
             Select Case color
                 Case TagPalette.Blue : Return If(dark, Drawing.Color.FromArgb(30, 58, 138), Drawing.Color.FromArgb(219, 234, 254))
                 Case TagPalette.Violet : Return If(dark, Drawing.Color.FromArgb(76, 29, 149), Drawing.Color.FromArgb(237, 233, 254))
@@ -167,6 +169,7 @@ Namespace Services
 
 
         Public Shared Function Foreground(color As TagPalette, dark As Boolean) As Color
+            If UiTheme.IsHighContrast() Then Return SystemColors.WindowText
             Select Case color
                 Case TagPalette.Blue : Return If(dark, Drawing.Color.FromArgb(191, 219, 254), Drawing.Color.FromArgb(30, 64, 175))
                 Case TagPalette.Violet : Return If(dark, Drawing.Color.FromArgb(221, 214, 254), Drawing.Color.FromArgb(91, 33, 182))

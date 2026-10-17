@@ -3923,40 +3923,10 @@ Public Class Form1
                 Return
             End If
 
-            Dim sizeInMb As Double =
-            inspection.UncompressedBytes / 1024.0 / 1024.0
-
             Dim preview As String =
-            "Restore this PaperRoute backup?" &
-            Environment.NewLine &
-            Environment.NewLine &
-            "Manuscripts: " &
-            inspection.ManuscriptCount.ToString() &
-            Environment.NewLine &
-            "Submissions: " &
-            inspection.SubmissionCount.ToString() &
-            Environment.NewLine &
-            "Editorial decisions: " &
-            inspection.DecisionCount.ToString() &
-            Environment.NewLine &
-            "Correspondence records: " &
-            inspection.CorrespondenceCount.ToString() &
-            Environment.NewLine &
-            "Managed files: " &
-            inspection.ManagedFileCount.ToString() &
-            Environment.NewLine &
-            "Archive entries: " &
-            inspection.ArchiveEntryCount.ToString() &
-            Environment.NewLine &
-            "Expanded size: " &
-            sizeInMb.ToString("N1") &
-            " MB" &
-            Environment.NewLine &
-            Environment.NewLine &
-            "IMPORTANT: This will REPLACE the library currently loaded in PaperRoute." &
-            Environment.NewLine &
-            Environment.NewLine &
-            "An emergency backup of your current library will be created before the restore begins."
+            RestorePreview(
+                inspection
+            )
 
             Dim confirmation As DialogResult =
             MessageBox.Show(
@@ -4004,6 +3974,51 @@ Public Class Form1
         End Using
 
     End Sub
+
+
+    ' What Restore Backup... asks once the archive has passed its check:
+    ' the backup's date and version (#115) and what it holds. Tests read it.
+    Private Shared Function RestorePreview(
+        inspection As BackupInspection
+    ) As String
+
+        Dim sizeInMb As Double =
+            inspection.UncompressedBytes / 1024.0 / 1024.0
+
+        Return "Restore this PaperRoute backup?" &
+            Environment.NewLine &
+            Environment.NewLine &
+            inspection.DescribeOrigin() &
+            Environment.NewLine &
+            "Manuscripts: " &
+            inspection.ManuscriptCount.ToString() &
+            Environment.NewLine &
+            "Submissions: " &
+            inspection.SubmissionCount.ToString() &
+            Environment.NewLine &
+            "Editorial decisions: " &
+            inspection.DecisionCount.ToString() &
+            Environment.NewLine &
+            "Correspondence records: " &
+            inspection.CorrespondenceCount.ToString() &
+            Environment.NewLine &
+            "Managed files: " &
+            inspection.ManagedFileCount.ToString() &
+            Environment.NewLine &
+            "Archive entries: " &
+            inspection.ArchiveEntryCount.ToString() &
+            Environment.NewLine &
+            "Expanded size: " &
+            sizeInMb.ToString("N1") &
+            " MB" &
+            Environment.NewLine &
+            Environment.NewLine &
+            "IMPORTANT: This will REPLACE the library currently loaded in PaperRoute." &
+            Environment.NewLine &
+            Environment.NewLine &
+            "An emergency backup of your current library will be created before the restore begins."
+
+    End Function
 
 
     ' Set once a restore has replaced the library on disk: until the restart,
