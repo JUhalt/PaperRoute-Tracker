@@ -231,6 +231,8 @@ Namespace Forms
             lstChanges.CheckBoxes = True
             lstChanges.FullRowSelect = True
             lstChanges.HeaderStyle = ColumnHeaderStyle.Nonclickable
+            lstChanges.BackColor = UiTheme.CardBackground()
+            lstChanges.ForeColor = UiTheme.PrimaryText()
             lstChanges.Dock = DockStyle.Fill
             lstChanges.AccessibleName = "Changes to make"
             lstChanges.Columns.Add("Manuscript", LogicalToDeviceUnits(250))

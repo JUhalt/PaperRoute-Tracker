@@ -364,6 +364,26 @@ Namespace Services
                 grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = UiTheme.HeaderBackground()
                 grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = UiTheme.PrimaryText()
 
+                ' Windows draws check boxes in cells from its Light theme (#106).
+                CheckGlyph.Attach(
+                    grid
+                )
+
+                Return
+
+            End If
+
+
+            ' Windows draws a list's check boxes from its Light theme (#106).
+            If TypeOf control Is ListView Then
+
+                CheckGlyph.Attach(
+                    DirectCast(
+                        control,
+                        ListView
+                    )
+                )
+
                 Return
 
             End If

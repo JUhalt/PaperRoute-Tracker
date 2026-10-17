@@ -32,9 +32,6 @@ Public Class DarkThemeLegibilityTests
         ("Message boxes", "Windows draws them.", Function(control As Control) False),
         ("File dialogs", "Windows draws them.", Function(control As Control) False),
         ("Date pickers", "Windows draws the field; step 4 of #106 decides whether PaperRoute repaints it.", Function(control As Control) TypeOf control Is DateTimePicker),
-        ("Lists and grids with check boxes", "Windows draws their check marks in Light colors until step 2 of #106 paints them.",
-            Function(control As Control) (TypeOf control Is ListView AndAlso DirectCast(control, ListView).CheckBoxes) OrElse
-                                         (TypeOf control Is DataGridView AndAlso DirectCast(control, DataGridView).Columns.OfType(Of DataGridViewCheckBoxColumn)().Any())),
         ("Standard buttons in the main window", "Your Citations' two buttons and the shortlist's rebuilt rows, until step 3 of #106.",
             Function(control As Control) TypeOf control Is Button AndAlso (TypeOf control.FindForm() Is Form1 OrElse TypeOf control.FindForm() Is EditManuscriptForm))
     }
@@ -109,10 +106,11 @@ Public Class DarkThemeLegibilityTests
                     Dim grid As New DataGridView With {.Name = "Probe grid", .Bounds = New Rectangle(390, 8, 240, 120), .AllowUserToAddRows = False}
                     grid.Columns.Add(New DataGridViewCheckBoxColumn With {.HeaderText = "Use"})
                     grid.Rows.Add(False)
-                    form.Controls.AddRange(New Control() {light, list, grid})
+                    form.Controls.Add(light)
                     UiPolish.ApplyDialog(form)
+                    ' Added once the window is styled, so Windows draws them.
                     Dim standard As New Button With {.Name = "Probe button", .Text = "Standard", .Location = New Point(8, 140), .AutoSize = True}
-                    form.Controls.Add(standard)
+                    form.Controls.AddRange(New Control() {list, grid, standard})
                     ShowOffscreen(form)
 
                     Dim found As List(Of String) = LightPartsOf(form, everything:=True)
@@ -128,6 +126,149 @@ Public Class DarkThemeLegibilityTests
                     Application.DoEvents()
                     Assert.AreEqual(0, LightPartsOf(form, everything:=True).Count, String.Join("; ", LightPartsOf(form, everything:=True)))
                 End Using
+            End Sub)
+
+    End Sub
+
+    ' ---------------------------------------------------------------
+    ' Check marks in lists and grids (#106)
+    ' ---------------------------------------------------------------
+
+    ' The views that show the four lists and the six grid columns with
+    ' check boxes, at the step that fills them.
+    Private Shared ReadOnly CheckBoxViews As String() = {
+        "PacketExportForm",
+        "CitationsUpdateForm, confirming the works it found",
+        "JournalFactsForm, with the changes it found",
+        "JournalSuggestionsForm, with the journals it found",
+        "FillBlanksForm, with the blanks it can fill",
+        "DecisionLetterForm, reviewing the comments it read",
+        "AuthorInstructionsForm, reviewing the requirements it read",
+        "TitlePageImportForm, with the authors it read"
+    }
+
+    ' In Dark each of their check marks is drawn from the tokens: mostly
+    ' the accent when checked, and the card color inside the secondary
+    ' outline when not, never a light color; in a list or grid that is off,
+    ' as the packet's is while its files are checked, the muted color. Fill
+    ' Blanks' list has the card colors as the other lists do.
+    <TestMethod>
+    Public Sub CheckGlyph_MarksInListsAndGridsFollowTheTokensInDark()
+
+        Dim failures As New List(Of String)()
+        Dim lists As Integer = 0
+        Dim columns As Integer = 0
+
+        For Each view In ViewCatalog.All().Where(Function(item) CheckBoxViews.Contains(item.Name))
+
+            Dim root As String = CreateTemporaryRoot()
+            StorageEnvironment.RootOverride = root
+
+            Try
+                RunWithColorMode(SystemColorMode.Dark,
+                    Sub()
+                        Try
+                            Using shown As Form = view.Build(root)
+                                If Not shown.Visible Then ShowOffscreen(shown)
+                                UiPolish.ApplyDialog(shown)
+                                Application.DoEvents()
+
+                                For Each control As Control In Descendants(shown).Where(Function(item) item.Visible AndAlso CheckMarks(item).Any())
+                                    If TypeOf control Is ListView Then
+                                        lists += 1
+                                        If control.BackColor <> UiTheme.CardBackground() OrElse control.ForeColor <> UiTheme.PrimaryText() Then
+                                            failures.Add($"{view.Name}: {Describe(control)} is {control.ForeColor} on {control.BackColor}.")
+                                        End If
+                                    Else
+                                        columns += DirectCast(control, DataGridView).Columns.OfType(Of DataGridViewCheckBoxColumn)().Count()
+                                    End If
+                                    Using image As Bitmap = Picture(control)
+                                        Dim client As Point = ClientOffset(control)
+                                        For Each mark In CheckMarks(control)
+                                            Dim cell As Rectangle = mark.Cell
+                                            cell.Offset(client)
+                                            Dim color As Color? = MarkColor(image, cell)
+                                            Dim expected As Color() =
+                                                If(Not control.Enabled, {UiTheme.MutedText(), UiTheme.CardBackground()},
+                                                   If(mark.Checked, {UiTheme.AccentColor()}, {UiTheme.SecondaryText(), UiTheme.CardBackground()}))
+                                            If Not color.HasValue OrElse Not expected.Any(Function(item) item.ToArgb() = color.Value.ToArgb()) Then
+                                                failures.Add($"{view.Name}: {Describe(control)} has a {If(mark.Checked, "checked", "clear")} mark that is mostly {color}.")
+                                            End If
+                                        Next
+                                    End Using
+                                Next
+                            End Using
+                        Finally
+                            For Each left As Form In StaRunner.OpenFormsOnThisThread()
+                                left.Dispose()
+                            Next
+                        End Try
+                    End Sub)
+            Finally
+                StorageEnvironment.RootOverride = Nothing
+                DeleteTemporaryRoot(root)
+            End Try
+
+        Next
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(4, lists, "The four lists with check boxes were judged.")
+        Assert.AreEqual(6, columns, "The six grid columns with check boxes were judged.")
+
+    End Sub
+
+    ' The list keeps Windows' own checking: Space checks the focused row,
+    ' and its mark is then the accent.
+    <TestMethod>
+    Public Sub CheckGlyph_SpaceStillChecksAListRowInDark()
+
+        RunWithColorMode(SystemColorMode.Dark,
+            Sub()
+                Using form As New Form With {.ClientSize = New Size(320, 160), .Font = New Font("Segoe UI", 9.0F)}
+                    Dim list As New ListView With {.View = View.Details, .CheckBoxes = True, .Dock = DockStyle.Fill,
+                                                   .BackColor = UiTheme.CardBackground(), .ForeColor = UiTheme.PrimaryText()}
+                    list.Columns.Add("Work", 200)
+                    list.Items.Add(New ListViewItem("A work"))
+                    form.Controls.Add(list)
+                    UiPolish.ApplyDialog(form)
+                    ShowOffscreen(form)
+
+                    list.Items(0).Focused = True
+                    SendMessage(list.Handle, WM_KEYDOWN, New IntPtr(VK_SPACE), IntPtr.Zero)
+                    SendMessage(list.Handle, WM_KEYUP, New IntPtr(VK_SPACE), IntPtr.Zero)
+                    Application.DoEvents()
+
+                    Assert.IsTrue(list.Items(0).Checked, "Space checks the focused row.")
+                    Using image As Bitmap = Picture(list)
+                        Dim mark = CheckMarks(list).Single()
+                        Dim cell As Rectangle = mark.Cell
+                        cell.Offset(ClientOffset(list))
+                        Assert.AreEqual(UiTheme.AccentColor().ToArgb(), MarkColor(image, cell).GetValueOrDefault().ToArgb(), "The checked mark is mostly the accent.")
+                    End Using
+                End Using
+            End Sub)
+
+    End Sub
+
+    ' In Light a list and a grid with the painter attached make the same
+    ' picture as plain ones, checked and clear. A guard: the painter does
+    ' nothing in Light, so this cannot fail unless that changes.
+    <TestMethod>
+    Public Sub CheckGlyph_LeavesListsAndGridsToWindowsInLight()
+
+        RunWithColorMode(SystemColorMode.Classic,
+            Sub()
+                Dim plain As (List As Bitmap, Grid As Bitmap) = CheckBoxSpecimens(attach:=False)
+                Dim painted As (List As Bitmap, Grid As Bitmap) = CheckBoxSpecimens(attach:=True)
+                Try
+                    AssertSamePicture(plain.List, painted.List, "A list with check boxes in Light")
+                    AssertSamePicture(plain.Grid, painted.Grid, "A grid with check boxes in Light")
+                Finally
+                    plain.List.Dispose()
+                    plain.Grid.Dispose()
+                    painted.List.Dispose()
+                    painted.Grid.Dispose()
+                End Try
             End Sub)
 
     End Sub
@@ -379,24 +520,26 @@ Public Class DarkThemeLegibilityTests
     ' from the row behind it, is light.
     Private Shared Function LightCheckMark(control As Control, image As Bitmap) As Color?
         Dim client As Point = ClientOffset(control)
-        For Each cell As Rectangle In CheckMarkCells(control)
+        For Each mark In CheckMarks(control)
+            Dim cell As Rectangle = mark.Cell
             cell.Offset(client)
-            Dim mark As Color? = MarkColor(image, cell)
-            If mark.HasValue AndAlso IsLight(mark.Value) Then Return mark
+            Dim color As Color? = MarkColor(image, cell)
+            If color.HasValue AndAlso IsLight(color.Value) Then Return color
         Next
         Return Nothing
     End Function
 
-    ' Where each row's check mark is drawn, in client coordinates: left of
-    ' a list row's icon and text, in a grid's check-box cell, and in the
-    ' square at the start of a checked list's item.
-    Private Shared Iterator Function CheckMarkCells(control As Control) As IEnumerable(Of Rectangle)
+    ' Where each row's check mark is drawn, in client coordinates, and
+    ' whether it is checked: left of a list row's icon and text, in a
+    ' grid's check-box cell, and in the square at the start of a checked
+    ' list's item.
+    Private Shared Iterator Function CheckMarks(control As Control) As IEnumerable(Of (Cell As Rectangle, Checked As Boolean))
 
         Dim list As ListView = TryCast(control, ListView)
         If list IsNot Nothing AndAlso list.CheckBoxes Then
             For Each item As ListViewItem In list.Items
                 Dim row As Rectangle = item.GetBounds(ItemBoundsPortion.Entire)
-                Yield Rectangle.FromLTRB(row.Left, row.Top, item.GetBounds(ItemBoundsPortion.Icon).Left, row.Bottom)
+                Yield (Rectangle.FromLTRB(row.Left, row.Top, item.GetBounds(ItemBoundsPortion.Icon).Left, row.Bottom), item.Checked)
             Next
         End If
 
@@ -406,7 +549,8 @@ Public Class DarkThemeLegibilityTests
                 If Not column.Visible OrElse Not TypeOf column Is DataGridViewCheckBoxColumn Then Continue For
                 For Each row As DataGridViewRow In grid.Rows
                     Dim cell As Rectangle = grid.GetCellDisplayRectangle(column.Index, row.Index, True)
-                    If Not cell.IsEmpty Then Yield cell
+                    Dim value As Object = row.Cells(column.Index).FormattedValue
+                    If Not cell.IsEmpty Then Yield (cell, TypeOf value Is Boolean AndAlso DirectCast(value, Boolean))
                 Next
             Next
         End If
@@ -415,7 +559,7 @@ Public Class DarkThemeLegibilityTests
         If checkedList IsNot Nothing Then
             For index As Integer = 0 To checkedList.Items.Count - 1
                 Dim item As Rectangle = checkedList.GetItemRectangle(index)
-                Yield New Rectangle(item.Left, item.Top, item.Height, item.Height)
+                Yield (New Rectangle(item.Left, item.Top, item.Height, item.Height), checkedList.GetItemChecked(index))
             Next
         End If
 
@@ -581,6 +725,29 @@ Public Class DarkThemeLegibilityTests
         Next
     End Sub
 
+    ' A list and a grid, each with a clear and a checked row, in a window of
+    ' their own, with or without the check-mark painter.
+    Private Shared Function CheckBoxSpecimens(attach As Boolean) As (List As Bitmap, Grid As Bitmap)
+        Using font As New Font("Segoe UI", 10.0F), form As New Form With {.ClientSize = New Size(640, 200), .Font = font}
+            Dim list As New ListView With {.View = View.Details, .CheckBoxes = True, .Bounds = New Rectangle(8, 8, 300, 150)}
+            list.Columns.Add("Work", 200)
+            list.Items.Add(New ListViewItem("Clear"))
+            list.Items.Add(New ListViewItem("Checked") With {.Checked = True})
+            Dim grid As New DataGridView With {.Bounds = New Rectangle(320, 8, 300, 150), .AllowUserToAddRows = False}
+            grid.Columns.Add(New DataGridViewCheckBoxColumn With {.HeaderText = "Use"})
+            grid.Columns.Add(New DataGridViewTextBoxColumn With {.HeaderText = "Title"})
+            grid.Rows.Add(False, "Clear")
+            grid.Rows.Add(True, "Checked")
+            form.Controls.AddRange(New Control() {list, grid})
+            If attach Then
+                CheckGlyph.Attach(list)
+                CheckGlyph.Attach(grid)
+            End If
+            ShowOffscreen(form)
+            Return (Picture(list), Picture(grid))
+        End Using
+    End Function
+
     ' The list alone in a window of its own, with two groups and their rows.
     Private Shared Function PictureOfList(list As ListView) As Bitmap
         Using font As New Font("Segoe UI", 10.0F), form As New Form With {.ClientSize = New Size(480, 240), .Font = font}
@@ -706,6 +873,14 @@ Public Class DarkThemeLegibilityTests
     Private Shared Function LinearChannel(channel As Byte) As Double
         Dim value As Double = channel / 255.0
         Return If(value <= 0.04045, value / 12.92, Math.Pow((value + 0.055) / 1.055, 2.4))
+    End Function
+
+    Private Const WM_KEYDOWN As Integer = &H100
+    Private Const WM_KEYUP As Integer = &H101
+    Private Const VK_SPACE As Integer = &H20
+
+    <Runtime.InteropServices.DllImport("user32.dll")>
+    Private Shared Function SendMessage(handle As IntPtr, message As Integer, wParam As IntPtr, lParam As IntPtr) As IntPtr
     End Function
 
     ' Changes the color mode of the test process only, on a thread of its
