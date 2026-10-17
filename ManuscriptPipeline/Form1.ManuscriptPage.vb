@@ -851,11 +851,17 @@ Partial Public Class Form1
         ' no draft holds them: the save is tried once more, without a
         ' question, and only a second failure shows its message. A save,
         ' backup or restore still running (#132) is never cut off: it ends
-        ' first, and what it ended in counts here.
+        ' first, and what it ended in counts here. A restore whose swap went
+        ' through hands over instead (#116): the page's edits belong to the
+        ' library it replaced, so no draft of them goes to the restored one.
         If e.CloseReason = CloseReason.WindowsShutDown Then
             FinishLibraryWorkForShutdown()
 
-            WriteRecoveryDraft("Windows was shutting down")
+            If handingOverAfterRestore Then
+                DiscardRecoveryDraft()
+            Else
+                WriteRecoveryDraft("Windows was shutting down")
+            End If
 
             If librarySaveFailed Then
                 SaveManuscripts()

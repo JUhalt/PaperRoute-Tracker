@@ -328,17 +328,23 @@ Public Class BackgroundLibraryWorkTests
     ' replaced: the shutdown hands over to the restored library as the
     ' restart would (#116). Its retry of a failed save (#113) writes
     ' nothing, where it would have written the replaced library over the
-    ' restored one.
+    ' restored one, and no recovery draft of the open page (#123) goes into
+    ' the restored library's data folder, where the next start would offer
+    ' the replaced record's edits over the restored one.
     <TestMethod>
     Public Sub AWindowsShutdownDuringARestoreSavesNothingOverTheRestoredLibrary()
         RunOnStaThread(
             Sub()
                 Dim example As LargeLibraryFixture.SyntheticLibrary = LargeLibraryFixture.WriteExample(Path.Combine(_root, "library"))
                 Dim backup As String = Path.Combine(_root, "backup.zip")
+                Dim draft As String = Path.Combine(_root, "library", "data", "recovery", "manuscript-page-draft.json")
                 Call New PortableBackupService(example.ManagedDirectory).CreateBackup(backup, example.Manuscripts, example.Repository)
 
                 Using board As New LibraryBoard(example, Path.Combine(_root, "settings"))
                     board.Start()
+                    ' Edits the restore's question was told to let go.
+                    board.Open(board.Library(0))
+                    board.Field("Title").Text = "Edited before the restore"
                     board.Library.Add(New ManuscriptPipeline.Models.Manuscript With {.Title = "Only in memory"})
                     board.MarkLastSaveFailed()
                     Dim shutdown As New FormClosingEventArgs(CloseReason.WindowsShutDown, False)
@@ -350,6 +356,7 @@ Public Class BackgroundLibraryWorkTests
 
                     Assert.IsFalse(shutdown.Cancel)
                     Assert.IsFalse(example.Repository.Load().Any(Function(item) item.Title = "Only in memory"), "The restored library is what is on disk.")
+                    Assert.IsFalse(File.Exists(draft), "No draft of the replaced library's page went to the restored one.")
                     Assert.AreEqual(1, board.RestoreNotices.Count, "The restore went on to its notice.")
                     Assert.IsFalse(board.SaveNow(), "Nothing is saved while the restore hands over.")
                     board.Close()
