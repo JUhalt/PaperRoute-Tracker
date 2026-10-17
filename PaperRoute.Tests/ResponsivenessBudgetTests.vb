@@ -148,7 +148,11 @@ Public Class ResponsivenessBudgetTests
             ' item, so a row cannot pass by showing fewer; the filter "a"
             ' matches every item on the 500 library, so the keystroke refills
             ' all of them. Painting is timed as a row of its own, since the
-            ' other rows do not pump messages.
+            ' other rows do not pump messages. These rows and Import & Export's
+            ' are enforced, unlike Journals to Board, because #133 requires it;
+            ' the first visits read 39 to 53 ms on a quiet host, but a busy one
+            ' can push them past 100 ms (or 200 in Debug), so a failure here is
+            ' run again on a quiet host before it is read as a regression.
             Dim openItems As Integer = OpenDeadlines(board, String.Empty)
             If enforce Then Assert.IsTrue(openItems >= 200, "The 500 library has " & openItems & " open deadline items.")
             rows.Add(Time(library, "Board to Deadlines", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Deadlines), enforced:=enforce))

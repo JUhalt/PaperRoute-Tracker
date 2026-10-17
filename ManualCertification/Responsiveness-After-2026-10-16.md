@@ -213,6 +213,10 @@ Before: the after table above (2026-10-16), and the profile's quiet run of 2026-
 
 Run A's Import & Export rows are before its own change (the second commit), which B, C and D include. The refill row's "before" is the keystroke's cost on 2026-10-16: every save from a row action rebuilt the list the same way. UI equals wall for every row here.
 
+The commit messages name runs differently. The first commit's message (`fede4b2`) calls a quiet run of that commit at 14:06 "B" (Board to Deadlines 61 ms, the keystroke 3, Deadlines to Board 21, the second visit 12 and its leave 21, Import & Export to Board 22); that run is not this table's B, which is the 14:22 run after the second commit. "Profile run B" in all three messages is this table's "Before (profile)" column.
+
+**Run E, 17:25, after the review fixes** (the Import & Export list out of the Tab order, a pressed button scrolled into view by its own bounds, the heading under the pointer read, one accessible object for drawn text), beside a sibling Release test host (`claude-v092-speed-startup`), CPU 0 to 57%: Board to Deadlines 62 ms, the keystroke 3, painting 19, the refill 43, Deadlines to Board 24, the second visit 20 and its leave 26, Board to Import & Export 81, Import & Export to Board 28, its second visit 9 and that leave 28, all within. The run failed only Restore's inspection step, at 458 ms, a row outside this batch that a busy run failed before (522 ms at 15:03).
+
 ### Release build, example library (report-only)
 
 | Action | 10-16 | C | D |
@@ -249,6 +253,8 @@ The targeted Debug filter at 15:28, with two sibling Debug test hosts (`claude-v
 | Board to Import & Export (second visit) | 150 | 16 | 5 |
 | Import & Export to Board (second visit) | 121 | 46 | 41 |
 
+After the review fixes, the targeted Debug filter at 17:49 failed only the budget test, beside one and then two sibling Debug test hosts. Its 500 library ran slow throughout (warm startup 13,984 ms, Board to a manuscript page 8,592 ms), and four enforced rows exceeded x2: Board to Deadlines 236 ms, the refill 636, Board to Import & Export 1,198 and Save from the manuscript page 584; the example library's first visit to Import & Export read 94 ms in the same run. Run again at 18:15 with no other test host until a sibling started near its end (18:22:53), all 137 tests passed, with the 500 library at Board to Deadlines 34 ms, the keystroke 2, painting 12, the refill 35, Deadlines to Board 20, the second visit 11 and its leave 16, Board to Import & Export 64, Import & Export to Board 16, its second visit 3 and that leave 16.
+
 ### Where the time goes now
 
 A scratch timing on the 500 library (not kept), on a moderately loaded host, broke the first visit to Deadlines down as: building the page and filling the list 8 ms (the data 1 ms, the 221 row models under 1 ms, laying out the entries 5 ms), putting the page in the window hidden 4 ms, giving it its size and laying it out 4 ms, making its windows as it is shown 35 ms (2 ms a window), bringing it forward and hiding the Board 2 ms. A second visit is a refill and showing the kept page; a keystroke is a refill alone, since no window is made or destroyed. Leaving either page is hiding it and showing the Board again, and `boardPage.Visible = True` (13 to 46 ms in the profile) is the floor of every "to Board" row, which the sibling batch owns. Import & Export's first visit is the same: its build, about 20 ms of layout and text measurement, and its 19 windows.
@@ -256,3 +262,5 @@ A scratch timing on the 500 library (not kept), on a moderately loaded host, bro
 ### What remains over budget
 
 Of these rows, none on a quiet host. On a busy one the first visits to both pages can still pass 100 ms (134 to 287 ms in the busy runs above), because window creation slows with the host; making fewer windows would mean drawing the filter chips or the page header, which are shared with other pages and tests, and building the pages before they are opened would only move the cost into startup. They stay enforced at x1, as the earlier rows do, and hold x3 on the CI runner.
+
+These rows are enforced while Journals to Board is only reported (see the top of this document) for two reasons: #133's brief requires it, and on a quiet host their first visits read 39 to 53 ms, where Journals to Board read 87 to 89 ms on a busy one. The budget test can therefore fail on this host while a sibling build or test host runs, and so can the targeted Debug filter, whose x2 allows 200 ms against busy Release readings of up to 287 ms above. Run such a failure again on a quiet host before reading it as a regression.
