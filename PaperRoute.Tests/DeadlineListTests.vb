@@ -30,6 +30,9 @@ Public Class DeadlineListTests
     Private Const WM_LBUTTONDBLCLK As Integer = &H203
     Private Const WM_RBUTTONDOWN As Integer = &H204
     Private Const WM_RBUTTONUP As Integer = &H205
+    Private Const WM_UPDATEUISTATE As Integer = &H128
+    Private Const UIS_CLEAR As Integer = 2
+    Private Const UISF_HIDEFOCUS As Integer = 1
     Private Const OBJID_CLIENT As Integer = -4
     Private Const EVENT_OBJECT_FOCUS As UInteger = &H8005UI
 
@@ -56,8 +59,10 @@ Public Class DeadlineListTests
     ' The rows
     ' ---------------------------------------------------------------
 
-    ' The buttons a row draws look exactly like the ActionButtons it hosted:
-    ' each role, enabled and disabled, in Light, Dark and a contrast theme.
+    ' The buttons a row draws, where the list draws them, look exactly like
+    ' the ActionButtons the row hosted (Secondary, the "⋯" Quiet, neither
+    ' with a mnemonic, on the card): enabled, disabled, and each with the
+    ' keyboard's focus ring, in Light, Dark and a contrast theme.
     <TestMethod>
     <DataRow(SystemColorMode.Classic, False)>
     <DataRow(SystemColorMode.Dark, False)>
@@ -70,27 +75,71 @@ Public Class DeadlineListTests
             Sub()
                 UiTheme.HighContrastOverride = contrast
                 Try
-                    Using host As New Form With {.StartPosition = FormStartPosition.Manual, .Location = New Point(-20000, -20000), .ShowInTaskbar = False}
-                        Dim surface As New Panel With {.Dock = DockStyle.Fill, .BackColor = UiTheme.CardBackground()}
+                    Using host As New Form With {.StartPosition = FormStartPosition.Manual, .Location = New Point(-20000, -20000), .ShowInTaskbar = False,
+                                                  .ClientSize = New Size(900, 260)}
+                        Dim list As New DeadlineList With {.Bounds = New Rectangle(0, 0, 900, 120), .AccessibleName = "Deadlines"}
+                        Dim surface As New Panel With {.Bounds = New Rectangle(0, 130, 900, 120), .BackColor = UiTheme.CardBackground()}
+                        host.Controls.Add(list)
                         host.Controls.Add(surface)
-                        Dim button As New ActionButton With {.Text = "Postpone...", .UseMnemonic = False, .Bounds = New Rectangle(10, 10, 110, 30)}
-                        Dim face As New FaceProbe With {.Text = "Postpone...", .Bounds = New Rectangle(10, 60, 110, 30)}
-                        surface.Controls.Add(button)
-                        surface.Controls.Add(face)
+                        Dim today As DateTime = DateTime.Today
+                        Dim row As DeadlineRow = DrawnRow(New DeadlineItem With {.Kind = DeadlineKind.Reminder, .Group = DeadlineGroup.Later, .Title = "Send draft", .ManuscriptTitle = "Beta", .DueDate = today.AddDays(20)}, today)
+                        list.SetEntries({DeadlineEntry.ForRow(row)})
                         host.Show()
                         Application.DoEvents()
 
-                        For Each role As ActionButtonRole In [Enum].GetValues(Of ActionButtonRole)()
-                            For Each enabled As Boolean In {True, False}
-                                button.Role = role
-                                button.Enabled = enabled
-                                face.Role = role
-                                face.Enabled = enabled
-                                Using expected As Bitmap = Snapshot(button), actual As Bitmap = Snapshot(face)
+                        ' A button for each part, at the size the list draws it.
+                        Dim references As New List(Of ActionButton)()
+                        Dim left As Integer = 10
+                        For part As Integer = 0 To row.MorePart
+                            Dim more As Boolean = part = row.MorePart
+                            Dim reference As New ActionButton With {
+                                .Text = If(more, "⋯", row.Buttons(part).Text),
+                                .Role = If(more, ActionButtonRole.Quiet, ActionButtonRole.Secondary),
+                                .UseMnemonic = False,
+                                .Bounds = New Rectangle(New Point(left, 10), list.ButtonBounds(row, part).Size)
+                            }
+                            surface.Controls.Add(reference)
+                            references.Add(reference)
+                            left += reference.Width + 10
+                        Next
+                        Application.DoEvents()
+
+                        ' The part of the list's picture where it drew a button,
+                        ' against that button's reference as it is drawn now.
+                        Dim compare As Action(Of String, Integer, Bitmap) =
+                            Sub(state, part, drawn)
+                                Using actual As Bitmap = drawn.Clone(list.ButtonBounds(row, part), drawn.PixelFormat), expected As Bitmap = Snapshot(references(part))
                                     Dim difference As String = FirstDifference(expected, actual)
-                                    If difference IsNot Nothing Then differences.Add(role.ToString() & If(enabled, " enabled", " disabled") & ": " & difference)
+                                    If difference IsNot Nothing Then differences.Add(state & ", " & references(part).Text & ": " & difference)
                                 End Using
-                            Next
+                            End Sub
+
+                        For Each enabled As Boolean In {True, False}
+                            list.Enabled = enabled
+                            references.ForEach(Sub(reference) reference.Enabled = enabled)
+                            Application.DoEvents()
+                            Using drawn As Bitmap = Snapshot(list)
+                                For part As Integer = 0 To row.MorePart
+                                    compare(If(enabled, "enabled", "disabled"), part, drawn)
+                                Next
+                            End Using
+                        Next
+                        list.Enabled = True
+                        references.ForEach(Sub(reference) reference.Enabled = True)
+
+                        ' Tab from the row to each of its buttons in turn, drawn
+                        ' with the focus ring; then the reference takes the focus.
+                        Assert.IsTrue(list.Focus())
+                        For part As Integer = 0 To row.MorePart
+                            GetType(DeadlineList).GetMethod("ProcessDialogKey", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(list, New Object() {Keys.Tab})
+                            Assert.AreEqual(part, list.FocusedPart, "Tab reaches each button in turn.")
+                            ShowFocusCues(list)
+                            Using drawn As Bitmap = Snapshot(list)
+                                Assert.IsTrue(references(part).Focus())
+                                ShowFocusCues(references(part))
+                                compare("with the focus ring", part, drawn)
+                            End Using
+                            Assert.IsTrue(list.Focus())
                         Next
 
                         host.Close()
@@ -1032,25 +1081,14 @@ Public Class DeadlineListTests
 
     End Class
 
-    ' A button face drawn by the shared painter, as the list draws one.
-    Private NotInheritable Class FaceProbe
-        Inherits Control
-
-        Public Sub New()
-            SetStyle(ControlStyles.UserPaint Or ControlStyles.AllPaintingInWmPaint Or ControlStyles.OptimizedDoubleBuffer Or ControlStyles.ResizeRedraw, True)
-        End Sub
-
-        <ComponentModel.DesignerSerializationVisibility(ComponentModel.DesignerSerializationVisibility.Hidden)>
-        Public Property Role As ActionButtonRole
-
-        Protected Overrides Sub OnPaint(e As PaintEventArgs)
-            e.Graphics.Clear(Parent.BackColor)
-            ActionButton.PaintFace(e.Graphics, New Rectangle(0, 0, Width, Height), Role, Text, Font,
-                                   TextFormatFlags.HorizontalCenter Or TextFormatFlags.VerticalCenter Or TextFormatFlags.SingleLine Or TextFormatFlags.EndEllipsis Or TextFormatFlags.NoPrefix,
-                                   False, False, False, Enabled, DeviceDpi)
-        End Sub
-
-    End Class
+    ' Focus cues on, as a key press turns them on: a window that has seen
+    ' only the mouse, as a test's has, hides them.
+    Private Shared Sub ShowFocusCues(control As Control)
+        Post(control, WM_UPDATEUISTATE, (UISF_HIDEFOCUS << 16) Or UIS_CLEAR, 0)
+        Application.DoEvents()
+        Assert.IsTrue(CBool(GetType(Control).GetProperty("ShowFocusCues", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(control)),
+                      control.GetType().Name & " shows focus cues.")
+    End Sub
 
     ' Each EVENT_OBJECT_FOCUS raised for the window, read back the way a
     ' screen reader reads it: AccessibleObjectFromEvent, then the name.
