@@ -28,7 +28,8 @@ Namespace Forms
         Private ReadOnly lblSelected As New Label()
         Private ReadOnly chkOrcid As New CheckBox()
         Private ReadOnly txtOrcid As New TextBox()
-        Private ReadOnly lblProgress As New Label()
+        ' Announced as it changes, without taking focus (#139).
+        Private ReadOnly lblProgress As New Label() With {.LiveSetting = Automation.AutomationLiveSetting.Polite}
         Private ReadOnly progressBar As New ProgressBar()
         Private ReadOnly btnPrimary As New ActionButton()
         Private ReadOnly btnCancel As New ActionButton()
@@ -119,6 +120,10 @@ Namespace Forms
 
             Controls.Add(root)
             AcceptButton = btnPrimary
+            ' Esc stops a check, or closes; a running check vetoes closing.
+            ' The button's own handler decides, so Stop never closes the window.
+            CancelButton = btnCancel
+            btnCancel.DialogResult = DialogResult.None
 
             ShowChoices(requested, defaultOrcid)
             UiPolish.ApplyDialog(Me)
@@ -375,6 +380,9 @@ Namespace Forms
             btnPrimary.Width = 90
             btnPrimary.Enabled = True
             btnCancel.Visible = False
+            ' Esc closes, as Close does, now Cancel is gone.
+            CancelButton = btnPrimary
+            btnPrimary.DialogResult = DialogResult.None
             lblIntro.Text = Summary(result, kept)
 
             Dim scroller As New Panel With {.Dock = DockStyle.Fill, .AutoScroll = True, .Margin = New Padding(0)}

@@ -21,7 +21,8 @@ Namespace Forms
 
         Private ReadOnly txtDoi As New TextBox()
         Private ReadOnly btnLookup As New Button()
-        Private ReadOnly lblStatus As New Label()
+        ' Announced as it changes, without taking focus (#139).
+        Private ReadOnly lblStatus As New Label() With {.LiveSetting = Automation.AutomationLiveSetting.Polite}
         Private ReadOnly txtPreview As New TextBox()
 
         Private ReadOnly chkDoi As New CheckBox()
@@ -139,6 +140,10 @@ Namespace Forms
             txtDoi.PlaceholderText =
                 "10.xxxx/... or https://doi.org/..."
 
+            ' Not the intro WinForms finds before it (#137).
+            txtDoi.AccessibleName =
+                "DOI"
+
             btnLookup.Text =
                 "Look Up"
 
@@ -185,6 +190,10 @@ Namespace Forms
 
             txtPreview.ScrollBars =
                 ScrollBars.Vertical
+
+            ' After Look Up, so no label names it (#137).
+            txtPreview.AccessibleName =
+                "Crossref metadata preview"
 
             txtPreview.Dock =
                 DockStyle.Fill

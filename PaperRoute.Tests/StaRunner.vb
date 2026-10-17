@@ -39,9 +39,9 @@ Friend NotInheritable Class StaRunner
     End Sub
 
 
-    ' Runs action on a new STA thread and waits for it. With a color mode,
-    ' the process is put in that mode for the action and back afterwards,
-    ' as the theme tests need.
+    ' Runs action on a new STA thread, with visual styles on as in the app,
+    ' and waits for it. With a color mode, the process is put in that mode
+    ' for the action and back afterwards, as the theme tests need.
     Public Shared Sub Run(
         action As Action,
         Optional timeout As TimeSpan? = Nothing,
@@ -64,13 +64,20 @@ Friend NotInheritable Class StaRunner
 
                 Try
 
-                    ' Application is touched only when a mode is asked for:
+                    ' Visual styles are on before the action creates a
+                    ' window, mode or no mode, as the app turns them on before
+                    ' its first. WinForms registers one window class per kind
+                    ' of control per process, from the comctl32 active when the
+                    ' first is created: a list shown without them left every
+                    ' later list a comctl32 5 list, which has no groups.
+                    Application.EnableVisualStyles()
+
+                    ' The color mode is read only when a mode is asked for:
                     ' read on a thread that showed no form, before the process
                     ' had shown one, it left the next thread's first form
                     ' hanging in creation.
                     If mode.HasValue Then
                         priorMode = Application.ColorMode
-                        Application.EnableVisualStyles()
                         Application.SetColorMode(mode.Value)
                     End If
 

@@ -1,6 +1,7 @@
 Imports System
 Imports System.Drawing
 Imports System.Windows.Forms
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Services
 
 Namespace Forms
@@ -56,6 +57,49 @@ Namespace Forms
         End Sub
 
 
+        ' A field's label with its help beside it (#137). The help control
+        ' is a tab stop between the label and the field, and WinForms stops
+        ' looking for a field's label at the first tab stop, so the field
+        ' is named for its label here, and the help control says whose help
+        ' it is. A check box names itself, so none is passed for one.
+        Public Shared Function LabelWithHelp(
+            label As Label,
+            helpText As String,
+            topPadding As Integer,
+            Optional field As Control = Nothing
+        ) As Control
+
+            Dim host As New FlowLayoutPanel With {
+                .Dock = DockStyle.Fill,
+                .AutoSize = True,
+                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                .FlowDirection = FlowDirection.LeftToRight,
+                .WrapContents = False,
+                .Margin = New Padding(0),
+                .Padding = New Padding(0, topPadding, 0, 0)
+            }
+
+            host.Controls.Add(
+                label
+            )
+
+            host.Controls.Add(
+                New ContextHelpControl(
+                    helpText
+                ) With {
+                    .AccessibleName = "Help: " & label.Text
+                }
+            )
+
+            If field IsNot Nothing Then
+                field.AccessibleName = label.Text
+            End If
+
+            Return host
+
+        End Function
+
+
         Protected Overrides Sub OnPaint(
             e As PaintEventArgs
         )
@@ -101,6 +145,18 @@ Namespace Forms
             End If
 
         End Sub
+
+
+        ' A screen reader presses it as a click does, and the help shows
+        ' (#139).
+        Protected Overrides Function CreateAccessibilityInstance() As AccessibleObject
+
+            Return New PressableAccessibleObject(
+                Me,
+                Sub() OnClick(EventArgs.Empty)
+            )
+
+        End Function
 
 
         Protected Overrides Sub OnClick(
@@ -153,7 +209,8 @@ Namespace Forms
             ' Focus alone should not open a tooltip. This prevents a help
             ' control that happens to receive initial dialog focus from
             ' covering the first field before the user asks for help.
-            ' Keyboard users can still press Enter, Space, or F1.
+            ' Keyboard users can still press Space or F1; in a dialog, Enter
+            ' presses the default button before it reaches this control.
             Invalidate()
 
         End Sub

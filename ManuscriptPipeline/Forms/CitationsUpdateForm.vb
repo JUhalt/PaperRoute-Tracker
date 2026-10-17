@@ -38,7 +38,8 @@ Namespace Forms
         Private ReadOnly chkLinked As New CheckBox()
         Private ReadOnly lvWorks As New GroupedListView()
         Private ReadOnly lblSummary As New Label()
-        Private ReadOnly lblStatus As New Label()
+        ' Announced as it changes, without taking focus (#139).
+        Private ReadOnly lblStatus As New Label() With {.LiveSetting = Automation.AutomationLiveSetting.Polite}
         Private ReadOnly btnPrimary As New Button()
         Private ReadOnly btnCancel As New Button()
         Private ReadOnly body As New Panel()

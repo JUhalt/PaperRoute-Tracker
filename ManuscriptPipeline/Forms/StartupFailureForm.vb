@@ -339,6 +339,8 @@ Namespace Forms
             txtDetails.Dock = DockStyle.Fill
             txtDetails.Multiline = True
             txtDetails.ReadOnly = True
+            ' Not the explanation WinForms finds before it (#137).
+            txtDetails.AccessibleName = "Technical details"
             txtDetails.ScrollBars = ScrollBars.Both
             txtDetails.WordWrap = False
             txtDetails.Font = New Font("Consolas", 9.5F)

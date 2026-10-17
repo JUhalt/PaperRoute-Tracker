@@ -402,6 +402,8 @@ Namespace Forms
             )
 
             lstLinks.Dock = DockStyle.Fill
+            ' A group's caption is not a label WinForms names a list by (#137).
+            lstLinks.AccessibleName = "Related web links"
 
             AddHandler lstLinks.DoubleClick,
                 AddressOf EditLink

@@ -35,7 +35,8 @@ Namespace Forms
         Private ReadOnly btnOpenFile As New Button()
         Private ReadOnly btnRecordFingerprint As New Button()
         Private ReadOnly btnCheckFiles As New Button()
-        Private ReadOnly lblIntegritySummary As New Label()
+        ' Announced as it changes, without taking focus (#139).
+        Private ReadOnly lblIntegritySummary As New Label() With {.LiveSetting = Automation.AutomationLiveSetting.Polite}
         ' File identifiers are unique within a packet, not across every packet.
         ' Keep observations attached to their exact working-copy file record.
         Private ReadOnly _integrityResults As New Dictionary(Of SubmissionPacketFile, PacketFileIntegrityResult)()
@@ -290,6 +291,9 @@ Namespace Forms
                 DockStyle.Fill
             lstPackets.IntegralHeight = False
             lstPackets.HorizontalScrollbar = True
+            ' Its own name, not "Show all packets", the link WinForms finds
+            ' before it (#137).
+            lstPackets.AccessibleName = "Submission packets"
 
             AddHandler lstPackets.SelectedIndexChanged,
                 AddressOf PacketSelectionChanged
