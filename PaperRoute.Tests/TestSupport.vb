@@ -108,6 +108,35 @@ Friend Module TestSupport
     End Sub
 
 
+    ' The Insights figures are worked out off the UI thread (#132): pumps
+    ' the window's messages until they are shown, and fails if they are
+    ' still being worked out at the limit.
+    Public Sub WaitForInsights(
+        window As ManuscriptPipeline.Form1,
+        limit As TimeSpan
+    )
+
+        Dim waited As System.Diagnostics.Stopwatch =
+            System.Diagnostics.Stopwatch.StartNew()
+
+        While window.InsightsCalculating AndAlso
+              waited.Elapsed < limit
+
+            System.Windows.Forms.Application.DoEvents()
+            System.Threading.Thread.Sleep(1)
+
+        End While
+
+        System.Windows.Forms.Application.DoEvents()
+
+        Assert.IsFalse(
+            window.InsightsCalculating,
+            "Insights finished calculating."
+        )
+
+    End Sub
+
+
     ' Puts backup.json in a backup archive in place of any there, as a
     ' newer PaperRoute or a damaged archive would have it (#115); Nothing
     ' leaves the archive without one, as PaperRoute 0.9.1 and earlier wrote.

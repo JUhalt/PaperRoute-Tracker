@@ -1992,13 +1992,7 @@ Public Class ManuscriptPageTests
         ' The Insights figures are worked out off the UI thread (#132); pumps
         ' until they are shown.
         Public Sub WaitForInsights()
-            Dim limit As System.Diagnostics.Stopwatch = System.Diagnostics.Stopwatch.StartNew()
-            While InsightsCalculating AndAlso limit.Elapsed < TimeSpan.FromSeconds(30)
-                Application.DoEvents()
-                Thread.Sleep(1)
-            End While
-            Application.DoEvents()
-            Assert.IsFalse(InsightsCalculating, "Insights finished calculating.")
+            TestSupport.WaitForInsights(Me, TimeSpan.FromSeconds(30))
         End Sub
 
         Public Sub Discard()
