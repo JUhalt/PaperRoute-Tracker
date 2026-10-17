@@ -310,7 +310,7 @@ Namespace Controls
             End If
 
             If _current >= 0 Then
-                ScrollIntoView(_stops(_current).Entry)
+                ScrollStopIntoView(_current)
                 NotifyFocus()
             End If
 
@@ -487,15 +487,31 @@ Namespace Controls
             Invalidate(bounds)
         End Sub
 
-        Private Sub ScrollIntoView(index As Integer)
-            Dim entry As DeadlineEntry = _entries(index)
+        ' Brings a stop into view as focusing a window brought that window
+        ' into view: a button by its own bounds, so a button already in view
+        ' never moves (and a click on it lands where it was pressed); a row or
+        ' the Done line by its whole entry.
+        Private Sub ScrollStopIntoView(index As Integer)
+            Dim spot As Spot = _stops(index)
+            If IsButton(spot) Then
+                Dim bounds As Rectangle = SpotBounds(spot)
+                ScrollIntoView(bounds.Top - AutoScrollPosition.Y, bounds.Height)
+            Else
+                Dim entry As DeadlineEntry = _entries(spot.Entry)
+                ScrollIntoView(entry.Top, entry.Height)
+            End If
+        End Sub
+
+        ' Scrolls as little as shows the span, in content coordinates, or its
+        ' top when it is taller than the list.
+        Private Sub ScrollIntoView(top As Integer, height As Integer)
             Dim offset As Integer = -AutoScrollPosition.Y
             Dim view As Integer = ClientSize.Height
             Dim target As Integer = offset
-            If entry.Top < offset Then
-                target = entry.Top
-            ElseIf entry.Top + entry.Height > offset + view Then
-                target = Math.Min(entry.Top, entry.Top + entry.Height - view)
+            If top < offset Then
+                target = top
+            ElseIf top + height > offset + view Then
+                target = Math.Min(top, top + height - view)
             End If
             If target <> offset Then AutoScrollPosition = New Point(0, target)
         End Sub
@@ -604,7 +620,7 @@ Namespace Controls
             _keyPressed = False
             If index >= 0 Then
                 InvalidateEntry(_stops(index).Entry)
-                ScrollIntoView(_stops(index).Entry)
+                ScrollStopIntoView(index)
                 InvalidateEntry(_stops(index).Entry)
                 NotifyFocus()
             End If
@@ -645,7 +661,7 @@ Namespace Controls
             MyBase.OnGotFocus(e)
             If _current < 0 AndAlso _stops.Count > 0 Then _current = 0
             If _current >= 0 Then
-                ScrollIntoView(_stops(_current).Entry)
+                ScrollStopIntoView(_current)
                 InvalidateEntry(_stops(_current).Entry)
             End If
             NotifyFocus()

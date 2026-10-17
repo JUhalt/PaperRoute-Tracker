@@ -631,6 +631,56 @@ Public Class DeadlineListTests
     End Sub
 
 
+    ' A click near the edge of a button on a row the list's lower edge cuts
+    ' off runs it once, whether the click focuses the list or moves the
+    ' keyboard within it: the list scrolls only as far as the button needs,
+    ' as focusing a button's own window did, so a button in view does not
+    ' move between the press and the release.
+    <TestMethod>
+    Public Sub DeadlinesClickOnAPartlyHiddenRowIsNotLost()
+
+        RunOnStaThread(
+            Sub()
+                Using board As New DeadlineBoard(_root)
+                    Dim library As List(Of Manuscript) = ManyReminders(60)
+                    board.Prepare(library)
+                    board.OpenDeadlines()
+                    board.SetPrompts(Function(item) DateTime.Today.AddDays(400), Function(question) True)
+                    Dim list As DeadlineList = board.List()
+                    Dim hidden As Integer = UiTheme.Px(10, list.DeviceDpi)
+                    board.Filter().Focus()
+
+                    For Each focused As Boolean In {False, True}
+                        Dim label As String = If(focused, "With the list focused: ", "With the filter focused: ")
+                        Assert.AreEqual(focused, list.Focused, label & "where the keyboard starts.")
+
+                        ' The first row that reaches 10 pixels below the list's
+                        ' edge, scrolled so that it does.
+                        list.AutoScrollPosition = Point.Empty
+                        Dim view As Integer = list.ClientSize.Height
+                        Dim target As DeadlineRow = list.Rows.First(Function(row) list.ButtonBounds(row, DeadlineRow.ItemPart).Bottom > view + hidden)
+                        Dim offset As Integer = list.ButtonBounds(target, DeadlineRow.ItemPart).Bottom - hidden - view
+                        list.AutoScrollPosition = New Point(0, offset)
+                        Application.DoEvents()
+                        Assert.AreEqual(view + hidden, list.ButtonBounds(target, DeadlineRow.ItemPart).Bottom, label & "the row is cut off by 10 pixels.")
+                        Dim postpone As Rectangle = list.ButtonBounds(target, 1)
+                        Assert.AreEqual("Postpone...", target.Buttons(1).Text)
+                        Assert.IsTrue(list.ClientRectangle.Contains(postpone), label & "its Postpone... is in view: " & postpone.ToString())
+
+                        Dim saves As Integer = board.SaveCount
+                        Dim reminder As ManuscriptReminder = library.SelectMany(Function(manuscript) manuscript.Reminders).Single(Function(candidate) candidate.Title = target.Item.Title)
+                        Click(list, New Point(postpone.Left + postpone.Width \ 2, postpone.Bottom - 2))
+                        Assert.AreEqual(saves + 1, board.SaveCount, label & "one click, one action.")
+                        Assert.AreEqual(DateTime.Today.AddDays(400), reminder.DueDate.Date, label & "the click postponed the row it was on.")
+                    Next
+
+                    board.Close()
+                End Using
+            End Sub)
+
+    End Sub
+
+
     ' ---------------------------------------------------------------
     ' Painting
     ' ---------------------------------------------------------------
