@@ -57,21 +57,26 @@ Friend NotInheritable Class ViewCatalog
         {GetType(AddDecisionForm), Function(root) New AddDecisionForm()},
         {GetType(AddManuscriptForm), Function(root) New AddManuscriptForm()},
         {GetType(AddSubmissionForm), Function(root) New AddSubmissionForm()},
+        {GetType(AffiliationEditForm), Function(root) New AffiliationEditForm(Nothing)},
         {GetType(ApiKeyForm), Function(root) ApiKeyForm.ForAssistant(ProtectedKeyStore.Anthropic)},
         {GetType(OpenAlexKeyForm), Function(root) New OpenAlexKeyForm()},
         {GetType(AssistantConsentForm), Function(root) New AssistantConsentForm(ResponseRequest(), ClaudeConnection())},
         {GetType(AssistantDraftForm), Function(root) New AssistantDraftForm(ResponseRequest(), String.Empty)},
+        {GetType(AuthorEditForm), Function(root) New AuthorEditForm(Nothing)},
         {GetType(AuthorInstructionsForm), Function(root) New AuthorInstructionsForm("Fictional Open Psychology", String.Empty, {}, {})},
         {GetType(AuthorLibraryForm), Function(root) New AuthorLibraryForm(New List(Of Manuscript)())},
         {GetType(BibliographyExportSelectionForm), Function(root) New BibliographyExportSelectionForm(CreateRepresentativeLibrary(), "BibTeX")},
         {GetType(BibliographyImportForm), Function(root) New BibliographyImportForm(BibTeXService.Parse(SampleBibTeX), CreateRepresentativeLibrary())},
         {GetType(CitationsUpdateForm), Function(root) New CitationsUpdateForm(Carberry, New List(Of (Doi As String, Title As String))(), Nothing, New NoCitations())},
         {GetType(CoverLetterForm), Function(root) New CoverLetterForm("Example: open materials", "Fictional Open Psychology", "Journal article", {"open science"}, "An abstract.")},
-        {GetType(DeadlineDateForm), Function(root) New DeadlineDateForm("Set the revision deadline", "Revise and resubmit  ·  Active Study", "The deadline is saved on the latest editorial decision.", "Set to", Nothing, DateTime.Today)},
+        {GetType(CrossrefLookupForm), Function(root) New CrossrefLookupForm(Routed(), AuthorLibrary())},
+        {GetType(DeadlineDateForm), Function(root) New DeadlineDateForm("Postpone the follow-up", "Follow up  ·  Active Study", "This changes the follow-up date on the journal submission.", "Postpone to", DateTime.Today.AddDays(7), DateTime.Today)},
         {GetType(DecisionLetterForm), Function(root) New DecisionLetterForm(DecisionLetterMode.NewDecision, New JournalSubmission())},
         {GetType(DeleteManuscriptForm), Function(root) New DeleteManuscriptForm("Active Study")},
         {GetType(DiagnosticsForm), Function(root) New DiagnosticsForm(New AppSettings())},
         {GetType(EditManuscriptForm), Function(root) Editor(root)},
+        {GetType(ExcelMappingForm), Function(root) New ExcelMappingForm(Workbook(root))},
+        {GetType(ExternalLinkEditForm), Function(root) New ExternalLinkEditForm(Nothing)},
         {GetType(FillBlanksForm), Function(root) New FillBlanksForm(WithDoi(), New NoPublications(), Function() True)},
         {GetType(HelpForm), Function(root) New HelpForm()},
         {GetType(JournalCandidateForm), Function(root) New JournalCandidateForm(New JournalCandidate With {.JournalName = "PLOS ONE"}, {"PLOS ONE"}, Function(name) "No submissions yet.")},
@@ -80,15 +85,18 @@ Friend NotInheritable Class ViewCatalog
         {GetType(JournalFactsForm), Function(root) New JournalFactsForm(Journal(), New NoFacts())},
         {GetType(JournalLibraryForm), Function(root) New JournalLibraryForm(New List(Of Manuscript)())},
         {GetType(JournalMetricForm), Function(root) New JournalMetricForm()},
+        {GetType(JournalPickerForm), Function(root) New JournalPickerForm(AuthorLibrary())},
         {GetType(JournalSuggestionsForm), Function(root) New JournalSuggestionsForm("Anchoring", {"anchoring effects"}, New NoSuggestions(), Nothing, Nothing, DateTime.Today)},
         {GetType(ManuscriptAuthorForm), Function(root) New ManuscriptAuthorForm(AuthorsWithAffiliations(), Nothing, Array.Empty(Of Guid)())},
+        {GetType(ManuscriptLinksForm), Function(root) New ManuscriptLinksForm(Routed(), CreateRepresentativeLibrary())},
         {GetType(ManuscriptReadinessForm), Function(root) New ManuscriptReadinessForm(WithPackets(), New AuthorLibraryData())},
-        {GetType(ManuscriptRouteViewForm), Function(root) New ManuscriptRouteViewForm(Routed())},
+        {GetType(ManuscriptRouteViewForm), Function(root) New ManuscriptRouteViewForm(InRevision())},
         {GetType(ManuscriptVersionEditForm), Function(root) VersionEditor()},
-        {GetType(OrcidLookupForm), Function(root) New OrcidLookupForm(New AuthorRecord With {.GivenName = "Josiah", .FamilyName = "Carberry", .Orcid = Carberry})},
+        {GetType(MarkPublishedForm), Function(root) New MarkPublishedForm(Routed(), Found(), DateTime.Today)},
+        {GetType(OrcidLookupForm), Function(root) New OrcidLookupForm(AuthorLibrary().Authors(0))},
         {GetType(PacketExportForm), Function(root) PacketExport(root)},
         {GetType(PublicationCheckForm), Function(root) New PublicationCheckForm(CreateRepresentativeLibrary(), Nothing, String.Empty, New NoPublications(), Function() True, DateTime.Today)},
-        {GetType(PublicationExportForm), Function(root) New PublicationExportForm(CreateRepresentativeLibrary(), AuthorsWithAffiliations())},
+        {GetType(PublicationExportForm), Function(root) New PublicationExportForm(CreateRepresentativeLibrary(), AuthorLibrary())},
         {GetType(ReadinessItemNotesForm), Function(root) New ReadinessItemNotesForm(WithPackets().ReadinessProfiles(0).Items(0))},
         {GetType(ReminderEditForm), Function(root) New ReminderEditForm(CreateRepresentativeLibrary())},
         {GetType(ReportForm), Function(root) New ReportForm("Pipeline Report", "report.html", CreateRepresentativeLibrary(), Function(chosen, deadlines) ReportService.PipelineReport(chosen, DateTime.Today))},
@@ -99,9 +107,11 @@ Friend NotInheritable Class ViewCatalog
         {GetType(StartupFailureForm), Function(root) StartupWindow(root)},
         {GetType(SubmissionDetailsForm), Function(root) Details()},
         {GetType(SubmissionPacketEditForm), Function(root) PacketEditor()},
+        {GetType(SubmissionPacketFileEditForm), Function(root) PacketFileEditor()},
         {GetType(SubmissionPacketVaultForm), Function(root) New SubmissionPacketVaultForm(WithPackets())},
         {GetType(TitlePageImportForm), Function(root) New TitlePageImportForm(New AuthorLibraryData(), "A preregistered replication of anchoring effects")},
         {GetType(UnexpectedErrorForm), Function(root) New UnexpectedErrorForm(New InvalidOperationException("The route map could not be drawn."), True, Path.Combine(root, "logs"))},
+        {GetType(UpdateProgressForm), Function(root) New UpdateProgressForm("0.9.2")},
         {GetType(UpdatePromptForm), Function(root) New UpdatePromptForm("0.9.1", "0.9.2", "Stable", "Notes & fixes")}
     }
 
@@ -144,29 +154,9 @@ Friend NotInheritable Class ViewCatalog
 
     ' Forms no test builds yet, each with what its factory will need. Each
     ' sweep shrinks this list; the catalog test fails when an entry is stale.
-    Public Shared ReadOnly NotYet As (View As Type, Reason As String)() = {
-        (GetType(AffiliationEditForm), "Needs an AffiliationRecord; no test builds it yet."),
-        (GetType(AuthorEditForm), "Needs an AuthorRecord; no test builds it yet."),
-        (GetType(CrossrefLookupForm), "Needs a manuscript and an author library; no test builds it yet."),
-        (GetType(ExcelMappingForm), "Needs an .xlsx file under the root; no test builds it yet."),
-        (GetType(ExternalLinkEditForm), "Needs a ManuscriptExternalLink; no test builds it yet."),
-        (GetType(JournalPickerForm), "Needs an AuthorLibraryData; no test builds it yet."),
-        (GetType(ManuscriptLinksForm), "Needs a manuscript; opens the author library from a field initialiser; no test builds it yet."),
-        (GetType(MarkPublishedForm), "Needs a manuscript, a PublicationMatch and a date; no test builds it yet."),
-        (GetType(SubmissionPacketFileEditForm), "Needs a packet and a file record; no test builds it yet."),
-        (GetType(UpdateProgressForm), "Needs a version string; no test builds it yet.")
-    }
-
-
-    ' Every factory, by name: the dialogs, the hosted views and the stages.
-    Public Shared Function All() As List(Of (Name As String, Build As Func(Of String, Form)))
-
-        Return Dialogs.Select(Function(entry) (entry.Key.Name, entry.Value)).
-            Concat(Hosted.Select(Function(entry) (entry.Name, entry.Build))).
-            Concat(Stages.Select(Function(entry) (entry.Name, entry.Build))).
-            ToList()
-
-    End Function
+    ' The accessibility sweeps (#136, #137) needed every view, so it is
+    ' empty; a new form without a factory goes here with its reason.
+    Public Shared ReadOnly NotYet As (View As Type, Reason As String)() = {}
 
 
     ' Every view in the app: the non-abstract Form subclasses of its assembly.
@@ -180,13 +170,15 @@ Friend NotInheritable Class ViewCatalog
     End Function
 
 
-    ' The views with neither a factory nor a place on the not-yet list.
+    ' The views with neither a factory nor a place on the not-yet list. A
+    ' test may pass a not-yet list of its own, as the real one is empty.
     Public Shared Function Unlisted(
-        views As IEnumerable(Of Type)
+        views As IEnumerable(Of Type),
+        Optional notYetViews As IEnumerable(Of Type) = Nothing
     ) As List(Of Type)
 
         Dim listed As New HashSet(Of Type)(
-            Dialogs.Keys.Concat(NotYet.Select(Function(entry) entry.View))
+            Dialogs.Keys.Concat(If(notYetViews, NotYet.Select(Function(entry) entry.View)))
         )
 
         Return views.Where(Function(view) Not listed.Contains(view)).ToList()
@@ -209,64 +201,173 @@ Friend NotInheritable Class ViewCatalog
     End Function
 
 
-    ' Builds each view on a temporary root of its own, in the color mode,
-    ' shows it offscreen if its factory did not, styles it once open, as
-    ' the app's idle hook styles every window but the main one
-    ' (UiPolish.InstallGlobalDialogStyling), and hands it to the check by
-    ' name with the findings so far. Then the view and anything it left
-    ' open are closed. What a view or its check throws, and a view that
-    ' asked for the default data root, are findings too, so every view
-    ' that fails is named.
+    ' Every view a sweep runs over: the dialogs, then the hosted
+    ' presentations and the main window's pages.
+    Public Shared Function AllViews() As List(Of (Name As String, Build As Func(Of String, Form)))
+
+        Return Dialogs.Select(Function(entry) (entry.Key.Name, entry.Value)).
+            Concat(Hosted.Select(Function(entry) (entry.Name, entry.Build))).
+            ToList()
+
+    End Function
+
+
+    ' Every factory, by name: every view, then the stages.
+    Public Shared Function AllViewsAndStages() As List(Of (Name As String, Build As Func(Of String, Form)))
+
+        Return AllViews().
+            Concat(Stages.Select(Function(entry) (entry.Name, entry.Build))).
+            ToList()
+
+    End Function
+
+
+    ' Builds each view on a temporary root of its own and shows it, styles
+    ' it, hands it to inspect and closes it on the shared runner, in the
+    ' color mode if one is given (see ShowAndClose). Returns a line for
+    ' every view that failed, or that asked for the default data root, so
+    ' a sweep names them all, not just the first.
     Public Shared Function ShowEach(
         views As IEnumerable(Of (Name As String, Build As Func(Of String, Form))),
-        mode As SystemColorMode,
-        check As Action(Of String, Form, List(Of String))
+        Optional inspect As Action(Of String, Form) = Nothing,
+        Optional mode As SystemColorMode? = Nothing
     ) As List(Of String)
 
-        Dim findings As New List(Of String)()
+        Dim failures As New List(Of String)()
 
         For Each view In views
 
-            Dim root As String = CreateTemporaryRoot()
-            StorageEnvironment.RootOverride = root
-            StorageEnvironment.DefaultRootUses = 0
+            Dim root As String =
+                CreateTemporaryRoot()
+
+            StorageEnvironment.RootOverride =
+                root
+
+            StorageEnvironment.DefaultRootUses =
+                0
 
             Try
 
-                StaRunner.Run(
-                    Sub()
-                        Try
-                            Using window As Form = view.Build(root)
-                                If Not window.Visible Then Shown(window)
-                                If Not TypeOf window Is Form1 Then UiPolish.ApplyDialog(window)
-                                Application.DoEvents()
-                                check(view.Name, window, findings)
-                            End Using
-                        Finally
-                            ' A view that fails after it showed is closed too.
-                            For Each left As Form In StaRunner.OpenFormsOnThisThread()
-                                left.Dispose()
-                            Next
-                        End Try
-                    End Sub,
-                    mode:=mode)
+                ShowAndClose(
+                    view.Name,
+                    Function() view.Build(root),
+                    inspect,
+                    mode
+                )
 
-                If StorageEnvironment.DefaultRootUses <> 0 Then
-                    findings.Add(view.Name & " asked for the default data root.")
-                End If
+                ' A guard that cannot fail while RootOverride stands: every
+                ' default root resolves through ResolveStorageRoot, so the
+                ' override is what keeps the view off the user's profile. This
+                ' catches only a view that clears the override as it builds;
+                ' TheGuardCountsAnAnswerFromTheDefaultRoot proves the count.
+                Assert.AreEqual(
+                    0,
+                    StorageEnvironment.DefaultRootUses,
+                    view.Name & " asked for the default data root."
+                )
 
             Catch ex As Exception
-                findings.Add(view.Name & ": " & ex.Message)
+
+                failures.Add(view.Name & ": " & ex.Message)
+
             Finally
-                StorageEnvironment.RootOverride = Nothing
-                DeleteTemporaryRoot(root)
+
+                StorageEnvironment.RootOverride =
+                    Nothing
+
+                DeleteTemporaryRoot(
+                    root
+                )
+
             End Try
 
         Next
 
-        Return findings
+        Return failures
 
     End Function
+
+
+    ' Builds the view and shows it offscreen if its factory did not, then
+    ' styles it once open, as the app's idle hook styles every window but
+    ' the main one (UiPolish.InstallGlobalDialogStyling), hands it to
+    ' inspect and closes it, on the shared runner and in the color mode if
+    ' one is given. Anything the view left open is closed too.
+    Public Shared Sub ShowAndClose(
+        name As String,
+        build As Func(Of Form),
+        Optional inspect As Action(Of String, Form) = Nothing,
+        Optional mode As SystemColorMode? = Nothing
+    )
+
+        StaRunner.Run(
+            Sub()
+
+                Try
+
+                    Using shown As Form = build()
+
+                        ShowOffscreen(shown)
+
+                        Assert.IsTrue(
+                            shown.Visible,
+                            name & " shows."
+                        )
+
+                        If Not TypeOf shown Is Form1 Then
+                            UiPolish.ApplyDialog(shown)
+                            Application.DoEvents()
+                        End If
+
+                        inspect?.Invoke(name, shown)
+
+                        shown.Close()
+
+                    End Using
+
+                    Assert.AreEqual(
+                        0,
+                        StaRunner.OpenFormsOnThisThread().Count,
+                        name & " leaves no form open."
+                    )
+
+                Finally
+
+                    ' A view that failed after it showed is closed too, so it
+                    ' fails only itself.
+                    For Each left As Form In StaRunner.OpenFormsOnThisThread()
+                        left.Dispose()
+                    Next
+
+                End Try
+
+            End Sub,
+            mode:=mode
+        )
+
+    End Sub
+
+
+    ' A view the factory may already have shown, such as a page of the main
+    ' window, is left as it is.
+    Public Shared Sub ShowOffscreen(
+        form As Form
+    )
+
+        If form.Visible Then
+            Return
+        End If
+
+        form.StartPosition = FormStartPosition.Manual
+        form.Location = New Point(-20000, -20000)
+        form.ShowInTaskbar = False
+        form.Show()
+
+        ' A window that centers itself when shown goes back offscreen.
+        form.Location = New Point(-20000, -20000)
+        Application.DoEvents()
+
+    End Sub
 
 
     ' ---------------------------------------------------------------
@@ -280,6 +381,25 @@ Friend NotInheritable Class ViewCatalog
     ' submission and its revision decision.
     Private Shared Function Routed() As Manuscript
         Return CreateRepresentativeLibrary()(0)
+    End Function
+
+
+    ' The study in revision since its decision, with the revised version
+    ' current, so Route View marks the current state and the current
+    ' version on the decision's waypoint, each with its help.
+    Private Shared Function InRevision() As Manuscript
+
+        Dim manuscript As Manuscript = Routed()
+        Dim submission As JournalSubmission = manuscript.Submissions(0)
+        Dim decision As EditorialDecisionEvent = submission.Decisions(0)
+        manuscript.CurrentStage = PaperStage.Revision
+        manuscript.StageEnteredDate = decision.DecisionDate
+
+        Dim version As New ManuscriptVersion With {.Label = "Revised manuscript", .SubmissionId = submission.Id, .DecisionId = decision.Id}
+        manuscript.Versions.Add(version)
+        manuscript.CurrentVersionId = version.Id
+        Return manuscript
+
     End Function
 
 
@@ -304,6 +424,39 @@ Friend NotInheritable Class ViewCatalog
 
     Private Shared Function Journal() As JournalRecord
         Return New JournalRecord With {.Name = "Fictional Journal", .SubmissionPortalUrl = "https://journal.example.invalid/submit"}
+    End Function
+
+
+    ' A reusable author, affiliation and journal, as the author library
+    ' holds them. Josiah Carberry is ORCID's own test record.
+    Private Shared Function AuthorLibrary() As AuthorLibraryData
+        Dim library As New AuthorLibraryData()
+        library.Affiliations.Add(New AffiliationRecord With {.Institution = "Example University", .Department = "Psychology", .Country = "Canada"})
+        library.Authors.Add(New AuthorRecord With {.GivenName = "Josiah", .FamilyName = "Carberry", .Orcid = Carberry})
+        library.Journals.Add(Journal())
+        Return library
+    End Function
+
+
+    ' A possible publication of the manuscript under review.
+    Private Shared Function Found() As PublicationMatch
+        Return New PublicationMatch With {.Doi = "10.5555/example.active", .Title = "Active Study", .Journal = "Journal of Example Studies", .PublishedDate = New DateTime(2026, 9, 1)}
+    End Function
+
+
+    ' A workbook no importer recognises, under the root, so Excel import
+    ' asks for its columns.
+    Private Shared Function Workbook(root As String) As String
+        Dim workbookPath As String = Path.Combine(root, "tracker.xlsx")
+        Using book As New ClosedXML.Excel.XLWorkbook()
+            Dim sheet = book.Worksheets.Add("My Tracker")
+            sheet.Cell("A1").Value = "Project Name"
+            sheet.Cell("B1").Value = "Outlet"
+            sheet.Cell("A2").Value = "Mapped Study"
+            sheet.Cell("B2").Value = "Journal of Mapping"
+            book.SaveAs(workbookPath)
+        End Using
+        Return workbookPath
     End Function
 
 
@@ -336,6 +489,12 @@ Friend NotInheritable Class ViewCatalog
     Private Shared Function PacketEditor() As SubmissionPacketEditForm
         Dim manuscript As Manuscript = WithPackets()
         Return New SubmissionPacketEditForm(manuscript, manuscript.SubmissionPackets(0))
+    End Function
+
+
+    Private Shared Function PacketFileEditor() As SubmissionPacketFileEditForm
+        Dim packet As SubmissionPacket = WithPackets().SubmissionPackets(0)
+        Return New SubmissionPacketFileEditForm(packet, packet.Files(0))
     End Function
 
 
@@ -394,11 +553,12 @@ Friend NotInheritable Class ViewCatalog
         "@article{whitfield2025, title={A preregistered replication of anchoring effects}, author={Whitfield, Dana and Okafor, Rui}, " &
         "journal={Fictional Journal of Psychology}, year={2025}, doi={10.5555/anchoring.2025}}"
 
-    Private Const PublishedDoi As String = "10.5555/published.study"
+    Private Const PublishedDoi As String = "10.5555/example.published"
 
 
-    ' The representative library, its published study with a DOI and its
-    ' journal, volume, pages and abstract still blank.
+    ' The representative library with a DOI on its published study, so
+    ' Fill Blanks has a manuscript to offer, with its journal, volume,
+    ' pages and abstract still blank.
     Private Shared Function WithDoi() As List(Of Manuscript)
         Dim library As List(Of Manuscript) = CreateRepresentativeLibrary()
         library(1).Metadata.Doi = PublishedDoi
@@ -406,6 +566,8 @@ Friend NotInheritable Class ViewCatalog
     End Function
 
 
+    ' The researcher and two affiliations, so the manuscript's author
+    ' window lists more than one affiliation to check.
     Private Shared Function AuthorsWithAffiliations() As AuthorLibraryData
         Dim library As New AuthorLibraryData()
         library.Affiliations.Add(New AffiliationRecord With {.Institution = "Blue Mountain University", .Department = "Department of Psychology"})
@@ -536,7 +698,11 @@ Friend NotInheritable Class ViewCatalog
         board.citationStoreFactory = Function() store
         board.Prepare(CreateRepresentativeLibrary())
         board.NavigateTo(Form1.WorkspacePage.Insights)
+        ' The Insights figures are worked out off the UI thread (#132), on
+        ' the page and again on the tab.
+        TestSupport.WaitForInsights(board, TimeSpan.FromSeconds(30))
         board.ShowCitations()
+        TestSupport.WaitForInsights(board, TimeSpan.FromSeconds(30))
         Dim action As String = If(saved, "Update from OpenAlex...", "Open Authors && Affiliations")
         Return Reached(board, Descendants(board).OfType(Of Button)().Any(Function(button) button.Visible AndAlso button.Text = action), "does not show " & action)
     End Function
@@ -566,12 +732,7 @@ Friend NotInheritable Class ViewCatalog
 
     ' Shows a dialog offscreen, so a step that needs its window can run.
     Private Shared Function Shown(Of T As Form)(dialog As T) As T
-        dialog.StartPosition = FormStartPosition.Manual
-        dialog.Location = New Point(-20000, -20000)
-        dialog.ShowInTaskbar = False
-        dialog.Show()
-        dialog.Location = New Point(-20000, -20000)
-        Application.DoEvents()
+        ShowOffscreen(dialog)
         Return dialog
     End Function
 
@@ -622,6 +783,9 @@ Friend NotInheritable Class ViewCatalog
         Dim board As CatalogBoard = BoardOn(CreateRepresentativeLibrary())
         board.NavigateTo(target)
         Application.DoEvents()
+        ' The Insights figures are worked out off the UI thread (#132): the
+        ' page is listed with them shown, not while it says Calculating.
+        TestSupport.WaitForInsights(board, TimeSpan.FromSeconds(30))
         Return board
     End Function
 
@@ -878,14 +1042,15 @@ Public Class ViewCatalogTests
 
     ' The listing has teeth: a Form subclass known to neither list is
     ' reported, as an app form without a factory would be. Beside it are
-    ' one form from each list, HelpForm with a factory and
-    ' AffiliationEditForm on the not-yet list, and neither is reported.
+    ' one form from each list, HelpForm with a factory and a probe form on
+    ' a not-yet list of the test's own (the real one is empty now), and
+    ' neither is reported.
     <TestMethod>
     Public Sub AFormWithNoFactoryAndNoReasonIsReported()
 
         CollectionAssert.AreEqual(
             {GetType(UnlistedProbeForm)},
-            ViewCatalog.Unlisted({GetType(UnlistedProbeForm), GetType(AffiliationEditForm), GetType(HelpForm)})
+            ViewCatalog.Unlisted({GetType(UnlistedProbeForm), GetType(NotYetProbeForm), GetType(HelpForm)}, {GetType(NotYetProbeForm)})
         )
 
     End Sub
@@ -893,61 +1058,12 @@ Public Class ViewCatalogTests
 
     ' Every factory builds and shows its view, closes it, and never asks
     ' for the default data root: all of its storage resolves under a
-    ' temporary root of its own.
+    ' temporary root of its own. The stages are factories too.
     <TestMethod>
     Public Sub EveryFactoryBuildsItsViewOnIsolatedStorage()
 
-        Dim failures As New List(Of String)()
-
-        Dim views As IEnumerable(Of (Name As String, Build As Func(Of String, Form))) =
-            ViewCatalog.All()
-
-        For Each view In views
-
-            Dim root As String =
-                CreateTemporaryRoot()
-
-            StorageEnvironment.RootOverride =
-                root
-
-            StorageEnvironment.DefaultRootUses =
-                0
-
-            Try
-
-                ShowAndClose(
-                    view.Name,
-                    Function() view.Build(root)
-                )
-
-                ' A guard that cannot fail while RootOverride stands: every
-                ' default root resolves through ResolveStorageRoot, so the
-                ' override is what keeps the view off the user's profile. This
-                ' catches only a view that clears the override as it builds;
-                ' TheGuardCountsAnAnswerFromTheDefaultRoot proves the count.
-                Assert.AreEqual(
-                    0,
-                    StorageEnvironment.DefaultRootUses,
-                    view.Name & " asked for the default data root."
-                )
-
-            Catch ex As Exception
-
-                ' Every failing view is named, not just the first.
-                failures.Add(view.Name & ": " & ex.Message)
-
-            Finally
-
-                StorageEnvironment.RootOverride =
-                    Nothing
-
-                DeleteTemporaryRoot(
-                    root
-                )
-
-            End Try
-
-        Next
+        Dim failures As List(Of String) =
+            ViewCatalog.ShowEach(ViewCatalog.AllViewsAndStages())
 
         Assert.AreEqual(
             0,
@@ -971,7 +1087,7 @@ Public Class ViewCatalogTests
         Dim failure As InvalidOperationException =
             Assert.ThrowsExactly(Of InvalidOperationException)(
                 Sub()
-                    ShowAndClose(
+                    ViewCatalog.ShowAndClose(
                         "The probe",
                         Function()
                             Dim probe As New Form With {
@@ -1070,73 +1186,14 @@ Public Class ViewCatalogTests
     End Function
 
 
-    ' Builds the view, shows it and closes it on the shared runner.
-    Private Shared Sub ShowAndClose(
-        name As String,
-        build As Func(Of Form)
-    )
-
-        StaRunner.Run(
-            Sub()
-
-                Try
-
-                    Using shown As Form = build()
-
-                        ShowOffscreen(shown)
-
-                        Assert.IsTrue(
-                            shown.Visible,
-                            name & " shows."
-                        )
-
-                        shown.Close()
-
-                    End Using
-
-                    Assert.AreEqual(
-                        0,
-                        StaRunner.OpenFormsOnThisThread().Count,
-                        name & " leaves no form open."
-                    )
-
-                Finally
-
-                    ' A view that failed after it showed is closed too, so it
-                    ' fails only itself.
-                    For Each left As Form In StaRunner.OpenFormsOnThisThread()
-                        left.Dispose()
-                    Next
-
-                End Try
-
-            End Sub
-        )
-
-    End Sub
-
-
-    ' A view the factory may already have shown, such as a page of the main
-    ' window, is left as it is.
-    Private Shared Sub ShowOffscreen(
-        form As Form
-    )
-
-        If form.Visible Then
-            Return
-        End If
-
-        form.StartPosition = FormStartPosition.Manual
-        form.Location = New Point(-20000, -20000)
-        form.ShowInTaskbar = False
-        form.Show()
-        Application.DoEvents()
-
-    End Sub
-
-
     ' A Form subclass of the test assembly, so on no list.
     Private NotInheritable Class UnlistedProbeForm
+        Inherits Form
+    End Class
+
+
+    ' Another, which the listing test puts on a not-yet list of its own.
+    Private NotInheritable Class NotYetProbeForm
         Inherits Form
     End Class
 

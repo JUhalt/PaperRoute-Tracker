@@ -67,7 +67,8 @@ Namespace Forms
         Private ReadOnly chkAbstract As New CheckBox()
         Private ReadOnly lblStrongWarning As New Label()
         Private ReadOnly chkAcknowledge As New CheckBox()
-        Private ReadOnly lblStatus As New Label()
+        ' Announced as it changes, without taking focus (#139).
+        Private ReadOnly lblStatus As New Label() With {.LiveSetting = Automation.AutomationLiveSetting.Polite}
         Private ReadOnly btnExport As New ActionButton()
         Private ReadOnly btnCancel As New ActionButton()
 

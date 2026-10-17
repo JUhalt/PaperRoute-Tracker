@@ -47,6 +47,99 @@ Public Class WorkflowThemeKeyboardSmokeTests
 
     End Sub
 
+    ' Under a Windows contrast theme every color the app chooses for itself
+    ' is one of the user's system colors, and the Dark palette is never
+    ' picked, even when the theme's window color is dark (#138). Tests
+    ' cannot switch the theme, so the seam stands in for it.
+    <TestMethod>
+    <DataRow(SystemColorMode.Classic)>
+    <DataRow(SystemColorMode.Dark)>
+    Public Sub EveryToken_IsASystemColorUnderAContrastTheme(mode As SystemColorMode)
+
+        RunWithColorMode(mode,
+            Sub()
+                UiTheme.HighContrastOverride = True
+                Try
+                    Assert.IsFalse(UiTheme.IsDark(), "A contrast theme never picks the Dark palette.")
+                    For Each token In ThemeTokens()
+                        Dim value As Color = token.Value()
+                        Assert.IsTrue(value.IsSystemColor, $"{token.Name} is {value} under a contrast theme, not a system color.")
+                    Next
+                Finally
+                    UiTheme.HighContrastOverride = Nothing
+                End Try
+            End Sub)
+
+    End Sub
+
+    ' Without a contrast theme every token is the color it was before #138,
+    ' in Light and in Dark. A guard: the colors were recorded from the code
+    ' before #138, which matches them.
+    <TestMethod>
+    <DataRow(SystemColorMode.Classic)>
+    <DataRow(SystemColorMode.Dark)>
+    Public Sub EveryToken_IsUnchangedWithoutAContrastTheme(mode As SystemColorMode)
+
+        RunWithColorMode(mode,
+            Sub()
+                UiTheme.HighContrastOverride = False
+                Try
+                    Dim column As Integer = If(mode = SystemColorMode.Dark, 2, 1)
+                    Dim before As Dictionary(Of String, String) = TokensBefore.Select(Function(row) row.Split(" "c)).ToDictionary(Function(row) row(0), Function(row) row(column))
+                    Dim tokens = ThemeTokens()
+                    CollectionAssert.AreEquivalent(before.Keys.ToList(), tokens.Select(Function(token) token.Name).ToList(), "Every token has its recorded color.")
+                    For Each token In tokens
+                        Dim value As Color = token.Value()
+                        If before(token.Name) = "system" Then
+                            Assert.AreEqual(SystemColors.ControlText, value, $"{token.Name} in {mode}")
+                        Else
+                            Assert.AreEqual("FF" & before(token.Name), value.ToArgb().ToString("X8"), $"{token.Name} in {mode}")
+                            Assert.IsFalse(value.IsSystemColor, $"{token.Name} in {mode}")
+                        End If
+                    Next
+                Finally
+                    UiTheme.HighContrastOverride = Nothing
+                End Try
+            End Sub)
+
+    End Sub
+
+    ' Time with the journal, time with the author, production, and time not
+    ' recorded can be told apart without their colors, in greyscale or by a
+    ' reader who cannot tell the hues apart (#140): each pair of kinds, as
+    ' the route map paints them, differs by 3:1 in luminance or in a
+    ' pattern whose lines show. Under a contrast theme the colors are the
+    ' user's, so only a pattern counts.
+    <TestMethod>
+    <DataRow(SystemColorMode.Classic, False)>
+    <DataRow(SystemColorMode.Dark, False)>
+    <DataRow(SystemColorMode.Classic, True)>
+    <DataRow(SystemColorMode.Dark, True)>
+    Public Sub RouteMapKinds_CanBeToldApartWithoutColor(mode As SystemColorMode, contrastTheme As Boolean)
+
+        RunWithColorMode(mode,
+            Sub()
+                UiTheme.HighContrastOverride = contrastTheme
+                Try
+                    Dim kinds As RouteSegmentKind() = [Enum].GetValues(Of RouteSegmentKind)()
+                    Dim painted As Dictionary(Of RouteSegmentKind, Integer()) = kinds.ToDictionary(Function(kind) kind, Function(kind) PaintedSwatch(kind))
+                    Dim alike As New List(Of String)()
+                    For first As Integer = 0 To kinds.Length - 2
+                        For second As Integer = first + 1 To kinds.Length - 1
+                            Dim one As Integer() = painted(kinds(first))
+                            Dim other As Integer() = painted(kinds(second))
+                            Dim ratio As Double = ContrastRatio(Color.FromArgb(Commonest(one)), Color.FromArgb(Commonest(other)))
+                            If SamePattern(one, other) AndAlso (contrastTheme OrElse ratio < 3.0) Then alike.Add($"{kinds(first)} and {kinds(second)} ({ratio:F2}:1)")
+                        Next
+                    Next
+                    Assert.AreEqual(0, alike.Count, $"Same pattern and too little luminance contrast in {mode}{If(contrastTheme, " under a contrast theme", String.Empty)}: {String.Join(", ", alike)}.")
+                Finally
+                    UiTheme.HighContrastOverride = Nothing
+                End Try
+            End Sub)
+
+    End Sub
+
     <TestMethod>
     <DataRow(SystemColorMode.Classic)>
     <DataRow(SystemColorMode.Dark)>
@@ -309,10 +402,15 @@ Public Class WorkflowThemeKeyboardSmokeTests
             Next
         Next
 
-        ' Hovered buttons, grid rows, and rail items.
-        pairs.Add(("A hovered button, selected grid row, or hovered rail item: primary text", UiTheme.PrimaryText(), UiTheme.HoverBackground()))
+        ' Hovered buttons and rail items.
+        pairs.Add(("A hovered button or hovered rail item: primary text", UiTheme.PrimaryText(), UiTheme.HoverBackground()))
         pairs.Add(("A hovered quiet button: accent text", UiTheme.AccentColor(), UiTheme.HoverBackground()))
         pairs.Add(("A hovered danger button: danger text", UiTheme.DangerColor(), UiTheme.HoverBackground()))
+
+        ' A grid's selected row, as UiPolish styles a dialog's grids and the
+        ' pages style their tables (#138).
+        pairs.Add(("A selected row in a dialog's grid", UiTheme.SelectedRowText(), UiTheme.SelectedRowBackground(UiTheme.HoverBackground())))
+        pairs.Add(("A selected row in a page's table", UiTheme.SelectedRowText(), UiTheme.SelectedRowBackground(UiTheme.AccentMutedBackground())))
 
         ' Selected rows, the selected rail item, and the current waypoint.
         Dim selected As Color = UiTheme.AccentMutedBackground()
@@ -391,6 +489,152 @@ Public Class WorkflowThemeKeyboardSmokeTests
         Dim value As Double = channel / 255.0
         Return If(value <= 0.04045, value / 12.92, Math.Pow((value + 0.055) / 1.055, 2.4))
     End Function
+
+    ' A kind's pixels as the route map paints it on a card.
+    Private Shared Function PaintedSwatch(kind As RouteSegmentKind) As Integer()
+        Using image As New Bitmap(48, 24)
+            Using g As Graphics = Graphics.FromImage(image)
+                g.Clear(UiTheme.CardBackground())
+                RouteMapStyle.FillSegment(g, New RectangleF(0, 0, image.Width, image.Height), kind, UiTheme.CardBackground())
+            End Using
+            Return Enumerable.Range(0, image.Width * image.Height).Select(Function(index) image.GetPixel(index Mod image.Width, index \ image.Width).ToArgb()).ToArray()
+        End Using
+    End Function
+
+    Private Shared Function Commonest(pixels As Integer()) As Integer
+        Return pixels.GroupBy(Function(pixel) pixel).OrderByDescending(Function(group) group.Count()).First().Key
+    End Function
+
+    ' Two swatches share a pattern, whatever their colors, when nearly the
+    ' same pixels are in each one's commonest color, or nearly the same
+    ' pixels are not. A pixel within 2:1 of that color counts as in it:
+    ' lines fainter than about the hatch of time not recorded (2.24:1 in
+    ' Light) are no pattern a reader can see.
+    Private Shared Function SamePattern(one As Integer(), other As Integer()) As Boolean
+        Dim oneColor As Color = Color.FromArgb(Commonest(one))
+        Dim otherColor As Color = Color.FromArgb(Commonest(other))
+        Dim inOne As Boolean() = one.Select(Function(pixel) ContrastRatio(Color.FromArgb(pixel), oneColor) < 2.0).ToArray()
+        Dim inOther As Boolean() = other.Select(Function(pixel) ContrastRatio(Color.FromArgb(pixel), otherColor) < 2.0).ToArray()
+        Dim differing As Double = Enumerable.Range(0, one.Length).Count(Function(index) inOne(index) <> inOther(index)) / CDbl(one.Length)
+        Return differing < 0.1 OrElse differing > 0.9
+    End Function
+
+    ' Every color the app chooses for itself, by name: each of the theme's
+    ' tokens, a stage's badge, a tag's chip as a card paints it, a grid's
+    ' selected rows, and the route map's fills, labels, and markers.
+    Private Shared Function ThemeTokens() As List(Of (Name As String, Value As Func(Of Color)))
+        Dim tokens As New List(Of (Name As String, Value As Func(Of Color)))()
+        Dim add As Action(Of String, Func(Of Color)) = Sub(name, value) tokens.Add((name, value))
+        For Each token As MethodInfo In GetType(UiTheme).GetMethods(BindingFlags.Public Or BindingFlags.Static).
+            Where(Function(method) method.ReturnType = GetType(Color) AndAlso method.GetParameters().Length = 0)
+            add(token.Name, Function() DirectCast(token.Invoke(Nothing, Nothing), Color))
+        Next
+        For Each stage As PaperStage In [Enum].GetValues(GetType(PaperStage))
+            add($"StageBackground({stage})", Function() UiTheme.StageBackground(stage))
+            add($"StageForeground({stage})", Function() UiTheme.StageForeground(stage))
+        Next
+        add("SelectedRowBackground(HoverBackground)", Function() UiTheme.SelectedRowBackground(UiTheme.HoverBackground()))
+        add("SelectedRowBackground(AccentMutedBackground)", Function() UiTheme.SelectedRowBackground(UiTheme.AccentMutedBackground()))
+        For Each palette As TagPalette In [Enum].GetValues(GetType(TagPalette))
+            add($"Tag.Background({palette})", Function() WorkTypeService.Background(palette, UiTheme.IsDark()))
+            add($"Tag.Foreground({palette})", Function() WorkTypeService.Foreground(palette, UiTheme.IsDark()))
+        Next
+        For Each kind As RouteSegmentKind In [Enum].GetValues(GetType(RouteSegmentKind))
+            add($"Route.Fill({kind})", Function() RouteMapStyle.Fill(kind))
+            add($"Route.LabelColor({kind})", Function() RouteMapStyle.LabelColor(kind))
+            If RouteMapStyle.Pattern(kind).HasValue Then add($"Route.Stripe({kind})", Function() RouteMapStyle.Stripe(kind))
+        Next
+        For Each marker In {("Submitted", RouteMarkerKind.Submitted, EditorialDecision.None), ("Resubmitted", RouteMarkerKind.Resubmitted, EditorialDecision.None),
+                            ("Published", RouteMarkerKind.Published, EditorialDecision.None), ("Accepted", RouteMarkerKind.Decision, EditorialDecision.Accepted),
+                            ("Revision", RouteMarkerKind.Decision, EditorialDecision.MajorRevision), ("Withdrawn", RouteMarkerKind.Decision, EditorialDecision.Withdrawn),
+                            ("Rejected", RouteMarkerKind.Decision, EditorialDecision.Rejected)}
+            Dim item As New RouteMarker With {.Kind = marker.Item2, .Decision = marker.Item3}
+            add($"Route.MarkerColor({marker.Item1})", Function() RouteMapStyle.MarkerColor(item))
+        Next
+        add("Route.NumberColor", AddressOf RouteMapStyle.NumberColor)
+        Return tokens
+    End Function
+
+    ' Each token's color before #138, recorded from that code: its name,
+    ' then Light, then Dark. "system" is the system's control text. The
+    ' route map's stripes came later, with #140.
+    Private Shared ReadOnly TokensBefore As String() = {
+        "SubtleBorder E7EEF0 323841",
+        "MutedText 64717D 8A95A1",
+        "OnAccentText FFFFFF 07201D",
+        "WarningMutedBackground FEF3C7 5C3F15",
+        "DangerMutedBackground FEE2E2 5B2126",
+        "BoardBackground F4F7F8 181B20",
+        "HeaderBackground FFFFFF 1F2329",
+        "CardBackground FFFFFF 282C33",
+        "CardBorder DAE4E7 3D444F",
+        "HoverBackground EBF4F5 323841",
+        "PrimaryText system system",
+        "SecondaryText 5B6977 ACB5C0",
+        "BrandNavy 0F172A 0F172A",
+        "AccentColor 0F766E 2DD4BF",
+        "AccentSecondaryColor 0E7490 22D3EE",
+        "AccentMutedBackground CCFBF1 144544",
+        "DangerColor BE232D F87C7C",
+        "WarningColor B45309 FBBF24",
+        "SuccessColor 15794A 6EE7B7",
+        "SuccessMutedBackground DCF7E8 153B2B",
+        "InfoColor 1D4ED8 93C5FD",
+        "InfoMutedBackground DBEAFE 1E3A64",
+        "StageBackground(Idea) EDE9FE 483678",
+        "StageForeground(Idea) 5B21B6 DDD6FE",
+        "StageBackground(Draft) E5E7EB 41444B",
+        "StageForeground(Draft) 374151 E5E7EB",
+        "StageBackground(Submitted) DBEAFE 1E406E",
+        "StageForeground(Submitted) 1D4ED8 BFDBFE",
+        "StageBackground(UnderReview) CCFBF1 115E59",
+        "StageForeground(UnderReview) 0F766E 99F6E4",
+        "StageBackground(Revision) FEF3C7 5C3F15",
+        "StageForeground(Revision) B45309 FDE68A",
+        "StageBackground(Accepted) DCFCE7 1F4C2F",
+        "StageForeground(Accepted) 15803D BBF7D0",
+        "StageBackground(InPress) CFFAFE 134E4A",
+        "StageForeground(InPress) 0E7490 A5F3FC",
+        "StageBackground(Published) D1FAE5 114E3C",
+        "StageForeground(Published) 047857 A7F3D0",
+        "SelectedRowBackground(HoverBackground) EBF4F5 323841",
+        "SelectedRowBackground(AccentMutedBackground) CCFBF1 144544",
+        "SelectedRowText system system",
+        "Tag.Background(Teal) CCFBF1 134E4A",
+        "Tag.Foreground(Teal) 115E59 99F6E4",
+        "Tag.Background(Blue) DBEAFE 1E3A8A",
+        "Tag.Foreground(Blue) 1E40AF BFDBFE",
+        "Tag.Background(Violet) EDE9FE 4C1D95",
+        "Tag.Foreground(Violet) 5B21B6 DDD6FE",
+        "Tag.Background(Rose) FFE4E6 881337",
+        "Tag.Foreground(Rose) 9F1239 FECDD3",
+        "Tag.Background(Amber) FEF3C7 78350F",
+        "Tag.Foreground(Amber) 92400E FDE68A",
+        "Tag.Background(Green) DCFCE7 14532D",
+        "Tag.Foreground(Green) 166534 BBF7D0",
+        "Tag.Background(Slate) E2E8F0 334155",
+        "Tag.Foreground(Slate) 334155 E2E8F0",
+        "Tag.Background(Orange) FFEDD5 7C2D12",
+        "Tag.Foreground(Orange) 9A3412 FED7AA",
+        "Route.Fill(Journal) 0F766E 0F766E",
+        "Route.LabelColor(Journal) FFFFFF FFFFFF",
+        "Route.Fill(Author) B45309 B45309",
+        "Route.LabelColor(Author) FFFFFF FFFFFF",
+        "Route.Stripe(Author) 482104 482104",
+        "Route.Fill(Production) 475569 64748B",
+        "Route.LabelColor(Production) FFFFFF FFFFFF",
+        "Route.Stripe(Production) 1C222A 282E38",
+        "Route.Fill(NotRecorded) A0B0B5 5C7076",
+        "Route.LabelColor(NotRecorded) FFFFFF FFFFFF",
+        "Route.MarkerColor(Submitted) 1D4ED8 1D4ED8",
+        "Route.MarkerColor(Resubmitted) 1D4ED8 1D4ED8",
+        "Route.MarkerColor(Published) 0F766E 0F766E",
+        "Route.MarkerColor(Accepted) 15803D 15803D",
+        "Route.MarkerColor(Revision) B45309 B45309",
+        "Route.MarkerColor(Withdrawn) 475569 475569",
+        "Route.MarkerColor(Rejected) B91C1C B91C1C",
+        "Route.NumberColor FFFFFF FFFFFF"
+    }
 
     Private Shared Function NamedControl(dialog As Form, name As String) As Control
         Return Descendants(dialog).Single(Function(item) item.AccessibleName = name)

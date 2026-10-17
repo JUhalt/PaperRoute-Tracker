@@ -1,9 +1,12 @@
 Imports System
 Imports System.Collections.Generic
 Imports System.IO
+Imports System.IO.Compression
+Imports System.Linq
 Imports System.Text.Json
 Imports System.Text.Json.Serialization
 Imports System.Text.RegularExpressions
+Imports Microsoft.VisualStudio.TestTools.UnitTesting
 Imports ManuscriptPipeline.Models
 
 Friend Module TestSupport
@@ -101,6 +104,110 @@ Friend Module TestSupport
             action,
             TimeSpan.FromSeconds(90)
         )
+
+    End Sub
+
+
+    ' The Insights figures are worked out off the UI thread (#132): pumps
+    ' the window's messages until they are shown, and fails if they are
+    ' still being worked out at the limit.
+    Public Sub WaitForInsights(
+        window As ManuscriptPipeline.Form1,
+        limit As TimeSpan
+    )
+
+        Dim waited As System.Diagnostics.Stopwatch =
+            System.Diagnostics.Stopwatch.StartNew()
+
+        While window.InsightsCalculating AndAlso
+              waited.Elapsed < limit
+
+            System.Windows.Forms.Application.DoEvents()
+            System.Threading.Thread.Sleep(1)
+
+        End While
+
+        System.Windows.Forms.Application.DoEvents()
+
+        Assert.IsFalse(
+            window.InsightsCalculating,
+            "Insights finished calculating."
+        )
+
+    End Sub
+
+
+    ' Puts backup.json in a backup archive in place of any there, as a
+    ' newer PaperRoute or a damaged archive would have it (#115); Nothing
+    ' leaves the archive without one, as PaperRoute 0.9.1 and earlier wrote.
+    Public Sub SetBackupManifest(
+        zipPath As String,
+        json As String
+    )
+
+        Using archive As ZipArchive = ZipFile.Open(zipPath, ZipArchiveMode.Update)
+
+            archive.GetEntry("backup.json")?.Delete()
+
+            If json IsNot Nothing Then
+                Using writer As New StreamWriter(archive.CreateEntry("backup.json").Open())
+                    writer.Write(json)
+                End Using
+            End If
+
+        End Using
+
+    End Sub
+
+
+    ' A backup.json as its first format has it, at the given storage schema.
+    Public Function BackupManifestJson(
+        schemaVersion As Integer,
+        Optional createdUtc As String = "2026-10-12T15:30:00Z",
+        Optional appVersion As String = "0.9.2"
+    ) As String
+
+        Return "{""FormatVersion"":1,""SchemaVersion"":" & schemaVersion.ToString() &
+               ",""AppVersion"":""" & appVersion & """,""CreatedUtc"":""" & createdUtc &
+               """,""Manuscripts"":3,""Submissions"":2,""EditorialDecisions"":2,""CorrespondenceRecords"":0}"
+
+    End Function
+
+
+    ' Every file and folder under the root, with each file's bytes (a
+    ' folder's are empty), so a test can show that nothing under it changed.
+    Public Function SnapshotTree(
+        root As String
+    ) As Dictionary(Of String, Byte())
+
+        Dim snapshot As New Dictionary(Of String, Byte())(StringComparer.OrdinalIgnoreCase)
+
+        For Each folder As String In Directory.GetDirectories(root, "*", SearchOption.AllDirectories)
+            snapshot(folder & Path.DirectorySeparatorChar) = Array.Empty(Of Byte)()
+        Next
+
+        For Each filePath As String In Directory.GetFiles(root, "*", SearchOption.AllDirectories)
+            snapshot(filePath) = File.ReadAllBytes(filePath)
+        Next
+
+        Return snapshot
+
+    End Function
+
+
+    Public Sub AssertSameTree(
+        expected As Dictionary(Of String, Byte()),
+        root As String,
+        message As String
+    )
+
+        Dim actual As Dictionary(Of String, Byte()) = SnapshotTree(root)
+
+        CollectionAssert.AreEquivalent(expected.Keys.ToList(), actual.Keys.ToList(), message & ": the same files and folders.")
+
+        For Each pair As KeyValuePair(Of String, Byte()) In expected
+            CollectionAssert.AreEqual(pair.Value, actual(pair.Key), message & ": " & pair.Key & " is unchanged.")
+        Next
 
     End Sub
 

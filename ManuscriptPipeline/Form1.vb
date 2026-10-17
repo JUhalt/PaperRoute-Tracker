@@ -39,7 +39,8 @@ Public Class Form1
     Private ReadOnly tabFileDrawer As New ShelfTabButton()
     Private ReadOnly shelfHost As New Panel()
 
-    Private ReadOnly lblStatus As New Label()
+    ' The status line is announced as it changes, without taking focus (#139).
+    Private ReadOnly lblStatus As New Label() With {.LiveSetting = Automation.AutomationLiveSetting.Polite}
 
     Private ReadOnly txtBoardSearch As New TextBox()
     Private ReadOnly cboStageFilter As New ComboBox()
@@ -84,6 +85,15 @@ Public Class Form1
     Private attentionTitleFont As Font = Nothing
 
     Private ReadOnly cardToolTip As New ToolTip()
+
+    ' Every card built this session, by manuscript, kept between renders: a
+    ' card whose text is unchanged is shown again rather than rebuilt, since
+    ' building one and its window handles costs tens of milliseconds on a
+    ' slow machine (#133). A card not on a shelf waits, parked, for the next
+    ' render that shows it. Each card's Tag is its CardRecord: the record it
+    ' stands for and the text it was built from. Cards are kept by
+    ' CardSlot, so records sharing an Id each have one.
+    Private ReadOnly manuscriptCards As New Dictionary(Of (Id As Guid, Occurrence As Integer), RoundedPanel)()
 
 
     Private NotInheritable Class StageFilterOption
@@ -1449,9 +1459,26 @@ Public Class Form1
 
         Try
 
-            repository.Save(
-            manuscripts
-        )
+            ' The sweep of the managed root and the write run on a worker
+            ' thread behind the disabled window (#132). A save refused while
+            ' other library work runs wrote nothing, but did not fail: the
+            ' caller learns it did not save, and the flag stays as it was.
+            ' Should Windows shut down during the save, a failure is marked
+            ' there, so the shutdown tries the save again.
+            If Not RunLibraryWork(
+                "Saving your library...",
+                Sub() repository.Save(manuscripts),
+                atShutdown:=
+                    Sub(work)
+                        If work.IsFaulted Then
+                            librarySaveFailed = True
+                        End If
+                    End Sub
+            ) Then
+
+                Return False
+
+            End If
 
             librarySaveFailed = False
 
@@ -2229,26 +2256,6 @@ Public Class Form1
     End Function
 
 
-    Private Sub ClearAndDisposeControls(
-        panel As Control
-    )
-
-        While panel.Controls.Count > 0
-
-            Dim child As Control =
-                panel.Controls(0)
-
-            panel.Controls.RemoveAt(
-                0
-            )
-
-            child.Dispose()
-
-        End While
-
-    End Sub
-
-
     Private Sub ResetSharedDashboardFonts()
 
         DisposeSharedDashboardFonts()
@@ -2392,8 +2399,18 @@ Public Class Form1
         boardSearchDebounceTimer.Dispose()
         manuscriptDirtyTimer.Stop()
         manuscriptDirtyTimer.Dispose()
+        libraryFilterDebounceTimer.Stop()
+        libraryFilterDebounceTimer.Dispose()
         cardToolTip.Dispose()
         DisposeSharedDashboardFonts()
+
+        ' Parked cards and the kept page are not in the window's control tree.
+        For Each card As RoundedPanel In manuscriptCards.Values
+            card.Dispose()
+        Next
+
+        manuscriptCards.Clear()
+        importExportPage?.Dispose()
 
         MyBase.OnFormClosed(
             e
@@ -2419,17 +2436,7 @@ Public Class Form1
         publishedPanel.SuspendLayout()
         fileDrawerPanel.SuspendLayout()
 
-        ClearAndDisposeControls(
-            pipelinePanel
-        )
-
-        ClearAndDisposeControls(
-            publishedPanel
-        )
-
-        ClearAndDisposeControls(
-            fileDrawerPanel
-        )
+        DropStaleCards()
 
 
         ' =================================================
@@ -2465,62 +2472,62 @@ Public Class Form1
         Dim visibleManuscripts As List(Of Manuscript) =
         GetVisibleManuscripts()
 
-        Dim pipelineCount As Integer = 0
-        Dim publishedCount As Integer = 0
-        Dim drawerCount As Integer = 0
+        ' Each shelf's cards in order; they go on the shelf together, below.
+        Dim pipelineCards As New List(Of Control)()
+        Dim publishedCards As New List(Of Control)()
+        Dim drawerCards As New List(Of Control)()
+        Dim seen As New Dictionary(Of Guid, Integer)()
 
 
         For Each manuscript As Manuscript In visibleManuscripts
+
+            Dim slot As (Id As Guid, Occurrence As Integer) =
+                CardSlot(
+                    manuscript,
+                    seen
+                )
 
             Select Case manuscript.Location
 
                 Case ManuscriptLocation.Pipeline
 
-                    Dim card As Panel =
-                    CreateManuscriptCard(
-                        manuscript,
-                        pipelinePanel
+                    pipelineCards.Add(
+                        CardFor(
+                            manuscript,
+                            slot,
+                            pipelinePanel
+                        )
                     )
-
-                    pipelinePanel.Controls.Add(
-                    card
-                )
-
-                    pipelineCount += 1
 
 
                 Case ManuscriptLocation.Published
 
-                    Dim card As Panel =
-                    CreateManuscriptCard(
-                        manuscript,
-                        publishedPanel
+                    publishedCards.Add(
+                        CardFor(
+                            manuscript,
+                            slot,
+                            publishedPanel
+                        )
                     )
-
-                    publishedPanel.Controls.Add(
-                    card
-                )
-
-                    publishedCount += 1
 
 
                 Case ManuscriptLocation.FileDrawer
 
-                    Dim card As Panel =
-                    CreateManuscriptCard(
-                        manuscript,
-                        fileDrawerPanel
+                    drawerCards.Add(
+                        CardFor(
+                            manuscript,
+                            slot,
+                            fileDrawerPanel
+                        )
                     )
-
-                    fileDrawerPanel.Controls.Add(
-                    card
-                )
-
-                    drawerCount += 1
 
             End Select
 
         Next
+
+        Dim pipelineCount As Integer = pipelineCards.Count
+        Dim publishedCount As Integer = publishedCards.Count
+        Dim drawerCount As Integer = drawerCards.Count
 
 
         ' =================================================
@@ -2569,7 +2576,7 @@ Public Class Form1
 
             End If
 
-            pipelinePanel.Controls.Add(
+            pipelineCards.Add(
             CreateEmptyLabel(
                 pipelineMessage
             )
@@ -2594,7 +2601,7 @@ Public Class Form1
 
             End If
 
-            publishedPanel.Controls.Add(
+            publishedCards.Add(
             CreateEmptyLabel(
                 publishedMessage
             )
@@ -2619,7 +2626,7 @@ Public Class Form1
 
             End If
 
-            fileDrawerPanel.Controls.Add(
+            drawerCards.Add(
             CreateEmptyLabel(
                 drawerMessage
             )
@@ -2627,6 +2634,10 @@ Public Class Form1
 
         End If
 
+
+        FillShelf(pipelinePanel, pipelineCards)
+        FillShelf(publishedPanel, publishedCards)
+        FillShelf(fileDrawerPanel, drawerCards)
 
         btnClearBoardFilters.Enabled =
         HasActiveBoardFilters()
@@ -2667,6 +2678,183 @@ Public Class Form1
         UpdateRailCounts()
         ShowWelcomeWhenEmpty()
         RefreshOpenPage()
+
+    End Sub
+
+
+    ' Where a record's card is kept: its Id, and how many records with that
+    ' Id came before it in this pass. A library merged or edited by hand can
+    ' hold two records with one Id; each keeps a card of its own, so neither
+    ' replaces a card the other was given in the same render.
+    Private Shared Function CardSlot(
+        manuscript As Manuscript,
+        seen As Dictionary(Of Guid, Integer)
+    ) As (Id As Guid, Occurrence As Integer)
+
+        Dim occurrence As Integer = 0
+        seen.TryGetValue(manuscript.Id, occurrence)
+        seen(manuscript.Id) = occurrence + 1
+
+        Return (manuscript.Id, occurrence)
+
+    End Function
+
+
+    ' The card for a manuscript: the one built before in its slot, when the
+    ' text it shows is unchanged, or a new one in its place.
+    Private Function CardFor(
+        manuscript As Manuscript,
+        slot As (Id As Guid, Occurrence As Integer),
+        shelf As ManuscriptShelfPanel
+    ) As RoundedPanel
+
+        Dim key As String = CardKey(manuscript)
+        Dim card As RoundedPanel = Nothing
+
+        If manuscriptCards.TryGetValue(slot, card) Then
+
+            Dim kept As CardRecord = TryCast(card.Tag, CardRecord)
+
+            If kept IsNot Nothing AndAlso String.Equals(kept.Key, key, StringComparison.Ordinal) Then
+
+                ' The card now stands for this record, which may have
+                ' replaced the one it was built for.
+                kept.Manuscript = manuscript
+
+                ' Tag colors come from the reusable library, which may have
+                ' been reloaded since the card was built.
+                For Each strip As TagStrip In card.Controls.OfType(Of TagStrip)()
+                    strip.Library = authorLibrary
+                Next
+
+                Return card
+
+            End If
+
+            card.Dispose()
+
+        End If
+
+        card = DirectCast(CreateManuscriptCard(manuscript, shelf), RoundedPanel)
+        DirectCast(card.Tag, CardRecord).Key = key
+        manuscriptCards(slot) = card
+        Return card
+
+    End Function
+
+
+    ' What a card stands for, in its Tag: the record it was last rendered
+    ' for and the text it shows. A kept card's record can be replaced by an
+    ' equal one with the same Id, and two records can share an Id, so the
+    ' card holds its own record rather than an Id.
+    Private NotInheritable Class CardRecord
+
+        Public Property Manuscript As Manuscript
+        Public Property Key As String = String.Empty
+
+    End Class
+
+
+    ' Runs a card's action on the card's own record while the library still
+    ' holds it, so the second of two records that share an Id acts on its
+    ' own copy, as each card did before cards were kept (#133). A record the
+    ' library no longer holds falls back to the one now holding its Id.
+    Private Sub WithLiveManuscript(
+        record As CardRecord,
+        action As Action(Of Manuscript)
+    )
+
+        Dim own As Manuscript = record.Manuscript
+
+        Dim live As Manuscript =
+            If(manuscripts.Any(Function(item) item Is own), own, FindManuscript(own.Id))
+
+        If live IsNot Nothing Then
+            action(live)
+        End If
+
+    End Sub
+
+
+    ' Everything a card shows, so a change in any of it rebuilds the card:
+    ' the texts CreateManuscriptCard derives.
+    Private Function CardKey(
+        manuscript As Manuscript
+    ) As String
+
+        Dim insightColor As Color
+        Dim insightText As String = BuildManuscriptInsight(manuscript, insightColor)
+        Dim statusIsUrgent As Boolean = insightText.Length > 0 AndAlso insightText <> MissingTargetInsight
+        Dim route As RouteSummary = RouteSummaryService.Describe(manuscript)
+
+        Return String.Join(
+            ChrW(31),
+            manuscript.Title,
+            manuscript.CurrentStage.ToString(),
+            manuscript.Location.ToString(),
+            manuscript.TargetJournal,
+            String.Join(",", If(manuscript.Tags, New List(Of String)())),
+            If(statusIsUrgent, insightText, StageClockService.Describe(manuscript, DateTime.Today)),
+            insightColor.ToArgb().ToString(),
+            route.Text,
+            String.Join(",", route.Dots.Select(Function(dot) dot.ToString())))
+
+    End Function
+
+
+    ' Disposes the cards of manuscripts the library no longer holds.
+    Private Sub DropStaleCards()
+
+        Dim seen As New Dictionary(Of Guid, Integer)()
+        Dim current As New HashSet(Of (Id As Guid, Occurrence As Integer))(
+            manuscripts.Where(Function(item) item IsNot Nothing).Select(Function(item) CardSlot(item, seen)))
+
+        For Each slot As (Id As Guid, Occurrence As Integer) In manuscriptCards.Keys.ToList()
+
+            If Not current.Contains(slot) Then
+                manuscriptCards(slot).Dispose()
+                manuscriptCards.Remove(slot)
+            End If
+
+        Next
+
+    End Sub
+
+
+    ' Puts a shelf's cards on it in order, touching nothing when they are
+    ' already there in that order. Messages such as an empty shelf are
+    ' disposed; cards leaving the shelf wait, parked, for a render that
+    ' shows them again.
+    Private Sub FillShelf(
+        shelf As ManuscriptShelfPanel,
+        cards As List(Of Control)
+    )
+
+        If shelf.Controls.Count = cards.Count Then
+
+            Dim same As Boolean = True
+
+            For index As Integer = 0 To cards.Count - 1
+                If shelf.Controls(index) IsNot cards(index) Then
+                    same = False
+                    Exit For
+                End If
+            Next
+
+            If same Then
+                Return
+            End If
+
+        End If
+
+        For Each child As Control In shelf.Controls.Cast(Of Control)().ToList()
+            If Not TypeOf child Is RoundedPanel Then
+                child.Dispose()
+            End If
+        Next
+
+        shelf.Controls.Clear()
+        shelf.Controls.AddRange(cards.ToArray())
 
     End Sub
 
@@ -2749,7 +2937,12 @@ Public Class Form1
             cardToolTip.SetToolTip(lblStatusLine, statusText)
         End If
 
-        Dim cardMenu As ContextMenuStrip = BuildCardMenu(manuscript)
+        ' The card may outlive this record (#133); its actions go through
+        ' the record it stands for when used.
+        Dim record As New CardRecord With {.Manuscript = manuscript}
+        card.Tag = record
+
+        Dim cardMenu As ContextMenuStrip = BuildCardMenu(record)
 
         AddHandler card.Disposed,
             Sub(sender, e)
@@ -2888,18 +3081,18 @@ Public Class Form1
         Dim openOnLeftClick As MouseEventHandler =
             Sub(sender, e)
                 If e.Button = MouseButtons.Left Then
-                    OpenManuscript(manuscript)
+                    WithLiveManuscript(record, Sub(live) OpenManuscript(live))
                 End If
             End Sub
 
         AddHandler lblTitle.LinkClicked,
             Sub(sender, e)
-                OpenManuscript(manuscript)
+                WithLiveManuscript(record, Sub(live) OpenManuscript(live))
             End Sub
 
         AddHandler lblRoute.LinkClicked,
             Sub(sender, e)
-                OpenRouteView(manuscript)
+                WithLiveManuscript(record, Sub(live) OpenRouteView(live))
             End Sub
 
         ' Hovering anywhere on the card, or focusing its title, highlights it.
@@ -2986,8 +3179,10 @@ Public Class Form1
     End Function
 
 
+    ' The menu acts through the card's record (#133); which items it has
+    ' follows the shelf, which is part of the text a card is kept by.
     Private Function BuildCardMenu(
-        manuscript As Manuscript
+        record As CardRecord
     ) As ContextMenuStrip
 
         Dim cardMenu As New ContextMenuStrip()
@@ -2996,7 +3191,7 @@ Public Class Form1
             "Open",
             Nothing,
             Sub(sender, e)
-                OpenManuscript(manuscript)
+                WithLiveManuscript(record, Sub(live) OpenManuscript(live))
             End Sub
         )
 
@@ -3004,29 +3199,29 @@ Public Class Form1
             "View Route",
             Nothing,
             Sub(sender, e)
-                OpenRouteView(manuscript)
+                WithLiveManuscript(record, Sub(live) OpenRouteView(live))
             End Sub
         )
 
-        If manuscript.Location = ManuscriptLocation.Pipeline Then
+        If record.Manuscript.Location = ManuscriptLocation.Pipeline Then
 
             cardMenu.Items.Add(New ToolStripSeparator())
             cardMenu.Items.Add(
                 "Move to File Drawer...",
                 Nothing,
                 Sub(sender, e)
-                    MoveToFileDrawer(manuscript)
+                    WithLiveManuscript(record, Sub(live) MoveToFileDrawer(live))
                 End Sub
             )
 
-        ElseIf manuscript.Location = ManuscriptLocation.FileDrawer Then
+        ElseIf record.Manuscript.Location = ManuscriptLocation.FileDrawer Then
 
             cardMenu.Items.Add(New ToolStripSeparator())
             cardMenu.Items.Add(
                 "Restore to Pipeline",
                 Nothing,
                 Sub(sender, e)
-                    RestoreToPipeline(manuscript)
+                    WithLiveManuscript(record, Sub(live) RestoreToPipeline(live))
                 End Sub
             )
 
@@ -3039,7 +3234,7 @@ Public Class Form1
                 "Delete...",
                 Nothing,
                 Sub(sender, e)
-                    DeleteManuscript(manuscript)
+                    WithLiveManuscript(record, Sub(live) DeleteManuscript(live))
                 End Sub
             )
 
@@ -3576,11 +3771,15 @@ Public Class Form1
 
         Try
 
-            CreateBackupService().CreateBackup(
-            destination,
-            manuscripts,
-            repository
-        )
+            ' The ZIP is written on a worker thread behind the disabled
+            ' window (#132); False when other library work is still running.
+            If Not WriteBackup(
+                destination
+            ) Then
+
+                Return
+
+            End If
 
             MessageBox.Show(
             Me,
@@ -3697,15 +3896,14 @@ Public Class Form1
                 Return
             End If
 
-            Dim restoreService As PortableRestoreService =
-            CreateRestoreService()
-
             Dim inspection As BackupInspection
 
+            ' Read on a worker thread behind the disabled window (#132);
+            ' Nothing when other library work is still running.
             Try
 
                 inspection =
-                restoreService.InspectBackup(
+                InspectBackupFile(
                     dialog.FileName
                 )
 
@@ -3726,40 +3924,14 @@ Public Class Form1
 
             End Try
 
-            Dim sizeInMb As Double =
-            inspection.UncompressedBytes / 1024.0 / 1024.0
+            If inspection Is Nothing Then
+                Return
+            End If
 
             Dim preview As String =
-            "Restore this PaperRoute backup?" &
-            Environment.NewLine &
-            Environment.NewLine &
-            "Manuscripts: " &
-            inspection.ManuscriptCount.ToString() &
-            Environment.NewLine &
-            "Submissions: " &
-            inspection.SubmissionCount.ToString() &
-            Environment.NewLine &
-            "Editorial decisions: " &
-            inspection.DecisionCount.ToString() &
-            Environment.NewLine &
-            "Correspondence records: " &
-            inspection.CorrespondenceCount.ToString() &
-            Environment.NewLine &
-            "Managed files: " &
-            inspection.ManagedFileCount.ToString() &
-            Environment.NewLine &
-            "Archive entries: " &
-            inspection.ArchiveEntryCount.ToString() &
-            Environment.NewLine &
-            "Expanded size: " &
-            sizeInMb.ToString("N1") &
-            " MB" &
-            Environment.NewLine &
-            Environment.NewLine &
-            "IMPORTANT: This will REPLACE the library currently loaded in PaperRoute." &
-            Environment.NewLine &
-            Environment.NewLine &
-            "An emergency backup of your current library will be created before the restore begins."
+            RestorePreview(
+                inspection
+            )
 
             Dim confirmation As DialogResult =
             MessageBox.Show(
@@ -3801,12 +3973,57 @@ Public Class Form1
 
             RestoreFromArchive(
             dialog.FileName,
-            restoreService
+            CreateRestoreService()
         )
 
         End Using
 
     End Sub
+
+
+    ' What Restore Backup... asks once the archive has passed its check:
+    ' the backup's date and version (#115) and what it holds. Tests read it.
+    Private Shared Function RestorePreview(
+        inspection As BackupInspection
+    ) As String
+
+        Dim sizeInMb As Double =
+            inspection.UncompressedBytes / 1024.0 / 1024.0
+
+        Return "Restore this PaperRoute backup?" &
+            Environment.NewLine &
+            Environment.NewLine &
+            inspection.DescribeOrigin() &
+            Environment.NewLine &
+            "Manuscripts: " &
+            inspection.ManuscriptCount.ToString() &
+            Environment.NewLine &
+            "Submissions: " &
+            inspection.SubmissionCount.ToString() &
+            Environment.NewLine &
+            "Editorial decisions: " &
+            inspection.DecisionCount.ToString() &
+            Environment.NewLine &
+            "Correspondence records: " &
+            inspection.CorrespondenceCount.ToString() &
+            Environment.NewLine &
+            "Managed files: " &
+            inspection.ManagedFileCount.ToString() &
+            Environment.NewLine &
+            "Archive entries: " &
+            inspection.ArchiveEntryCount.ToString() &
+            Environment.NewLine &
+            "Expanded size: " &
+            sizeInMb.ToString("N1") &
+            " MB" &
+            Environment.NewLine &
+            Environment.NewLine &
+            "IMPORTANT: This will REPLACE the library currently loaded in PaperRoute." &
+            Environment.NewLine &
+            Environment.NewLine &
+            "An emergency backup of your current library will be created before the restore begins."
+
+    End Function
 
 
     ' Set once a restore has replaced the library on disk: until the restart,
@@ -3818,22 +4035,43 @@ Public Class Form1
     ' Restores the archive and hands over to a new session (#116): the next
     ' start reads the restored library from disk, so nothing this session
     ' holds in memory, such as the author library, can be saved over it.
-    ' Tests call this with a throwaway archive.
+    ' The swap runs on a worker thread behind the disabled window (#132);
+    ' what follows it runs here, on the UI thread. Tests call this with a
+    ' throwaway archive.
     Private Sub RestoreFromArchive(
         backupZipPath As String,
         restoreService As PortableRestoreService
     )
 
-        Dim restoreResult As RestoreResult
+        Dim restoreResult As RestoreResult = Nothing
 
         Try
 
-            restoreResult =
-                restoreService.RestoreBackup(
-                    backupZipPath,
-                    manuscripts,
-                    repository
-                )
+            ' Nothing starts while other library work is still running.
+            ' Should Windows shut down meanwhile, the swap ends first, and a
+            ' swap that went through leaves the restored library on disk to
+            ' hand over to, as below.
+            If Not RunLibraryWork(
+                "Restoring the backup...",
+                Sub()
+                    restoreResult =
+                        restoreService.RestoreBackup(
+                            backupZipPath,
+                            manuscripts,
+                            repository
+                        )
+                End Sub,
+                atShutdown:=
+                    Sub(work)
+                        If work.Status = TaskStatus.RanToCompletion Then
+                            handingOverAfterRestore = True
+                        End If
+                    End Sub
+            ) Then
+
+                Return
+
+            End If
 
         Catch ex As Exception
 
@@ -4320,7 +4558,8 @@ Public Class Form1
 
     ' Both checks: the page's unsaved edits (#112), then a failed library
     ' save (#113), are asked about after the user accepts the update and
-    ' before it downloads. The restart is a close.
+    ' before it downloads; a save that fails while it downloads is asked
+    ' about before the restart. The restart is a close.
     Private Function OfferUpdateAsync(
         interactive As Boolean
     ) As Task(Of Boolean)
@@ -4329,7 +4568,8 @@ Public Class Form1
             Me,
             appSettings.UpdateChannel,
             interactive,
-            Function() ConfirmLeaveManuscript() AndAlso ConfirmCloseUnsavedLibrary()
+            Function() ConfirmLeaveManuscript() AndAlso ConfirmCloseUnsavedLibrary(),
+            AddressOf ConfirmCloseUnsavedLibrary
         )
 
     End Function

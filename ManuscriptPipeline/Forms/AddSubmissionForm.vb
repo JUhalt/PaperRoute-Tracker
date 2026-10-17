@@ -202,6 +202,10 @@ Namespace Forms
             dtpSubmitted.Width =
                 180
 
+            ' A date picker takes no name from the label before it (#137).
+            dtpSubmitted.AccessibleName =
+                "Submitted"
+
             chkFollowUp.Text =
                 "Remind me to follow up"
 
@@ -230,6 +234,9 @@ Namespace Forms
 
             dtpFollowUp.Enabled =
                 False
+
+            dtpFollowUp.AccessibleName =
+                "Follow-up date"
 
             AddHandler chkFollowUp.CheckedChanged,
                 Sub(sender, e)
@@ -300,7 +307,8 @@ Namespace Forms
             root.Controls.Add(
                 CreateFieldLabelWithHelp(
                     "Journal manuscript ID",
-                    WorkflowHelpCatalog.JournalManuscriptId
+                    WorkflowHelpCatalog.JournalManuscriptId,
+                    txtManuscriptNumber
                 ),
                 0,
                 1
@@ -506,32 +514,18 @@ Namespace Forms
 
         Private Function CreateFieldLabelWithHelp(
             text As String,
-            helpText As String
+            helpText As String,
+            field As Control
         ) As Control
 
-            Dim host As New FlowLayoutPanel With {
-                .Dock = DockStyle.Fill,
-                .AutoSize = True,
-                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                .FlowDirection = FlowDirection.LeftToRight,
-                .WrapContents = False,
-                .Margin = New Padding(0),
-                .Padding = New Padding(0, 7, 0, 0)
-            }
-
-            host.Controls.Add(
+            Return ContextHelpControl.LabelWithHelp(
                 CreateFieldLabel(
                     text
-                )
+                ),
+                helpText,
+                7,
+                field
             )
-
-            host.Controls.Add(
-                New ContextHelpControl(
-                    helpText
-                )
-            )
-
-            Return host
 
         End Function
 

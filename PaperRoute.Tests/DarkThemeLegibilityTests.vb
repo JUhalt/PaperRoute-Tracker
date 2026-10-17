@@ -53,9 +53,13 @@ Public Class DarkThemeLegibilityTests
 
         SkipWhereThemesCannotBeChecked(SystemColorMode.Dark)
 
-        Dim findings As List(Of String) = ViewCatalog.ShowEach(ViewCatalog.All(), SystemColorMode.Dark,
-            Sub(name, shown, found) found.AddRange(LightPartsOf(shown).Select(Function(part) name & ": " & part)))
+        Dim findings As New List(Of String)()
 
+        Dim failures As List(Of String) = ViewCatalog.ShowEach(ViewCatalog.AllViewsAndStages(),
+            Sub(name, shown) findings.AddRange(LightPartsOf(shown).Select(Function(part) name & ": " & part)),
+            mode:=SystemColorMode.Dark)
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
         Assert.AreEqual(0, findings.Count, Environment.NewLine & String.Join(Environment.NewLine, findings))
 
     End Sub
@@ -117,20 +121,23 @@ Public Class DarkThemeLegibilityTests
 
         ' A dialog keyed by a Form subclass of its own never builds the main
         ' window; the hosted views and the stages may.
-        Dim views = ViewCatalog.All().Where(Function(view) view.Name = NameOf(Form1) OrElse Not ViewCatalog.Dialogs.Keys.Any(Function(type) type.Name = view.Name))
+        Dim views = ViewCatalog.AllViewsAndStages().Where(Function(view) view.Name = NameOf(Form1) OrElse Not ViewCatalog.Dialogs.Keys.Any(Function(type) type.Name = view.Name))
         Dim boards As Integer = 0
+        Dim standard As New List(Of String)()
 
-        Dim standard As List(Of String) = ViewCatalog.ShowEach(views, SystemColorMode.Dark,
-            Sub(name, shown, found)
+        Dim failures As List(Of String) = ViewCatalog.ShowEach(views,
+            Sub(name, shown)
                 If Not TypeOf shown Is Form1 Then Return
                 boards += 1
                 For Each button As Button In OwnControls(shown).OfType(Of Button)()
                     If Not TypeOf button Is ActionButton AndAlso Not TypeOf button Is RailCommandButton Then
-                        found.Add($"{name}: {Describe(button)}")
+                        standard.Add($"{name}: {Describe(button)}")
                     End If
                 Next
-            End Sub)
+            End Sub,
+            mode:=SystemColorMode.Dark)
 
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
         Assert.IsTrue(boards >= 10, $"The board, its pages and Your Citations were looked at ({boards}).")
         Assert.AreEqual(0, standard.Count, Environment.NewLine & String.Join(Environment.NewLine, standard))
 
@@ -202,9 +209,10 @@ Public Class DarkThemeLegibilityTests
         SkipWhereThemesCannotBeChecked(SystemColorMode.Dark)
 
         Dim pickers As New List(Of String)()
+        Dim found As New List(Of String)()
 
-        Dim failures As List(Of String) = ViewCatalog.ShowEach(ViewCatalog.All().Where(Function(item) DatePickerViews.Contains(item.Name)), SystemColorMode.Dark,
-            Sub(name, shown, found)
+        Dim failures As List(Of String) = ViewCatalog.ShowEach(ViewCatalog.AllViewsAndStages().Where(Function(item) DatePickerViews.Contains(item.Name)),
+            Sub(name, shown)
                 For Each picker As DateTimePicker In Descendants(shown).OfType(Of DateTimePicker)()
                     pickers.Add($"{name}: {Describe(picker)}{If(picker.Visible, String.Empty, " (hidden)")}{If(picker.Enabled, String.Empty, " (off)")}")
                     If Not picker.Visible Then Continue For
@@ -219,10 +227,12 @@ Public Class DarkThemeLegibilityTests
                         End If
                     End Using
                 Next
-            End Sub)
+            End Sub,
+            mode:=SystemColorMode.Dark)
 
-        Assert.AreEqual(9, pickers.Count, "The nine date pickers: " & String.Join("; ", pickers))
         Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(9, pickers.Count, "The nine date pickers: " & String.Join("; ", pickers))
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
 
     End Sub
 
@@ -347,9 +357,10 @@ Public Class DarkThemeLegibilityTests
 
         Dim lists As Integer = 0
         Dim columns As Integer = 0
+        Dim found As New List(Of String)()
 
-        Dim failures As List(Of String) = ViewCatalog.ShowEach(ViewCatalog.All().Where(Function(item) CheckBoxViews.Contains(item.Name)), SystemColorMode.Dark,
-            Sub(name, shown, found)
+        Dim failures As List(Of String) = ViewCatalog.ShowEach(ViewCatalog.AllViewsAndStages().Where(Function(item) CheckBoxViews.Contains(item.Name)),
+            Sub(name, shown)
                 For Each control As Control In Descendants(shown).Where(Function(item) item.Visible AndAlso CheckMarks(item).Any())
                     If TypeOf control Is ListView Then
                         lists += 1
@@ -374,9 +385,11 @@ Public Class DarkThemeLegibilityTests
                         Next
                     End Using
                 Next
-            End Sub)
+            End Sub,
+            mode:=SystemColorMode.Dark)
 
         Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
         Assert.AreEqual(4, lists, "The four lists with check boxes were judged.")
         Assert.AreEqual(6, columns, "The six grid columns with check boxes were judged.")
 

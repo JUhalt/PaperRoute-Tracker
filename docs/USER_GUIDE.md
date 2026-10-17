@@ -847,12 +847,15 @@ A backup can contain:
 
 ```text
 backup-info.txt
+backup.json
 manuscripts.json
 authors.json
 citations.json
 library.xlsx
 files\
 ```
+
+`backup.json` records when the backup was made, the PaperRoute version that made it, and its storage schema; the restore preview shows the date and version. Backups made before v0.9.2 have no `backup.json` and restore as before.
 
 Depending on the library, `authors.json` contains reusable authors, affiliations, and journals, including journal checklist templates, and `citations.json` your saved citation figures (see **Your Citations** under Insights). `manuscripts.json` preserves manuscript histories, readiness profiles, packet associations, saved fingerprints, and reviewer-response items with their decisions, revision rounds, statuses, drafts, and order.
 
@@ -862,8 +865,8 @@ Managed document copies, including version and packet snapshots, are included. E
 
 **Settings > Restore Backup...** (also on the Import & Export page):
 
-1. validates the selected archive;
-2. previews record/file counts;
+1. validates the selected archive, and refuses one made by a newer PaperRoute;
+2. previews record/file counts, and when and with which version the backup was made;
 3. asks for confirmation;
 4. creates an emergency backup of the current library;
 5. restores the selected backup; and
@@ -873,7 +876,7 @@ Restoring a backup that includes `citations.json` replaces your saved citation f
 
 PaperRoute is intentionally conservative about restore operations because the manuscript library is the primary research-workflow record.
 
-PaperRoute v0.9 uses **Schema 9**, and v0.8 uses Schema 8. An older version refuses to open a newer library, and its restore may ignore data it does not know, so restore a backup with the version that made it or a later one. To go back to an earlier version, restore the backup you made with that version before upgrading; changes made since then are not in it. See the [upgrade notes](../UPGRADE_NOTES.md).
+PaperRoute v0.9 uses **Schema 9**, and v0.8 uses Schema 8. An older version refuses to open a newer library. From v0.9.2 its restore also refuses a backup from a newer PaperRoute; before v0.9.2 a restore could ignore data it did not know, so restore a backup with the version that made it or a later one. To go back to an earlier version, restore the backup you made with that version before upgrading; changes made since then are not in it. See the [upgrade notes](../UPGRADE_NOTES.md).
 
 ---
 
@@ -981,6 +984,72 @@ Your keys are kept encrypted for your Windows account on this computer. The Clau
 ### Suggestions stay suggestions
 
 Every result is labeled as an AI suggestion, with the service and model. A decision, comment, response draft, or checklist requirement you accept records that it began as an AI suggestion, with the service, the model, the date, and the text it came from. **Editorial History** shows this for a decision, **Reviewer Responses** for a comment or a response draft, and a journal's **Readiness Checklist** and **Submission Readiness...** for a requirement, which notes after a year that the journal may have changed its instructions. **Submission Readiness...** also says when a profile includes requirements the assistant found, since it can miss some. Check each suggestion before you use it: a model can misread a letter or invent details.
+
+---
+
+## Accessibility
+
+PaperRoute can be used from the keyboard alone and with a screen reader such as Windows Narrator.
+
+### Keyboard shortcuts
+
+Anywhere in the main window:
+
+| Shortcut | What it does |
+| --- | --- |
+| **Ctrl+1** | Open the Board |
+| **Ctrl+2** | Open the Library |
+| **Ctrl+3** | Open Journals |
+| **Ctrl+4** | Open Deadlines |
+| **Ctrl+5** | Open Insights |
+| **Ctrl+6** | Open Import & Export |
+| **Ctrl+F** | Search the Board |
+| **Ctrl+S** | Save the open manuscript |
+| **Alt+Left** | Go back |
+| **Alt+Right** | Go forward |
+| **Browser Back** | Go back, with a keyboard's Back key |
+| **Browser Forward** | Go forward, with a keyboard's Forward key |
+| **F1** | Open this guide |
+
+The number keys on the number pad work as well as the ones above the letters.
+
+In windows, pages, and lists:
+
+- **Tab** and **Shift+Tab** move from one control to the next. **Enter** chooses the window's main button, and **Esc** closes a window as its **Cancel** or **Close** button does. In **Fill Blanks from Crossref** and **Check for Publications**, **Esc** stops a lookup that is running, as **Stop** does. The window that shows an update installing has nothing to cancel.
+- On the Board, **Tab** to a card's title and press **Enter** to open it; the keyboard's context-menu key opens the card's **⋯** menu.
+- On a chip, such as the Board's Needs Attention filters or the Deadlines page's filters, **Enter** or **Space** presses it.
+- In the Library table, the Insights tables, and Your Citations, **Enter** opens the selected row.
+- On the Deadlines page, **Up** and **Down** move from item to item, and **Enter** does the item's main action.
+- In the Insights route chart, **Up** and **Down** choose a route, and **Enter** opens it.
+- In **Route View**, **Tab** moves from waypoint to waypoint in route order, and **Enter** opens the one you are on in the manuscript page.
+- In a manuscript's tag box, **Enter**, a comma, or a semicolon adds the tag, and **Backspace** in the empty box removes the last tag. On a tag, **Delete** or **Backspace** removes it.
+- On a **?** help button, **Space** or **F1** shows its help.
+- In this guide's window, **Ctrl+F** goes to **Find**, and **Enter** in **Find** finds the next match. In **Look Up Journal Facts**, **Enter** in the search box searches.
+
+### Screen readers
+
+Every field, list, and table has a name that a screen reader reads, and every button that shows a symbol rather than words, such as **⋯** or **«**, says what it does. A **?** help button names what it helps with. Status and progress messages, such as the line at the bottom of the main window, a lookup's progress, and an update's progress, are read out as they change, without moving you from where you are. A screen reader presses chips and **?** help buttons as it presses any button.
+
+### Contrast themes
+
+PaperRoute supports the Windows contrast themes (**Settings > Accessibility > Contrast themes** in Windows). While one is on, PaperRoute's windows, route maps, and tag colors use the theme's colors in place of PaperRoute's Light or Dark appearance.
+
+### What Windows draws
+
+Message boxes, the Open and Save dialogs, and the folder picker are drawn by Windows, not PaperRoute, so how they work with the keyboard and a screen reader is Windows' own, and so are their colors. In PaperRoute's Dark appearance they keep Windows' colors, which can be light; for 1.0 they stay that way.
+
+### What was tested
+
+PaperRoute's automated tests check, in every window and page:
+
+- that every field, list, and table has a name, and every symbol button an accessible name;
+- that every dialog, except the update's progress window, has a **Cancel** or **Close** button that **Esc** presses;
+- that **Route View** can be used from the keyboard;
+- that status and progress messages are set to be read out as they change;
+- that a screen reader's press reaches chips, tags, and **?** help buttons as a click does; and
+- that the shortcuts listed here are the ones PaperRoute handles.
+
+Before release, PaperRoute is also checked by hand with Narrator on its six pages and its five most-used windows, and under one dark and one light Windows contrast theme.
 
 ---
 

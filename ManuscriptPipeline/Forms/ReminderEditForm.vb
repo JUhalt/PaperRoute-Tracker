@@ -161,6 +161,10 @@ Namespace Forms
             dtpDueDate.Value =
                 DateTime.Today.AddDays(7)
 
+            ' A date picker takes no name from the label before it (#137).
+            dtpDueDate.AccessibleName =
+                "Due date"
+
             txtTitle.Dock =
                 DockStyle.Fill
 

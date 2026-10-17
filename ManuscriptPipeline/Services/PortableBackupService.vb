@@ -2,9 +2,33 @@ Imports System
 Imports System.Collections.Generic
 Imports System.IO
 Imports System.IO.Compression
+Imports System.Text.Json
 Imports ManuscriptPipeline.Models
 
 Namespace Services
+
+    ' backup.json (#115): what made a backup, so Restore can refuse one from
+    ' a newer storage schema before anything changes. PaperRoute 0.9.1 and
+    ' earlier wrote none, so a backup without one is taken as schema 9 or
+    ' older.
+    Public Class BackupManifest
+
+        Public Const FileName As String = "backup.json"
+
+        ' The layout of this file. Restore refuses a format it does not know.
+        Public Const CurrentFormatVersion As Integer = 1
+
+        Public Property FormatVersion As Integer = CurrentFormatVersion
+        Public Property SchemaVersion As Integer = StorageMigrationService.CurrentSchemaVersion
+        Public Property AppVersion As String = String.Empty
+        Public Property CreatedUtc As DateTime
+        Public Property Manuscripts As Integer
+        Public Property Submissions As Integer
+        Public Property EditorialDecisions As Integer
+        Public Property CorrespondenceRecords As Integer
+
+    End Class
+
 
     Public Class PortableBackupService
 
@@ -269,6 +293,34 @@ Namespace Services
                         "backup-info.txt"
                     ),
                     backupInfo
+                )
+
+                ' =============================================
+                ' Manifest
+                ' =============================================
+
+                ' Read by Restore before anything changes (#115);
+                ' backup-info.txt stays for people who read it.
+                Dim manifest As New BackupManifest With {
+                    .AppVersion = PacketExportService.AppVersion(),
+                    .CreatedUtc = DateTime.UtcNow,
+                    .Manuscripts = manuscripts.Count,
+                    .Submissions = submissionCount,
+                    .EditorialDecisions = decisionCount,
+                    .CorrespondenceRecords = correspondenceCount
+                }
+
+                File.WriteAllText(
+                    Path.Combine(
+                        stagingDirectory,
+                        BackupManifest.FileName
+                    ),
+                    JsonSerializer.Serialize(
+                        manifest,
+                        New JsonSerializerOptions With {
+                            .WriteIndented = True
+                        }
+                    )
                 )
 
                 ' =============================================

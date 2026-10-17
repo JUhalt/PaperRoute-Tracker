@@ -1,5 +1,6 @@
 Imports System
 Imports System.Collections.Generic
+Imports System.Globalization
 Imports System.IO
 Imports System.IO.Compression
 Imports System.Text.Json
@@ -17,6 +18,45 @@ Namespace Services
         Public Property ManagedFileCount As Integer
         Public Property ArchiveEntryCount As Integer
         Public Property UncompressedBytes As Long
+
+        ' From the backup's backup.json (#115). A backup without one has the
+        ' date its backup-info.txt records, if any, and no version.
+        Public Property CreatedUtc As DateTime?
+        Public Property AppVersion As String = String.Empty
+
+
+        ' The backup's date and the PaperRoute that made it, as both restore
+        ' questions show them (#115), each "not recorded" when the backup
+        ' does not say.
+        Public Function DescribeOrigin() As String
+
+            Dim created As String =
+                "not recorded"
+
+            If CreatedUtc.HasValue Then
+
+                created =
+                    CreatedUtc.Value.ToLocalTime().ToString(
+                        "MMM d, yyyy h:mm tt",
+                        CultureInfo.CurrentCulture
+                    )
+
+            End If
+
+            Dim version As String =
+                If(
+                    String.IsNullOrWhiteSpace(AppVersion),
+                    "not recorded",
+                    AppVersion
+                )
+
+            Return "Created: " &
+                created &
+                Environment.NewLine &
+                "PaperRoute version: " &
+                version
+
+        End Function
 
     End Class
 
@@ -170,6 +210,11 @@ Namespace Services
                 backupZipPath
             )
 
+            Dim manifest As BackupManifest =
+                ReadManifest(
+                    backupZipPath
+                )
+
             Dim extractionDirectory As String =
                 CreateTemporaryDirectory()
 
@@ -231,6 +276,25 @@ Namespace Services
                     BuildInspection(
                         restoredManuscripts
                     )
+
+                If manifest IsNot Nothing Then
+
+                    inspection.CreatedUtc =
+                        manifest.CreatedUtc
+
+                    inspection.AppVersion =
+                        manifest.AppVersion
+
+                Else
+
+                    ' PaperRoute 0.9.1 and earlier wrote no backup.json, but
+                    ' their backup-info.txt says when the backup was made.
+                    inspection.CreatedUtc =
+                        ReadBackupInfoCreated(
+                            extractionDirectory
+                        )
+
+                End If
 
                 Using archive As ZipArchive = ZipFile.OpenRead(backupZipPath)
 
@@ -343,6 +407,12 @@ Namespace Services
             )
 
             ValidateArchiveLimits(
+                backupZipPath
+            )
+
+            ' Before any folder is made or file written: this build would
+            ' drop what a newer schema holds when it rewrites the library.
+            ReadManifest(
                 backupZipPath
             )
 
@@ -1021,6 +1091,203 @@ Namespace Services
             End Using
 
         End Sub
+
+
+        ' =====================================================
+        ' Manifest
+        ' =====================================================
+
+        Private Const UnreadableManifestMessage As String =
+            "The backup's manifest (backup.json) could not be read."
+
+
+        ' backup.json (#115), read from the archive before anything is
+        ' extracted or changed. Nothing when there is none, as in a backup
+        ' made before PaperRoute wrote one: it is taken as schema 9 or older
+        ' and restores as it always has. One that cannot be read, or is in a
+        ' format this build does not know, is refused, as is one from a
+        ' newer storage schema.
+        Private Shared Function ReadManifest(
+            backupZipPath As String
+        ) As BackupManifest
+
+            Dim json As String
+
+            Using archive As ZipArchive = ZipFile.OpenRead(backupZipPath)
+
+                Dim entry As ZipArchiveEntry =
+                    archive.GetEntry(
+                        BackupManifest.FileName
+                    )
+
+                If entry Is Nothing Then
+                    Return Nothing
+                End If
+
+                Using reader As New StreamReader(entry.Open())
+                    json = reader.ReadToEnd()
+                End Using
+
+            End Using
+
+            Dim manifest As BackupManifest
+
+            Try
+
+                Using document As JsonDocument = JsonDocument.Parse(json)
+
+                    manifest =
+                        ParseManifest(
+                            document.RootElement
+                        )
+
+                End Using
+
+            Catch ex As JsonException
+
+                Throw New InvalidDataException(
+                    UnreadableManifestMessage,
+                    ex
+                )
+
+            End Try
+
+            If manifest.SchemaVersion > StorageMigrationService.CurrentSchemaVersion Then
+
+                Throw New InvalidOperationException(
+                    "This backup was created by a newer storage schema (" &
+                    manifest.SchemaVersion.ToString() &
+                    "). Update PaperRoute before restoring it."
+                )
+
+            End If
+
+            Return manifest
+
+        End Function
+
+
+        Private Shared Function ParseManifest(
+            root As JsonElement
+        ) As BackupManifest
+
+            If root.ValueKind <> JsonValueKind.Object Then
+                Throw New InvalidDataException(UnreadableManifestMessage)
+            End If
+
+            Dim formatVersion As Integer =
+                PositiveInteger(
+                    root,
+                    "FormatVersion"
+                )
+
+            If formatVersion <> BackupManifest.CurrentFormatVersion Then
+
+                ' Format 1 is the first, so any other was written by a newer
+                ' PaperRoute: say so, as a newer schema does.
+                Throw New InvalidDataException(
+                    "The backup's manifest (backup.json) is in format " &
+                    formatVersion.ToString() &
+                    ", from a newer PaperRoute. Update PaperRoute before restoring it."
+                )
+
+            End If
+
+            Dim appVersion As JsonElement
+            Dim createdUtc As JsonElement
+            Dim created As DateTimeOffset
+
+            If Not root.TryGetProperty("AppVersion", appVersion) OrElse
+               appVersion.ValueKind <> JsonValueKind.String OrElse
+               String.IsNullOrWhiteSpace(appVersion.GetString()) OrElse
+               Not root.TryGetProperty("CreatedUtc", createdUtc) OrElse
+               createdUtc.ValueKind <> JsonValueKind.String OrElse
+               Not createdUtc.TryGetDateTimeOffset(created) Then
+
+                Throw New InvalidDataException(UnreadableManifestMessage)
+
+            End If
+
+            Return New BackupManifest With {
+                .FormatVersion = formatVersion,
+                .SchemaVersion = PositiveInteger(root, "SchemaVersion"),
+                .AppVersion = appVersion.GetString(),
+                .CreatedUtc = created.UtcDateTime
+            }
+
+        End Function
+
+
+        ' A whole number above zero, or the manifest cannot be read.
+        Private Shared Function PositiveInteger(
+            root As JsonElement,
+            name As String
+        ) As Integer
+
+            Dim element As JsonElement
+            Dim value As Integer
+
+            If Not root.TryGetProperty(name, element) OrElse
+               element.ValueKind <> JsonValueKind.Number OrElse
+               Not element.TryGetInt32(value) OrElse
+               value <= 0 Then
+
+                Throw New InvalidDataException(UnreadableManifestMessage)
+
+            End If
+
+            Return value
+
+        End Function
+
+
+        ' The Created line of an extracted backup-info.txt, which every
+        ' backup has written in round-trip form, with its offset. Nothing
+        ' when there is no such file or line, or it does not parse, as in the
+        ' copy a restore makes of a library that could not be loaded.
+        Private Shared Function ReadBackupInfoCreated(
+            extractionDirectory As String
+        ) As DateTime?
+
+            Const CreatedPrefix As String = "Created: "
+
+            Dim infoPath As String =
+                Path.Combine(
+                    extractionDirectory,
+                    "backup-info.txt"
+                )
+
+            If Not File.Exists(infoPath) Then
+                Return Nothing
+            End If
+
+            For Each line As String In File.ReadLines(infoPath)
+
+                If Not line.StartsWith(
+                    CreatedPrefix,
+                    StringComparison.Ordinal
+                ) Then
+                    Continue For
+                End If
+
+                Dim created As DateTimeOffset
+
+                If DateTimeOffset.TryParse(
+                    line.Substring(CreatedPrefix.Length),
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    created
+                ) Then
+                    Return created.UtcDateTime
+                End If
+
+                Return Nothing
+
+            Next
+
+            Return Nothing
+
+        End Function
 
 
         ' =====================================================

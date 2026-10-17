@@ -165,6 +165,7 @@ Choose **Settings → Backup Library...** (also on the Import & Export page) to 
 
 ```text
 backup-info.txt
+backup.json         (v0.9.2 and later: the date, version and storage schema)
 manuscripts.json
 authors.json        (when reusable metadata exists)
 citations.json      (v0.9 and later, when citation figures are saved)
@@ -174,7 +175,7 @@ files\
 
 The native JSON preserves manuscript history, readiness profiles, packet associations, and saved file fingerprints. Reusable authors, affiliations, journals, and journal checklist templates are included when present. From v0.9, saved citation figures are included too. Managed document copies, including version and packet snapshots, are included; externally linked files remain references to their original paths. The included Excel workbook is a convenient partial export, not a replacement for the ZIP backup.
 
-**Restore Backup...** validates the archive, previews record/file counts, asks for explicit confirmation, creates an emergency backup of the current library, and then restores the selected archive. From v0.9, restoring an archive with saved citation figures replaces yours.
+**Restore Backup...** validates the archive (from v0.9.2 it refuses a backup from a newer PaperRoute), previews record/file counts and the backup's date and version, asks for explicit confirmation, creates an emergency backup of the current library, and then restores the selected archive. From v0.9, restoring an archive with saved citation figures replaces yours.
 
 ## File Drawer
 

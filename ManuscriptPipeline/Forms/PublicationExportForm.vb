@@ -328,6 +328,10 @@ Namespace Forms
             lstItems.HorizontalScrollbar =
                 True
 
+            ' Neither the list nor the preview has a label (#137).
+            lstItems.AccessibleName =
+                "Manuscripts to export"
+
             split.Panel1.Controls.Add(
                 lstItems
             )
@@ -346,6 +350,9 @@ Namespace Forms
 
             txtPreview.WordWrap =
                 False
+
+            txtPreview.AccessibleName =
+                "Export preview"
 
             split.Panel2.Controls.Add(
                 txtPreview

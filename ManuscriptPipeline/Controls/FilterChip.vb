@@ -78,6 +78,11 @@ Namespace Controls
             End If
         End Sub
 
+        ' A screen reader presses the chip as Enter does (#139).
+        Protected Overrides Function CreateAccessibilityInstance() As AccessibleObject
+            Return New PressableAccessibleObject(Me, Sub() OnClick(EventArgs.Empty))
+        End Function
+
         Protected Overrides Sub OnMouseDown(e As MouseEventArgs)
             MyBase.OnMouseDown(e)
             If e.Button = MouseButtons.Left AndAlso CanFocus Then Focus()

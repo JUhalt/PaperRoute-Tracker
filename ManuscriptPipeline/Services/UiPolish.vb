@@ -377,8 +377,8 @@ Namespace Services
                 grid.GridColor = UiTheme.CardBorder()
                 grid.DefaultCellStyle.BackColor = UiTheme.CardBackground()
                 grid.DefaultCellStyle.ForeColor = UiTheme.PrimaryText()
-                grid.DefaultCellStyle.SelectionBackColor = UiTheme.HoverBackground()
-                grid.DefaultCellStyle.SelectionForeColor = UiTheme.PrimaryText()
+                grid.DefaultCellStyle.SelectionBackColor = UiTheme.SelectedRowBackground(UiTheme.HoverBackground())
+                grid.DefaultCellStyle.SelectionForeColor = UiTheme.SelectedRowText()
                 grid.ColumnHeadersDefaultCellStyle.BackColor = UiTheme.HeaderBackground()
                 grid.ColumnHeadersDefaultCellStyle.ForeColor = UiTheme.PrimaryText()
                 ' A header never looks selected because a cell below it is.

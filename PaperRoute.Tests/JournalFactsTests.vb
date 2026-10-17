@@ -868,7 +868,8 @@ Public Class JournalFactsTests
         Return File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "JournalFacts", name))
     End Function
 
-    Private Shared Function PlosLookup(Optional checkedUtc As DateTime? = Nothing) As JournalFactsLookup
+    ' Shared with ResponsivenessBudgetTests, which times the dialog on it.
+    Friend Shared Function PlosLookup(Optional checkedUtc As DateTime? = Nothing) As JournalFactsLookup
         Return New JournalFactsLookup With {
             .CheckedUtc = If(checkedUtc, Checked),
             .Issns = New List(Of String) From {"1932-6203"},
@@ -924,7 +925,7 @@ Public Class JournalFactsTests
     End Class
 
     ' Recorded answers for the dialog and the Journals page.
-    Private NotInheritable Class RecordedFacts
+    Friend NotInheritable Class RecordedFacts
         Implements IJournalFactsSource
 
         Private ReadOnly _lookup As JournalFactsLookup

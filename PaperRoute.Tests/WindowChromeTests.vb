@@ -45,9 +45,10 @@ Public Class WindowChromeTests
 
         Dim readable As New HashSet(Of String)()
         Dim views As Integer = 0
+        Dim found As New List(Of String)()
 
-        Dim failures As List(Of String) = ViewCatalog.ShowEach(ViewCatalog.All(), mode,
-            Sub(name, shown, found)
+        Dim failures As List(Of String) = ViewCatalog.ShowEach(ViewCatalog.AllViewsAndStages(),
+            Sub(name, shown)
 
                 views += 1
 
@@ -81,11 +82,13 @@ Public Class WindowChromeTests
                     found.Add($"{name}: reads back corners of {value}.")
                 End If
 
-            End Sub)
+            End Sub,
+            mode:=mode)
 
         TestContext.WriteLine($"{mode}: {views} windows; reading back answered: {String.Join(", ", readable)}.")
         Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
-        Assert.AreEqual(ViewCatalog.All().Count, views, "Every view was shown.")
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        Assert.AreEqual(ViewCatalog.AllViewsAndStages().Count, views, "Every view was shown.")
         Assert.IsTrue(readable.Contains("dark title bar 0x00000000"), "Windows 11 lets the dark title bar be read back: " & String.Join(", ", readable))
 
     End Sub

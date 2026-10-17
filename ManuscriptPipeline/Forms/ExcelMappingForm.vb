@@ -220,6 +220,8 @@ Namespace Forms
         Private Sub ConfigureGrid()
 
             gridMappings.Dock = DockStyle.Fill
+            ' No label names the grid (#137).
+            gridMappings.AccessibleName = "Column mappings"
             gridMappings.AllowUserToAddRows = False
             gridMappings.AllowUserToDeleteRows = False
             gridMappings.AllowUserToResizeRows = False
@@ -273,8 +275,8 @@ Namespace Forms
             gridMappings.GridColor = UiTheme.CardBorder()
             gridMappings.DefaultCellStyle.BackColor = UiTheme.CardBackground()
             gridMappings.DefaultCellStyle.ForeColor = UiTheme.PrimaryText()
-            gridMappings.DefaultCellStyle.SelectionBackColor = UiTheme.HoverBackground()
-            gridMappings.DefaultCellStyle.SelectionForeColor = UiTheme.PrimaryText()
+            gridMappings.DefaultCellStyle.SelectionBackColor = UiTheme.SelectedRowBackground(UiTheme.HoverBackground())
+            gridMappings.DefaultCellStyle.SelectionForeColor = UiTheme.SelectedRowText()
             gridMappings.DefaultCellStyle.Padding = New Padding(6, 4, 6, 4)
             gridMappings.ColumnHeadersDefaultCellStyle.BackColor = UiTheme.HeaderBackground()
             gridMappings.ColumnHeadersDefaultCellStyle.ForeColor = UiTheme.PrimaryText()
