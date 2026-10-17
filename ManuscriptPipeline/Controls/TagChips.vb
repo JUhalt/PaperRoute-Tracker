@@ -346,6 +346,11 @@ Namespace Controls
             End If
         End Sub
 
+        ' A screen reader presses the chip as a click on it does (#139).
+        Protected Overrides Function CreateAccessibilityInstance() As AccessibleObject
+            Return New PressableAccessibleObject(Me, Sub() OnClick(EventArgs.Empty))
+        End Function
+
         Protected Overrides Sub OnGotFocus(e As EventArgs)
             MyBase.OnGotFocus(e)
             Invalidate()

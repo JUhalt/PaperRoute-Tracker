@@ -117,7 +117,8 @@ Namespace Forms
         Private ReadOnly lblTruncated As New Label()
         Private ReadOnly gridRequirements As New DataGridView()
         Private ReadOnly txtQuote As New TextBox()
-        Private ReadOnly lblStatus As New Label()
+        ' Announced as it changes, without taking focus (#139).
+        Private ReadOnly lblStatus As New Label() With {.LiveSetting = Automation.AutomationLiveSetting.Polite}
         Private ReadOnly btnPrimary As New Button()
         Private ReadOnly btnBack As New Button()
         Private ReadOnly btnCancel As New Button()

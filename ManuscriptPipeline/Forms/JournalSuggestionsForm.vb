@@ -60,7 +60,8 @@ Namespace Forms
         Private ReadOnly evidencePanel As New TableLayoutPanel()
         Private ReadOnly lvJournals As New ListView()
         Private ReadOnly examplesPanel As New FlowLayoutPanel()
-        Private ReadOnly lblStatus As New Label()
+        ' Announced as it changes, without taking focus (#139).
+        Private ReadOnly lblStatus As New Label() With {.LiveSetting = Automation.AutomationLiveSetting.Polite}
         Private ReadOnly lblFooter As New Label()
         ' Plain buttons size to their text; the accept button is styled as
         ' the primary action.

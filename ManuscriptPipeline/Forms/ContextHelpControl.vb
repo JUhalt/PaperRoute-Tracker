@@ -1,6 +1,7 @@
 Imports System
 Imports System.Drawing
 Imports System.Windows.Forms
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Services
 
 Namespace Forms
@@ -144,6 +145,18 @@ Namespace Forms
             End If
 
         End Sub
+
+
+        ' A screen reader presses it as a click does, and the help shows
+        ' (#139).
+        Protected Overrides Function CreateAccessibilityInstance() As AccessibleObject
+
+            Return New PressableAccessibleObject(
+                Me,
+                Sub() OnClick(EventArgs.Empty)
+            )
+
+        End Function
 
 
         Protected Overrides Sub OnClick(

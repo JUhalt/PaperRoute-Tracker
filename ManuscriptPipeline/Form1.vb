@@ -39,7 +39,8 @@ Public Class Form1
     Private ReadOnly tabFileDrawer As New ShelfTabButton()
     Private ReadOnly shelfHost As New Panel()
 
-    Private ReadOnly lblStatus As New Label()
+    ' The status line is announced as it changes, without taking focus (#139).
+    Private ReadOnly lblStatus As New Label() With {.LiveSetting = Automation.AutomationLiveSetting.Polite}
 
     Private ReadOnly txtBoardSearch As New TextBox()
     Private ReadOnly cboStageFilter As New ComboBox()

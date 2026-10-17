@@ -27,7 +27,8 @@ Namespace Forms
         Private ReadOnly lstManuscripts As New CheckedListBox()
         Private ReadOnly lstChanges As New ListView()
         Private ReadOnly lblIntro As New Label()
-        Private ReadOnly lblProgress As New Label()
+        ' Announced as it changes, without taking focus (#139).
+        Private ReadOnly lblProgress As New Label() With {.LiveSetting = Automation.AutomationLiveSetting.Polite}
         Private ReadOnly body As New Panel()
         Private ReadOnly btnPrimary As New ActionButton()
         Private ReadOnly btnCancel As New ActionButton()

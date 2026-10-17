@@ -19,7 +19,8 @@ Namespace Forms
         Private ReadOnly txtOrcid As New TextBox()
         Private ReadOnly btnLookup As New Button()
         Private ReadOnly btnOpenProfile As New Button()
-        Private ReadOnly lblStatus As New Label()
+        ' Announced as it changes, without taking focus (#139).
+        Private ReadOnly lblStatus As New Label() With {.LiveSetting = Automation.AutomationLiveSetting.Polite}
 
         Private ReadOnly chkApplyName As New CheckBox()
         Private ReadOnly chkApplyCredit As New CheckBox()

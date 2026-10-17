@@ -47,7 +47,8 @@ Namespace Forms
         Private ReadOnly lnkSent As New LinkLabel()
         Private ReadOnly txtSent As New TextBox()
         Private ReadOnly txtLetter As New TextBox()
-        Private ReadOnly lblStatus As New Label()
+        ' Announced as it changes, without taking focus (#139).
+        Private ReadOnly lblStatus As New Label() With {.LiveSetting = Automation.AutomationLiveSetting.Polite}
         Private ReadOnly btnPrimary As New Button()
         Private ReadOnly btnSave As New Button()
         Private ReadOnly btnAgain As New Button()

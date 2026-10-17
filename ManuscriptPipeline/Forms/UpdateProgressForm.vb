@@ -7,7 +7,8 @@ Namespace Forms
     Public Class UpdateProgressForm
         Inherits Form
 
-        Private ReadOnly lblStatus As New Label()
+        ' Announced as it changes, without taking focus (#139).
+        Private ReadOnly lblStatus As New Label() With {.LiveSetting = Automation.AutomationLiveSetting.Polite}
         Private ReadOnly progressBar As New ProgressBar()
 
 

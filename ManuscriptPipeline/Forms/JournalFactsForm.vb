@@ -40,7 +40,8 @@ Namespace Forms
         Private ReadOnly btnFind As New ActionButton()
         Private ReadOnly lvMatches As New ListView()
         Private ReadOnly lvChanges As New ListView()
-        Private ReadOnly lblStatus As New Label()
+        ' Announced as it changes, without taking focus (#139).
+        Private ReadOnly lblStatus As New Label() With {.LiveSetting = Automation.AutomationLiveSetting.Polite}
         Private ReadOnly lblFooter As New Label()
         Private ReadOnly btnPrimary As New ActionButton()
         Private ReadOnly btnCancel As New ActionButton()

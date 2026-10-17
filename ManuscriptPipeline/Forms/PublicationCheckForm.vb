@@ -28,7 +28,8 @@ Namespace Forms
         Private ReadOnly lblSelected As New Label()
         Private ReadOnly chkOrcid As New CheckBox()
         Private ReadOnly txtOrcid As New TextBox()
-        Private ReadOnly lblProgress As New Label()
+        ' Announced as it changes, without taking focus (#139).
+        Private ReadOnly lblProgress As New Label() With {.LiveSetting = Automation.AutomationLiveSetting.Polite}
         Private ReadOnly progressBar As New ProgressBar()
         Private ReadOnly btnPrimary As New ActionButton()
         Private ReadOnly btnCancel As New ActionButton()

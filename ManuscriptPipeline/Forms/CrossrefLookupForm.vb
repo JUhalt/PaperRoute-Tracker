@@ -21,7 +21,8 @@ Namespace Forms
 
         Private ReadOnly txtDoi As New TextBox()
         Private ReadOnly btnLookup As New Button()
-        Private ReadOnly lblStatus As New Label()
+        ' Announced as it changes, without taking focus (#139).
+        Private ReadOnly lblStatus As New Label() With {.LiveSetting = Automation.AutomationLiveSetting.Polite}
         Private ReadOnly txtPreview As New TextBox()
 
         Private ReadOnly chkDoi As New CheckBox()
