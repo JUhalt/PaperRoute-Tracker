@@ -550,10 +550,16 @@ Partial Public Class Form1
             Return
         End If
 
-        contentHost.Controls.Remove(currentPageView)
-
         ' The Import & Export page keeps its controls for its next visit.
-        If currentPageView IsNot importExportPage Then
+        ' Every other page is disposed where it is: removed first, each of
+        ' its windows would move to WinForms' parking window only to be
+        ' destroyed there, a few milliseconds a window on a slow machine
+        ' (#133). Disposing removes it from the page area once its windows
+        ' are gone.
+        If currentPageView Is importExportPage Then
+            contentHost.Controls.Remove(currentPageView)
+        Else
+            MoveFocusOutOf(currentPageView)
             currentPageView.Dispose()
         End If
 
@@ -579,6 +585,21 @@ Partial Public Class Form1
     End Sub
 
 
+    ' Focus in a page being put away moves where removing the page from
+    ' the window moved it: to the window's first stop, the rail's collapse
+    ' button. Disposed or hidden with focus inside, a page would otherwise
+    ' leave it on the page area itself.
+    Private Sub MoveFocusOutOf(page As Control)
+
+        Dim active As Control = ActiveControl
+
+        If active IsNot Nothing AndAlso (active Is page OrElse page.Contains(active)) Then
+            SelectNextControl(Nothing, True, True, True, True)
+        End If
+
+    End Sub
+
+
     Private Sub ShowPage(request As PageRequest)
 
         If request.Page = WorkspacePage.Board Then
@@ -598,7 +619,7 @@ Partial Public Class Form1
                 view = BuildHostedPage(
                     "Journals",
                     "Your reusable journal records and their submission checklists. Changes are saved as you make them.",
-                    New JournalLibraryForm(manuscripts))
+                    CreateJournalLibraryEditor())
             Case WorkspacePage.Deadlines
                 view = BuildDeadlinesPage()
             Case WorkspacePage.Insights
@@ -718,14 +739,17 @@ Partial Public Class Form1
             End If
         Next
 
-        editor.Visible = True
+        InPlace.WhenAttached(editor, Sub() editor.Visible = True)
         pageHostedEditor = True
         Return editor
 
     End Function
 
 
-    ' Shows a form as a child control that fills its place in a page.
+    ' Shows a form as a child control that fills its place in a page, once
+    ' the page is in the window (InPlace.WhenAttached): marked visible
+    ' before then, it would make its windows on WinForms' parking window
+    ' and move them (#133).
     Private Shared Sub EmbedForm(form As Form)
 
         form.TopLevel = False
@@ -735,7 +759,6 @@ Partial Public Class Form1
         form.AcceptButton = Nothing
         form.CancelButton = Nothing
         form.ShowInTaskbar = False
-        form.Visible = True
 
     End Sub
 
@@ -832,9 +855,18 @@ Partial Public Class Form1
         body.Controls.Add(libraryContent, 0, 1)
         frame.Controls.Add(body, 0, 2)
 
-        tabLibraryManuscripts.Checked = True
-        AddHandler tabLibraryManuscripts.CheckedChanged, AddressOf LibraryViewChanged
-        AddHandler tabLibraryAuthors.CheckedChanged, AddressOf LibraryViewChanged
+        ' The first tab is checked once the page is in the window, and only
+        ' then listened to, as before: a radio button checked earlier makes
+        ' its window on WinForms' parking window (#133).
+        Dim manuscriptsTab As ShelfTabButton = tabLibraryManuscripts
+        Dim authorsTab As ShelfTabButton = tabLibraryAuthors
+        InPlace.WhenAttached(
+            manuscriptsTab,
+            Sub()
+                manuscriptsTab.Checked = True
+                AddHandler manuscriptsTab.CheckedChanged, AddressOf LibraryViewChanged
+                AddHandler authorsTab.CheckedChanged, AddressOf LibraryViewChanged
+            End Sub)
 
         ShowLibraryManuscripts()
 
@@ -898,6 +930,15 @@ Partial Public Class Form1
     End Function
 
 
+    ' Creates the Journals page's editor. Tests supply one on their own
+    ' author library.
+    Protected Overridable Function CreateJournalLibraryEditor() As Form
+
+        Return New JournalLibraryForm(manuscripts)
+
+    End Function
+
+
     ' A read-only, sortable table in the page style, shared by the Library
     ' and Insights pages.
     Private Function CreatePageGrid(accessibleName As String) As DataGridView
@@ -945,14 +986,17 @@ Partial Public Class Form1
 
         Dim grid As DataGridView = CreatePageGrid("All manuscripts. Press Enter to open the selected manuscript.")
 
+        ' Stage, Shelf, Type and Days are as wide as their widest text,
+        ' fitted on every fill (FitLibraryColumns), and, as columns sized to
+        ' their cells always were, cannot be dragged wider.
         grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Title", .HeaderText = "Title", .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = 220, .MinimumWidth = UiTheme.Px(220, DeviceDpi)})
-        grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Stage", .HeaderText = "Stage", .AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells})
-        grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Shelf", .HeaderText = "Shelf", .AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells})
+        grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Stage", .HeaderText = "Stage", .AutoSizeMode = DataGridViewAutoSizeColumnMode.None, .Resizable = DataGridViewTriState.False})
+        grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Shelf", .HeaderText = "Shelf", .AutoSizeMode = DataGridViewAutoSizeColumnMode.None, .Resizable = DataGridViewTriState.False})
         grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Journal", .HeaderText = "Target journal", .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = 55})
         grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Route", .HeaderText = "Route", .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = 70})
-        grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Type", .HeaderText = "Type", .AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells})
+        grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Type", .HeaderText = "Type", .AutoSizeMode = DataGridViewAutoSizeColumnMode.None, .Resizable = DataGridViewTriState.False})
         grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Tags", .HeaderText = "Tags", .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = 45})
-        grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Days", .HeaderText = "Days in stage", .AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells, .ValueType = GetType(Integer)})
+        grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Days", .HeaderText = "Days in stage", .AutoSizeMode = DataGridViewAutoSizeColumnMode.None, .Resizable = DataGridViewTriState.False, .ValueType = GetType(Integer)})
         grid.Columns("Days").DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight
 
         For Each column As DataGridViewColumn In grid.Columns
@@ -974,6 +1018,11 @@ Partial Public Class Form1
 
         libraryGrid = grid
         FillLibraryGrid()
+
+        ' Fitted in the window's font, once the grid is in the window.
+        InPlace.WhenAttached(grid, Sub() FitLibraryColumns(grid))
+        AddHandler grid.FontChanged, Sub(sender, e) FitLibraryColumns(grid)
+
         libraryContent.Controls.Add(grid)
 
         EmptyHint.Attach(
@@ -1058,6 +1107,7 @@ Partial Public Class Form1
         Next
 
         libraryGrid.Rows.AddRange(rows.ToArray())
+        FitLibraryColumns(libraryGrid)
 
         If selectedRow IsNot Nothing Then
             libraryGrid.CurrentCell = selectedRow.Cells(0)
@@ -1070,6 +1120,43 @@ Partial Public Class Form1
         If tabLibraryManuscripts IsNot Nothing AndAlso Not tabLibraryManuscripts.IsDisposed Then
             tabLibraryManuscripts.Text = "Manuscripts (" & manuscripts.Count.ToString() & ")"
         End If
+
+    End Sub
+
+
+    ' Sizes the Library's short columns to their widest text and their
+    ' heading on one line, as sizing each to all its cells did, measuring
+    ' one cell of each distinct text (of each length, for a number) on
+    ' every fill and font change once the grid is in the window, where it
+    ' has the window's font. A column sized to its cells measured every
+    ' one of them again each time the grid laid out, which on a library
+    ' of 500 made showing the page slow (#133).
+    Private Shared Sub FitLibraryColumns(
+        grid As DataGridView
+    )
+
+        If grid.IsDisposed OrElse grid.FindForm() Is Nothing Then
+            Return
+        End If
+
+        For Each name As String In {"Stage", "Shelf", "Type", "Days"}
+
+            Dim column As DataGridViewColumn = grid.Columns(name)
+            Dim measured As New HashSet(Of String)(StringComparer.Ordinal)
+            Dim width As Integer = column.HeaderCell.PreferredSize.Width
+
+            For Each row As DataGridViewRow In grid.Rows
+                Dim cell As DataGridViewCell = row.Cells(column.Index)
+                Dim text As String = Convert.ToString(cell.Value, Globalization.CultureInfo.CurrentCulture)
+                Dim key As String = If(TypeOf cell.Value Is Integer, "#" & text.Length.ToString(Globalization.CultureInfo.InvariantCulture), text)
+                If measured.Add(key) Then
+                    width = Math.Max(width, cell.PreferredSize.Width)
+                End If
+            Next
+
+            column.Width = Math.Max(column.MinimumWidth, width)
+
+        Next
 
     End Sub
 

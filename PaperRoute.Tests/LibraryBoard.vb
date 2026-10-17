@@ -19,7 +19,6 @@ Friend NotInheritable Class LibraryBoard
     Inherits Form1
 
     Private ReadOnly _library As LargeLibraryFixture.SyntheticLibrary
-    Private _journals As Control = Nothing
     Private _painted As Boolean = False
 
 
@@ -54,6 +53,13 @@ Friend NotInheritable Class LibraryBoard
     ' user's author library.
     Protected Overrides Function CreateAuthorLibraryEditor() As Form
         Return New Form()
+    End Function
+
+
+    ' The Journals page as the window builds it, on the test's author
+    ' library rather than the user's.
+    Protected Overrides Function CreateJournalLibraryEditor() As Form
+        Return New JournalLibraryForm(Library, _library.AuthorRepository, Nothing)
     End Function
 
 
@@ -239,32 +245,6 @@ Friend NotInheritable Class LibraryBoard
     End Function
 
 
-    ' The Journals page as ShowPage builds it, from the test's author
-    ' library, and leaving it as LeaveCurrentPage leaves a hosted editor.
-    Public Sub ShowJournals()
-        Dim editor As New JournalLibraryForm(Library, _library.AuthorRepository, Nothing)
-        _journals = DirectCast(CallPrivate("BuildHostedPage", "Journals",
-                                           "Your reusable journal records and their submission checklists. Changes are saved as you make them.",
-                                           editor), Control)
-        Dim host As Panel = DirectCast(GetField("contentHost"), Panel)
-        _journals.Dock = DockStyle.Fill
-        host.Controls.Add(_journals)
-        _journals.BringToFront()
-        DirectCast(GetField("boardPage"), Panel).Visible = False
-    End Sub
-
-
-    Public Sub LeaveJournals()
-        DirectCast(GetField("contentHost"), Panel).Controls.Remove(_journals)
-        _journals.Dispose()
-        _journals = Nothing
-        SetField("pageHostedEditor", False)
-        LoadAuthorLibrary()
-        CallPrivate("RenderManuscripts")
-        DirectCast(GetField("boardPage"), Panel).Visible = True
-    End Sub
-
-
     ' ---------------------------------------------------------------
     ' The manuscript page, for the tests of an editor that loads one
     ' record after another (#133)
@@ -282,6 +262,21 @@ Friend NotInheritable Class LibraryBoard
     Public ReadOnly Property Editor As EditManuscriptForm
         Get
             Return DirectCast(GetField("manuscriptEditor"), EditManuscriptForm)
+        End Get
+    End Property
+
+
+    ' The page area, and the Board page in it.
+    Public ReadOnly Property ContentHost As Control
+        Get
+            Return DirectCast(GetField("contentHost"), Control)
+        End Get
+    End Property
+
+
+    Public ReadOnly Property BoardPage As Control
+        Get
+            Return DirectCast(GetField("boardPage"), Control)
         End Get
     End Property
 

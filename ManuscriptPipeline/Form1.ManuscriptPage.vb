@@ -350,6 +350,7 @@ Partial Public Class Form1
         ' The editor: tabs over one working copy, without its dialog footer.
         Dim editor As EditManuscriptForm = CreateManuscriptEditor(manuscript)
         EmbedForm(editor)
+        InPlace.WhenAttached(editor, Sub() editor.Visible = True)
         AddHandler editor.DeleteConfirmed, AddressOf ManuscriptDeleteConfirmed
         AddHandler editor.StatusMessage, Sub(sender, message) lblStatus.Text = message
         manuscriptEditor = editor

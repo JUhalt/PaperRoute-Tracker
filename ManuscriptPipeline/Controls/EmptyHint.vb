@@ -58,6 +58,12 @@ Namespace Controls
                     Update(entry)
                 End Sub
 
+            ' A list not yet in any window shows its hint once it has one.
+            AddHandler target.HandleCreated,
+                Sub(sender, e)
+                    Update(entry)
+                End Sub
+
             ' A table reports its rows, so its hint follows them at once.
             Dim grid As DataGridView = TryCast(target, DataGridView)
             If grid IsNot Nothing Then
@@ -87,6 +93,13 @@ Namespace Controls
             Dim target As Control = entry.Target
 
             If target.IsDisposed OrElse entry.Hint.IsDisposed Then
+                Return
+            End If
+
+            ' Shown while its list is in no window yet, the hint would make
+            ' its window on WinForms' parking window (#133); it waits until
+            ' the list has a window or a form around it.
+            If Not target.IsHandleCreated AndAlso target.FindForm() Is Nothing Then
                 Return
             End If
 

@@ -134,13 +134,10 @@ Public Class ResponsivenessBudgetTests
             rows.Add(Time(library, "Library filter: refill once typing pauses", UiThread, Sub() board.PauseTyping()))
             rows.Add(Time(library, "Library to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
 
-            ' ShowPage builds the Journals page from the user's author library;
-            ' here it is built the same way from the test's, since no seam
-            ' lets a test supply one.
-            rows.Add(Time(library, "Board to Journals (built as ShowPage builds it, from the test's author library)", PageSwitch, Sub() board.ShowJournals()))
-            ' #133 brought this from 8.9 s to about 90 ms; against a 100 ms
-            ' budget that leaves no room on a busy host, so it is reported.
-            rows.Add(Time(library, "Journals to Board", PageSwitch, Sub() board.LeaveJournals()))
+            ' The Journals page on the test's author library, through the
+            ' window's own navigation (CreateJournalLibraryEditor).
+            rows.Add(Time(library, "Board to Journals", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Journals)))
+            rows.Add(Time(library, "Journals to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
 
             rows.Add(Time(library, "Board to Deadlines", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Deadlines)))
             rows.Add(Time(library, "Deadlines: one filter keystroke", UiThread, Sub() board.TypeInDeadlinesFilter("a")))
