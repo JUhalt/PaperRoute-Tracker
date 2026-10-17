@@ -175,7 +175,10 @@ Public Class ImportExportPageTests
                     Assert.IsTrue(page.Visible)
                     CollectionAssert.AreEqual(before, ViewCatalog.Descendants(page).Select(Function(control) control.Handle).ToList(), "No window is made again.")
 
+                    ' Kept in the window, the page goes with it, shown or hidden.
+                    board.NavigateTo(Form1.WorkspacePage.Board)
                     board.Close()
+                    Assert.IsTrue(page.IsDisposed, "Closing the window disposes the kept page.")
                 End Using
             End Sub)
 

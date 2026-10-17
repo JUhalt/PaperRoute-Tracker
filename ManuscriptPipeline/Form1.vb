@@ -2404,13 +2404,14 @@ Public Class Form1
         cardToolTip.Dispose()
         DisposeSharedDashboardFonts()
 
-        ' Parked cards and the kept page are not in the window's control tree.
+        ' Parked cards are not in the window's control tree, so they are
+        ' disposed here. The kept pages are in it, hidden while another page
+        ' shows (#133), and are disposed with it.
         For Each card As RoundedPanel In manuscriptCards.Values
             card.Dispose()
         Next
 
         manuscriptCards.Clear()
-        importExportPage?.Dispose()
 
         MyBase.OnFormClosed(
             e

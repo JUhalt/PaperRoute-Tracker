@@ -836,7 +836,10 @@ Public Class DeadlineListTests
 
                     Assert.AreEqual(0, board.SaveCount, "Nothing on the page saved.")
 
+                    ' Kept in the window, the page goes with it, shown or hidden.
+                    board.NavigateTo(Form1.WorkspacePage.Board)
                     board.Close()
+                    Assert.IsTrue(page.IsDisposed, "Closing the window disposes the kept page.")
                 End Using
             End Sub)
 
