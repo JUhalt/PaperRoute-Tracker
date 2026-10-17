@@ -89,8 +89,9 @@ Public Class Form1
     ' card whose text is unchanged is shown again rather than rebuilt, since
     ' building one and its window handles costs tens of milliseconds on a
     ' slow machine (#133). A card not on a shelf waits, parked, for the next
-    ' render that shows it. Each card's Tag is the text it was built from.
-    ' Cards are kept by CardSlot, so records sharing an Id each have one.
+    ' render that shows it. Each card's Tag is its CardRecord: the record it
+    ' stands for and the text it was built from. Cards are kept by
+    ' CardSlot, so records sharing an Id each have one.
     Private ReadOnly manuscriptCards As New Dictionary(Of (Id As Guid, Occurrence As Integer), RoundedPanel)()
 
 
@@ -2707,7 +2708,13 @@ Public Class Form1
 
         If manuscriptCards.TryGetValue(slot, card) Then
 
-            If String.Equals(TryCast(card.Tag, String), key, StringComparison.Ordinal) Then
+            Dim kept As CardRecord = TryCast(card.Tag, CardRecord)
+
+            If kept IsNot Nothing AndAlso String.Equals(kept.Key, key, StringComparison.Ordinal) Then
+
+                ' The card now stands for this record, which may have
+                ' replaced the one it was built for.
+                kept.Manuscript = manuscript
 
                 ' Tag colors come from the reusable library, which may have
                 ' been reloaded since the card was built.
@@ -2724,22 +2731,38 @@ Public Class Form1
         End If
 
         card = DirectCast(CreateManuscriptCard(manuscript, shelf), RoundedPanel)
-        card.Tag = key
+        DirectCast(card.Tag, CardRecord).Key = key
         manuscriptCards(slot) = card
         Return card
 
     End Function
 
 
-    ' Runs an action on a card's manuscript as the library holds it when the
-    ' card is used, not as it was when the card was built: a restore replaces
-    ' the records while their cards stay.
+    ' What a card stands for, in its Tag: the record it was last rendered
+    ' for and the text it shows. A kept card's record can be replaced by an
+    ' equal one with the same Id, and two records can share an Id, so the
+    ' card holds its own record rather than an Id.
+    Private NotInheritable Class CardRecord
+
+        Public Property Manuscript As Manuscript
+        Public Property Key As String = String.Empty
+
+    End Class
+
+
+    ' Runs a card's action on the card's own record while the library still
+    ' holds it, so the second of two records that share an Id acts on its
+    ' own copy, as each card did before cards were kept (#133). A record the
+    ' library no longer holds falls back to the one now holding its Id.
     Private Sub WithLiveManuscript(
-        id As Guid,
+        record As CardRecord,
         action As Action(Of Manuscript)
     )
 
-        Dim live As Manuscript = FindManuscript(id)
+        Dim own As Manuscript = record.Manuscript
+
+        Dim live As Manuscript =
+            If(manuscripts.Any(Function(item) item Is own), own, FindManuscript(own.Id))
 
         If live IsNot Nothing Then
             action(live)
@@ -2909,7 +2932,12 @@ Public Class Form1
             cardToolTip.SetToolTip(lblStatusLine, statusText)
         End If
 
-        Dim cardMenu As ContextMenuStrip = BuildCardMenu(manuscript)
+        ' The card may outlive this record (#133); its actions go through
+        ' the record it stands for when used.
+        Dim record As New CardRecord With {.Manuscript = manuscript}
+        card.Tag = record
+
+        Dim cardMenu As ContextMenuStrip = BuildCardMenu(record)
 
         AddHandler card.Disposed,
             Sub(sender, e)
@@ -3045,24 +3073,21 @@ Public Class Form1
         ' Behavior
         ' =================================================
 
-        ' The card may outlive this record (#133): act on the library's.
-        Dim id As Guid = manuscript.Id
-
         Dim openOnLeftClick As MouseEventHandler =
             Sub(sender, e)
                 If e.Button = MouseButtons.Left Then
-                    WithLiveManuscript(id, Sub(live) OpenManuscript(live))
+                    WithLiveManuscript(record, Sub(live) OpenManuscript(live))
                 End If
             End Sub
 
         AddHandler lblTitle.LinkClicked,
             Sub(sender, e)
-                WithLiveManuscript(id, Sub(live) OpenManuscript(live))
+                WithLiveManuscript(record, Sub(live) OpenManuscript(live))
             End Sub
 
         AddHandler lblRoute.LinkClicked,
             Sub(sender, e)
-                WithLiveManuscript(id, Sub(live) OpenRouteView(live))
+                WithLiveManuscript(record, Sub(live) OpenRouteView(live))
             End Sub
 
         ' Hovering anywhere on the card, or focusing its title, highlights it.
@@ -3149,20 +3174,19 @@ Public Class Form1
     End Function
 
 
+    ' The menu acts through the card's record (#133); which items it has
+    ' follows the shelf, which is part of the text a card is kept by.
     Private Function BuildCardMenu(
-        manuscript As Manuscript
+        record As CardRecord
     ) As ContextMenuStrip
 
         Dim cardMenu As New ContextMenuStrip()
-
-        ' The menu may outlive this record (#133): act on the library's.
-        Dim id As Guid = manuscript.Id
 
         cardMenu.Items.Add(
             "Open",
             Nothing,
             Sub(sender, e)
-                WithLiveManuscript(id, Sub(live) OpenManuscript(live))
+                WithLiveManuscript(record, Sub(live) OpenManuscript(live))
             End Sub
         )
 
@@ -3170,29 +3194,29 @@ Public Class Form1
             "View Route",
             Nothing,
             Sub(sender, e)
-                WithLiveManuscript(id, Sub(live) OpenRouteView(live))
+                WithLiveManuscript(record, Sub(live) OpenRouteView(live))
             End Sub
         )
 
-        If manuscript.Location = ManuscriptLocation.Pipeline Then
+        If record.Manuscript.Location = ManuscriptLocation.Pipeline Then
 
             cardMenu.Items.Add(New ToolStripSeparator())
             cardMenu.Items.Add(
                 "Move to File Drawer...",
                 Nothing,
                 Sub(sender, e)
-                    WithLiveManuscript(id, Sub(live) MoveToFileDrawer(live))
+                    WithLiveManuscript(record, Sub(live) MoveToFileDrawer(live))
                 End Sub
             )
 
-        ElseIf manuscript.Location = ManuscriptLocation.FileDrawer Then
+        ElseIf record.Manuscript.Location = ManuscriptLocation.FileDrawer Then
 
             cardMenu.Items.Add(New ToolStripSeparator())
             cardMenu.Items.Add(
                 "Restore to Pipeline",
                 Nothing,
                 Sub(sender, e)
-                    WithLiveManuscript(id, Sub(live) RestoreToPipeline(live))
+                    WithLiveManuscript(record, Sub(live) RestoreToPipeline(live))
                 End Sub
             )
 
@@ -3205,7 +3229,7 @@ Public Class Form1
                 "Delete...",
                 Nothing,
                 Sub(sender, e)
-                    WithLiveManuscript(id, Sub(live) DeleteManuscript(live))
+                    WithLiveManuscript(record, Sub(live) DeleteManuscript(live))
                 End Sub
             )
 

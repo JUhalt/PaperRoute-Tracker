@@ -1610,11 +1610,12 @@ Public Class ManuscriptPageTests
     End Sub
 
     ' Board cards are kept between renders (#133). A kept card acts on the
-    ' record the library holds when the card is used, as after a restore
-    ' replaces every record, and a card is rebuilt when its title or its
-    ' shelf changes. A guard: #133 already behaves so; the test fails if a
-    ' card acts on the record it was built from, or if the title or the
-    ' location leaves the text a card is kept by.
+    ' record the library holds when the card is used, as when an equal
+    ' record with the same Id takes the old one's place, and a card is
+    ' rebuilt when its title or its shelf changes. A guard: #133 already
+    ' behaves so; the test fails if a card acts on the record it was built
+    ' from, or if the title or the location leaves the text a card is kept
+    ' by.
     <TestMethod>
     Public Sub KeptCardsActOnTheLibrarysRecordAndShowItsChanges()
         RunOnStaThread(
@@ -1625,7 +1626,7 @@ Public Class ManuscriptPageTests
                     board.Prepare(filed)
                     Dim card As RoundedPanel = board.Card("Filed manuscript")
 
-                    ' A restore puts an equal record with the same Id in its place.
+                    ' An equal record with the same Id takes its place.
                     Dim restored As Manuscript = ManuscriptCloneService.CloneManuscript(filed)
                     board.ReplaceLibrary(restored)
                     Assert.AreSame(card, board.Card("Filed manuscript"), "The card is kept: what it shows is unchanged.")
@@ -1640,6 +1641,36 @@ Public Class ManuscriptPageTests
                     restored.Title = "Renamed manuscript"
                     board.Render()
                     CollectionAssert.AreEqual({"Renamed manuscript"}, board.Cards().Select(Function(item) item.AccessibleName).ToList(), "The card shows the new title.")
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    ' Of two records that share an Id, each card acts on its own record, as
+    ' each card did before cards were kept (#133). Looked up by the Id, the
+    ' second copy's Restore to Pipeline restored the first copy instead,
+    ' and left the second in the File Drawer.
+    <TestMethod>
+    Public Sub ACardActsOnItsOwnRecordWhenTwoRecordsShareAnId()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard()
+                    Dim first As Manuscript = Sample("First copy")
+                    first.Location = ManuscriptLocation.FileDrawer
+                    Dim second As Manuscript = ManuscriptCloneService.CloneManuscript(first)
+                    second.Title = "Second copy"
+                    Assert.AreEqual(first.Id, second.Id, "The two records share an Id.")
+                    board.Prepare(first, second)
+
+                    MenuItem(board.Card("Second copy"), "Restore to Pipeline").PerformClick()
+                    Application.DoEvents()
+
+                    Assert.AreEqual(ManuscriptLocation.Pipeline, second.Location, "The second copy's card restored the second copy.")
+                    Assert.AreEqual(ManuscriptLocation.FileDrawer, first.Location, "The first copy is left alone.")
+                    Assert.AreEqual(1, board.SaveCount)
+                    Assert.IsNotNull(MenuItem(board.Card("Second copy"), "Move to File Drawer..."), "The second copy's card follows it to the Pipeline.")
+                    Assert.IsNotNull(MenuItem(board.Card("First copy"), "Restore to Pipeline"), "The first copy's card stays in the File Drawer.")
 
                     board.Close()
                 End Using
