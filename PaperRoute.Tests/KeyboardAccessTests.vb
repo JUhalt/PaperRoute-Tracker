@@ -70,7 +70,7 @@ Public Class KeyboardAccessTests
 
                 Using view As New ManuscriptRouteViewForm(manuscript)
 
-                    ShowOffscreen(view)
+                    ViewCatalog.ShowOffscreen(view)
 
                     Dim links As List(Of LinkLabel) =
                         WaypointLinks(view, waypoints.Count)
@@ -147,15 +147,21 @@ Public Class KeyboardAccessTests
 
                 End Using
 
-                ' Enter on each link opens its own waypoint, never Close.
+                ' Enter on each link opens its own waypoint, never Close: a
+                ' focused link is the form's default button while it has focus.
                 For index As Integer = 0 To waypoints.Count - 1
 
                     Using view As New ManuscriptRouteViewForm(manuscript)
 
-                        ShowOffscreen(view)
+                        ViewCatalog.ShowOffscreen(view)
 
                         Dim link As LinkLabel =
                             WaypointLinks(view, waypoints.Count)(index)
+
+                        Assert.IsNotNull(
+                            view.AcceptButton,
+                            "Close is the default button, so Enter has another button to press."
+                        )
 
                         view.ActiveControl = link
                         Press(view, Keys.Enter)
@@ -607,19 +613,6 @@ Public Class KeyboardAccessTests
         Return active
 
     End Function
-
-
-    Private Shared Sub ShowOffscreen(
-        form As Form
-    )
-
-        form.StartPosition = FormStartPosition.Manual
-        form.Location = New Point(-20000, -20000)
-        form.ShowInTaskbar = False
-        form.Show()
-        Application.DoEvents()
-
-    End Sub
 
 
     <DllImport("user32.dll")>

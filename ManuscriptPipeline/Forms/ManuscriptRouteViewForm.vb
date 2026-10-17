@@ -801,7 +801,6 @@ Namespace Forms
                 .UseMnemonic = False,
                 .Text = "Open in Manuscript →",
                 .AutoSize = True,
-                .TabStop = True,
                 .Margin = New Padding(8, 2, 0, 0),
                 .AccessibleName =
                     "Open in Manuscript: " &
@@ -817,15 +816,6 @@ Namespace Forms
                     RequestOpenWaypoint(
                         waypoint
                     )
-                End Sub
-
-            ' Enter opens the waypoint rather than pressing Close, the
-            ' default button.
-            AddHandler lnkOpenDetails.PreviewKeyDown,
-                Sub(sender, e)
-                    If e.KeyCode = Keys.Enter Then
-                        e.IsInputKey = True
-                    End If
                 End Sub
 
             topRow.Controls.Add(
