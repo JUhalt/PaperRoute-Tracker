@@ -1,6 +1,5 @@
 Imports System
 Imports System.Collections.Generic
-Imports System.Drawing
 Imports System.IO
 Imports System.Linq
 Imports System.Runtime.InteropServices
@@ -44,82 +43,45 @@ Public Class WindowChromeTests
             mode = SystemColorMode.Dark OrElse
             (mode = SystemColorMode.System AndAlso WindowsAppsAreDark())
 
-        Dim failures As New List(Of String)()
         Dim readable As New HashSet(Of String)()
         Dim views As Integer = 0
 
-        For Each view In ViewCatalog.All()
+        Dim failures As List(Of String) = ViewCatalog.ShowEach(ViewCatalog.All(), mode,
+            Sub(name, shown, found)
 
-            Dim root As String = CreateTemporaryRoot()
-            StorageEnvironment.RootOverride = root
+                views += 1
 
-            Try
+                Dim frame As WindowChrome.Frame = WindowChrome.FrameOf(shown)
 
-                StaRunner.Run(
-                    Sub()
-                        Try
-                            Using shown As Form = view.Build(root)
+                If frame Is Nothing Then
+                    found.Add(name & ": the helper set no frame.")
+                    Return
+                End If
 
-                                If Not shown.Visible Then
-                                    shown.StartPosition = FormStartPosition.Manual
-                                    shown.Location = New Point(-20000, -20000)
-                                    shown.ShowInTaskbar = False
-                                    shown.Show()
-                                End If
+                If frame.Dark <> expectedDark OrElse frame.DarkResult <> 0 Then
+                    found.Add($"{name}: dark title bar {frame.Dark}, answered 0x{frame.DarkResult:X8}; expected {expectedDark}.")
+                End If
 
-                                ' Styled once open, as the app's idle hook styles every
-                                ' window but the main one (UiPolish.InstallGlobalDialogStyling).
-                                If Not TypeOf shown Is Form1 Then UiPolish.ApplyDialog(shown)
-                                Application.DoEvents()
-                                views += 1
+                If frame.Corners <> WindowChrome.DWMWCP_ROUND OrElse frame.CornersResult <> 0 Then
+                    found.Add($"{name}: corners {frame.Corners}, answered 0x{frame.CornersResult:X8}.")
+                End If
 
-                                Dim frame As WindowChrome.Frame = WindowChrome.FrameOf(shown)
+                Dim value As Integer = 0
+                Dim answer As Integer = DwmGetWindowAttribute(shown.Handle, WindowChrome.DWMWA_USE_IMMERSIVE_DARK_MODE, value, 4)
+                readable.Add($"dark title bar 0x{answer:X8}")
 
-                                If frame Is Nothing Then
-                                    failures.Add(view.Name & ": the helper set no frame.")
-                                    Return
-                                End If
+                If answer = 0 AndAlso (value <> 0) <> expectedDark Then
+                    found.Add($"{name}: reads back a dark title bar of {value}.")
+                End If
 
-                                If frame.Dark <> expectedDark OrElse frame.DarkResult <> 0 Then
-                                    failures.Add($"{view.Name}: dark title bar {frame.Dark}, answered 0x{frame.DarkResult:X8}; expected {expectedDark}.")
-                                End If
+                answer = DwmGetWindowAttribute(shown.Handle, WindowChrome.DWMWA_WINDOW_CORNER_PREFERENCE, value, 4)
+                readable.Add($"corners 0x{answer:X8}")
 
-                                If frame.Corners <> WindowChrome.DWMWCP_ROUND OrElse frame.CornersResult <> 0 Then
-                                    failures.Add($"{view.Name}: corners {frame.Corners}, answered 0x{frame.CornersResult:X8}.")
-                                End If
+                If answer = 0 AndAlso value <> WindowChrome.DWMWCP_ROUND Then
+                    found.Add($"{name}: reads back corners of {value}.")
+                End If
 
-                                Dim value As Integer = 0
-                                Dim answer As Integer = DwmGetWindowAttribute(shown.Handle, WindowChrome.DWMWA_USE_IMMERSIVE_DARK_MODE, value, 4)
-                                readable.Add($"dark title bar 0x{answer:X8}")
-
-                                If answer = 0 AndAlso (value <> 0) <> expectedDark Then
-                                    failures.Add($"{view.Name}: reads back a dark title bar of {value}.")
-                                End If
-
-                                answer = DwmGetWindowAttribute(shown.Handle, WindowChrome.DWMWA_WINDOW_CORNER_PREFERENCE, value, 4)
-                                readable.Add($"corners 0x{answer:X8}")
-
-                                If answer = 0 AndAlso value <> WindowChrome.DWMWCP_ROUND Then
-                                    failures.Add($"{view.Name}: reads back corners of {value}.")
-                                End If
-
-                            End Using
-                        Finally
-                            For Each left As Form In StaRunner.OpenFormsOnThisThread()
-                                left.Dispose()
-                            Next
-                        End Try
-                    End Sub,
-                    mode:=mode)
-
-            Catch ex As Exception
-                failures.Add(view.Name & ": " & ex.Message)
-            Finally
-                StorageEnvironment.RootOverride = Nothing
-                DeleteTemporaryRoot(root)
-            End Try
-
-        Next
+            End Sub)
 
         TestContext.WriteLine($"{mode}: {views} windows; reading back answered: {String.Join(", ", readable)}.")
         Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
