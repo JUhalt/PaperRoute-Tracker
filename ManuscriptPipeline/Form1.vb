@@ -2820,7 +2820,9 @@ Public Class Form1
     ' Puts a shelf's cards on it in order, touching nothing when they are
     ' already there in that order. Messages such as an empty shelf are
     ' disposed; cards leaving the shelf wait, parked, for a render that
-    ' shows them again.
+    ' shows them again. Cards that stay are left where they are and only
+    ' moved into their place in the order, so a card that changes costs its
+    ' own windows, not every card's moved off the shelf and back (#133).
     Private Sub FillShelf(
         shelf As ManuscriptShelfPanel,
         cards As List(Of Control)
@@ -2843,14 +2845,28 @@ Public Class Form1
 
         End If
 
+        Dim staying As New HashSet(Of Control)(cards)
+
         For Each child As Control In shelf.Controls.Cast(Of Control)().ToList()
-            If Not TypeOf child Is RoundedPanel Then
+            If staying.Contains(child) Then
+                Continue For
+            End If
+            If TypeOf child Is RoundedPanel Then
+                shelf.Controls.Remove(child)
+            Else
                 child.Dispose()
             End If
         Next
 
-        shelf.Controls.Clear()
-        shelf.Controls.AddRange(cards.ToArray())
+        For index As Integer = 0 To cards.Count - 1
+            Dim card As Control = cards(index)
+            If card.Parent IsNot shelf Then
+                shelf.Controls.Add(card)
+            End If
+            If shelf.Controls.GetChildIndex(card) <> index Then
+                shelf.Controls.SetChildIndex(card, index)
+            End If
+        Next
 
     End Sub
 
