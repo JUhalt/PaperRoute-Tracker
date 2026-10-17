@@ -151,7 +151,7 @@ Namespace Controls
         ' text; and the highlight on the part of the date being edited, the
         ' box around the pixels in the highlight color that are not lines.
         ' A field Windows drew dark is left as it is.
-        Friend Shared Sub Recolor(
+        Private Shared Sub Recolor(
             picture As Bitmap,
             highlight As Color
         )

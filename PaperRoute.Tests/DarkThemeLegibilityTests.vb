@@ -3,8 +3,6 @@ Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.Linq
 Imports System.Runtime.ExceptionServices
-Imports System.Threading
-Imports System.Threading.Tasks
 Imports System.Windows.Forms
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
 Imports ManuscriptPipeline
@@ -22,15 +20,23 @@ Imports ManuscriptPipeline.Services
 <DoNotParallelize>
 Public Class DarkThemeLegibilityTests
 
-    Private Const Carberry As String = "0000-0002-1825-0097"
-
-    ' What stays as Windows draws it in Dark for 1.0, by name; the sweep
-    ' passes over these and nothing else. Message boxes and file dialogs
-    ' are Windows' own windows, which no view in the catalog opens.
-    Friend Shared ReadOnly DarkAllowList As (Name As String, Reason As String, Matches As Func(Of Control, Boolean))() = {
+    ' What stays as Windows draws it in Dark for 1.0, by name: the residual
+    ' list (#106, plan item 57). The sweep passes over what an entry
+    ' matches and nothing else. An entry that matches nothing names what
+    ' the sweep cannot judge: Windows' own windows, which no view in the
+    ' catalog opens, and frames, borders, fills and links, which are never
+    ' most of a control. Matching those by type would pass over the whole
+    ' control, a grid's check marks with its frame.
+    Private Shared ReadOnly DarkAllowList As (Name As String, Reason As String, Matches As Func(Of Control, Boolean))() = {
         ("The report preview", "A web page that Windows' browser control draws.", Function(control As Control) TypeOf control Is WebBrowser),
         ("Message boxes", "Windows draws them, title bar included: WindowChrome could set it, but nothing hands it a message box's window (#143).", Function(control As Control) False),
-        ("File dialogs", "Windows draws them.", Function(control As Control) False)
+        ("File dialogs", "Windows draws them.", Function(control As Control) False),
+        ("Grid frames", "WinForms draws a white frame one pixel wide round a grid; UiPolish leaves the grid's border as it is.", Function(control As Control) False),
+        ("Progress bars", "Windows draws the bars in Check for Publications and Updating PaperRoute: not light in Dark, but in Windows' blue, not the accent.", Function(control As Control) False),
+        ("Combo and number box borders", "Windows draws them in greys of its own.", Function(control As Control) False),
+        ("The route map's fills", "The journal and author segments and the numbered events keep their Light fills in Dark; their white labels keep 4.5:1.", Function(control As Control) False),
+        ("Help's links", "The guide's links are in the color Windows' rich text box gives links.", Function(control As Control) False),
+        ("Input borders", "Text boxes and lists are outlined in the quiet card border, under the 3:1 an input's outline should have.", Function(control As Control) False)
     }
 
     ' ---------------------------------------------------------------
@@ -45,42 +51,10 @@ Public Class DarkThemeLegibilityTests
     <TestMethod>
     Public Sub NoViewKeepsLightColorsInDark()
 
-        Dim findings As New List(Of String)()
+        SkipWhereThemesCannotBeChecked(SystemColorMode.Dark)
 
-        For Each view In ViewCatalog.All()
-
-            Dim root As String = CreateTemporaryRoot()
-            StorageEnvironment.RootOverride = root
-            StorageEnvironment.DefaultRootUses = 0
-
-            Try
-                RunWithColorMode(SystemColorMode.Dark,
-                    Sub()
-                        Try
-                            Using shown As Form = view.Build(root)
-                                If Not shown.Visible Then ShowOffscreen(shown)
-                                ' Styled once open, as the app's idle hook styles every
-                                ' window but the main one (UiPolish.InstallGlobalDialogStyling).
-                                If Not TypeOf shown Is Form1 Then UiPolish.ApplyDialog(shown)
-                                Application.DoEvents()
-                                findings.AddRange(LightPartsOf(shown).Select(Function(found) view.Name & ": " & found))
-                            End Using
-                        Finally
-                            ' A view that fails after it showed is closed too.
-                            For Each left As Form In StaRunner.OpenFormsOnThisThread()
-                                left.Dispose()
-                            Next
-                        End Try
-                    End Sub)
-                Assert.AreEqual(0, StorageEnvironment.DefaultRootUses, view.Name & " asked for the default data root.")
-            Catch ex As Exception
-                findings.Add(view.Name & ": " & ex.Message)
-            Finally
-                StorageEnvironment.RootOverride = Nothing
-                DeleteTemporaryRoot(root)
-            End Try
-
-        Next
+        Dim findings As List(Of String) = ViewCatalog.ShowEach(ViewCatalog.All(), SystemColorMode.Dark,
+            Sub(name, shown, found) found.AddRange(LightPartsOf(shown).Select(Function(part) name & ": " & part)))
 
         Assert.AreEqual(0, findings.Count, Environment.NewLine & String.Join(Environment.NewLine, findings))
 
@@ -139,39 +113,23 @@ Public Class DarkThemeLegibilityTests
     <TestMethod>
     Public Sub EveryButtonOnTheMainWindowsPagesIsAnActionButton()
 
-        Dim standard As New List(Of String)()
+        SkipWhereThemesCannotBeChecked(SystemColorMode.Dark)
+
+        ' A dialog keyed by a Form subclass of its own never builds the main
+        ' window; the hosted views and the stages may.
+        Dim views = ViewCatalog.All().Where(Function(view) view.Name = NameOf(Form1) OrElse Not ViewCatalog.Dialogs.Keys.Any(Function(type) type.Name = view.Name))
         Dim boards As Integer = 0
 
-        For Each view In ViewCatalog.All()
-
-            Dim root As String = CreateTemporaryRoot()
-            StorageEnvironment.RootOverride = root
-
-            Try
-                RunWithColorMode(SystemColorMode.Dark,
-                    Sub()
-                        Try
-                            Using shown As Form = view.Build(root)
-                                If Not TypeOf shown Is Form1 Then Return
-                                boards += 1
-                                For Each button As Button In OwnControls(shown).OfType(Of Button)()
-                                    If Not TypeOf button Is ActionButton AndAlso Not TypeOf button Is RailCommandButton Then
-                                        standard.Add($"{view.Name}: {Describe(button)}")
-                                    End If
-                                Next
-                            End Using
-                        Finally
-                            For Each left As Form In StaRunner.OpenFormsOnThisThread()
-                                left.Dispose()
-                            Next
-                        End Try
-                    End Sub)
-            Finally
-                StorageEnvironment.RootOverride = Nothing
-                DeleteTemporaryRoot(root)
-            End Try
-
-        Next
+        Dim standard As List(Of String) = ViewCatalog.ShowEach(views, SystemColorMode.Dark,
+            Sub(name, shown, found)
+                If Not TypeOf shown Is Form1 Then Return
+                boards += 1
+                For Each button As Button In OwnControls(shown).OfType(Of Button)()
+                    If Not TypeOf button Is ActionButton AndAlso Not TypeOf button Is RailCommandButton Then
+                        found.Add($"{name}: {Describe(button)}")
+                    End If
+                Next
+            End Sub)
 
         Assert.IsTrue(boards >= 10, $"The board, its pages and Your Citations were looked at ({boards}).")
         Assert.AreEqual(0, standard.Count, Environment.NewLine & String.Join(Environment.NewLine, standard))
@@ -236,53 +194,32 @@ Public Class DarkThemeLegibilityTests
     }
 
     ' In Dark each date field is mostly the card color, whether it is on or
-    ' off, and the text of one that is on has 4.5:1 on it at least.
+    ' off, and the text of one that is on has 4.5:1 on it at least: judged
+    ' where the date is written, not on the drop-down button or the frame.
     <TestMethod>
     Public Sub DatePicker_FieldsAreTheCardColorInDark()
 
-        Dim failures As New List(Of String)()
+        SkipWhereThemesCannotBeChecked(SystemColorMode.Dark)
+
         Dim pickers As New List(Of String)()
 
-        For Each view In ViewCatalog.All().Where(Function(item) DatePickerViews.Contains(item.Name))
-
-            Dim root As String = CreateTemporaryRoot()
-            StorageEnvironment.RootOverride = root
-
-            Try
-                RunWithColorMode(SystemColorMode.Dark,
-                    Sub()
-                        Try
-                            Using shown As Form = view.Build(root)
-                                If Not shown.Visible Then ShowOffscreen(shown)
-                                UiPolish.ApplyDialog(shown)
-                                Application.DoEvents()
-                                For Each picker As DateTimePicker In Descendants(shown).OfType(Of DateTimePicker)()
-                                    pickers.Add($"{view.Name}: {Describe(picker)}{If(picker.Visible, String.Empty, " (hidden)")}{If(picker.Enabled, String.Empty, " (off)")}")
-                                    If Not picker.Visible Then Continue For
-                                    Using image As Bitmap = Picture(picker)
-                                        Dim field As Color = CommonestColor(image)
-                                        If field.ToArgb() <> UiTheme.CardBackground().ToArgb() Then
-                                            failures.Add($"{view.Name}: {Describe(picker)} is mostly {field}.")
-                                        End If
-                                        Dim ratio As Double = StrongestContrast(image, New Rectangle(Point.Empty, image.Size), UiTheme.CardBackground())
-                                        If picker.Enabled AndAlso ratio < 4.5 Then
-                                            failures.Add($"{view.Name}: {Describe(picker)}'s text has {ratio:F2}:1 on the card color.")
-                                        End If
-                                    End Using
-                                Next
-                            End Using
-                        Finally
-                            For Each left As Form In StaRunner.OpenFormsOnThisThread()
-                                left.Dispose()
-                            Next
-                        End Try
-                    End Sub)
-            Finally
-                StorageEnvironment.RootOverride = Nothing
-                DeleteTemporaryRoot(root)
-            End Try
-
-        Next
+        Dim failures As List(Of String) = ViewCatalog.ShowEach(ViewCatalog.All().Where(Function(item) DatePickerViews.Contains(item.Name)), SystemColorMode.Dark,
+            Sub(name, shown, found)
+                For Each picker As DateTimePicker In Descendants(shown).OfType(Of DateTimePicker)()
+                    pickers.Add($"{name}: {Describe(picker)}{If(picker.Visible, String.Empty, " (hidden)")}{If(picker.Enabled, String.Empty, " (off)")}")
+                    If Not picker.Visible Then Continue For
+                    Using image As Bitmap = Picture(picker)
+                        Dim field As Color = CommonestColor(image)
+                        If field.ToArgb() <> UiTheme.CardBackground().ToArgb() Then
+                            found.Add($"{name}: {Describe(picker)} is mostly {field}.")
+                        End If
+                        Dim ratio As Double = StrongestContrast(image, DateTextArea(picker), UiTheme.CardBackground())
+                        If picker.Enabled AndAlso ratio < 4.5 Then
+                            found.Add($"{name}: {Describe(picker)}'s text has {ratio:F2}:1 on the card color.")
+                        End If
+                    End Using
+                Next
+            End Sub)
 
         Assert.AreEqual(9, pickers.Count, "The nine date pickers: " & String.Join("; ", pickers))
         Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
@@ -291,7 +228,11 @@ Public Class DarkThemeLegibilityTests
 
     ' The field keeps Windows' own editing in Dark: the Up arrow changes the
     ' part of the date being edited, and the field is still the card color.
-    ' With the focus, the part being edited keeps Windows' highlight.
+    ' With the focus, the part being edited keeps Windows' highlight. On
+    ' screen the field is painted for WM_PAINT, which DrawToBitmap never
+    ' sends: handed a device context, as Windows may hand it one, the paint
+    ' gives the card color too. The paint without one, which draws on the
+    ' window itself, is left to the manual captures.
     <TestMethod>
     Public Sub DatePicker_KeepsWindowsEditingInDark()
 
@@ -314,6 +255,17 @@ Public Class DarkThemeLegibilityTests
                         Dim highlight As Integer = ColorTranslator.FromWin32(GetSysColor(COLOR_HIGHLIGHT)).ToArgb()
                         Dim marked As Integer = CountPixels(image, New Rectangle(Point.Empty, image.Size), Function(pixel) pixel.ToArgb() = highlight)
                         Assert.AreEqual(picker.Focused, marked > 0, $"The part being edited is highlighted exactly when the field has the focus (focused: {picker.Focused}).")
+                    End Using
+                    Using painted As New Bitmap(picker.ClientSize.Width, picker.ClientSize.Height)
+                        Using g As Graphics = Graphics.FromImage(painted)
+                            Dim dc As IntPtr = g.GetHdc()
+                            Try
+                                SendMessage(picker.Handle, WM_PAINT, dc, IntPtr.Zero)
+                            Finally
+                                g.ReleaseHdc(dc)
+                            End Try
+                        End Using
+                        Assert.AreEqual(UiTheme.CardBackground().ToArgb(), CommonestColor(painted).ToArgb(), "Painted as on screen, the field is the card color.")
                     End Using
                 End Using
             End Sub)
@@ -350,6 +302,17 @@ Public Class DarkThemeLegibilityTests
         End Using
     End Function
 
+    ' Where a date field's text is in its picture: the client area inside
+    ' its frame, left of the drop-down button Windows reports.
+    Private Shared Function DateTextArea(picker As DateTimePicker) As Rectangle
+        Dim info As New DATETIMEPICKERINFO With {.cbSize = Runtime.InteropServices.Marshal.SizeOf(Of DATETIMEPICKERINFO)()}
+        SendMessage(picker.Handle, DTM_GETDATETIMEPICKERINFO, IntPtr.Zero, info)
+        Dim frame As Integer = picker.LogicalToDeviceUnits(2)
+        Dim area As Rectangle = Rectangle.FromLTRB(frame, frame, info.ButtonLeft, picker.ClientSize.Height - frame)
+        area.Offset(ClientOffset(picker))
+        Return area
+    End Function
+
     ' The color of most pixels in a picture.
     Private Shared Function CommonestColor(image As Bitmap) As Color
         Return Color.FromArgb(PixelsOf(image).GroupBy(Function(pixel) pixel).OrderByDescending(Function(group) group.Count()).First().Key)
@@ -380,61 +343,38 @@ Public Class DarkThemeLegibilityTests
     <TestMethod>
     Public Sub CheckGlyph_MarksInListsAndGridsFollowTheTokensInDark()
 
-        Dim failures As New List(Of String)()
+        SkipWhereThemesCannotBeChecked(SystemColorMode.Dark)
+
         Dim lists As Integer = 0
         Dim columns As Integer = 0
 
-        For Each view In ViewCatalog.All().Where(Function(item) CheckBoxViews.Contains(item.Name))
-
-            Dim root As String = CreateTemporaryRoot()
-            StorageEnvironment.RootOverride = root
-
-            Try
-                RunWithColorMode(SystemColorMode.Dark,
-                    Sub()
-                        Try
-                            Using shown As Form = view.Build(root)
-                                If Not shown.Visible Then ShowOffscreen(shown)
-                                UiPolish.ApplyDialog(shown)
-                                Application.DoEvents()
-
-                                For Each control As Control In Descendants(shown).Where(Function(item) item.Visible AndAlso CheckMarks(item).Any())
-                                    If TypeOf control Is ListView Then
-                                        lists += 1
-                                        If control.BackColor <> UiTheme.CardBackground() OrElse control.ForeColor <> UiTheme.PrimaryText() Then
-                                            failures.Add($"{view.Name}: {Describe(control)} is {control.ForeColor} on {control.BackColor}.")
-                                        End If
-                                    Else
-                                        columns += DirectCast(control, DataGridView).Columns.OfType(Of DataGridViewCheckBoxColumn)().Count()
-                                    End If
-                                    Using image As Bitmap = Picture(control)
-                                        Dim client As Point = ClientOffset(control)
-                                        For Each mark In CheckMarks(control)
-                                            Dim cell As Rectangle = mark.Cell
-                                            cell.Offset(client)
-                                            Dim color As Color? = MarkColor(image, cell)
-                                            Dim expected As Color() =
-                                                If(Not control.Enabled, {UiTheme.MutedText(), UiTheme.CardBackground()},
-                                                   If(mark.Checked, {UiTheme.AccentColor()}, {UiTheme.SecondaryText(), UiTheme.CardBackground()}))
-                                            If Not color.HasValue OrElse Not expected.Any(Function(item) item.ToArgb() = color.Value.ToArgb()) Then
-                                                failures.Add($"{view.Name}: {Describe(control)} has a {If(mark.Checked, "checked", "clear")} mark that is mostly {color}.")
-                                            End If
-                                        Next
-                                    End Using
-                                Next
-                            End Using
-                        Finally
-                            For Each left As Form In StaRunner.OpenFormsOnThisThread()
-                                left.Dispose()
-                            Next
-                        End Try
-                    End Sub)
-            Finally
-                StorageEnvironment.RootOverride = Nothing
-                DeleteTemporaryRoot(root)
-            End Try
-
-        Next
+        Dim failures As List(Of String) = ViewCatalog.ShowEach(ViewCatalog.All().Where(Function(item) CheckBoxViews.Contains(item.Name)), SystemColorMode.Dark,
+            Sub(name, shown, found)
+                For Each control As Control In Descendants(shown).Where(Function(item) item.Visible AndAlso CheckMarks(item).Any())
+                    If TypeOf control Is ListView Then
+                        lists += 1
+                        If control.BackColor <> UiTheme.CardBackground() OrElse control.ForeColor <> UiTheme.PrimaryText() Then
+                            found.Add($"{name}: {Describe(control)} is {control.ForeColor} on {control.BackColor}.")
+                        End If
+                    Else
+                        columns += DirectCast(control, DataGridView).Columns.OfType(Of DataGridViewCheckBoxColumn)().Count()
+                    End If
+                    Using image As Bitmap = Picture(control)
+                        Dim client As Point = ClientOffset(control)
+                        For Each mark In CheckMarks(control)
+                            Dim cell As Rectangle = mark.Cell
+                            cell.Offset(client)
+                            Dim color As Color? = MarkColor(image, cell)
+                            Dim expected As Color() =
+                                If(Not control.Enabled, {UiTheme.MutedText(), UiTheme.CardBackground()},
+                                   If(mark.Checked, {UiTheme.AccentColor()}, {UiTheme.SecondaryText(), UiTheme.CardBackground()}))
+                            If Not color.HasValue OrElse Not expected.Any(Function(item) item.ToArgb() = color.Value.ToArgb()) Then
+                                found.Add($"{name}: {Describe(control)} has a {If(mark.Checked, "checked", "clear")} mark that is mostly {color}.")
+                            End If
+                        Next
+                    End Using
+                Next
+            End Sub)
 
         Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
         Assert.AreEqual(4, lists, "The four lists with check boxes were judged.")
@@ -507,7 +447,7 @@ Public Class DarkThemeLegibilityTests
 
         RunWithColorMode(SystemColorMode.Dark,
             Sub()
-                Using dialog As CitationsUpdateForm = CitationsDialog()
+                Using dialog As CitationsUpdateForm = ViewCatalog.CitationsDialog()
                     ShowOffscreen(dialog)
                     dialog.LookUpAsync().GetAwaiter().GetResult()
                     Application.DoEvents()
@@ -621,7 +561,7 @@ Public Class DarkThemeLegibilityTests
                     AssertMutedCaption(dialog.AddButton)
                 End Using
 
-                Using dialog As CitationsUpdateForm = CitationsDialog()
+                Using dialog As CitationsUpdateForm = ViewCatalog.CitationsDialog()
                     ShowOffscreen(dialog)
                     dialog.LinkedBox.Enabled = False
                     AssertMutedCaption(dialog.LinkedBox)
@@ -1024,25 +964,6 @@ Public Class DarkThemeLegibilityTests
         Return count
     End Function
 
-    ' The update window on a recorded answer with a work in each group.
-    Private Shared Function CitationsDialog() As CitationsUpdateForm
-        Dim groups As New List(Of OrcidWorkGroup) From {
-            New OrcidWorkGroup With {.Dois = New List(Of String) From {"10.5555/test.orcid"}, .Title = "A work on the ORCID record", .WorkType = "journal-article"}
-        }
-        Dim found As New Dictionary(Of String, CitedWork) From {
-            {"10.5555/test.orcid", Work("W1", "10.5555/test.orcid", "A work on the ORCID record")},
-            {"10.5555/test.manuscript", Work("W2", "10.5555/test.manuscript", "A published manuscript")}
-        }
-        Dim linked As New List(Of CitedWork) From {Work("W3", "10.5555/test.linked", "A work OpenAlex links to the iD")}
-        Dim manuscripts As New List(Of (Doi As String, Title As String)) From {("10.5555/test.manuscript", "A published manuscript")}
-        Dim lookup As CitationLookup = CitationsService.Assemble(Carberry, groups, manuscripts, found, linked, 1, Array.Empty(Of String)())
-        Return New CitationsUpdateForm(Carberry, manuscripts, Nothing, New RecordedCitations(lookup))
-    End Function
-
-    Private Shared Function Work(id As String, doi As String, title As String) As CitedWork
-        Return New CitedWork With {.OpenAlexId = id, .Doi = doi, .Title = title, .Year = 2025, .Journal = "Fictional Journal", .CitedByCount = 3}
-    End Function
-
     ' A journal with a fact from an open index and a metric entered by hand.
     Private Shared Function JournalWithFacts() As JournalRecord
         Dim record As New JournalRecord With {.Name = "Fictional Journal"}
@@ -1050,21 +971,6 @@ Public Class DarkThemeLegibilityTests
         record.Facts.Add(New JournalFact With {.Key = JournalFactCatalog.CiteScore, .Value = "5.2", .Year = 2025, .Source = "Scopus", .EnteredByYou = True})
         Return record
     End Function
-
-    Private NotInheritable Class RecordedCitations
-        Implements ICitationSource
-
-        Private ReadOnly _lookup As CitationLookup
-
-        Public Sub New(lookup As CitationLookup)
-            _lookup = lookup
-        End Sub
-
-        Public Function LookupAsync(orcid As String, manuscriptDois As IEnumerable(Of (Doi As String, Title As String)), includeOpenAlexLinked As Boolean,
-                                    excluded As IEnumerable(Of String), progress As IProgress(Of String), cancellationToken As CancellationToken) As Task(Of CitationLookup) Implements ICitationSource.LookupAsync
-            Return Task.FromResult(_lookup)
-        End Function
-    End Class
 
     Private Shared Sub ShowOffscreen(form As Form)
         form.StartPosition = FormStartPosition.Manual
@@ -1100,14 +1006,32 @@ Public Class DarkThemeLegibilityTests
         Return If(value <= 0.04045, value / 12.92, Math.Pow((value + 0.055) / 1.055, 2.4))
     End Function
 
+    Private Const WM_PAINT As Integer = &HF
     Private Const WM_KEYDOWN As Integer = &H100
     Private Const WM_KEYUP As Integer = &H101
     Private Const VK_SPACE As Integer = &H20
     Private Const VK_UP As Integer = &H26
     Private Const COLOR_HIGHLIGHT As Integer = 13
+    Private Const DTM_GETDATETIMEPICKERINFO As Integer = &H100E
+
+    ' Where Windows draws a date picker's parts, in client coordinates;
+    ' only the drop-down button's left edge is read.
+    <Runtime.InteropServices.StructLayout(Runtime.InteropServices.LayoutKind.Sequential)>
+    Private Structure DATETIMEPICKERINFO
+        Public cbSize As Integer
+        Public CheckLeft, CheckTop, CheckRight, CheckBottom As Integer
+        Public CheckState As Integer
+        Public ButtonLeft, ButtonTop, ButtonRight, ButtonBottom As Integer
+        Public ButtonState As Integer
+        Public Edit, UpDown, DropDown As IntPtr
+    End Structure
 
     <Runtime.InteropServices.DllImport("user32.dll")>
     Private Shared Function SendMessage(handle As IntPtr, message As Integer, wParam As IntPtr, lParam As IntPtr) As IntPtr
+    End Function
+
+    <Runtime.InteropServices.DllImport("user32.dll")>
+    Private Shared Function SendMessage(handle As IntPtr, message As Integer, wParam As IntPtr, ByRef info As DATETIMEPICKERINFO) As IntPtr
     End Function
 
     <Runtime.InteropServices.DllImport("user32.dll")>
@@ -1120,16 +1044,22 @@ Public Class DarkThemeLegibilityTests
     Private Shared Sub RunWithColorMode(mode As SystemColorMode, action As Action)
         StaRunner.Run(
             Sub()
-                If SystemInformation.HighContrast Then
-                    Assert.Inconclusive("Windows high-contrast themes require separate certification; these checks do not change OS settings.")
-                End If
-                If mode = SystemColorMode.Dark AndAlso Not OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000) Then
-                    Assert.Inconclusive("Native WinForms dark mode requires Windows 11 or later.")
-                End If
+                SkipWhereThemesCannotBeChecked(mode)
                 Assert.AreEqual(mode = SystemColorMode.Dark, UiTheme.IsDark())
                 action()
                 Assert.AreEqual(0, StaRunner.OpenFormsOnThisThread().Count, "Theme tests leave no form open.")
             End Sub, mode:=mode)
+    End Sub
+
+    ' What these checks cannot judge, so they do not run: a high-contrast
+    ' theme, and Dark before Windows 11.
+    Private Shared Sub SkipWhereThemesCannotBeChecked(mode As SystemColorMode)
+        If SystemInformation.HighContrast Then
+            Assert.Inconclusive("Windows high-contrast themes require separate certification; these checks do not change OS settings.")
+        End If
+        If mode = SystemColorMode.Dark AndAlso Not OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000) Then
+            Assert.Inconclusive("Native WinForms dark mode requires Windows 11 or later.")
+        End If
     End Sub
 
 End Class

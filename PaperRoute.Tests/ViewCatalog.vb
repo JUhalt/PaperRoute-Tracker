@@ -209,6 +209,66 @@ Friend NotInheritable Class ViewCatalog
     End Function
 
 
+    ' Builds each view on a temporary root of its own, in the color mode,
+    ' shows it offscreen if its factory did not, styles it once open, as
+    ' the app's idle hook styles every window but the main one
+    ' (UiPolish.InstallGlobalDialogStyling), and hands it to the check by
+    ' name with the findings so far. Then the view and anything it left
+    ' open are closed. What a view or its check throws, and a view that
+    ' asked for the default data root, are findings too, so every view
+    ' that fails is named.
+    Public Shared Function ShowEach(
+        views As IEnumerable(Of (Name As String, Build As Func(Of String, Form))),
+        mode As SystemColorMode,
+        check As Action(Of String, Form, List(Of String))
+    ) As List(Of String)
+
+        Dim findings As New List(Of String)()
+
+        For Each view In views
+
+            Dim root As String = CreateTemporaryRoot()
+            StorageEnvironment.RootOverride = root
+            StorageEnvironment.DefaultRootUses = 0
+
+            Try
+
+                StaRunner.Run(
+                    Sub()
+                        Try
+                            Using window As Form = view.Build(root)
+                                If Not window.Visible Then Shown(window)
+                                If Not TypeOf window Is Form1 Then UiPolish.ApplyDialog(window)
+                                Application.DoEvents()
+                                check(view.Name, window, findings)
+                            End Using
+                        Finally
+                            ' A view that fails after it showed is closed too.
+                            For Each left As Form In StaRunner.OpenFormsOnThisThread()
+                                left.Dispose()
+                            Next
+                        End Try
+                    End Sub,
+                    mode:=mode)
+
+                If StorageEnvironment.DefaultRootUses <> 0 Then
+                    findings.Add(view.Name & " asked for the default data root.")
+                End If
+
+            Catch ex As Exception
+                findings.Add(view.Name & ": " & ex.Message)
+            Finally
+                StorageEnvironment.RootOverride = Nothing
+                DeleteTemporaryRoot(root)
+            End Try
+
+        Next
+
+        Return findings
+
+    End Function
+
+
     ' ---------------------------------------------------------------
     ' Samples
     ' ---------------------------------------------------------------
@@ -362,7 +422,9 @@ Friend NotInheritable Class ViewCatalog
     Private Shared ReadOnly LetterDay As New DateTime(2026, 10, 1)
 
 
-    Private Shared Function CitationsFound() As Form
+    ' The update window on a recorded answer with a work in each group, not
+    ' yet shown; DarkThemeLegibilityTests builds it too.
+    Friend Shared Function CitationsDialog() As CitationsUpdateForm
         Dim groups As New List(Of OrcidWorkGroup) From {
             New OrcidWorkGroup With {.Dois = New List(Of String) From {"10.5555/test.orcid"}, .Title = "A work on the ORCID record", .WorkType = "journal-article"}
         }
@@ -373,7 +435,12 @@ Friend NotInheritable Class ViewCatalog
         Dim linked As New List(Of CitedWork) From {Work("W3", "10.5555/test.linked", "A work OpenAlex links to the iD")}
         Dim manuscripts As New List(Of (Doi As String, Title As String)) From {("10.5555/test.manuscript", "A published manuscript")}
         Dim lookup As CitationLookup = CitationsService.Assemble(Carberry, groups, manuscripts, found, linked, 1, Array.Empty(Of String)())
-        Dim dialog As CitationsUpdateForm = Shown(New CitationsUpdateForm(Carberry, manuscripts, Nothing, New RecordedCitations(lookup)))
+        Return New CitationsUpdateForm(Carberry, manuscripts, Nothing, New RecordedCitations(lookup))
+    End Function
+
+
+    Private Shared Function CitationsFound() As Form
+        Dim dialog As CitationsUpdateForm = Shown(CitationsDialog())
         dialog.LookUpAsync().GetAwaiter().GetResult()
         Application.DoEvents()
         Return Reached(dialog, dialog.WorksList.Items.Count > 0, "found no works")
