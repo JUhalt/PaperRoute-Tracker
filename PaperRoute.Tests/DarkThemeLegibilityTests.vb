@@ -29,7 +29,7 @@ Public Class DarkThemeLegibilityTests
     ' are Windows' own windows, which no view in the catalog opens.
     Friend Shared ReadOnly DarkAllowList As (Name As String, Reason As String, Matches As Func(Of Control, Boolean))() = {
         ("The report preview", "A web page that Windows' browser control draws.", Function(control As Control) TypeOf control Is WebBrowser),
-        ("Message boxes", "Windows draws them.", Function(control As Control) False),
+        ("Message boxes", "Windows draws them, title bar included: WindowChrome could set it, but nothing hands it a message box's window (#143).", Function(control As Control) False),
         ("File dialogs", "Windows draws them.", Function(control As Control) False)
     }
 

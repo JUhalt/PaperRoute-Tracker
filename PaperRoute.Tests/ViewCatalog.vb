@@ -609,6 +609,8 @@ Friend NotInheritable Class ViewCatalog
         End Property
 
         Public Sub Prepare(library As List(Of Manuscript))
+            ' The frame, as Form1_Load sets it (#143); WindowChromeTests checks Load's call.
+            WindowChrome.Apply(Me)
             CallPrivate("BuildInterface")
             GetType(Form1).GetField("manuscripts", BindingFlags.Instance Or BindingFlags.NonPublic).SetValue(Me, library)
             CallPrivate("RenderManuscripts")

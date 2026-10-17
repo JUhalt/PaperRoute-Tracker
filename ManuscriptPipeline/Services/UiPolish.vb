@@ -114,6 +114,11 @@ Namespace Services
                 Return
             End If
 
+            ' Windows 11's title bar and corners for the theme (#143).
+            WindowChrome.Apply(
+                form
+            )
+
             form.BackColor =
                 UiTheme.BoardBackground()
 

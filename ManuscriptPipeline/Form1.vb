@@ -143,6 +143,10 @@ Public Class Form1
 
         uiInitialized = True
 
+        ' Windows 11's title bar and corners for the theme (#143); UiPolish
+        ' sets them on every other window.
+        WindowChrome.Apply(Me)
+
         appSettings =
         settingsService.Load()
 
