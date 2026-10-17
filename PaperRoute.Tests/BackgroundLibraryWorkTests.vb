@@ -358,6 +358,71 @@ Public Class BackgroundLibraryWorkTests
     End Sub
 
 
+    ' A save refused because other library work runs wrote nothing but did
+    ' not fail (#132 with #113): the failed-save mark stays as it was.
+    ' Cleared, a close would skip the question that keeps a failed save's
+    ' changes; set, a close would ask about a save that never failed.
+    <TestMethod>
+    Public Sub ASaveRefusedDuringLibraryWorkLeavesTheFailedSaveMarkAsItWas()
+        RunOnStaThread(
+            Sub()
+                Dim example As LargeLibraryFixture.SyntheticLibrary = LargeLibraryFixture.WriteExample(Path.Combine(_root, "library"))
+                Using board As New LibraryBoard(example, Path.Combine(_root, "settings"))
+                    board.Start()
+
+                    For Each failedBefore As Boolean In {False, True}
+                        If failedBefore Then board.MarkLastSaveFailed()
+                        Dim saved As Boolean = True
+                        Dim markDuringWork As Boolean = Not failedBefore
+
+                        OnTheWindowDuringWork(board,
+                            Sub()
+                                saved = board.SaveNow()
+                                markDuringWork = board.LastSaveFailed
+                            End Sub)
+
+                        Assert.IsFalse(saved, "The save was refused.")
+                        Assert.AreEqual(failedBefore, markDuringWork, "The refusal left the mark as it was.")
+                        Assert.AreEqual(failedBefore, board.LastSaveFailed, "So did the end of the work.")
+                    Next
+
+                    board.SetPrompt(Function(title) DialogResult.No)
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+
+    ' The page's Save while library work runs keeps the edits on the page:
+    ' its save would be refused, and committing them first left them in the
+    ' records the work was reading, saved nowhere, with the page reporting
+    ' nothing unsaved.
+    <TestMethod>
+    Public Sub APageSaveDuringLibraryWorkKeepsTheEditsOnThePage()
+        RunOnStaThread(
+            Sub()
+                Dim example As LargeLibraryFixture.SyntheticLibrary = LargeLibraryFixture.WriteExample(Path.Combine(_root, "library"))
+                Using board As New LibraryBoard(example, Path.Combine(_root, "settings"))
+                    board.Start()
+                    Dim manuscript As ManuscriptPipeline.Models.Manuscript = board.Library(0)
+                    Dim original As String = manuscript.Title
+                    board.Open(manuscript)
+                    board.Field("Title").Text = "Edited during the work"
+                    Dim saved As Boolean = True
+
+                    OnTheWindowDuringWork(board, Sub() saved = board.SaveManuscriptPage())
+
+                    Assert.IsFalse(saved, "The page's save waits for the work.")
+                    Assert.AreEqual(original, manuscript.Title, "The edits did not go into the records the work was reading.")
+                    Assert.AreEqual("Edited during the work", board.Field("Title").Text, "They are still on the page.")
+                    Assert.IsTrue(board.SaveManuscriptPage(), "Once the work has ended, Save saves them.")
+                    Assert.AreEqual("Edited during the work", manuscript.Title)
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+
     Private Function OpenLargeLibrary() As LibraryBoard
         Dim library As LargeLibraryFixture.SyntheticLibrary = LargeLibraryFixture.Create(Path.Combine(_root, "library"), 500)
         Dim board As New LibraryBoard(library, Path.Combine(_root, "settings"))

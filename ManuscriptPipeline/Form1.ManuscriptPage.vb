@@ -585,6 +585,13 @@ Partial Public Class Form1
             Return True
         End If
 
+        ' While a save, backup or restore runs (#132), the library's save
+        ' would be refused: the edits stay on the page, still unsaved, rather
+        ' than go into records the work is reading and be saved nowhere.
+        If libraryWorkInProgress Then
+            Return False
+        End If
+
         If Not manuscriptEditor.CommitChanges() Then
             Return False
         End If
