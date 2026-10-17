@@ -111,7 +111,7 @@ Friend NotInheritable Class ViewCatalog
         {GetType(SubmissionPacketVaultForm), Function(root) New SubmissionPacketVaultForm(WithPackets())},
         {GetType(TitlePageImportForm), Function(root) New TitlePageImportForm(New AuthorLibraryData(), "A preregistered replication of anchoring effects")},
         {GetType(UnexpectedErrorForm), Function(root) New UnexpectedErrorForm(New InvalidOperationException("The route map could not be drawn."), True, Path.Combine(root, "logs"))},
-        {GetType(UpdateProgressForm), Function(root) New UpdateProgressForm("0.9.2")},
+        {GetType(UpdateProgressForm), Function(root) PartwayThrough(New UpdateProgressForm("0.9.2"))},
         {GetType(UpdatePromptForm), Function(root) New UpdatePromptForm("0.9.1", "0.9.2", "Stable", "Notes & fixes")}
     }
 
@@ -549,6 +549,29 @@ Friend NotInheritable Class ViewCatalog
         End If
 
         Return window
+
+    End Function
+
+
+    ' The update partway through, so a sweep judges the bar's fill and not
+    ' an empty bar on the window color. Windows grows a bar to a higher
+    ' value over a moment but draws a lower one at once, so the bar is
+    ' shown, set just past the value and then back; a bar whose fill is not
+    ' drawn fails the factory.
+    Private Shared Function PartwayThrough(dialog As UpdateProgressForm) As Form
+
+        ShowOffscreen(dialog)
+        dialog.SetProgress(61)
+        dialog.SetProgress(60)
+        Application.DoEvents()
+
+        Dim bar As ProgressBar = Descendants(dialog).OfType(Of ProgressBar)().Single()
+        Using image As New Bitmap(bar.Width, bar.Height)
+            bar.DrawToBitmap(image, New Rectangle(Point.Empty, bar.Size))
+            Dim middle As Integer = bar.Height \ 2
+            Dim drawn As Boolean = image.GetPixel(bar.Width * 3 \ 10, middle).ToArgb() <> image.GetPixel(bar.Width * 9 \ 10, middle).ToArgb()
+            Return Reached(dialog, drawn, "does not draw its bar's fill")
+        End Using
 
     End Function
 
