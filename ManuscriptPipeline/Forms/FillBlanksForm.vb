@@ -92,6 +92,10 @@ Namespace Forms
 
             Controls.Add(root)
             AcceptButton = btnPrimary
+            ' Esc stops a lookup, or closes; a running lookup vetoes closing.
+            ' The button's own handler decides, so Stop never closes the window.
+            CancelButton = btnCancel
+            btnCancel.DialogResult = DialogResult.None
 
             lstManuscripts.Dock = DockStyle.Fill
             lstManuscripts.CheckOnClick = True
@@ -251,6 +255,9 @@ Namespace Forms
                 RemoveHandler btnPrimary.Click, AddressOf PrimaryClicked
                 AddHandler btnPrimary.Click, Sub(sender, e) Close()
                 btnCancel.Visible = False
+                ' Esc closes, as Close does, now Cancel is gone.
+                CancelButton = btnPrimary
+                btnPrimary.DialogResult = DialogResult.None
             Else
                 UpdateButtons()
             End If

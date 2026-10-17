@@ -119,6 +119,10 @@ Namespace Forms
 
             Controls.Add(root)
             AcceptButton = btnPrimary
+            ' Esc stops a check, or closes; a running check vetoes closing.
+            ' The button's own handler decides, so Stop never closes the window.
+            CancelButton = btnCancel
+            btnCancel.DialogResult = DialogResult.None
 
             ShowChoices(requested, defaultOrcid)
             UiPolish.ApplyDialog(Me)
@@ -372,6 +376,9 @@ Namespace Forms
             btnPrimary.Width = 90
             btnPrimary.Enabled = True
             btnCancel.Visible = False
+            ' Esc closes, as Close does, now Cancel is gone.
+            CancelButton = btnPrimary
+            btnPrimary.DialogResult = DialogResult.None
             lblIntro.Text = Summary(result)
 
             Dim scroller As New Panel With {.Dock = DockStyle.Fill, .AutoScroll = True, .Margin = New Padding(0)}

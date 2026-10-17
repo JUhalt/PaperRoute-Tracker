@@ -266,6 +266,9 @@ Namespace Forms
             Me.AcceptButton =
                 btnClose
 
+            Me.CancelButton =
+                btnClose
+
             Me.Controls.Add(
                 root
             )

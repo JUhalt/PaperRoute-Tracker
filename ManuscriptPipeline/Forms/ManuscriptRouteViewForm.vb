@@ -795,28 +795,41 @@ Namespace Forms
                 waypoint
             )
 
-            Dim lblOpenDetails As New Label With {
+            ' A link, so Tab reaches each waypoint in route order and Enter
+            ' opens it (#136); its name says which waypoint it opens.
+            Dim lnkOpenDetails As New LinkLabel With {
                 .UseMnemonic = False,
                 .Text = "Open in Manuscript →",
                 .AutoSize = True,
+                .TabStop = True,
                 .Margin = New Padding(8, 2, 0, 0),
-                .ForeColor = UiTheme.AccentSecondaryColor(),
-                .Cursor = Cursors.Hand,
-                .Font = New Font(
-                    Me.Font,
-                    FontStyle.Underline
-                )
+                .AccessibleName =
+                    "Open in Manuscript: " &
+                    WaypointTitle(waypoint) &
+                    ", " &
+                    waypoint.EventDate.ToString(
+                        "MMM d, yyyy"
+                    )
             }
 
-            AddHandler lblOpenDetails.Click,
+            AddHandler lnkOpenDetails.LinkClicked,
                 Sub(sender, e)
                     RequestOpenWaypoint(
                         waypoint
                     )
                 End Sub
 
+            ' Enter opens the waypoint rather than pressing Close, the
+            ' default button.
+            AddHandler lnkOpenDetails.PreviewKeyDown,
+                Sub(sender, e)
+                    If e.KeyCode = Keys.Enter Then
+                        e.IsInputKey = True
+                    End If
+                End Sub
+
             topRow.Controls.Add(
-                lblOpenDetails
+                lnkOpenDetails
             )
 
             Dim lblTitle As New Label With {

@@ -474,6 +474,7 @@ Namespace Forms
                 root.Controls.Add(buttons, 0, 3)
 
                 Me.AcceptButton = btnClose
+                Me.CancelButton = btnClose
 
             End If
 

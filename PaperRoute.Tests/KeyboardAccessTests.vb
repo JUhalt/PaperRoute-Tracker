@@ -1,0 +1,650 @@
+Imports System
+Imports System.Collections.Generic
+Imports System.Diagnostics
+Imports System.Drawing
+Imports System.Linq
+Imports System.Runtime.InteropServices
+Imports System.Threading.Tasks
+Imports System.Windows.Forms
+Imports Microsoft.VisualStudio.TestTools.UnitTesting
+Imports ManuscriptPipeline
+Imports ManuscriptPipeline.Controls
+Imports ManuscriptPipeline.Forms
+Imports ManuscriptPipeline.Models
+Imports ManuscriptPipeline.Services
+
+' Keyboard access (#136): Route View is operated from the keyboard, and
+' Esc cancels every modal dialog. Keys are posted to the focused control,
+' so they take the path a real key takes, past PreviewKeyDown, the form's
+' command keys and its dialog keys.
+<TestClass>
+<DoNotParallelize>
+Public Class KeyboardAccessTests
+
+    ' Views the app never shows modally: the main window, and the editor,
+    ' which is only ever the manuscript page.
+    Private Shared ReadOnly NeverModal As Type() = {
+        GetType(Form1),
+        GetType(EditManuscriptForm)
+    }
+
+    ' Shown, not modal, while an update downloads; nothing in it can stop
+    ' the download, so it has nothing for Esc to press.
+    Private Shared ReadOnly AllowedWithoutCancel As Type() = {
+        GetType(UpdateProgressForm)
+    }
+
+    ' The five dialogs that had no CancelButton, with the result Esc closes
+    ' each with: that of its Cancel or its Close button.
+    Private Shared ReadOnly EscapeProbed As (View As Type, Result As DialogResult)() = {
+        (GetType(FillBlanksForm), DialogResult.Cancel),
+        (GetType(PublicationCheckForm), DialogResult.Cancel),
+        (GetType(SubmissionDetailsForm), DialogResult.OK),
+        (GetType(AuthorLibraryForm), DialogResult.OK),
+        (GetType(JournalLibraryForm), DialogResult.OK)
+    }
+
+    Private Const WM_KEYDOWN As UInteger =
+        &H100
+
+
+    ' Every waypoint of a published route has one link that Tab reaches,
+    ' in route order, and Enter on it opens that waypoint, as a double
+    ' click on its card does. Each link Tab reaches is scrolled into view.
+    <TestMethod>
+    Public Sub RouteViewOpensEachWaypointFromItsOwnLinkInRouteOrder()
+
+        Dim manuscript As Manuscript =
+            RouteMapServiceTests.Anchoring()
+
+        Dim waypoints As List(Of ManuscriptRouteWaypoint) =
+            ManuscriptRouteProjectionService.Project(manuscript).Waypoints
+
+        Assert.IsTrue(
+            waypoints.Count >= 8,
+            "The fixture route is long enough to scroll: " & waypoints.Count & " waypoints."
+        )
+
+        StaRunner.Run(
+            Sub()
+
+                Using view As New ManuscriptRouteViewForm(manuscript)
+
+                    ShowOffscreen(view)
+
+                    Dim links As List(Of LinkLabel) =
+                        WaypointLinks(view, waypoints.Count)
+
+                    For index As Integer = 0 To links.Count - 1
+                        StringAssert.StartsWith(
+                            links(index).AccessibleName,
+                            "Open in Manuscript: ",
+                            "Link " & index & " names what it opens."
+                        )
+                    Next
+
+                    Assert.AreEqual(
+                        links.Count,
+                        links.Select(Function(link) link.AccessibleName).Distinct().Count(),
+                        "Each link's name tells its waypoint apart: " & String.Join(" | ", links.Select(Function(link) link.AccessibleName))
+                    )
+
+                    ' Round the whole tab order once, from no focus.
+                    Dim host As Control =
+                        links(0).Parent
+
+                    While Not (TypeOf host Is ScrollableControl AndAlso DirectCast(host, ScrollableControl).AutoScroll)
+                        host = host.Parent
+                    End While
+
+                    Dim reached As New List(Of LinkLabel)()
+                    Dim seen As New HashSet(Of Control)()
+
+                    view.ActiveControl = Nothing
+
+                    For count As Integer = 0 To ViewCatalog.Descendants(view).Count()
+
+                        Press(view, Keys.Tab)
+
+                        Dim active As Control =
+                            DeepestActiveControl(view)
+
+                        Assert.IsNotNull(
+                            active,
+                            "Tab selects a control."
+                        )
+
+                        If Not seen.Add(active) Then
+                            Exit For
+                        End If
+
+                        Dim link As LinkLabel =
+                            TryCast(active, LinkLabel)
+
+                        If link IsNot Nothing Then
+
+                            reached.Add(link)
+
+                            Dim shown As Rectangle =
+                                host.RectangleToClient(link.RectangleToScreen(link.ClientRectangle))
+
+                            Assert.IsTrue(
+                                host.ClientRectangle.Contains(shown),
+                                link.AccessibleName & " is scrolled into view: " & shown.ToString() & " in " & host.ClientRectangle.ToString()
+                            )
+
+                        End If
+
+                    Next
+
+                    CollectionAssert.AreEqual(
+                        links,
+                        reached,
+                        "Tab reaches every waypoint's link once, in route order: " & String.Join(" | ", reached.Select(Function(link) link.AccessibleName))
+                    )
+
+                    view.Close()
+
+                End Using
+
+                ' Enter on each link opens its own waypoint, never Close.
+                For index As Integer = 0 To waypoints.Count - 1
+
+                    Using view As New ManuscriptRouteViewForm(manuscript)
+
+                        ShowOffscreen(view)
+
+                        Dim link As LinkLabel =
+                            WaypointLinks(view, waypoints.Count)(index)
+
+                        view.ActiveControl = link
+                        Press(view, Keys.Enter)
+
+                        Assert.AreEqual(
+                            DialogResult.Yes,
+                            view.DialogResult,
+                            "Enter on " & link.AccessibleName & " opens it."
+                        )
+
+                        Assert.IsTrue(
+                            SameWaypoint(waypoints(index), view.SelectedWaypoint),
+                            link.AccessibleName & " opens waypoint " & index & "."
+                        )
+
+                        view.Close()
+
+                    End Using
+
+                Next
+
+                Assert.AreEqual(
+                    0,
+                    StaRunner.OpenFormsOnThisThread().Count,
+                    "Route View leaves no form open."
+                )
+
+            End Sub
+        )
+
+    End Sub
+
+
+    ' Esc can cancel every dialog the app shows modally: each has a
+    ' CancelButton. The allow-list has teeth: a form on it that gains a
+    ' CancelButton is reported, so the list never outlives its reason.
+    <TestMethod>
+    Public Sub EveryModalDialogHasACancelButton()
+
+        Dim missing As New List(Of String)()
+        Dim stale As New List(Of String)()
+
+        Dim modal As List(Of (Name As String, Build As Func(Of String, Form))) =
+            ViewCatalog.Dialogs.
+                Where(Function(entry) Not NeverModal.Contains(entry.Key)).
+                Select(Function(entry) (entry.Key.Name, entry.Value)).
+                ToList()
+
+        Dim failures As List(Of String) =
+            ViewCatalog.ShowEach(
+                modal,
+                Sub(name, shown)
+
+                    Dim allowed As Boolean =
+                        AllowedWithoutCancel.Any(Function(type) type.Name = name)
+
+                    If shown.CancelButton Is Nothing AndAlso Not allowed Then
+                        missing.Add(name)
+                    ElseIf shown.CancelButton IsNot Nothing AndAlso allowed Then
+                        stale.Add(name)
+                    End If
+
+                End Sub
+            )
+
+        Assert.AreEqual(
+            0,
+            failures.Count,
+            Environment.NewLine & String.Join(Environment.NewLine, failures)
+        )
+
+        Assert.AreEqual(
+            0,
+            missing.Count,
+            "Modal dialogs Esc cannot cancel: " & String.Join(", ", missing)
+        )
+
+        Assert.AreEqual(
+            0,
+            stale.Count,
+            "Allowed without a CancelButton, yet it has one: " & String.Join(", ", stale)
+        )
+
+    End Sub
+
+
+    ' Esc closes each of the five when it is shown modally, as the app
+    ' shows it: the dialog returns from ShowDialog with its Cancel or Close
+    ' button's result.
+    <TestMethod>
+    Public Sub EscClosesFillBlanksPublicationCheckSubmissionDetailsAndTheLibraries()
+
+        Dim failures As New List(Of String)()
+
+        For Each probed In EscapeProbed
+
+            Dim root As String =
+                CreateTemporaryRoot()
+
+            StorageEnvironment.RootOverride =
+                root
+
+            Try
+
+                Dim result As DialogResult? =
+                    Nothing
+
+                StaRunner.Run(
+                    Sub()
+                        result = EscapeResult(ViewCatalog.Dialogs(probed.View)(root))
+                    End Sub
+                )
+
+                If Not result.HasValue Then
+                    failures.Add(probed.View.Name & ": Esc did not close it.")
+                ElseIf result.Value <> probed.Result Then
+                    failures.Add(probed.View.Name & ": Esc closed it with " & result.Value.ToString() & ", not " & probed.Result.ToString() & ".")
+                End If
+
+            Catch ex As Exception
+
+                failures.Add(probed.View.Name & ": " & ex.Message)
+
+            Finally
+
+                StorageEnvironment.RootOverride =
+                    Nothing
+
+                DeleteTemporaryRoot(
+                    root
+                )
+
+            End Try
+
+        Next
+
+        Assert.AreEqual(
+            0,
+            failures.Count,
+            Environment.NewLine & String.Join(Environment.NewLine, failures)
+        )
+
+    End Sub
+
+
+    ' Esc on a running lookup stops it, as Stop does, and the window stays
+    ' open on what was found; Esc again closes it. Stop is the Cancel
+    ' button renamed while the lookup runs, so its handler, not the button's
+    ' DialogResult, decides what Esc does.
+    <TestMethod>
+    Public Sub EscStopsARunningLookupAndLeavesTheWindowOpen()
+
+        Dim failures As New List(Of String)()
+
+        Dim probes As (Name As String, Build As Func(Of Form), Result As DialogResult)() = {
+            ("FillBlanksForm", Function() New FillBlanksForm(WithDois(), New UntilStopped(), Function() True) With {.Pause = TimeSpan.Zero}, DialogResult.Cancel),
+            ("PublicationCheckForm", Function() New PublicationCheckForm(WithDois(), Nothing, String.Empty, New UntilStopped(), Function() True, DateTime.Today) With {.Pause = TimeSpan.Zero}, DialogResult.OK)
+        }
+
+        For Each probe In probes
+
+            Dim root As String =
+                CreateTemporaryRoot()
+
+            StorageEnvironment.RootOverride =
+                root
+
+            Try
+
+                Dim outcome As (Closed As Boolean, Result As DialogResult, Taken As Integer) =
+                    Nothing
+
+                Dim openAfterStop As Boolean =
+                    False
+
+                StaRunner.Run(
+                    Sub()
+
+                        Dim dialog As Form =
+                            probe.Build()
+
+                        outcome = Drive(
+                            dialog,
+                            (Function() True, Sub() PrimaryButton(dialog).PerformClick()),
+                            (Function() Shows(dialog, "Stop"), Sub() Post(dialog, Keys.Escape)),
+                            (Function() Shows(dialog, "Stopped early"),
+                             Sub()
+                                 openAfterStop = dialog.Visible
+                                 Post(dialog, Keys.Escape)
+                             End Sub)
+                        )
+
+                    End Sub
+                )
+
+                If outcome.Taken < 3 Then
+                    failures.Add(probe.Name & ": Esc did not stop the lookup.")
+                ElseIf Not openAfterStop Then
+                    failures.Add(probe.Name & ": stopping the lookup closed the window.")
+                ElseIf Not outcome.Closed Then
+                    failures.Add(probe.Name & ": Esc did not close it once the lookup stopped.")
+                ElseIf outcome.Result <> probe.Result Then
+                    failures.Add(probe.Name & ": Esc closed it with " & outcome.Result.ToString() & ", not " & probe.Result.ToString() & ".")
+                End If
+
+            Catch ex As Exception
+
+                failures.Add(probe.Name & ": " & ex.Message)
+
+            Finally
+
+                StorageEnvironment.RootOverride =
+                    Nothing
+
+                DeleteTemporaryRoot(
+                    root
+                )
+
+            End Try
+
+        Next
+
+        Assert.AreEqual(
+            0,
+            failures.Count,
+            Environment.NewLine & String.Join(Environment.NewLine, failures)
+        )
+
+    End Sub
+
+
+    ' Shows the dialog modally, offscreen, and presses Esc in it once it
+    ' has shown. Nothing is returned for a dialog Esc leaves open.
+    Private Shared Function EscapeResult(
+        dialog As Form
+    ) As DialogResult?
+
+        Dim outcome As (Closed As Boolean, Result As DialogResult, Taken As Integer) =
+            Drive(
+                dialog,
+                (Function() True, Sub() Post(dialog, Keys.Escape))
+            )
+
+        Return If(outcome.Closed, outcome.Result, CType(Nothing, DialogResult?))
+
+    End Function
+
+
+    ' Shows the dialog modally, offscreen, and takes each step in turn once
+    ' its condition holds. A dialog that waits more than five seconds for a
+    ' step, or to close after its last, is closed, and is reported as not
+    ' closed by its steps; closing is asked for again until a running lookup
+    ' lets it go. Returns the result and how many steps were taken.
+    Private Shared Function Drive(
+        dialog As Form,
+        ParamArray steps As (Ready As Func(Of Boolean), Take As Action)()
+    ) As (Closed As Boolean, Result As DialogResult, Taken As Integer)
+
+        Using dialog
+
+            Dim taken As Integer =
+                0
+
+            Dim closedBySteps As Boolean =
+                True
+
+            Dim waited As New Stopwatch()
+
+            Using poll As New Timer With {.Interval = 50}
+
+                AddHandler dialog.Shown,
+                    Sub(sender, e)
+                        waited.Start()
+                        poll.Start()
+                    End Sub
+
+                AddHandler poll.Tick,
+                    Sub(sender, e)
+
+                        If closedBySteps AndAlso taken < steps.Length AndAlso steps(taken).Ready() Then
+
+                            taken += 1
+                            waited.Restart()
+                            steps(taken - 1).Take()
+
+                        ElseIf Not closedBySteps OrElse waited.Elapsed > TimeSpan.FromSeconds(5) Then
+
+                            closedBySteps = False
+                            dialog.DialogResult = DialogResult.Abort
+
+                        End If
+
+                    End Sub
+
+                dialog.StartPosition = FormStartPosition.Manual
+                dialog.Location = New Point(-20000, -20000)
+                dialog.ShowInTaskbar = False
+
+                Dim result As DialogResult =
+                    dialog.ShowDialog()
+
+                poll.Stop()
+
+                Return (closedBySteps, result, taken)
+
+            End Using
+
+        End Using
+
+    End Function
+
+
+    ' The view's main button: the primary one it shows.
+    Private Shared Function PrimaryButton(
+        view As Form
+    ) As ActionButton
+
+        Return ViewCatalog.Descendants(view).OfType(Of ActionButton)().
+            Single(Function(button) button.Visible AndAlso button.Role = ActionButtonRole.Primary)
+
+    End Function
+
+
+    ' Whether a visible button or label in the view shows the text.
+    Private Shared Function Shows(
+        view As Form,
+        text As String
+    ) As Boolean
+
+        Return ViewCatalog.Descendants(view).
+            Any(Function(control) control.Visible AndAlso (TypeOf control Is ButtonBase OrElse TypeOf control Is Label) AndAlso control.Text.Contains(text, StringComparison.Ordinal))
+
+    End Function
+
+
+    ' The representative library with a DOI on its study under review and
+    ' on its published study, so each lookup has a manuscript to ask about:
+    ' Check for Publications skips a title as short as "Active Study".
+    Private Shared Function WithDois() As List(Of Manuscript)
+
+        Dim library As List(Of Manuscript) =
+            CreateRepresentativeLibrary()
+
+        library(0).Metadata.Doi =
+            "10.5555/example.active"
+
+        library(1).Metadata.Doi =
+            "10.5555/example.published"
+
+        Return library
+
+    End Function
+
+
+    ' The links of the waypoint cards, one card after another: exactly one
+    ' tab-stop link in each card, and a card for every waypoint.
+    Private Shared Function WaypointLinks(
+        view As Form,
+        waypointCount As Integer
+    ) As List(Of LinkLabel)
+
+        Dim cards As List(Of RoundedPanel) =
+            ViewCatalog.Descendants(view).OfType(Of RoundedPanel)().ToList()
+
+        Assert.AreEqual(
+            waypointCount,
+            cards.Count,
+            "A card for every waypoint."
+        )
+
+        Dim links As New List(Of LinkLabel)()
+
+        For index As Integer = 0 To cards.Count - 1
+
+            Dim stops As List(Of LinkLabel) =
+                ViewCatalog.Descendants(cards(index)).OfType(Of LinkLabel)().
+                    Where(Function(link) link.TabStop AndAlso link.CanSelect).
+                    ToList()
+
+            Assert.AreEqual(
+                1,
+                stops.Count,
+                "Waypoint card " & index & " has one link to open it with."
+            )
+
+            links.Add(stops(0))
+
+        Next
+
+        Return links
+
+    End Function
+
+
+    ' The projection is rebuilt for each view, so a waypoint is matched by
+    ' what it records rather than by reference.
+    Private Shared Function SameWaypoint(
+        expected As ManuscriptRouteWaypoint,
+        actual As ManuscriptRouteWaypoint
+    ) As Boolean
+
+        Return actual IsNot Nothing AndAlso
+            actual.Kind = expected.Kind AndAlso
+            actual.EventDate = expected.EventDate AndAlso
+            Nullable.Equals(actual.Stage, expected.Stage) AndAlso
+            Nullable.Equals(actual.SubmissionId, expected.SubmissionId) AndAlso
+            Nullable.Equals(actual.DecisionId, expected.DecisionId) AndAlso
+            Nullable.Equals(actual.VersionId, expected.VersionId)
+
+    End Function
+
+
+    ' Posts the key to the focused control and lets the form handle it.
+    Private Shared Sub Press(
+        form As Form,
+        key As Keys
+    )
+
+        Post(form, key)
+        Application.DoEvents()
+
+    End Sub
+
+
+    Private Shared Sub Post(
+        form As Form,
+        key As Keys
+    )
+
+        Dim target As Control =
+            If(DeepestActiveControl(form), form)
+
+        PostMessage(target.Handle, WM_KEYDOWN, New IntPtr(CInt(key)), New IntPtr(1))
+
+    End Sub
+
+
+    Private Shared Function DeepestActiveControl(
+        form As Form
+    ) As Control
+
+        Dim active As Control =
+            form.ActiveControl
+
+        While TypeOf active Is ContainerControl AndAlso DirectCast(active, ContainerControl).ActiveControl IsNot Nothing
+            active = DirectCast(active, ContainerControl).ActiveControl
+        End While
+
+        Return active
+
+    End Function
+
+
+    Private Shared Sub ShowOffscreen(
+        form As Form
+    )
+
+        form.StartPosition = FormStartPosition.Manual
+        form.Location = New Point(-20000, -20000)
+        form.ShowInTaskbar = False
+        form.Show()
+        Application.DoEvents()
+
+    End Sub
+
+
+    <DllImport("user32.dll")>
+    Private Shared Function PostMessage(handle As IntPtr, message As UInteger, wParam As IntPtr, lParam As IntPtr) As Boolean
+    End Function
+
+
+    ' Answers nothing until the lookup is stopped, as a slow service would.
+    Private NotInheritable Class UntilStopped
+        Implements IPublicationSource
+
+        Public Async Function LookupDoiAsync(doi As String, cancellationToken As Threading.CancellationToken) As Task(Of CrossrefMetadataSuggestion) Implements IPublicationSource.LookupDoiAsync
+            Await Task.Delay(Threading.Timeout.InfiniteTimeSpan, cancellationToken)
+            Return Nothing
+        End Function
+
+        Public Async Function SearchTitleAsync(title As String, cancellationToken As Threading.CancellationToken) As Task(Of List(Of CrossrefMetadataSuggestion)) Implements IPublicationSource.SearchTitleAsync
+            Await Task.Delay(Threading.Timeout.InfiniteTimeSpan, cancellationToken)
+            Return New List(Of CrossrefMetadataSuggestion)()
+        End Function
+
+        Public Async Function OrcidWorksAsync(orcid As String, cancellationToken As Threading.CancellationToken) As Task(Of List(Of OrcidWorkSuggestion)) Implements IPublicationSource.OrcidWorksAsync
+            Await Task.Delay(Threading.Timeout.InfiniteTimeSpan, cancellationToken)
+            Return New List(Of OrcidWorkSuggestion)()
+        End Function
+    End Class
+
+End Class
