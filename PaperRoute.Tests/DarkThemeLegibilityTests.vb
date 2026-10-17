@@ -7,6 +7,7 @@ Imports System.Threading
 Imports System.Threading.Tasks
 Imports System.Windows.Forms
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
+Imports ManuscriptPipeline
 Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Forms
 Imports ManuscriptPipeline.Models
@@ -15,11 +16,121 @@ Imports ManuscriptPipeline.Services
 ' Text that Windows or WinForms colors without asking the theme stays
 ' readable in Dark: a list's group headings, and the captions of disabled
 ' check boxes, options, and buttons. In Light both are left as they were.
+' And no view in the catalog keeps light colors in Dark (#106), but for
+' what the allow-list names.
 <TestClass>
 <DoNotParallelize>
 Public Class DarkThemeLegibilityTests
 
     Private Const Carberry As String = "0000-0002-1825-0097"
+
+    ' What stays as Windows draws it in Dark for 1.0, by name; the sweep
+    ' passes over these and nothing else. Message boxes and file dialogs
+    ' are Windows' own windows, which no view in the catalog opens.
+    Friend Shared ReadOnly DarkAllowList As (Name As String, Reason As String, Matches As Func(Of Control, Boolean))() = {
+        ("The report preview", "A web page that Windows' browser control draws.", Function(control As Control) TypeOf control Is WebBrowser),
+        ("Message boxes", "Windows draws them.", Function(control As Control) False),
+        ("File dialogs", "Windows draws them.", Function(control As Control) False),
+        ("Date pickers", "Windows draws the field; step 4 of #106 decides whether PaperRoute repaints it.", Function(control As Control) TypeOf control Is DateTimePicker),
+        ("Lists and grids with check boxes", "Windows draws their check marks in Light colors until step 2 of #106 paints them.",
+            Function(control As Control) (TypeOf control Is ListView AndAlso DirectCast(control, ListView).CheckBoxes) OrElse
+                                         (TypeOf control Is DataGridView AndAlso DirectCast(control, DataGridView).Columns.OfType(Of DataGridViewCheckBoxColumn)().Any())),
+        ("Standard buttons in the main window", "Your Citations' two buttons and the shortlist's rebuilt rows, until step 3 of #106.",
+            Function(control As Control) TypeOf control Is Button AndAlso (TypeOf control.FindForm() Is Form1 OrElse TypeOf control.FindForm() Is EditManuscriptForm))
+    }
+
+    ' ---------------------------------------------------------------
+    ' Every view in Dark (#106)
+    ' ---------------------------------------------------------------
+
+    ' Each view in the catalog, shown in Dark: no control is mostly a light
+    ' color, apart from what its children cover; no check mark in a list or
+    ' grid is; and no button is a standard Windows button, whose face is
+    ' dark in Dark but whose caption stays light when it is disabled. What
+    ' the allow-list names is passed over. Every finding is listed.
+    <TestMethod>
+    Public Sub NoViewKeepsLightColorsInDark()
+
+        Dim findings As New List(Of String)()
+
+        For Each view In ViewCatalog.All()
+
+            Dim root As String = CreateTemporaryRoot()
+            StorageEnvironment.RootOverride = root
+            StorageEnvironment.DefaultRootUses = 0
+
+            Try
+                RunWithColorMode(SystemColorMode.Dark,
+                    Sub()
+                        Try
+                            Using shown As Form = view.Build(root)
+                                If Not shown.Visible Then ShowOffscreen(shown)
+                                ' Styled once open, as the app's idle hook styles every
+                                ' window but the main one (UiPolish.InstallGlobalDialogStyling).
+                                If Not TypeOf shown Is Form1 Then UiPolish.ApplyDialog(shown)
+                                Application.DoEvents()
+                                findings.AddRange(LightPartsOf(shown).Select(Function(found) view.Name & ": " & found))
+                            End Using
+                        Finally
+                            ' A view that fails after it showed is closed too.
+                            For Each left As Form In StaRunner.OpenFormsOnThisThread()
+                                left.Dispose()
+                            Next
+                        End Try
+                    End Sub)
+                Assert.AreEqual(0, StorageEnvironment.DefaultRootUses, view.Name & " asked for the default data root.")
+            Catch ex As Exception
+                findings.Add(view.Name & ": " & ex.Message)
+            Finally
+                StorageEnvironment.RootOverride = Nothing
+                DeleteTemporaryRoot(root)
+            End Try
+
+        Next
+
+        Assert.AreEqual(0, findings.Count, Environment.NewLine & String.Join(Environment.NewLine, findings))
+
+    End Sub
+
+    ' The sweep has teeth: in Dark, a light panel, a list's and a grid's
+    ' stock check marks, and a standard button are found, and the same
+    ' window with a dark panel and none of the others shows nothing.
+    <TestMethod>
+    Public Sub TheDarkSweepFindsLightControlsAndStockCheckMarks()
+
+        RunWithColorMode(SystemColorMode.Dark,
+            Sub()
+                Using form As New Form With {.ClientSize = New Size(640, 300), .Font = New Font("Segoe UI", 9.0F)}
+                    Dim light As New Panel With {.Name = "Light panel", .Bounds = New Rectangle(8, 8, 120, 60), .BackColor = Color.White}
+                    Dim list As New ListView With {.Name = "Probe list", .View = View.Details, .CheckBoxes = True, .Bounds = New Rectangle(140, 8, 240, 120),
+                                                   .BackColor = UiTheme.CardBackground(), .ForeColor = UiTheme.PrimaryText()}
+                    list.Columns.Add("Work", 200)
+                    list.Items.Add(New ListViewItem("Unchecked"))
+                    Dim grid As New DataGridView With {.Name = "Probe grid", .Bounds = New Rectangle(390, 8, 240, 120), .AllowUserToAddRows = False}
+                    grid.Columns.Add(New DataGridViewCheckBoxColumn With {.HeaderText = "Use"})
+                    grid.Rows.Add(False)
+                    form.Controls.AddRange(New Control() {light, list, grid})
+                    UiPolish.ApplyDialog(form)
+                    Dim standard As New Button With {.Name = "Probe button", .Text = "Standard", .Location = New Point(8, 140), .AutoSize = True}
+                    form.Controls.Add(standard)
+                    ShowOffscreen(form)
+
+                    Dim found As List(Of String) = LightPartsOf(form, everything:=True)
+                    For Each expected As String In {"Panel 'Light panel' is mostly", "ListView 'Probe list' has a check mark that is mostly", "DataGridView 'Probe grid' has a check mark that is mostly", "Button 'Probe button' is a standard Windows button"}
+                        Assert.IsTrue(found.Any(Function(item) item.StartsWith(expected, StringComparison.Ordinal)), $"Found '{expected}...' among: {String.Join("; ", found)}")
+                    Next
+                    Assert.AreEqual(4, found.Count, String.Join("; ", found))
+
+                    light.BackColor = UiTheme.CardBackground()
+                    list.Dispose()
+                    grid.Dispose()
+                    standard.Dispose()
+                    Application.DoEvents()
+                    Assert.AreEqual(0, LightPartsOf(form, everything:=True).Count, String.Join("; ", LightPartsOf(form, everything:=True)))
+                End Using
+            End Sub)
+
+    End Sub
 
     ' ---------------------------------------------------------------
     ' Group headings
@@ -156,6 +267,185 @@ Public Class DarkThemeLegibilityTests
     ' ---------------------------------------------------------------
     ' Helpers
     ' ---------------------------------------------------------------
+
+    ' What in a shown view keeps light colors, one line for each control,
+    ' passing over what the allow-list names unless told to look at all.
+    Private Shared Function LightPartsOf(view As Form, Optional everything As Boolean = False) As List(Of String)
+
+        Dim found As New List(Of String)()
+
+        For Each control As Control In {CType(view, Control)}.Concat(Descendants(view))
+
+            If Not control.Visible OrElse control.Width <= 0 OrElse control.Height <= 0 OrElse
+               (Not everything AndAlso DarkAllowList.Any(Function(entry) entry.Matches(control))) Then
+                Continue For
+            End If
+
+            If TypeOf control Is Button AndAlso Not TypeOf control Is ActionButton AndAlso
+               DirectCast(control, Button).FlatStyle <> FlatStyle.Flat Then
+                found.Add($"{Describe(control)} is a standard Windows button.")
+                Continue For
+            End If
+
+            Using image As Bitmap = Picture(control)
+                Dim own As Color? = CommonestOwnColor(control, image)
+                If own.HasValue AndAlso IsLight(own.Value) Then
+                    found.Add($"{Describe(control)} is mostly {own.Value}.")
+                End If
+                Dim mark As Color? = LightCheckMark(control, image)
+                If mark.HasValue Then
+                    found.Add($"{Describe(control)} has a check mark that is mostly {mark.Value}.")
+                End If
+            End Using
+
+        Next
+
+        Return found
+
+    End Function
+
+    ' Lighter than any surface the Dark tokens fill: the lightest, the
+    ' accent of a primary button, is 0.51 in relative luminance.
+    Private Shared Function IsLight(color As Color) As Boolean
+        Return color.A = 255 AndAlso Luminance(color) > 0.6
+    End Function
+
+    Private Shared Function Describe(control As Control) As String
+        Dim name As String = If(Not String.IsNullOrEmpty(control.AccessibleName), control.AccessibleName,
+                                If(Not String.IsNullOrEmpty(control.Name), control.Name, If(control.Text, String.Empty)))
+        name = name.Replace(Environment.NewLine, " ")
+        Return $"{control.GetType().Name} '{If(name.Length > 60, name.Substring(0, 60) & "...", name)}'"
+    End Function
+
+    ' Where a control's client area starts in its picture.
+    Private Shared Function ClientOffset(control As Control) As Point
+        Dim window As Point = If(control.Parent Is Nothing, control.Location, control.Parent.PointToScreen(control.Location))
+        Dim client As Point = control.PointToScreen(Point.Empty)
+        Return New Point(client.X - window.X, client.Y - window.Y)
+    End Function
+
+    ' The commonest color of what the control paints itself: its picture
+    ' without what its visible children cover, and a window without its
+    ' frame and title bar.
+    Private Shared Function CommonestOwnColor(control As Control, image As Bitmap) As Color?
+
+        Dim client As Point = ClientOffset(control)
+        Dim whole As New Rectangle(Point.Empty, image.Size)
+        Dim area As Rectangle = If(TypeOf control Is Form, New Rectangle(client, control.ClientSize), whole)
+        area.Intersect(whole)
+
+        Dim covered(image.Width * image.Height - 1) As Boolean
+        For Each child As Control In control.Controls
+            If Not child.Visible Then Continue For
+            Dim bounds As New Rectangle(child.Left + client.X, child.Top + client.Y, child.Width, child.Height)
+            bounds.Intersect(whole)
+            For y As Integer = bounds.Top To bounds.Bottom - 1
+                For x As Integer = bounds.Left To bounds.Right - 1
+                    covered(y * image.Width + x) = True
+                Next
+            Next
+        Next
+
+        Dim pixels As Integer() = PixelsOf(image)
+        Dim counts As New Dictionary(Of Integer, Integer)()
+        For y As Integer = area.Top To area.Bottom - 1
+            For x As Integer = area.Left To area.Right - 1
+                Dim index As Integer = y * image.Width + x
+                If covered(index) Then Continue For
+                Dim count As Integer = 0
+                counts.TryGetValue(pixels(index), count)
+                counts(pixels(index)) = count + 1
+            Next
+        Next
+
+        If counts.Count = 0 Then Return Nothing
+        Return Color.FromArgb(counts.OrderByDescending(Function(entry) entry.Value).First().Key)
+
+    End Function
+
+    Private Shared Function PixelsOf(image As Bitmap) As Integer()
+        Dim area As New Rectangle(Point.Empty, image.Size)
+        Dim data As Imaging.BitmapData = image.LockBits(area, Imaging.ImageLockMode.ReadOnly, Imaging.PixelFormat.Format32bppArgb)
+        Try
+            Dim pixels(area.Width * area.Height - 1) As Integer
+            Runtime.InteropServices.Marshal.Copy(data.Scan0, pixels, 0, pixels.Length)
+            Return pixels
+        Finally
+            image.UnlockBits(data)
+        End Try
+    End Function
+
+    ' The first check mark in a list or grid whose commonest color, apart
+    ' from the row behind it, is light.
+    Private Shared Function LightCheckMark(control As Control, image As Bitmap) As Color?
+        Dim client As Point = ClientOffset(control)
+        For Each cell As Rectangle In CheckMarkCells(control)
+            cell.Offset(client)
+            Dim mark As Color? = MarkColor(image, cell)
+            If mark.HasValue AndAlso IsLight(mark.Value) Then Return mark
+        Next
+        Return Nothing
+    End Function
+
+    ' Where each row's check mark is drawn, in client coordinates: left of
+    ' a list row's icon and text, in a grid's check-box cell, and in the
+    ' square at the start of a checked list's item.
+    Private Shared Iterator Function CheckMarkCells(control As Control) As IEnumerable(Of Rectangle)
+
+        Dim list As ListView = TryCast(control, ListView)
+        If list IsNot Nothing AndAlso list.CheckBoxes Then
+            For Each item As ListViewItem In list.Items
+                Dim row As Rectangle = item.GetBounds(ItemBoundsPortion.Entire)
+                Yield Rectangle.FromLTRB(row.Left, row.Top, item.GetBounds(ItemBoundsPortion.Icon).Left, row.Bottom)
+            Next
+        End If
+
+        Dim grid As DataGridView = TryCast(control, DataGridView)
+        If grid IsNot Nothing Then
+            For Each column As DataGridViewColumn In grid.Columns
+                If Not column.Visible OrElse Not TypeOf column Is DataGridViewCheckBoxColumn Then Continue For
+                For Each row As DataGridViewRow In grid.Rows
+                    Dim cell As Rectangle = grid.GetCellDisplayRectangle(column.Index, row.Index, True)
+                    If Not cell.IsEmpty Then Yield cell
+                Next
+            Next
+        End If
+
+        Dim checkedList As CheckedListBox = TryCast(control, CheckedListBox)
+        If checkedList IsNot Nothing Then
+            For index As Integer = 0 To checkedList.Items.Count - 1
+                Dim item As Rectangle = checkedList.GetItemRectangle(index)
+                Yield New Rectangle(item.Left, item.Top, item.Height, item.Height)
+            Next
+        End If
+
+    End Function
+
+    ' The commonest color in the square at the middle of a cell, where its
+    ' mark is drawn, apart from the row behind the mark, which is the
+    ' commonest color there: a mark is smaller than the square.
+    Private Shared Function MarkColor(image As Bitmap, cell As Rectangle) As Color?
+
+        Dim side As Integer = Math.Min(cell.Width, cell.Height)
+        cell = New Rectangle(cell.Left + (cell.Width - side) \ 2, cell.Top + (cell.Height - side) \ 2, side, side)
+        cell.Intersect(New Rectangle(Point.Empty, image.Size))
+        If cell.Width < 3 OrElse cell.Height < 3 Then Return Nothing
+
+        Dim counts As New Dictionary(Of Integer, Integer)()
+        For y As Integer = cell.Top To cell.Bottom - 1
+            For x As Integer = cell.Left To cell.Right - 1
+                Dim pixel As Integer = image.GetPixel(x, y).ToArgb()
+                Dim count As Integer = 0
+                counts.TryGetValue(pixel, count)
+                counts(pixel) = count + 1
+            Next
+        Next
+
+        Dim ranked = counts.OrderByDescending(Function(entry) entry.Value).ToList()
+        If ranked.Count < 2 Then Return Nothing
+        Return Color.FromArgb(ranked(1).Key)
+
+    End Function
 
     ' Each heading sits just above its group's first row. Text is judged
     ' by its strongest pixels: smoothing leaves the rest of a stroke paler.

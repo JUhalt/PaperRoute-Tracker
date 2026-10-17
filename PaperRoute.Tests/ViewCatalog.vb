@@ -9,6 +9,7 @@ Imports System.Threading.Tasks
 Imports System.Windows.Forms
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
 Imports ManuscriptPipeline
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Forms
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
@@ -18,9 +19,10 @@ Imports ManuscriptPipeline.Services
 ' Windows 11 chrome. The dialogs are keyed by their Form subclass, so a
 ' form with neither a factory nor a place on the not-yet list fails the
 ' catalog test; the hosted presentations and the main window's pages, which
-' no Form subclass of their own keys, are listed by name. Every factory is
-' handed the isolated storage root it runs on and builds its view the way
-' the app does, with any files it needs under that root.
+' no Form subclass of their own keys, are listed by name, and so are the
+' later steps of views whose first step hides a list or a grid. Every
+' factory is handed the isolated storage root it runs on and builds its
+' view the way the app does, with any files it needs under that root.
 Friend NotInheritable Class ViewCatalog
 
     Private Sub New()
@@ -51,6 +53,7 @@ Friend NotInheritable Class ViewCatalog
     Public Shared ReadOnly Dialogs As New Dictionary(Of Type, Func(Of String, Form)) From {
         {GetType(Form1), Function(root) BoardOn(CreateRepresentativeLibrary())},
         {GetType(AboutForm), Function(root) New AboutForm()},
+        {GetType(AddCorrespondenceForm), Function(root) New AddCorrespondenceForm()},
         {GetType(AddDecisionForm), Function(root) New AddDecisionForm()},
         {GetType(AddManuscriptForm), Function(root) New AddManuscriptForm()},
         {GetType(AddSubmissionForm), Function(root) New AddSubmissionForm()},
@@ -60,12 +63,16 @@ Friend NotInheritable Class ViewCatalog
         {GetType(AssistantDraftForm), Function(root) New AssistantDraftForm(ResponseRequest(), String.Empty)},
         {GetType(AuthorInstructionsForm), Function(root) New AuthorInstructionsForm("Fictional Open Psychology", String.Empty, {}, {})},
         {GetType(AuthorLibraryForm), Function(root) New AuthorLibraryForm(New List(Of Manuscript)())},
+        {GetType(BibliographyExportSelectionForm), Function(root) New BibliographyExportSelectionForm(CreateRepresentativeLibrary(), "BibTeX")},
+        {GetType(BibliographyImportForm), Function(root) New BibliographyImportForm(BibTeXService.Parse(SampleBibTeX), CreateRepresentativeLibrary())},
         {GetType(CitationsUpdateForm), Function(root) New CitationsUpdateForm(Carberry, New List(Of (Doi As String, Title As String))(), Nothing, New NoCitations())},
         {GetType(CoverLetterForm), Function(root) New CoverLetterForm("Example: open materials", "Fictional Open Psychology", "Journal article", {"open science"}, "An abstract.")},
+        {GetType(DeadlineDateForm), Function(root) New DeadlineDateForm("Set the revision deadline", "Revise and resubmit  ·  Active Study", "The deadline is saved on the latest editorial decision.", "Set to", Nothing, DateTime.Today)},
         {GetType(DecisionLetterForm), Function(root) New DecisionLetterForm(DecisionLetterMode.NewDecision, New JournalSubmission())},
         {GetType(DeleteManuscriptForm), Function(root) New DeleteManuscriptForm("Active Study")},
         {GetType(DiagnosticsForm), Function(root) New DiagnosticsForm(New AppSettings())},
         {GetType(EditManuscriptForm), Function(root) Editor(root)},
+        {GetType(FillBlanksForm), Function(root) New FillBlanksForm(WithDoi(), New NoPublications(), Function() True)},
         {GetType(HelpForm), Function(root) New HelpForm()},
         {GetType(JournalCandidateForm), Function(root) New JournalCandidateForm(New JournalCandidate With {.JournalName = "PLOS ONE"}, {"PLOS ONE"}, Function(name) "No submissions yet.")},
         {GetType(JournalChecklistItemEditForm), Function(root) New JournalChecklistItemEditForm(New JournalChecklistTemplateItem With {.Title = "Data availability statement"})},
@@ -74,12 +81,16 @@ Friend NotInheritable Class ViewCatalog
         {GetType(JournalLibraryForm), Function(root) New JournalLibraryForm(New List(Of Manuscript)())},
         {GetType(JournalMetricForm), Function(root) New JournalMetricForm()},
         {GetType(JournalSuggestionsForm), Function(root) New JournalSuggestionsForm("Anchoring", {"anchoring effects"}, New NoSuggestions(), Nothing, Nothing, DateTime.Today)},
+        {GetType(ManuscriptAuthorForm), Function(root) New ManuscriptAuthorForm(AuthorsWithAffiliations(), Nothing, Array.Empty(Of Guid)())},
         {GetType(ManuscriptReadinessForm), Function(root) New ManuscriptReadinessForm(WithPackets(), New AuthorLibraryData())},
         {GetType(ManuscriptRouteViewForm), Function(root) New ManuscriptRouteViewForm(Routed())},
         {GetType(ManuscriptVersionEditForm), Function(root) VersionEditor()},
+        {GetType(OrcidLookupForm), Function(root) New OrcidLookupForm(New AuthorRecord With {.GivenName = "Josiah", .FamilyName = "Carberry", .Orcid = Carberry})},
         {GetType(PacketExportForm), Function(root) PacketExport(root)},
         {GetType(PublicationCheckForm), Function(root) New PublicationCheckForm(CreateRepresentativeLibrary(), Nothing, String.Empty, New NoPublications(), Function() True, DateTime.Today)},
+        {GetType(PublicationExportForm), Function(root) New PublicationExportForm(CreateRepresentativeLibrary(), AuthorsWithAffiliations())},
         {GetType(ReadinessItemNotesForm), Function(root) New ReadinessItemNotesForm(WithPackets().ReadinessProfiles(0).Items(0))},
+        {GetType(ReminderEditForm), Function(root) New ReminderEditForm(CreateRepresentativeLibrary())},
         {GetType(ReportForm), Function(root) New ReportForm("Pipeline Report", "report.html", CreateRepresentativeLibrary(), Function(chosen, deadlines) ReportService.PipelineReport(chosen, DateTime.Today))},
         {GetType(ReviewerResponseExportForm), Function(root) New ReviewerResponseExportForm("# Responses to reviewers")},
         {GetType(ReviewerResponseItemForm), Function(root) New ReviewerResponseItemForm(Routed().Submissions(0))},
@@ -112,29 +123,50 @@ Friend NotInheritable Class ViewCatalog
     }
 
 
+    ' Views at a step their first one does not show: the lists and grids a
+    ' lookup, a reading or a parse fills, and what the main window shows
+    ' only in some states (#106). Each factory shows its view to reach the
+    ' step, as the main window's pages are shown, and fails when the step
+    ' does not show.
+    Public Shared ReadOnly Stages As NamedView() = {
+        New NamedView("CitationsUpdateForm, confirming the works it found", Function(root) CitationsFound()),
+        New NamedView("JournalFactsForm, with the changes it found", Function(root) FactsFound()),
+        New NamedView("JournalSuggestionsForm, with the journals it found", Function(root) JournalsFound()),
+        New NamedView("FillBlanksForm, with the blanks it can fill", Function(root) BlanksFound()),
+        New NamedView("DecisionLetterForm, reviewing the comments it read", Function(root) LetterRead()),
+        New NamedView("AuthorInstructionsForm, reviewing the requirements it read", Function(root) InstructionsRead()),
+        New NamedView("TitlePageImportForm, with the authors it read", Function(root) TitlePageRead()),
+        New NamedView("Insights page, Your Citations before an update", Function(root) Citations(root, saved:=False)),
+        New NamedView("Insights page, Your Citations from a saved update", Function(root) Citations(root, saved:=True)),
+        New NamedView("EditManuscriptForm as the manuscript page, after its shortlist is rebuilt", Function(root) ShortlistRebuilt())
+    }
+
+
     ' Forms no test builds yet, each with what its factory will need. Each
     ' sweep shrinks this list; the catalog test fails when an entry is stale.
     Public Shared ReadOnly NotYet As (View As Type, Reason As String)() = {
-        (GetType(AddCorrespondenceForm), "New AddCorrespondenceForm() needs nothing; no test builds it yet."),
         (GetType(AffiliationEditForm), "Needs an AffiliationRecord; no test builds it yet."),
         (GetType(AuthorEditForm), "Needs an AuthorRecord; no test builds it yet."),
-        (GetType(BibliographyExportSelectionForm), "Needs manuscripts and a format name; no test builds it yet."),
-        (GetType(BibliographyImportForm), "Needs a BibliographyParseResult; no test builds it yet."),
         (GetType(CrossrefLookupForm), "Needs a manuscript and an author library; no test builds it yet."),
-        (GetType(DeadlineDateForm), "Needs a heading, context, note, verb and dates; no test builds it yet."),
         (GetType(ExcelMappingForm), "Needs an .xlsx file under the root; no test builds it yet."),
         (GetType(ExternalLinkEditForm), "Needs a ManuscriptExternalLink; no test builds it yet."),
-        (GetType(FillBlanksForm), "Needs a library, a publication source and a save callback; no test builds it yet."),
         (GetType(JournalPickerForm), "Needs an AuthorLibraryData; no test builds it yet."),
-        (GetType(ManuscriptAuthorForm), "Needs a library, a ManuscriptAuthor and excluded ids; no test builds it yet."),
         (GetType(ManuscriptLinksForm), "Needs a manuscript; opens the author library from a field initialiser; no test builds it yet."),
         (GetType(MarkPublishedForm), "Needs a manuscript, a PublicationMatch and a date; no test builds it yet."),
-        (GetType(OrcidLookupForm), "Needs an AuthorRecord; no test builds it yet."),
-        (GetType(PublicationExportForm), "Needs manuscripts and an author library; no test builds it yet."),
-        (GetType(ReminderEditForm), "Needs manuscripts; no test builds it yet."),
         (GetType(SubmissionPacketFileEditForm), "Needs a packet and a file record; no test builds it yet."),
         (GetType(UpdateProgressForm), "Needs a version string; no test builds it yet.")
     }
+
+
+    ' Every factory, by name: the dialogs, the hosted views and the stages.
+    Public Shared Function All() As List(Of (Name As String, Build As Func(Of String, Form)))
+
+        Return Dialogs.Select(Function(entry) (entry.Key.Name, entry.Value)).
+            Concat(Hosted.Select(Function(entry) (entry.Name, entry.Build))).
+            Concat(Stages.Select(Function(entry) (entry.Name, entry.Build))).
+            ToList()
+
+    End Function
 
 
     ' Every view in the app: the non-abstract Form subclasses of its assembly.
@@ -298,6 +330,207 @@ Friend NotInheritable Class ViewCatalog
     End Function
 
 
+    Private Const SampleBibTeX As String =
+        "@article{whitfield2025, title={A preregistered replication of anchoring effects}, author={Whitfield, Dana and Okafor, Rui}, " &
+        "journal={Fictional Journal of Psychology}, year={2025}, doi={10.5555/anchoring.2025}}"
+
+    Private Const PublishedDoi As String = "10.5555/published.study"
+
+
+    ' The representative library, its published study with a DOI and its
+    ' journal, volume, pages and abstract still blank.
+    Private Shared Function WithDoi() As List(Of Manuscript)
+        Dim library As List(Of Manuscript) = CreateRepresentativeLibrary()
+        library(1).Metadata.Doi = PublishedDoi
+        Return library
+    End Function
+
+
+    Private Shared Function AuthorsWithAffiliations() As AuthorLibraryData
+        Dim library As New AuthorLibraryData()
+        library.Affiliations.Add(New AffiliationRecord With {.Institution = "Blue Mountain University", .Department = "Department of Psychology"})
+        library.Affiliations.Add(New AffiliationRecord With {.Institution = "Cascade State University", .Department = "School of Nursing"})
+        library.Authors.Add(New AuthorRecord With {.GivenName = "Dana", .FamilyName = "Whitfield", .IsMe = True})
+        Return library
+    End Function
+
+
+    ' ---------------------------------------------------------------
+    ' Stages
+    ' ---------------------------------------------------------------
+
+    Private Shared ReadOnly LetterDay As New DateTime(2026, 10, 1)
+
+
+    Private Shared Function CitationsFound() As Form
+        Dim groups As New List(Of OrcidWorkGroup) From {
+            New OrcidWorkGroup With {.Dois = New List(Of String) From {"10.5555/test.orcid"}, .Title = "A work on the ORCID record", .WorkType = "journal-article"}
+        }
+        Dim found As New Dictionary(Of String, CitedWork) From {
+            {"10.5555/test.orcid", Work("W1", "10.5555/test.orcid", "A work on the ORCID record")},
+            {"10.5555/test.manuscript", Work("W2", "10.5555/test.manuscript", "A published manuscript")}
+        }
+        Dim linked As New List(Of CitedWork) From {Work("W3", "10.5555/test.linked", "A work OpenAlex links to the iD")}
+        Dim manuscripts As New List(Of (Doi As String, Title As String)) From {("10.5555/test.manuscript", "A published manuscript")}
+        Dim lookup As CitationLookup = CitationsService.Assemble(Carberry, groups, manuscripts, found, linked, 1, Array.Empty(Of String)())
+        Dim dialog As CitationsUpdateForm = Shown(New CitationsUpdateForm(Carberry, manuscripts, Nothing, New RecordedCitations(lookup)))
+        dialog.LookUpAsync().GetAwaiter().GetResult()
+        Application.DoEvents()
+        Return Reached(dialog, dialog.WorksList.Items.Count > 0, "found no works")
+    End Function
+
+
+    ' The researcher's own publisher is kept, so its row starts unchecked.
+    Private Shared Function FactsFound() As Form
+        Dim record As New JournalRecord With {.Name = "Fictional Journal", .Publisher = "Fictional Press (my spelling)", .Issns = New List(Of String) From {"1932-6203"}}
+        Dim lookup As New JournalFactsLookup With {
+            .Issns = New List(Of String) From {"1932-6203"},
+            .Doaj = New DoajJournal With {.Title = "Fictional Journal", .Publisher = "Fictional Press", .HomepageUrl = "https://journal.example.invalid/"},
+            .DoajChecked = True
+        }
+        Dim dialog As JournalFactsForm = Shown(New JournalFactsForm(record, New RecordedFacts(lookup)))
+        dialog.LookUpAsync().GetAwaiter().GetResult()
+        Application.DoEvents()
+        Return Reached(dialog, dialog.ChangesList.Items.Count > 0, "found no changes")
+    End Function
+
+
+    Private Shared Function JournalsFound() As Form
+        Dim dialog As JournalSuggestionsForm = Shown(New JournalSuggestionsForm("Anchoring", {"anchoring effects"}, New RecordedSuggestions(), Nothing, Nothing, DateTime.Today))
+        dialog.SearchAsync().GetAwaiter().GetResult()
+        Application.DoEvents()
+        Return Reached(dialog, dialog.JournalsList.Items.Count > 0, "found no journals")
+    End Function
+
+
+    Private Shared Function BlanksFound() As Form
+        Dim work As New CrossrefMetadataSuggestion With {
+            .Doi = PublishedDoi, .Title = "Published Study", .Journal = "Behavioral Examples", .Volume = "12", .Pages = "1-20",
+            .PublishedDate = New DateTime(2026, 5, 15), .AbstractText = "A fictional abstract."
+        }
+        Dim dialog As FillBlanksForm = Shown(New FillBlanksForm(WithDoi(), New NoPublications(work), Function() True) With {.Pause = TimeSpan.Zero})
+        dialog.LookUpAsync().GetAwaiter().GetResult()
+        Application.DoEvents()
+        Return Reached(dialog, dialog.PlannedChanges.Count > 0, "found no blanks to fill")
+    End Function
+
+
+    ' What the assistant's fictional answer proposes, put in front of the
+    ' researcher in the open window as a reading does: no provider is asked.
+    Private Shared Function LetterRead() As Form
+        Dim dialog As DecisionLetterForm = Shown(New DecisionLetterForm(DecisionLetterMode.NewDecision, New JournalSubmission With {.JournalName = "Fictional Journal of Psychology"}, AssistantCoreTests.Letter, LetterDay))
+        Dim found As DecisionLetterProposal = AssistantService.ReadLetterReply(
+            New AssistantReply With {.Text = AssistantCoreTests.LetterAnswer, .ProviderName = "Claude", .Model = "claude-opus-5-5"}, AssistantCoreTests.Letter, LetterDay)
+        SetPrivate(dialog, "_letter", AssistantCoreTests.Letter)
+        CallPrivate(dialog, "ShowReview", found)
+        Application.DoEvents()
+        Return Reached(dialog, dialog.IsReviewing AndAlso dialog.CommentsGrid.Rows.Count > 0, "is not reviewing the letter's comments")
+    End Function
+
+
+    Private Shared Function InstructionsRead() As Form
+        Dim dialog As AuthorInstructionsForm = Shown(New AuthorInstructionsForm("Fictional Open Psychology", String.Empty, {}, {}, AuthorInstructionsTests.Instructions))
+        Dim found As AuthorInstructionsProposal = AssistantService.ReadAuthorInstructionsReply(
+            New AssistantReply With {.Text = AuthorInstructionsTests.InstructionsAnswer, .ProviderName = "Claude", .Model = "claude-opus-5-5"},
+            AuthorInstructionsTests.Instructions, AssistantService.CategoriesFor(Nothing))
+        SetPrivate(dialog, "_text", AuthorInstructionsTests.Instructions)
+        CallPrivate(dialog, "ShowReview", found)
+        Application.DoEvents()
+        Return Reached(dialog, dialog.IsReviewing AndAlso dialog.RequirementsGrid.Rows.Count > 0, "is not reviewing the requirements")
+    End Function
+
+
+    Private Shared Function TitlePageRead() As Form
+        Dim dialog As New TitlePageImportForm(New AuthorLibraryData(), String.Join(vbLf, {
+            "A preregistered replication of anchoring effects in clinical risk estimates",
+            "",
+            "Dana Whitfield1, Rui Okafor1,2*, and Lena Marsh2",
+            "",
+            "1 Department of Psychology, Blue Mountain University",
+            "2 School of Nursing, Cascade State University"
+        }))
+        dialog.ParseNow()
+        Return Reached(dialog, Descendants(dialog).OfType(Of DataGridView)().Any(Function(grid) grid.Rows.Count > 0), "read no authors")
+    End Function
+
+
+    ' Your Citations, with or without an update saved under the root. With
+    ' one, Update from OpenAlex shows, off until the researcher's ORCID iD
+    ' is known; without, Open Authors & Affiliations shows.
+    Private Shared Function Citations(root As String, saved As Boolean) As Form
+        Dim store As New CitationStore(Path.Combine(root, "citations"))
+        If saved Then
+            store.Save(New CitationSnapshot With {
+                .Orcid = Carberry, .Source = "OpenAlex", .RetrievedUtc = DateTime.UtcNow,
+                .Works = New List(Of CitedWork) From {Work("W1", "10.5555/test.orcid", "A work on the ORCID record")}
+            })
+        End If
+        Dim board As New CatalogBoard()
+        board.citationStoreFactory = Function() store
+        board.Prepare(CreateRepresentativeLibrary())
+        board.NavigateTo(Form1.WorkspacePage.Insights)
+        board.ShowCitations()
+        Dim action As String = If(saved, "Update from OpenAlex...", "Open Authors && Affiliations")
+        Return Reached(board, Descendants(board).OfType(Of Button)().Any(Function(button) button.Visible AndAlso button.Text = action), "does not show " & action)
+    End Function
+
+
+    ' The manuscript page after its shortlist's rows are built again, as
+    ' adding, moving or editing a candidate does.
+    Private Shared Function ShortlistRebuilt() As Form
+        Dim library As List(Of Manuscript) = CreateRepresentativeLibrary()
+        library(0).JournalShortlist = New List(Of JournalCandidate) From {
+            New JournalCandidate With {.JournalName = "PLOS ONE"},
+            New JournalCandidate With {.JournalName = "Collabra: Psychology"}
+        }
+        Dim board As CatalogBoard = BoardOn(library)
+        board.Open(library(0))
+        Dim editor As EditManuscriptForm = Descendants(board).OfType(Of EditManuscriptForm)().Single()
+        CallPrivate(editor, "RefreshShortlist")
+        Application.DoEvents()
+        Return Reached(board, Descendants(editor).OfType(Of Button)().Any(Function(button) button.Visible AndAlso button.AccessibleName = "Edit PLOS ONE"), "shows no shortlist row")
+    End Function
+
+
+    Private Shared Function Work(id As String, doi As String, title As String) As CitedWork
+        Return New CitedWork With {.OpenAlexId = id, .Doi = doi, .Title = title, .Year = 2025, .Journal = "Fictional Journal", .CitedByCount = 3}
+    End Function
+
+
+    ' Shows a dialog offscreen, so a step that needs its window can run.
+    Private Shared Function Shown(Of T As Form)(dialog As T) As T
+        dialog.StartPosition = FormStartPosition.Manual
+        dialog.Location = New Point(-20000, -20000)
+        dialog.ShowInTaskbar = False
+        dialog.Show()
+        dialog.Location = New Point(-20000, -20000)
+        Application.DoEvents()
+        Return dialog
+    End Function
+
+
+    ' The view, once the step it is for shows; otherwise it is closed and
+    ' the factory fails.
+    Private Shared Function Reached(view As Form, shows As Boolean, otherwise As String) As Form
+        If Not shows Then
+            Dim name As String = view.GetType().Name
+            view.Dispose()
+            Throw New InvalidOperationException(name & " " & otherwise & ".")
+        End If
+        Return view
+    End Function
+
+
+    Private Shared Sub CallPrivate(target As Object, name As String, ParamArray args As Object())
+        target.GetType().GetMethod(name, BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(target, args)
+    End Sub
+
+
+    Private Shared Sub SetPrivate(target As Object, name As String, value As Object)
+        target.GetType().GetField(name, BindingFlags.Instance Or BindingFlags.NonPublic).SetValue(target, value)
+    End Sub
+
+
     ' ---------------------------------------------------------------
     ' The main window and its pages
     ' ---------------------------------------------------------------
@@ -396,6 +629,11 @@ Friend NotInheritable Class ViewCatalog
             Application.DoEvents()
         End Sub
 
+        Public Sub ShowCitations()
+            DirectCast(GetType(Form1).GetField("tabInsightsCitations", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me), ShelfTabButton).Checked = True
+            Application.DoEvents()
+        End Sub
+
         Public ReadOnly Property Welcome As Control
             Get
                 Return DirectCast(GetType(Form1).GetField("boardWelcome", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me), Control)
@@ -409,7 +647,8 @@ Friend NotInheritable Class ViewCatalog
 
 
     ' ---------------------------------------------------------------
-    ' Sources that answer nothing, so no view goes online
+    ' Sources that answer nothing, or a recorded answer, so no view goes
+    ' online
     ' ---------------------------------------------------------------
 
     Private NotInheritable Class NoCitations
@@ -418,6 +657,58 @@ Friend NotInheritable Class ViewCatalog
         Public Function LookupAsync(orcid As String, manuscriptDois As IEnumerable(Of (Doi As String, Title As String)), includeOpenAlexLinked As Boolean,
                                     excluded As IEnumerable(Of String), progress As IProgress(Of String), cancellationToken As CancellationToken) As Task(Of CitationLookup) Implements ICitationSource.LookupAsync
             Return Task.FromResult(New CitationLookup With {.Orcid = orcid})
+        End Function
+    End Class
+
+
+    Private NotInheritable Class RecordedCitations
+        Implements ICitationSource
+
+        Private ReadOnly _lookup As CitationLookup
+
+        Public Sub New(lookup As CitationLookup)
+            _lookup = lookup
+        End Sub
+
+        Public Function LookupAsync(orcid As String, manuscriptDois As IEnumerable(Of (Doi As String, Title As String)), includeOpenAlexLinked As Boolean,
+                                    excluded As IEnumerable(Of String), progress As IProgress(Of String), cancellationToken As CancellationToken) As Task(Of CitationLookup) Implements ICitationSource.LookupAsync
+            Return Task.FromResult(_lookup)
+        End Function
+    End Class
+
+
+    Private NotInheritable Class RecordedFacts
+        Implements IJournalFactsSource
+
+        Private ReadOnly _lookup As JournalFactsLookup
+
+        Public Sub New(lookup As JournalFactsLookup)
+            _lookup = lookup
+        End Sub
+
+        Public Function LookupAsync(issns As IEnumerable(Of String), openAlexId As String, cancellationToken As CancellationToken) As Task(Of JournalFactsLookup) Implements IJournalFactsSource.LookupAsync
+            Return Task.FromResult(_lookup)
+        End Function
+
+        Public Function SearchAsync(name As String, cancellationToken As CancellationToken) As Task(Of List(Of OpenAlexSourceMatch)) Implements IJournalFactsSource.SearchAsync
+            Return Task.FromResult(New List(Of OpenAlexSourceMatch)())
+        End Function
+    End Class
+
+
+    ' One fictional journal for any request.
+    Private NotInheritable Class RecordedSuggestions
+        Implements IJournalSuggestionsSource
+
+        Public Function SearchAsync(request As JournalSuggestionRequest, cancellationToken As CancellationToken) As Task(Of JournalSuggestionsResult) Implements IJournalSuggestionsSource.SearchAsync
+            Dim journal As New JournalSuggestion With {
+                .OpenAlexId = "S1", .Name = "Fictional Journal of Anchoring", .Publisher = "Fictional Press", .MatchingArticles = 12, .AllArticles = 400
+            }
+            Return Task.FromResult(New JournalSuggestionsResult With {.Request = request, .Journals = New List(Of JournalSuggestion) From {journal}, .TotalMatching = 12})
+        End Function
+
+        Public Function ExamplesAsync(request As JournalSuggestionRequest, openAlexId As String, cancellationToken As CancellationToken) As Task(Of List(Of EvidenceExample)) Implements IJournalSuggestionsSource.ExamplesAsync
+            Return Task.FromResult(New List(Of EvidenceExample)())
         End Function
     End Class
 
@@ -448,11 +739,18 @@ Friend NotInheritable Class ViewCatalog
     End Class
 
 
+    ' Answers a DOI lookup with the work it is given, if any.
     Private NotInheritable Class NoPublications
         Implements IPublicationSource
 
+        Private ReadOnly _work As CrossrefMetadataSuggestion
+
+        Public Sub New(Optional work As CrossrefMetadataSuggestion = Nothing)
+            _work = work
+        End Sub
+
         Public Function LookupDoiAsync(doi As String, cancellationToken As CancellationToken) As Task(Of CrossrefMetadataSuggestion) Implements IPublicationSource.LookupDoiAsync
-            Return Task.FromResult(Of CrossrefMetadataSuggestion)(Nothing)
+            Return Task.FromResult(_work)
         End Function
 
         Public Function SearchTitleAsync(title As String, cancellationToken As CancellationToken) As Task(Of List(Of CrossrefMetadataSuggestion)) Implements IPublicationSource.SearchTitleAsync
@@ -512,13 +810,13 @@ Public Class ViewCatalogTests
     ' The listing has teeth: a Form subclass known to neither list is
     ' reported, as an app form without a factory would be. Beside it are
     ' one form from each list, HelpForm with a factory and
-    ' AddCorrespondenceForm on the not-yet list, and neither is reported.
+    ' AffiliationEditForm on the not-yet list, and neither is reported.
     <TestMethod>
     Public Sub AFormWithNoFactoryAndNoReasonIsReported()
 
         CollectionAssert.AreEqual(
             {GetType(UnlistedProbeForm)},
-            ViewCatalog.Unlisted({GetType(UnlistedProbeForm), GetType(AddCorrespondenceForm), GetType(HelpForm)})
+            ViewCatalog.Unlisted({GetType(UnlistedProbeForm), GetType(AffiliationEditForm), GetType(HelpForm)})
         )
 
     End Sub
@@ -533,8 +831,7 @@ Public Class ViewCatalogTests
         Dim failures As New List(Of String)()
 
         Dim views As IEnumerable(Of (Name As String, Build As Func(Of String, Form))) =
-            ViewCatalog.Dialogs.Select(Function(entry) (entry.Key.Name, entry.Value)).
-            Concat(ViewCatalog.Hosted.Select(Function(entry) (entry.Name, entry.Build)))
+            ViewCatalog.All()
 
         For Each view In views
 
