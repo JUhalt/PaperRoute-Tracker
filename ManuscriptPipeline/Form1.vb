@@ -2997,15 +2997,17 @@ Public Class Form1
         If hasJournal Then cardToolTip.SetToolTip(lblJournal, manuscript.TargetJournal)
 
         ' Tags share the journal line, right-aligned, so every card keeps the
-        ' same height. Clicking one searches the board for it.
+        ' same height. Clicking one searches the board for it. The strip is
+        ' a chip tall, centred on the line, so no chip is shaved (#141).
         Dim tagStrip As TagStrip = Nothing
         If manuscript.Tags IsNot Nothing AndAlso manuscript.Tags.Count > 0 Then
+            Dim chipHeight As Integer = TagChipPainter.Measure("Ag", cardMetaFont, dpi).Height
             tagStrip = New TagStrip With {
                 .Tags = manuscript.Tags.ToList(),
                 .Library = authorLibrary,
                 .Font = cardMetaFont,
-                .Top = journalTop,
-                .Height = metaLine + 2,
+                .Top = journalTop + (metaLine + 2 - chipHeight) \ 2,
+                .Height = chipHeight,
                 .BackColor = UiTheme.CardBackground(),
                 .Cursor = Cursors.Hand
             }

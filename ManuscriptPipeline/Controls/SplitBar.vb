@@ -24,6 +24,8 @@ Namespace Controls
             SetStyle(ControlStyles.ResizeRedraw, True)
             Controls.Add(left)
             Controls.Add(right)
+            AddHandler left.Paint, AddressOf PaintGroupBaseline
+            AddHandler right.Paint, AddressOf PaintGroupBaseline
         End Sub
 
         ' Center both groups on their line (page headers) rather than sitting
@@ -92,6 +94,13 @@ Namespace Controls
                 _right.SetBounds(rightX, top + leftSize.Height, rightSize.Width, rightSize.Height)
             End If
 
+            ' A group that moved onto or off the bottom line draws its piece
+            ' of the baseline, or stops drawing it.
+            If ShowBaseline Then
+                _left.Invalidate()
+                _right.Invalidate()
+            End If
+
         End Sub
 
         Protected Overrides Sub OnResize(eventargs As EventArgs)
@@ -107,6 +116,20 @@ Namespace Controls
                     e.Graphics.DrawLine(line, 0, Height - 1, Width, Height - 1)
                 End Using
             End If
+        End Sub
+
+        ' The groups cover the bar's bottom edge where they sit on it, so each
+        ' draws the baseline across its own bottom row there, and the line runs
+        ' under the tabs and the filters alike (#141). What a group holds draws
+        ' its own piece, as the shelf tabs do.
+        Private Sub PaintGroupBaseline(sender As Object, e As PaintEventArgs)
+            If Not ShowBaseline Then Return
+            Dim group As Control = DirectCast(sender, Control)
+            Dim row As Integer = ClientSize.Height - 1 - group.Top
+            If row < 0 OrElse row >= group.Height Then Return
+            Using line As New Pen(UiTheme.CardBorder())
+                e.Graphics.DrawLine(line, 0, row, group.Width, row)
+            End Using
         End Sub
 
     End Class
