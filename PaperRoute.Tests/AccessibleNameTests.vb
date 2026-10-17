@@ -318,7 +318,8 @@ Public Class AccessibleNameTests
     ) As Boolean
 
         Return TypeOf control Is DeadlineList OrElse
-            TypeOf control Is DeadlineGlance
+            TypeOf control Is DeadlineGlance OrElse
+            TypeOf control Is CommandList
 
     End Function
 

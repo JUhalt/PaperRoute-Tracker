@@ -1148,26 +1148,7 @@ Partial Public Class Form1
         Dim frame As TableLayoutPanel = CreatePageFrame(
             "Import & Export",
             "Every way of bringing work into PaperRoute or taking it out, and what each one keeps.")
-
-        Dim scroller As New Panel With {
-            .Dock = DockStyle.Fill,
-            .AutoScroll = True,
-            .Margin = New Padding(0),
-            .BackColor = UiTheme.BoardBackground()
-        }
-
-        Dim list As New TableLayoutPanel With {
-            .Dock = DockStyle.Top,
-            .AutoSize = True,
-            .AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            .ColumnCount = 2,
-            .Margin = New Padding(0),
-            .Padding = New Padding(0, 0, UiTheme.Px(8, DeviceDpi), 0),
-            .BackColor = UiTheme.BoardBackground()
-        }
-
-        list.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
-        list.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100.0F))
+        frame.SuspendLayout()
 
         Dim buttonWidth As Integer =
             {"Import Spreadsheet...", "Import BibTeX / RIS...", "ORCID Works...", "Get Import Template...", "Add Manuscript...",
@@ -1175,25 +1156,23 @@ Partial Public Class Form1
              "Publication & CV Export...", "Backup Library...", "Restore Backup..."}.
             Max(Function(text) GetResponsiveButtonWidth(text, 0)) + UiTheme.Px(8, DeviceDpi)
 
+        ' The buttons, with the headings and descriptions drawn around them
+        ' by one list that wraps them at the page's width (#133).
+        Dim list As New CommandList With {
+            .Dock = DockStyle.Fill,
+            .Margin = New Padding(0),
+            .HeadingFont = attentionTitleFont,
+            .ButtonWidth = buttonWidth
+        }
+        list.SuspendLayout()
+
         Dim addSection As Action(Of String) =
             Sub(heading)
-                list.RowStyles.Add(New RowStyle(SizeType.AutoSize))
-                Dim lblHeading As New Label With {
-                    .Text = heading.ToUpperInvariant(),
-                    .AutoSize = True,
-                    .UseMnemonic = False,
-                    .Font = attentionTitleFont,
-                    .ForeColor = UiTheme.MutedText(),
-                    .Margin = New Padding(0, If(list.RowCount <= 1, 0, UiTheme.Px(14, DeviceDpi)), 0, UiTheme.Px(6, DeviceDpi))
-                }
-                list.Controls.Add(lblHeading, 0, list.RowCount - 1)
-                list.SetColumnSpan(lblHeading, 2)
-                list.RowCount += 1
+                list.AddSection(heading.ToUpperInvariant())
             End Sub
 
         Dim addCommand As Action(Of String, String, EventHandler) =
             Sub(text, description, handler)
-                list.RowStyles.Add(New RowStyle(SizeType.AutoSize))
                 Dim button As New ActionButton With {
                     .Text = text,
                     .UseMnemonic = False,
@@ -1203,20 +1182,8 @@ Partial Public Class Form1
                     .AccessibleDescription = description
                 }
                 AddHandler button.Click, handler
-                Dim lblDescription As New Label With {
-                    .Text = description,
-                    .AutoSize = True,
-                    .UseMnemonic = False,
-                    .Anchor = AnchorStyles.Left Or AnchorStyles.Right,
-                    .Margin = New Padding(0, 0, 0, UiTheme.Px(8, DeviceDpi)),
-                    .ForeColor = UiTheme.SecondaryText()
-                }
-                list.Controls.Add(button, 0, list.RowCount - 1)
-                list.Controls.Add(lblDescription, 1, list.RowCount - 1)
-                list.RowCount += 1
+                list.AddCommand(button, description)
             End Sub
-
-        list.RowCount = 1
 
         addSection("Bring work in")
         addCommand("Import Spreadsheet...", "A PaperRoute template, a legacy tracker, or any workbook through column mapping. You see a preview, including likely duplicates, before anything is added.", AddressOf ImportExcelHistory)
@@ -1244,16 +1211,9 @@ Partial Public Class Form1
         addCommand("Backup Library...", "A ZIP of the complete library, including files PaperRoute manages. The only format that keeps everything.", AddressOf BackupLibrary)
         addCommand("Restore Backup...", "Replaces the current library with a backup after showing what it contains. A safety backup of the current library is made first.", AddressOf RestoreLibraryBackup)
 
-        AddHandler scroller.Resize,
-            Sub(sender, e)
-                Dim descriptionWidth As Integer = Math.Max(UiTheme.Px(200, DeviceDpi), scroller.ClientSize.Width - buttonWidth - UiTheme.Px(40, DeviceDpi))
-                For Each label As Label In list.Controls.OfType(Of Label)()
-                    If list.GetColumn(label) = 1 Then label.MaximumSize = New Size(descriptionWidth, 0)
-                Next
-            End Sub
-
-        scroller.Controls.Add(list)
-        frame.Controls.Add(scroller, 0, 2)
+        frame.Controls.Add(list, 0, 2)
+        list.ResumeLayout(False)
+        frame.ResumeLayout(False)
 
         Return frame
 
