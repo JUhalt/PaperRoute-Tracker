@@ -230,7 +230,8 @@ Friend NotInheritable Class ViewCatalog
     Public Shared Function ShowEach(
         views As IEnumerable(Of (Name As String, Build As Func(Of String, Form))),
         Optional inspect As Action(Of String, Form) = Nothing,
-        Optional mode As SystemColorMode? = Nothing
+        Optional mode As SystemColorMode? = Nothing,
+        Optional styled As Boolean = True
     ) As List(Of String)
 
         Dim failures As New List(Of String)()
@@ -252,7 +253,8 @@ Friend NotInheritable Class ViewCatalog
                     view.Name,
                     Function() view.Build(root),
                     inspect,
-                    mode
+                    mode,
+                    styled
                 )
 
                 ' A guard that cannot fail while RootOverride stands: every
@@ -292,12 +294,14 @@ Friend NotInheritable Class ViewCatalog
     ' styles it once open, as the app's idle hook styles every window but
     ' the main one (UiPolish.InstallGlobalDialogStyling), hands it to
     ' inspect and closes it, on the shared runner and in the color mode if
-    ' one is given. Anything the view left open is closed too.
+    ' one is given. Anything the view left open is closed too. Unstyled,
+    ' inspect sees the view as it first shows, before the idle hook runs.
     Public Shared Sub ShowAndClose(
         name As String,
         build As Func(Of Form),
         Optional inspect As Action(Of String, Form) = Nothing,
-        Optional mode As SystemColorMode? = Nothing
+        Optional mode As SystemColorMode? = Nothing,
+        Optional styled As Boolean = True
     )
 
         StaRunner.Run(
@@ -314,7 +318,7 @@ Friend NotInheritable Class ViewCatalog
                             name & " shows."
                         )
 
-                        If Not TypeOf shown Is Form1 Then
+                        If styled AndAlso Not TypeOf shown Is Form1 Then
                             UiPolish.ApplyDialog(shown)
                             Application.DoEvents()
                         End If
@@ -1069,6 +1073,54 @@ Public Class ViewCatalogTests
             0,
             failures.Count,
             Environment.NewLine & String.Join(Environment.NewLine, failures)
+        )
+
+    End Sub
+
+
+    ' Every dialog is styled when it first shows, not only once the app's
+    ' idle hook reaches it: in Dark, each one the catalog builds and shows,
+    ' and does not style again, already has the dark title bar that
+    ' UiPolish.ApplyDialog sets first. Unstyled until then, a dialog paints
+    ' its first frames in Windows' colors. The main window styles itself.
+    <TestMethod>
+    Public Sub EveryDialogIsStyledWhenItFirstShows()
+
+        If Not OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000) OrElse SystemInformation.HighContrast Then
+            Assert.Inconclusive("The dark title bar needs Windows 11 and no contrast theme.")
+        End If
+
+        Dim unstyled As New List(Of String)()
+
+        Dim failures As List(Of String) =
+            ViewCatalog.ShowEach(
+                ViewCatalog.Dialogs.
+                    Where(Function(entry) entry.Key IsNot GetType(Form1)).
+                    Select(Function(entry) (entry.Key.Name, entry.Value)),
+                Sub(name, shown)
+
+                    Dim frame As WindowChrome.Frame =
+                        WindowChrome.FrameOf(shown)
+
+                    If frame Is Nothing OrElse Not frame.Dark Then
+                        unstyled.Add(name)
+                    End If
+
+                End Sub,
+                mode:=SystemColorMode.Dark,
+                styled:=False
+            )
+
+        Assert.AreEqual(
+            0,
+            failures.Count,
+            Environment.NewLine & String.Join(Environment.NewLine, failures)
+        )
+
+        Assert.AreEqual(
+            0,
+            unstyled.Count,
+            "Not styled when first shown: " & String.Join(", ", unstyled)
         )
 
     End Sub

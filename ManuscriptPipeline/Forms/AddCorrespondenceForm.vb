@@ -52,6 +52,7 @@ Namespace Forms
             _existingItem = Nothing
 
             BuildInterface()
+            UiPolish.ApplyDialog(Me)
 
         End Sub
 
