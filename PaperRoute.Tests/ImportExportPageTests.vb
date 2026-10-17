@@ -86,7 +86,21 @@ Public Class ImportExportPageTests
                     Next
                     CollectionAssert.AreEqual(expected, children.Select(Function(child) child.Role.ToString() & ": " & child.Name).ToList())
 
+                    ' The list does not answer UI Automation itself, which would
+                    ' hide the drawn headings and descriptions from it.
+                    Dim supports As PropertyInfo = GetType(Control).GetProperty("SupportsUiaProviders", BindingFlags.Instance Or BindingFlags.NonPublic)
+                    Assert.IsNotNull(supports, "Control.SupportsUiaProviders exists on this runtime.")
+                    Assert.IsFalse(CBool(supports.GetValue(list)), "The list is read through MSAA.")
+
                     Dim page As Control = board.Page()
+
+                    ' The list is no Tab stop of its own, as the Panel it replaced
+                    ' was not: Tab into the page lands on the first command, and
+                    ' Shift+Tab from it leaves the page.
+                    Assert.IsFalse(list.CanSelect, "The list itself cannot take focus.")
+                    Assert.IsTrue(page.SelectNextControl(Nothing, True, True, True, False), "Tab finds a stop on the page.")
+                    Assert.AreSame(buttons(0), board.ActiveControl, "Tab into the page lands on Import Spreadsheet..., not on the list.")
+                    Assert.IsFalse(page.SelectNextControl(buttons(0), False, True, True, False), "Shift+Tab from the first command leaves the page.")
                     Dim windows As Integer = 1 + ViewCatalog.Descendants(page).Count(Function(control) control.IsHandleCreated)
                     Assert.IsTrue(windows <= 19, "The page makes " & windows & " windows.")
 

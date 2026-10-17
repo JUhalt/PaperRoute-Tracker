@@ -42,9 +42,13 @@ Namespace Controls
         Private _arrangedFont As Font = Nothing
         Private _arrangedDpi As Integer = 0
 
+        ' Not a Tab stop itself, as the Panel it replaces was not: Tab goes
+        ' straight to its buttons.
         Public Sub New()
             SetStyle(ControlStyles.UserPaint Or ControlStyles.AllPaintingInWmPaint Or ControlStyles.OptimizedDoubleBuffer Or
                      ControlStyles.ResizeRedraw, True)
+            SetStyle(ControlStyles.Selectable, False)
+            TabStop = False
             AutoScroll = True
             BackColor = UiTheme.BoardBackground()
         End Sub
