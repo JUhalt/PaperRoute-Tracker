@@ -128,6 +128,22 @@ Namespace Services
         End Sub
 
 
+        ' Styles controls built after their form was styled: the parts the
+        ' manuscript page builds for each record it loads (#133).
+        Friend Shared Sub ApplyToControls(
+            root As Control
+        )
+
+            If root Is Nothing Then
+                Return
+            End If
+
+            ApplyControlStyle(root, Nothing)
+            ApplyToControlTree(root, Nothing)
+
+        End Sub
+
+
         ' =====================================================
         ' Recursive control styling
         ' =====================================================

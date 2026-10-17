@@ -280,6 +280,130 @@ Public Class ManuscriptEditorReuseTests
     End Sub
 
 
+    ' The editor itself: one that has edited a manuscript in every way and
+    ' then loads another matches, control by control, one built for that
+    ' other manuscript; and loading the first again shows it as saved.
+    <TestMethod>
+    Public Sub AnEditorThatLoadsAnotherRecordMatchesOneBuiltForIt()
+
+        Dim library As LargeLibraryFixture.SyntheticLibrary = Library40()
+        Dim filed As Manuscript = FiledManuscript(library)
+        Dim active As Manuscript = ActiveManuscript(library)
+
+        StaRunner.Run(
+            Sub()
+                For Each pair In {(filed, active), (active, filed)}
+
+                    Dim savedLeft As String = Json(pair.Item1)
+
+                    Dim reused As New EditManuscriptForm(pair.Item1, library.Manuscripts, library.AuthorRepository, pageMode:=True)
+
+                    Using reusedHost As Form = Hosted(reused)
+
+                        EditEverything(reused)
+                        Assert.IsTrue(reused.HasUnsavedChanges())
+                        Dim token As Object = reused.RecordToken
+
+                        reused.LoadRecord(pair.Item2, library.Manuscripts)
+                        Application.DoEvents()
+                        Assert.AreNotSame(token, reused.RecordToken, "The record is replaced as a whole.")
+                        Assert.IsFalse(reused.HasUnsavedChanges())
+                        Assert.AreEqual(savedLeft, Json(pair.Item1), "Loading another record changes nothing in the one left.")
+
+                        Dim fresh As New EditManuscriptForm(pair.Item2, library.Manuscripts, library.AuthorRepository, pageMode:=True)
+                        Using freshHost As Form = Hosted(fresh)
+                            AssertSameEditor(freshHost, fresh, reusedHost, reused, pair.Item2.Title)
+                            freshHost.Close()
+                        End Using
+
+                        reused.LoadRecord(pair.Item1, library.Manuscripts)
+                        Application.DoEvents()
+                        Assert.AreEqual(pair.Item1.Title, Box(reused, "Title").Text, "The first manuscript opens again as saved.")
+                        Assert.IsFalse(reused.HasUnsavedChanges())
+
+                        reusedHost.Close()
+                    End Using
+
+                Next
+            End Sub,
+            TimeSpan.FromMinutes(5))
+
+    End Sub
+
+
+    ' Everything the editor holds is one of: a control or a component, a
+    ' setting fixed when it is made, or part of the record it has loaded,
+    ' which LoadRecord replaces as a whole. A field added without being
+    ' one of these could carry one manuscript's state into the next, so
+    ' it fails here until it is placed. TagEditor, which the editor binds
+    ' to each record's tags, likewise.
+    <TestMethod>
+    Public Sub EveryEditorFieldIsAControlASettingOrPartOfTheRecord()
+
+        Dim unplaced As New List(Of String)()
+
+        unplaced.AddRange(
+            UnplacedFields(GetType(EditManuscriptForm),
+                     {"_record",
+                      "_authorRepository", "_pageMode",
+                      "candidatePrompt", "journalSuggestionPrompt", "coverLetterPrompt"}))
+
+        ' Bind replaces what it was given.
+        unplaced.AddRange(UnplacedFields(GetType(TagEditor), {"_tags", "_library", "_suggestions"}))
+
+        Assert.AreEqual(0, unplaced.Count, "Fields that are neither controls, settings nor part of the record:" & Environment.NewLine & String.Join(Environment.NewLine, unplaced))
+
+    End Sub
+
+
+    ' The editor shown filling a window of its own, offscreen, as the
+    ' manuscript page shows it.
+    Private Shared Function Hosted(editor As EditManuscriptForm) As Form
+
+        Dim host As New QuietHost With {.Size = New Size(1100, 900), .StartPosition = FormStartPosition.Manual, .Location = New Point(-20000, -20000), .ShowInTaskbar = False}
+        editor.TopLevel = False
+        editor.FormBorderStyle = FormBorderStyle.None
+        editor.MinimumSize = Size.Empty
+        editor.Dock = DockStyle.Fill
+        host.Controls.Add(editor)
+        editor.Visible = True
+        host.Show()
+        Application.DoEvents()
+        Return host
+
+    End Function
+
+
+    ' A window that never takes focus from the desktop it is shown on.
+    Private NotInheritable Class QuietHost
+        Inherits Form
+
+        Protected Overrides ReadOnly Property ShowWithoutActivation As Boolean
+            Get
+                Return True
+            End Get
+        End Property
+
+    End Class
+
+
+    Private Shared Function UnplacedFields(type As Type, placed As String()) As List(Of String)
+
+        Return type.GetFields(BindingFlags.Instance Or BindingFlags.Public Or BindingFlags.NonPublic Or BindingFlags.DeclaredOnly).
+            Where(Function(field)
+                      Dim kind As Type = field.FieldType
+                      If GetType(Control).IsAssignableFrom(kind) OrElse GetType(ComponentModel.IComponent).IsAssignableFrom(kind) Then Return False
+                      If kind.IsGenericType AndAlso kind.GetGenericTypeDefinition() Is GetType(List(Of )) AndAlso GetType(Control).IsAssignableFrom(kind.GetGenericArguments()(0)) Then Return False
+                      ' An event's handlers, which the page attaches once.
+                      If GetType([Delegate]).IsAssignableFrom(kind) AndAlso field.Name.EndsWith("Event", StringComparison.Ordinal) Then Return False
+                      Return Not placed.Contains(field.Name)
+                  End Function).
+            Select(Function(field) type.Name & "." & field.Name & " As " & field.FieldType.Name).
+            ToList()
+
+    End Function
+
+
     ' ---------------------------------------------------------------
     ' The library and its two manuscripts
     ' ---------------------------------------------------------------
@@ -343,13 +467,16 @@ Public Class ManuscriptEditorReuseTests
     ' comments reordered, another submission selected, the Overview
     ' scrolled, focus in the title, and the Submissions tab left showing.
     Private Shared Sub EditEverything(board As LibraryBoard)
+        EditEverything(board.Editor)
+    End Sub
 
-        Dim editor As EditManuscriptForm = board.Editor
 
-        board.Field("Title").Text = "A title that must not reach the next manuscript"
-        board.Field("Target journal").Text = "A journal that must not reach the next manuscript"
+    Private Shared Sub EditEverything(editor As EditManuscriptForm)
+
+        Box(editor, "Title").Text = "A title that must not reach the next manuscript"
+        Box(editor, "Target journal").Text = "A journal that must not reach the next manuscript"
         If Field(Of SectionCard)(editor, "fileDrawerGroup").Visible Then
-            board.Field("File Drawer reason").Text = "A reason that must not reach the next manuscript"
+            Box(editor, "File Drawer reason").Text = "A reason that must not reach the next manuscript"
         End If
 
         Dim stage As ComboBox = ViewCatalog.Descendants(editor).OfType(Of ComboBox)().Single(Function(box) box.AccessibleName = "Current stage")
@@ -402,6 +529,11 @@ Public Class ManuscriptEditorReuseTests
     End Sub
 
 
+    Private Shared Function Box(editor As EditManuscriptForm, name As String) As TextBox
+        Return ViewCatalog.Descendants(editor).OfType(Of TextBox)().Single(Function(item) item.AccessibleName = name)
+    End Function
+
+
     Private Shared Function Sections(editor As EditManuscriptForm) As List(Of ShelfTabButton)
         Return DirectCast(GetType(EditManuscriptForm).GetField("_sectionTabs", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(editor), List(Of ShelfTabButton))
     End Function
@@ -433,20 +565,29 @@ Public Class ManuscriptEditorReuseTests
     ' scrolled or undoable; then the editor's own state.
     Friend Shared Sub AssertSamePage(expected As LibraryBoard, actual As LibraryBoard, title As String)
 
-        Assert.AreEqual(title, actual.Field("Title").Text)
-        Assert.AreEqual(ShownSection(expected.Editor), ShownSection(actual.Editor), "The section the page shows")
-        AssertSameLines(Describe(expected.PageView), Describe(actual.PageView), "The page as it opened")
+        AssertSameEditor(expected.PageView, expected.Editor, actual.PageView, actual.Editor, title)
+        Assert.AreEqual(expected.SaveBarVisible, actual.SaveBarVisible, "The Unsaved changes bar")
+
+    End Sub
+
+
+    ' The same for an editor and what holds it: the page, or the editor
+    ' itself shown on its own.
+    Private Shared Sub AssertSameEditor(expectedRoot As Control, expected As EditManuscriptForm, actualRoot As Control, actual As EditManuscriptForm, title As String)
+
+        Assert.AreEqual(title, Box(actual, "Title").Text)
+        Assert.AreEqual(ShownSection(expected), ShownSection(actual), "The section the page shows")
+        AssertSameLines(Describe(expectedRoot), Describe(actualRoot), "The page as it opened")
 
         For Each section As String In {"Overview", "Authors", "Versions", "Submissions", "Readiness & Packets", "Overview"}
-            ShowSection(expected.Editor, section)
-            ShowSection(actual.Editor, section)
-            AssertSameLines(Describe(expected.PageView), Describe(actual.PageView), "The " & section & " section")
+            ShowSection(expected, section)
+            ShowSection(actual, section)
+            AssertSameLines(Describe(expectedRoot), Describe(actualRoot), "The " & section & " section")
         Next
 
-        Assert.AreEqual(expected.Editor.HasUnsavedChanges(), actual.Editor.HasUnsavedChanges(), "Unsaved changes")
-        Assert.AreEqual(Json(expected.Editor.RecoveryCopy()), Json(actual.Editor.RecoveryCopy()), "The working copy")
-        Assert.AreEqual(ActiveName(expected.Editor), ActiveName(actual.Editor), "The editor's active control")
-        Assert.AreEqual(expected.SaveBarVisible, actual.SaveBarVisible, "The Unsaved changes bar")
+        Assert.AreEqual(expected.HasUnsavedChanges(), actual.HasUnsavedChanges(), "Unsaved changes")
+        Assert.AreEqual(Json(expected.RecoveryCopy()), Json(actual.RecoveryCopy()), "The working copy")
+        Assert.AreEqual(ActiveName(expected), ActiveName(actual), "The editor's active control")
 
     End Sub
 

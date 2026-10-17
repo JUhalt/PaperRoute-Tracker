@@ -68,6 +68,27 @@ Namespace Controls
         End Sub
 
 
+        ' Gives a control that starts hidden its own window as soon as its
+        ' parent has one, so a sibling after it that is shown later keeps its
+        ' place. WinForms moves a window made while no sibling before it has
+        ' one to the front of its parent, ahead of them, so a page that shows
+        ' parts as records need them would otherwise end up in another order
+        ' than one built for the record it shows.
+        Public Shared Sub HoldPlace(
+            control As Control
+        )
+
+            WhenAttached(
+                control,
+                Sub()
+                    If Not control.IsHandleCreated Then
+                        Dim made As IntPtr = control.Handle
+                    End If
+                End Sub)
+
+        End Sub
+
+
         ' Disposes a control where it is: its windows are destroyed in place
         ' and it then leaves its parent. With focus inside it, it is removed
         ' first, as before, so focus moves on the way a removal moves it.

@@ -1,5 +1,6 @@
 Imports System.Collections.Generic
 Imports System.Drawing
+Imports System.Linq
 Imports System.Windows.Forms
 Imports ManuscriptPipeline.Services
 
@@ -78,6 +79,14 @@ Namespace Controls
 
             Update(entry)
 
+        End Sub
+
+        ' Brings a list's hint up to date at once, as a form that loads
+        ' another record into its lists does (#133).
+        Public Shared Sub Refresh(target As Control)
+            For Each entry As Entry In Entries.Where(Function(item) item.Target Is target).ToArray()
+                Update(entry)
+            Next
         End Sub
 
         ' Lists change their items without events, so the hints follow them

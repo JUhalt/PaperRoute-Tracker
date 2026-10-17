@@ -12,23 +12,142 @@ Namespace Forms
     Public Class EditManuscriptForm
         Inherits Form
 
-        Private ReadOnly _originalManuscript As Manuscript
-        Private ReadOnly _workingManuscript As Manuscript
-        Private ReadOnly _allManuscripts As List(Of Manuscript)
+        ' Everything the form holds for the manuscript it edits (#133). The
+        ' manuscript page keeps one form and loads one manuscript after
+        ' another into it (LoadRecord), so all of it is replaced at once,
+        ' and anything posted for one record checks it is still the one
+        ' loaded. The names the form has always used read and write it.
+        Private NotInheritable Class RecordState
 
+            Public Original As Manuscript
+            Public Working As Manuscript
+            Public All As List(Of Manuscript) = New List(Of Manuscript)()
+            Public AuthorLibrary As AuthorLibraryData = New AuthorLibraryData()
+            Public AuthorLibraryDirty As Boolean = False
+
+            ' The working copy as last loaded or saved; unsaved changes are
+            ' any difference from it.
+            Public Baseline As String = String.Empty
+
+            Public DeleteRequested As Boolean = False
+            Public PendingRouteWaypoint As ManuscriptRouteWaypoint = Nothing
+            Public ReadOnly DisplayedSubmissions As New List(Of JournalSubmission)()
+            Public SubmissionDetail As SubmissionDetailsForm = Nothing
+            Public RefreshingSubmissions As Boolean = False
+
+            ' The Versions tab and the selected submission's details, which
+            ' a page loading this record builds after its first paint.
+            Public VersionHistory As ManuscriptVersionHistoryControl = Nothing
+            Public PartsDeferred As Boolean = False
+
+        End Class
+
+        ' No manuscript until the first is loaded: a working copy of nothing.
+        Private _record As New RecordState With {.Working = New Manuscript()}
+
+        Private ReadOnly Property _originalManuscript As Manuscript
+            Get
+                Return _record.Original
+            End Get
+        End Property
+
+        Private ReadOnly Property _workingManuscript As Manuscript
+            Get
+                Return _record.Working
+            End Get
+        End Property
+
+        Private ReadOnly Property _allManuscripts As List(Of Manuscript)
+            Get
+                Return _record.All
+            End Get
+        End Property
+
+        Private Property _authorLibrary As AuthorLibraryData
+            Get
+                Return _record.AuthorLibrary
+            End Get
+            Set(value As AuthorLibraryData)
+                _record.AuthorLibrary = value
+            End Set
+        End Property
+
+        Private Property _authorLibraryDirty As Boolean
+            Get
+                Return _record.AuthorLibraryDirty
+            End Get
+            Set(value As Boolean)
+                _record.AuthorLibraryDirty = value
+            End Set
+        End Property
+
+        Private Property _baseline As String
+            Get
+                Return _record.Baseline
+            End Get
+            Set(value As String)
+                _record.Baseline = value
+            End Set
+        End Property
+
+        Private Property _deleteRequested As Boolean
+            Get
+                Return _record.DeleteRequested
+            End Get
+            Set(value As Boolean)
+                _record.DeleteRequested = value
+            End Set
+        End Property
+
+        Private Property _pendingRouteWaypoint As ManuscriptRouteWaypoint
+            Get
+                Return _record.PendingRouteWaypoint
+            End Get
+            Set(value As ManuscriptRouteWaypoint)
+                _record.PendingRouteWaypoint = value
+            End Set
+        End Property
+
+        Private ReadOnly Property _displayedSubmissions As List(Of JournalSubmission)
+            Get
+                Return _record.DisplayedSubmissions
+            End Get
+        End Property
+
+        Private Property _submissionDetail As SubmissionDetailsForm
+            Get
+                Return _record.SubmissionDetail
+            End Get
+            Set(value As SubmissionDetailsForm)
+                _record.SubmissionDetail = value
+            End Set
+        End Property
+
+        Private Property _refreshingSubmissions As Boolean
+            Get
+                Return _record.RefreshingSubmissions
+            End Get
+            Set(value As Boolean)
+                _record.RefreshingSubmissions = value
+            End Set
+        End Property
+
+        Private Property versionHistoryControl As ManuscriptVersionHistoryControl
+            Get
+                Return _record.VersionHistory
+            End Get
+            Set(value As ManuscriptVersionHistoryControl)
+                _record.VersionHistory = value
+            End Set
+        End Property
+
+        ' Settings fixed when the form is made.
         Private ReadOnly _authorRepository As AuthorLibraryRepository
-        Private _authorLibrary As AuthorLibraryData
-
-        Private _deleteRequested As Boolean = False
 
         ' In page mode the form is hosted inside the main window: there is no
         ' Save & Close or Cancel footer, and the page's Save / Discard bar
         ' commits or drops this working copy.
         Private ReadOnly _pageMode As Boolean
-
-        ' The working copy as last loaded or saved; unsaved changes are any
-        ' difference from it.
-        Private _baseline As String = String.Empty
 
         Private ReadOnly _sectionTabs As New List(Of ShelfTabButton)()
         Private ReadOnly lblReadinessSummary As New Label()
@@ -49,7 +168,6 @@ Namespace Forms
         Private ReadOnly btnJournalLinks As New Button()
         Private ReadOnly lblRevisionDeadlineValue As New Label()
         Private ReadOnly btnRevisionDeadline As New Button()
-        Private _authorLibraryDirty As Boolean = False
 
         Private ReadOnly fileDrawerGroup As New SectionCard()
 
@@ -97,13 +215,12 @@ Namespace Forms
         ' details, decisions, reviewer responses, and correspondence.
         Private _submissionsSection As Control = Nothing
         Private ReadOnly _submissionDetailHost As New Panel()
-        Private _submissionDetail As SubmissionDetailsForm = Nothing
 
-        Private versionHistoryControl As ManuscriptVersionHistoryControl = Nothing
+        ' The Versions tab, which holds each record's version history.
+        Private ReadOnly _versionsHost As New Panel()
 
-        Private _pendingRouteWaypoint As ManuscriptRouteWaypoint = Nothing
-
-        Private ReadOnly _displayedSubmissions As New List(Of JournalSubmission)()
+        ' The Overview tab, scrolled back to its top for each record.
+        Private _overview As ScrollableControl = Nothing
 
 
         Public ReadOnly Property DeleteRequested As Boolean
@@ -129,7 +246,9 @@ Namespace Forms
 
 
         ' workingCopy, when given, is a recovery draft (#123) the page opens
-        ' with in place of a copy of the saved manuscript.
+        ' with in place of a copy of the saved manuscript. Given no
+        ' manuscript, the form is built for LoadRecord to load one later: the
+        ' manuscript page keeps one form for every manuscript it opens.
         Friend Sub New(
             manuscript As Manuscript,
             allManuscripts As IEnumerable(Of Manuscript),
@@ -144,36 +263,193 @@ Namespace Forms
             _authorRepository =
                 If(authorRepository, New AuthorLibraryRepository())
 
-            _originalManuscript =
-                manuscript
-
-            _workingManuscript =
-                CloneManuscript(If(workingCopy, manuscript))
-
-            _allManuscripts =
-                If(
-                    allManuscripts Is Nothing,
-                    New List(Of Manuscript) From {
-                        manuscript
-                    },
-                    allManuscripts.ToList()
-                )
-
-            _authorLibrary =
-                _authorRepository.Load()
-
             BuildInterface()
             EmptyHint.Attach(lstAuthors, "No authors yet. Add Author picks people from your reusable library; Manage Library creates new ones.")
             EmptyHint.Attach(lstSubmissions, "No submissions yet.")
             UiPolish.ApplyDialog(Me)
+
+            If manuscript IsNot Nothing Then
+                LoadRecord(manuscript, allManuscripts, workingCopy)
+            End If
+
+        End Sub
+
+
+        ' =====================================================
+        ' One record after another (#133)
+        ' =====================================================
+
+        ' Loads a manuscript: a working copy of it, or of the recovered draft
+        ' given (#123), the library's records, and the reusable author
+        ' library read afresh, as a form built for it would. Whatever the
+        ' manuscript before left on the form goes first, and the form shows
+        ' its Overview from the top with nothing to undo. With deferParts the
+        ' Versions tab and the selected submission's details wait for
+        ' EnsureDeferredParts, which the page calls once it has painted, or
+        ' which anything that needs them calls first.
+        Friend Sub LoadRecord(
+            manuscript As Manuscript,
+            allManuscripts As IEnumerable(Of Manuscript),
+            Optional workingCopy As Manuscript = Nothing,
+            Optional deferParts As Boolean = False
+        )
+
+            Bind(
+                New RecordState With {
+                    .Original = manuscript,
+                    .Working = CloneManuscript(If(workingCopy, manuscript)),
+                    .All = If(allManuscripts Is Nothing, New List(Of Manuscript) From {manuscript}, allManuscripts.ToList()),
+                    .AuthorLibrary = _authorRepository.Load(),
+                    .PartsDeferred = deferParts
+                },
+                recovered:=workingCopy IsNot Nothing)
+
+        End Sub
+
+
+        ' Lets go of the record: the form holds and shows nothing of it until
+        ' the next LoadRecord. The library's tags stay suggested, so the next
+        ' load need not set them again.
+        Friend Sub UnloadRecord()
+
+            Bind(
+                New RecordState With {
+                    .Working = New Manuscript(),
+                    .All = _record.All,
+                    .AuthorLibrary = _record.AuthorLibrary,
+                    .PartsDeferred = True
+                },
+                recovered:=False)
+
+        End Sub
+
+
+        Private Sub Bind(
+            record As RecordState,
+            recovered As Boolean
+        )
+
+            ReleaseRecordParts()
+            _record = record
+
+            ' A dialog's size follows the shelf; a page is sized by its window.
+            If Dock = DockStyle.None Then
+                Size = If(_workingManuscript.Location = ManuscriptLocation.FileDrawer, New Size(980, 980), New Size(980, 960))
+            End If
+
+            If Not record.PartsDeferred Then
+                BuildVersionHistory()
+            End If
+
+            tagEditor.ClearInput()
             LoadManuscript()
             RefreshReadinessSummary()
             RefreshJournalNotes()
+            ShowFromTheTop()
 
             ' A recovered draft counts as unsaved until it is saved or
             ' discarded, so its baseline matches nothing.
             _baseline =
-                If(workingCopy Is Nothing, Snapshot(), String.Empty)
+                If(recovered, String.Empty, Snapshot())
+
+        End Sub
+
+
+        ' The library's tags, offered before any record is loaded, so the
+        ' first load finds them in place: setting them makes the tag box a
+        ' new window.
+        Friend Sub PrimeTagSuggestions(allManuscripts As IEnumerable(Of Manuscript))
+            tagEditor.Bind(_workingManuscript.Tags, _authorLibrary, WorkTypeService.AllTags(allManuscripts.ToList()))
+        End Sub
+
+
+        ' The record now loaded, for work posted for it to check it still is.
+        Friend ReadOnly Property RecordToken As Object
+            Get
+                Return _record
+            End Get
+        End Property
+
+
+        ' Builds what LoadRecord left for later, once.
+        Friend Sub EnsureDeferredParts()
+
+            If Not _record.PartsDeferred Then
+                Return
+            End If
+
+            _record.PartsDeferred = False
+            BuildVersionHistory()
+            ShowSubmissionDetail(GetSelectedSubmission())
+
+        End Sub
+
+
+        ' The controls built for one record: its version history and the
+        ' selected submission's details. Disposed where they are, which
+        ' destroys their windows without moving them first.
+        Private Sub ReleaseRecordParts()
+
+            If versionHistoryControl IsNot Nothing Then
+                InPlace.Dispose(versionHistoryControl)
+                versionHistoryControl = Nothing
+            End If
+
+            For Each child As Control In _submissionDetailHost.Controls.Cast(Of Control)().ToList()
+                InPlace.Dispose(child)
+            Next
+
+            _submissionDetail = Nothing
+
+        End Sub
+
+
+        Private Sub BuildVersionHistory()
+
+            Dim versions As New ManuscriptVersionHistoryControl(_workingManuscript) With {
+                .Dock = DockStyle.Fill,
+                .Margin = New Padding(0)
+            }
+
+            AddHandler versions.ViewPacketsRequested,
+                Sub(versionId)
+                    RunSubmissionWorkflow(New SubmissionWorkflowRequest With {
+                        .Target = SubmissionWorkflowTarget.Packets, .VersionId = versionId
+                    })
+                End Sub
+
+            _versionsHost.Controls.Add(versions)
+
+            ' Built after the form was styled, it is styled now.
+            UiPolish.ApplyToControls(versions)
+            versionHistoryControl = versions
+
+        End Sub
+
+
+        ' The Overview, scrolled to its top, with no control active and no
+        ' typing to undo, as a form built for this record shows it.
+        Private Sub ShowFromTheTop()
+
+            If IsHandleCreated Then
+                ShowSection(_overview)
+            Else
+                ' Until the form has a window, no tab is checked and the
+                ' Overview is the section shown (OnHandleCreated).
+                For Each tab As ShelfTabButton In _sectionTabs
+                    DirectCast(tab.Tag, Control).Visible = tab.Tag Is _overview
+                Next
+            End If
+
+            _overview.AutoScrollPosition = Point.Empty
+            ActiveControl = Nothing
+
+            For Each box As TextBoxBase In {txtTitle, txtTargetJournal, txtFileDrawerReason, tagEditor.Input}
+                box.ClearUndo()
+            Next
+
+            EmptyHint.Refresh(lstAuthors)
+            EmptyHint.Refresh(lstSubmissions)
 
         End Sub
 
@@ -263,8 +539,12 @@ Namespace Forms
                 If(journal?.ReadinessChecklistTemplate, New List(Of JournalChecklistTemplateItem)()).
                     Where(Function(item) item IsNot Nothing).Count()
 
+            ' Hidden, the card keeps no other journal's notes: the page shows
+            ' one record after another (#133).
             If journal Is Nothing OrElse (notes.Length = 0 AndAlso checklist = 0) Then
                 journalNotesGroup.Visible = False
+                journalNotesGroup.Text = "Target journal notes"
+                lblJournalNotes.Text = String.Empty
                 Return
             End If
 
@@ -297,6 +577,8 @@ Namespace Forms
         Friend Sub ShowRouteWaypoint(
             waypoint As ManuscriptRouteWaypoint
         )
+
+            EnsureDeferredParts()
 
             _pendingRouteWaypoint =
                 waypoint
@@ -349,6 +631,12 @@ Namespace Forms
         Private Sub ShowSection(
             section As Control
         )
+
+            ' The Versions and Submissions tabs show what a load left for
+            ' later, so it is built before they show.
+            If section Is _versionsHost OrElse section Is _submissionsSection Then
+                EnsureDeferredParts()
+            End If
 
             For Each tab As ShelfTabButton In _sectionTabs
                 Dim panel As Control = DirectCast(tab.Tag, Control)
@@ -538,6 +826,8 @@ Namespace Forms
             submissionId As Guid
         )
 
+            EnsureDeferredParts()
+
             For index As Integer =
                 0 To _displayedSubmissions.Count - 1
 
@@ -657,16 +947,8 @@ Namespace Forms
             Me.Text = "Manuscript Details"
             Me.StartPosition = FormStartPosition.CenterParent
 
-            If _workingManuscript.Location =
-                ManuscriptLocation.FileDrawer Then
-
-                Me.Size = New Size(980, 980)
-
-            Else
-
-                Me.Size = New Size(980, 960)
-
-            End If
+            ' A filed manuscript's dialog is taller (Bind).
+            Me.Size = New Size(980, 960)
 
             Me.MinimumSize = New Size(860, 760)
             Me.Font = New Font("Segoe UI", 10.0F)
@@ -897,9 +1179,9 @@ Namespace Forms
             fileDrawerGroup.AutoSizeMode = AutoSizeMode.GrowAndShrink
             fileDrawerGroup.Padding = New Padding(14)
             fileDrawerGroup.Margin = New Padding(3, 8, 3, 8)
-            fileDrawerGroup.Visible =
-                _workingManuscript.Location =
-                ManuscriptLocation.FileDrawer
+
+            ' Shown for a filed manuscript (LoadManuscript).
+            fileDrawerGroup.Visible = False
 
             Dim fileDrawerLayout As New TableLayoutPanel With {
                 .Dock = DockStyle.Top,
@@ -1091,23 +1373,13 @@ Namespace Forms
             authorsGroup.Controls.Add(authorsLayout)
 
             ' =================================================
-            ' Manuscript version history
+            ' Manuscript version history: each record's own
+            ' (BuildVersionHistory), in this host.
             ' =================================================
 
-            versionHistoryControl =
-                New ManuscriptVersionHistoryControl(
-                    _workingManuscript
-                ) With {
-                    .Dock = DockStyle.Fill,
-                    .Margin = New Padding(3, 8, 3, 8)
-                }
-
-            AddHandler versionHistoryControl.ViewPacketsRequested,
-                Sub(versionId)
-                    RunSubmissionWorkflow(New SubmissionWorkflowRequest With {
-                        .Target = SubmissionWorkflowTarget.Packets, .VersionId = versionId
-                    })
-                End Sub
+            _versionsHost.Dock = DockStyle.Fill
+            _versionsHost.Margin = New Padding(0)
+            _versionsHost.Padding = New Padding(0)
 
             ' =================================================
             ' Submissions
@@ -1315,7 +1587,7 @@ Namespace Forms
             }
 
             authorsGroup.Margin = New Padding(0)
-            versionHistoryControl.Margin = New Padding(0)
+            _overview = scrollHost
 
             ' The Overview shows first. Its tab is checked once the form has a
             ' window (OnHandleCreated): a radio button checked, or a section
@@ -1325,7 +1597,7 @@ Namespace Forms
             For Each section In {
                 ("Overview", CType(scrollHost, Control)),
                 ("Authors", CType(authorsGroup, Control)),
-                ("Versions", CType(versionHistoryControl, Control)),
+                ("Versions", CType(_versionsHost, Control)),
                 ("Submissions", CType(submissionsGroup, Control)),
                 ("Readiness & Packets", CreateReadinessSection())
             }
@@ -1441,6 +1713,8 @@ Namespace Forms
                     End Using
                 End Sub
             layout.Controls.Add(shortlistOffer, 0, 0)
+            ' Hidden until a rejection, ahead of the rows a record shows (#133).
+            InPlace.HoldPlace(shortlistOffer)
 
             shortlistRows.Dock = DockStyle.Top
             shortlistRows.AutoSize = True
@@ -1512,14 +1786,16 @@ Namespace Forms
 
             shortlistRows.SuspendLayout()
             For Each child As Control In shortlistRows.Controls.Cast(Of Control)().ToList()
-                shortlistRows.Controls.Remove(child)
-                child.Dispose()
+                InPlace.Dispose(child)
             Next
             shortlistRows.RowStyles.Clear()
             shortlistRows.RowCount = Math.Max(1, list.Count)
             For index As Integer = 0 To list.Count - 1
                 shortlistRows.RowStyles.Add(New RowStyle(SizeType.AutoSize))
-                shortlistRows.Controls.Add(CreateShortlistRow(list(index), index, list.Count), 0, index)
+                Dim row As Control = CreateShortlistRow(list(index), index, list.Count)
+                shortlistRows.Controls.Add(row, 0, index)
+                ' Built after the form was styled, a row is styled now (#133).
+                UiPolish.ApplyToControls(row)
             Next
             shortlistRows.ResumeLayout(True)
             shortlistRows.Visible = list.Count > 0
@@ -2869,7 +3145,10 @@ Namespace Forms
 
             End If
 
-            ShowSubmissionDetail(GetSelectedSubmission())
+            ' Details a load left for later wait for EnsureDeferredParts.
+            If Not _record.PartsDeferred Then
+                ShowSubmissionDetail(GetSelectedSubmission())
+            End If
 
             UpdateSubmissionButtons()
             RefreshRevisionDeadlineDisplay()
@@ -2972,9 +3251,6 @@ Namespace Forms
         End Function
 
 
-        Private _refreshingSubmissions As Boolean = False
-
-
         Private Sub SubmissionSelectionChanged(
             sender As Object,
             e As EventArgs
@@ -2982,7 +3258,14 @@ Namespace Forms
 
             UpdateSubmissionButtons()
 
-            If Not _refreshingSubmissions Then
+            If _refreshingSubmissions Then
+                Return
+            End If
+
+            ' Details left for later are built now, for this selection.
+            If _record.PartsDeferred Then
+                EnsureDeferredParts()
+            Else
                 ShowSubmissionDetail(GetSelectedSubmission())
             End If
 
@@ -3038,11 +3321,16 @@ Namespace Forms
                 AddHandler detail.Changed, AddressOf SubmissionDetailChanged
 
                 ' Open the requested window after the detail's own click handler
-                ' has returned, since it may select another submission.
+                ' has returned, since it may select another submission; by
+                ' then the form may hold another record, and it does nothing.
+                Dim record As RecordState = _record
                 AddHandler detail.NavigationRequested,
                     Sub(request)
                         If IsHandleCreated Then
-                            BeginInvoke(New Action(Sub() RunSubmissionWorkflow(request)))
+                            BeginInvoke(New Action(
+                                Sub()
+                                    If _record Is record AndAlso Not IsDisposed Then RunSubmissionWorkflow(request)
+                                End Sub))
                         Else
                             RunSubmissionWorkflow(request)
                         End If

@@ -12,6 +12,8 @@ Namespace Forms
         ' unwinds each child before opening another, so stale clones cannot later
         ' overwrite changes made in a nested dialog.
         Private Sub RunSubmissionWorkflow(request As SubmissionWorkflowRequest)
+            ' The versions and details a load left for later are needed here.
+            EnsureDeferredParts()
             While request IsNot Nothing
                 Dim nextRequest As SubmissionWorkflowRequest = Nothing
                 Select Case request.Target
