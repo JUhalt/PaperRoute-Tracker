@@ -1294,6 +1294,9 @@ Public Class ManuscriptPageTests
                         Assert.IsTrue(update.Enabled)
 
                         ClickControl(update)
+                        ' The update redraws the page, and its figures are worked out
+                        ' off the UI thread (#132): wait for them before reading.
+                        board.WaitForInsights()
                         Assert.AreEqual(1, prompted.Count)
                         Assert.IsNull(prompted(0), "Nothing saved before.")
                         Assert.AreEqual(3, store.Load().Works.Count, "The confirmed works are saved.")
