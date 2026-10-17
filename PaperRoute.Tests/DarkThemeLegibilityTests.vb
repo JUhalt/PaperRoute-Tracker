@@ -30,8 +30,7 @@ Public Class DarkThemeLegibilityTests
     Friend Shared ReadOnly DarkAllowList As (Name As String, Reason As String, Matches As Func(Of Control, Boolean))() = {
         ("The report preview", "A web page that Windows' browser control draws.", Function(control As Control) TypeOf control Is WebBrowser),
         ("Message boxes", "Windows draws them.", Function(control As Control) False),
-        ("File dialogs", "Windows draws them.", Function(control As Control) False),
-        ("Date pickers", "Windows draws the field; step 4 of #106 decides whether PaperRoute repaints it.", Function(control As Control) TypeOf control Is DateTimePicker)
+        ("File dialogs", "Windows draws them.", Function(control As Control) False)
     }
 
     ' ---------------------------------------------------------------
@@ -224,6 +223,136 @@ Public Class DarkThemeLegibilityTests
                 Yield descendant
             Next
         Next
+    End Function
+
+    ' ---------------------------------------------------------------
+    ' Date pickers (#106)
+    ' ---------------------------------------------------------------
+
+    ' The views with the app's nine date pickers.
+    Private Shared ReadOnly DatePickerViews As String() = {
+        "AddCorrespondenceForm", "AddDecisionForm", "AddManuscriptForm", "AddSubmissionForm",
+        "DeadlineDateForm", "ManuscriptVersionEditForm", "ReminderEditForm"
+    }
+
+    ' In Dark each date field is mostly the card color, whether it is on or
+    ' off, and the text of one that is on has 4.5:1 on it at least.
+    <TestMethod>
+    Public Sub DatePicker_FieldsAreTheCardColorInDark()
+
+        Dim failures As New List(Of String)()
+        Dim pickers As New List(Of String)()
+
+        For Each view In ViewCatalog.All().Where(Function(item) DatePickerViews.Contains(item.Name))
+
+            Dim root As String = CreateTemporaryRoot()
+            StorageEnvironment.RootOverride = root
+
+            Try
+                RunWithColorMode(SystemColorMode.Dark,
+                    Sub()
+                        Try
+                            Using shown As Form = view.Build(root)
+                                If Not shown.Visible Then ShowOffscreen(shown)
+                                UiPolish.ApplyDialog(shown)
+                                Application.DoEvents()
+                                For Each picker As DateTimePicker In Descendants(shown).OfType(Of DateTimePicker)()
+                                    pickers.Add($"{view.Name}: {Describe(picker)}{If(picker.Visible, String.Empty, " (hidden)")}{If(picker.Enabled, String.Empty, " (off)")}")
+                                    If Not picker.Visible Then Continue For
+                                    Using image As Bitmap = Picture(picker)
+                                        Dim field As Color = CommonestColor(image)
+                                        If field.ToArgb() <> UiTheme.CardBackground().ToArgb() Then
+                                            failures.Add($"{view.Name}: {Describe(picker)} is mostly {field}.")
+                                        End If
+                                        Dim ratio As Double = StrongestContrast(image, New Rectangle(Point.Empty, image.Size), UiTheme.CardBackground())
+                                        If picker.Enabled AndAlso ratio < 4.5 Then
+                                            failures.Add($"{view.Name}: {Describe(picker)}'s text has {ratio:F2}:1 on the card color.")
+                                        End If
+                                    End Using
+                                Next
+                            End Using
+                        Finally
+                            For Each left As Form In StaRunner.OpenFormsOnThisThread()
+                                left.Dispose()
+                            Next
+                        End Try
+                    End Sub)
+            Finally
+                StorageEnvironment.RootOverride = Nothing
+                DeleteTemporaryRoot(root)
+            End Try
+
+        Next
+
+        Assert.AreEqual(9, pickers.Count, "The nine date pickers: " & String.Join("; ", pickers))
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+
+    End Sub
+
+    ' The field keeps Windows' own editing in Dark: the Up arrow changes the
+    ' part of the date being edited, and the field is still the card color.
+    ' With the focus, the part being edited keeps Windows' highlight.
+    <TestMethod>
+    Public Sub DatePicker_KeepsWindowsEditingInDark()
+
+        RunWithColorMode(SystemColorMode.Dark,
+            Sub()
+                Using form As New Form With {.ClientSize = New Size(320, 120), .Font = New Font("Segoe UI", 9.0F)}
+                    Dim picker As New ThemedDatePicker With {.Format = DateTimePickerFormat.Short, .Bounds = New Rectangle(8, 8, 200, 30), .Value = New DateTime(2026, 10, 15)}
+                    form.Controls.Add(picker)
+                    UiPolish.ApplyDialog(form)
+                    ShowOffscreen(form)
+
+                    picker.Focus()
+                    SendMessage(picker.Handle, WM_KEYDOWN, New IntPtr(VK_UP), IntPtr.Zero)
+                    SendMessage(picker.Handle, WM_KEYUP, New IntPtr(VK_UP), IntPtr.Zero)
+                    Application.DoEvents()
+
+                    Assert.AreNotEqual(New DateTime(2026, 10, 15), picker.Value.Date, "The Up arrow changes the date.")
+                    Using image As Bitmap = Picture(picker)
+                        Assert.AreEqual(UiTheme.CardBackground().ToArgb(), CommonestColor(image).ToArgb(), "The field is the card color.")
+                        Dim highlight As Integer = ColorTranslator.FromWin32(GetSysColor(COLOR_HIGHLIGHT)).ToArgb()
+                        Dim marked As Integer = CountPixels(image, New Rectangle(Point.Empty, image.Size), Function(pixel) pixel.ToArgb() = highlight)
+                        Assert.AreEqual(picker.Focused, marked > 0, $"The part being edited is highlighted exactly when the field has the focus (focused: {picker.Focused}).")
+                    End Using
+                End Using
+            End Sub)
+
+    End Sub
+
+    ' In Light a themed date picker makes the same picture as a plain one,
+    ' on and off. A guard: in Light the picker changes nothing, so this
+    ' cannot fail unless that changes.
+    <TestMethod>
+    Public Sub DatePicker_LeavesTheFieldToWindowsInLight()
+
+        RunWithColorMode(SystemColorMode.Classic,
+            Sub()
+                For Each enabled As Boolean In {True, False}
+                    Using plain As Bitmap = DatePickerPicture(New DateTimePicker(), enabled), themed As Bitmap = DatePickerPicture(New ThemedDatePicker(), enabled)
+                        AssertSamePicture(plain, themed, $"A date picker in Light, {If(enabled, "on", "off")}")
+                    End Using
+                Next
+            End Sub)
+
+    End Sub
+
+    ' A picker alone in a window of its own, on a fixed date.
+    Private Shared Function DatePickerPicture(picker As DateTimePicker, enabled As Boolean) As Bitmap
+        Using font As New Font("Segoe UI", 9.0F), form As New Form With {.ClientSize = New Size(320, 120), .Font = font}
+            picker.Format = DateTimePickerFormat.Short
+            picker.Bounds = New Rectangle(8, 8, 200, 30)
+            picker.Value = New DateTime(2026, 10, 15)
+            picker.Enabled = enabled
+            form.Controls.Add(picker)
+            ShowOffscreen(form)
+            Return Picture(picker)
+        End Using
+    End Function
+
+    ' The color of most pixels in a picture.
+    Private Shared Function CommonestColor(image As Bitmap) As Color
+        Return Color.FromArgb(PixelsOf(image).GroupBy(Function(pixel) pixel).OrderByDescending(Function(group) group.Count()).First().Key)
     End Function
 
     ' ---------------------------------------------------------------
@@ -974,9 +1103,15 @@ Public Class DarkThemeLegibilityTests
     Private Const WM_KEYDOWN As Integer = &H100
     Private Const WM_KEYUP As Integer = &H101
     Private Const VK_SPACE As Integer = &H20
+    Private Const VK_UP As Integer = &H26
+    Private Const COLOR_HIGHLIGHT As Integer = 13
 
     <Runtime.InteropServices.DllImport("user32.dll")>
     Private Shared Function SendMessage(handle As IntPtr, message As Integer, wParam As IntPtr, lParam As IntPtr) As IntPtr
+    End Function
+
+    <Runtime.InteropServices.DllImport("user32.dll")>
+    Private Shared Function GetSysColor(index As Integer) As Integer
     End Function
 
     ' Changes the color mode of the test process only, on a thread of its

@@ -15,7 +15,7 @@ Namespace Forms
         Private ReadOnly _today As DateTime
         Private ReadOnly _choices As New List(Of (Button As RadioButton, Days As Integer))()
         Private ReadOnly rdoPick As New RadioButton()
-        Private ReadOnly dtpDate As New DateTimePicker()
+        Private ReadOnly dtpDate As New ThemedDatePicker()
         Private ReadOnly btnApply As New ActionButton()
         Private ReadOnly _verb As String
 

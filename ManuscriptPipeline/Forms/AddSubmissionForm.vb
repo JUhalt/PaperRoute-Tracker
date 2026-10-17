@@ -3,6 +3,7 @@ Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.Linq
 Imports System.Windows.Forms
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
@@ -16,10 +17,10 @@ Namespace Forms
 
         Private ReadOnly txtJournal As New TextBox()
         Private ReadOnly txtManuscriptNumber As New TextBox()
-        Private ReadOnly dtpSubmitted As New DateTimePicker()
+        Private ReadOnly dtpSubmitted As New ThemedDatePicker()
         Private ReadOnly txtPortalUrl As New TextBox()
         Private ReadOnly chkFollowUp As New CheckBox()
-        Private ReadOnly dtpFollowUp As New DateTimePicker()
+        Private ReadOnly dtpFollowUp As New ThemedDatePicker()
         Private ReadOnly txtNotes As New TextBox()
 
         Private _selectedJournalId As Guid?

@@ -61,7 +61,7 @@ Namespace Forms
         Private ReadOnly _managedLibrary As New ManagedLibraryService()
 
         Private ReadOnly txtLabel As New TextBox()
-        Private ReadOnly dtpVersionDate As New DateTimePicker()
+        Private ReadOnly dtpVersionDate As New ThemedDatePicker()
         Private ReadOnly txtFilePath As New TextBox()
         Private ReadOnly btnBrowse As New Button()
         Private ReadOnly btnClearFile As New Button()
