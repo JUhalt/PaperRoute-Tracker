@@ -3,6 +3,7 @@ Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.Linq
 Imports System.Windows.Forms
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
@@ -16,7 +17,7 @@ Namespace Forms
         Private ReadOnly _existingReminder As ManuscriptReminder
 
         Private ReadOnly cboManuscript As New ComboBox()
-        Private ReadOnly dtpDueDate As New DateTimePicker()
+        Private ReadOnly dtpDueDate As New ThemedDatePicker()
         Private ReadOnly txtTitle As New TextBox()
         Private ReadOnly txtNotes As New TextBox()
 

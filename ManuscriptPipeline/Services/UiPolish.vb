@@ -114,6 +114,11 @@ Namespace Services
                 Return
             End If
 
+            ' Windows 11's title bar and corners for the theme (#143).
+            WindowChrome.Apply(
+                form
+            )
+
             form.BackColor =
                 UiTheme.BoardBackground()
 
@@ -123,6 +128,25 @@ Namespace Services
             ApplyToControlTree(
                 form,
                 TryCast(form.AcceptButton, Button)
+            )
+
+        End Sub
+
+
+        ' Styles the controls under one control, for those a window adds
+        ' after it was styled, such as rows it builds again (#106): the idle
+        ' hook styles each window once.
+        Public Shared Sub ApplyToControls(
+            parent As Control
+        )
+
+            If parent Is Nothing Then
+                Return
+            End If
+
+            ApplyToControlTree(
+                parent,
+                TryCast(parent.FindForm()?.AcceptButton, Button)
             )
 
         End Sub
@@ -360,9 +384,26 @@ Namespace Services
                 ' A header never looks selected because a cell below it is.
                 grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = UiTheme.HeaderBackground()
                 grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = UiTheme.PrimaryText()
-                ' A header never looks selected because a cell below it is.
-                grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = UiTheme.HeaderBackground()
-                grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = UiTheme.PrimaryText()
+
+                ' Windows draws check boxes in cells from its Light theme (#106).
+                CheckGlyph.Attach(
+                    grid
+                )
+
+                Return
+
+            End If
+
+
+            ' Windows draws a list's check boxes from its Light theme (#106).
+            If TypeOf control Is ListView Then
+
+                CheckGlyph.Attach(
+                    DirectCast(
+                        control,
+                        ListView
+                    )
+                )
 
                 Return
 

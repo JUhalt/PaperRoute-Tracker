@@ -25,19 +25,24 @@ Public Class WorkflowThemeKeyboardSmokeTests
     Private Shared ReadOnly DialogKeyMethod As MethodInfo =
         GetType(Control).GetMethod("ProcessDialogKey", BindingFlags.Instance Or BindingFlags.NonPublic)
 
-    ' The board, rail, and cards draw their text from these tokens directly.
+    ' Every ink the code draws on every surface it draws it on (#106): text
+    ' on the page surfaces, and on the tinted rows, pills, chips, banners,
+    ' and filled buttons the survey found. Each pair says where it is drawn;
+    ' the ratios are written to the test's output.
     <TestMethod>
     <DataRow(SystemColorMode.Classic)>
     <DataRow(SystemColorMode.Dark)>
-    Public Sub WorkspaceTextTokens_AreLegibleOnEverySurface(mode As SystemColorMode)
+    Public Sub EveryInkAndSurfacePairTheCodeDraws_Meets4_5To1(mode As SystemColorMode)
 
         RunWithColorMode(mode,
             Sub()
-                For Each surface In {("board", UiTheme.BoardBackground()), ("card", UiTheme.CardBackground())}
-                    For Each ink In {("primary", UiTheme.PrimaryText()), ("secondary", UiTheme.SecondaryText()), ("muted", UiTheme.MutedText())}
-                        AssertContrast(ink.Item2, surface.Item2, $"{ink.Item1} text on the {surface.Item1} background")
-                    Next
+                Dim failures As New List(Of String)()
+                For Each pair In DrawnPairs()
+                    Dim ratio As Double = ContrastRatio(pair.Ink, pair.Surface)
+                    TestContext.WriteLine($"{mode}  {ratio:F2}:1  {pair.Where} ({pair.Ink} on {pair.Surface})")
+                    If ratio < 4.5 Then failures.Add($"{pair.Where}: {ratio:F2}:1 ({pair.Ink} on {pair.Surface})")
                 Next
+                Assert.AreEqual(0, failures.Count, $"Pairs under 4.5:1 in {mode}:{Environment.NewLine}{String.Join(Environment.NewLine, failures)}")
             End Sub)
 
     End Sub
@@ -379,6 +384,89 @@ Public Class WorkflowThemeKeyboardSmokeTests
             control = control.Parent
         End While
         Return control.BackColor
+    End Function
+
+    ' The pairs, read from the code that chooses them where the code picks a
+    ' color by state, and otherwise as the survey found them drawn.
+    Private Shared Function DrawnPairs() As List(Of (Where As String, Ink As Color, Surface As Color))
+
+        Dim pairs As New List(Of (Where As String, Ink As Color, Surface As Color))()
+
+        ' Labels and painted text sit on the board, a card, or a header.
+        Dim inks = {("primary", UiTheme.PrimaryText()), ("secondary", UiTheme.SecondaryText()), ("muted", UiTheme.MutedText()),
+                    ("accent", UiTheme.AccentColor()), ("secondary accent", UiTheme.AccentSecondaryColor()), ("info", UiTheme.InfoColor()),
+                    ("warning", UiTheme.WarningColor()), ("danger", UiTheme.DangerColor()), ("success", UiTheme.SuccessColor())}
+        For Each surface In {("board", UiTheme.BoardBackground()), ("card", UiTheme.CardBackground()), ("header", UiTheme.HeaderBackground())}
+            For Each ink In inks
+                pairs.Add(($"{ink.Item1} text on the {surface.Item1}", ink.Item2, surface.Item2))
+            Next
+        Next
+
+        ' Hovered buttons and rail items.
+        pairs.Add(("A hovered button or hovered rail item: primary text", UiTheme.PrimaryText(), UiTheme.HoverBackground()))
+        pairs.Add(("A hovered quiet button: accent text", UiTheme.AccentColor(), UiTheme.HoverBackground()))
+        pairs.Add(("A hovered danger button: danger text", UiTheme.DangerColor(), UiTheme.HoverBackground()))
+
+        ' A grid's selected row, as UiPolish styles a dialog's grids and the
+        ' pages style their tables (#138).
+        pairs.Add(("A selected row in a dialog's grid", UiTheme.SelectedRowText(), UiTheme.SelectedRowBackground(UiTheme.HoverBackground())))
+        pairs.Add(("A selected row in a page's table", UiTheme.SelectedRowText(), UiTheme.SelectedRowBackground(UiTheme.AccentMutedBackground())))
+
+        ' Selected rows, the selected rail item, and the current waypoint.
+        Dim selected As Color = UiTheme.AccentMutedBackground()
+        pairs.Add(("A selected row, the example banner, the welcome's privacy note, or the shortlist's offer: primary text", UiTheme.PrimaryText(), selected))
+        pairs.Add(("A selected submission, comment, or route: secondary text", UiTheme.SecondaryText(), selected))
+        pairs.Add(("The selected rail item, an active filter chip, or the current waypoint's kind: accent text", UiTheme.AccentColor(), selected))
+        pairs.Add(("The current waypoint's link", UiTheme.AccentSecondaryColor(), selected))
+
+        ' A submission's latest decision, the third line of its row.
+        Dim decisions As New List(Of (Name As String, Latest As EditorialDecisionEvent)) From {("awaiting a decision", Nothing)}
+        For Each decision As EditorialDecision In [Enum].GetValues(GetType(EditorialDecision))
+            If decision <> EditorialDecision.None Then decisions.Add((decision.ToString(), New EditorialDecisionEvent With {.Decision = decision}))
+        Next
+        For Each decision In decisions
+            pairs.Add(($"A submission's latest decision, {decision.Name}", EditManuscriptForm.OutcomeColor(decision.Latest, False), UiTheme.CardBackground()))
+            pairs.Add(($"A selected submission's latest decision, {decision.Name}", EditManuscriptForm.OutcomeColor(decision.Latest, True), selected))
+        Next
+
+        ' Pills, chips, badges, and banners on their own fills.
+        For Each status As ReviewerResponseStatus In [Enum].GetValues(GetType(ReviewerResponseStatus))
+            Dim pill As (Fill As Color, Ink As Color) = ReviewerResponseMatrixForm.StatusPill(status)
+            pairs.Add(($"The {ReviewerResponseService.FormatStatus(status)} pill", pill.Ink, pill.Fill))
+        Next
+        For Each stage As PaperStage In [Enum].GetValues(GetType(PaperStage))
+            pairs.Add(($"The {stage} stage pill and deadline badge", UiTheme.StageForeground(stage), UiTheme.StageBackground(stage)))
+        Next
+        pairs.Add(("A warning chip, the rail's count, or an Unresolved pill", UiTheme.WarningColor(), UiTheme.WarningMutedBackground()))
+        pairs.Add(("A danger chip", UiTheme.DangerColor(), UiTheme.DangerMutedBackground()))
+        pairs.Add(("Working offline in the rail", UiTheme.InfoColor(), UiTheme.InfoMutedBackground()))
+        pairs.Add(("Working offline in the rail, hovered", UiTheme.InfoColor(), UiTheme.Blend(UiTheme.InfoMutedBackground(), UiTheme.PrimaryText(), 0.08F)))
+        pairs.Add(("The assistant's banner in Record Editorial Decision", UiTheme.PrimaryText(), UiTheme.InfoMutedBackground()))
+
+        ' Filled buttons, at rest, hovered, and pressed.
+        Dim accent As Color = UiTheme.AccentColor()
+        Dim shade As Color = If(UiTheme.IsDark(), Color.White, Color.Black)
+        pairs.Add(("A primary button", UiTheme.OnAccentText(), accent))
+        pairs.Add(("A primary button, hovered", UiTheme.OnAccentText(), UiTheme.Blend(accent, shade, 0.1F)))
+        pairs.Add(("A primary button, pressed", UiTheme.OnAccentText(), UiTheme.Blend(accent, shade, 0.2F)))
+
+        ' The route map's white labels on its fills and numbered events.
+        For Each kind As RouteSegmentKind In {RouteSegmentKind.Journal, RouteSegmentKind.Author, RouteSegmentKind.Production}
+            pairs.Add(($"A route map's {kind} segment label", Color.White, RouteMapStyle.Fill(kind)))
+        Next
+        For Each marker As RouteMarker In {
+            New RouteMarker With {.Kind = RouteMarkerKind.Submitted},
+            New RouteMarker With {.Kind = RouteMarkerKind.Published},
+            New RouteMarker With {.Kind = RouteMarkerKind.Decision, .Decision = EditorialDecision.Accepted},
+            New RouteMarker With {.Kind = RouteMarkerKind.Decision, .Decision = EditorialDecision.MajorRevision},
+            New RouteMarker With {.Kind = RouteMarkerKind.Decision, .Decision = EditorialDecision.Withdrawn},
+            New RouteMarker With {.Kind = RouteMarkerKind.Decision, .Decision = EditorialDecision.Rejected}
+        }
+            pairs.Add(($"A route map's numbered {marker.Kind} {marker.Decision} event", Color.White, RouteMapStyle.MarkerColor(marker)))
+        Next
+
+        Return pairs
+
     End Function
 
     Private Shared Sub AssertContrast(foreground As Color, background As Color, label As String)

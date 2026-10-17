@@ -1036,7 +1036,18 @@ PaperRoute supports the Windows contrast themes (**Settings > Accessibility > Co
 
 ### What Windows draws
 
-Message boxes, the Open and Save dialogs, and the folder picker are drawn by Windows, not PaperRoute, so how they work with the keyboard and a screen reader is Windows' own, and so are their colors. In PaperRoute's Dark appearance they keep Windows' colors, which can be light; for 1.0 they stay that way.
+Message boxes, the Open and Save dialogs, and the folder picker are drawn by Windows, not PaperRoute, so how they work with the keyboard and a screen reader is Windows' own, and so are their colors.
+
+In PaperRoute's Dark appearance, these keep the colors Windows gives them, or PaperRoute's Light ones, for 1.0. None of them hides anything you need to read:
+
+- Message boxes, title bar included, which can be light.
+- The Open and Save dialogs and the folder picker.
+- The report preview, a web page that Windows draws.
+- The thin white frame around a table.
+- The borders of drop-down lists and number boxes, in Windows' own greys.
+- On a route map, the journal and author segments and the numbered events, which keep their Light colors; their white labels stay easy to read.
+- The links in this guide's window, in the color Windows gives links.
+- The outlines of text boxes and lists, which are fainter than accessibility guidelines ask of an input's outline.
 
 ### What was tested
 
