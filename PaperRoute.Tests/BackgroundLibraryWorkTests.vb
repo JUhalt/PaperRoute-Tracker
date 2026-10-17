@@ -474,14 +474,17 @@ Public Class BackgroundLibraryWorkTests
                     board.unhandledErrorPrompt = Function(failure, unsavedChanges) DialogResult.Abort
                     Dim closedDuringWork As Boolean = True
 
-                    OnTheWindowDuringWork(board,
+                    OnTheWindowsContext(
                         Sub()
-                            board.ReportUnhandledError(New InvalidOperationException("A failure of the test's own."))
-                            closedDuringWork = board.IsDisposed
-                        End Sub)
+                            OnTheWindowDuringWork(board,
+                                Sub()
+                                    board.ReportUnhandledError(New InvalidOperationException("A failure of the test's own."))
+                                    closedDuringWork = board.IsDisposed
+                                End Sub)
 
-                    Assert.IsFalse(closedDuringWork, "The work was not cut off by the close.")
-                    PumpUntil(Function() board.IsDisposed, "Once the work ended, PaperRoute closed, as the user chose.")
+                            Assert.IsFalse(closedDuringWork, "The work was not cut off by the close.")
+                            PumpUntil(Function() board.IsDisposed, "Once the work ended, PaperRoute closed, as the user chose.")
+                        End Sub)
                 End Using
             End Sub)
     End Sub
@@ -534,16 +537,38 @@ Public Class BackgroundLibraryWorkTests
 
 
     ' Check for Updates through scripted steps (#112) that apply nothing and
-    ' reach no network; the real steps come back afterwards.
+    ' reach no network, on the window's context; the real steps come back
+    ' afterwards. The update ends with its progress window gone.
     Private Shared Sub WithScriptedUpdate(board As LibraryBoard, test As Action(Of ManuscriptPageTests.ScriptedUpdate))
         Dim update As New ManuscriptPageTests.ScriptedUpdate With {.Window = board}
         UpdateService.Steps = update.Steps()
         OnlineAccess.ResetForTests()
         Try
-            test(update)
+            OnTheWindowsContext(Sub() test(update))
+            Assert.IsFalse(Application.OpenForms.OfType(Of ManuscriptPipeline.Forms.UpdateProgressForm)().Any(), "The update's progress window is gone.")
         Finally
             UpdateService.Steps = New UpdateSteps()
             OnlineAccess.ResetForTests()
+        End Try
+    End Sub
+
+
+    ' Keeps the window's synchronization context installed for the whole
+    ' action, as PaperRoute's main message loop does. A test has no such
+    ' loop, so each DoEvents uninstalls the context as it returns, and a
+    ' message the window takes after that, such as the end of a download,
+    ' runs with none: the update's next wait, or a deferred close's, would
+    ' go on on the thread pool, off the window's thread.
+    Private Shared Sub OnTheWindowsContext(action As Action)
+        Dim previous As SynchronizationContext = SynchronizationContext.Current
+        Dim autoInstall As Boolean = WindowsFormsSynchronizationContext.AutoInstall
+        WindowsFormsSynchronizationContext.AutoInstall = False
+        SynchronizationContext.SetSynchronizationContext(New WindowsFormsSynchronizationContext())
+        Try
+            action()
+        Finally
+            SynchronizationContext.SetSynchronizationContext(previous)
+            WindowsFormsSynchronizationContext.AutoInstall = autoInstall
         End Try
     End Sub
 
