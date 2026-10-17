@@ -204,9 +204,9 @@ Public Class AccessibleNameTests
 
     ' One line for each control in the form that a screen reader would
     ' announce without a name, or by a link's, a button's or a sentence's
-    ' words. The
-    ' form's tab pages are shown one after another, so controls on a page
-    ' that is not in front are read as well, and the first is put back.
+    ' words. The form's tab pages are shown one after another, so controls
+    ' on a page that is not in front are read as well, and the first is put
+    ' back.
     Friend Shared Function Unnamed(
         form As Form
     ) As List(Of String)
