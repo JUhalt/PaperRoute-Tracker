@@ -18,6 +18,8 @@
     <StartupObject>ManuscriptPipeline.Program</StartupObject>
     <UseWindowsForms>true</UseWindowsForms>
     <MyType>WindowsForms</MyType>
+    <!-- English resources only: 52 fewer files to extract and scan before Setup's first start of PaperRoute (#92). -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <ItemGroup>

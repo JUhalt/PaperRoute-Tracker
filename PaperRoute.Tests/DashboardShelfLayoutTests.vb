@@ -7,6 +7,7 @@ Imports System.Windows.Forms
 Imports ManuscriptPipeline
 Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Models
+Imports ManuscriptPipeline.Services
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
 
 <TestClass>
@@ -438,6 +439,120 @@ Public Class DashboardShelfLayoutTests
                     board.Close()
                 End Using
             End Sub)
+    End Sub
+
+    ' The shelf bar's hairline runs under both of its groups (#141), so the
+    ' tabs and the filters sit on one line, whether they share a line or the
+    ' filters wrap above the tabs. Before the change the groups covered the
+    ' line the bar drew along its own bottom edge, and only the piece between
+    ' them showed, reading as a fourth tab's underline.
+    <TestMethod>
+    Public Sub TheSplitBarBaselineRunsUnderBothGroupsInBothLayouts()
+        RunOnStaThread(
+            Sub()
+                Using host As New Form With {.StartPosition = FormStartPosition.Manual, .Location = New Point(-20000, -20000), .ShowInTaskbar = False, .BackColor = UiTheme.BoardBackground()}
+                    ' Groups as the Board's: tabs that carry the line under
+                    ' themselves, and filters that stop short of the bottom.
+                    Dim tabs As New FlowLayoutPanel With {.AutoSize = True, .AutoSizeMode = AutoSizeMode.GrowAndShrink, .WrapContents = False, .Margin = New Padding(0), .Padding = New Padding(0), .BackColor = UiTheme.BoardBackground()}
+                    For Each name As String In {"Pipeline (3)", "Published (1)", "File Drawer (2)"}
+                        tabs.Controls.Add(New ShelfTabButton With {.Text = name})
+                    Next
+                    Dim tools As New FlowLayoutPanel With {.AutoSize = True, .AutoSizeMode = AutoSizeMode.GrowAndShrink, .WrapContents = False, .Margin = New Padding(0), .Padding = New Padding(0, 0, 0, 6), .BackColor = UiTheme.BoardBackground()}
+                    tools.Controls.Add(New Label With {.Text = "Sort: Current order", .AutoSize = True, .Margin = New Padding(8, 5, 0, 0), .BackColor = UiTheme.CardBackground()})
+                    Dim bar As New SplitBar(tabs, tools) With {.WrapRightAbove = True, .ShowBaseline = True, .Dock = DockStyle.Top, .BackColor = UiTheme.BoardBackground()}
+                    host.Controls.Add(bar)
+                    host.Show()
+
+                    For Each arrangement In {(Name:="side by side", Width:=900), (Name:="wrapped", Width:=300)}
+                        host.ClientSize = New Size(arrangement.Width, 200)
+                        Application.DoEvents()
+                        Assert.AreEqual(arrangement.Name = "wrapped", tools.Bottom <= tabs.Top, "The bar is " & arrangement.Name & ".")
+                        AssertBottomRow(bar, Function(x) UiTheme.CardBorder(), arrangement.Name)
+                    Next
+
+                    host.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    ' On the Board the line runs the bar's full width, under the shelf tabs
+    ' and the stage filter and sort, and the selected tab sits on it with
+    ' its accent underline (#141).
+    <TestMethod>
+    Public Sub TheShelfSplitBarIsOneLineUnderTabsAndFilters()
+        RunOnStaThread(
+            Sub()
+                Using board As New LayoutOnlyBoard()
+                    board.Prepare(1.0F)
+                    board.Show()
+                    Application.DoEvents()
+                    Dim bar As SplitBar = Descendants(board).OfType(Of SplitBar)().Single(Function(item) item.ShowBaseline)
+                    Dim selected As RadioButton = board.ShelfTabs.Single(Function(tab) tab.Checked)
+                    Dim under As Rectangle = bar.RectangleToClient(selected.RectangleToScreen(selected.ClientRectangle))
+
+                    AssertBottomRow(bar, Function(x) If(x >= under.Left AndAlso x < under.Right, UiTheme.AccentColor(), UiTheme.CardBorder()), "the Board's shelf bar")
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    ' Every pixel of the bar's bottom row, as drawn, against what each
+    ' column should be.
+    Private Shared Sub AssertBottomRow(bar As Control, expected As Func(Of Integer, Color), context As String)
+        Using image As New Bitmap(bar.Width, bar.Height)
+            bar.DrawToBitmap(image, New Rectangle(0, 0, bar.Width, bar.Height))
+            Dim wrong As List(Of Integer) = Enumerable.Range(0, image.Width).
+                Where(Function(x) image.GetPixel(x, image.Height - 1).ToArgb() <> expected(x).ToArgb()).ToList()
+            Assert.AreEqual(0, wrong.Count,
+                $"{context}: {wrong.Count} of {image.Width} pixels of the bottom row are not the line, from x = {If(wrong.Count = 0, 0, wrong.First())} to {If(wrong.Count = 0, 0, wrong.Last())}.")
+        End Using
+    End Sub
+
+    ' A card's tags are a chip tall, centred on the journal line (#141), on
+    ' a card built for the record, kept for it, or rebuilt when its tags
+    ' change (#133). Before the change the strip was the journal line's
+    ' height, two pixels less than a chip, which was shaved top and bottom.
+    <TestMethod>
+    Public Sub TagStripsAreAtLeastAChipTallOnTheJournalLine()
+        RunOnStaThread(
+            Sub()
+                Using board As New LayoutOnlyBoard()
+                    board.Prepare(1.0F)
+                    Dim tagged As New Manuscript With {.Title = "Tagged manuscript", .Location = ManuscriptLocation.Pipeline, .CurrentStage = PaperStage.Draft, .TargetJournal = "Memory & Cognition"}
+                    tagged.Tags.AddRange({"teaching", "grant"})
+                    Dim library As New List(Of Manuscript) From {tagged}
+                    board.SetManuscripts(library)
+                    board.Show()
+                    Application.DoEvents()
+
+                    Dim built As Control = board.Shelves.First().Controls(0)
+                    AssertTagStrip(built, "Built")
+
+                    board.SetManuscripts(library)
+                    Application.DoEvents()
+                    Assert.AreSame(built, board.Shelves.First().Controls(0), "The card is kept between renders.")
+                    AssertTagStrip(built, "Kept")
+
+                    tagged.Tags.Add("replication")
+                    board.SetManuscripts(library)
+                    Application.DoEvents()
+                    Dim rebuilt As Control = board.Shelves.First().Controls(0)
+                    Assert.AreNotSame(built, rebuilt, "New tags rebuild the card.")
+                    AssertTagStrip(rebuilt, "Rebuilt")
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    Private Shared Sub AssertTagStrip(card As Control, context As String)
+        Dim strip As TagStrip = card.Controls.OfType(Of TagStrip)().Single()
+        Dim journal As Label = card.Controls.OfType(Of Label)().Single(Function(label) label.Text = "Memory & Cognition")
+        Dim chip As Integer = TagChipPainter.Measure("Ag", strip.Font, strip.DeviceDpi).Height
+        Assert.IsTrue(strip.Height >= chip, $"{context}: the strip is {strip.Height} px tall, a chip {chip} px.")
+        Dim offCentre As Integer = Math.Abs((strip.Top * 2 + strip.Height) - (journal.Top * 2 + journal.Height))
+        Assert.IsTrue(offCentre <= 2, $"{context}: the strip ({strip.Top}, {strip.Height} px) is centred on the journal line ({journal.Top}, {journal.Height} px).")
     End Sub
 
     Private Shared Iterator Function Descendants(parent As Control) As IEnumerable(Of Control)
