@@ -262,3 +262,55 @@ Friend NotInheritable Class StaRunner
     End Function
 
 End Class
+
+
+' Every Form a test makes is made on the shared runner (#185). A form, as
+' any control, leaves WinForms' synchronization context on the thread it
+' is made on, and the test's own thread pumps no messages: two forms
+' DialogFitTests made there outlived it, and every color-mode run after it
+' in the same process hung until the runner's timeout. So the test's own
+' thread is looked at after every test in the assembly, and a test that
+' left that trace there fails; a trace an earlier test left is cleared
+' before the next starts, so it fails only the test that left it. It
+' failed DialogFitTests, TitlePageApplyTests and UiTextMnemonicTests
+' until their forms moved onto the runner. A thread a test starts for
+' itself is not looked at: the one test that made a form on one now
+' makes it on a second runner instead.
+<TestClass>
+Public NotInheritable Class StaRunnerGuard
+
+    <GlobalTestInitialize>
+    Public Shared Sub StartWithoutAFormsTrace(context As TestContext)
+
+        ClearFormsTrace()
+
+    End Sub
+
+
+    <GlobalTestCleanup>
+    Public Shared Sub MadeNoFormOffTheRunner(context As TestContext)
+
+        If ClearFormsTrace() Then
+            Assert.Fail(
+                "The test made a Form, or another control, on its own thread, not on StaRunner.Run (#185). " &
+                "A color-mode test after it in the same process can hang"
+            )
+        End If
+
+    End Sub
+
+
+    ' Whether the calling thread had WinForms' synchronization context,
+    ' which it no longer has.
+    Friend Shared Function ClearFormsTrace() As Boolean
+
+        If TypeOf SynchronizationContext.Current Is WindowsFormsSynchronizationContext Then
+            SynchronizationContext.SetSynchronizationContext(Nothing)
+            Return True
+        End If
+
+        Return False
+
+    End Function
+
+End Class
