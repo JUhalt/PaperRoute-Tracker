@@ -17,7 +17,7 @@ The scripted screen-reader check for a release (#139), run once during certifica
 
 ## The six pages
 
-- [ ] **Board** (**Ctrl+1**): a card's title opens with **Enter**; a Needs Attention chip is read as a button, and **Narrator+Enter** applies it. Then press **Ctrl+F**: Narrator lands on the search box by name.
+- [ ] **Board** (**Ctrl+1**): **Tab** reaches each card in turn: its title, read by name, then its **⋯** button, then **View route**. **Enter** or **Space** on a title opens that manuscript. A Needs Attention chip is read as a button, and **Narrator+Enter** applies it. Then press **Ctrl+F**: Narrator lands on the search box by name.
 - [ ] **Library** (**Ctrl+2**): the table and its filter box are named; **Enter** on a row opens it. On Authors & Affiliations, both lists are named.
 - [ ] **Journals** (**Ctrl+3**): the journal list is read as "Journals", not as its count.
 - [ ] **Deadlines** (**Ctrl+4**): **Up** and **Down** move between items and each is read; a filter chip is pressed with **Narrator+Enter**.

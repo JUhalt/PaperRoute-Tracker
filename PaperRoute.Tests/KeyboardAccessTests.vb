@@ -207,6 +207,268 @@ Public Class KeyboardAccessTests
     End Sub
 
 
+    ' Route View opens on a stop a keyboard user can see (#192). Every
+    ' stop Tab reaches is a waypoint's link, a button, or the route map,
+    ' which a screen reader reads and which draws a focus ring; the map's
+    ' key and the route's markers, which drew none and do nothing, are no
+    ' stops. The first Tab from the window's opening focus lands on the
+    ' first waypoint's link, and Enter there opens that waypoint, never
+    ' Close; Enter on the route map does nothing at all.
+    <TestMethod>
+    Public Sub RouteViewsFirstTabIsVisibleAndEnterNeverPressesClose()
+
+        Dim manuscript As Manuscript =
+            RouteMapServiceTests.Anchoring()
+
+        Dim waypoints As List(Of ManuscriptRouteWaypoint) =
+            ManuscriptRouteProjectionService.Project(manuscript).Waypoints
+
+        StaRunner.Run(
+            Sub()
+
+                Using view As New ManuscriptRouteViewForm(manuscript)
+
+                    ViewCatalog.ShowOffscreen(view)
+
+                    Dim links As List(Of LinkLabel) =
+                        WaypointLinks(view, waypoints.Count)
+
+                    Dim opening As Control =
+                        DeepestActiveControl(view)
+
+                    Press(view, Keys.Tab)
+
+                    Dim first As Control =
+                        DeepestActiveControl(view)
+
+                    Assert.AreSame(
+                        links(0),
+                        first,
+                        "The first Tab from " & Describe(opening) & " lands on the first waypoint's link, not on " & Describe(first) & "."
+                    )
+
+                    ' Round the whole tab order once.
+                    Dim hidden As New List(Of String)()
+                    Dim seen As New HashSet(Of Control)()
+                    Dim active As Control = first
+
+                    For count As Integer = 0 To ViewCatalog.Descendants(view).Count()
+
+                        If Not seen.Add(active) Then
+                            Exit For
+                        End If
+
+                        If Not (TypeOf active Is LinkLabel OrElse TypeOf active Is ButtonBase OrElse TypeOf active Is ContextHelpControl OrElse TypeOf active Is RouteMapBar) Then
+                            hidden.Add(Describe(active))
+                        End If
+
+                        Press(view, Keys.Tab)
+                        active = DeepestActiveControl(view)
+
+                    Next
+
+                    Assert.AreEqual(
+                        0,
+                        hidden.Count,
+                        "Stops that show no focus: " & String.Join(", ", hidden)
+                    )
+
+                    Dim map As RouteMapBar =
+                        ViewCatalog.Descendants(view).OfType(Of RouteMapBar)().Single()
+
+                    Assert.IsTrue(
+                        seen.Contains(map),
+                        "The route map is a stop, so a screen reader reads it."
+                    )
+
+                    view.ActiveControl = map
+                    Application.DoEvents()
+
+                    Using focused As New Bitmap(map.Width, map.Height)
+
+                        map.DrawToBitmap(focused, New Rectangle(Point.Empty, map.Size))
+
+                        Dim ring As Integer =
+                            Enumerable.Range(0, map.Width * map.Height).
+                                Count(Function(index) focused.GetPixel(index Mod map.Width, index \ map.Width).ToArgb() = UiTheme.AccentSecondaryColor().ToArgb())
+
+                        Assert.IsTrue(
+                            ring >= map.Width,
+                            "Focused, the route map draws a ring: " & ring & " pixels of it."
+                        )
+
+                    End Using
+
+                    Press(view, Keys.Enter)
+
+                    Assert.IsTrue(
+                        view.Visible AndAlso view.DialogResult = DialogResult.None,
+                        "Enter on the route map does nothing; the window answered " & view.DialogResult.ToString() & "."
+                    )
+
+                    view.Close()
+
+                End Using
+
+                Using view As New ManuscriptRouteViewForm(manuscript)
+
+                    ViewCatalog.ShowOffscreen(view)
+                    Press(view, Keys.Tab)
+                    Press(view, Keys.Enter)
+
+                    Assert.AreEqual(
+                        DialogResult.Yes,
+                        view.DialogResult,
+                        "Enter at the first Tab opens a waypoint, never Close."
+                    )
+
+                    Assert.IsTrue(
+                        SameWaypoint(waypoints(0), view.SelectedWaypoint),
+                        "It opens the first waypoint."
+                    )
+
+                    view.Close()
+
+                End Using
+
+                Assert.AreEqual(
+                    0,
+                    StaRunner.OpenFormsOnThisThread().Count,
+                    "Route View leaves no form open."
+                )
+
+            End Sub
+        )
+
+    End Sub
+
+
+    ' On the Board, Tab reaches each card's title in card order, each just
+    ' before the card's ⋯ button and named by its manuscript (#192), and
+    ' Enter or Space on a title opens that manuscript's page, as a click
+    ' does. Tab and Enter already worked in this window before #192; Space
+    ' did not.
+    <TestMethod>
+    <DataRow(Keys.Enter)>
+    <DataRow(Keys.Space)>
+    Public Sub BoardCardTitlesAreTabStopsInCardOrderAndOpenTheirManuscript(key As Keys)
+
+        Dim library As List(Of Manuscript) =
+            CreateRepresentativeLibrary()
+
+        library.Add(New Manuscript With {.Title = "Second Pipeline Study", .CurrentStage = PaperStage.Draft, .Location = ManuscriptLocation.Pipeline})
+        library.Add(New Manuscript With {.Title = "Third Pipeline Study", .CurrentStage = PaperStage.Revision, .Location = ManuscriptLocation.Pipeline})
+
+        Dim root As String =
+            CreateTemporaryRoot()
+
+        StorageEnvironment.RootOverride =
+            root
+
+        Try
+
+            StaRunner.Run(
+                Sub()
+
+                    Using board As Form1 = ViewCatalog.BoardOf(library)
+
+                        Dim cards As List(Of Control) =
+                            ViewCatalog.Descendants(board).OfType(Of RoundedPanel)().
+                                Where(Function(card) card.Visible AndAlso card.ContextMenuStrip IsNot Nothing).
+                                Cast(Of Control)().
+                                ToList()
+
+                        Dim titles As List(Of LinkLabel) =
+                            cards.Select(Function(card) card.Controls.OfType(Of LinkLabel)().Single(Function(link) link.Text = card.AccessibleName)).
+                                ToList()
+
+                        Assert.AreEqual(3, titles.Count, "The Pipeline shows three cards.")
+
+                        For Each title As LinkLabel In titles
+                            Assert.AreEqual(title.Text, title.AccessibilityObject.Name, "A title is named by its manuscript.")
+                        Next
+
+                        ' Round the Board from its search box.
+                        board.ActiveControl =
+                            ViewCatalog.Descendants(board).OfType(Of TextBox)().First(Function(box) box.Visible)
+
+                        Dim reached As New List(Of LinkLabel)()
+                        Dim after As New List(Of String)()
+                        Dim previous As LinkLabel = Nothing
+
+                        For count As Integer = 0 To 60
+
+                            Press(board, Keys.Tab)
+
+                            Dim active As Control =
+                                DeepestActiveControl(board)
+
+                            If previous IsNot Nothing Then
+                                after.Add(If(active?.AccessibleName, "(nothing)"))
+                                previous = Nothing
+                            End If
+
+                            Dim title As LinkLabel =
+                                TryCast(active, LinkLabel)
+
+                            If title IsNot Nothing AndAlso titles.Contains(title) Then
+                                If reached.Contains(title) Then Exit For
+                                reached.Add(title)
+                                previous = title
+                            End If
+
+                        Next
+
+                        CollectionAssert.AreEqual(
+                            titles,
+                            reached,
+                            "Tab reaches each card's title once, in card order: " & String.Join(" | ", reached.Select(Function(link) link.Text))
+                        )
+
+                        CollectionAssert.AreEqual(
+                            titles.Select(Function(link) "More actions for " & link.Text).ToList(),
+                            after,
+                            "Each title comes just before its card's ⋯."
+                        )
+
+                        ' The middle card, from its title.
+                        board.ActiveControl = titles(1)
+                        Application.DoEvents()
+                        Press(board, key)
+
+                        Assert.AreEqual(
+                            Form1.WorkspacePage.Manuscript,
+                            board.ActivePage,
+                            key.ToString() & " on a card's title opens the manuscript's page."
+                        )
+
+                        Assert.AreEqual(
+                            library.Single(Function(item) item.Title = titles(1).Text).Id,
+                            DirectCast(GetType(Form1).GetField("currentManuscriptId", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(board), Guid),
+                            "It opens that card's manuscript."
+                        )
+
+                        board.Close()
+
+                    End Using
+
+                End Sub
+            )
+
+        Finally
+
+            StorageEnvironment.RootOverride =
+                Nothing
+
+            DeleteTemporaryRoot(
+                root
+            )
+
+        End Try
+
+    End Sub
+
+
     ' Esc can cancel every dialog the app shows modally: each has a
     ' CancelButton. The allow-list has teeth: a form on it that gains a
     ' CancelButton is reported, so the list never outlives its reason.
@@ -700,6 +962,19 @@ Public Class KeyboardAccessTests
                 GetField("_clickHelpVisible", BindingFlags.Instance Or BindingFlags.NonPublic).
                 GetValue(help)
         )
+
+    End Function
+
+
+    Private Shared Function Describe(
+        control As Control
+    ) As String
+
+        If control Is Nothing Then
+            Return "no control"
+        End If
+
+        Return control.GetType().Name & " '" & If(control.AccessibleName, control.Text) & "'"
 
     End Function
 
