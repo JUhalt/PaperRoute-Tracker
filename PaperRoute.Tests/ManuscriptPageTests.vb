@@ -1351,6 +1351,55 @@ Public Class ManuscriptPageTests
             End Sub)
     End Sub
 
+    ' New matches whose save fails are taken back out, so none waits on the
+    ' Deadlines page (#184). Before the change the window still said they
+    ' were there to review and stayed on the Deadlines page; it now says
+    ' they were not kept.
+    <TestMethod>
+    Public Sub NewMatchesThatFailToSaveAreNotReportedAsKept()
+        RunOnStaThread(
+            Sub()
+                Dim root As String = CreateTemporaryRoot()
+                Try
+                    Using board As New PageBoard(), dialogs As New DialogWatcher()
+                        board.UseRepository(root)
+                        Dim tracked As Manuscript = TrackedForPublication()
+                        board.Prepare(tracked)
+                        Assert.IsTrue(board.SaveNow(), "The library is saved before the check.")
+                        Dim source As New OneTitleSource(tracked.Title, New CrossrefMetadataSuggestion With {
+                            .Doi = "10.5555/grit", .Title = tracked.Title, .Journal = "Assessment", .WorkType = "journal-article", .PublishedDate = DateTime.Today.AddDays(-2)})
+
+                        Using dialog As New PublicationCheckForm(board.Library, Nothing, String.Empty, source, AddressOf board.SaveNow, DateTime.Today)
+                            dialog.Pause = TimeSpan.Zero
+                            ShowOffscreen(dialog)
+                            Using held As FileStream = HoldTheSaveFile(root)
+                                Dim check As Task = dialog.CheckAsync()
+                                While Not check.IsCompleted
+                                    Application.DoEvents()
+                                End While
+                                check.GetAwaiter().GetResult()
+                            End Using
+
+                            CollectionAssert.AreEqual({"Save Error"}, dialogs.Closed)
+                            Assert.IsFalse(Descendants(dialog).OfType(Of Button)().Any(Function(button) button.Text = "Mark Published..." OrElse button.Text = "Ignore"), "No card offers a match that was not kept.")
+                            Dim intro As String = Descendants(dialog).OfType(Of Label)().Single(Function(label) label.Text.StartsWith("Checked 1 manuscript.")).Text
+                            Assert.IsFalse(intro.Contains("Deadlines page"), "Nothing is said to wait on the Deadlines page: " & intro)
+                            Assert.IsTrue(intro.Contains("not kept"), "The window says the match was not kept: " & intro)
+                            Assert.AreEqual(0, board.Library.Single().PublicationMatches.Count, "The library is as it was.")
+                            Assert.AreEqual(0, SavedLibrary(root).Single().PublicationMatches.Count, "Nothing reached the saved library.")
+                            Assert.IsFalse(dialog.Changed)
+                            dialog.Close()
+                        End Using
+
+                        board.SetPrompt(Function(title) DialogResult.No)
+                        board.Close()
+                    End Using
+                Finally
+                    DeleteTemporaryRoot(root)
+                End Try
+            End Sub)
+    End Sub
+
     ' Under review, with a match a title search finds.
     Private Shared Function TrackedForPublication() As Manuscript
         Dim tracked As Manuscript = Sample("Measurement invariance of a short grit scale across four countries")

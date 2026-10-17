@@ -308,8 +308,8 @@ Namespace Forms
                 _cancellation = Nothing
             End Try
 
-            RecordMatches(result)
-            ShowResults(result)
+            Dim kept As Boolean = RecordMatches(result)
+            ShowResults(result, kept)
 
         End Function
 
@@ -339,10 +339,12 @@ Namespace Forms
 
 
         ' New matches are kept at once, so closing the window keeps them for
-        ' later review on the Deadlines page.
-        Private Sub RecordMatches(result As PublicationCheckResult)
+        ' later review on the Deadlines page. False when the save failed or
+        ' was refused and they were taken back out, so the summary does not
+        ' say they are kept (#184).
+        Private Function RecordMatches(result As PublicationCheckResult) As Boolean
 
-            If result.Matches.Count = 0 Then Return
+            If result.Matches.Count = 0 Then Return True
 
             For Each found In result.Matches
                 found.Manuscript.PublicationMatches.Add(found.Match)
@@ -352,19 +354,20 @@ Namespace Forms
                 For Each found In result.Matches
                     found.Manuscript.PublicationMatches.Remove(found.Match)
                 Next
-                Return
+                Return False
             End If
 
             Changed = True
+            Return True
 
-        End Sub
+        End Function
 
 
         ' ---------------------------------------------------------------
         ' Review
         ' ---------------------------------------------------------------
 
-        Private Sub ShowResults(result As PublicationCheckResult)
+        Private Sub ShowResults(result As PublicationCheckResult, kept As Boolean)
 
             ClearBody()
             btnPrimary.Visible = True
@@ -372,7 +375,7 @@ Namespace Forms
             btnPrimary.Width = 90
             btnPrimary.Enabled = True
             btnCancel.Visible = False
-            lblIntro.Text = Summary(result)
+            lblIntro.Text = Summary(result, kept)
 
             Dim scroller As New Panel With {.Dock = DockStyle.Fill, .AutoScroll = True, .Margin = New Padding(0)}
             Dim list As New TableLayoutPanel With {
@@ -420,19 +423,26 @@ Namespace Forms
         End Sub
 
 
-        Friend Shared Function Summary(result As PublicationCheckResult) As String
+        ' Matches whose save failed are not kept, so nothing is said to wait
+        ' on the Deadlines page (#184).
+        Friend Shared Function Summary(result As PublicationCheckResult, Optional kept As Boolean = True) As String
 
             Dim checkedText As String = "Checked " & result.Checked.ToString(CultureInfo.CurrentCulture) &
                                         If(result.Checked = 1, " manuscript. ", " manuscripts. ")
             Dim found As String
             Select Case result.Matches.Count
                 Case 0 : found = "No new possible publications."
-                Case 1 : found = "1 possible publication to review."
-                Case Else : found = result.Matches.Count.ToString(CultureInfo.CurrentCulture) & " possible publications to review."
+                Case 1 : found = If(kept, "1 possible publication to review.",
+                                    "1 possible publication found, but PaperRoute could not save it, so it was not kept.")
+                Case Else : found = result.Matches.Count.ToString(CultureInfo.CurrentCulture) &
+                                    If(kept, " possible publications to review.",
+                                       " possible publications found, but PaperRoute could not save them, so they were not kept.")
             End Select
 
             Dim text As String = checkedText & found
-            If result.Matches.Count > 0 Then text &= " Any you leave stay on the Deadlines page, under No date."
+            If result.Matches.Count > 0 Then
+                text &= If(kept, " Any you leave stay on the Deadlines page, under No date.", " Check again once your library can be saved.")
+            End If
             If Not String.IsNullOrWhiteSpace(result.StoppedReason) Then text &= Environment.NewLine & "Stopped early: " & result.StoppedReason
             Return text
 
