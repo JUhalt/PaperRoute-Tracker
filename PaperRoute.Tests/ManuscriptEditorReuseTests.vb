@@ -527,8 +527,9 @@ Public Class ManuscriptEditorReuseTests
             parts.Add("items=" & combo.Items.Count.ToString(CultureInfo.InvariantCulture))
         End If
 
+        ' A tab control reports no selected tab until it has its window.
         Dim tabs As TabControl = TryCast(control, TabControl)
-        If tabs IsNot Nothing Then parts.Add("tab selected=" & tabs.SelectedIndex.ToString(CultureInfo.InvariantCulture))
+        If tabs IsNot Nothing AndAlso control.Visible Then parts.Add("tab selected=" & tabs.SelectedIndex.ToString(CultureInfo.InvariantCulture))
 
         Dim scrollable As ScrollableControl = TryCast(control, ScrollableControl)
         If control.Visible AndAlso scrollable IsNot Nothing AndAlso scrollable.AutoScroll Then parts.Add("scroll=" & scrollable.AutoScrollPosition.ToString())

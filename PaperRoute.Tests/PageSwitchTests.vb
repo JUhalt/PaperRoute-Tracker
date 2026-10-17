@@ -124,6 +124,69 @@ Public Class PageSwitchTests
     End Sub
 
 
+    ' The manuscript editor, with its submission details and reviewer
+    ' responses, makes no window while it is built: each is made once the
+    ' page that holds it is in the main window, where it stays, and a
+    ' section's or a tab's only when it first shows. Before, building the
+    ' editor alone made 99 windows, and opening a manuscript made 98 on
+    ' WinForms' parking window (#133).
+    <TestMethod>
+    Public Sub TheManuscriptEditorMakesItsWindowsOnlyInPlace()
+
+        Dim report As New List(Of String)()
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary =
+                    LargeLibraryFixture.Create(Path.Combine(_root, "library"), 60)
+                Dim subject As Models.Manuscript =
+                    library.Manuscripts.Where(Function(item) item.Submissions.Count > 0).OrderByDescending(Function(item) item.Submissions.Count).First()
+
+                Using watch As New WindowCreationWatch()
+                    Using editor As New Forms.EditManuscriptForm(subject, library.Manuscripts, library.AuthorRepository, pageMode:=True)
+                        report.AddRange(watch.Children().Select(Function(window) "built alone: " & window))
+                    End Using
+                End Using
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+
+                    For Each manuscript As Models.Manuscript In {subject, library.Manuscripts.First(Function(item) item IsNot subject)}
+                        Using watch As New WindowCreationWatch()
+                            board.Open(manuscript)
+                            Application.DoEvents()
+                            report.AddRange(watch.Parked().Select(Function(window) "opened: " & window))
+                        End Using
+                        Using watch As New WindowCreationWatch()
+                            For Each tab As RadioButton In ViewCatalog.Descendants(board.Editor).OfType(Of RadioButton)().ToList()
+                                tab.Checked = True
+                                Application.DoEvents()
+                                For Each tabs As TabControl In ViewCatalog.Descendants(DirectCast(tab.Tag, Control)).OfType(Of TabControl)().ToList()
+                                    For Each page As TabPage In tabs.TabPages
+                                        tabs.SelectedTab = page
+                                        Application.DoEvents()
+                                    Next
+                                Next
+                            Next
+                            report.AddRange(watch.Parked().Select(Function(window) "each section shown: " & window))
+                        End Using
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                    Next
+
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(3))
+
+        CollectionAssert.AreEqual(
+            Array.Empty(Of String)(),
+            report,
+            Environment.NewLine & String.Join(Environment.NewLine, report))
+
+    End Sub
+
+
     ' Leaving the Library, Journals or Insights disposes the page where it
     ' is: its windows are destroyed while it is still in the page area,
     ' and the page area then holds the Board alone.

@@ -391,6 +391,23 @@ Namespace Forms
         End Sub
 
 
+        ' The tab of the section shown is checked once the form has a window,
+        ' so checking it makes its windows in place (#133).
+        Protected Overrides Sub OnHandleCreated(
+            e As EventArgs
+        )
+
+            MyBase.OnHandleCreated(e)
+
+            ' None is checked until a section has been asked for, and until
+            ' then the Overview is the one shown.
+            If _sectionTabs.Count > 0 AndAlso Not _sectionTabs.Any(Function(tab) tab.Checked) Then
+                _sectionTabs(0).Checked = True
+            End If
+
+        End Sub
+
+
         Protected Overrides Sub OnShown(
             e As EventArgs
         )
@@ -1300,6 +1317,11 @@ Namespace Forms
             authorsGroup.Margin = New Padding(0)
             versionHistoryControl.Margin = New Padding(0)
 
+            ' The Overview shows first. Its tab is checked once the form has a
+            ' window (OnHandleCreated): a radio button checked, or a section
+            ' made visible, before then makes windows on WinForms' parking
+            ' window that are moved into place later, which on a slow
+            ' machine cost more than building the page (#133).
             For Each section In {
                 ("Overview", CType(scrollHost, Control)),
                 ("Authors", CType(authorsGroup, Control)),
@@ -1309,7 +1331,7 @@ Namespace Forms
             }
                 Dim panel As Control = section.Item2
                 panel.Dock = DockStyle.Fill
-                panel.Visible = False
+                panel.Visible = panel Is scrollHost
                 sectionHost.Controls.Add(panel)
 
                 Dim tab As New ShelfTabButton With {
@@ -1328,9 +1350,6 @@ Namespace Forms
                 _sectionTabs.Add(tab)
                 sectionTabs.Controls.Add(tab)
             Next
-
-            _sectionTabs(0).Checked = True
-            ShowSection(scrollHost)
 
             shell.Controls.Add(
                 sectionTabs,
@@ -2981,8 +3000,7 @@ Namespace Forms
             Try
 
                 For Each child As Control In _submissionDetailHost.Controls.Cast(Of Control)().ToList()
-                    _submissionDetailHost.Controls.Remove(child)
-                    child.Dispose()
+                    InPlace.Dispose(child)
                 Next
 
                 _submissionDetail = Nothing
@@ -3030,8 +3048,10 @@ Namespace Forms
                         End If
                     End Sub
 
-                detail.Visible = True
+                ' Shown once it is in place and the Submissions tab has
+                ' shown, so its windows are made there (#133).
                 _submissionDetailHost.Controls.Add(detail)
+                InPlace.WhenAttached(detail, Sub() detail.Visible = True)
                 _submissionDetail = detail
 
             Finally
