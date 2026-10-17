@@ -490,6 +490,41 @@ Public Class BackgroundLibraryWorkTests
     End Sub
 
 
+    ' The Board fills in after startup while the window idles (#133), but
+    ' not while library work runs, since the fill reads the records the work
+    ' is saving; it goes on once the work has ended.
+    <TestMethod>
+    Public Sub BoardFillWaitsForLibraryWork()
+        RunOnStaThread(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary = LargeLibraryFixture.Create(Path.Combine(_root, "library"), 120)
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+                    board.Start()
+                    Dim pipeline As Control = board.Shelf("pipelinePanel")
+                    Dim hidden As Func(Of Integer) = Function() pipeline.Controls.Cast(Of Control)().Count(Function(card) Not card.Visible)
+                    Dim before As Integer = hidden()
+                    Assert.IsTrue(before > 0, "The Board is still filling in.")
+
+                    Dim seen As New Collections.Generic.List(Of Integer)()
+                    Using sample As New System.Windows.Forms.Timer With {.Interval = 50}
+                        AddHandler sample.Tick, Sub(sender, e) seen.Add(hidden())
+                        sample.Start()
+                        ' Long enough for many of the fill's slices.
+                        Assert.IsTrue(board.RunWork("Saving your library...", Sub() Thread.Sleep(1500)))
+                        sample.Stop()
+                    End Using
+
+                    Assert.IsTrue(seen.Count > 5, "The window kept processing messages.")
+                    Assert.IsTrue(seen.All(Function(count) count = before), "No card was shown while the work ran: " & String.Join(", ", seen))
+
+                    board.WaitForBoardFill()
+                    Assert.AreEqual(0, hidden(), "The fill went on once the work ended.")
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+
     Private Function OpenLargeLibrary() As LibraryBoard
         Dim library As LargeLibraryFixture.SyntheticLibrary = LargeLibraryFixture.Create(Path.Combine(_root, "library"), 500)
         Dim board As New LibraryBoard(library, Path.Combine(_root, "settings"))

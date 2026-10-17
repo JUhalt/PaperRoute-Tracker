@@ -605,6 +605,8 @@ Partial Public Class Form1
         If request.Page = WorkspacePage.Board Then
             boardPage.Visible = True
             boardPage.BringToFront()
+            ' A shelf still filling in goes on now the Board shows (#133).
+            QueueBoardFill()
             Return
         End If
 

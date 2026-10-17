@@ -119,6 +119,7 @@ Friend NotInheritable Class ViewCatalog
     ' not inside it.
     Public Shared ReadOnly Hosted As NamedView() = {
         New NamedView("The welcome, on an empty library", Function(root) Welcome()),
+        New NamedView("Board after startup (filled in slices)", Function(root) FilledBoard()),
         New NamedView("Library page", Function(root) Page(Form1.WorkspacePage.Library)),
         New NamedView("AuthorLibraryForm as the Library page", Function(root) LibraryAuthors()),
         New NamedView("Journals page, JournalLibraryForm hosted", Function(root) Hosting(Of JournalLibraryForm)(Page(Form1.WorkspacePage.Journals))),
@@ -530,6 +531,19 @@ Friend NotInheritable Class ViewCatalog
     End Function
 
 
+    ' The Board as startup leaves it once it has filled in while the
+    ' window idled (#133), on a library large enough to fill in slices.
+    Private Shared Function FilledBoard() As Form
+        Dim library As New List(Of Manuscript)()
+        For copy As Integer = 1 To 12
+            library.AddRange(CreateRepresentativeLibrary())
+        Next
+        Dim board As New CatalogBoard()
+        board.PrepareFilled(library)
+        Return board
+    End Function
+
+
     Private Shared Function Welcome() As Form
         Dim board As CatalogBoard = BoardOn(New List(Of Manuscript)())
         If Not board.Welcome.Visible Then
@@ -608,6 +622,27 @@ Friend NotInheritable Class ViewCatalog
             ShowInTaskbar = False
             Show()
             Application.DoEvents()
+        End Sub
+
+        ' Startup's order (#133): the Board fills in after its first screen,
+        ' and the window's idle work is then let run to its end.
+        Public Sub PrepareFilled(library As List(Of Manuscript))
+            CallPrivate("BuildInterface")
+            GetType(Form1).GetField("manuscripts", BindingFlags.Instance Or BindingFlags.NonPublic).SetValue(Me, library)
+            GetType(Form1).GetField("startupComplete", BindingFlags.Instance Or BindingFlags.NonPublic).SetValue(Me, True)
+            CallPrivate("DeferBoardFill")
+            CallPrivate("RenderManuscripts")
+            StartPosition = FormStartPosition.Manual
+            Location = New Point(-20000, -20000)
+            ShowInTaskbar = False
+            Show()
+            Application.DoEvents()
+            Dim watch As Diagnostics.Stopwatch = Diagnostics.Stopwatch.StartNew()
+            While IsIdleWorkPending AndAlso watch.Elapsed < TimeSpan.FromSeconds(60)
+                Application.DoEvents()
+                Thread.Sleep(1)
+            End While
+            If IsIdleWorkPending Then Throw New InvalidOperationException("The Board did not fill in.")
         End Sub
 
         Public Sub Open(manuscript As Manuscript)

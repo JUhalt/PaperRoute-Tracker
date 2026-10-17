@@ -19,11 +19,15 @@ Friend NotInheritable Class LibraryBoard
     Inherits Form1
 
     Private ReadOnly _library As LargeLibraryFixture.SyntheticLibrary
+    Private ReadOnly _fontScale As Single
     Private _painted As Boolean = False
 
 
-    Public Sub New(library As LargeLibraryFixture.SyntheticLibrary, settingsDirectory As String)
+    ' A text size other than 1 is the window's font scaled, as a larger
+    ' Windows text size gives it.
+    Public Sub New(library As LargeLibraryFixture.SyntheticLibrary, settingsDirectory As String, Optional fontScale As Single = 1.0F)
         _library = library
+        _fontScale = fontScale
         SetField("repository", library.Repository)
         SetField("authorRepository", library.AuthorRepository)
         SetField("settingsService", New AppSettingsService(settingsDirectory))
@@ -115,12 +119,14 @@ Friend NotInheritable Class LibraryBoard
     Public Sub Start()
         SetField("appSettings", DirectCast(GetField("settingsService"), AppSettingsService).Load())
         CallPrivate("BuildInterface")
+        If _fontScale <> 1.0F Then Font = New Font(Font.FontFamily, 10.0F * _fontScale)
         CallPrivate("RefreshOnlineIndicators")
         If Not CBool(CallPrivate("LoadManuscripts")) OrElse Not LoadAuthorLibrary() Then
             CallPrivate("EndFailedStartup")
             Assert.Fail("The library did not load: " & String.Join(" | ", StartupFailures.Select(Function(failure) failure.Heading)))
         End If
         SetField("startupComplete", True)
+        CallPrivate("DeferBoardFill")
         CallPrivate("RenderManuscripts")
         recoveryDraftPrompt = Function(title) DialogResult.No
         CallPrivate("OfferRecoveryDraft")
@@ -131,6 +137,47 @@ Friend NotInheritable Class LibraryBoard
         AddHandler Me.Paint, Sub(sender, e) _painted = True
         Show()
         Application.DoEvents()
+    End Sub
+
+
+    ' A shelf of the Board and its tab, by field name.
+    Public Function Shelf(name As String) As ManuscriptPipeline.Controls.ManuscriptShelfPanel
+        Return DirectCast(GetField(name), ManuscriptPipeline.Controls.ManuscriptShelfPanel)
+    End Function
+
+
+    Public Function ShelfTab(name As String) As RadioButton
+        Return DirectCast(GetField(name), RadioButton)
+    End Function
+
+
+    ' Typing in the Board's search, then the pause its timer waits for.
+    Public Sub SearchBoard(text As String)
+        DirectCast(GetField("txtBoardSearch"), TextBox).Text = text
+        CallPrivate("BoardSearchDebounceElapsed", Nothing, EventArgs.Empty)
+    End Sub
+
+
+    ' Processes messages until the Board has shown every card of the shown
+    ' shelf, as it does in slices while the window idles (#133).
+    Public Sub WaitForBoardFill()
+        PumpWhile(Function() IsBoardFillPending, "The Board did not fill in.")
+    End Sub
+
+
+    ' Processes messages until the window's idle work is done.
+    Public Sub WaitForIdleWork()
+        PumpWhile(Function() IsIdleWorkPending, "The window's idle work did not finish.")
+    End Sub
+
+
+    Private Shared Sub PumpWhile(pending As Func(Of Boolean), failure As String)
+        Dim watch As Stopwatch = Stopwatch.StartNew()
+        While pending() AndAlso watch.Elapsed < TimeSpan.FromSeconds(60)
+            Application.DoEvents()
+            Thread.Sleep(1)
+        End While
+        Assert.IsFalse(pending(), failure)
     End Sub
 
 

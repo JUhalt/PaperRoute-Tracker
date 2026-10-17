@@ -129,6 +129,16 @@ Public Class ResponsivenessBudgetTests
             rows.Add(Time(library, "Warm startup to an interactive Board (Show, queue drained)", Startup, Sub() board.Start()))
             _paintObserved(library.Name) = board.PaintObserved
 
+            ' The shelf shown fills in after its first screen, a card at a
+            ' time while the window idles; a shelf not shown yet is built when
+            ' it is first shown (#133). The first switch is reported: it builds
+            ' the shelf's cards where startup no longer does.
+            rows.Add(Time(library, "Board: the rest of the shown shelf, shown in idle slices", UiThread, Sub() board.WaitForBoardFill(), enforced:=enforce))
+            rows.Add(Time(library, "First switch to Published (the shelf built when first shown)", PageSwitch, Sub() board.ShelfTab("tabPublished").Checked = True))
+            board.WaitForBoardFill()
+            board.ShelfTab("tabPipeline").Checked = True
+            board.WaitForBoardFill()
+
             rows.Add(Time(library, "Board to Library", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Library)))
             rows.Add(Time(library, "One Library filter keystroke", FilterKeystroke, Sub() board.TypeInLibraryFilter("a"), enforced:=enforce))
             rows.Add(Time(library, "Library filter: refill once typing pauses", UiThread, Sub() board.PauseTyping()))
