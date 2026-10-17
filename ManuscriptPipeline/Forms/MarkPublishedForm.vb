@@ -162,17 +162,21 @@ Namespace Forms
 
 
         ' Makes a change and saves. If saving fails, the manuscript goes back
-        ' to exactly what it was.
+        ' to exactly what it was: a copy of it takes its place in the library.
+        ' A manuscript the library no longer holds, such as one a failed save
+        ' put a copy in place of, is left alone: its change could not reach
+        ' the saved library (#184).
         Public Shared Function Commit(library As IList(Of Manuscript), manuscript As Manuscript, change As Action, save As Func(Of Boolean)) As Boolean
 
             Dim index As Integer = library.IndexOf(manuscript)
+            If index < 0 Then Return False
             Dim snapshot As String = JsonSerializer.Serialize(manuscript)
 
             change()
 
             If save() Then Return True
 
-            If index >= 0 Then library(index) = JsonSerializer.Deserialize(Of Manuscript)(snapshot)
+            library(index) = JsonSerializer.Deserialize(Of Manuscript)(snapshot)
             Return False
 
         End Function

@@ -531,6 +531,72 @@ Public Class ManuscriptPageTests
             End Sub)
     End Sub
 
+    ' Yes to restarting in a new appearance (#178) restarts as a restore and
+    ' a startup recovery do: the page's edits and a failed save are asked
+    ' about first, and Cancel at either restarts nothing; then the window
+    ' hands over and restarts through RestartOnTheLibraryOnDisk, which
+    ' releases the single-instance lock, and the close the restart sends
+    ' asks and saves nothing again. Before the change the restart was a
+    ' plain Application.Restart, with no seam a test could stand in for: it
+    ' asked nothing first and released nothing, and its close asked later.
+    <TestMethod>
+    Public Sub TheAppearanceRestartAsksFirstThenHandsOver()
+        RunOnStaThread(
+            Sub()
+                Dim root As String = CreateTemporaryRoot()
+                Try
+                    Using board As New PageBoard(), dialogs As New DialogWatcher()
+                        board.UseRepository(root)
+                        Dim manuscript As Manuscript = Sample("Original title")
+                        board.Prepare(manuscript)
+                        board.Open(manuscript)
+                        board.Field("Title").Text = "Edited title"
+                        Dim questions As New List(Of String)()
+                        Dim answer As DialogResult = DialogResult.Cancel
+                        board.SetPrompt(Function(title)
+                                           questions.Add(title)
+                                           Return answer
+                                       End Function)
+
+                        board.RestartForAppearance()
+                        CollectionAssert.AreEqual({"Original title"}, questions, "The page's edits are asked about first.")
+                        Assert.AreEqual(0, board.Restarts, "Cancel at the page's question restarts nothing.")
+                        Assert.AreEqual(0, board.SaveCount)
+                        Assert.AreEqual("Edited title", board.Field("Title").Text, "Cancel keeps the edits.")
+
+                        Using held As FileStream = HoldTheSaveFile(root)
+                            board.PressCommandKey(Keys.Control Or Keys.S)
+                        End Using
+                        Assert.IsTrue(board.LibrarySaveFailed)
+                        CollectionAssert.AreEqual({"Save Error"}, dialogs.Closed)
+                        questions.Clear()
+                        board.RestartForAppearance()
+                        CollectionAssert.AreEqual({"your library"}, questions, "The failed save is asked about.")
+                        Assert.AreEqual(0, board.Restarts, "Cancel at the failed save's question restarts nothing.")
+                        Assert.AreEqual(1, board.SaveCount)
+
+                        questions.Clear()
+                        answer = DialogResult.Yes
+                        board.RestartForAppearance()
+                        CollectionAssert.AreEqual({"your library"}, questions)
+                        Assert.AreEqual(2, board.SaveCount, "Yes saved again.")
+                        Assert.IsFalse(board.LibrarySaveFailed)
+                        StringAssert.Contains(File.ReadAllText(Path.Combine(root, "data", "manuscripts.json")), "Edited title")
+                        Assert.AreEqual(1, board.Restarts, "Then PaperRoute restarts through RestartOnTheLibraryOnDisk.")
+                        Assert.IsTrue(board.HandingOverAtRestart, "Handing over, so the restart's close neither asks nor saves.")
+
+                        board.Close()
+                        Assert.IsTrue(board.IsDisposed, "The restart's close goes through.")
+                        CollectionAssert.AreEqual({"your library"}, questions, "Nothing is asked twice.")
+                        Assert.AreEqual(2, board.SaveCount, "Nothing is saved twice.")
+                        CollectionAssert.AreEqual({"Save Error"}, dialogs.Closed)
+                    End Using
+                Finally
+                    DeleteTemporaryRoot(root)
+                End Try
+            End Sub)
+    End Sub
+
     ' The plain error dialog (#121) keeps the unsaved page reachable: Close
     ' PaperRoute goes through the normal close, Keep Working changes nothing.
     <TestMethod>
@@ -1133,6 +1199,270 @@ Public Class ManuscriptPageTests
                 End Using
             End Sub)
     End Sub
+
+    ' A failed save in Fill Blanks puts a copy of each manuscript it filled
+    ' back in the library, and the window stays open to try again (#184).
+    ' Before the change the retry filled the preview's own records, which
+    ' the library no longer held, saved the copies without the fills, and
+    ' reported them filled. The retry now fills the records the library
+    ' holds, and the count it reports is what the saved library has.
+    <TestMethod>
+    Public Sub FillBlanksRetriedAfterAFailedSaveFillsTheSavedLibrary()
+        RunOnStaThread(
+            Sub()
+                Dim root As String = CreateTemporaryRoot()
+                Try
+                    Using board As New PageBoard(), dialogs As New DialogWatcher()
+                        board.UseRepository(root)
+                        Dim manuscript As Manuscript = Sample("Measurement invariance of a short grit scale across four countries")
+                        manuscript.Metadata.Doi = "10.5555/grit"
+                        board.Prepare(manuscript)
+                        Dim source As New OneDoiSource("10.5555/grit", New CrossrefMetadataSuggestion With {.Doi = "10.5555/grit", .Journal = "Assessment", .Volume = "33"})
+
+                        Using dialog As New FillBlanksForm(board.Library, source, AddressOf board.SaveNow)
+                            dialog.Pause = TimeSpan.Zero
+                            ShowOffscreen(dialog)
+                            Dim lookUp As Task = dialog.LookUpAsync()
+                            While Not lookUp.IsCompleted
+                                Application.DoEvents()
+                            End While
+                            lookUp.GetAwaiter().GetResult()
+                            CollectionAssert.AreEqual({"Journal", "Volume"}, dialog.PlannedChanges.Select(Function(fill) fill.Field).ToList())
+
+                            Using held As FileStream = HoldTheSaveFile(root)
+                                dialog.ApplyChecked()
+                            End Using
+                            CollectionAssert.AreEqual({"Save Error"}, dialogs.Closed)
+                            Assert.IsFalse(dialog.IsDisposed, "The window stays open to try again.")
+                            Assert.AreEqual(0, dialog.FilledCount, "Nothing is reported filled.")
+                            Assert.AreEqual(String.Empty, board.Library.Single().Metadata.PublicationJournal, "The library is as it was.")
+
+                            dialog.ApplyChecked()
+                            Assert.AreEqual(DialogResult.OK, dialog.DialogResult, "The retry saved.")
+                            Dim saved As Manuscript = SavedLibrary(root).Single()
+                            Assert.AreEqual("Assessment", saved.Metadata.PublicationJournal, "The fills reached the saved library.")
+                            Assert.AreEqual("33", saved.Metadata.Volume)
+                            Assert.AreEqual(2, dialog.FilledCount, "Filled 2 empty fields: the two the saved library has.")
+                        End Using
+
+                        CollectionAssert.AreEqual({"Save Error"}, dialogs.Closed, "Only the first save failed.")
+                        board.Close()
+                    End Using
+                Finally
+                    DeleteTemporaryRoot(root)
+                End Try
+            End Sub)
+    End Sub
+
+    ' A failed save after Mark Published puts a copy of the manuscript back
+    ' in the library, and the card stays to try again (#184). Before the
+    ' change the retry marked the card's own record, which the library no
+    ' longer held, saved the copy unmarked, and said it was on the Published
+    ' shelf. The retry now marks the record the library holds.
+    <TestMethod>
+    Public Sub MarkPublishedRetriedAfterAFailedSaveMarksTheSavedLibrary()
+        RunOnStaThread(
+            Sub()
+                Dim root As String = CreateTemporaryRoot()
+                Try
+                    Using board As New PageBoard(), dialogs As New DialogWatcher()
+                        board.UseRepository(root)
+                        Dim tracked As Manuscript = TrackedForPublication()
+                        board.Prepare(tracked)
+
+                        Using dialog As PublicationCheckForm = ShowCheckedPublications(board, tracked)
+                            Dim mark As Button = Descendants(dialog).OfType(Of Button)().Single(Function(button) button.Text = "Mark Published...")
+
+                            Using held As FileStream = HoldTheSaveFile(root)
+                                mark.PerformClick()
+                                Application.DoEvents()
+                            End Using
+                            CollectionAssert.AreEqual({"Save Error"}, dialogs.Closed)
+                            Assert.IsFalse(Descendants(dialog).OfType(Of Label)().Any(Function(label) label.Text.StartsWith("Marked published.") AndAlso label.Visible), "Nothing is reported marked.")
+                            Assert.AreEqual(PaperStage.UnderReview, board.Library.Single().CurrentStage, "The library is as it was.")
+                            Assert.IsTrue(mark.Visible, "The card's actions stay to try again.")
+
+                            mark.PerformClick()
+                            Application.DoEvents()
+                            Dim saved As Manuscript = SavedLibrary(root).Single()
+                            Assert.AreEqual(PaperStage.Published, saved.CurrentStage, "The retry reached the saved library.")
+                            Assert.AreEqual(ManuscriptLocation.Published, saved.Location)
+                            Assert.AreEqual(PublicationMatchStatus.Confirmed, saved.PublicationMatches.Single().Status)
+                            Assert.IsTrue(Descendants(dialog).OfType(Of Label)().Any(Function(label) label.Text = "Marked published. It is on the Published shelf." AndAlso label.Visible))
+                            Assert.IsTrue(dialog.Changed)
+                            dialog.Close()
+                        End Using
+
+                        CollectionAssert.AreEqual({"Save Error"}, dialogs.Closed, "Only the first save failed.")
+                        board.Close()
+                    End Using
+                Finally
+                    DeleteTemporaryRoot(root)
+                End Try
+            End Sub)
+    End Sub
+
+    ' Ignore after a failed save, as Mark Published (#184); a save refused
+    ' because other library work runs is a failed save to the window too.
+    ' Before the change the last press ignored the card's own match, saved
+    ' the library's copy still pending, and said it was ignored.
+    <TestMethod>
+    Public Sub IgnoreRetriedAfterAFailedSaveIgnoresInTheSavedLibrary()
+        RunOnStaThread(
+            Sub()
+                Dim root As String = CreateTemporaryRoot()
+                Try
+                    Using board As New PageBoard(), dialogs As New DialogWatcher()
+                        board.UseRepository(root)
+                        Dim tracked As Manuscript = TrackedForPublication()
+                        board.Prepare(tracked)
+
+                        Using dialog As PublicationCheckForm = ShowCheckedPublications(board, tracked)
+                            Dim ignore As Button = Descendants(dialog).OfType(Of Button)().Single(Function(button) button.Text = "Ignore")
+                            Dim ignored As Func(Of Boolean) = Function() Descendants(dialog).OfType(Of Label)().Any(Function(label) label.Text = "Ignored. Later checks will not show this match again." AndAlso label.Visible)
+
+                            Using held As FileStream = HoldTheSaveFile(root)
+                                ignore.PerformClick()
+                                Application.DoEvents()
+                            End Using
+                            CollectionAssert.AreEqual({"Save Error"}, dialogs.Closed)
+                            Assert.IsFalse(ignored(), "Nothing is reported ignored.")
+                            Assert.AreEqual(PublicationMatchStatus.Pending, board.Library.Single().PublicationMatches.Single().Status, "The library is as it was.")
+
+                            Assert.IsTrue(board.RunWork("Backing up your library...", Sub() board.Invoke(New Action(Sub() ignore.PerformClick()))))
+                            Assert.IsFalse(ignored(), "A refused save reports nothing either.")
+                            Assert.AreEqual(PublicationMatchStatus.Pending, board.Library.Single().PublicationMatches.Single().Status, "The library is still as it was.")
+
+                            ignore.PerformClick()
+                            Application.DoEvents()
+                            Dim saved As Manuscript = SavedLibrary(root).Single()
+                            Assert.AreEqual(PublicationMatchStatus.Ignored, saved.PublicationMatches.Single().Status, "The retry reached the saved library.")
+                            Assert.AreEqual(PaperStage.UnderReview, saved.CurrentStage, "Ignore changes nothing else.")
+                            Assert.IsTrue(ignored())
+                            dialog.Close()
+                        End Using
+
+                        CollectionAssert.AreEqual({"Save Error"}, dialogs.Closed, "Only the first save failed.")
+                        board.Close()
+                    End Using
+                Finally
+                    DeleteTemporaryRoot(root)
+                End Try
+            End Sub)
+    End Sub
+
+    ' New matches whose save fails are taken back out, so none waits on the
+    ' Deadlines page (#184). Before the change the window still said they
+    ' were there to review and stayed on the Deadlines page; it now says
+    ' they were not kept.
+    <TestMethod>
+    Public Sub NewMatchesThatFailToSaveAreNotReportedAsKept()
+        RunOnStaThread(
+            Sub()
+                Dim root As String = CreateTemporaryRoot()
+                Try
+                    Using board As New PageBoard(), dialogs As New DialogWatcher()
+                        board.UseRepository(root)
+                        Dim tracked As Manuscript = TrackedForPublication()
+                        board.Prepare(tracked)
+                        Assert.IsTrue(board.SaveNow(), "The library is saved before the check.")
+                        Dim source As New OneTitleSource(tracked.Title, New CrossrefMetadataSuggestion With {
+                            .Doi = "10.5555/grit", .Title = tracked.Title, .Journal = "Assessment", .WorkType = "journal-article", .PublishedDate = DateTime.Today.AddDays(-2)})
+
+                        Using dialog As New PublicationCheckForm(board.Library, Nothing, String.Empty, source, AddressOf board.SaveNow, DateTime.Today)
+                            dialog.Pause = TimeSpan.Zero
+                            ShowOffscreen(dialog)
+                            Using held As FileStream = HoldTheSaveFile(root)
+                                Dim check As Task = dialog.CheckAsync()
+                                While Not check.IsCompleted
+                                    Application.DoEvents()
+                                End While
+                                check.GetAwaiter().GetResult()
+                            End Using
+
+                            CollectionAssert.AreEqual({"Save Error"}, dialogs.Closed)
+                            Assert.IsFalse(Descendants(dialog).OfType(Of Button)().Any(Function(button) button.Text = "Mark Published..." OrElse button.Text = "Ignore"), "No card offers a match that was not kept.")
+                            Dim intro As String = Descendants(dialog).OfType(Of Label)().Single(Function(label) label.Text.StartsWith("Checked 1 manuscript.")).Text
+                            Assert.IsFalse(intro.Contains("Deadlines page"), "Nothing is said to wait on the Deadlines page: " & intro)
+                            Assert.IsTrue(intro.Contains("not kept"), "The window says the match was not kept: " & intro)
+                            Assert.AreEqual(0, board.Library.Single().PublicationMatches.Count, "The library is as it was.")
+                            Assert.AreEqual(0, SavedLibrary(root).Single().PublicationMatches.Count, "Nothing reached the saved library.")
+                            Assert.IsFalse(dialog.Changed)
+                            dialog.Close()
+                        End Using
+
+                        board.SetPrompt(Function(title) DialogResult.No)
+                        board.Close()
+                    End Using
+                Finally
+                    DeleteTemporaryRoot(root)
+                End Try
+            End Sub)
+    End Sub
+
+    ' Under review, with a match a title search finds.
+    Private Shared Function TrackedForPublication() As Manuscript
+        Dim tracked As Manuscript = Sample("Measurement invariance of a short grit scale across four countries")
+        tracked.CurrentStage = PaperStage.UnderReview
+        tracked.Submissions.Add(New JournalSubmission With {.JournalName = "Assessment", .SubmittedDate = DateTime.Today.AddDays(-120)})
+        Return tracked
+    End Function
+
+    ' Check for Publications on the board's library, saving through the
+    ' board, with the check done and its match kept.
+    Private Shared Function ShowCheckedPublications(board As PageBoard, tracked As Manuscript) As PublicationCheckForm
+        Dim source As New OneTitleSource(tracked.Title, New CrossrefMetadataSuggestion With {
+            .Doi = "10.5555/grit", .Title = tracked.Title, .Journal = "Assessment", .WorkType = "journal-article", .PublishedDate = DateTime.Today.AddDays(-2)})
+        Dim dialog As New PublicationCheckForm(board.Library, Nothing, String.Empty, source, AddressOf board.SaveNow, DateTime.Today)
+        dialog.Pause = TimeSpan.Zero
+        dialog.ConfirmMarkPublished = Function(manuscript, match) True
+        ShowOffscreen(dialog)
+        Dim check As Task = dialog.CheckAsync()
+        While Not check.IsCompleted
+            Application.DoEvents()
+        End While
+        check.GetAwaiter().GetResult()
+        Assert.AreEqual(PublicationMatchStatus.Pending, board.Library.Single().PublicationMatches.Single().Status, "The match was found and kept.")
+        Return dialog
+    End Function
+
+    ' A file held open where the save writes makes it fail, as a sync
+    ' client or a virus scanner can.
+    Private Shared Function HoldTheSaveFile(root As String) As FileStream
+        Dim data As String = Path.Combine(root, "data")
+        Directory.CreateDirectory(data)
+        Return New FileStream(Path.Combine(data, "manuscripts.tmp"), FileMode.Create, FileAccess.Write, FileShare.None)
+    End Function
+
+    ' The library as the next start would load it from the test's root.
+    Private Shared Function SavedLibrary(root As String) As List(Of Manuscript)
+        Return New ManuscriptRepository(Path.Combine(root, "data"), Path.Combine(root, "library")).Load()
+    End Function
+
+    ' Crossref's record for one DOI; nothing else is found.
+    Private NotInheritable Class OneDoiSource
+        Implements IPublicationSource
+
+        Private ReadOnly _doi As String
+        Private ReadOnly _work As CrossrefMetadataSuggestion
+
+        Public Sub New(doi As String, work As CrossrefMetadataSuggestion)
+            _doi = doi
+            _work = work
+        End Sub
+
+        Public Function LookupDoiAsync(doi As String, cancellationToken As Threading.CancellationToken) As Task(Of CrossrefMetadataSuggestion) Implements IPublicationSource.LookupDoiAsync
+            Return Task.FromResult(If(String.Equals(doi, _doi, StringComparison.OrdinalIgnoreCase), _work, Nothing))
+        End Function
+
+        Public Function SearchTitleAsync(title As String, cancellationToken As Threading.CancellationToken) As Task(Of List(Of CrossrefMetadataSuggestion)) Implements IPublicationSource.SearchTitleAsync
+            Return Task.FromResult(New List(Of CrossrefMetadataSuggestion)())
+        End Function
+
+        Public Function OrcidWorksAsync(orcid As String, cancellationToken As Threading.CancellationToken) As Task(Of List(Of OrcidWorkSuggestion)) Implements IPublicationSource.OrcidWorksAsync
+            Return Task.FromResult(New List(Of OrcidWorkSuggestion)())
+        End Function
+    End Class
 
     Private NotInheritable Class OneTitleSource
         Implements IPublicationSource
@@ -1801,6 +2131,34 @@ Public Class ManuscriptPageTests
             If _realSaves Then Return MyBase.SaveManuscripts()
             Return True
         End Function
+
+        ' The save a dialog the window opens is given (Check for
+        ' Publications, Fill Blanks).
+        Public Function SaveNow() As Boolean
+            Return SaveManuscripts()
+        End Function
+
+        ' Work of the test's own behind the disabled window, as a save,
+        ' backup or restore runs (#132).
+        Public Function RunWork(status As String, work As Action) As Boolean
+            Return CBool(GetType(Form1).GetMethod("RunLibraryWork", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(Me, New Object() {status, work, Nothing}))
+        End Function
+
+        ' A restart is counted, with whether the window was handing over
+        ' when it was asked for; nothing restarts the test host.
+        Public Restarts As Integer
+        Public HandingOverAtRestart As Boolean
+
+        Protected Overrides Sub RestartOnTheLibraryOnDisk()
+            Restarts += 1
+            HandingOverAtRestart = CBool(GetType(Form1).GetField("handingOverAfterRestore", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me))
+        End Sub
+
+        ' Yes to the Restart Required question after a new appearance.
+        Public Sub RestartForAppearance()
+            CallPrivate("RestartForNewAppearance")
+            Application.DoEvents()
+        End Sub
 
         ' The library is written to a throwaway directory, as the app writes it.
         Public Sub UseRepository(root As String)
