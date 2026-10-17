@@ -243,12 +243,17 @@ Namespace Forms
             layout.RowStyles.Add(New RowStyle(SizeType.AutoSize))
             layout.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
 
+            ' Until a lookup fills them in, each says what it will offer, so
+            ' none is an empty, unnamed box (#137).
+            chkApplyName.Text = "Apply public name"
             chkApplyName.AutoSize = True
             chkApplyName.Enabled = False
 
+            chkApplyCredit.Text = "Apply credit/display name"
             chkApplyCredit.AutoSize = True
             chkApplyCredit.Enabled = False
 
+            chkAffiliations.Text = "Add public employment affiliations to reusable library"
             chkAffiliations.AutoSize = True
             chkAffiliations.Enabled = False
 
@@ -313,6 +318,8 @@ Namespace Forms
             lstWorks.Dock = DockStyle.Fill
             lstWorks.CheckOnClick = True
             lstWorks.HorizontalScrollbar = True
+            ' After a check box, so no label names it (#137).
+            lstWorks.AccessibleName = "Works to import"
 
             Dim controls As New FlowLayoutPanel With {
                 .Dock = DockStyle.Fill,

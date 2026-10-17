@@ -199,6 +199,10 @@ Namespace Forms
             txtGuide.DetectUrls =
                 True
 
+            ' After Find Next, so no label names it (#137).
+            txtGuide.AccessibleName =
+                "User Guide"
+
             AddHandler txtGuide.LinkClicked,
                 AddressOf OpenClickedLink
 

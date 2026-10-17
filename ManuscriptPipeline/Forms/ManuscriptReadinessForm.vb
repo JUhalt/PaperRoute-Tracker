@@ -225,6 +225,8 @@ Namespace Forms
                 DockStyle.Fill
             lstItems.IntegralHeight = False
             lstItems.HorizontalScrollbar = True
+            ' Not the summary WinForms finds before it (#137).
+            lstItems.AccessibleName = "Readiness requirements"
 
             AddHandler lstItems.SelectedIndexChanged,
                 AddressOf ItemSelectionChanged

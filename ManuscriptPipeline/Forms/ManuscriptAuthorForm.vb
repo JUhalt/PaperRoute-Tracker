@@ -156,6 +156,10 @@ Namespace Forms
             lstAffiliations.CheckOnClick =
                 True
 
+            ' Not the note WinForms finds before it (#137).
+            lstAffiliations.AccessibleName =
+                "Affiliations"
+
             chkCorresponding.Text =
                 "Corresponding author"
 

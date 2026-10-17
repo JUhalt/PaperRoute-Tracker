@@ -217,6 +217,10 @@ Namespace Forms
             lstAuthors.Dock =
                 DockStyle.Fill
 
+            ' A list takes no name from a tab's caption (#137).
+            lstAuthors.AccessibleName =
+                "Authors"
+
             AddHandler lstAuthors.DoubleClick,
                 AddressOf EditSelectedAuthor
 
@@ -307,6 +311,10 @@ Namespace Forms
 
             lstAffiliations.Dock =
                 DockStyle.Fill
+
+            ' Otherwise WinForms names it with the Authors list's empty hint.
+            lstAffiliations.AccessibleName =
+                "Affiliations"
 
             AddHandler lstAffiliations.DoubleClick,
                 AddressOf EditSelectedAffiliation

@@ -290,6 +290,9 @@ Namespace Forms
                 DockStyle.Fill
             lstPackets.IntegralHeight = False
             lstPackets.HorizontalScrollbar = True
+            ' Its own name, not "Show all packets", the link WinForms finds
+            ' before it (#137).
+            lstPackets.AccessibleName = "Submission packets"
 
             AddHandler lstPackets.SelectedIndexChanged,
                 AddressOf PacketSelectionChanged

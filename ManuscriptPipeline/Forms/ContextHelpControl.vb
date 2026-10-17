@@ -56,6 +56,49 @@ Namespace Forms
         End Sub
 
 
+        ' A field's label with its help beside it (#137). The help control
+        ' is a tab stop between the label and the field, and WinForms stops
+        ' looking for a field's label at the first tab stop, so the field
+        ' is named for its label here, and the help control says whose help
+        ' it is. A check box names itself, so none is passed for one.
+        Public Shared Function LabelWithHelp(
+            label As Label,
+            helpText As String,
+            topPadding As Integer,
+            Optional field As Control = Nothing
+        ) As Control
+
+            Dim host As New FlowLayoutPanel With {
+                .Dock = DockStyle.Fill,
+                .AutoSize = True,
+                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                .FlowDirection = FlowDirection.LeftToRight,
+                .WrapContents = False,
+                .Margin = New Padding(0),
+                .Padding = New Padding(0, topPadding, 0, 0)
+            }
+
+            host.Controls.Add(
+                label
+            )
+
+            host.Controls.Add(
+                New ContextHelpControl(
+                    helpText
+                ) With {
+                    .AccessibleName = "Help: " & label.Text
+                }
+            )
+
+            If field IsNot Nothing Then
+                field.AccessibleName = label.Text
+            End If
+
+            Return host
+
+        End Function
+
+
         Protected Overrides Sub OnPaint(
             e As PaintEventArgs
         )

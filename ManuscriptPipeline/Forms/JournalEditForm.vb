@@ -365,6 +365,10 @@ Namespace Forms
             lstChecklist.Dock =
                 DockStyle.Fill
 
+            ' Not the count WinForms finds before it (#137).
+            lstChecklist.AccessibleName =
+                "Checklist requirements"
+
             AddHandler lstChecklist.SelectedIndexChanged,
                 AddressOf ChecklistSelectionChanged
 
@@ -1161,6 +1165,8 @@ Namespace Forms
             }
 
             lvFacts.Dock = DockStyle.Fill
+            ' Not the note WinForms finds before it (#137).
+            lvFacts.AccessibleName = "Facts and metrics"
             lvFacts.View = View.Details
             lvFacts.FullRowSelect = True
             lvFacts.MultiSelect = False

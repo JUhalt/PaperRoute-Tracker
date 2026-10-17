@@ -80,6 +80,8 @@ Namespace Forms
             txtReport.Dock = DockStyle.Fill
             txtReport.Multiline = True
             txtReport.ReadOnly = True
+            ' Not the description WinForms finds before it (#137).
+            txtReport.AccessibleName = "Diagnostics report"
             txtReport.ScrollBars = ScrollBars.Both
             txtReport.WordWrap = False
             txtReport.Font = New Font("Consolas", 9.5F)

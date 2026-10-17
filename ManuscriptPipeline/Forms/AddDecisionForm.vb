@@ -159,6 +159,8 @@ Namespace Forms
             dtpDecisionDate.MinimumSize = New Size(180, 0)
             dtpDecisionDate.Width = 180
             dtpDecisionDate.Anchor = AnchorStyles.Left
+            ' A date picker takes no name from the label before it (#137).
+            dtpDecisionDate.AccessibleName = "Decision date"
 
             AddHandler dtpDecisionDate.ValueChanged,
                 AddressOf DecisionDateChanged
@@ -185,6 +187,7 @@ Namespace Forms
             dtpDeadline.Width = 180
             dtpDeadline.Anchor = AnchorStyles.Left
             dtpDeadline.Enabled = False
+            dtpDeadline.AccessibleName = "Revision deadline"
 
             AddHandler chkDeadline.CheckedChanged,
                 AddressOf DeadlineCheckedChanged

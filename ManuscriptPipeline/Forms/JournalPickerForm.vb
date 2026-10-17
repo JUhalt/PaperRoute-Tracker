@@ -103,6 +103,11 @@ Namespace Forms
             txtSearch.PlaceholderText =
                 "Search journals..."
 
+            ' Placeholder text is not a name, and no label precedes either
+            ' control (#137).
+            txtSearch.AccessibleName =
+                "Search journals"
+
             AddHandler txtSearch.TextChanged,
                 Sub(sender, e)
                     RefreshList()
@@ -110,6 +115,9 @@ Namespace Forms
 
             lstJournals.Dock =
                 DockStyle.Fill
+
+            lstJournals.AccessibleName =
+                "Journals"
 
             AddHandler lstJournals.DoubleClick,
                 AddressOf ChooseSelected

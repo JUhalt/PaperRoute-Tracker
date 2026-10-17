@@ -341,13 +341,15 @@ Namespace Forms
                 notesText = "No submission notes were recorded."
             End If
 
+            ' Not the portal address WinForms finds before it (#137).
             Dim txtSubmissionNotes As New TextBox With {
                 .Text = notesText,
                 .Dock = DockStyle.Fill,
                 .Multiline = True,
                 .ReadOnly = True,
                 .ScrollBars = ScrollBars.Vertical,
-                .BackColor = SystemColors.Window
+                .BackColor = SystemColors.Window,
+                .AccessibleName = "Submission notes"
             }
 
             notesGroup.Controls.Add(txtSubmissionNotes)
@@ -689,6 +691,8 @@ Namespace Forms
 
             lstDecisions.Dock = DockStyle.Fill
             lstDecisions.IntegralHeight = False
+            ' A list takes no name from a tab's caption (#137).
+            lstDecisions.AccessibleName = "Editorial history"
             ' Let the docked list fit its actual panel height. A fixed child
             ' minimum can extend below the panel on different Windows metrics.
 
@@ -700,6 +704,8 @@ Namespace Forms
             txtDecisionDetails.ReadOnly = True
             txtDecisionDetails.ScrollBars = ScrollBars.Vertical
             txtDecisionDetails.BackColor = SystemColors.Window
+            ' Not the empty list's hint WinForms finds before it (#137).
+            txtDecisionDetails.AccessibleName = "Selected decision details"
             Dim split As New SplitContainer With {
                 .Dock = DockStyle.Fill,
                 .Orientation = Orientation.Vertical,
@@ -1266,6 +1272,9 @@ Namespace Forms
             lstCorrespondence.IntegralHeight =
                 False
 
+            lstCorrespondence.AccessibleName =
+                "Correspondence and files"
+
             lstCorrespondence.AllowDrop =
                 True
 
@@ -1295,6 +1304,9 @@ Namespace Forms
 
             txtCorrespondenceDetails.BackColor =
                 SystemColors.Window
+
+            txtCorrespondenceDetails.AccessibleName =
+                "Selected item details"
 
             Dim split As New SplitContainer With {
                 .Dock = DockStyle.Fill,

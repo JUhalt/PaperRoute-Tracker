@@ -220,6 +220,8 @@ Namespace Forms
         Private Sub ConfigureGrid()
 
             gridMappings.Dock = DockStyle.Fill
+            ' No label names the grid (#137).
+            gridMappings.AccessibleName = "Column mappings"
             gridMappings.AllowUserToAddRows = False
             gridMappings.AllowUserToDeleteRows = False
             gridMappings.AllowUserToResizeRows = False

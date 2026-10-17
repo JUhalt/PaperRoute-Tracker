@@ -121,6 +121,8 @@ Namespace Forms
             lstManuscripts.Dock = DockStyle.Fill
             lstManuscripts.CheckOnClick = True
             lstManuscripts.HorizontalScrollbar = True
+            ' No label precedes the list (#137).
+            lstManuscripts.AccessibleName = "Manuscripts to export"
 
             Dim footer As New FlowLayoutPanel With {
                 .Dock = DockStyle.Fill,
