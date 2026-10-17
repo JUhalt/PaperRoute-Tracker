@@ -62,6 +62,26 @@ Namespace Services
         End Function
 
 
+        ' Applying an update ends PaperRoute at once (#132). A save, backup or
+        ' restore processes the window's messages while it runs, so a download
+        ' can finish during one; the update waits until that work has ended.
+        Friend Shared Async Function WaitForLibraryWorkAsync(
+            owner As IWin32Window,
+            Optional interval As Integer = 250
+        ) As Task
+
+            Dim window As Form1 = TryCast(owner, Form1)
+
+            While window IsNot Nothing AndAlso
+                  window.IsLibraryWorkInProgress
+
+                Await Task.Delay(interval)
+
+            End While
+
+        End Function
+
+
         Public Shared Function ChannelDisplayName(
             channel As AppUpdateChannel
         ) As String
@@ -77,11 +97,14 @@ Namespace Services
 
         ' Offers an update and, once the user accepts it, asks `confirm`
         ' before anything downloads; False there stops the update (#112).
+        ' `confirmBeforeRestart` is asked once the download is done and any
+        ' library work has ended, just before PaperRoute restarts.
         Public Shared Async Function CheckAndOfferUpdateAsync(
             owner As IWin32Window,
             channel As AppUpdateChannel,
             interactive As Boolean,
-            Optional confirm As Func(Of Boolean) = Nothing
+            Optional confirm As Func(Of Boolean) = Nothing,
+            Optional confirmBeforeRestart As Func(Of Boolean) = Nothing
         ) As Task(Of Boolean)
 
             ' Work offline, or the update check switched off (#86): nothing is
@@ -175,7 +198,14 @@ Namespace Services
                     Return False
                 End If
 
-                ' The window's own question, such as about unsaved page edits.
+                ' The window's own question, such as about unsaved page edits,
+                ' once a save, backup or restore still running has ended
+                ' (#132): until then a save that fails has not been marked,
+                ' and a save the question starts would be refused.
+                Await WaitForLibraryWorkAsync(
+                    owner
+                )
+
                 If confirm IsNot Nothing AndAlso Not confirm() Then
                     Return False
                 End If
@@ -211,6 +241,18 @@ Namespace Services
                             updateInfo,
                             progressCallback
                         )
+
+                        ' A save, backup or restore still running ends first,
+                        ' and a save that failed meanwhile is asked about
+                        ' (#113): applying the update ends PaperRoute at once,
+                        ' with no close to ask.
+                        Await WaitForLibraryWorkAsync(
+                            owner
+                        )
+
+                        If confirmBeforeRestart IsNot Nothing AndAlso Not confirmBeforeRestart() Then
+                            Return False
+                        End If
 
                         progressDialog.SetProgress(100)
                         progressDialog.SetStatus("Installing update and restarting PaperRoute...")

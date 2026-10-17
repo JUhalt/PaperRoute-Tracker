@@ -543,6 +543,9 @@ Friend NotInheritable Class ViewCatalog
         Dim board As CatalogBoard = BoardOn(CreateRepresentativeLibrary())
         board.NavigateTo(target)
         Application.DoEvents()
+        ' The Insights figures are worked out off the UI thread (#132): the
+        ' page is listed with them shown, not while it says Calculating.
+        TestSupport.WaitForInsights(board, TimeSpan.FromSeconds(30))
         Return board
     End Function
 

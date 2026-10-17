@@ -11,15 +11,26 @@ Imports ManuscriptPipeline.Services
 
 Namespace Controls
 
-    ' Colors and wording shared by the route map views (#82). The three
-    ' kinds differ in lightness as well as hue, and white text on each fill
-    ' meets 4.5:1.
+    ' Colors and wording shared by the route map views (#82). The kinds
+    ' differ in pattern as well as hue, so they can be told apart without
+    ' color (#140): the journal's time is plain, the author's lined across,
+    ' production lined down, and time not recorded hatched. White text on
+    ' each fill meets 4.5:1. Under a contrast theme every color is one of
+    ' the user's own, with the text that goes on it (#138).
     Friend NotInheritable Class RouteMapStyle
 
         Private Sub New()
         End Sub
 
         Public Shared Function Fill(kind As RouteSegmentKind) As Color
+            If UiTheme.IsHighContrast() Then
+                Select Case kind
+                    Case RouteSegmentKind.Journal : Return SystemColors.Highlight
+                    Case RouteSegmentKind.Author : Return SystemColors.HotTrack
+                    Case RouteSegmentKind.Production : Return SystemColors.WindowText
+                    Case Else : Return SystemColors.GrayText
+                End Select
+            End If
             Select Case kind
                 Case RouteSegmentKind.Journal : Return Color.FromArgb(15, 118, 110)
                 Case RouteSegmentKind.Author : Return Color.FromArgb(180, 83, 9)
@@ -28,11 +39,31 @@ Namespace Controls
             End Select
         End Function
 
+        ' The lines over a kind's own fill, or Nothing for a plain fill.
+        Public Shared Function Pattern(kind As RouteSegmentKind) As HatchStyle?
+            Select Case kind
+                Case RouteSegmentKind.Author : Return HatchStyle.DarkHorizontal
+                Case RouteSegmentKind.Production : Return HatchStyle.DarkVertical
+                Case Else : Return Nothing
+            End Select
+        End Function
+
+        ' Those lines: a shade of the fill dark enough to show against it,
+        ' 2:1 or more like the hatch of time not recorded, or the window
+        ' color under a contrast theme.
+        Public Shared Function Stripe(kind As RouteSegmentKind) As Color
+            Return If(UiTheme.IsHighContrast(), SystemColors.Window, UiTheme.Blend(Fill(kind), Color.Black, 0.6F))
+        End Function
+
         Public Shared Sub FillSegment(g As Graphics, bounds As RectangleF, kind As RouteSegmentKind, background As Color)
             If kind = RouteSegmentKind.NotRecorded Then
                 Using hatch As New HatchBrush(HatchStyle.WideUpwardDiagonal, Fill(kind), background), edge As New Pen(Fill(kind))
                     g.FillRectangle(hatch, bounds)
                     g.DrawRectangle(edge, bounds.X, bounds.Y, Math.Max(0, bounds.Width - 1), Math.Max(0, bounds.Height - 1))
+                End Using
+            ElseIf Pattern(kind).HasValue Then
+                Using lines As New HatchBrush(Pattern(kind).Value, Stripe(kind), Fill(kind))
+                    g.FillRectangle(lines, bounds)
                 End Using
             Else
                 Using brush As New SolidBrush(Fill(kind))
@@ -41,7 +72,17 @@ Namespace Controls
             End If
         End Sub
 
+        ' The day count drawn on a kind's fill.
+        Public Shared Function LabelColor(kind As RouteSegmentKind) As Color
+            If Not UiTheme.IsHighContrast() Then Return Color.White
+            Select Case kind
+                Case RouteSegmentKind.Journal : Return SystemColors.HighlightText
+                Case Else : Return SystemColors.Window
+            End Select
+        End Function
+
         Public Shared Function MarkerColor(marker As RouteMarker) As Color
+            If UiTheme.IsHighContrast() Then Return SystemColors.WindowText
             Select Case marker.Kind
                 Case RouteMarkerKind.Published : Return Color.FromArgb(15, 118, 110)
                 Case RouteMarkerKind.Decision
@@ -53,6 +94,11 @@ Namespace Controls
                     End Select
                 Case Else : Return Color.FromArgb(29, 78, 216)
             End Select
+        End Function
+
+        ' The number drawn on an event's marker.
+        Public Shared Function NumberColor() As Color
+            Return If(UiTheme.IsHighContrast(), SystemColors.Window, Color.White)
         End Function
 
         ' "105 days with the journals", one per kind on the route.
@@ -297,7 +343,17 @@ Namespace Controls
                     Dim label As String = segment.Days.ToString(CultureInfo.CurrentCulture) & If(segment.Days = 1, " day", " days")
                     If TextRenderer.MeasureText(label, Font).Width + 6 * unit > bounds.Width Then label = segment.Days.ToString(CultureInfo.CurrentCulture) & "d"
                     If TextRenderer.MeasureText(label, Font).Width + 2 * unit <= bounds.Width Then
-                        TextRenderer.DrawText(g, label, Font, Rectangle.Round(bounds), Color.White,
+                        ' A lined stretch keeps its count on a plain patch of its fill.
+                        If RouteMapStyle.Pattern(segment.Kind).HasValue Then
+                            Dim textSize As Size = TextRenderer.MeasureText(label, Font, Size.Empty, flags)
+                            Dim patch As New RectangleF(bounds.X + (bounds.Width - textSize.Width) / 2.0F - 3 * unit, bounds.Y + (bounds.Height - textSize.Height) / 2.0F - unit,
+                                                        textSize.Width + 6 * unit, textSize.Height + 2 * unit)
+                            patch.Intersect(bounds)
+                            Using plain As New SolidBrush(RouteMapStyle.Fill(segment.Kind))
+                                g.FillRectangle(plain, patch)
+                            End Using
+                        End If
+                        TextRenderer.DrawText(g, label, Font, Rectangle.Round(bounds), RouteMapStyle.LabelColor(segment.Kind),
                             TextFormatFlags.HorizontalCenter Or TextFormatFlags.VerticalCenter Or flags)
                     End If
                 End If
@@ -382,7 +438,7 @@ Namespace Controls
                 g.FillEllipse(fill, circle)
                 g.DrawEllipse(ring, circle)
             End Using
-            TextRenderer.DrawText(g, item.Number.ToString(CultureInfo.CurrentCulture), numberFont, Rectangle.Round(circle), Color.White,
+            TextRenderer.DrawText(g, item.Number.ToString(CultureInfo.CurrentCulture), numberFont, Rectangle.Round(circle), RouteMapStyle.NumberColor(),
                 TextFormatFlags.HorizontalCenter Or TextFormatFlags.VerticalCenter Or TextFormatFlags.NoPadding Or TextFormatFlags.NoPrefix)
         End Sub
 

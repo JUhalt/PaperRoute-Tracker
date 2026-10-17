@@ -12,7 +12,7 @@ The scripted screen-reader check for a release (#139), run once during certifica
 
 - [ ] **Tab** through every control once. Each one Narrator reaches says its name and its role; no field is read as just "edit", "list", or "combo box", and none takes the name of a hint, a count, or a link.
 - [ ] A button that shows a symbol (**⋯**, **«**, **»**) is read by what it does.
-- [ ] A **?** help button is read as "Help: <the field's label>", and **Narrator+Enter** on it shows its help.
+- [ ] A **?** help button is read as "Help: " and what it helps with (a field's label, or the button or badge beside it), and **Narrator+Enter** on it shows its help.
 - [ ] Record what Narrator said for anything that was wrong, word for word.
 
 ## The six pages

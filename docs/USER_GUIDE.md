@@ -847,12 +847,15 @@ A backup can contain:
 
 ```text
 backup-info.txt
+backup.json
 manuscripts.json
 authors.json
 citations.json
 library.xlsx
 files\
 ```
+
+`backup.json` records when the backup was made, the PaperRoute version that made it, and its storage schema; the restore preview shows the date and version. Backups made before v0.9.2 have no `backup.json` and restore as before.
 
 Depending on the library, `authors.json` contains reusable authors, affiliations, and journals, including journal checklist templates, and `citations.json` your saved citation figures (see **Your Citations** under Insights). `manuscripts.json` preserves manuscript histories, readiness profiles, packet associations, saved fingerprints, and reviewer-response items with their decisions, revision rounds, statuses, drafts, and order.
 
@@ -862,8 +865,8 @@ Managed document copies, including version and packet snapshots, are included. E
 
 **Settings > Restore Backup...** (also on the Import & Export page):
 
-1. validates the selected archive;
-2. previews record/file counts;
+1. validates the selected archive, and refuses one made by a newer PaperRoute;
+2. previews record/file counts, and when and with which version the backup was made;
 3. asks for confirmation;
 4. creates an emergency backup of the current library;
 5. restores the selected backup; and
@@ -873,7 +876,7 @@ Restoring a backup that includes `citations.json` replaces your saved citation f
 
 PaperRoute is intentionally conservative about restore operations because the manuscript library is the primary research-workflow record.
 
-PaperRoute v0.9 uses **Schema 9**, and v0.8 uses Schema 8. An older version refuses to open a newer library, and its restore may ignore data it does not know, so restore a backup with the version that made it or a later one. To go back to an earlier version, restore the backup you made with that version before upgrading; changes made since then are not in it. See the [upgrade notes](../UPGRADE_NOTES.md).
+PaperRoute v0.9 uses **Schema 9**, and v0.8 uses Schema 8. An older version refuses to open a newer library. From v0.9.2 its restore also refuses a backup from a newer PaperRoute; before v0.9.2 a restore could ignore data it did not know, so restore a backup with the version that made it or a later one. To go back to an earlier version, restore the backup you made with that version before upgrading; changes made since then are not in it. See the [upgrade notes](../UPGRADE_NOTES.md).
 
 ---
 

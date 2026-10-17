@@ -3,6 +3,7 @@ Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.Globalization
 Imports System.Linq
+Imports System.Threading.Tasks
 Imports System.Windows.Forms
 Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Models
@@ -26,6 +27,19 @@ Partial Public Class Form1
     Friend routeViewOpener As Action(Of Manuscript) = Nothing
     Private insightsTiles As FlowLayoutPanel = Nothing
     Private insightsScope As LinkLabel = Nothing
+    ' Shown while the figures are worked out on a worker thread (#132).
+    Private insightsStatus As Label = Nothing
+    ' Which calculation the page is waiting for; an older one's result is dropped.
+    Private insightsRequest As Integer = 0
+    Private insightsPending As Boolean = False
+
+
+    ' True while the page's figures are being worked out; tests wait on it.
+    Friend ReadOnly Property InsightsCalculating As Boolean
+        Get
+            Return insightsPending
+        End Get
+    End Property
 
 
     Private Function BuildInsightsPage() As Control
@@ -49,11 +63,12 @@ Partial Public Class Form1
         Dim body As New TableLayoutPanel With {
             .Dock = DockStyle.Fill,
             .ColumnCount = 1,
-            .RowCount = 5,
+            .RowCount = 6,
             .Margin = New Padding(0),
             .BackColor = UiTheme.BoardBackground()
         }
         body.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100.0F))
+        body.RowStyles.Add(New RowStyle(SizeType.AutoSize))
         body.RowStyles.Add(New RowStyle(SizeType.AutoSize))
         body.RowStyles.Add(New RowStyle(SizeType.AutoSize))
         body.RowStyles.Add(New RowStyle(SizeType.AutoSize))
@@ -113,8 +128,18 @@ Partial Public Class Form1
             End Sub
         body.Controls.Add(insightsScope, 0, 2)
 
+        insightsStatus = New Label With {
+            .Text = "Calculating from your records...",
+            .AutoSize = True,
+            .UseMnemonic = False,
+            .Visible = False,
+            .ForeColor = UiTheme.SecondaryText(),
+            .Margin = New Padding(0, 0, 0, UiTheme.Px(6, dpi))
+        }
+        body.Controls.Add(insightsStatus, 0, 3)
+
         insightsContent = New Panel With {.Dock = DockStyle.Fill, .Margin = New Padding(0), .BackColor = UiTheme.BoardBackground()}
-        body.Controls.Add(insightsContent, 0, 3)
+        body.Controls.Add(insightsContent, 0, 4)
 
         insightsFootnote = New Label With {
             .Text = "Days are calendar days between recorded dates. A first decision is the earliest decision recorded for a submission; " &
@@ -124,7 +149,7 @@ Partial Public Class Form1
             .ForeColor = UiTheme.SecondaryText(),
             .Margin = New Padding(0, UiTheme.Px(8, dpi), 0, 0)
         }
-        body.Controls.Add(insightsFootnote, 0, 4)
+        body.Controls.Add(insightsFootnote, 0, 5)
         AddHandler body.SizeChanged,
             Sub(sender, e)
                 For Each note As Label In body.Controls.OfType(Of Label)()
@@ -155,7 +180,54 @@ Partial Public Class Form1
 
         If insightsContent Is Nothing OrElse insightsContent.IsDisposed Then Return
 
-        Dim statistics As LibraryStatistics = RouteAnalyticsService.ForLibrary(manuscripts, DateTime.Today, CurrentJournalLibrary())
+        ' The figures are worked out on a worker thread (#132) while the page
+        ' keeps what it shows and says so. The result comes back through the
+        ' window's own message queue; a request made in the meantime, or a
+        ' page left, drops it.
+        insightsRequest += 1
+        Dim request As Integer = insightsRequest
+        Dim content As Panel = insightsContent
+        Dim library As List(Of Manuscript) = manuscripts.ToList()
+        Dim journals As List(Of JournalRecord) = CurrentJournalLibrary().ToList()
+        Dim today As DateTime = DateTime.Today
+
+        ' Without a handle there is no message queue to come back to.
+        If Not IsHandleCreated Then
+            ShowInsights(RouteAnalyticsService.ForLibrary(library, today, journals))
+            Return
+        End If
+
+        insightsPending = True
+        insightsStatus.Visible = True
+
+        Task.Run(Function() RouteAnalyticsService.ForLibrary(library, today, journals)).
+            ContinueWith(
+                Sub(calculation)
+                    If Not IsDisposed AndAlso IsHandleCreated Then
+                        BeginInvoke(New Action(Sub() ReceiveInsights(calculation, request, content)))
+                    End If
+                End Sub)
+
+    End Sub
+
+
+    ' Back on the UI thread with the figures, or with the worker's failure.
+    Private Sub ReceiveInsights(
+        calculation As Task(Of LibraryStatistics),
+        request As Integer,
+        content As Panel
+    )
+
+        If request = insightsRequest Then insightsPending = False
+        If request <> insightsRequest OrElse content.IsDisposed OrElse insightsContent IsNot content Then Return
+
+        insightsStatus.Visible = False
+        ShowInsights(calculation.GetAwaiter().GetResult())
+
+    End Sub
+
+
+    Private Sub ShowInsights(statistics As LibraryStatistics)
 
         ' A chosen journal may no longer exist after an edit.
         If insightsJournal IsNot Nothing Then

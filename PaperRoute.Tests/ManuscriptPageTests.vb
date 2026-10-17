@@ -855,16 +855,22 @@ Public Class ManuscriptPageTests
                     Assert.AreEqual(3, grid.Rows.Count)
                     Assert.IsFalse(hint.Visible)
 
+                    ' The grid refills once typing pauses (#133); the pause is
+                    ' the debounce timer's tick.
                     filter.Text = "revisions"
+                    Assert.AreEqual(3, grid.Rows.Count, "A keystroke alone leaves the grid as it is.")
+                    board.PauseTyping()
                     Assert.AreEqual(1, grid.Rows.Count, "The filter matches the target journal.")
                     Assert.AreSame(revising, grid.Rows(0).Tag)
 
                     filter.Text = "no such paper"
+                    board.PauseTyping()
                     Assert.AreEqual(0, grid.Rows.Count)
                     Assert.IsTrue(hint.Visible)
                     StringAssert.Contains(hint.Text, "no such paper")
 
                     filter.Text = String.Empty
+                    board.PauseTyping()
                     Assert.AreEqual(3, grid.Rows.Count)
                     Assert.IsFalse(hint.Visible)
 
@@ -1162,6 +1168,7 @@ Public Class ManuscriptPageTests
                     board.Prepare(routed, Sample("Unsubmitted idea"))
 
                     board.PressCommandKey(Keys.Control Or Keys.D5)
+                    board.WaitForInsights()
                     Assert.AreEqual("Insights", board.PageName)
                     Dim tiles As List(Of String) = Descendants(board).OfType(Of RoundedPanel)().Select(Function(tile) tile.AccessibleName).Where(Function(name) name IsNot Nothing).ToList()
                     Assert.IsTrue(tiles.Contains("2 submissions  ·  0 accepted"), String.Join(" | ", tiles))
@@ -1177,6 +1184,7 @@ Public Class ManuscriptPageTests
                     journals.CurrentCell = second.Cells(0)
                     GetType(Control).GetMethod("OnKeyDown", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(journals, New Object() {New KeyEventArgs(Keys.Enter)})
                     Application.DoEvents()
+                    board.WaitForInsights()
                     Dim routes As DataGridView = Descendants(board).OfType(Of DataGridView)().Single()
                     Assert.AreEqual(1, routes.Rows.Count, "Enter on a journal shows the routes that went through it.")
                     Assert.AreEqual("Routed manuscript", CStr(routes.Rows(0).Cells("Title").Value))
@@ -1207,8 +1215,10 @@ Public Class ManuscriptPageTests
                     board.routeViewOpener = Sub(item) opened.Add(item)
 
                     board.PressCommandKey(Keys.Control Or Keys.D5)
+                    board.WaitForInsights()
                     Descendants(board).OfType(Of ShelfTabButton)().Single(Function(item) item.Text = "Route Map").Checked = True
                     Application.DoEvents()
+                    board.WaitForInsights()
                     Dim chart As RouteMapChart = Descendants(board).OfType(Of RouteMapChart)().Single()
                     CollectionAssert.AreEqual({published}, chart.Routes.Select(Function(item) item.Manuscript).ToList(), "Published routes by default.")
                     Assert.IsTrue(Descendants(board).OfType(Of Label)().Any(Function(label) label.Text = "1 published route lined up at day 0. Median 264 days from first submission to publication."))
@@ -1218,6 +1228,7 @@ Public Class ManuscriptPageTests
                     GetType(LinkLabel).GetMethod("OnLinkClicked", BindingFlags.Instance Or BindingFlags.NonPublic).
                         Invoke(toggle, New Object() {New LinkLabelLinkClickedEventArgs(toggle.Links(0))})
                     Application.DoEvents()
+                    board.WaitForInsights()
                     chart = Descendants(board).OfType(Of RouteMapChart)().Single()
                     CollectionAssert.AreEquivalent({published, routed}, chart.Routes.Select(Function(item) item.Manuscript).ToList(), "Work in progress runs to today; an idea has no route.")
                     Assert.IsTrue(chart.Routes.Single(Function(item) item.Manuscript Is routed).Map.Ongoing)
@@ -1266,8 +1277,10 @@ Public Class ManuscriptPageTests
 
                         ' Without an ORCID iD, the tab says where to add one.
                         board.PressCommandKey(Keys.Control Or Keys.D5)
+                        board.WaitForInsights()
                         Descendants(board).OfType(Of ShelfTabButton)().Single(Function(item) item.Text = "Your Citations").Checked = True
                         Application.DoEvents()
+                        board.WaitForInsights()
                         Assert.IsTrue(Descendants(board).OfType(Of Button)().Any(Function(button) button.Text = "Open Authors && Affiliations"))
                         Assert.IsFalse(Descendants(board).OfType(Of Label)().Single(Function(label) label.Text.StartsWith("Days are calendar days")).Visible, "The route footnote belongs to the other views.")
 
@@ -1275,11 +1288,15 @@ Public Class ManuscriptPageTests
                         Descendants(board).OfType(Of ShelfTabButton)().Single(Function(item) item.Text.StartsWith("Your Journals")).Checked = True
                         Descendants(board).OfType(Of ShelfTabButton)().Single(Function(item) item.Text = "Your Citations").Checked = True
                         Application.DoEvents()
+                        board.WaitForInsights()
                         Assert.IsTrue(Descendants(board).OfType(Of Label)().Any(Function(label) label.Text.StartsWith("See how your published work has been cited, from OpenAlex") AndAlso label.Text.Contains("(0000-0002-1825-0097)")))
                         Dim update As Button = Descendants(board).OfType(Of Button)().Single(Function(button) button.Text = "Update from OpenAlex...")
                         Assert.IsTrue(update.Enabled)
 
                         ClickControl(update)
+                        ' The update redraws the page, and its figures are worked out
+                        ' off the UI thread (#132): wait for them before reading.
+                        board.WaitForInsights()
                         Assert.AreEqual(1, prompted.Count)
                         Assert.IsNull(prompted(0), "Nothing saved before.")
                         Assert.AreEqual(3, store.Load().Works.Count, "The confirmed works are saved.")
@@ -1308,6 +1325,7 @@ Public Class ManuscriptPageTests
                         Descendants(board).OfType(Of ShelfTabButton)().Single(Function(item) item.Text.StartsWith("Your Routes")).Checked = True
                         Descendants(board).OfType(Of ShelfTabButton)().Single(Function(item) item.Text = "Your Citations").Checked = True
                         Application.DoEvents()
+                        board.WaitForInsights()
                         Assert.IsFalse(Descendants(board).OfType(Of Button)().Single(Function(button) button.Text = "Update from OpenAlex...").Enabled)
                         Assert.AreEqual(2, Descendants(board).OfType(Of DataGridView)().Single().Rows.Count)
                         Assert.IsTrue(Descendants(board).OfType(Of Label)().Any(Function(label) label.Text.StartsWith("You're working offline, so updating is off.")))
@@ -1565,6 +1583,107 @@ Public Class ManuscriptPageTests
             End Sub)
     End Sub
 
+    ' Two records with the same Id, which a manuscripts.json merged or edited
+    ' by hand can hold and the library loads, each keep their own card on
+    ' the Board (#133): one never replaces the other's in the same render.
+    <TestMethod>
+    Public Sub TwoRecordsWithTheSameIdEachHaveACard()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard()
+                    Dim first As Manuscript = Sample("First copy")
+                    Dim second As Manuscript = ManuscriptCloneService.CloneManuscript(first)
+                    second.Title = "Second copy"
+                    board.Prepare(first, second)
+
+                    For Each pass As String In {"shown", "rendered again"}
+                        CollectionAssert.AreEquivalent({"First copy", "Second copy"}, board.Cards().Select(Function(card) card.AccessibleName).ToList(),
+                                                       "Both records are on the Board once " & pass & ".")
+                        Assert.IsFalse(board.Cards().Any(Function(card) card.IsDisposed), "No card on a shelf is disposed once " & pass & ".")
+                        board.Render()
+                    Next
+
+                    second.Title = first.Title
+                    board.Render()
+                    Assert.AreEqual(2, board.Cards().Count, "Records that show the same text still have a card each.")
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    ' Board cards are kept between renders (#133). A kept card acts on the
+    ' record the library holds when the card is used, as when an equal
+    ' record with the same Id takes the old one's place, and a card is
+    ' rebuilt when its title or its shelf changes. A guard: #133 already
+    ' behaves so; the test fails if a card acts on the record it was built
+    ' from, or if the title or the location leaves the text a card is kept
+    ' by.
+    <TestMethod>
+    Public Sub KeptCardsActOnTheLibrarysRecordAndShowItsChanges()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard()
+                    Dim filed As Manuscript = Sample("Filed manuscript")
+                    filed.Location = ManuscriptLocation.FileDrawer
+                    board.Prepare(filed)
+                    Dim card As RoundedPanel = board.Card("Filed manuscript")
+
+                    ' An equal record with the same Id takes its place.
+                    Dim restored As Manuscript = ManuscriptCloneService.CloneManuscript(filed)
+                    board.ReplaceLibrary(restored)
+                    Assert.AreSame(card, board.Card("Filed manuscript"), "The card is kept: what it shows is unchanged.")
+
+                    MenuItem(card, "Restore to Pipeline").PerformClick()
+                    Application.DoEvents()
+                    Assert.AreEqual(ManuscriptLocation.Pipeline, restored.Location, "The kept card restored the library's record.")
+                    Assert.AreEqual(ManuscriptLocation.FileDrawer, filed.Location, "The record from before the restore is left alone.")
+                    Assert.AreEqual(1, board.SaveCount)
+                    Assert.IsNotNull(MenuItem(board.Card("Filed manuscript"), "Move to File Drawer..."), "On the Pipeline the card offers the Pipeline's menu.")
+
+                    restored.Title = "Renamed manuscript"
+                    board.Render()
+                    CollectionAssert.AreEqual({"Renamed manuscript"}, board.Cards().Select(Function(item) item.AccessibleName).ToList(), "The card shows the new title.")
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    ' Of two records that share an Id, each card acts on its own record, as
+    ' each card did before cards were kept (#133). Looked up by the Id, the
+    ' second copy's Restore to Pipeline restored the first copy instead,
+    ' and left the second in the File Drawer.
+    <TestMethod>
+    Public Sub ACardActsOnItsOwnRecordWhenTwoRecordsShareAnId()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard()
+                    Dim first As Manuscript = Sample("First copy")
+                    first.Location = ManuscriptLocation.FileDrawer
+                    Dim second As Manuscript = ManuscriptCloneService.CloneManuscript(first)
+                    second.Title = "Second copy"
+                    Assert.AreEqual(first.Id, second.Id, "The two records share an Id.")
+                    board.Prepare(first, second)
+
+                    MenuItem(board.Card("Second copy"), "Restore to Pipeline").PerformClick()
+                    Application.DoEvents()
+
+                    Assert.AreEqual(ManuscriptLocation.Pipeline, second.Location, "The second copy's card restored the second copy.")
+                    Assert.AreEqual(ManuscriptLocation.FileDrawer, first.Location, "The first copy is left alone.")
+                    Assert.AreEqual(1, board.SaveCount)
+                    Assert.IsNotNull(MenuItem(board.Card("Second copy"), "Move to File Drawer..."), "The second copy's card follows it to the Pipeline.")
+                    Assert.IsNotNull(MenuItem(board.Card("First copy"), "Restore to Pipeline"), "The first copy's card stays in the File Drawer.")
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    Private Shared Function MenuItem(card As Control, text As String) As ToolStripItem
+        Return card.ContextMenuStrip.Items.Cast(Of ToolStripItem)().SingleOrDefault(Function(item) item.Text = text)
+    End Function
+
     Private Shared Function DeadlineRows(board As PageBoard) As List(Of DeadlineRow)
         Return Descendants(board).OfType(Of DeadlineRow)().ToList()
     End Function
@@ -1770,6 +1889,23 @@ Public Class ManuscriptPageTests
             End Get
         End Property
 
+        ' As a restore leaves it: the library's records replaced, then a render.
+        Public Sub ReplaceLibrary(ParamArray records As Manuscript())
+            GetType(Form1).GetField("manuscripts", BindingFlags.Instance Or BindingFlags.NonPublic).SetValue(Me, records.ToList())
+            Render()
+        End Sub
+
+        ' The cards on the Board's three shelves.
+        Public Function Cards() As List(Of RoundedPanel)
+            Return {"pipelinePanel", "publishedPanel", "fileDrawerPanel"}.
+                SelectMany(Function(name) DirectCast(GetType(Form1).GetField(name, BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me), Control).Controls.OfType(Of RoundedPanel)()).
+                ToList()
+        End Function
+
+        Public Function Card(title As String) As RoundedPanel
+            Return Cards().Single(Function(item) item.AccessibleName = title)
+        End Function
+
         Public Sub Open(manuscript As Manuscript)
             CallPrivate("OpenManuscript", manuscript, Nothing)
             Application.DoEvents()
@@ -1851,6 +1987,17 @@ Public Class ManuscriptPageTests
             CallPrivate("ManuscriptDirtyTimer_Tick", Nothing, EventArgs.Empty)
         End Sub
 
+        ' The Library filter's debounce timer firing (#133).
+        Public Sub PauseTyping()
+            CallPrivate("LibraryFilterDebounceElapsed", Nothing, EventArgs.Empty)
+        End Sub
+
+        ' The Insights figures are worked out off the UI thread (#132); pumps
+        ' until they are shown.
+        Public Sub WaitForInsights()
+            TestSupport.WaitForInsights(Me, TimeSpan.FromSeconds(30))
+        End Sub
+
         Public Sub Discard()
             CallPrivate("DiscardManuscriptChanges")
             Application.DoEvents()
@@ -1889,7 +2036,7 @@ Public Class ManuscriptPageTests
     ' Closes any Windows dialog (a message box or a file dialog, class #32770)
     ' that opens on the test thread while it is alive, and keeps their titles:
     ' a production dialog then fails a test by name instead of blocking it.
-    Private NotInheritable Class DialogWatcher
+    Friend NotInheritable Class DialogWatcher
         Implements IDisposable
 
         Private ReadOnly _threadId As Integer = GetCurrentThreadId()
@@ -1924,14 +2071,17 @@ Public Class ManuscriptPageTests
     End Class
 
     ' An update that is always available and accepted at once, then
-    ' downloaded and applied without Velopack or a network.
-    Private NotInheritable Class ScriptedUpdate
+    ' downloaded and applied without Velopack or a network. A download given
+    ' a gate ends when the test completes it. BackgroundLibraryWorkTests
+    ' drives one too.
+    Friend NotInheritable Class ScriptedUpdate
 
         Public Window As Control
         Public Offered, Downloaded, Applied As Integer
         Public WindowEnabledWhileDownloading As Boolean = True
         Public CheckFailure As Exception
         Public DownloadFailure As Exception
+        Public DownloadGate As Task
         Public ReadOnly Reports As New List(Of String)()
 
         Public Function Steps() As UpdateSteps
@@ -1947,7 +2097,7 @@ Public Class ManuscriptPageTests
                                 Downloaded += 1
                                 WindowEnabledWhileDownloading = Window.Enabled
                                 If DownloadFailure IsNot Nothing Then Return Task.FromException(DownloadFailure)
-                                Return Task.CompletedTask
+                                Return If(DownloadGate, Task.CompletedTask)
                             End Function,
                 .Apply = Sub(manager, release) Applied += 1,
                 .Report = Sub(owner, text, title, icon) Reports.Add(title & ": " & text)
