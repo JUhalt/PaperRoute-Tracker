@@ -4,6 +4,7 @@ Imports System.Drawing
 Imports System.Globalization
 Imports System.Text.RegularExpressions
 Imports System.Windows.Forms
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
@@ -36,9 +37,9 @@ Namespace Forms
         Private ReadOnly lblBanner As New Label()
         Private ReadOnly txtBanner As New TextBox()
         Private ReadOnly cmbDecision As New ComboBox()
-        Private ReadOnly dtpDecisionDate As New DateTimePicker()
+        Private ReadOnly dtpDecisionDate As New ThemedDatePicker()
         Private ReadOnly chkDeadline As New CheckBox()
-        Private ReadOnly dtpDeadline As New DateTimePicker()
+        Private ReadOnly dtpDeadline As New ThemedDatePicker()
         Private ReadOnly txtNotes As New TextBox()
         Private ReadOnly lblCheck As New Label()
 

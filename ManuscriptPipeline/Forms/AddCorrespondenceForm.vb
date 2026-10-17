@@ -2,6 +2,7 @@
 Imports System.Drawing
 Imports System.IO
 Imports System.Windows.Forms
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
@@ -30,7 +31,7 @@ Namespace Forms
         Private ReadOnly _existingItem As CorrespondenceItem
 
         Private ReadOnly cmbType As New ComboBox()
-        Private ReadOnly dtpDate As New DateTimePicker()
+        Private ReadOnly dtpDate As New ThemedDatePicker()
         Private ReadOnly txtTitle As New TextBox()
         Private ReadOnly txtLocalFile As New TextBox()
         Private ReadOnly txtSourceUrl As New TextBox()
@@ -51,6 +52,7 @@ Namespace Forms
             _existingItem = Nothing
 
             BuildInterface()
+            UiPolish.ApplyDialog(Me)
 
         End Sub
 

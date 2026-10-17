@@ -2,6 +2,7 @@
 Imports System.Drawing
 Imports System.Linq
 Imports System.Windows.Forms
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
@@ -18,7 +19,7 @@ Namespace Forms
         Private ReadOnly lnkClearProposal As New LinkLabel()
         Private ReadOnly chkDeadline As New CheckBox()
         Private ReadOnly txtDeadline As New TextBox()
-        Private ReadOnly dtpDeadline As New DateTimePicker()
+        Private ReadOnly dtpDeadline As New ThemedDatePicker()
 
         ' Nothing when the author library could not be loaded; pasting a title
         ' page is then unavailable and authors are added after creation.

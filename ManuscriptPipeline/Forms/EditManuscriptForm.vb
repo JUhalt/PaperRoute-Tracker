@@ -1527,6 +1527,9 @@ Namespace Forms
 
             RefreshOnlineCommands()
 
+            ' The rows are new; styled as the page was (#106).
+            UiPolish.ApplyToControls(shortlistRows)
+
         End Sub
 
 
@@ -3133,28 +3136,45 @@ Namespace Forms
 
             Dim latest As EditorialDecisionEvent = ManuscriptAttentionService.GetLatestDecision(submission)
             Dim outcome As String
-            Dim outcomeColor As Color
 
             If latest Is Nothing Then
                 outcome = If(submission.FollowUpDate.HasValue,
                              "Awaiting decision  " & ChrW(&HB7) & "  follow up " & submission.FollowUpDate.Value.ToString("MMM d"),
                              "Awaiting decision")
-                outcomeColor = UiTheme.MutedText()
             Else
                 outcome = EditorialDecisionDisplayService.Format(latest.Decision) & "  " & ChrW(&HB7) & "  " & latest.DecisionDate.ToString("MMM d, yyyy")
-                outcomeColor =
-                    If(ManuscriptAttentionService.IsRejectionDecision(latest.Decision), UiTheme.MutedText(),
-                       If(latest.Decision = EditorialDecision.Accepted, UiTheme.SuccessColor(), UiTheme.WarningColor()))
             End If
 
             Using semibold As New Font(lstSubmissions.Font, FontStyle.Bold)
                 TextRenderer.DrawText(e.Graphics, outcome, semibold,
-                    New Rectangle(left, bounds.Top + 8 + lineHeight * 2, width, lineHeight), outcomeColor, flags)
+                    New Rectangle(left, bounds.Top + 8 + lineHeight * 2, width, lineHeight), OutcomeColor(latest, selected), flags)
             End Using
 
             e.DrawFocusRectangle()
 
         End Sub
+
+
+        ' The color of a submission's latest decision: muted while awaiting
+        ' one or after a rejection, green when accepted, amber otherwise. On
+        ' a selected row it is the secondary text color, as muted and amber
+        ' text on the selection fall short of 4.5:1 (#106).
+        Friend Shared Function OutcomeColor(
+            latest As EditorialDecisionEvent,
+            selected As Boolean
+        ) As Color
+
+            If selected Then
+                Return UiTheme.SecondaryText()
+            End If
+
+            If latest Is Nothing OrElse ManuscriptAttentionService.IsRejectionDecision(latest.Decision) Then
+                Return UiTheme.MutedText()
+            End If
+
+            Return If(latest.Decision = EditorialDecision.Accepted, UiTheme.SuccessColor(), UiTheme.WarningColor())
+
+        End Function
 
 
         Private Sub UpdateSubmissionButtons()

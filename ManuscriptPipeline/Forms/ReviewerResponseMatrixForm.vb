@@ -264,18 +264,7 @@ Namespace Forms
             Dim top As Integer = bounds.Top + UiTheme.Px(9, DeviceDpi)
             Const flags As TextFormatFlags = TextFormatFlags.NoPrefix Or TextFormatFlags.NoPadding Or TextFormatFlags.SingleLine Or TextFormatFlags.EndEllipsis
 
-            Dim fill As Color
-            Dim ink As Color
-            Select Case item.Status
-                Case ReviewerResponseStatus.Unresolved
-                    fill = UiTheme.WarningMutedBackground() : ink = UiTheme.WarningColor()
-                Case ReviewerResponseStatus.InProgress
-                    fill = UiTheme.AccentMutedBackground() : ink = UiTheme.AccentColor()
-                Case ReviewerResponseStatus.Addressed
-                    fill = UiTheme.Blend(UiTheme.SuccessColor(), UiTheme.CardBackground(), 0.85F) : ink = UiTheme.SuccessColor()
-                Case Else
-                    fill = UiTheme.HoverBackground() : ink = UiTheme.SecondaryText()
-            End Select
+            Dim colors As (Fill As Color, Ink As Color) = StatusPill(item.Status)
 
             Using bold As New Font(font, FontStyle.Bold)
                 Dim status As String = ReviewerResponseService.FormatStatus(item.Status)
@@ -283,12 +272,12 @@ Namespace Forms
                 Dim pill As New Rectangle(bounds.Left + inset, top - UiTheme.Px(2, DeviceDpi), statusSize.Width + UiTheme.Px(14, DeviceDpi), line + UiTheme.Px(4, DeviceDpi))
                 g.SmoothingMode = Drawing2D.SmoothingMode.AntiAlias
                 Using path As Drawing2D.GraphicsPath = RoundedShapes.Create(pill, pill.Height / 2.0F)
-                    Using brush As New SolidBrush(fill)
+                    Using brush As New SolidBrush(colors.Fill)
                         g.FillPath(brush, path)
                     End Using
                 End Using
                 g.SmoothingMode = Drawing2D.SmoothingMode.Default
-                TextRenderer.DrawText(g, status, bold, pill, ink, flags Or TextFormatFlags.HorizontalCenter Or TextFormatFlags.VerticalCenter)
+                TextRenderer.DrawText(g, status, bold, pill, colors.Ink, flags Or TextFormatFlags.HorizontalCenter Or TextFormatFlags.VerticalCenter)
 
                 Dim who As String = item.ReviewerLabel & "  " & ChrW(&HB7) & "  Round " & item.RevisionRoundNumber.ToString()
                 Dim whoLeft As Integer = pill.Right + UiTheme.Px(UiTheme.SpaceSm, DeviceDpi)
@@ -304,6 +293,22 @@ Namespace Forms
             e.DrawFocusRectangle()
 
         End Sub
+
+        ' A status pill's fill and the text drawn on it.
+        Friend Shared Function StatusPill(status As ReviewerResponseStatus) As (Fill As Color, Ink As Color)
+            Select Case status
+                Case ReviewerResponseStatus.Unresolved
+                    Return (UiTheme.WarningMutedBackground(), UiTheme.WarningColor())
+                Case ReviewerResponseStatus.InProgress
+                    Return (UiTheme.AccentMutedBackground(), UiTheme.AccentColor())
+                Case ReviewerResponseStatus.Addressed
+                    ' The success token's own fill: a blend of green and white
+                    ' left green text at 4.41:1 in Light (#106).
+                    Return (UiTheme.SuccessMutedBackground(), UiTheme.SuccessColor())
+                Case Else
+                    Return (UiTheme.HoverBackground(), UiTheme.SecondaryText())
+            End Select
+        End Function
 
         ' The assistant's button is in the actions row only while the
         ' assistant is turned on, so a hidden button never takes a place.
