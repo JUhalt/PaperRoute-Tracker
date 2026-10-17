@@ -987,6 +987,13 @@ Partial Public Class Form1
 
     Private Sub LibraryFilterDebounceElapsed(sender As Object, e As EventArgs) Handles libraryFilterDebounceTimer.Tick
 
+        ' The refill reads every record, which a save, backup or restore may
+        ' be normalizing on its worker thread (#132): the timer keeps going
+        ' and refills the grid once the work has ended.
+        If libraryWorkInProgress Then
+            Return
+        End If
+
         libraryFilterDebounceTimer.Stop()
         FillLibraryGrid()
 

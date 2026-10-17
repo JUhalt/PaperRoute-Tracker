@@ -430,6 +430,37 @@ Public Class BackgroundLibraryWorkTests
     End Sub
 
 
+    ' The Library filter's refill reads every record (#133), which library
+    ' work may be normalizing on its worker thread: a pause in typing while
+    ' the work runs refills the grid once the work has ended.
+    <TestMethod>
+    Public Sub TheLibraryFilterRefillsOnceLibraryWorkHasEnded()
+        RunOnStaThread(
+            Sub()
+                Dim example As LargeLibraryFixture.SyntheticLibrary = LargeLibraryFixture.WriteExample(Path.Combine(_root, "library"))
+                Using board As New LibraryBoard(example, Path.Combine(_root, "settings"))
+                    board.Start()
+                    board.NavigateTo(ManuscriptPipeline.Form1.WorkspacePage.Library)
+                    Dim grid As DataGridView = ViewCatalog.Descendants(board).OfType(Of DataGridView)().Single()
+                    Dim everything As Integer = grid.Rows.Count
+                    Assert.IsTrue(everything > 0)
+                    board.TypeInLibraryFilter("no manuscript is called this")
+                    Dim rowsDuringWork As Integer = -1
+
+                    OnTheWindowDuringWork(board,
+                        Sub()
+                            board.PauseTyping()
+                            rowsDuringWork = grid.Rows.Count
+                        End Sub)
+
+                    Assert.AreEqual(everything, rowsDuringWork, "The grid was not refilled while the work ran.")
+                    PumpUntil(Function() grid.Rows.Count = 0, "Once the work ended, the paused filter refilled the grid.")
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+
     Private Function OpenLargeLibrary() As LibraryBoard
         Dim library As LargeLibraryFixture.SyntheticLibrary = LargeLibraryFixture.Create(Path.Combine(_root, "library"), 500)
         Dim board As New LibraryBoard(library, Path.Combine(_root, "settings"))
