@@ -447,13 +447,20 @@ Namespace Controls
             Return low
         End Function
 
-        Private Function HitTest(point As Point) As Spot
-
+        ' The entry under a point in client coordinates, or -1.
+        Private Function EntryAt(point As Point) As Integer
             Dim y As Integer = point.Y - AutoScrollPosition.Y
             Dim index As Integer = FirstEntryEndingBelow(y)
-            If index >= _entries.Count OrElse y < _entries(index).Top OrElse point.X < 0 OrElse point.X >= ContentWidth() Then
-                Return Spot.None
-            End If
+            If index >= _entries.Count OrElse y < _entries(index).Top OrElse point.X < 0 OrElse point.X >= ContentWidth() Then Return -1
+            Return index
+        End Function
+
+        ' What the pointer can press: a row or one of its buttons, or the
+        ' Done line's link.
+        Private Function HitTest(point As Point) As Spot
+
+            Dim index As Integer = EntryAt(point)
+            If index < 0 Then Return Spot.None
 
             Dim entry As DeadlineEntry = _entries(index)
             Select Case entry.Kind
@@ -1017,14 +1024,18 @@ Namespace Controls
                 Return If(row < 0, Nothing, _list.ReadableChild(_list._stopChild(row)))
             End Function
 
+            ' The child under the point: a button, a row, or the heading, the
+            ' sentence or the Done line the point is over, as each was a window
+            ' of its own; the list itself between them.
             Public Overrides Function HitTest(x As Integer, y As Integer) As AccessibleObject
                 If Not _list.IsHandleCreated Then Return Nothing
                 Dim client As Point = _list.PointToClient(New Point(x, y))
                 If Not _list.ClientRectangle.Contains(client) Then Return Nothing
                 Dim hit As Spot = _list.HitTest(client)
+                Dim entry As Integer = If(hit.Entry >= 0, hit.Entry, _list.EntryAt(client))
                 Dim index As Integer = _list._readable.FindIndex(Function(candidate) candidate.IsSameAs(hit))
-                If index < 0 AndAlso hit.Entry >= 0 Then
-                    index = _list._readable.FindIndex(Function(candidate) candidate.Entry = hit.Entry)
+                If index < 0 AndAlso entry >= 0 Then
+                    index = _list._readable.FindIndex(Function(candidate) candidate.Entry = entry)
                 End If
                 Return If(index < 0, Me, _list.ReadableChild(index))
             End Function

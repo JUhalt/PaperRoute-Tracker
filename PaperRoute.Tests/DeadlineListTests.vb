@@ -484,6 +484,14 @@ Public Class DeadlineListTests
                     Assert.AreEqual(RowName(list, "Book the room"), CStr(root.accDescription(3)), "A button is described by its row.")
                     StringAssert.StartsWith(CStr(root.accDescription(20)), "Done in the last 30 days: 1")
 
+                    ' Pointing at a heading, or at the Done line's words before its
+                    ' link, reads that line, as each was a window of its own.
+                    Dim heading As Point = Center(Child(list, "OVERDUE  1", AccessibleRole.StaticText).Bounds)
+                    Assert.AreEqual("OVERDUE  1", list.AccessibilityObject.HitTest(heading.X, heading.Y)?.Name, "The heading under the pointer.")
+                    Dim link As Rectangle = Child(list, "Show done items", AccessibleRole.Link).Bounds
+                    Assert.AreEqual("Show done items", list.AccessibilityObject.HitTest(link.Left - UiTheme.Px(20, list.DeviceDpi), link.Top + link.Height \ 2)?.Name,
+                                    "The Done line's words under the pointer.")
+
                     ' The glance: a group with a line for each count.
                     Dim glanceRoot As Accessibility.IAccessible = FromWindow(glance.Handle)
                     Assert.AreEqual("At a glance", CStr(glanceRoot.accName(0)))
