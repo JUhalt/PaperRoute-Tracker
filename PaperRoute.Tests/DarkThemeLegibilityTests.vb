@@ -1,6 +1,7 @@
 Imports System
 Imports System.Collections.Generic
 Imports System.Drawing
+Imports System.IO
 Imports System.Linq
 Imports System.Runtime.ExceptionServices
 Imports System.Windows.Forms
@@ -21,22 +22,22 @@ Imports ManuscriptPipeline.Services
 Public Class DarkThemeLegibilityTests
 
     ' What stays as Windows draws it in Dark for 1.0, by name: the residual
-    ' list (#106, plan item 57). The sweep passes over what an entry
+    ' list (#106, plan item 57), with the words the guide's Accessibility
+    ' section names it in (#139). The sweep passes over what an entry
     ' matches and nothing else. An entry that matches nothing names what
     ' the sweep cannot judge: Windows' own windows, which no view in the
     ' catalog opens, and frames, borders, fills and links, which are never
     ' most of a control. Matching those by type would pass over the whole
     ' control, a grid's check marks with its frame.
-    Private Shared ReadOnly DarkAllowList As (Name As String, Reason As String, Matches As Func(Of Control, Boolean))() = {
-        ("The report preview", "A web page that Windows' browser control draws.", Function(control As Control) TypeOf control Is WebBrowser),
-        ("Message boxes", "Windows draws them, title bar included: WindowChrome could set it, but nothing hands it a message box's window (#143).", Function(control As Control) False),
-        ("File dialogs", "Windows draws them.", Function(control As Control) False),
-        ("Grid frames", "WinForms draws a white frame one pixel wide round a grid; UiPolish leaves the grid's border as it is.", Function(control As Control) False),
-        ("Progress bars", "Windows draws the bars in Check for Publications and Updating PaperRoute: not light in Dark, but in Windows' blue, not the accent.", Function(control As Control) False),
-        ("Combo and number box borders", "Windows draws them in greys of its own.", Function(control As Control) False),
-        ("The route map's fills", "The journal and author segments and the numbered events keep their Light fills in Dark; their white labels keep 4.5:1.", Function(control As Control) False),
-        ("Help's links", "The guide's links are in the color Windows' rich text box gives links.", Function(control As Control) False),
-        ("Input borders", "Text boxes and lists are outlined in the quiet card border, under the 3:1 an input's outline should have.", Function(control As Control) False)
+    Private Shared ReadOnly DarkAllowList As (Name As String, Reason As String, Guide As String, Matches As Func(Of Control, Boolean))() = {
+        ("The report preview", "A web page that Windows' browser control draws.", "The report preview", Function(control As Control) TypeOf control Is WebBrowser),
+        ("Message boxes", "Windows draws them, title bar included: WindowChrome could set it, but nothing hands it a message box's window (#143).", "Message boxes, title bar included", Function(control As Control) False),
+        ("File dialogs", "Windows draws them.", "The Open and Save dialogs and the folder picker", Function(control As Control) False),
+        ("Grid frames", "WinForms draws a white frame one pixel wide round a grid; UiPolish leaves the grid's border as it is.", "The thin white frame around a table", Function(control As Control) False),
+        ("Combo and number box borders", "Windows draws them in greys of its own.", "The borders of drop-down lists and number boxes", Function(control As Control) False),
+        ("The route map's fills", "The journal and author segments and the numbered events keep their Light fills in Dark; their white labels keep 4.5:1.", "the journal and author segments and the numbered events", Function(control As Control) False),
+        ("Help's links", "The guide's links are in the color Windows' rich text box gives links.", "The links in this guide's window", Function(control As Control) False),
+        ("Input borders", "Text boxes and lists are outlined in the quiet card border, under the 3:1 an input's outline should have.", "The outlines of text boxes and lists", Function(control As Control) False)
     }
 
     ' ---------------------------------------------------------------
@@ -102,6 +103,29 @@ Public Class DarkThemeLegibilityTests
                     Assert.AreEqual(0, LightPartsOf(form, everything:=True).Count, String.Join("; ", LightPartsOf(form, everything:=True)))
                 End Using
             End Sub)
+
+    End Sub
+
+    ' The guide's Accessibility section names exactly what the allow-list
+    ' leaves to Windows in Dark (#139): one line of its list for each
+    ' entry, in the entry's words, and no other line.
+    <TestMethod>
+    Public Sub TheGuideNamesEachDarkSurfaceLeftToWindows()
+
+        Dim guide As String = File.ReadAllText(UserGuideService.GuideFilePath()).Replace(vbCrLf, vbLf)
+        Dim heading As Integer = guide.IndexOf(vbLf & "### What Windows draws" & vbLf, StringComparison.Ordinal)
+        Assert.IsTrue(heading >= 0, "The Accessibility section says what Windows draws.")
+
+        Dim [next] As Integer = guide.IndexOf(vbLf & "#", heading + 1, StringComparison.Ordinal)
+        Dim lines As List(Of String) = guide.Substring(heading, If([next] < 0, guide.Length, [next]) - heading).
+            Split(ChrW(10)).
+            Where(Function(line) line.StartsWith("- ", StringComparison.Ordinal)).
+            ToList()
+
+        Assert.AreEqual(DarkAllowList.Length, lines.Count, "A line for each entry: " & String.Join(" | ", lines))
+        For Each entry In DarkAllowList
+            Assert.AreEqual(1, lines.Where(Function(line) line.Contains(entry.Guide, StringComparison.Ordinal)).Count(), $"The guide names {entry.Name} on one line, as '{entry.Guide}'.")
+        Next
 
     End Sub
 
