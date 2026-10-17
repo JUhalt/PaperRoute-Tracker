@@ -4023,7 +4023,9 @@ Public Class Form1
 
     ' Set once a restore has replaced the library on disk: until the restart,
     ' what is in memory is the replaced library, so the close the restart
-    ' sends neither asks about the open page nor saves anything.
+    ' sends neither asks about the open page nor saves anything. The other
+    ' restarts that hand over set it too (#124, #178), once nothing in
+    ' memory is left to save.
     Private handingOverAfterRestore As Boolean = False
 
 
@@ -4149,11 +4151,12 @@ Public Class Form1
 
 
     ' Starts PaperRoute again on the library now on disk, after a restore
-    ' (#116) or a recovery in the startup window (#124). The running
-    ' instance is released first: the new process starts before this one
-    ' has unwound, and would otherwise find the library still held and
-    ' exit. Nothing here can cancel the close (handingOverAfterRestore is
-    ' set first), so no second window can follow. Tests record it instead.
+    ' (#116), a recovery in the startup window (#124) or a change of
+    ' appearance (#178). The running instance is released first: the new
+    ' process starts before this one has unwound, and would otherwise find
+    ' the library still held and exit. Nothing here can cancel the close
+    ' (handingOverAfterRestore is set first), so no second window can
+    ' follow. Tests record it instead.
     Protected Overridable Sub RestartOnTheLibraryOnDisk()
 
         Program.ReleaseInstanceForRestart()
@@ -4618,13 +4621,30 @@ Public Class Form1
                 If restartResult =
                 DialogResult.Yes Then
 
-                    Application.Restart()
+                    RestartForNewAppearance()
 
                 End If
 
             End If
 
         End Using
+
+    End Sub
+
+
+    ' Starts PaperRoute again in the new appearance (#178), as a restore and
+    ' a startup recovery do: the open page's edits and a failed save are
+    ' asked about first, and Cancel at either restarts nothing. Then the
+    ' window hands over, so the close the restart sends neither asks nor
+    ' saves again, and the running instance is released for the new one.
+    Private Sub RestartForNewAppearance()
+
+        If Not (ConfirmLeaveManuscript() AndAlso ConfirmCloseUnsavedLibrary()) Then
+            Return
+        End If
+
+        handingOverAfterRestore = True
+        RestartOnTheLibraryOnDisk()
 
     End Sub
 

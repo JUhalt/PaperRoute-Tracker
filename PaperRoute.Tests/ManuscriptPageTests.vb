@@ -531,6 +531,72 @@ Public Class ManuscriptPageTests
             End Sub)
     End Sub
 
+    ' Yes to restarting in a new appearance (#178) restarts as a restore and
+    ' a startup recovery do: the page's edits and a failed save are asked
+    ' about first, and Cancel at either restarts nothing; then the window
+    ' hands over and restarts through RestartOnTheLibraryOnDisk, which
+    ' releases the single-instance lock, and the close the restart sends
+    ' asks and saves nothing again. Before the change the restart was a
+    ' plain Application.Restart, with no seam a test could stand in for: it
+    ' asked nothing first and released nothing, and its close asked later.
+    <TestMethod>
+    Public Sub TheAppearanceRestartAsksFirstThenHandsOver()
+        RunOnStaThread(
+            Sub()
+                Dim root As String = CreateTemporaryRoot()
+                Try
+                    Using board As New PageBoard(), dialogs As New DialogWatcher()
+                        board.UseRepository(root)
+                        Dim manuscript As Manuscript = Sample("Original title")
+                        board.Prepare(manuscript)
+                        board.Open(manuscript)
+                        board.Field("Title").Text = "Edited title"
+                        Dim questions As New List(Of String)()
+                        Dim answer As DialogResult = DialogResult.Cancel
+                        board.SetPrompt(Function(title)
+                                           questions.Add(title)
+                                           Return answer
+                                       End Function)
+
+                        board.RestartForAppearance()
+                        CollectionAssert.AreEqual({"Original title"}, questions, "The page's edits are asked about first.")
+                        Assert.AreEqual(0, board.Restarts, "Cancel at the page's question restarts nothing.")
+                        Assert.AreEqual(0, board.SaveCount)
+                        Assert.AreEqual("Edited title", board.Field("Title").Text, "Cancel keeps the edits.")
+
+                        Using held As FileStream = HoldTheSaveFile(root)
+                            board.PressCommandKey(Keys.Control Or Keys.S)
+                        End Using
+                        Assert.IsTrue(board.LibrarySaveFailed)
+                        CollectionAssert.AreEqual({"Save Error"}, dialogs.Closed)
+                        questions.Clear()
+                        board.RestartForAppearance()
+                        CollectionAssert.AreEqual({"your library"}, questions, "The failed save is asked about.")
+                        Assert.AreEqual(0, board.Restarts, "Cancel at the failed save's question restarts nothing.")
+                        Assert.AreEqual(1, board.SaveCount)
+
+                        questions.Clear()
+                        answer = DialogResult.Yes
+                        board.RestartForAppearance()
+                        CollectionAssert.AreEqual({"your library"}, questions)
+                        Assert.AreEqual(2, board.SaveCount, "Yes saved again.")
+                        Assert.IsFalse(board.LibrarySaveFailed)
+                        StringAssert.Contains(File.ReadAllText(Path.Combine(root, "data", "manuscripts.json")), "Edited title")
+                        Assert.AreEqual(1, board.Restarts, "Then PaperRoute restarts through RestartOnTheLibraryOnDisk.")
+                        Assert.IsTrue(board.HandingOverAtRestart, "Handing over, so the restart's close neither asks nor saves.")
+
+                        board.Close()
+                        Assert.IsTrue(board.IsDisposed, "The restart's close goes through.")
+                        CollectionAssert.AreEqual({"your library"}, questions, "Nothing is asked twice.")
+                        Assert.AreEqual(2, board.SaveCount, "Nothing is saved twice.")
+                        CollectionAssert.AreEqual({"Save Error"}, dialogs.Closed)
+                    End Using
+                Finally
+                    DeleteTemporaryRoot(root)
+                End Try
+            End Sub)
+    End Sub
+
     ' The plain error dialog (#121) keeps the unsaved page reachable: Close
     ' PaperRoute goes through the normal close, Keep Working changes nothing.
     <TestMethod>
@@ -2028,6 +2094,22 @@ Public Class ManuscriptPageTests
         Public Function RunWork(status As String, work As Action) As Boolean
             Return CBool(GetType(Form1).GetMethod("RunLibraryWork", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(Me, New Object() {status, work, Nothing}))
         End Function
+
+        ' A restart is counted, with whether the window was handing over
+        ' when it was asked for; nothing restarts the test host.
+        Public Restarts As Integer
+        Public HandingOverAtRestart As Boolean
+
+        Protected Overrides Sub RestartOnTheLibraryOnDisk()
+            Restarts += 1
+            HandingOverAtRestart = CBool(GetType(Form1).GetField("handingOverAfterRestore", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me))
+        End Sub
+
+        ' Yes to the Restart Required question after a new appearance.
+        Public Sub RestartForAppearance()
+            CallPrivate("RestartForNewAppearance")
+            Application.DoEvents()
+        End Sub
 
         ' The library is written to a throwaway directory, as the app writes it.
         Public Sub UseRepository(root As String)
