@@ -4,7 +4,9 @@ Imports System.Drawing
 Imports System.Linq
 Imports System.Windows.Forms
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Forms
+Imports ManuscriptPipeline.Models
 
 ' Accessible names (#137): every input a screen reader lands on says what
 ' it is, and so does every button whose face has no letters. The sweep
@@ -97,6 +99,15 @@ Public Class AccessibleNameTests
                     layout.Controls.Add(New Button With {.Text = "...", .Name = "ellipsis"})
                     layout.Controls.Add(New Button With {.Text = "...", .Name = "namedEllipsis", .AccessibleName = "Choose a file"})
 
+                    ' A drawn list whose row has a button with no letters.
+                    Dim arrowRow As New DeadlineRow(New DeadlineItem With {.Title = "Arrow", .Kind = DeadlineKind.Reminder, .Group = DeadlineGroup.Today, .DueDate = DateTime.Today}, DateTime.Today)
+                    arrowRow.AddAction("→", Sub()
+                                            End Sub)
+                    arrowRow.FinishActions()
+                    Dim drawn As New DeadlineList With {.Name = "drawnArrow", .Size = New Size(400, 120), .AccessibleName = "Deadlines"}
+                    drawn.SetEntries({DeadlineEntry.ForRow(arrowRow)})
+                    layout.Controls.Add(drawn)
+
                     probe.Controls.Add(layout)
                     probe.Show()
                     Application.DoEvents()
@@ -111,7 +122,7 @@ Public Class AccessibleNameTests
         )
 
         Dim names As String() =
-            {"bareHelp", "afterHelp", "afterCheck", "afterLink", "afterSentence", "ellipsis"}
+            {"bareHelp", "afterHelp", "afterCheck", "afterLink", "afterSentence", "ellipsis", "drawnArrow"}
 
         Assert.AreEqual(
             names.Length,
@@ -287,7 +298,67 @@ Public Class AccessibleNameTests
                     lines.Add(Describe(control) & " is named only ""Help"", not for what it helps with.")
                 End If
 
+            ElseIf DrawsItsChildren(control) Then
+
+                seen.Add(control)
+                InspectDrawn(control, lines)
+
             End If
+
+        Next
+
+    End Sub
+
+
+    ' A control that draws its items, buttons and text rather than hosting a
+    ' control for each (#133). A screen reader reads them as its accessible
+    ' children, so the same rules hold for them.
+    Private Shared Function DrawsItsChildren(
+        control As Control
+    ) As Boolean
+
+        Return TypeOf control Is DeadlineList OrElse
+            TypeOf control Is DeadlineGlance
+
+    End Function
+
+
+    ' Every drawn button is named with letters, and every drawn item, text
+    ' or link has a name.
+    Private Shared Sub InspectDrawn(
+        control As Control,
+        lines As List(Of String)
+    )
+
+        Dim accessible As AccessibleObject =
+            control.AccessibilityObject
+
+        For index As Integer = 0 To accessible.GetChildCount() - 1
+
+            Dim child As AccessibleObject =
+                accessible.GetChild(index)
+
+            If child Is Nothing Then
+                lines.Add(Describe(control) & " has no child " & index & ".")
+                Continue For
+            End If
+
+            Dim name As String =
+                If(child.Name, String.Empty).Trim()
+
+            Select Case child.Role
+
+                Case AccessibleRole.PushButton
+                    If Not name.Any(Function(character) Char.IsLetter(character)) Then
+                        lines.Add(Describe(control) & " draws a button named """ & name & """, with no letters.")
+                    End If
+
+                Case AccessibleRole.ListItem, AccessibleRole.StaticText, AccessibleRole.Link
+                    If name.Length = 0 Then
+                        lines.Add(Describe(control) & " draws a " & child.Role.ToString() & " with no name.")
+                    End If
+
+            End Select
 
         Next
 

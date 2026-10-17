@@ -9,8 +9,9 @@ Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
 ' The single-window shell: a left rail of pages, one content area, and
-' back/forward navigation. The Board is always kept; other pages are built
-' when opened and disposed when left. Library editors that save as they go
+' back/forward navigation. The Board is always kept, and so are Deadlines
+' and Import & Export once built (#133); other pages are built when opened
+' and disposed when left. Library editors that save as they go
 ' (journals, authors, reminders) are hosted as pages until later v0.6 work
 ' converts them.
 Partial Public Class Form1
@@ -550,10 +551,13 @@ Partial Public Class Form1
             Return
         End If
 
-        contentHost.Controls.Remove(currentPageView)
-
-        ' The Import & Export page keeps its controls for its next visit.
-        If currentPageView IsNot importExportPage Then
+        ' A kept page is hidden where it is, with its windows, for its next
+        ' visit; taking it out of the window and putting it back costs as
+        ' much as showing it.
+        If IsKeptPage(currentPageView) Then
+            currentPageView.Visible = False
+        Else
+            contentHost.Controls.Remove(currentPageView)
             currentPageView.Dispose()
         End If
 
@@ -562,8 +566,6 @@ Partial Public Class Form1
         libraryContent = Nothing
         libraryAuthorsForm = Nothing
         libraryFilter = Nothing
-        deadlinesList = Nothing
-        deadlinesFilter = Nothing
         insightsContent = Nothing
         insightsGrid = Nothing
 
@@ -577,6 +579,12 @@ Partial Public Class Form1
         End If
 
     End Sub
+
+
+    ' The pages built once and kept while the window lives (#133).
+    Private Function IsKeptPage(view As Control) As Boolean
+        Return view IsNot Nothing AndAlso (view Is importExportPage OrElse view Is deadlinesPage)
+    End Function
 
 
     Private Sub ShowPage(request As PageRequest)
@@ -600,7 +608,7 @@ Partial Public Class Form1
                     "Your reusable journal records and their submission checklists. Changes are saved as you make them.",
                     New JournalLibraryForm(manuscripts))
             Case WorkspacePage.Deadlines
-                view = BuildDeadlinesPage()
+                view = OpenDeadlinesPage()
             Case WorkspacePage.Insights
                 view = BuildInsightsPage()
             Case Else
@@ -610,9 +618,26 @@ Partial Public Class Form1
                 view = importExportPage
         End Select
 
-        view.Dock = DockStyle.Fill
         currentPageView = view
-        contentHost.Controls.Add(view)
+
+        If view.Parent Is contentHost Then
+            view.Visible = True
+        ElseIf IsKeptPage(view) Then
+            ' A kept page is put in the window hidden and laid out at the
+            ' size it is shown at, so its windows are made once, at their
+            ' final size, as it appears. A hidden page takes no part in its
+            ' parent's layout, so it is given that size here.
+            view.Dock = DockStyle.Fill
+            view.Visible = False
+            contentHost.Controls.Add(view)
+            view.Bounds = contentHost.DisplayRectangle
+            view.PerformLayout()
+            view.Visible = True
+        Else
+            view.Dock = DockStyle.Fill
+            contentHost.Controls.Add(view)
+        End If
+
         view.BringToFront()
         boardPage.Visible = False
 

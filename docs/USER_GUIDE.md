@@ -1019,7 +1019,7 @@ In windows, pages, and lists:
 - On the Board, **Tab** to a card's title and press **Enter** to open it; the keyboard's context-menu key opens the card's **⋯** menu.
 - On a chip, such as the Board's Needs Attention filters or the Deadlines page's filters, **Enter** or **Space** presses it.
 - In the Library table, the Insights tables, and Your Citations, **Enter** opens the selected row.
-- On the Deadlines page, **Up** and **Down** move from item to item, and **Enter** does the item's main action.
+- On the Deadlines page, **Up** and **Down** move from item to item, **Left** and **Right** move across the items and the **Done** line, and **Enter** does the item's main action.
 - In the Insights route chart, **Up** and **Down** choose a route, and **Enter** opens it.
 - In **Route View**, **Tab** moves from waypoint to waypoint in route order, and **Enter** opens the one you are on in the manuscript page.
 - In a manuscript's tag box, **Enter**, a comma, or a semicolon adds the tag, and **Backspace** in the empty box removes the last tag. On a tag, **Delete** or **Backspace** removes it.

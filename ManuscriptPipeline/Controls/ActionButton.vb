@@ -109,6 +109,27 @@ Namespace Controls
 
             Dim g As Graphics = e.Graphics
             g.Clear(If(Parent IsNot Nothing, Parent.BackColor, UiTheme.BoardBackground()))
+            PaintFace(g, New Rectangle(0, 0, Width, Height), _role, Text, Font, TextFlags(), _hover, _pressed,
+                      Focused AndAlso ShowFocusCues, Enabled, DeviceDpi)
+
+        End Sub
+
+        ' The button's face in bounds, for this button and for buttons a list
+        ' draws in its rows (the Deadlines page), so both look the same.
+        Friend Shared Sub PaintFace(
+            g As Graphics,
+            bounds As Rectangle,
+            role As ActionButtonRole,
+            text As String,
+            font As Font,
+            flags As TextFormatFlags,
+            hover As Boolean,
+            pressed As Boolean,
+            focusRing As Boolean,
+            enabled As Boolean,
+            dpi As Integer
+        )
+
             g.SmoothingMode = SmoothingMode.AntiAlias
 
             Dim fill As Color = Color.Empty
@@ -117,33 +138,33 @@ Namespace Controls
 
             Dim hoverTint As Color = UiTheme.HoverBackground()
 
-            Select Case _role
+            Select Case role
                 Case ActionButtonRole.Primary
                     Dim accent As Color = UiTheme.AccentColor()
                     Dim shade As Color = If(UiTheme.IsDark(), Color.White, Color.Black)
-                    fill = If(_pressed, UiTheme.Blend(accent, shade, 0.2F), If(_hover, UiTheme.Blend(accent, shade, 0.1F), accent))
+                    fill = If(pressed, UiTheme.Blend(accent, shade, 0.2F), If(hover, UiTheme.Blend(accent, shade, 0.1F), accent))
                     ink = UiTheme.OnAccentText()
                 Case ActionButtonRole.Quiet
-                    fill = If(_hover OrElse _pressed, hoverTint, Color.Empty)
+                    fill = If(hover OrElse pressed, hoverTint, Color.Empty)
                     ink = UiTheme.AccentColor()
                 Case ActionButtonRole.Danger
-                    fill = If(_hover OrElse _pressed, hoverTint, UiTheme.CardBackground())
+                    fill = If(hover OrElse pressed, hoverTint, UiTheme.CardBackground())
                     border = UiTheme.CardBorder()
                     ink = UiTheme.DangerColor()
                 Case Else
-                    fill = If(_hover OrElse _pressed, hoverTint, UiTheme.CardBackground())
+                    fill = If(hover OrElse pressed, hoverTint, UiTheme.CardBackground())
                     border = UiTheme.CardBorder()
                     ink = UiTheme.PrimaryText()
             End Select
 
-            If Not Enabled Then
-                fill = If(_role = ActionButtonRole.Quiet, Color.Empty, UiTheme.BoardBackground())
+            If Not enabled Then
+                fill = If(role = ActionButtonRole.Quiet, Color.Empty, UiTheme.BoardBackground())
                 border = UiTheme.CardBorder()
                 ink = UiTheme.MutedText()
             End If
 
-            Dim radius As Single = UiTheme.Px(UiTheme.ControlRadius, DeviceDpi)
-            Dim shape As New RectangleF(0.5F, 0.5F, Width - 1.0F, Height - 1.0F)
+            Dim radius As Single = UiTheme.Px(UiTheme.ControlRadius, dpi)
+            Dim shape As New RectangleF(bounds.X + 0.5F, bounds.Y + 0.5F, bounds.Width - 1.0F, bounds.Height - 1.0F)
 
             Using path As GraphicsPath = RoundedShapes.Create(shape, radius)
                 If Not fill.IsEmpty Then
@@ -158,17 +179,17 @@ Namespace Controls
                 End If
             End Using
 
-            If Focused AndAlso ShowFocusCues Then
-                Dim ring As New RectangleF(2.0F, 2.0F, Width - 5.0F, Height - 5.0F)
+            If focusRing Then
+                Dim ring As New RectangleF(bounds.X + 2.0F, bounds.Y + 2.0F, bounds.Width - 5.0F, bounds.Height - 5.0F)
                 Using path As GraphicsPath = RoundedShapes.Create(ring, Math.Max(1.0F, radius - 2.0F))
-                    Using pen As New Pen(If(_role = ActionButtonRole.Primary, UiTheme.OnAccentText(), UiTheme.AccentSecondaryColor()), 2.0F)
+                    Using pen As New Pen(If(role = ActionButtonRole.Primary, UiTheme.OnAccentText(), UiTheme.AccentSecondaryColor()), 2.0F)
                         g.DrawPath(pen, path)
                     End Using
                 End Using
             End If
 
             g.SmoothingMode = SmoothingMode.None
-            TextRenderer.DrawText(g, Text, Font, New Rectangle(0, 0, Width, Height), ink, TextFlags())
+            TextRenderer.DrawText(g, text, font, bounds, ink, flags)
 
         End Sub
 
