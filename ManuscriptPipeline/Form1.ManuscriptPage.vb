@@ -585,6 +585,13 @@ Partial Public Class Form1
             Return True
         End If
 
+        ' While a save, backup or restore runs (#132), the library's save
+        ' would be refused: the edits stay on the page, still unsaved, rather
+        ' than go into records the work is reading and be saved nowhere.
+        If libraryWorkInProgress Then
+            Return False
+        End If
+
         If Not manuscriptEditor.CommitChanges() Then
             Return False
         End If
@@ -737,7 +744,8 @@ Partial Public Class Form1
     ' An error on the UI thread (#121): one plain dialog that says what
     ' happened and whether there are unsaved changes. Keep Working returns
     ' to the window; Close PaperRoute closes it the normal way, so the Save
-    ' or Discard question still appears.
+    ' or Discard question still appears, once any library work running
+    ' has ended (#132), since a close before then is refused.
     Friend Sub ReportUnhandledError(
         failure As Exception
     )
@@ -763,7 +771,11 @@ Partial Public Class Form1
         End If
 
         If choice = DialogResult.Abort Then
-            Close()
+            If libraryWorkInProgress Then
+                CloseOnceLibraryWorkHasEnded()
+            Else
+                Close()
+            End If
         End If
 
     End Sub
@@ -842,9 +854,19 @@ Partial Public Class Form1
         ' open page's working copy goes to a recovery draft instead. A save
         ' that failed (#113) left its changes in the model, not the page, so
         ' no draft holds them: the save is tried once more, without a
-        ' question, and only a second failure shows its message.
+        ' question, and only a second failure shows its message. A save,
+        ' backup or restore still running (#132) is never cut off: it ends
+        ' first, and what it ended in counts here. A restore whose swap went
+        ' through hands over instead (#116): the page's edits belong to the
+        ' library it replaced, so no draft of them goes to the restored one.
         If e.CloseReason = CloseReason.WindowsShutDown Then
-            WriteRecoveryDraft("Windows was shutting down")
+            FinishLibraryWorkForShutdown()
+
+            If handingOverAfterRestore Then
+                DiscardRecoveryDraft()
+            Else
+                WriteRecoveryDraft("Windows was shutting down")
+            End If
 
             If librarySaveFailed Then
                 SaveManuscripts()
@@ -862,6 +884,13 @@ Partial Public Class Form1
             DiscardRecoveryDraft()
             MyBase.OnFormClosing(e)
             Return
+        End If
+
+        ' Any other close is refused while library work runs (#132): the
+        ' status line says what is running, and the window can be closed
+        ' once it has ended.
+        If libraryWorkInProgress Then
+            e.Cancel = True
         End If
 
         If Not e.Cancel AndAlso Not ConfirmLeaveManuscript() Then
