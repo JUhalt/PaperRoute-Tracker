@@ -43,8 +43,10 @@ Friend NotInheritable Class LibraryBoard
     End Property
 
 
+    ' As the window's own: a recovered draft (#123) opens as the working copy.
     Protected Overrides Function CreateManuscriptEditor(manuscript As Manuscript) As EditManuscriptForm
-        Return New EditManuscriptForm(manuscript, Library, _library.AuthorRepository, pageMode:=True)
+        Return New EditManuscriptForm(manuscript, Library, _library.AuthorRepository, pageMode:=True,
+                                      workingCopy:=DirectCast(GetField("pendingRecoveredCopy"), Manuscript))
     End Function
 
 
@@ -260,6 +262,95 @@ Friend NotInheritable Class LibraryBoard
         LoadAuthorLibrary()
         CallPrivate("RenderManuscripts")
         DirectCast(GetField("boardPage"), Panel).Visible = True
+    End Sub
+
+
+    ' ---------------------------------------------------------------
+    ' The manuscript page, for the tests of an editor that loads one
+    ' record after another (#133)
+    ' ---------------------------------------------------------------
+
+    ' Saves that went through SaveManuscripts, as they are written.
+    Public SaveCount As Integer
+
+    Protected Overrides Function SaveManuscripts() As Boolean
+        SaveCount += 1
+        Return MyBase.SaveManuscripts()
+    End Function
+
+
+    Public ReadOnly Property Editor As EditManuscriptForm
+        Get
+            Return DirectCast(GetField("manuscriptEditor"), EditManuscriptForm)
+        End Get
+    End Property
+
+
+    ' The page now shown in the content area, other than the Board.
+    Public ReadOnly Property PageView As Control
+        Get
+            Return DirectCast(GetField("currentPageView"), Control)
+        End Get
+    End Property
+
+
+    Public ReadOnly Property PageName As String
+        Get
+            Return GetField("currentPage").ToString()
+        End Get
+    End Property
+
+
+    Public ReadOnly Property OpenManuscriptId As Guid
+        Get
+            Return DirectCast(GetField("currentManuscriptId"), Guid)
+        End Get
+    End Property
+
+
+    Public ReadOnly Property SaveBarVisible As Boolean
+        Get
+            Dim bar As Control = DirectCast(GetField("manuscriptSaveBar"), Control)
+            Return bar IsNot Nothing AndAlso bar.Visible
+        End Get
+    End Property
+
+
+    Public ReadOnly Property SaveBarHint As String
+        Get
+            Return DirectCast(GetField("manuscriptSaveHint"), Label).Text
+        End Get
+    End Property
+
+
+    ' Opens a manuscript at a waypoint as Route View does, without
+    ' processing the messages it posts.
+    Public Sub OpenAt(manuscript As Manuscript, waypoint As ManuscriptRouteWaypoint)
+        CallPrivate("OpenManuscript", manuscript, waypoint)
+    End Sub
+
+
+    ' The startup offer of a recovery draft, answered Yes (#123).
+    Public Sub AcceptRecoveryDraft()
+        recoveryDraftPrompt = Function(title) DialogResult.Yes
+        Try
+            CallPrivate("OfferRecoveryDraft")
+        Finally
+            recoveryDraftPrompt = Function(title) DialogResult.No
+        End Try
+    End Sub
+
+
+    Public Sub GoBackInHistory()
+        CallPrivate("GoBack")
+    End Sub
+
+
+    ' A command key as the window handles it (Ctrl+1, Alt+Left).
+    Public Sub PressCommandKey(keyData As Keys)
+        Dim message As New Message()
+        GetType(Form1).GetMethod("ProcessCmdKey", BindingFlags.Instance Or BindingFlags.NonPublic).
+            Invoke(Me, New Object() {message, keyData})
     End Sub
 
 
