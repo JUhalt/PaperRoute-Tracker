@@ -683,6 +683,9 @@ Partial Public Class Form1
             tools.Controls.Add(action)
         Next
 
+        ' A page with no actions makes no window for them (#133).
+        tools.Visible = actions.Length > 0
+
         Return New SplitBar(lblPageTitle, tools) With {
             .CenterVertically = True,
             .Dock = DockStyle.Top,

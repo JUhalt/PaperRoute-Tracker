@@ -47,7 +47,7 @@ Public Class ImportExportPageTests
 
     ' The fourteen commands in order, each as wide as the widest plus 8,
     ' described by what it does, and read in order after its section's
-    ' heading; the page makes at most 20 windows.
+    ' heading; the page makes at most 19 windows.
     <TestMethod>
     Public Sub ImportExportPageKeepsItsCommands()
 
@@ -88,7 +88,7 @@ Public Class ImportExportPageTests
 
                     Dim page As Control = board.Page()
                     Dim windows As Integer = 1 + ViewCatalog.Descendants(page).Count(Function(control) control.IsHandleCreated)
-                    Assert.IsTrue(windows <= 20, "The page makes " & windows & " windows.")
+                    Assert.IsTrue(windows <= 19, "The page makes " & windows & " windows.")
 
                     board.Close()
                 End Using

@@ -757,7 +757,7 @@ Public Class DeadlineListTests
             End Sub)
 
         Assert.AreEqual(counts(0), counts(1), "Windows for 3 and 60 rows: " & String.Join(", ", counts))
-        Assert.IsTrue(counts(1) <= 18, "The page makes " & counts(1) & " windows.")
+        Assert.IsTrue(counts(1) <= 17, "The page makes " & counts(1) & " windows.")
 
     End Sub
 

@@ -115,18 +115,12 @@ Partial Public Class Form1
         deadlinesSubtitle = DirectCast(frame.GetControlFromPosition(0, 1), Label)
         deadlinesPageDate = DateTime.Today
 
-        Dim body As New TableLayoutPanel With {
-            .Dock = DockStyle.Fill,
-            .ColumnCount = 1,
-            .RowCount = 3,
-            .Margin = New Padding(0),
-            .BackColor = UiTheme.BoardBackground()
-        }
-        body.SuspendLayout()
-        body.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100.0F))
-        body.RowStyles.Add(New RowStyle(SizeType.AutoSize))
-        body.RowStyles.Add(New RowStyle(SizeType.AutoSize))
-        body.RowStyles.Add(New RowStyle(SizeType.Percent, 100.0F))
+        ' The counts, the chips and the list take the frame's last three
+        ' rows, so the page needs no table of its own for them.
+        frame.RowStyles(2).SizeType = SizeType.AutoSize
+        frame.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+        frame.RowStyles.Add(New RowStyle(SizeType.Percent, 100.0F))
+        frame.RowCount = 5
 
         ' Four counts across the top; they ignore the filters.
         deadlineGlance = New DeadlineGlance With {
@@ -134,8 +128,8 @@ Partial Public Class Form1
             .Margin = New Padding(0, 0, 0, UiTheme.Px(10, dpi)),
             .AccessibleName = "At a glance"
         }
-        body.Controls.Add(deadlineGlance, 0, 0)
-        body.Controls.Add(BuildDeadlineChips(), 0, 1)
+        frame.Controls.Add(deadlineGlance, 0, 2)
+        frame.Controls.Add(BuildDeadlineChips(), 0, 3)
 
         deadlinesList = New DeadlineList With {
             .Dock = DockStyle.Fill,
@@ -148,12 +142,10 @@ Partial Public Class Form1
                 deadlinesShowDone = Not deadlinesShowDone
                 FillDeadlines()
             End Sub
-        body.Controls.Add(deadlinesList, 0, 2)
+        frame.Controls.Add(deadlinesList, 0, 4)
 
-        frame.Controls.Add(body, 0, 2)
         deadlinesPublicationsShown = Nothing
         FillDeadlines()
-        body.ResumeLayout(False)
         frame.ResumeLayout(False)
         Return frame
 
