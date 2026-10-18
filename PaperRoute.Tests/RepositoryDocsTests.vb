@@ -178,9 +178,9 @@ Public Class RepositoryDocsTests
 
 
     ' #148: what 1.0 knowingly leaves as it is, in one list #44 can cite.
-    ' The scaling entry counts the windows the code still builds without
-    ' 96-DPI base dimensions (#93's not-converted list), so converting one
-    ' fails here until the entry is brought up to date.
+    ' The scaling entry is #93's not-converted list as it stood when
+    ' written; it is updated when #93 lands. It is not counted against the
+    ' code, so a #93 conversion doesn't fail a roadmap test.
     <TestMethod>
     Public Sub TheResidualLimitationsAreListedInOnePlace()
 
@@ -194,6 +194,7 @@ Public Class RepositoryDocsTests
 
         For Each expected As String In {
             "Schema 10",
+            "Crossref, ORCID, BibTeX and RIS imports",
             "/issues/93)",
             "docs/USER_GUIDE.md#what-windows-draws",
             "contrast theme",
@@ -209,33 +210,6 @@ Public Class RepositoryDocsTests
             )
 
         Next
-
-        Dim unconverted As List(Of String) =
-            Directory.GetFiles(
-                Path.Combine(
-                    AssistantCoreTests.RepositoryRoot(),
-                    "ManuscriptPipeline",
-                    "Forms"
-                ),
-                "*.vb"
-            ).Where(
-                Function(sourceFile)
-                    Dim source As String = File.ReadAllText(sourceFile)
-                    Return Regex.IsMatch(source, "^\s*Inherits Form\s*$", RegexOptions.Multiline) AndAlso
-                           Not source.Contains("AutoScaleDimensions", StringComparison.Ordinal)
-                End Function
-            ).Select(
-                Function(sourceFile) Path.GetFileNameWithoutExtension(sourceFile)
-            ).OrderBy(
-                Function(name) name,
-                StringComparer.Ordinal
-            ).ToList()
-
-        StringAssert.Contains(
-            limitations,
-            " " & unconverted.Count.ToString() & " windows besides the main window",
-            "The scaling entry counts the windows without base dimensions: " & String.Join(", ", unconverted)
-        )
 
     End Sub
 
