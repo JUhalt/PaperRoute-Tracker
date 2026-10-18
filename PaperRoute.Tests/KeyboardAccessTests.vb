@@ -6,6 +6,7 @@ Imports System.IO
 Imports System.Linq
 Imports System.Reflection
 Imports System.Runtime.InteropServices
+Imports System.Text.RegularExpressions
 Imports System.Threading.Tasks
 Imports System.Windows.Forms
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
@@ -1082,33 +1083,52 @@ Public Class KeyboardAccessTests
 
     ' No window gives one letter to two access keys it shows together, so
     ' Alt and the letter always reach the one control it names (#151).
-    ' Every view and step in the catalog is read, with the keys of labels,
-    ' buttons, check boxes and options that show them. A guard: no window
-    ' repeats one today, so it cannot fail before the change; it holds the
-    ' new keys, and every later one, to that.
+    ' Every view and step in the catalog is read as it opens and again on
+    ' each page of each of its tabs, with the keys of labels, buttons,
+    ' check boxes and options that show them. A guard: no window repeats
+    ' one today, so it cannot fail before the change; it holds the keys on
+    ' each tab of a window to that. Sections a page hides some other way,
+    ' such as the manuscript page's, are not switched.
     <TestMethod>
     Public Sub NoWindowRepeatsAnAccessKeyItShowsTogether()
 
-        Dim repeated As New List(Of String)()
-        Dim keyed As New List(Of String)()
+        Dim repeated As New HashSet(Of String)()
+        Dim read As New HashSet(Of String)()
 
         Dim failures As List(Of String) =
             ViewCatalog.ShowEach(
                 ViewCatalog.AllViewsAndStages(),
                 Sub(name, shown)
 
-                    Dim keys As List(Of (Key As Char, Text As String)) =
-                        ViewCatalog.Descendants(shown).
-                            Where(Function(control) control.Visible AndAlso AccessKeyOf(control).HasValue).
-                            Select(Function(control) (AccessKeyOf(control).Value, control.Text)).
-                            ToList()
+                    Dim readings As New List(Of List(Of (Key As Char, Text As String))) From {
+                        ShownAccessKeys(shown)
+                    }
 
-                    If keys.Count > 0 Then
-                        keyed.Add(name)
-                    End If
+                    ' A tab's keys show only while it is selected, so each
+                    ' page is read on its own.
+                    For Each tabs As TabControl In ViewCatalog.Descendants(shown).OfType(Of TabControl)().ToList()
 
-                    For Each letter In keys.GroupBy(Function(entry) entry.Key).Where(Function(group) group.Count() > 1)
-                        repeated.Add(name & ": Alt+" & letter.Key & " is " & String.Join(" and ", letter.Select(Function(entry) "'" & entry.Text & "'")))
+                        For index As Integer = 0 To tabs.TabCount - 1
+
+                            tabs.SelectedIndex = index
+                            Application.DoEvents()
+
+                            readings.Add(ShownAccessKeys(shown))
+
+                        Next
+
+                    Next
+
+                    For Each keys In readings
+
+                        For Each entry In keys
+                            read.Add(name & " " & entry.Key)
+                        Next
+
+                        For Each letter In keys.GroupBy(Function(entry) entry.Key).Where(Function(group) group.Count() > 1)
+                            repeated.Add(name & ": Alt+" & letter.Key & " is " & String.Join(" and ", letter.Select(Function(entry) "'" & entry.Text & "'")))
+                        Next
+
                     Next
 
                 End Sub
@@ -1120,9 +1140,18 @@ Public Class KeyboardAccessTests
             Environment.NewLine & String.Join(Environment.NewLine, failures)
         )
 
-        Assert.IsTrue(
-            keyed.Contains("ReviewerResponseItemForm") AndAlso keyed.Contains("JournalSuggestionsForm"),
-            "The sweep read the keys of the windows that have them: " & String.Join(", ", keyed)
+        ' The keys the walk gave, three of them on tabs not shown first,
+        ' were among those read.
+        Dim unread As List(Of String) =
+            AccessKeyGiven.
+                Select(Function(given) given.View.Name & " " & Char.ToUpperInvariant(given.Key)).
+                Where(Function(key) Not read.Contains(key)).
+                ToList()
+
+        Assert.AreEqual(
+            0,
+            unread.Count,
+            "The sweep did not read: " & String.Join(", ", unread)
         )
 
         Assert.AreEqual(
@@ -1478,29 +1507,25 @@ Public Class KeyboardAccessTests
             Return Nothing
         End If
 
-        Dim text As String =
-            If(control.Text, String.Empty)
+        ' "&&" is a literal ampersand; a key is a letter or digit, as
+        ' UiPolish reads one.
+        Dim match As Match =
+            Regex.Match(If(control.Text, String.Empty).Replace("&&", String.Empty), "&([\p{L}\p{N}])")
 
-        Dim index As Integer =
-            0
+        Return If(match.Success, Char.ToUpperInvariant(match.Groups(1).Value(0)), CType(Nothing, Char?))
 
-        While index < text.Length - 1
+    End Function
 
-            If text(index) = "&"c Then
 
-                If text(index + 1) <> "&"c Then
-                    Return If(Char.IsLetterOrDigit(text(index + 1)), Char.ToUpperInvariant(text(index + 1)), CType(Nothing, Char?))
-                End If
+    ' The access keys of the controls the window shows now.
+    Private Shared Function ShownAccessKeys(
+        form As Form
+    ) As List(Of (Key As Char, Text As String))
 
-                index += 1
-
-            End If
-
-            index += 1
-
-        End While
-
-        Return Nothing
+        Return ViewCatalog.Descendants(form).
+            Where(Function(control) control.Visible AndAlso AccessKeyOf(control).HasValue).
+            Select(Function(control) (AccessKeyOf(control).Value, control.Text)).
+            ToList()
 
     End Function
 
