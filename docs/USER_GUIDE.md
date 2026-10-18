@@ -1127,6 +1127,8 @@ This records preparation only. Record the journal submission after it actually o
 
 Nothing is sent, and nothing in your library changes. See [Export a packet](#export-a-packet) for what starts unchecked and why.
 
+A backup is for moving your own library to another computer, not for sharing: it holds everything, including notes, correspondence, and reviewer comments.
+
 ## How do I remind myself to check on a journal?
 
 Use either method:
