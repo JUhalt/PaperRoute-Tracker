@@ -1030,6 +1030,8 @@ In windows, pages, and lists:
 
 Every field, list, and table has a name that a screen reader reads, and every button that shows a symbol rather than words, such as **⋯** or **«**, says what it does. A **?** help button names what it helps with. Status and progress messages, such as the line at the bottom of the main window, a lookup's progress, and an update's progress, are read out as they change, without moving you from where you are. A screen reader presses chips and **?** help buttons as it presses any button.
 
+On a large library, the Board fills in its cards during the first seconds after PaperRoute opens. Until it finishes, Tab reaches every card, but a screen reader's object navigation and Shift+Tab into the shelf stop at the last card shown so far.
+
 ### Contrast themes
 
 PaperRoute supports the Windows contrast themes (**Settings > Accessibility > Contrast themes** in Windows). While one is on, PaperRoute's windows, route maps, and tag colors use the theme's colors in place of PaperRoute's Light or Dark appearance. If you turn a contrast theme on or off while PaperRoute is open, restart PaperRoute: until then, some of its colors stay as they were.

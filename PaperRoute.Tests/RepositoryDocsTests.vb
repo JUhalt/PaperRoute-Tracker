@@ -201,7 +201,8 @@ Public Class RepositoryDocsTests
             "contrast theme",
             "`removed`",
             "recovery draft",
-            "CODE_SIGNING.md"
+            "CODE_SIGNING.md",
+            "docs/USER_GUIDE.md#screen-readers"
         }
 
             StringAssert.Contains(
