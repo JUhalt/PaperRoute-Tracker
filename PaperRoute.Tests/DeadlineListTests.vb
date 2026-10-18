@@ -763,6 +763,153 @@ Public Class DeadlineListTests
     End Sub
 
 
+    ' Under a Windows contrast theme the lists that draw their own items,
+    ' buttons, headings and links use the user's colors, as what Windows
+    ' draws does (#138): drawn with the seam on, in Classic and in Dark, the
+    ' Deadlines list, its counts and Import & Export's list show no patch of
+    ' a color of the Light or Dark palette; their surfaces are the window
+    ' color; every button they draw or hold, the quiet "⋯" too, shows its
+    ' edge; and the keyboard's place shows on a row, on each of its buttons
+    ' and on the Done line's link, in the user's selection or link color.
+    <TestMethod>
+    <DataRow(SystemColorMode.Classic)>
+    <DataRow(SystemColorMode.Dark)>
+    Public Sub DrawnListsUseOnlyTheUsersColorsUnderAContrastTheme(mode As SystemColorMode)
+
+        Dim failures As New List(Of String)()
+
+        StaRunner.Run(
+            Sub()
+                Try
+                    ' The palette's own colors in this mode: its tokens that
+                    ' are not one of the user's colors once the theme is on.
+                    UiTheme.HighContrastOverride = False
+                    Dim palette As HashSet(Of Integer) = TokenColors(systemToo:=False)
+                    UiTheme.HighContrastOverride = True
+                    palette.ExceptWith(TokenColors(systemToo:=True))
+                    Dim window As Color = SystemColors.Window
+
+                    Using host As New Form With {.StartPosition = FormStartPosition.Manual, .Location = New Point(-20000, -20000), .ShowInTaskbar = False,
+                                                  .ClientSize = New Size(900, 780), .BackColor = UiTheme.BoardBackground()}
+                        Dim today As DateTime = DateTime.Today
+                        Dim overdue As DeadlineRow = DrawnRow(New DeadlineItem With {.Kind = DeadlineKind.Revision, .Group = DeadlineGroup.Overdue, .Title = "Revision due", .ManuscriptTitle = "Alpha", .JournalName = "Fictional Journal", .DueDate = today.AddDays(-2), .ProgressDone = 1, .ProgressActive = 1, .ProgressTotal = 3}, today)
+                        Dim dueToday As DeadlineRow = DrawnRow(New DeadlineItem With {.Kind = DeadlineKind.Reminder, .Group = DeadlineGroup.Today, .Title = "Send draft", .ManuscriptTitle = "Beta", .DueDate = today}, today)
+                        Dim undated As DeadlineRow = DrawnRow(New DeadlineItem With {.Kind = DeadlineKind.Revision, .Group = DeadlineGroup.NoDate, .Title = "Revision has no deadline", .ManuscriptTitle = "Gamma"}, today)
+                        Dim list As New DeadlineList With {.Bounds = New Rectangle(0, 0, 900, 470), .AccessibleName = "Deadlines"}
+                        list.SetEntries({
+                            DeadlineEntry.Heading("OVERDUE  1", DeadlineGroup.Overdue), DeadlineEntry.ForRow(overdue),
+                            DeadlineEntry.Heading("TODAY  1", DeadlineGroup.Today), DeadlineEntry.ForRow(dueToday),
+                            DeadlineEntry.Heading("NO DATE  1", DeadlineGroup.NoDate), DeadlineEntry.ForRow(undated),
+                            DeadlineEntry.Message("Nothing matches this filter."),
+                            DeadlineEntry.DoneToggle("Done in the last 30 days: 1  ·  Show", "Show", "Show done items")
+                        })
+                        Dim glance As New DeadlineGlance With {.AutoSize = False, .Bounds = New Rectangle(0, 480, 900, 110), .AccessibleName = "At a glance"}
+                        glance.SetCounts(1, 1, 0, 1)
+                        Dim commands As New CommandList With {.Bounds = New Rectangle(0, 600, 900, 170), .ButtonWidth = UiTheme.Px(180, host.DeviceDpi)}
+                        commands.AddSection("BRING WORK IN")
+                        Dim importButton As New ActionButton With {.Text = "Import Spreadsheet...", .UseMnemonic = False, .Width = UiTheme.Px(180, host.DeviceDpi), .Height = UiTheme.Px(34, host.DeviceDpi)}
+                        commands.AddCommand(importButton, "A PaperRoute template, a legacy tracker, or any workbook through column mapping.")
+                        host.Controls.AddRange(New Control() {list, glance, commands})
+                        host.Show()
+                        Application.DoEvents()
+
+                        ' The list as tall as what it draws, at any text size,
+                        ' so every row is in its picture; the others below it.
+                        list.Height = list.AutoScrollMinSize.Height
+                        glance.Top = list.Bottom + 10
+                        commands.Top = glance.Bottom + 10
+                        host.ClientSize = New Size(host.ClientSize.Width, commands.Bottom)
+                        Application.DoEvents()
+                        Assert.AreEqual(0, list.AutoScrollPosition.Y, "The list does not scroll.")
+
+                        Dim label As String = mode.ToString() & ": "
+                        Dim judge As Action(Of String, Control) =
+                            Sub(what, drawn)
+                                Using picture As Bitmap = Snapshot(drawn)
+                                    For Each patch In PaletteColorsIn(picture, palette)
+                                        failures.Add(label & what & " has " & patch.Count & " pixels of the palette's " & Color.FromArgb(patch.Argb).ToString() & ".")
+                                    Next
+                                End Using
+                            End Sub
+
+                        ' The surfaces, and every drawn button's edge.
+                        If list.BackColor.ToArgb() <> window.ToArgb() OrElse Not list.BackColor.IsSystemColor Then failures.Add(label & "the list's surface is " & list.BackColor.ToString() & ".")
+                        If commands.BackColor.ToArgb() <> window.ToArgb() OrElse Not commands.BackColor.IsSystemColor Then failures.Add(label & "Import & Export's surface is " & commands.BackColor.ToString() & ".")
+                        judge("the list", list)
+                        judge("the counts", glance)
+                        judge("Import & Export's list", commands)
+                        Using picture As Bitmap = Snapshot(list)
+                            If picture.GetPixel(CardAt(list, undated).X, CardAt(list, undated).Y).ToArgb() <> window.ToArgb() Then failures.Add(label & "a row's card is not the window color.")
+                            For Each row As DeadlineRow In {overdue, dueToday, undated}
+                                For part As Integer = 0 To row.MorePart
+                                    Dim edge As Double = EdgeContrast(picture, list.ButtonBounds(row, part), window)
+                                    If edge < 3.0 Then failures.Add(label & row.Item.Title & "'s " & If(part = row.MorePart, "⋯", row.Buttons(part).Text) & " shows its edge at " & edge.ToString("F2") & ":1.")
+                                Next
+                            Next
+                        End Using
+                        Using picture As Bitmap = Snapshot(glance)
+                            Dim tiles As AccessibleObject = glance.AccessibilityObject
+                            For index As Integer = 0 To tiles.GetChildCount() - 1
+                                Dim edge As Double = EdgeContrast(picture, glance.RectangleToClient(tiles.GetChild(index).Bounds), window)
+                                If edge < 3.0 Then failures.Add(label & "count tile " & (index + 1) & " shows its edge at " & edge.ToString("F2") & ":1.")
+                            Next
+                        End Using
+                        Using picture As Bitmap = Snapshot(commands)
+                            Dim edge As Double = EdgeContrast(picture, importButton.Bounds, window)
+                            If edge < 3.0 Then failures.Add(label & "Import Spreadsheet... shows its edge at " & edge.ToString("F2") & ":1.")
+                        End Using
+
+                        ' The keyboard on the first row, then on each of its
+                        ' buttons, then on the Done line's link.
+                        Dim dialogKey As MethodInfo = GetType(DeadlineList).GetMethod("ProcessDialogKey", BindingFlags.Instance Or BindingFlags.NonPublic)
+                        Assert.IsTrue(list.Focus())
+                        ShowFocusCues(list)
+                        Assert.AreSame(overdue, list.FocusedRow)
+                        Using picture As Bitmap = Snapshot(list)
+                            Dim top As Point = TopEdgeAt(list, overdue)
+                            If picture.GetPixel(top.X, top.Y).ToArgb() <> UiTheme.AccentColor().ToArgb() Then failures.Add(label & "the focused row's border is " & picture.GetPixel(top.X, top.Y).ToString() & ", not the selection color.")
+                        End Using
+                        For part As Integer = 0 To overdue.MorePart
+                            dialogKey.Invoke(list, New Object() {Keys.Tab})
+                            Application.DoEvents()
+                            Dim bounds As Rectangle = list.ButtonBounds(overdue, part)
+                            Using picture As Bitmap = Snapshot(list)
+                                Dim ring As Integer = Enumerable.Range(bounds.Top, 4).Count(Function(y) picture.GetPixel(bounds.Left + bounds.Width \ 2, y).ToArgb() = UiTheme.AccentSecondaryColor().ToArgb())
+                                If ring = 0 Then failures.Add(label & "the focus ring on " & If(part = overdue.MorePart, "⋯", overdue.Buttons(part).Text) & " is not drawn in the link color.")
+                            End Using
+                        Next
+                        While Not list.DoneLineFocused AndAlso list.Focused
+                            dialogKey.Invoke(list, New Object() {Keys.Tab})
+                        End While
+                        Application.DoEvents()
+                        Assert.IsTrue(list.DoneLineFocused, "Tab reaches the Done line.")
+                        Using picture As Bitmap = Snapshot(list)
+                            Dim link As Rectangle = list.DoneLinkBounds()
+                            Dim dots As Integer = Enumerable.Range(link.Top, link.Height).Count(Function(y) picture.GetPixel(link.Left - 1, y).ToArgb() = UiTheme.AccentColor().ToArgb())
+                            If dots < link.Height \ 3 Then failures.Add(label & "the Done link's focus rectangle has " & dots & " of " & link.Height & " pixels in the selection color.")
+                        End Using
+                        judge("the list with the keyboard on the Done line", list)
+
+                        Assert.IsTrue(importButton.Focus())
+                        ShowFocusCues(importButton)
+                        Using picture As Bitmap = Snapshot(commands)
+                            Dim command As Rectangle = importButton.Bounds
+                            Dim ring As Integer = Enumerable.Range(command.Top, 4).Count(Function(y) picture.GetPixel(command.Left + command.Width \ 2, y).ToArgb() = UiTheme.AccentSecondaryColor().ToArgb())
+                            If ring = 0 Then failures.Add(label & "the focus ring on Import Spreadsheet... is not drawn in the link color.")
+                        End Using
+
+                        host.Close()
+                    End Using
+                Finally
+                    UiTheme.HighContrastOverride = Nothing
+                End Try
+            End Sub, mode:=mode)
+
+        Assert.AreEqual(0, failures.Count, String.Join(Environment.NewLine, failures))
+
+    End Sub
+
+
     ' ---------------------------------------------------------------
     ' The page
     ' ---------------------------------------------------------------
@@ -1083,6 +1230,71 @@ Public Class DeadlineListTests
         Dim picture As New Bitmap(control.Width, control.Height)
         control.DrawToBitmap(picture, New Rectangle(Point.Empty, control.Size))
         Return picture
+    End Function
+
+    ' Every token's color, a stage's badge and pill included, as the theme
+    ' gives them now; the system colors among them only when asked for.
+    Private Shared Function TokenColors(systemToo As Boolean) As HashSet(Of Integer)
+        Dim colors As New List(Of Color)()
+        For Each token As MethodInfo In GetType(UiTheme).GetMethods(BindingFlags.Public Or BindingFlags.Static).
+            Where(Function(method) method.ReturnType = GetType(Color) AndAlso method.GetParameters().Length = 0)
+            colors.Add(DirectCast(token.Invoke(Nothing, Nothing), Color))
+        Next
+        For Each stage As PaperStage In [Enum].GetValues(GetType(PaperStage))
+            colors.Add(UiTheme.StageBackground(stage))
+            colors.Add(UiTheme.StageForeground(stage))
+        Next
+        Return New HashSet(Of Integer)(colors.Where(Function(color) systemToo OrElse Not color.IsSystemColor).Select(Function(color) color.ToArgb()))
+    End Function
+
+    ' The palette's colors in a picture that cover at least four pixels
+    ' each: smoothing makes single pixels of every shade between two
+    ' colors, and one of them may match by chance; a fill, a line or a
+    ' letter in a palette color makes many.
+    Private Shared Function PaletteColorsIn(picture As Bitmap, palette As HashSet(Of Integer)) As List(Of (Argb As Integer, Count As Integer))
+        Dim area As New Rectangle(Point.Empty, picture.Size)
+        Dim data As Imaging.BitmapData = picture.LockBits(area, Imaging.ImageLockMode.ReadOnly, Imaging.PixelFormat.Format32bppArgb)
+        Dim pixels(area.Width * area.Height - 1) As Integer
+        Try
+            Marshal.Copy(data.Scan0, pixels, 0, pixels.Length)
+        Finally
+            picture.UnlockBits(data)
+        End Try
+        Return pixels.Where(Function(pixel) palette.Contains(pixel)).
+            GroupBy(Function(pixel) pixel).
+            Where(Function(same) same.Count() >= 4).
+            Select(Function(same) (Argb:=same.Key, Count:=same.Count())).
+            ToList()
+    End Function
+
+    ' How far a drawn shape's edge stands out from the surface: at the
+    ' middle of each side, the stronger of its two outermost pixels; the
+    ' weakest of the four sides.
+    Private Shared Function EdgeContrast(picture As Bitmap, bounds As Rectangle, surface As Color) As Double
+        Dim middleX As Integer = bounds.Left + bounds.Width \ 2
+        Dim middleY As Integer = bounds.Top + bounds.Height \ 2
+        Dim sides As Point()() = {
+            New Point() {New Point(middleX, bounds.Top), New Point(middleX, bounds.Top + 1)},
+            New Point() {New Point(middleX, bounds.Bottom - 1), New Point(middleX, bounds.Bottom - 2)},
+            New Point() {New Point(bounds.Left, middleY), New Point(bounds.Left + 1, middleY)},
+            New Point() {New Point(bounds.Right - 1, middleY), New Point(bounds.Right - 2, middleY)}
+        }
+        Return sides.Min(Function(side) side.Max(Function(spot) ContrastRatio(picture.GetPixel(spot.X, spot.Y), surface)))
+    End Function
+
+    Private Shared Function ContrastRatio(foreground As Color, background As Color) As Double
+        Dim first As Double = Luminance(foreground)
+        Dim second As Double = Luminance(background)
+        Return (Math.Max(first, second) + 0.05) / (Math.Min(first, second) + 0.05)
+    End Function
+
+    Private Shared Function Luminance(color As Color) As Double
+        Return 0.2126 * LinearChannel(color.R) + 0.7152 * LinearChannel(color.G) + 0.0722 * LinearChannel(color.B)
+    End Function
+
+    Private Shared Function LinearChannel(channel As Byte) As Double
+        Dim value As Double = channel / 255.0
+        Return If(value <= 0.04045, value / 12.92, Math.Pow((value + 0.055) / 1.055, 2.4))
     End Function
 
     Private Shared Function FirstDifference(expected As Bitmap, actual As Bitmap) As String

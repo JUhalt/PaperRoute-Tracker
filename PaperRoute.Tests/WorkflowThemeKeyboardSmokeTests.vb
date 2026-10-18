@@ -450,6 +450,44 @@ Public Class WorkflowThemeKeyboardSmokeTests
         pairs.Add(("A primary button, hovered", UiTheme.OnAccentText(), UiTheme.Blend(accent, shade, 0.1F)))
         pairs.Add(("A primary button, pressed", UiTheme.OnAccentText(), UiTheme.Blend(accent, shade, 0.2F)))
 
+        ' The lists that draw their own text and buttons (#133): the Deadlines
+        ' list's headings, its empty sentence and its Done line on the board;
+        ' on a row's card its date by group, title, manuscript, journal,
+        ' progress and the dash for no date, and its kind's badge; the counts
+        ' and their captions on their tiles; Import & Export's headings and
+        ' descriptions on the board; and each button the lists draw or hold,
+        ' Secondary and the quiet "⋯", in each state, on what is under its
+        ' text: its fill, or the row's card.
+        For Each group As DeadlineGroup In [Enum].GetValues(GetType(DeadlineGroup))
+            pairs.Add(($"A Deadlines heading, {group}", DeadlineList.HeadingInkOf(group), UiTheme.BoardBackground()))
+            pairs.Add(($"A Deadlines row's date and how far away, {group}", DeadlineRow.WhenInkOf(group), UiTheme.CardBackground()))
+            pairs.Add(($"A Deadlines row's day of the month, {group}", DeadlineRow.DayInkOf(group), UiTheme.CardBackground()))
+            pairs.Add(($"A Deadlines row's title, {group}", DeadlineRow.TitleInkOf(group), UiTheme.CardBackground()))
+        Next
+        pairs.Add(("A Deadlines row's month, manuscript, journal and progress", UiTheme.SecondaryText(), UiTheme.CardBackground()))
+        pairs.Add(("A Deadlines row's dash for no date", UiTheme.MutedText(), UiTheme.CardBackground()))
+        For Each kind As DeadlineKind In [Enum].GetValues(GetType(DeadlineKind))
+            Dim stage As PaperStage = DeadlineRow.StageOf(kind)
+            pairs.Add(($"A Deadlines row's {kind} badge", UiTheme.StageForeground(stage), UiTheme.StageBackground(stage)))
+        Next
+        pairs.Add(("The Deadlines list's sentence when nothing is listed, and its Done line", UiTheme.SecondaryText(), UiTheme.BoardBackground()))
+        pairs.Add(("The Done line's Show or Hide", UiTheme.AccentColor(), UiTheme.BoardBackground()))
+        For index As Integer = 0 To 3
+            pairs.Add(($"A Deadlines count, tile {index + 1}", DeadlineGlance.CountInkOf(index), UiTheme.CardBackground()))
+        Next
+        pairs.Add(("A Deadlines count's caption", UiTheme.SecondaryText(), UiTheme.CardBackground()))
+        pairs.Add(("An Import & Export heading", UiTheme.MutedText(), UiTheme.BoardBackground()))
+        pairs.Add(("An Import & Export description", UiTheme.SecondaryText(), UiTheme.BoardBackground()))
+        Dim states As (Name As String, Hover As Boolean, Pressed As Boolean, Enabled As Boolean)() = {
+            ("at rest", False, False, True), ("hovered", True, False, True), ("pressed", False, True, True), ("off", False, False, False)
+        }
+        For Each role As ActionButtonRole In {ActionButtonRole.Secondary, ActionButtonRole.Quiet}
+            For Each state In states
+                Dim face As (Fill As Color, Border As Color, Ink As Color) = ActionButton.FaceColors(role, state.Hover, state.Pressed, state.Enabled)
+                pairs.Add(($"A {role} button the Deadlines or Import & Export list draws or holds, {state.Name}", face.Ink, If(face.Fill.IsEmpty, UiTheme.CardBackground(), face.Fill)))
+            Next
+        Next
+
         ' The route map's white labels on its fills and numbered events.
         For Each kind As RouteSegmentKind In {RouteSegmentKind.Journal, RouteSegmentKind.Author, RouteSegmentKind.Production}
             pairs.Add(($"A route map's {kind} segment label", Color.White, RouteMapStyle.Fill(kind)))

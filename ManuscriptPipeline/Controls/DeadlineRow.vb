@@ -327,15 +327,14 @@ Namespace Controls
 
             ' When: month, day, and how far away.
             Dim whenWidth As Integer = UiTheme.Px(62, dpi)
-            Dim whenInk As Color = If(Item.Group = DeadlineGroup.Overdue, UiTheme.DangerColor(),
-                                      If(Item.Group = DeadlineGroup.Today, UiTheme.WarningColor(), UiTheme.SecondaryText()))
+            Dim whenInk As Color = WhenInkOf(Item.Group)
             Dim centered As TextFormatFlags = flags Or TextFormatFlags.HorizontalCenter
             Dim whenTop As Integer = center - (smallFont.Height + dayFont.Height + smallFont.Height) \ 2
             If Item.DueDate.HasValue AndAlso Item.Group <> DeadlineGroup.Done Then
                 TextRenderer.DrawText(g, Item.DueDate.Value.ToString("MMM", CultureInfo.CurrentCulture).ToUpperInvariant(), smallFont,
                                       New Rectangle(left + pad, whenTop, whenWidth, smallFont.Height), UiTheme.SecondaryText(), centered)
                 TextRenderer.DrawText(g, Item.DueDate.Value.Day.ToString(CultureInfo.CurrentCulture), dayFont,
-                                      New Rectangle(left + pad, whenTop + smallFont.Height, whenWidth, dayFont.Height), If(Item.Group = DeadlineGroup.Next7Days OrElse Item.Group = DeadlineGroup.Later, UiTheme.PrimaryText(), whenInk), centered)
+                                      New Rectangle(left + pad, whenTop + smallFont.Height, whenWidth, dayFont.Height), DayInkOf(Item.Group), centered)
             Else
                 TextRenderer.DrawText(g, "—", dayFont, New Rectangle(left + pad, whenTop + smallFont.Height, whenWidth, dayFont.Height), UiTheme.MutedText(), centered)
             End If
@@ -346,7 +345,7 @@ Namespace Controls
             Dim badge As Integer = UiTheme.Px(28, dpi)
             Dim badgeLeft As Integer = left + pad + whenWidth + UiTheme.Px(8, dpi)
             Dim badgeBounds As New RectangleF(badgeLeft, center - badge / 2.0F, badge, badge)
-            Dim stage As PaperStage = KindStage()
+            Dim stage As PaperStage = StageOf(Item.Kind)
             Using path As GraphicsPath = RoundedShapes.Create(badgeBounds, UiTheme.Px(7, dpi))
                 Using fill As New SolidBrush(UiTheme.StageBackground(stage))
                     g.FillPath(fill, path)
@@ -365,8 +364,7 @@ Namespace Controls
             Dim textWidth As Integer = Math.Max(0, actionsLeft - UiTheme.Px(14, dpi) - textLeft)
             Dim lines As Integer = boldFont.Height + font.Height + UiTheme.Px(2, dpi) + If(Item.ProgressTotal > 0, smallFont.Height + UiTheme.Px(5, dpi), 0)
             Dim y As Integer = center - lines \ 2
-            TextRenderer.DrawText(g, Item.Title, boldFont, New Rectangle(textLeft, y, textWidth, boldFont.Height),
-                                  If(Item.Group = DeadlineGroup.Done, UiTheme.SecondaryText(), UiTheme.PrimaryText()), flags)
+            TextRenderer.DrawText(g, Item.Title, boldFont, New Rectangle(textLeft, y, textWidth, boldFont.Height), TitleInkOf(Item.Group), flags)
             y += boldFont.Height + UiTheme.Px(2, dpi)
             TextRenderer.DrawText(g, ContextText(), font, New Rectangle(textLeft, y, textWidth, font.Height), UiTheme.SecondaryText(), flags)
             y += font.Height
@@ -413,9 +411,26 @@ Namespace Controls
 
         End Sub
 
+        ' The inks a row picks by its group, read when it is drawn: the date
+        ' and how far away it is in danger when overdue and warning when due
+        ' today; the day of the month in primary text from tomorrow on; the
+        ' title in secondary text once done.
+        Friend Shared Function WhenInkOf(group As DeadlineGroup) As Color
+            Return If(group = DeadlineGroup.Overdue, UiTheme.DangerColor(),
+                      If(group = DeadlineGroup.Today, UiTheme.WarningColor(), UiTheme.SecondaryText()))
+        End Function
+
+        Friend Shared Function DayInkOf(group As DeadlineGroup) As Color
+            Return If(group = DeadlineGroup.Next7Days OrElse group = DeadlineGroup.Later, UiTheme.PrimaryText(), WhenInkOf(group))
+        End Function
+
+        Friend Shared Function TitleInkOf(group As DeadlineGroup) As Color
+            Return If(group = DeadlineGroup.Done, UiTheme.SecondaryText(), UiTheme.PrimaryText())
+        End Function
+
         ' Kind colors follow the board's stage pills.
-        Private Function KindStage() As PaperStage
-            Select Case Item.Kind
+        Friend Shared Function StageOf(kind As DeadlineKind) As PaperStage
+            Select Case kind
                 Case DeadlineKind.Revision : Return PaperStage.Revision
                 Case DeadlineKind.FollowUp : Return PaperStage.Submitted
                 Case DeadlineKind.Preparation : Return PaperStage.UnderReview

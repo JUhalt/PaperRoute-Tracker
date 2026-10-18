@@ -1,5 +1,6 @@
 Imports System.ComponentModel
 Imports System.Drawing
+Imports System.Drawing.Drawing2D
 Imports System.Runtime.InteropServices
 Imports System.Windows.Forms
 Imports ManuscriptPipeline.Models
@@ -544,10 +545,7 @@ Namespace Controls
                 Dim bounds As Rectangle = EntryBounds(index)
                 Select Case entry.Kind
                     Case DeadlineEntryKind.Heading
-                        TextRenderer.DrawText(g, entry.Text, HeadingFont, bounds,
-                                              If(entry.Group = DeadlineGroup.Overdue, UiTheme.DangerColor(),
-                                                 If(entry.Group = DeadlineGroup.Today, UiTheme.WarningColor(), UiTheme.MutedText())),
-                                              HeadingFlags)
+                        TextRenderer.DrawText(g, entry.Text, HeadingFont, bounds, HeadingInkOf(entry.Group), HeadingFlags)
                     Case DeadlineEntryKind.Row
                         entry.Row.Paint(g, bounds, measures, RowState(index))
                     Case DeadlineEntryKind.Message
@@ -558,6 +556,13 @@ Namespace Controls
             Next
 
         End Sub
+
+        ' A group's heading: danger when overdue, warning for today, and
+        ' muted for the rest.
+        Friend Shared Function HeadingInkOf(group As DeadlineGroup) As Color
+            Return If(group = DeadlineGroup.Overdue, UiTheme.DangerColor(),
+                      If(group = DeadlineGroup.Today, UiTheme.WarningColor(), UiTheme.MutedText()))
+        End Function
 
         Private Function RowState(index As Integer) As DeadlineRowPaintState
 
@@ -583,7 +588,10 @@ Namespace Controls
         End Function
 
         ' "Done in the last 30 days: n  ·  Show", with Show or Hide drawn as
-        ' a link and a focus rectangle around it when the keyboard is there.
+        ' a link and a dotted focus rectangle around it when the keyboard is
+        ' there. The rectangle is drawn in the link's own color rather than
+        ' by ControlPaint, whose black and inverted dots are no theme color,
+        ' so under a contrast theme it is the user's color too (#138).
         Private Sub PaintDoneLine(g As Graphics, index As Integer, bounds As Rectangle)
 
             Dim entry As DeadlineEntry = _entries(index)
@@ -595,7 +603,10 @@ Namespace Controls
             If Focused AndAlso ShowFocusCues AndAlso _current >= 0 AndAlso _stops(_current).Entry = index Then
                 Dim ring As Rectangle = link
                 ring.Inflate(1, 0)
-                ControlPaint.DrawFocusRectangle(g, ring, UiTheme.AccentColor(), BackColor)
+                g.SmoothingMode = SmoothingMode.None
+                Using dots As New Pen(UiTheme.AccentColor()) With {.DashStyle = DashStyle.Dot}
+                    g.DrawRectangle(dots, ring.X, ring.Y, ring.Width - 1, ring.Height - 1)
+                End Using
             End If
 
         End Sub

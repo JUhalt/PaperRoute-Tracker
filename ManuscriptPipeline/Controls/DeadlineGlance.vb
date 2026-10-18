@@ -102,7 +102,6 @@ Namespace Controls
 
             MyBase.OnPaint(e)
             Dim g As Graphics = e.Graphics
-            Dim inks As Color() = {UiTheme.DangerColor(), UiTheme.WarningColor(), UiTheme.PrimaryText(), UiTheme.SecondaryText()}
             Dim tiles As Rectangle() = TileBounds(ClientSize.Width)
             Dim radius As Single = UiTheme.Px(UiTheme.ControlRadius, DeviceDpi)
 
@@ -121,11 +120,22 @@ Namespace Controls
 
                 Dim count As String = _counts(index).ToString(CultureInfo.CurrentCulture)
                 Dim countHeight As Integer = TextRenderer.MeasureText("0", CountFont).Height
-                TextRenderer.DrawText(g, count, CountFont, New Point(tile.X + Px(12), tile.Y + Px(8)), inks(index), TextFormatFlags.NoPrefix)
+                TextRenderer.DrawText(g, count, CountFont, New Point(tile.X + Px(12), tile.Y + Px(8)), CountInkOf(index), TextFormatFlags.NoPrefix)
                 TextRenderer.DrawText(g, Captions(index), Font, New Point(tile.X + Px(12), tile.Y + Px(8) + countHeight), UiTheme.SecondaryText(), TextFormatFlags.NoPrefix)
             Next
 
         End Sub
+
+        ' A tile's count: overdue in danger, due today in warning, the next
+        ' 7 days in primary text, and those without a date in secondary.
+        Friend Shared Function CountInkOf(index As Integer) As Color
+            Select Case index
+                Case 0 : Return UiTheme.DangerColor()
+                Case 1 : Return UiTheme.WarningColor()
+                Case 2 : Return UiTheme.PrimaryText()
+                Case Else : Return UiTheme.SecondaryText()
+            End Select
+        End Function
 
         Protected Overrides Sub OnFontChanged(e As EventArgs)
             _countFont?.Dispose()

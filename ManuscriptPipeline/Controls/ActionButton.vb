@@ -132,36 +132,10 @@ Namespace Controls
 
             g.SmoothingMode = SmoothingMode.AntiAlias
 
-            Dim fill As Color = Color.Empty
-            Dim border As Color = Color.Empty
-            Dim ink As Color
-
-            Dim hoverTint As Color = UiTheme.HoverBackground()
-
-            Select Case role
-                Case ActionButtonRole.Primary
-                    Dim accent As Color = UiTheme.AccentColor()
-                    Dim shade As Color = If(UiTheme.IsDark(), Color.White, Color.Black)
-                    fill = If(pressed, UiTheme.Blend(accent, shade, 0.2F), If(hover, UiTheme.Blend(accent, shade, 0.1F), accent))
-                    ink = UiTheme.OnAccentText()
-                Case ActionButtonRole.Quiet
-                    fill = If(hover OrElse pressed, hoverTint, Color.Empty)
-                    ink = UiTheme.AccentColor()
-                Case ActionButtonRole.Danger
-                    fill = If(hover OrElse pressed, hoverTint, UiTheme.CardBackground())
-                    border = UiTheme.CardBorder()
-                    ink = UiTheme.DangerColor()
-                Case Else
-                    fill = If(hover OrElse pressed, hoverTint, UiTheme.CardBackground())
-                    border = UiTheme.CardBorder()
-                    ink = UiTheme.PrimaryText()
-            End Select
-
-            If Not enabled Then
-                fill = If(role = ActionButtonRole.Quiet, Color.Empty, UiTheme.BoardBackground())
-                border = UiTheme.CardBorder()
-                ink = UiTheme.MutedText()
-            End If
+            Dim face As (Fill As Color, Border As Color, Ink As Color) = FaceColors(role, hover, pressed, enabled)
+            Dim fill As Color = face.Fill
+            Dim border As Color = face.Border
+            Dim ink As Color = face.Ink
 
             Dim radius As Single = UiTheme.Px(UiTheme.ControlRadius, dpi)
             Dim shape As New RectangleF(bounds.X + 0.5F, bounds.Y + 0.5F, bounds.Width - 1.0F, bounds.Height - 1.0F)
@@ -192,6 +166,54 @@ Namespace Controls
             TextRenderer.DrawText(g, text, font, bounds, ink, flags)
 
         End Sub
+
+        ' What a face of the role is filled, outlined and written with in a
+        ' state, from the theme as it is now; Color.Empty is no fill or no
+        ' outline. A quiet face has no outline, but under a contrast theme,
+        ' where its fill is the window color too, it is outlined as every
+        ' other button is, so its edge shows (#138).
+        Friend Shared Function FaceColors(
+            role As ActionButtonRole,
+            hover As Boolean,
+            pressed As Boolean,
+            enabled As Boolean
+        ) As (Fill As Color, Border As Color, Ink As Color)
+
+            Dim fill As Color = Color.Empty
+            Dim border As Color = Color.Empty
+            Dim ink As Color
+
+            Dim hoverTint As Color = UiTheme.HoverBackground()
+
+            Select Case role
+                Case ActionButtonRole.Primary
+                    Dim accent As Color = UiTheme.AccentColor()
+                    Dim shade As Color = If(UiTheme.IsDark(), Color.White, Color.Black)
+                    fill = If(pressed, UiTheme.Blend(accent, shade, 0.2F), If(hover, UiTheme.Blend(accent, shade, 0.1F), accent))
+                    ink = UiTheme.OnAccentText()
+                Case ActionButtonRole.Quiet
+                    fill = If(hover OrElse pressed, hoverTint, Color.Empty)
+                    If UiTheme.IsHighContrast() Then border = UiTheme.CardBorder()
+                    ink = UiTheme.AccentColor()
+                Case ActionButtonRole.Danger
+                    fill = If(hover OrElse pressed, hoverTint, UiTheme.CardBackground())
+                    border = UiTheme.CardBorder()
+                    ink = UiTheme.DangerColor()
+                Case Else
+                    fill = If(hover OrElse pressed, hoverTint, UiTheme.CardBackground())
+                    border = UiTheme.CardBorder()
+                    ink = UiTheme.PrimaryText()
+            End Select
+
+            If Not enabled Then
+                fill = If(role = ActionButtonRole.Quiet, Color.Empty, UiTheme.BoardBackground())
+                border = UiTheme.CardBorder()
+                ink = UiTheme.MutedText()
+            End If
+
+            Return (fill, border, ink)
+
+        End Function
 
         Private Function TextFlags() As TextFormatFlags
             Dim flags As TextFormatFlags =
