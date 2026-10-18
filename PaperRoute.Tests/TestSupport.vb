@@ -191,7 +191,8 @@ Friend Module TestSupport
     End Function
 
 
-    Private Function RelativeLuminance(
+    ' The WCAG relative luminance of a color, from 0 (black) to 1 (white).
+    Public Function RelativeLuminance(
         color As System.Drawing.Color
     ) As Double
 
