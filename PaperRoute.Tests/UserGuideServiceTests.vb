@@ -527,7 +527,9 @@ Public Class UserGuideServiceTests
 
     ' #155: for 1.0, a packet or a report is what you share; a backup
     ' holds the whole library and moves it between your own computers.
-    ' The sharing answer says so, beside Export Packet.
+    ' The sharing answer says so, beside Export Packet. It says the whole
+    ' library, not everything: linked originals stay references, and a
+    ' backup leaves out `removed` and the preferences.
     <TestMethod>
     Public Sub ShareAPacket_SaysABackupIsNotForSharing()
 
@@ -544,7 +546,8 @@ Public Class UserGuideServiceTests
 
         For Each expected As String In {
             "A backup is for moving your own library",
-            "not for sharing"
+            "not for sharing",
+            "it holds your whole library"
         }
 
             StringAssert.Contains(
