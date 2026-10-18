@@ -71,10 +71,12 @@ Public Class PageSwitchTests
     End Sub
 
 
-    ' Every window the Library, its Authors view, Journals and Insights
-    ' make as they open is made inside the main window, where it stays:
-    ' none is made on WinForms' parking window and moved in afterwards,
-    ' which costs every window twice on a slow machine (#133).
+    ' Every window the Library, its Authors view, Journals, Insights and
+    ' the kept Deadlines and Import & Export pages (each visited twice, so
+    ' a kept page shown again is held too) make as they open is made
+    ' inside the main window, where it stays: none is made on WinForms'
+    ' parking window and moved in afterwards, which costs every window
+    ' twice on a slow machine (#133).
     <TestMethod>
     Public Sub PageWindowsAreCreatedOnceInPlace()
 
@@ -101,7 +103,11 @@ Public Class PageSwitchTests
                          Sub()
                              board.NavigateTo(Form1.WorkspacePage.Insights)
                              board.WaitForInsights()
-                         End Sub)
+                         End Sub),
+                        ("Deadlines", Sub() board.NavigateTo(Form1.WorkspacePage.Deadlines)),
+                        ("Deadlines, shown again", Sub() board.NavigateTo(Form1.WorkspacePage.Deadlines)),
+                        ("Import & Export", Sub() board.NavigateTo(Form1.WorkspacePage.ImportExport)),
+                        ("Import & Export, shown again", Sub() board.NavigateTo(Form1.WorkspacePage.ImportExport))
                     }
 
                     For Each view In views
