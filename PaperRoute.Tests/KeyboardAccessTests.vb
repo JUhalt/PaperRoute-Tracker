@@ -920,7 +920,7 @@ Public Class KeyboardAccessTests
     ' focus lands, and that the control left loses it once, is the same
     ' however the page is put away. Pinned on the window as it was when
     ' every page was removed and then disposed, before pages were disposed
-    ' in place.
+    ' or hidden in place.
     <TestMethod>
     Public Sub LeavingAPageByKeyboardKeepsFocusWhereItLandsToday()
 
@@ -950,6 +950,10 @@ Public Class KeyboardAccessTests
                             ("the Journals list", Sub() board.NavigateTo(Form1.WorkspacePage.Journals),
                              Function() ViewCatalog.Descendants(board).OfType(Of JournalLibraryForm)().Single().Controls.Cast(Of Control)().
                                  SelectMany(Function(child) {child}.Concat(ViewCatalog.Descendants(child))).OfType(Of ListBox)().First()),
+                            ("the Deadlines filter", Sub() board.NavigateTo(Form1.WorkspacePage.Deadlines),
+                             Function() ViewCatalog.Descendants(board.PageView).OfType(Of TextBox)().Single(Function(box) box.AccessibleName = "Filter deadlines")),
+                            ("an Import & Export command", Sub() board.NavigateTo(Form1.WorkspacePage.ImportExport),
+                             Function() ViewCatalog.Descendants(board.PageView).OfType(Of ActionButton)().Single(Function(button) button.Text = "Import Spreadsheet...")),
                             ("the manuscript page's Back link", Sub() board.Open(board.Library(0)),
                              Function() ViewCatalog.Descendants(board.PageView).OfType(Of LinkLabel)().Single(Function(link) If(link.AccessibleName, String.Empty).StartsWith("Back to", StringComparison.Ordinal))),
                             ("the manuscript page's Title box", Sub() board.Open(board.Library(0)),
@@ -1012,9 +1016,12 @@ Public Class KeyboardAccessTests
         End Try
 
         ' Focus moves to the first stop of the window, the rail's collapse
-        ' button, and the control left loses it once.
+        ' button, and the control left loses it once, from a page disposed
+        ' as from one kept (the manuscript page, Deadlines and Import &
+        ' Export, hidden in place and shown again on the next visit).
         Dim expected As List(Of String) =
-            {"the Library filter", "an Insights tab", "the Journals list", "the manuscript page's Back link", "the manuscript page's Title box"}.
+            {"the Library filter", "an Insights tab", "the Journals list", "the Deadlines filter", "an Import & Export command",
+             "the manuscript page's Back link", "the manuscript page's Title box"}.
                 SelectMany(Function(target) {"Alt+Left", "Ctrl+1", "Back"}.
                     Select(Function(leave) target & ", " & leave & ": page Board, active RailCommandButton 'Collapse navigation', Leave 1")).
                 ToList()
