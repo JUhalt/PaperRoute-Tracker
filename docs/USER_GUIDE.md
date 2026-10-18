@@ -1032,7 +1032,7 @@ Every field, list, and table has a name that a screen reader reads, and every bu
 
 ### Contrast themes
 
-PaperRoute supports the Windows contrast themes (**Settings > Accessibility > Contrast themes** in Windows). While one is on, PaperRoute's windows, route maps, and tag colors use the theme's colors in place of PaperRoute's Light or Dark appearance.
+PaperRoute supports the Windows contrast themes (**Settings > Accessibility > Contrast themes** in Windows). While one is on, PaperRoute's windows, route maps, and tag colors use the theme's colors in place of PaperRoute's Light or Dark appearance. If you turn a contrast theme on or off while PaperRoute is open, restart PaperRoute: until then, some of its colors stay as they were.
 
 ### What Windows draws
 
@@ -1126,6 +1126,8 @@ This records preparation only. Record the journal submission after it actually o
 5. Send or keep the .zip. Its `ro-crate-preview.html` shows what it holds and how to check the files.
 
 Nothing is sent, and nothing in your library changes. See [Export a packet](#export-a-packet) for what starts unchecked and why.
+
+A backup is for moving your own library to another computer, not for sharing: it holds your whole library, including notes, correspondence, and reviewer comments.
 
 ## How do I remind myself to check on a journal?
 
@@ -1304,12 +1306,12 @@ PaperRoute ships a local copy of this guide. Open it with **Help** at the bottom
 
 The Route, Version History, readiness profiles, submission packets, reviewer responses, and Deadlines form one connected manuscript record. Later releases build on that record:
 
-- **v0.9.2 — 1.0 Hardening:** guided onboarding, accessibility, consistency, recovery, speed, and release certification.
+- **v0.9.2 — 1.0 Hardening:** accessibility, consistency, recovery, speed, and release certification.
 - **v1.0 — Trusted Research Workflow:** a release you can trust with your real publication pipeline.
 
 Planned releases are directional and may change; see the [roadmap](https://github.com/JUhalt/PaperRoute-Tracker/blob/master/ROADMAP.md).
 
-The in-app `?` guidance is intentionally reusable so a future guided tutorial can teach the same concepts without maintaining a second vocabulary.
+A guided tutorial may follow after 1.0, reusing the in-app `?` guidance so that it teaches the same concepts in the same words.
 
 ---
 

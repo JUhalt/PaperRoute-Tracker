@@ -130,7 +130,9 @@ Public Class WindowChromeTests
     ' view state under HKCU for every folder a file dialog shows (Shell's
     ' BagMRU and Bags), which outlives the folder, and on closing saves the
     ' dialog's size for testhost.exe as one value under ComDlg32's
-    ' CIDSizeMRU. Cancelled, with AddToRecent off, it adds no recent item
+    ' CIDSizeMRU. CI sets the variable on its disposable runners, and the
+    ' local candidate build leaves the OnDemand category out (#196).
+    ' Cancelled, with AddToRecent off, it adds no recent item
     ' and no last folder. Run on October 17, 2026, the four rows without a
     ' contrast theme passed: the Open and Save dialogs and the folder
     ' picker took the frame and read back dark in Dark and light in Light.
@@ -138,6 +140,7 @@ Public Class WindowChromeTests
     ' for, as IsDark() is false; in routine runs that case rests on the
     ' message box's contrast row, through the same hook and SetFrame.
     <TestMethod>
+    <TestCategory("OnDemand")>
     <DataRow(SystemColorMode.Classic, "Open", False)>
     <DataRow(SystemColorMode.Dark, "Open", False)>
     <DataRow(SystemColorMode.Dark, "Open", True)>

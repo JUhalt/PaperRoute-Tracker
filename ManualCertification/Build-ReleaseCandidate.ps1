@@ -210,8 +210,12 @@ try {
     Invoke-CandidateCommand '01-build' $dotnet (@(
         'build', 'ManuscriptPipeline.slnx', '--configuration', 'Release', '--artifacts-path', $buildRoot
     ) + $properties)
+    # This runs on the maintainer's computer, so the OnDemand tests (the
+    # file dialogs, which leave Explorer's view state under HKCU) are left
+    # to CI, which runs them on disposable runners (#196).
     Invoke-CandidateCommand '02-test' $dotnet (@(
         'test', 'PaperRoute.Tests/PaperRoute.Tests.vbproj', '--configuration', 'Release', '--no-build', '--no-restore',
+        '--filter', 'TestCategory!=OnDemand',
         '--artifacts-path', $buildRoot, '--logger', 'trx;LogFileName=PaperRoute.Tests.trx', '--results-directory', $testRoot
     ) + $properties)
     $trxPath = Join-Path $testRoot 'PaperRoute.Tests.trx'
@@ -305,6 +309,6 @@ try {
     }
     [IO.File]::WriteAllText((Join-Path $candidateRoot 'candidate-verification.json'), ($evidence | ConvertTo-Json -Depth 8), $utf8)
     Write-Host "Verified local candidate: $candidateRoot"
-    Write-Host "Tests: $($evidence.TestsPassed) passed. Installer signature: $($evidence.InstallerSignatureStatus). Bundled .NET runtime: $runtimeVersion."
+    Write-Host "Tests: $($evidence.TestsPassed) passed; the OnDemand tests are left to CI. Installer signature: $($evidence.InstallerSignatureStatus). Bundled .NET runtime: $runtimeVersion."
 }
 finally { Pop-Location }
