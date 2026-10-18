@@ -6,6 +6,37 @@ This directory contains disposable import fixtures used for repeatable F5/manual
 
 - [How releases are certified](Release-Certification.md): the standing procedure every release certification issue follows, from v0.9.2 on
 - [Capture-HarnessWindow.ps1](Capture-HarnessWindow.ps1): captures a harness window once it reports itself painted, with evidence JSON
+- [The standing certification fixture](#standing-certification-fixture) and [the fixture collector](#fixture-collector) that reports on it
+
+## Standing certification fixture
+
+From v0.9.2, every release certification uses one standing fixture (#145): a fictional library of four manuscripts, written as a 0.9.x (Schema 9) library is on disk, with journal shortlists, journal facts, `citations.json`, AI-suggestion provenance, packets with managed and linked files, reviewer responses and versions. Its ids, dates and files are fixed, so it is the same every time it is written.
+
+| Id | Title |
+| --- | --- |
+| `92000000-0000-0000-0000-000000000001` | ZZZ-CERT-v0.9.2-01 Major revision with responses |
+| `92000000-0000-0000-0000-000000000002` | ZZZ-CERT-v0.9.2-02 Rejected and rerouted |
+| `92000000-0000-0000-0000-000000000003` | ZZZ-CERT-v0.9.2-03 Published |
+| `92000000-0000-0000-0000-000000000004` | ZZZ-CERT-v0.9.2-04 Draft with a shortlist |
+
+The generator is `PaperRoute.Tests/CertificationFixture.vb`. `CertificationFixtureTests` writes the fixture twice and compares the two byte for byte, and its chained upgrade test carries the fixture through what an update to this build does to a 0.9 library: open, save, back up, restore into a new library, open again. Every record, and every managed and linked file byte for byte, must come through. The chain starts from Schema 9 because only the 0.9 releases update straight to 1.0 (#153); the Schema 3 to 9 steps keep their own migration tests.
+
+To regenerate the fixture for a certification, name a new or empty folder outside PaperRoute's own folders and run its writer test from the repository root:
+
+```powershell
+$env:PAPERROUTE_CERTIFICATION_FIXTURE = 'C:\PaperRouteCertification\fixture'
+dotnet test PaperRoute.Tests/PaperRoute.Tests.vbproj --filter "FullyQualifiedName~WritesTheFixtureForACertificationOnDemand"
+```
+
+It writes `PaperRoute\data` (the library files), `PaperRoute Library` (the managed copies), `Linked files`, and `PaperRoute-certification-fixture.zip`, a portable backup of the library. Restore the ZIP with **Restore Backup...**. The managed copies move with it; the linked files are referenced where they were written, so put `Linked files` at the same path on the certification VM. Without the variable, the test writes all of this into its own temporary folder, so every test run checks that **Restore Backup...** accepts the fixture's backup.
+
+## Fixture collector
+
+The evidence collector every certification since v0.5 cites (`fixture-evidence-<stamp>.json` in #97 and #108) is in [FixtureCollector](FixtureCollector/USAGE.md): `Program.cs`, `PaperRouteFixtureCollector.csproj` and `USAGE.md`.
+
+- Version 1.2.0, and its JSON reports `CollectorVersion` 1.2.0, read from the build. Version 1.1.0 (from v0.7, which added `SchemaMarkers`) still reported 1.0.0, so an earlier report with `SchemaMarkers` came from 1.1.0.
+- It never changes the library; its only write is the report, on the evidence share. For the v0.4 one-manuscript fixture it reports what it always has. For the standing fixture it reports `CertificationFixture`, with `CertificationManuscripts` naming each `ZZZ-CERT-` manuscript by id and title. Nothing is read from any other record: a library with any other manuscript is rejected, with nothing copied.
+- Build it with `dotnet build ManualCertification/FixtureCollector/PaperRouteFixtureCollector.csproj -c Release` and copy `bin\Release\net10.0-windows\win-x64` to the input share's `diagnostic-collector` folder. Run it only in the certification VM, as USAGE.md says.
 
 ## v0.4 release records
 
