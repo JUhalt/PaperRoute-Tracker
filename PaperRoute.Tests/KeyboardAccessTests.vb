@@ -6,6 +6,7 @@ Imports System.IO
 Imports System.Linq
 Imports System.Reflection
 Imports System.Runtime.InteropServices
+Imports System.Text.RegularExpressions
 Imports System.Threading.Tasks
 Imports System.Windows.Forms
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
@@ -37,6 +38,40 @@ Public Class KeyboardAccessTests
         GetType(UpdateProgressForm)
     }
 
+    ' The dialogs Enter presses no button in (#151), each for a reason of
+    ' its own.
+    Private Shared ReadOnly AllowedWithoutDefault As Type() = {
+        GetType(DeleteManuscriptForm),          ' Enter must never delete; Delete waits for DELETE.
+        GetType(ExcelMappingForm),              ' Enter in Header row would import before its columns are seen.
+        GetType(JournalFactsForm),              ' Without an ISSN, Enter in the name box runs Find.
+        GetType(OrcidLookupForm),               ' Enter would look up again and clear the works checked.
+        GetType(PacketExportForm),              ' Enter commits an edit in the file list.
+        GetType(PublicationExportForm),         ' Save Export and Copy are two equal ways out.
+        GetType(ReviewerResponseExportForm),    ' Its one field takes Enter as a new line.
+        GetType(UpdateProgressForm)             ' It has no buttons.
+    }
+
+    ' The three dialogs whose footer ends in a main action that was no
+    ' default button (#151), with the button Enter now presses.
+    Private Shared ReadOnly DefaultButtonGiven As (View As Type, Text As String)() = {
+        (GetType(BibliographyExportSelectionForm), "Export Selected"),
+        (GetType(BibliographyImportForm), "Import Selected"),
+        (GetType(TitlePageImportForm), "Use These Details")
+    }
+
+    ' The fields the walk found without an access key in two dialogs that
+    ' give their other fields one (#151), each with the key that now
+    ' focuses it and the tab it is on (-1: the dialog has none), named as
+    ' a screen reader names it.
+    Private Shared ReadOnly AccessKeyGiven As (View As Type, Tab As Integer, Key As Char, Field As String)() = {
+        (GetType(ReviewerResponseItemForm), 0, "m"c, "Reviewer comment (enter a comment or action)"),
+        (GetType(ReviewerResponseItemForm), 0, "p"c, "Planned or completed action"),
+        (GetType(ReviewerResponseItemForm), 1, "e"c, "Response draft for the journal"),
+        (GetType(ReviewerResponseItemForm), 2, "l"c, "Manuscript location (page, line, or section)"),
+        (GetType(ReviewerResponseItemForm), 2, "n"c, "Working notes (included in export)"),
+        (GetType(JournalSuggestionsForm), -1, "l"c, "Published in the last")
+    }
+
     ' The five dialogs that had no CancelButton, with the result Esc closes
     ' each with: that of its Cancel or its Close button.
     Private Shared ReadOnly EscapeProbed As (View As Type, Result As DialogResult)() = {
@@ -65,6 +100,9 @@ Public Class KeyboardAccessTests
 
     Private Const WM_UPDATEUISTATE As UInteger =
         &H128
+
+    Private Const WM_SYSCHAR As UInteger =
+        &H106
 
     Private Const UIS_CLEAR As Integer =
         2
@@ -692,6 +730,78 @@ Public Class KeyboardAccessTests
     End Sub
 
 
+    ' Enter presses the main action of every dialog the app shows modally
+    ' (#151): each has a default button, which UiPolish also fills as the
+    ' one primary action, except those allowed none for a reason of their
+    ' own. The three that had none press the button named for them. The
+    ' allow-list has teeth: a form on it that gains a default button is
+    ' reported, as one that loses its own would be.
+    <TestMethod>
+    Public Sub EveryDialogWithAMainActionHasADefaultButton()
+
+        Dim missing As New List(Of String)()
+        Dim stale As New List(Of String)()
+        Dim wrong As New List(Of String)()
+
+        Dim modal As List(Of (Name As String, Build As Func(Of String, Form))) =
+            ViewCatalog.Dialogs.
+                Where(Function(entry) Not NeverModal.Contains(entry.Key)).
+                Select(Function(entry) (entry.Key.Name, entry.Value)).
+                ToList()
+
+        Dim failures As List(Of String) =
+            ViewCatalog.ShowEach(
+                modal,
+                Sub(name, shown)
+
+                    Dim allowed As Boolean =
+                        AllowedWithoutDefault.Any(Function(type) type.Name = name)
+
+                    Dim defaultButton As Control =
+                        TryCast(shown.AcceptButton, Control)
+
+                    If defaultButton Is Nothing AndAlso Not allowed Then
+                        missing.Add(name)
+                    ElseIf defaultButton IsNot Nothing AndAlso allowed Then
+                        stale.Add(name)
+                    End If
+
+                    For Each given In DefaultButtonGiven.Where(Function(entry) entry.View.Name = name)
+                        If defaultButton Is Nothing OrElse defaultButton.Text <> given.Text Then
+                            wrong.Add(name & " presses " & If(defaultButton?.Text, "nothing") & ", not " & given.Text)
+                        End If
+                    Next
+
+                End Sub
+            )
+
+        Assert.AreEqual(
+            0,
+            failures.Count,
+            Environment.NewLine & String.Join(Environment.NewLine, failures)
+        )
+
+        Assert.AreEqual(
+            0,
+            missing.Count,
+            "Modal dialogs Enter presses nothing in: " & String.Join(", ", missing)
+        )
+
+        Assert.AreEqual(
+            0,
+            stale.Count,
+            "Allowed without a default button, yet it has one: " & String.Join(", ", stale)
+        )
+
+        Assert.AreEqual(
+            0,
+            wrong.Count,
+            String.Join("; ", wrong)
+        )
+
+    End Sub
+
+
     ' Esc closes each of the five when it is shown modally, as the app
     ' shows it: the dialog returns from ShowDialog with its Cancel or Close
     ' button's result.
@@ -911,6 +1021,143 @@ Public Class KeyboardAccessTests
             0,
             reports.Count,
             Environment.NewLine & String.Join(Environment.NewLine, reports)
+        )
+
+    End Sub
+
+
+    ' In the two dialogs that gave some of their fields access keys and
+    ' not the rest (#151), each field the walk found without one now has
+    ' one: Alt and its letter, on the field's tab, focus the field its
+    ' label names, and the field is still named without the "&".
+    <TestMethod>
+    Public Sub EachFieldOfTheReviewerCommentAndFindJournalsHasAnAccessKey()
+
+        Dim reports As New List(Of String)()
+
+        Dim failures As List(Of String) =
+            ViewCatalog.ShowEach(
+                AccessKeyGiven.Select(Function(entry) entry.View).Distinct().Select(Function(type) (type.Name, ViewCatalog.Dialogs(type))),
+                Sub(name, shown)
+
+                    For Each given In AccessKeyGiven.Where(Function(entry) entry.View.Name = name)
+
+                        If given.Tab >= 0 Then
+                            ViewCatalog.Descendants(shown).OfType(Of TabControl)().Single().SelectedIndex = given.Tab
+                            Application.DoEvents()
+                        End If
+
+                        ' Start from the window's first stop, away from the field.
+                        shown.ActiveControl = Nothing
+                        shown.SelectNextControl(Nothing, True, True, True, False)
+                        Application.DoEvents()
+
+                        PressAccessKey(shown, given.Key)
+
+                        Dim active As Control =
+                            DeepestActiveControl(shown)
+
+                        If active Is Nothing OrElse active.AccessibilityObject.Name <> given.Field Then
+                            reports.Add(name & ": Alt+" & Char.ToUpperInvariant(given.Key) & " focused " & Describe(active) & If(active Is Nothing, String.Empty, ", named '" & active.AccessibilityObject.Name & "'") & ", not " & given.Field & ".")
+                        End If
+
+                    Next
+
+                End Sub
+            )
+
+        Assert.AreEqual(
+            0,
+            failures.Count,
+            Environment.NewLine & String.Join(Environment.NewLine, failures)
+        )
+
+        Assert.AreEqual(
+            0,
+            reports.Count,
+            Environment.NewLine & String.Join(Environment.NewLine, reports)
+        )
+
+    End Sub
+
+
+    ' No window gives one letter to two access keys it shows together, so
+    ' Alt and the letter always reach the one control it names (#151).
+    ' Every view and step in the catalog is read as it opens and again on
+    ' each page of each of its tabs, with the keys of labels, buttons,
+    ' check boxes and options that show them. A guard: no window repeats
+    ' one today, so it cannot fail before the change; it holds the keys on
+    ' each tab of a window to that. Sections a page hides some other way,
+    ' such as the manuscript page's, are not switched.
+    <TestMethod>
+    Public Sub NoWindowRepeatsAnAccessKeyItShowsTogether()
+
+        Dim repeated As New HashSet(Of String)()
+        Dim read As New HashSet(Of String)()
+
+        Dim failures As List(Of String) =
+            ViewCatalog.ShowEach(
+                ViewCatalog.AllViewsAndStages(),
+                Sub(name, shown)
+
+                    Dim readings As New List(Of List(Of (Key As Char, Text As String))) From {
+                        ShownAccessKeys(shown)
+                    }
+
+                    ' A tab's keys show only while it is selected, so each
+                    ' page is read on its own.
+                    For Each tabs As TabControl In ViewCatalog.Descendants(shown).OfType(Of TabControl)().ToList()
+
+                        For index As Integer = 0 To tabs.TabCount - 1
+
+                            tabs.SelectedIndex = index
+                            Application.DoEvents()
+
+                            readings.Add(ShownAccessKeys(shown))
+
+                        Next
+
+                    Next
+
+                    For Each keys In readings
+
+                        For Each entry In keys
+                            read.Add(name & " " & entry.Key)
+                        Next
+
+                        For Each letter In keys.GroupBy(Function(entry) entry.Key).Where(Function(group) group.Count() > 1)
+                            repeated.Add(name & ": Alt+" & letter.Key & " is " & String.Join(" and ", letter.Select(Function(entry) "'" & entry.Text & "'")))
+                        Next
+
+                    Next
+
+                End Sub
+            )
+
+        Assert.AreEqual(
+            0,
+            failures.Count,
+            Environment.NewLine & String.Join(Environment.NewLine, failures)
+        )
+
+        ' The keys the walk gave, three of them on tabs not shown first,
+        ' were among those read.
+        Dim unread As List(Of String) =
+            AccessKeyGiven.
+                Select(Function(given) given.View.Name & " " & Char.ToUpperInvariant(given.Key)).
+                Where(Function(key) Not read.Contains(key)).
+                ToList()
+
+        Assert.AreEqual(
+            0,
+            unread.Count,
+            "The sweep did not read: " & String.Join(", ", unread)
+        )
+
+        Assert.AreEqual(
+            0,
+            repeated.Count,
+            Environment.NewLine & String.Join(Environment.NewLine, repeated)
         )
 
     End Sub
@@ -1225,6 +1472,62 @@ Public Class KeyboardAccessTests
         Application.DoEvents()
 
     End Sub
+
+
+    ' Alt and the letter, as Windows delivers an access key: a WM_SYSCHAR
+    ' to the focused control, which the window hands to its mnemonics.
+    Private Shared Sub PressAccessKey(
+        form As Form,
+        key As Char
+    )
+
+        Dim target As Control =
+            If(DeepestActiveControl(form), form)
+
+        ' Bit 29 of the key data: Alt is held.
+        PostMessage(target.Handle, WM_SYSCHAR, New IntPtr(AscW(key)), New IntPtr(1 << 29))
+        Application.DoEvents()
+
+    End Sub
+
+
+    ' The letter Alt presses a label, button, check box or option with:
+    ' the one after a single "&" in its text, while it shows mnemonics.
+    Private Shared Function AccessKeyOf(
+        control As Control
+    ) As Char?
+
+        Dim label As Label =
+            TryCast(control, Label)
+
+        Dim button As ButtonBase =
+            TryCast(control, ButtonBase)
+
+        If Not ((label IsNot Nothing AndAlso label.UseMnemonic) OrElse (button IsNot Nothing AndAlso button.UseMnemonic)) Then
+            Return Nothing
+        End If
+
+        ' "&&" is a literal ampersand; a key is a letter or digit, as
+        ' UiPolish reads one.
+        Dim match As Match =
+            Regex.Match(If(control.Text, String.Empty).Replace("&&", String.Empty), "&([\p{L}\p{N}])")
+
+        Return If(match.Success, Char.ToUpperInvariant(match.Groups(1).Value(0)), CType(Nothing, Char?))
+
+    End Function
+
+
+    ' The access keys of the controls the window shows now.
+    Private Shared Function ShownAccessKeys(
+        form As Form
+    ) As List(Of (Key As Char, Text As String))
+
+        Return ViewCatalog.Descendants(form).
+            Where(Function(control) control.Visible AndAlso AccessKeyOf(control).HasValue).
+            Select(Function(control) (AccessKeyOf(control).Value, control.Text)).
+            ToList()
+
+    End Function
 
 
     ' Shows the window with the focus it opens with in the app, where it is
