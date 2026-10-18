@@ -307,24 +307,38 @@ Friend NotInheritable Class WindowCreationWatch
     End Function
 
 
+    ' Every call is passed on (CallNextHookEx), whatever recording it does:
+    ' another CBT hook on the thread, as the dialog hook is
+    ' (WindowChrome.HookDialogs, #188), hears each window too, and nothing
+    ' may escape into Windows. A window it could not record is counted as
+    ' parked and as a child, so no test passes over it.
     Private Function Hook(code As Integer, wParam As IntPtr, lParam As IntPtr) As IntPtr
         If code = HCBT_CREATEWND Then
-            ' CBT_CREATEWND: a CREATESTRUCT pointer, whose hwndParent follows
-            ' three pointers and whose style follows four ints after it.
-            Dim create As IntPtr = Marshal.ReadIntPtr(lParam)
-            Dim parent As IntPtr = Marshal.ReadIntPtr(create, IntPtr.Size * 3)
-            Dim style As Integer = Marshal.ReadInt32(create, IntPtr.Size * 4 + 16)
-            Dim root As Control = If(parent = IntPtr.Zero, Nothing, Control.FromHandle(GetAncestor(parent, GA_ROOT)))
-            Dim parked As Boolean = (style And WS_CHILD) <> 0 AndAlso root IsNot Nothing AndAlso root.GetType().Name.Contains("ParkingWindow", StringComparison.Ordinal)
-            ' Where in PaperRoute the window was asked for, for the message.
-            Dim frames As List(Of String) = Environment.StackTrace.Split({vbCrLf, vbLf}, StringSplitOptions.RemoveEmptyEntries).
-                Select(Function(frame) frame.Trim().Split(" in ")(0)).ToList()
-            Dim app As Integer = frames.FindIndex(Function(frame) frame.StartsWith("at ManuscriptPipeline.", StringComparison.Ordinal))
-            Dim caller As String = If(app < 0, String.Empty, ", " & frames(app) & " < " & String.Join(" < ", frames.Take(app).Skip(Math.Max(0, app - 3))))
-            _windows.Add((ClassOf(wParam) & " in " & Describe(Control.FromHandle(parent)) & caller, parked, (style And WS_CHILD) <> 0))
+            Try
+                Record(wParam, lParam)
+            Catch ex As Exception
+                _windows.Add(("a window not recorded: " & ex.GetType().Name & ": " & ex.Message, True, True))
+            End Try
         End If
         Return CallNextHookEx(_hook, code, wParam, lParam)
     End Function
+
+
+    Private Sub Record(wParam As IntPtr, lParam As IntPtr)
+        ' CBT_CREATEWND: a CREATESTRUCT pointer, whose hwndParent follows
+        ' three pointers and whose style follows four ints after it.
+        Dim create As IntPtr = Marshal.ReadIntPtr(lParam)
+        Dim parent As IntPtr = Marshal.ReadIntPtr(create, IntPtr.Size * 3)
+        Dim style As Integer = Marshal.ReadInt32(create, IntPtr.Size * 4 + 16)
+        Dim root As Control = If(parent = IntPtr.Zero, Nothing, Control.FromHandle(GetAncestor(parent, GA_ROOT)))
+        Dim parked As Boolean = (style And WS_CHILD) <> 0 AndAlso root IsNot Nothing AndAlso root.GetType().Name.Contains("ParkingWindow", StringComparison.Ordinal)
+        ' Where in PaperRoute the window was asked for, for the message.
+        Dim frames As List(Of String) = Environment.StackTrace.Split({vbCrLf, vbLf}, StringSplitOptions.RemoveEmptyEntries).
+            Select(Function(frame) frame.Trim().Split(" in ")(0)).ToList()
+        Dim app As Integer = frames.FindIndex(Function(frame) frame.StartsWith("at ManuscriptPipeline.", StringComparison.Ordinal))
+        Dim caller As String = If(app < 0, String.Empty, ", " & frames(app) & " < " & String.Join(" < ", frames.Take(app).Skip(Math.Max(0, app - 3))))
+        _windows.Add((ClassOf(wParam) & " in " & Describe(Control.FromHandle(parent)) & caller, parked, (style And WS_CHILD) <> 0))
+    End Sub
 
 
     Private Shared Function ClassOf(handle As IntPtr) As String

@@ -233,6 +233,80 @@ Public Class WindowChromeTests
     End Sub
 
 
+    ' The dialog hook and the window watch the page-switch tests set
+    ' (WindowCreationWatch, #133) are both CBT hooks on their thread, and
+    ' Windows calls the one set last first. Each passes every call on
+    ' (CallNextHookEx), so with both on one thread, set in either order, a
+    ' message box shown there is still framed by the dialog hook as it is
+    ' activated, and the watch still hears the box's windows made.
+    <TestMethod>
+    <DataRow(True)>
+    <DataRow(False)>
+    Public Sub TheDialogHookAndAWindowWatchOnOneThreadEachHearTheirWindows(watchSetFirst As Boolean)
+
+        Dim framed As Boolean = False
+        Dim made As New List(Of String)()
+
+        StaRunner.Run(
+            Sub()
+                Using poll As New Timer With {.Interval = 50}
+
+                    Dim waited As Diagnostics.Stopwatch = Diagnostics.Stopwatch.StartNew()
+
+                    AddHandler poll.Tick,
+                        Sub(sender, e)
+                            Dim box As IntPtr = DialogOfThisThread(ProbeTitle)
+                            If box <> IntPtr.Zero AndAlso (framed OrElse waited.Elapsed > TimeSpan.FromSeconds(10)) Then
+                                poll.Stop()
+                                PostMessage(box, WM_CLOSE, IntPtr.Zero, IntPtr.Zero)
+                            End If
+                        End Sub
+
+                    Dim setDialogHook As Func(Of IDisposable) =
+                        Function()
+                            Return WindowChrome.HookDialogs(
+                                Sub(window, frame)
+                                    If TitleOf(window) = ProbeTitle Then framed = True
+                                End Sub)
+                        End Function
+
+                    Dim watch As WindowCreationWatch = Nothing
+                    Dim dialogHook As IDisposable = Nothing
+
+                    Try
+                        If watchSetFirst Then
+                            watch = New WindowCreationWatch()
+                            dialogHook = setDialogHook()
+                        Else
+                            dialogHook = setDialogHook()
+                            watch = New WindowCreationWatch()
+                        End If
+
+                        poll.Start()
+                        MessageBox.Show("A message box for a test.", ProbeTitle, MessageBoxButtons.OK)
+                        made.AddRange(watch.Children())
+                    Finally
+                        ' The one set last is removed first.
+                        If watchSetFirst Then
+                            dialogHook?.Dispose()
+                            watch?.Dispose()
+                        Else
+                            watch?.Dispose()
+                            dialogHook?.Dispose()
+                        End If
+                    End Try
+
+                End Using
+            End Sub,
+            TimeSpan.FromSeconds(60))
+
+        Assert.IsTrue(framed, "The dialog hook framed the message box as it was activated.")
+        Assert.IsTrue(made.Any(Function(window) window.StartsWith("Button in ", StringComparison.Ordinal)),
+                      "The watch heard the message box's button made: " & String.Join("; ", made))
+
+    End Sub
+
+
     ' Guard: the app's UI thread is the one Main runs on. Main puts the
     ' hook on it around everything the app shows and removes it as the app
     ' ends, and nothing else in the app hooks a thread. It fails before
