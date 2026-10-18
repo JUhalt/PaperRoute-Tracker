@@ -878,9 +878,10 @@ Public Class DeadlineListTests
                                 If ring = 0 Then failures.Add(label & "the focus ring on " & If(part = overdue.MorePart, "⋯", overdue.Buttons(part).Text) & " is not drawn in the link color.")
                             End Using
                         Next
-                        While Not list.DoneLineFocused AndAlso list.Focused
+                        For tries As Integer = 0 To list.AccessibilityObject.GetChildCount()
+                            If list.DoneLineFocused OrElse Not list.Focused Then Exit For
                             dialogKey.Invoke(list, New Object() {Keys.Tab})
-                        End While
+                        Next
                         Application.DoEvents()
                         Assert.IsTrue(list.DoneLineFocused, "Tab reaches the Done line.")
                         Using picture As Bitmap = Snapshot(list)

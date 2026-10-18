@@ -246,7 +246,7 @@ Public Class KeyboardAccessTests
                             Continue For
                         End If
 
-                        For count As Integer = 0 To expected.Count + 1
+                        For count As Integer = 0 To expected.Count - 1
 
                             If Not list.Focused Then
                                 Exit For
