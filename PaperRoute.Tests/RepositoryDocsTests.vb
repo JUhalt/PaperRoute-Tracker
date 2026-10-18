@@ -15,11 +15,18 @@ Public Class RepositoryDocsTests
     ' on x64 is the one Windows that is tested. The upgrade notes and the
     ' security policy each say so under "Supported versions", in the
     ' guide's words for Windows, so the three cannot drift apart.
+    ' The guide's sentence is a guard: it predates #153, so only the other
+    ' two documents could fail before it.
     <TestMethod>
     Public Sub TheUpgradeNotesAndSecurityPolicyNameTheSupportedVersions()
 
         Const untested As String =
             "Windows 10 and Windows on ARM may work, but they are not tested."
+
+        ' The decision's own words. #153 set this release's update path,
+        ' not a certification rule for every later release.
+        Const updatePath As String =
+            "Only the 0.9 releases update straight to 1.0; an older version updates to a 0.9 release first."
 
         StringAssert.Contains(
             Section(
@@ -45,11 +52,19 @@ Public Class RepositoryDocsTests
                     "## Supported versions"
                 )
 
+            Assert.IsFalse(
+                supported.Contains(
+                    "certified",
+                    StringComparison.Ordinal
+                ),
+                document & " promises nothing about certification under Supported versions."
+            )
+
             For Each expected As String In {
                 "Windows 11",
                 "x64",
                 untested,
-                "Only the 0.9 releases update straight to 1.0"
+                updatePath
             }
 
                 StringAssert.Contains(

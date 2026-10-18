@@ -17,7 +17,7 @@ Developer builds, including the CI smoke-test artifact, intentionally do not rep
 
 PaperRoute supports Windows 11 on x64 computers. Windows 10 and Windows on ARM may work, but they are not tested.
 
-Only the 0.9 releases update straight to 1.0. An older version updates to a 0.9 release first; each release is certified by updating from the Stable release before it.
+Only the 0.9 releases update straight to 1.0; an older version updates to a 0.9 release first.
 
 ## Before upgrading
 
