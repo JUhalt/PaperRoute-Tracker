@@ -1306,12 +1306,12 @@ PaperRoute ships a local copy of this guide. Open it with **Help** at the bottom
 
 The Route, Version History, readiness profiles, submission packets, reviewer responses, and Deadlines form one connected manuscript record. Later releases build on that record:
 
-- **v0.9.2 — 1.0 Hardening:** guided onboarding, accessibility, consistency, recovery, speed, and release certification.
+- **v0.9.2 — 1.0 Hardening:** accessibility, consistency, recovery, speed, and release certification.
 - **v1.0 — Trusted Research Workflow:** a release you can trust with your real publication pipeline.
 
 Planned releases are directional and may change; see the [roadmap](https://github.com/JUhalt/PaperRoute-Tracker/blob/master/ROADMAP.md).
 
-The in-app `?` guidance is intentionally reusable so a future guided tutorial can teach the same concepts without maintaining a second vocabulary.
+A guided tutorial may follow after 1.0, reusing the in-app `?` guidance so that it teaches the same concepts in the same words.
 
 ---
 

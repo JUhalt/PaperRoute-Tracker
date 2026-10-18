@@ -1,4 +1,5 @@
 ﻿Imports System
+Imports System.Collections.Generic
 Imports System.IO
 Imports System.Linq
 Imports System.Text.RegularExpressions
@@ -103,6 +104,240 @@ Public Class RepositoryDocsTests
                 paragraph,
                 expected,
                 "The runtime paragraph says: " & expected
+            )
+
+        Next
+
+    End Sub
+
+
+    ' #148: each decision 1.0 needed (#152 to #156), and each default
+    ' adopted without a decision issue (onboarding, #130; Portable.zip,
+    ' #149), has a dated paragraph in the roadmap linking the issue that
+    ' does the work.
+    <TestMethod>
+    Public Sub TheRoadmapRecordsEachDispositionWithItsDate()
+
+        Dim paragraphs As String() =
+            Section(
+                ReadDocument(
+                    "ROADMAP.md"
+                ),
+                "## Decisions and deferrals"
+            ).Split(
+                ChrW(10)
+            ).Where(
+                Function(line) line.StartsWith(
+                    "**",
+                    StringComparison.Ordinal
+                )
+            ).ToArray()
+
+        Dim dated As New Regex(
+            "(January|February|March|April|May|June|July|August|September|October|November|December) \d{1,2}, \d{4}"
+        )
+
+        For Each issue As Integer In {152, 153, 154, 155, 156, 130, 149}
+
+            Dim paragraph As String =
+                paragraphs.FirstOrDefault(
+                    Function(line) line.Contains(
+                        "/issues/" & issue.ToString() & ")",
+                        StringComparison.Ordinal
+                    )
+                )
+
+            Assert.IsNotNull(
+                paragraph,
+                "A paragraph under Decisions and deferrals links #" & issue.ToString() & "."
+            )
+
+            Assert.IsTrue(
+                dated.IsMatch(paragraph),
+                "The paragraph for #" & issue.ToString() & " is dated: " & paragraph
+            )
+
+        Next
+
+    End Sub
+
+
+    ' #148: what 1.0 knowingly leaves as it is, in one list #44 can cite.
+    ' The scaling entry counts the windows the code still builds without
+    ' 96-DPI base dimensions (#93's not-converted list), so converting one
+    ' fails here until the entry is brought up to date.
+    <TestMethod>
+    Public Sub TheResidualLimitationsAreListedInOnePlace()
+
+        Dim limitations As String =
+            Section(
+                ReadDocument(
+                    "ROADMAP.md"
+                ),
+                "## Residual limitations"
+            )
+
+        For Each expected As String In {
+            "Schema 10",
+            "/issues/93)",
+            "docs/USER_GUIDE.md#what-windows-draws",
+            "contrast theme",
+            "`removed`",
+            "recovery draft",
+            "CODE_SIGNING.md"
+        }
+
+            StringAssert.Contains(
+                limitations,
+                expected,
+                "The list covers: " & expected
+            )
+
+        Next
+
+        Dim unconverted As List(Of String) =
+            Directory.GetFiles(
+                Path.Combine(
+                    AssistantCoreTests.RepositoryRoot(),
+                    "ManuscriptPipeline",
+                    "Forms"
+                ),
+                "*.vb"
+            ).Where(
+                Function(sourceFile)
+                    Dim source As String = File.ReadAllText(sourceFile)
+                    Return Regex.IsMatch(source, "^\s*Inherits Form\s*$", RegexOptions.Multiline) AndAlso
+                           Not source.Contains("AutoScaleDimensions", StringComparison.Ordinal)
+                End Function
+            ).Select(
+                Function(sourceFile) Path.GetFileNameWithoutExtension(sourceFile)
+            ).OrderBy(
+                Function(name) name,
+                StringComparer.Ordinal
+            ).ToList()
+
+        StringAssert.Contains(
+            limitations,
+            " " & unconverted.Count.ToString() & " windows besides the main window",
+            "The scaling entry counts the windows without base dimensions: " & String.Join(", ", unconverted)
+        )
+
+    End Sub
+
+
+    ' #148: onboarding for 1.0 is the welcome, the example library and the
+    ' welcome's Quick Start link (#130); the guided tutorial comes after
+    ' 1.0. No sentence in the roadmap or the guide promises one sooner.
+    <TestMethod>
+    Public Sub NothingPromisesATutorialBeforeVersion1()
+
+        For Each document As String In {
+            "ROADMAP.md",
+            Path.Combine("docs", "USER_GUIDE.md")
+        }
+
+            Dim promises As List(Of String) =
+                Regex.Split(
+                    ReadDocument(
+                        document
+                    ),
+                    "(?<=[.!?])\s+|\n"
+                ).Where(
+                    Function(sentence) Regex.IsMatch(
+                        sentence,
+                        "tutorial|guided onboarding",
+                        RegexOptions.IgnoreCase
+                    ) AndAlso Not sentence.Contains(
+                        "after 1.0",
+                        StringComparison.Ordinal
+                    )
+                ).ToList()
+
+            Assert.AreEqual(
+                0,
+                promises.Count,
+                document & " promises a tutorial before 1.0: " & String.Join(" | ", promises)
+            )
+
+        Next
+
+    End Sub
+
+
+    ' #148: the README's build badge is captioned with the name the
+    ' workflow runs under, as the Actions page shows it.
+    <TestMethod>
+    Public Sub TheReadmeBadgeIsCaptionedWithTheWorkflowsName()
+
+        Dim workflow As String =
+            ReadDocument(
+                Path.Combine(".github", "workflows", "build.yml")
+            ).Split(
+                ChrW(10)
+            ).First(
+                Function(line) line.StartsWith(
+                    "name:",
+                    StringComparison.Ordinal
+                )
+            ).Substring(
+                "name:".Length
+            ).Trim()
+
+        Dim badge As Match =
+            Regex.Match(
+                ReadDocument(
+                    "README.md"
+                ),
+                "\[!\[([^\]]+)\]\([^)]+/actions/workflows/build\.yml/badge\.svg\)\]"
+            )
+
+        Assert.IsTrue(
+            badge.Success,
+            "The README shows the build workflow's badge."
+        )
+
+        Assert.AreEqual(
+            workflow,
+            badge.Groups(1).Value,
+            "The badge is captioned with the workflow's name."
+        )
+
+    End Sub
+
+
+    ' #156, recorded with #148: the 1.0 bar's accessibility claim is the
+    ' one the maintainer decided, and it points at what was tested.
+    <TestMethod>
+    Public Sub TheOneZeroBarSaysWhatAccessibleMeans()
+
+        Dim bar As String =
+            Section(
+                ReadDocument(
+                    "ROADMAP.md"
+                ),
+                "# v1.0 Trusted Research Workflow"
+            )
+
+        Assert.IsFalse(
+            bar.Contains(
+                "accessible keyboard-first UI",
+                StringComparison.Ordinal
+            ),
+            "The 1.0 bar no longer leaves accessible undefined."
+        )
+
+        For Each expected As String In {
+            "keyboard-complete",
+            "Narrator",
+            "contrast themes",
+            "docs/USER_GUIDE.md#accessibility",
+            "/issues/156)"
+        }
+
+            StringAssert.Contains(
+                bar,
+                expected,
+                "The 1.0 bar says: " & expected
             )
 
         Next
