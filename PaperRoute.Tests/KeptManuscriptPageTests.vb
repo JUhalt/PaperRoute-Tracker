@@ -218,6 +218,75 @@ Public Class KeptManuscriptPageTests
     End Sub
 
 
+    ' The system colors changing, as Windows changes them when a contrast
+    ' theme is turned on or off, lets the kept page go as it lets the kept
+    ' Deadlines and Import & Export pages go: hidden, at once and where it
+    ' is; showing, as it is left, its manuscript on it until then. The next
+    ' manuscript opened builds the page anew, and that page is kept again.
+    ' Nothing is saved.
+    <TestMethod>
+    Public Sub TheSystemColorsChangingLetsTheKeptPageGo()
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary = Library60()
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.Open(board.Library(0))
+                    Application.DoEvents()
+                    Dim hidden As Control = board.KeptPage
+                    board.NavigateTo(Form1.WorkspacePage.Board)
+                    Application.DoEvents()
+
+                    UiTheme.HighContrastOverride = True
+                    Try
+                        board.ChangeSystemColors()
+                        Assert.IsTrue(hidden.IsDisposed, "The hidden page is let go at once.")
+                        Assert.IsFalse(board.ContentHost.Controls.Contains(hidden), "It has left the page area.")
+                        Assert.IsNull(board.KeptPage, "No page is kept until the next manuscript is opened.")
+
+                        board.Open(board.Library(1))
+                        Application.DoEvents()
+                        Dim showing As Control = board.KeptPage
+                        Assert.AreEqual(SystemColors.Window, showing.BackColor, "The next page is built in the contrast theme's colors.")
+
+                        UiTheme.HighContrastOverride = False
+                        board.ChangeSystemColors()
+                        Assert.IsFalse(showing.IsDisposed, "The page showing stays while it shows.")
+                        Assert.IsTrue(showing.Visible)
+                        Assert.AreEqual(board.Library(1).Title, board.Field("Title").Text, "Its manuscript is still on it.")
+
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        Application.DoEvents()
+                        Assert.IsTrue(showing.IsDisposed, "The page that was showing is let go as it is left.")
+
+                        board.Open(board.Library(2))
+                        Application.DoEvents()
+                        Dim rebuilt As Control = board.KeptPage
+                        Assert.AreNotSame(showing, rebuilt, "The next manuscript builds the page anew.")
+                        Assert.AreEqual(UiTheme.BoardBackground(), rebuilt.BackColor, "In the colors of now.")
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        Application.DoEvents()
+                        Assert.IsFalse(rebuilt.IsDisposed, "Leaving keeps the new page.")
+                        board.Open(board.Library(0))
+                        Application.DoEvents()
+                        Assert.AreSame(rebuilt, board.KeptPage, "The new page is kept for the next manuscript.")
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                    Finally
+                        UiTheme.HighContrastOverride = Nothing
+                    End Try
+
+                    Assert.AreEqual(0, board.SaveCount, "Nothing was saved.")
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(5))
+
+    End Sub
+
+
     ' Tab never reaches the hidden page.
     <TestMethod>
     Public Sub FocusNeverStaysInTheHiddenPage()

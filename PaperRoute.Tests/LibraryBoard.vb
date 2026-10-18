@@ -368,6 +368,13 @@ Friend NotInheritable Class LibraryBoard
     End Property
 
 
+    ' As Windows does when a contrast theme is turned on or off.
+    Public Sub ChangeSystemColors()
+        OnSystemColorsChanged(EventArgs.Empty)
+        Application.DoEvents()
+    End Sub
+
+
     ' The Discard button of the Unsaved changes bar.
     Public Sub Discard()
         CallPrivate("DiscardManuscriptChanges")
