@@ -4,6 +4,8 @@
 
 Security fixes are prioritized for the current stable PaperRoute release and active development line.
 
+PaperRoute supports Windows 11 on x64 computers. Windows 10 and Windows on ARM may work, but they are not tested. Only the 0.9 releases update straight to 1.0; an older version updates to a 0.9 release first. The [upgrade notes](https://github.com/JUhalt/PaperRoute-Tracker/blob/master/UPGRADE_NOTES.md#supported-versions) say the same.
+
 ## Reporting a vulnerability
 
 Please do not publish suspected vulnerabilities, sensitive local paths, manuscript content, credentials, tokens, or private research data in a public GitHub issue.

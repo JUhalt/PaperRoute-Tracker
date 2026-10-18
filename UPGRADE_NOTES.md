@@ -13,6 +13,12 @@ For normal upgrades, use an installed PaperRoute build rather than replacing app
 
 Developer builds, including the CI smoke-test artifact, intentionally do not replace themselves in place.
 
+## Supported versions
+
+PaperRoute supports Windows 11 on x64 computers. Windows 10 and Windows on ARM may work, but they are not tested.
+
+Only the 0.9 releases update straight to 1.0. An older version updates to a 0.9 release first; each release is certified by updating from the Stable release before it.
+
 ## Before upgrading
 
 PaperRoute upgrades are designed not to overwrite the manuscript database, settings, schema metadata, managed document library, or externally linked files. Even so, creating a current PaperRoute backup before an important upgrade is a sensible precaution.
