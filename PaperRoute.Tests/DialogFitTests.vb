@@ -30,20 +30,27 @@ Public Class DialogFitTests
         Next
     End Sub
 
+    ' On the shared runner (#185). Made on the test's own thread, which
+    ' pumps no messages, these two forms left something bound to it that
+    ' outlived them, and every color-mode run after this test in the same
+    ' process hung until the runner's timeout.
     <TestMethod>
     Public Sub AWindowLargerThanTheScreenIsShrunkAndCenteredInIt()
         Dim area As New Rectangle(100, 50, 700, 500)
-        Using dialog As New Form With {.StartPosition = FormStartPosition.Manual, .MinimumSize = New Size(760, 620), .Size = New Size(900, 700)}
-            ResponsiveDialogSizingService.FitToWorkingArea(dialog, area)
-            Assert.IsTrue(area.Contains(dialog.Bounds), "Inside the working area: " & dialog.Bounds.ToString())
-            Assert.AreEqual(New Size(700, 500), dialog.Size, "As large as the area allows.")
-            Assert.IsTrue(dialog.MinimumSize.Width <= 700 AndAlso dialog.MinimumSize.Height <= 500, "A minimum too large for this screen is lowered.")
-        End Using
+        StaRunner.Run(
+            Sub()
+                Using dialog As New Form With {.StartPosition = FormStartPosition.Manual, .MinimumSize = New Size(760, 620), .Size = New Size(900, 700)}
+                    ResponsiveDialogSizingService.FitToWorkingArea(dialog, area)
+                    Assert.IsTrue(area.Contains(dialog.Bounds), "Inside the working area: " & dialog.Bounds.ToString())
+                    Assert.AreEqual(New Size(700, 500), dialog.Size, "As large as the area allows.")
+                    Assert.IsTrue(dialog.MinimumSize.Width <= 700 AndAlso dialog.MinimumSize.Height <= 500, "A minimum too large for this screen is lowered.")
+                End Using
 
-        Using fits As New Form With {.StartPosition = FormStartPosition.Manual, .Location = New Point(120, 60), .Size = New Size(400, 300)}
-            ResponsiveDialogSizingService.FitToWorkingArea(fits, area)
-            Assert.AreEqual(New Rectangle(120, 60, 400, 300), fits.Bounds, "A window that fits is left as it is.")
-        End Using
+                Using fits As New Form With {.StartPosition = FormStartPosition.Manual, .Location = New Point(120, 60), .Size = New Size(400, 300)}
+                    ResponsiveDialogSizingService.FitToWorkingArea(fits, area)
+                    Assert.AreEqual(New Rectangle(120, 60, 400, 300), fits.Bounds, "A window that fits is left as it is.")
+                End Using
+            End Sub)
     End Sub
 
     ' At 150% a button's minimum (scaled from 96x34) is larger than its

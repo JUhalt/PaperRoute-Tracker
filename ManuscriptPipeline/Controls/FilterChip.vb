@@ -22,6 +22,9 @@ Namespace Controls
 
         Private _tone As FilterChipTone = FilterChipTone.Neutral
 
+        ' Held down by the mouse; drawn only under a contrast theme (#191).
+        Private _pressed As Boolean = False
+
         Public Sub New()
             SetStyle(
                 ControlStyles.Selectable Or
@@ -86,6 +89,28 @@ Namespace Controls
         Protected Overrides Sub OnMouseDown(e As MouseEventArgs)
             MyBase.OnMouseDown(e)
             If e.Button = MouseButtons.Left AndAlso CanFocus Then Focus()
+            SetPressed(e.Button = MouseButtons.Left)
+        End Sub
+
+        Protected Overrides Sub OnMouseUp(e As MouseEventArgs)
+            MyBase.OnMouseUp(e)
+            SetPressed(False)
+        End Sub
+
+        Protected Overrides Sub OnMouseCaptureChanged(e As EventArgs)
+            MyBase.OnMouseCaptureChanged(e)
+            SetPressed(False)
+        End Sub
+
+        Protected Overrides Sub OnMouseLeave(e As EventArgs)
+            MyBase.OnMouseLeave(e)
+            SetPressed(False)
+        End Sub
+
+        Private Sub SetPressed(pressed As Boolean)
+            If _pressed = pressed Then Return
+            _pressed = pressed
+            If UiTheme.IsHighContrast() Then Invalidate()
         End Sub
 
         Protected Overrides Sub OnGotFocus(e As EventArgs)
@@ -129,6 +154,20 @@ Namespace Controls
                     border = UiTheme.CardBorder()
             End Select
 
+            ' Under a contrast theme every fill is the window color (#191):
+            ' the chip is outlined in its text color instead, pressed is the
+            ' highlight pair, and focus a ring in the text color, as Windows
+            ' draws a control there.
+            Dim contrast As Boolean = UiTheme.IsHighContrast()
+
+            If contrast Then
+                border = Color.Empty
+                If _pressed Then
+                    fill = SystemColors.Highlight
+                    ink = SystemColors.HighlightText
+                End If
+            End If
+
             Dim shape As New RectangleF(0.5F, 0.5F, Width - 1.0F, Height - 1.0F)
             Using path As GraphicsPath = RoundedShapes.Create(shape, Height / 2.0F)
                 Using brush As New SolidBrush(fill)
@@ -141,9 +180,11 @@ Namespace Controls
                 End If
             End Using
 
+            RoundedShapes.OutlineUnderContrast(g, New RectangleF(0, 0, Width, Height), Height / 2.0F, If(_pressed, fill, ink))
+
             If Focused AndAlso ShowFocusCues Then
                 Using path As GraphicsPath = RoundedShapes.Create(New RectangleF(1.5F, 1.5F, Width - 4.0F, Height - 4.0F), (Height - 4.0F) / 2.0F)
-                    Using pen As New Pen(UiTheme.AccentSecondaryColor(), 2.0F)
+                    Using pen As New Pen(If(contrast, UiTheme.PrimaryText(), UiTheme.AccentSecondaryColor()), 2.0F)
                         g.DrawPath(pen, path)
                     End Using
                 End Using

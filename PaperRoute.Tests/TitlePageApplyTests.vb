@@ -102,31 +102,36 @@ Public Class TitlePageApplyTests
 
     End Sub
 
+    ' The dialogs are made on the shared runner, never on the test's own
+    ' thread (#185).
     <TestMethod>
     Public Sub ImportDialog_ShowsLibraryMatchesAndReturnsTheEditedProposal()
 
-        Using dialog As New TitlePageImportForm(CreateLibrary(), TitlePage)
-            Dim grid As DataGridView = Descendants(dialog).OfType(Of DataGridView)().Single()
+        StaRunner.Run(
+            Sub()
+                Using dialog As New TitlePageImportForm(CreateLibrary(), TitlePage)
+                    Dim grid As DataGridView = Descendants(dialog).OfType(Of DataGridView)().Single()
 
-            Assert.AreEqual(3, grid.Rows.Count)
-            CollectionAssert.AreEqual(
-                {"In your library", "New author", "New author"},
-                grid.Rows.Cast(Of DataGridViewRow)().Select(Function(row) CStr(row.Cells("Library").Value)).ToList())
+                    Assert.AreEqual(3, grid.Rows.Count)
+                    CollectionAssert.AreEqual(
+                        {"In your library", "New author", "New author"},
+                        grid.Rows.Cast(Of DataGridViewRow)().Select(Function(row) CStr(row.Cells("Library").Value)).ToList())
 
-            ' Leave out the third author and rename the second.
-            grid.Rows(2).Cells("Use").Value = False
-            grid.Rows(1).Cells("Author").Value = "Rui A. Okafor"
+                    ' Leave out the third author and rename the second.
+                    grid.Rows(2).Cells("Use").Value = False
+                    grid.Rows(1).Cells("Author").Value = "Rui A. Okafor"
 
-            InvokePrivate(dialog, "UseDetails")
+                    InvokePrivate(dialog, "UseDetails")
 
-            Assert.AreEqual(DialogResult.OK, dialog.DialogResult)
-            Dim reviewed As TitlePageParseResult = dialog.ReviewedProposal
-            Assert.AreEqual(2, reviewed.Authors.Count)
-            Assert.AreEqual("A.", reviewed.Authors(1).Name.MiddleName)
-            Assert.IsTrue(reviewed.Authors(1).IsCorrespondingAuthor)
-            CollectionAssert.AreEqual({Psychology, Nursing}, reviewed.Authors(1).Affiliations)
-            CollectionAssert.AreEqual({"anchoring", "clinical judgment", "replication"}, reviewed.Keywords)
-        End Using
+                    Assert.AreEqual(DialogResult.OK, dialog.DialogResult)
+                    Dim reviewed As TitlePageParseResult = dialog.ReviewedProposal
+                    Assert.AreEqual(2, reviewed.Authors.Count)
+                    Assert.AreEqual("A.", reviewed.Authors(1).Name.MiddleName)
+                    Assert.IsTrue(reviewed.Authors(1).IsCorrespondingAuthor)
+                    CollectionAssert.AreEqual({Psychology, Nursing}, reviewed.Authors(1).Affiliations)
+                    CollectionAssert.AreEqual({"anchoring", "clinical judgment", "replication"}, reviewed.Keywords)
+                End Using
+            End Sub)
 
     End Sub
 
@@ -135,25 +140,28 @@ Public Class TitlePageApplyTests
 
         Dim library As AuthorLibraryData = CreateLibrary()
 
-        Using dialog As New AddManuscriptForm(library)
-            dialog.UseTitlePageProposal(TitlePageParserService.Parse(TitlePage))
-            dialog.SetFirstDeadline("Send draft to coauthors", New DateTime(2026, 10, 10))
+        StaRunner.Run(
+            Sub()
+                Using dialog As New AddManuscriptForm(library)
+                    dialog.UseTitlePageProposal(TitlePageParserService.Parse(TitlePage))
+                    dialog.SetFirstDeadline("Send draft to coauthors", New DateTime(2026, 10, 10))
 
-            InvokePrivate(dialog, "AddManuscript")
+                    InvokePrivate(dialog, "AddManuscript")
 
-            Dim created As Manuscript = dialog.CreatedManuscript
-            Assert.IsNotNull(created)
-            Assert.AreEqual("A preregistered replication of anchoring effects in clinical risk estimates", created.Title)
-            Assert.AreEqual(3, created.Authors.Count)
-            Assert.AreEqual(1, created.History.Count)
-            Assert.IsTrue(dialog.AuthorLibraryChanged)
-            Assert.AreEqual(3, library.Authors.Count)
+                    Dim created As Manuscript = dialog.CreatedManuscript
+                    Assert.IsNotNull(created)
+                    Assert.AreEqual("A preregistered replication of anchoring effects in clinical risk estimates", created.Title)
+                    Assert.AreEqual(3, created.Authors.Count)
+                    Assert.AreEqual(1, created.History.Count)
+                    Assert.IsTrue(dialog.AuthorLibraryChanged)
+                    Assert.AreEqual(3, library.Authors.Count)
 
-            Assert.AreEqual(1, created.Reminders.Count)
-            Assert.AreEqual("Send draft to coauthors", created.Reminders(0).Title)
-            Assert.AreEqual(New DateTime(2026, 10, 10), created.Reminders(0).DueDate)
-            Assert.IsFalse(created.Reminders(0).IsCompleted)
-        End Using
+                    Assert.AreEqual(1, created.Reminders.Count)
+                    Assert.AreEqual("Send draft to coauthors", created.Reminders(0).Title)
+                    Assert.AreEqual(New DateTime(2026, 10, 10), created.Reminders(0).DueDate)
+                    Assert.IsFalse(created.Reminders(0).IsCompleted)
+                End Using
+            End Sub)
 
     End Sub
 
@@ -161,34 +169,40 @@ Public Class TitlePageApplyTests
     <TestMethod>
     Public Sub AddManuscript_FirstDeadlineShowsTheWholeDate()
 
-        Using dialog As New AddManuscriptForm()
-            dialog.SetFirstDeadline("Send draft to coauthors", New DateTime(2026, 12, 28))
-            dialog.SizeDeadlinePicker()
+        StaRunner.Run(
+            Sub()
+                Using dialog As New AddManuscriptForm()
+                    dialog.SetFirstDeadline("Send draft to coauthors", New DateTime(2026, 12, 28))
+                    dialog.SizeDeadlinePicker()
 
-            Dim picker As DateTimePicker = DirectCast(GetField(dialog, "dtpDeadline"), DateTimePicker)
-            Dim text As Integer = TextRenderer.MeasureText(picker.Value.ToString("d"), picker.Font).Width
-            Assert.IsTrue(picker.Width - SystemInformation.GetVerticalScrollBarWidthForDpi(dialog.DeviceDpi) >= text,
-                          "The date and its drop-down button fit at this display's scaling.")
-        End Using
+                    Dim picker As DateTimePicker = DirectCast(GetField(dialog, "dtpDeadline"), DateTimePicker)
+                    Dim text As Integer = TextRenderer.MeasureText(picker.Value.ToString("d"), picker.Font).Width
+                    Assert.IsTrue(picker.Width - SystemInformation.GetVerticalScrollBarWidthForDpi(dialog.DeviceDpi) >= text,
+                                  "The date and its drop-down button fit at this display's scaling.")
+                End Using
+            End Sub)
 
     End Sub
 
     <TestMethod>
     Public Sub AddManuscript_WithoutALibrary_StillAddsATitleOnlyManuscript()
 
-        Using dialog As New AddManuscriptForm()
-            Dim paste As Button =
-                Descendants(dialog).OfType(Of Button)().Single(Function(button) button.Text = "Paste a Title Page...")
-            Assert.IsFalse(paste.Enabled)
+        StaRunner.Run(
+            Sub()
+                Using dialog As New AddManuscriptForm()
+                    Dim paste As Button =
+                        Descendants(dialog).OfType(Of Button)().Single(Function(button) button.Text = "Paste a Title Page...")
+                    Assert.IsFalse(paste.Enabled)
 
-            DirectCast(GetField(dialog, "txtTitle"), TextBox).Text = "Synthetic title-only manuscript"
-            InvokePrivate(dialog, "AddManuscript")
+                    DirectCast(GetField(dialog, "txtTitle"), TextBox).Text = "Synthetic title-only manuscript"
+                    InvokePrivate(dialog, "AddManuscript")
 
-            Assert.AreEqual("Synthetic title-only manuscript", dialog.CreatedManuscript.Title)
-            Assert.AreEqual(0, dialog.CreatedManuscript.Authors.Count)
-            Assert.AreEqual(0, dialog.CreatedManuscript.Reminders.Count)
-            Assert.IsFalse(dialog.AuthorLibraryChanged)
-        End Using
+                    Assert.AreEqual("Synthetic title-only manuscript", dialog.CreatedManuscript.Title)
+                    Assert.AreEqual(0, dialog.CreatedManuscript.Authors.Count)
+                    Assert.AreEqual(0, dialog.CreatedManuscript.Reminders.Count)
+                    Assert.IsFalse(dialog.AuthorLibraryChanged)
+                End Using
+            End Sub)
 
     End Sub
 

@@ -797,6 +797,12 @@ Friend NotInheritable Class ViewCatalog
     End Function
 
 
+    ' The Board, shown, on a library of the test's own.
+    Friend Shared Function BoardOf(library As List(Of Manuscript)) As Form1
+        Return BoardOn(library)
+    End Function
+
+
     Private Shared Function Welcome() As Form
         Dim board As CatalogBoard = BoardOn(New List(Of Manuscript)())
         If Not board.Welcome.Visible Then

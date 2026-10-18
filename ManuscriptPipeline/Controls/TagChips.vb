@@ -28,6 +28,8 @@ Namespace Controls
                   fill As New SolidBrush(WorkTypeService.Background(palette, dark))
                 g.FillPath(fill, path)
             End Using
+            ' The fill is the window color under a contrast theme (#191).
+            RoundedShapes.OutlineUnderContrast(g, bounds, bounds.Height / 2.0F, WorkTypeService.Foreground(palette, dark))
             TextRenderer.DrawText(g, text, font, bounds, WorkTypeService.Foreground(palette, dark),
                 TextFormatFlags.HorizontalCenter Or TextFormatFlags.VerticalCenter Or TextFormatFlags.NoPadding Or TextFormatFlags.NoPrefix Or TextFormatFlags.SingleLine)
         End Sub

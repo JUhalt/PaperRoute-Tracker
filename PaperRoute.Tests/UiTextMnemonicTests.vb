@@ -17,12 +17,17 @@ Public Class UiTextMnemonicTests
     ' must be written as "&&" or shown in a control with UseMnemonic = False.
     Private Shared ReadOnly LostAmpersand As New Regex("(?<!&)&(?!&)(?=\s|$)")
 
+    ' The forms are made on the shared runner, never on the test's own
+    ' thread (#185).
     <TestMethod>
     Public Sub SettingsDialog_ShowsLiteralAmpersands()
 
-        Using dialog As New SettingsForm(New AppSettings())
-            AssertNoLostAmpersands(dialog)
-        End Using
+        StaRunner.Run(
+            Sub()
+                Using dialog As New SettingsForm(New AppSettings())
+                    AssertNoLostAmpersands(dialog)
+                End Using
+            End Sub)
 
     End Sub
 
@@ -36,9 +41,12 @@ Public Class UiTextMnemonicTests
             .Label = "Synthetic metadata-only version"
         })
 
-        Using history As New ManuscriptVersionHistoryControl(manuscript)
-            AssertNoLostAmpersands(history)
-        End Using
+        StaRunner.Run(
+            Sub()
+                Using history As New ManuscriptVersionHistoryControl(manuscript)
+                    AssertNoLostAmpersands(history)
+                End Using
+            End Sub)
 
     End Sub
 
@@ -46,10 +54,13 @@ Public Class UiTextMnemonicTests
     <TestMethod>
     Public Sub UpdatePrompt_ShowsLiteralAmpersands()
 
-        Using prompt As New UpdatePromptForm("0.6.0", "0.6.1", "Stable", "Notes & fixes")
-            AssertNoLostAmpersands(prompt)
-            Assert.IsTrue(Descendants(prompt).OfType(Of Button)().Any(Function(button) button.Text = "Download && Restart"))
-        End Using
+        StaRunner.Run(
+            Sub()
+                Using prompt As New UpdatePromptForm("0.6.0", "0.6.1", "Stable", "Notes & fixes")
+                    AssertNoLostAmpersands(prompt)
+                    Assert.IsTrue(Descendants(prompt).OfType(Of Button)().Any(Function(button) button.Text = "Download && Restart"))
+                End Using
+            End Sub)
 
     End Sub
 
@@ -96,19 +107,22 @@ Public Class UiTextMnemonicTests
         })
         manuscript.Submissions.Add(submission)
 
-        Using details As New SubmissionDetailsForm(manuscript, submission)
-            AssertNoLostAmpersands(details)
-            AssertShowsLiterally(details, "Memory & Cognition")
-        End Using
+        StaRunner.Run(
+            Sub()
+                Using details As New SubmissionDetailsForm(manuscript, submission)
+                    AssertNoLostAmpersands(details)
+                    AssertShowsLiterally(details, "Memory & Cognition")
+                End Using
 
-        Using route As New ManuscriptRouteViewForm(manuscript)
-            AssertNoLostAmpersands(route)
-            AssertShowsLiterally(route, "Memory & Cognition")
-        End Using
+                Using route As New ManuscriptRouteViewForm(manuscript)
+                    AssertNoLostAmpersands(route)
+                    AssertShowsLiterally(route, "Memory & Cognition")
+                End Using
 
-        Using confirm As New DeleteManuscriptForm(manuscript.Title)
-            AssertNoLostAmpersands(confirm)
-        End Using
+                Using confirm As New DeleteManuscriptForm(manuscript.Title)
+                    AssertNoLostAmpersands(confirm)
+                End Using
+            End Sub)
 
     End Sub
 
@@ -116,12 +130,15 @@ Public Class UiTextMnemonicTests
     <TestMethod>
     Public Sub DeliberateLabelAcceleratorsKeepWorking()
 
-        Using item As New ReviewerResponseItemForm(New JournalSubmission With {.JournalName = "Memory & Cognition"})
-            For Each text As String In {"Editorial &decision", "Revision &round", "Re&viewer (required)"}
-                Dim label As Label = Descendants(item).OfType(Of Label)().Single(Function(candidate) candidate.Text = text)
-                Assert.IsTrue(label.UseMnemonic, text & " keeps its accelerator.")
-            Next
-        End Using
+        StaRunner.Run(
+            Sub()
+                Using item As New ReviewerResponseItemForm(New JournalSubmission With {.JournalName = "Memory & Cognition"})
+                    For Each text As String In {"Editorial &decision", "Revision &round", "Re&viewer (required)"}
+                        Dim label As Label = Descendants(item).OfType(Of Label)().Single(Function(candidate) candidate.Text = text)
+                        Assert.IsTrue(label.UseMnemonic, text & " keeps its accelerator.")
+                    Next
+                End Using
+            End Sub)
 
         Assert.IsTrue(UiPolish.UsesAcceleratorSyntax("Show &status"))
         Assert.IsTrue(UiPolish.UsesAcceleratorSyntax("Save && Close"))

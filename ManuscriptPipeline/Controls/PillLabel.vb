@@ -2,6 +2,7 @@
 Imports System.Drawing
 Imports System.Drawing.Drawing2D
 Imports System.Windows.Forms
+Imports ManuscriptPipeline.Services
 
 Namespace Controls
 
@@ -23,6 +24,24 @@ Namespace Controls
             MyBase.OnSizeChanged(e)
 
             UpdateShape()
+
+        End Sub
+
+
+        ' A stage's fill is the window color under a contrast theme, so
+        ' the pill is outlined in its text color there (#191).
+        Protected Overrides Sub OnPaint(
+            e As PaintEventArgs
+        )
+
+            MyBase.OnPaint(e)
+
+            RoundedShapes.OutlineUnderContrast(
+                e.Graphics,
+                New RectangleF(0, 0, Width, Height),
+                Height / 2.0F,
+                ForeColor
+            )
 
         End Sub
 

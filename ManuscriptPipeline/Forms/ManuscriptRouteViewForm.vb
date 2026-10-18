@@ -1685,6 +1685,16 @@ Namespace Forms
                     True
                 )
 
+                ' A marker on the line, with nothing to do from the
+                ' keyboard and no focus to show, is no tab stop (#192).
+                Me.SetStyle(
+                    ControlStyles.Selectable,
+                    False
+                )
+
+                Me.TabStop =
+                    False
+
             End Sub
 
 
