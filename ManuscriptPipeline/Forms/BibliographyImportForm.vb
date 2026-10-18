@@ -196,6 +196,7 @@ Namespace Forms
             root.Controls.Add(options, 0, 2)
             root.Controls.Add(footer, 0, 3)
 
+            Me.AcceptButton = btnImport
             Me.CancelButton = btnCancel
             Me.Controls.Add(root)
         End Sub

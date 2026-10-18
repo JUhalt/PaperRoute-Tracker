@@ -37,6 +37,27 @@ Public Class KeyboardAccessTests
         GetType(UpdateProgressForm)
     }
 
+    ' The dialogs Enter presses no button in (#151), each for a reason of
+    ' its own.
+    Private Shared ReadOnly AllowedWithoutDefault As Type() = {
+        GetType(DeleteManuscriptForm),          ' Enter must never delete; Delete waits for DELETE.
+        GetType(ExcelMappingForm),              ' Enter in Header row would import before its columns are seen.
+        GetType(JournalFactsForm),              ' Without an ISSN, Enter in the name box runs Find.
+        GetType(OrcidLookupForm),               ' Enter would look up again and clear the works checked.
+        GetType(PacketExportForm),              ' Enter commits an edit in the file list.
+        GetType(PublicationExportForm),         ' Save Export and Copy are two equal ways out.
+        GetType(ReviewerResponseExportForm),    ' Its one field takes Enter as a new line.
+        GetType(UpdateProgressForm)             ' It has no buttons.
+    }
+
+    ' The three dialogs whose footer ends in a main action that was no
+    ' default button (#151), with the button Enter now presses.
+    Private Shared ReadOnly DefaultButtonGiven As (View As Type, Text As String)() = {
+        (GetType(BibliographyExportSelectionForm), "Export Selected"),
+        (GetType(BibliographyImportForm), "Import Selected"),
+        (GetType(TitlePageImportForm), "Use These Details")
+    }
+
     ' The five dialogs that had no CancelButton, with the result Esc closes
     ' each with: that of its Cancel or its Close button.
     Private Shared ReadOnly EscapeProbed As (View As Type, Result As DialogResult)() = {
@@ -687,6 +708,78 @@ Public Class KeyboardAccessTests
             0,
             stale.Count,
             "Allowed without a CancelButton, yet it has one: " & String.Join(", ", stale)
+        )
+
+    End Sub
+
+
+    ' Enter presses the main action of every dialog the app shows modally
+    ' (#151): each has a default button, which UiPolish also fills as the
+    ' one primary action, except those allowed none for a reason of their
+    ' own. The three that had none press the button named for them. The
+    ' allow-list has teeth: a form on it that gains a default button is
+    ' reported, as one that loses its own would be.
+    <TestMethod>
+    Public Sub EveryDialogWithAMainActionHasADefaultButton()
+
+        Dim missing As New List(Of String)()
+        Dim stale As New List(Of String)()
+        Dim wrong As New List(Of String)()
+
+        Dim modal As List(Of (Name As String, Build As Func(Of String, Form))) =
+            ViewCatalog.Dialogs.
+                Where(Function(entry) Not NeverModal.Contains(entry.Key)).
+                Select(Function(entry) (entry.Key.Name, entry.Value)).
+                ToList()
+
+        Dim failures As List(Of String) =
+            ViewCatalog.ShowEach(
+                modal,
+                Sub(name, shown)
+
+                    Dim allowed As Boolean =
+                        AllowedWithoutDefault.Any(Function(type) type.Name = name)
+
+                    Dim defaultButton As Control =
+                        TryCast(shown.AcceptButton, Control)
+
+                    If defaultButton Is Nothing AndAlso Not allowed Then
+                        missing.Add(name)
+                    ElseIf defaultButton IsNot Nothing AndAlso allowed Then
+                        stale.Add(name)
+                    End If
+
+                    For Each given In DefaultButtonGiven.Where(Function(entry) entry.View.Name = name)
+                        If defaultButton Is Nothing OrElse defaultButton.Text <> given.Text Then
+                            wrong.Add(name & " presses " & If(defaultButton?.Text, "nothing") & ", not " & given.Text)
+                        End If
+                    Next
+
+                End Sub
+            )
+
+        Assert.AreEqual(
+            0,
+            failures.Count,
+            Environment.NewLine & String.Join(Environment.NewLine, failures)
+        )
+
+        Assert.AreEqual(
+            0,
+            missing.Count,
+            "Modal dialogs Enter presses nothing in: " & String.Join(", ", missing)
+        )
+
+        Assert.AreEqual(
+            0,
+            stale.Count,
+            "Allowed without a default button, yet it has one: " & String.Join(", ", stale)
+        )
+
+        Assert.AreEqual(
+            0,
+            wrong.Count,
+            String.Join("; ", wrong)
         )
 
     End Sub
