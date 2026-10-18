@@ -124,12 +124,30 @@ Public Class WindowChromeTests
     ' each takes the frame from the hook in the same way (#188). Each opens
     ' on a folder the test makes, adds nothing to Windows' recent items and
     ' is cancelled.
+    '
+    ' Run only on demand, with PAPERROUTE_FILE_DIALOG_TESTS set, because a
+    ' file dialog writes outside the test's folder: Windows' shell keeps
+    ' view state under HKCU for every folder a file dialog shows (Shell's
+    ' BagMRU and Bags), which outlives the folder, and on closing saves the
+    ' dialog's size for testhost.exe as one value under ComDlg32's
+    ' CIDSizeMRU. Cancelled, with AddToRecent off, it adds no recent item
+    ' and no last folder. Run on October 17, 2026, the four rows without a
+    ' contrast theme passed: the Open and Save dialogs and the folder
+    ' picker took the frame and read back dark in Dark and light in Light.
+    ' Under a contrast theme the hook asks for what the Classic row asks
+    ' for, as IsDark() is false; in routine runs that case rests on the
+    ' message box's contrast row, through the same hook and SetFrame.
     <TestMethod>
-    <DataRow(SystemColorMode.Classic, "Open")>
-    <DataRow(SystemColorMode.Dark, "Open")>
-    <DataRow(SystemColorMode.Dark, "Save")>
-    <DataRow(SystemColorMode.Dark, "Folder")>
-    Public Sub TheFileDialogsGetTheThemesTitleBarFromTheDialogHook(mode As SystemColorMode, kind As String)
+    <DataRow(SystemColorMode.Classic, "Open", False)>
+    <DataRow(SystemColorMode.Dark, "Open", False)>
+    <DataRow(SystemColorMode.Dark, "Open", True)>
+    <DataRow(SystemColorMode.Dark, "Save", False)>
+    <DataRow(SystemColorMode.Dark, "Folder", False)>
+    Public Sub TheFileDialogsGetTheThemesTitleBarFromTheDialogHook(mode As SystemColorMode, kind As String, contrastTheme As Boolean)
+
+        If String.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(FileDialogTestsVariable)) Then
+            Assert.Inconclusive($"A file dialog writes Windows' view state for its folder under HKCU; set {FileDialogTestsVariable} to run it.")
+        End If
 
         Dim folder As String =
             CreateTemporaryRoot()
@@ -144,9 +162,9 @@ Public Class WindowChromeTests
                         End Using
                     End Sub,
                     mode,
-                    contrastTheme:=False)
+                    contrastTheme)
 
-            AssertFramed(shown, mode = SystemColorMode.Dark)
+            AssertFramed(shown, mode = SystemColorMode.Dark AndAlso Not contrastTheme)
 
         Finally
             DeleteTemporaryRoot(folder)
@@ -305,6 +323,9 @@ Public Class WindowChromeTests
     Private Const OtherTitle As String = "PaperRoute frame probe, another thread"
 
     Private Const DialogBoxClass As String = "#32770"
+
+    ' Set, to any value, to run the file dialog cases.
+    Private Const FileDialogTestsVariable As String = "PAPERROUTE_FILE_DIALOG_TESTS"
 
     Private Const WM_CLOSE As UInteger = &H10
 
