@@ -2,6 +2,7 @@ Imports System
 Imports System.Drawing
 Imports System.Runtime.InteropServices
 Imports System.Threading
+Imports System.Threading.Tasks
 Imports System.Windows.Forms
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
 Imports ManuscriptPipeline.Services
@@ -226,31 +227,38 @@ Public Class StaRunnerTests
 
 
     ' A form held open on another thread, as a stuck test leaves one, is
-    ' not counted among this thread's forms.
+    ' not counted among this thread's forms. That thread is a runner's of
+    ' its own, as every thread a test makes a form on is (#185).
     <TestMethod>
     Public Sub OpenFormsOnThisThreadLeavesOutAnotherThreadsForm()
 
         Using shown As New ManualResetEventSlim(False), release As New ManualResetEventSlim(False)
 
-            Dim other As New Thread(
-                Sub()
-                    Using form As Form = Offscreen(New Form With {.Text = "Another thread's form"})
-                        form.Show()
-                        shown.Set()
-                        While Not release.IsSet
-                            Application.DoEvents()
-                            Thread.Sleep(10)
-                        End While
-                        form.Close()
-                    End Using
-                End Sub
-            ) With {.IsBackground = True}
-
-            other.SetApartmentState(ApartmentState.STA)
-            other.Start()
-            shown.Wait()
+            Dim other As Task =
+                Task.Run(
+                    Sub()
+                        StaRunner.Run(
+                            Sub()
+                                Using form As Form = Offscreen(New Form With {.Text = "Another thread's form"})
+                                    form.Show()
+                                    shown.Set()
+                                    While Not release.IsSet
+                                        Application.DoEvents()
+                                        Thread.Sleep(10)
+                                    End While
+                                    form.Close()
+                                End Using
+                            End Sub
+                        )
+                    End Sub
+                )
 
             Try
+
+                Assert.IsTrue(
+                    shown.Wait(TimeSpan.FromSeconds(30)),
+                    "The other thread's form showed."
+                )
 
                 StaRunner.Run(
                     Sub()
@@ -283,11 +291,53 @@ Public Class StaRunnerTests
             Finally
 
                 release.Set()
-                other.Join(TimeSpan.FromSeconds(10))
+                other.Wait(TimeSpan.FromSeconds(10))
 
             End Try
 
         End Using
+
+    End Sub
+
+
+    ' What StaRunnerGuard sees (#185): a control leaves WinForms'
+    ' synchronization context on the thread it is made on, and one made on
+    ' the runner leaves none on the test's own thread. A guard on the
+    ' guard: it passes before and after #185, and fails only if WinForms
+    ' stops leaving the context, when the guard could no longer see a form
+    ' made off the runner.
+    <TestMethod>
+    Public Sub AControlLeavesWinFormsContextOnTheThreadItIsMadeOn()
+
+        Dim before As Boolean =
+            True
+
+        Dim after As Boolean =
+            False
+
+        StaRunner.Run(
+            Sub()
+                before = TypeOf SynchronizationContext.Current Is WindowsFormsSynchronizationContext
+                Using control As New Control()
+                End Using
+                after = TypeOf SynchronizationContext.Current Is WindowsFormsSynchronizationContext
+            End Sub
+        )
+
+        Assert.IsFalse(
+            before,
+            "The runner's thread starts without WinForms' context."
+        )
+
+        Assert.IsTrue(
+            after,
+            "A control made on the runner's thread leaves WinForms' context there."
+        )
+
+        Assert.IsFalse(
+            TypeOf SynchronizationContext.Current Is WindowsFormsSynchronizationContext,
+            "None reaches the test's own thread."
+        )
 
     End Sub
 

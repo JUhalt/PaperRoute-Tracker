@@ -10,6 +10,7 @@ Imports System.Threading
 Imports System.Threading.Tasks
 Imports System.Windows.Forms
 Imports ManuscriptPipeline
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Forms
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
@@ -154,20 +155,44 @@ Public Class ResponsivenessBudgetTests
             rows.Add(Time(library, "Board to Journals", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Journals)))
             rows.Add(Time(library, "Journals to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
 
-            rows.Add(Time(library, "Board to Deadlines", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Deadlines)))
-            rows.Add(Time(library, "Deadlines: one filter keystroke", UiThread, Sub() board.TypeInDeadlinesFilter("a")))
-            rows.Add(Time(library, "Deadlines to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
-            rows.Add(Time(library, "Board to Deadlines (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Deadlines)))
-            rows.Add(Time(library, "Deadlines to Board (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
+            ' The Deadlines page draws its rows in one list and is kept (#133).
+            ' Outside the timed steps, the list is checked to hold every open
+            ' item, so a row cannot pass by showing fewer; the filter "a"
+            ' matches every item on the 500 library, so the keystroke refills
+            ' all of them. Painting is timed as a row of its own, since the
+            ' other rows do not pump messages. These rows and Import & Export's
+            ' are enforced, unlike Journals to Board, because #133 requires it;
+            ' the first visits read 39 to 53 ms on a quiet host, but a busy one
+            ' can push them past 100 ms (or 200 in Debug), so a failure here is
+            ' run again on a quiet host before it is read as a regression.
+            Dim openItems As Integer = OpenDeadlines(board, String.Empty)
+            If enforce Then Assert.IsTrue(openItems >= 200, "The 500 library has " & openItems & " open deadline items.")
+            rows.Add(Time(library, "Board to Deadlines", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Deadlines), enforced:=enforce))
+            Assert.AreEqual(openItems, ShownDeadlines(board).Rows.Count, "The list holds every open item after the visit.")
+            rows.Add(Time(library, "Deadlines: one filter keystroke", UiThread, Sub() board.TypeInDeadlinesFilter("a"), enforced:=enforce))
+            Assert.AreEqual(OpenDeadlines(board, "a"), ShownDeadlines(board).Rows.Count, "The list holds every matching item after the keystroke.")
+            If enforce Then Assert.AreEqual(openItems, ShownDeadlines(board).Rows.Count, "The filter ""a"" matches every item on the 500 library.")
+            Dim shown As DeadlineList = ShownDeadlines(board)
+            Using picture As New Bitmap(Math.Max(1, shown.Width), Math.Max(1, shown.Height))
+                rows.Add(Time(library, "Deadlines: paint the visible rows (DrawToBitmap)", UiThread,
+                              Sub() shown.DrawToBitmap(picture, New Rectangle(Point.Empty, shown.Size)), enforced:=enforce))
+            End Using
+            rows.Add(Time(library, "Deadlines: refill after a change (RenderManuscripts while Deadlines is open)", UiThread, Sub() board.Render(), enforced:=enforce))
+            rows.Add(Time(library, "Deadlines to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
+            rows.Add(Time(library, "Board to Deadlines (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Deadlines), enforced:=enforce))
+            Assert.AreEqual(openItems, ShownDeadlines(board).Rows.Count, "The list holds every open item after the second visit.")
+            rows.Add(Time(library, "Deadlines to Board (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
 
             rows.Add(Time(library, "Board to Insights", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Insights)))
             rows.Add(Time(library, "Insights: figures ready (calculated off the UI thread)", UiThread, Sub() board.WaitForInsights()))
             rows.Add(Time(library, "Insights to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
 
-            rows.Add(Time(library, "Board to Import & Export", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.ImportExport)))
-            rows.Add(Time(library, "Import & Export to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
-            rows.Add(Time(library, "Board to Import & Export (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.ImportExport)))
-            rows.Add(Time(library, "Import & Export to Board (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
+            ' Import & Export's commands are laid out and drawn by one list
+            ' around its buttons, and the page is kept (#133).
+            rows.Add(Time(library, "Board to Import & Export", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.ImportExport), enforced:=enforce))
+            rows.Add(Time(library, "Import & Export to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
+            rows.Add(Time(library, "Board to Import & Export (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.ImportExport), enforced:=enforce))
+            rows.Add(Time(library, "Import & Export to Board (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
 
             ' The first manuscript opened builds the manuscript page, which is
             ' kept: each one opened after loads into it, and it shows in one
@@ -262,6 +287,24 @@ Public Class ResponsivenessBudgetTests
 
         End Using
 
+    End Function
+
+
+    ' The open deadline items the page lists for a filter text, worked out
+    ' as the page works them out, from the window's own records.
+    Private Shared Function OpenDeadlines(board As LibraryBoard, filter As String) As Integer
+        Return DeadlineService.Build(board.Library, DateTime.Today).
+            Where(Function(item) item.Group <> DeadlineGroup.Done AndAlso
+                                 (filter.Length = 0 OrElse
+                                  {item.ManuscriptTitle, item.JournalName, item.Title}.Any(
+                                      Function(value) If(value, String.Empty).IndexOf(filter, StringComparison.CurrentCultureIgnoreCase) >= 0))).
+            Count()
+    End Function
+
+
+    ' The Deadlines page's list, while the page is shown.
+    Private Shared Function ShownDeadlines(board As LibraryBoard) As DeadlineList
+        Return ViewCatalog.Descendants(board).OfType(Of DeadlineList)().Single(Function(list) list.Visible)
     End Function
 
 

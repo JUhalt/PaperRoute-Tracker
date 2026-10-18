@@ -153,6 +153,10 @@ Public Class Form1
 
         uiInitialized = True
 
+        ' Windows 11's title bar and corners for the theme (#143); UiPolish
+        ' sets them on every other window.
+        WindowChrome.Apply(Me)
+
         appSettings =
         settingsService.Load()
 
@@ -2409,13 +2413,14 @@ Public Class Form1
         cardToolTip.Dispose()
         DisposeSharedDashboardFonts()
 
-        ' Parked cards and the kept page are not in the window's control tree.
+        ' Parked cards are not in the window's control tree, so they are
+        ' disposed here. The kept pages are in it, hidden while another page
+        ' shows (#133), and are disposed with it.
         For Each card As RoundedPanel In manuscriptCards.Values
             card.Dispose()
         Next
 
         manuscriptCards.Clear()
-        importExportPage?.Dispose()
 
         MyBase.OnFormClosed(
             e
@@ -2992,7 +2997,9 @@ Public Class Form1
         ' Title and journal
         ' =================================================
 
-        ' A link, so the title is the card's keyboard-focusable way to open it.
+        ' A link, so the title is the card's keyboard-focusable way to open
+        ' it: a tab stop before the card's ⋯, that Enter or Space opens
+        ' (#192).
         Dim lblTitle As New LinkLabel With {
             .Text = manuscript.Title,
             .AutoSize = False,
@@ -3025,15 +3032,17 @@ Public Class Form1
         If hasJournal Then cardToolTip.SetToolTip(lblJournal, manuscript.TargetJournal)
 
         ' Tags share the journal line, right-aligned, so every card keeps the
-        ' same height. Clicking one searches the board for it.
+        ' same height. Clicking one searches the board for it. The strip is
+        ' a chip tall, centred on the line, so no chip is shaved (#141).
         Dim tagStrip As TagStrip = Nothing
         If manuscript.Tags IsNot Nothing AndAlso manuscript.Tags.Count > 0 Then
+            Dim chipHeight As Integer = TagChipPainter.Measure("Ag", cardMetaFont, dpi).Height
             tagStrip = New TagStrip With {
                 .Tags = manuscript.Tags.ToList(),
                 .Library = authorLibrary,
                 .Font = cardMetaFont,
-                .Top = journalTop,
-                .Height = metaLine + 2,
+                .Top = journalTop + (metaLine + 2 - chipHeight) \ 2,
+                .Height = chipHeight,
                 .BackColor = UiTheme.CardBackground(),
                 .Cursor = Cursors.Hand
             }
@@ -3111,6 +3120,16 @@ Public Class Form1
         AddHandler lblTitle.LinkClicked,
             Sub(sender, e)
                 WithLiveManuscript(record, Sub(live) OpenManuscript(live))
+            End Sub
+
+        ' A link opens on Enter by itself; Space, as on a button, opens it
+        ' too. Only bare Space: Alt+Space is the window menu's.
+        AddHandler lblTitle.KeyDown,
+            Sub(sender, e)
+                If e.KeyData = Keys.Space Then
+                    e.SuppressKeyPress = True
+                    WithLiveManuscript(record, Sub(live) OpenManuscript(live))
+                End If
             End Sub
 
         AddHandler lblRoute.LinkClicked,
@@ -4053,7 +4072,9 @@ Public Class Form1
 
     ' Set once a restore has replaced the library on disk: until the restart,
     ' what is in memory is the replaced library, so the close the restart
-    ' sends neither asks about the open page nor saves anything.
+    ' sends neither asks about the open page nor saves anything. The other
+    ' restarts that hand over set it too (#124, #178), once nothing in
+    ' memory is left to save.
     Private handingOverAfterRestore As Boolean = False
 
 
@@ -4179,11 +4200,12 @@ Public Class Form1
 
 
     ' Starts PaperRoute again on the library now on disk, after a restore
-    ' (#116) or a recovery in the startup window (#124). The running
-    ' instance is released first: the new process starts before this one
-    ' has unwound, and would otherwise find the library still held and
-    ' exit. Nothing here can cancel the close (handingOverAfterRestore is
-    ' set first), so no second window can follow. Tests record it instead.
+    ' (#116), a recovery in the startup window (#124) or a change of
+    ' appearance (#178). The running instance is released first: the new
+    ' process starts before this one has unwound, and would otherwise find
+    ' the library still held and exit. Nothing here can cancel the close
+    ' (handingOverAfterRestore is set first), so no second window can
+    ' follow. Tests record it instead.
     Protected Overridable Sub RestartOnTheLibraryOnDisk()
 
         Program.ReleaseInstanceForRestart()
@@ -4648,13 +4670,30 @@ Public Class Form1
                 If restartResult =
                 DialogResult.Yes Then
 
-                    Application.Restart()
+                    RestartForNewAppearance()
 
                 End If
 
             End If
 
         End Using
+
+    End Sub
+
+
+    ' Starts PaperRoute again in the new appearance (#178), as a restore and
+    ' a startup recovery do: the open page's edits and a failed save are
+    ' asked about first, and Cancel at either restarts nothing. Then the
+    ' window hands over, so the close the restart sends neither asks nor
+    ' saves again, and the running instance is released for the new one.
+    Private Sub RestartForNewAppearance()
+
+        If Not (ConfirmLeaveManuscript() AndAlso ConfirmCloseUnsavedLibrary()) Then
+            Return
+        End If
+
+        handingOverAfterRestore = True
+        RestartOnTheLibraryOnDisk()
 
     End Sub
 

@@ -7,105 +7,187 @@ Imports ManuscriptPipeline.Services
 
 Namespace Controls
 
-    ' One row on the Deadlines page: when, what kind, what and for which
-    ' manuscript, any progress, and its actions. The row itself takes focus,
-    ' so arrow keys move between rows, Enter runs the first action, and the
-    ' context-menu key opens every action.
-    Friend Class DeadlineRow
-        Inherits Control
+    ' What one Deadlines row is drawn with: the list's font, its bold,
+    ' small and day sizes, and the width each action's button takes. The
+    ' list makes one set for its font and DPI and keeps it until either
+    ' changes.
+    Friend NotInheritable Class DeadlineMetrics
+        Implements IDisposable
 
-        Private ReadOnly _today As DateTime
-        Private ReadOnly _actions As FlowLayoutPanel
-        Private ReadOnly _menu As New ContextMenuStrip()
-        Private _primary As Action = Nothing
-        Private _boldFont As Font
-        Private _smallFont As Font
-        Private _dayFont As Font
+        Private ReadOnly _widths As New Dictionary(Of String, Integer)(StringComparer.Ordinal)
 
-        Public Sub New(item As DeadlineItem, today As DateTime)
-
-            Me.Item = item
-            _today = today.Date
-
-            SetStyle(ControlStyles.UserPaint Or ControlStyles.AllPaintingInWmPaint Or ControlStyles.OptimizedDoubleBuffer Or
-                     ControlStyles.ResizeRedraw Or ControlStyles.Selectable, True)
-            TabStop = True
-            BackColor = UiTheme.CardBackground()
-            AccessibleRole = AccessibleRole.ListItem
-            AccessibleName = Describe()
-            ContextMenuStrip = _menu
-
-            _actions = New FlowLayoutPanel With {
-                .AutoSize = True,
-                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                .WrapContents = False,
-                .Margin = New Padding(0),
-                .BackColor = UiTheme.CardBackground()
-            }
-            Controls.Add(_actions)
-
+        Public Sub New(font As Font, dpi As Integer)
+            Regular = font
+            Me.Dpi = dpi
+            Bold = New Font(font, FontStyle.Bold)
+            Small = New Font(font.FontFamily, font.SizeInPoints * 0.85F)
+            Day = New Font(font.FontFamily, font.SizeInPoints * 1.35F, FontStyle.Bold)
+            Link = New Font(font, FontStyle.Underline)
+            RegularHeight = font.Height
+            BoldHeight = Bold.Height
+            SmallHeight = Small.Height
         End Sub
 
-        <System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)>
+        ' The list's own font, not owned here.
+        Public ReadOnly Property Regular As Font
+        Public ReadOnly Property Bold As Font
+        Public ReadOnly Property Small As Font
+        Public ReadOnly Property Day As Font
+        Public ReadOnly Property Link As Font
+        Public ReadOnly Property Dpi As Integer
+
+        ' The font heights, read once: a list measures every row on a fill.
+        Public ReadOnly Property RegularHeight As Integer
+        Public ReadOnly Property BoldHeight As Integer
+        Public ReadOnly Property SmallHeight As Integer
+
+        Public Function Px(logicalPixels As Integer) As Integer
+            Return UiTheme.Px(logicalPixels, Dpi)
+        End Function
+
+        ' As wide as the button the row once hosted for the action.
+        Public Function ButtonWidth(text As String) As Integer
+            Dim width As Integer
+            If Not _widths.TryGetValue(text, width) Then
+                width = TextRenderer.MeasureText(text, Regular).Width + Px(26)
+                _widths(text) = width
+            End If
+            Return width
+        End Function
+
+        Public Sub Dispose() Implements IDisposable.Dispose
+            Bold.Dispose()
+            Small.Dispose()
+            Day.Dispose()
+            Link.Dispose()
+        End Sub
+
+    End Class
+
+    ' How one row is drawn at the moment: whether the row itself has focus,
+    ' and which of its buttons shows a focus ring, the pointer, or a press.
+    ' A part is a button's index, or the index after the last button for
+    ' the "⋯" button; NoPart is none.
+    Friend Structure DeadlineRowPaintState
+        Public Focused As Boolean
+        Public FocusRingPart As Integer
+        Public HoverPart As Integer
+        Public PressedPart As Integer
+        Public Enabled As Boolean
+    End Structure
+
+    ' One row on the Deadlines page: when, what kind, what and for which
+    ' manuscript, any progress, and its actions. A DeadlineList draws the
+    ' rows and gives them focus, so arrow keys move between rows, Enter runs
+    ' the first action, and the context-menu key opens every action.
+    Friend NotInheritable Class DeadlineRow
+
+        ' The row itself, rather than one of its buttons.
+        Friend Const ItemPart As Integer = -1
+        Friend Const NoPart As Integer = -2
+
+        Private ReadOnly _today As DateTime
+        Private ReadOnly _actions As New List(Of RowAction)()
+        Private ReadOnly _buttons As New List(Of RowAction)()
+        Private _accessibleName As String = Nothing
+
+        ' An action: its menu text, what it does, and whether it shows as a
+        ' button or only in the menu.
+        Friend NotInheritable Class RowAction
+
+            Public Sub New(text As String, handler As Action, menuOnly As Boolean)
+                Me.Text = text
+                Me.Handler = handler
+                Me.MenuOnly = menuOnly
+            End Sub
+
+            Public ReadOnly Property Text As String
+            Public ReadOnly Property Handler As Action
+            Public ReadOnly Property MenuOnly As Boolean
+
+        End Class
+
+        Public Sub New(item As DeadlineItem, today As DateTime)
+            Me.Item = item
+            _today = today.Date
+        End Sub
+
         Friend ReadOnly Property Item As DeadlineItem
 
         ' The first visible action is also Enter's. Menu-only actions appear
         ' under the row's "⋯" button and its context menu.
         Friend Sub AddAction(text As String, handler As Action, Optional menuOnly As Boolean = False)
-
-            If _primary Is Nothing AndAlso Not menuOnly Then _primary = handler
-            _menu.Items.Add(text, Nothing, Sub(sender, e) handler())
-            If menuOnly Then Return
-
-            Dim button As New ActionButton With {
-                .Text = text,
-                .UseMnemonic = False,
-                .Height = UiTheme.Px(30, DeviceDpi),
-                .Width = TextRenderer.MeasureText(text, Font).Width + UiTheme.Px(26, DeviceDpi),
-                .Margin = New Padding(UiTheme.Px(6, DeviceDpi), 0, 0, 0),
-                .AccessibleDescription = Describe()
-            }
-            AddHandler button.Click, Sub(sender, e) handler()
-            _actions.Controls.Add(button)
-
+            Dim action As New RowAction(text, handler, menuOnly)
+            _actions.Add(action)
+            If Not menuOnly Then _buttons.Add(action)
         End Sub
 
-        ' Adds the "⋯" button when the menu holds more than the buttons show.
-        ' Otherwise its space stays empty, so buttons line up down the list.
+        ' The row has a "⋯" button when the menu holds more than the buttons
+        ' show. Otherwise its space stays empty, so buttons line up down the
+        ' list. Nothing is left to do once the actions are added; the call
+        ' marks the end of them.
         Friend Sub FinishActions()
-
-            If _menu.Items.Count <= _actions.Controls.Count Then
-                _actions.Controls.Add(New Panel With {
-                    .Size = New Size(UiTheme.Px(32, DeviceDpi), UiTheme.Px(30, DeviceDpi)),
-                    .Margin = New Padding(UiTheme.Px(4, DeviceDpi), 0, 0, 0),
-                    .TabStop = False
-                })
-                Return
-            End If
-
-            Dim more As New ActionButton With {
-                .Text = "⋯",
-                .Role = ActionButtonRole.Quiet,
-                .UseMnemonic = False,
-                .Height = UiTheme.Px(30, DeviceDpi),
-                .Width = UiTheme.Px(32, DeviceDpi),
-                .Margin = New Padding(UiTheme.Px(4, DeviceDpi), 0, 0, 0),
-                .AccessibleName = "More actions for " & Item.Title
-            }
-            AddHandler more.Click, Sub(sender, e) _menu.Show(more, New Point(0, more.Height))
-            _actions.Controls.Add(more)
-
         End Sub
 
         Friend ReadOnly Property ActionTexts As IEnumerable(Of String)
             Get
-                Return _menu.Items.Cast(Of ToolStripItem)().Select(Function(entry) entry.Text).ToList()
+                Return _actions.Select(Function(entry) entry.Text).ToList()
+            End Get
+        End Property
+
+        ' Every action, in menu order.
+        Friend ReadOnly Property Actions As IReadOnlyList(Of RowAction)
+            Get
+                Return _actions
+            End Get
+        End Property
+
+        ' The actions shown as buttons, in order.
+        Friend ReadOnly Property Buttons As IReadOnlyList(Of RowAction)
+            Get
+                Return _buttons
+            End Get
+        End Property
+
+        ' The first action shown as a button, which Enter and a double-click
+        ' run; Nothing when every action is in the menu.
+        Friend ReadOnly Property Primary As RowAction
+            Get
+                Return If(_buttons.Count > 0, _buttons(0), Nothing)
+            End Get
+        End Property
+
+        Friend ReadOnly Property HasMore As Boolean
+            Get
+                Return _actions.Count > _buttons.Count
+            End Get
+        End Property
+
+        ' The part number of the "⋯" button.
+        Friend ReadOnly Property MorePart As Integer
+            Get
+                Return _buttons.Count
+            End Get
+        End Property
+
+        Friend ReadOnly Property MoreName As String
+            Get
+                Return "More actions for " & Item.Title
+            End Get
+        End Property
+
+        ' What a screen reader reads for the row, and the description of
+        ' each of its buttons.
+        Friend ReadOnly Property AccessibleName As String
+            Get
+                If _accessibleName Is Nothing Then _accessibleName = Describe()
+                Return _accessibleName
             End Get
         End Property
 
         ' Runs an action by its text, as a click would.
         Friend Sub RunAction(text As String)
-            _menu.Items.Cast(Of ToolStripItem)().First(Function(entry) entry.Text = text).PerformClick()
+            _actions.First(Function(entry) entry.Text = text).Handler.Invoke()
         End Sub
 
         Private Function Describe() As String
@@ -164,101 +246,58 @@ Namespace Controls
             Return text
         End Function
 
-        Private ReadOnly Property BoldFont As Font
-            Get
-                If _boldFont Is Nothing Then _boldFont = New Font(Font, FontStyle.Bold)
-                Return _boldFont
-            End Get
-        End Property
-
-        Private ReadOnly Property SmallFont As Font
-            Get
-                If _smallFont Is Nothing Then _smallFont = New Font(Font.FontFamily, Font.SizeInPoints * 0.85F)
-                Return _smallFont
-            End Get
-        End Property
-
-        Private ReadOnly Property DayFont As Font
-            Get
-                If _dayFont Is Nothing Then _dayFont = New Font(Font.FontFamily, Font.SizeInPoints * 1.35F, FontStyle.Bold)
-                Return _dayFont
-            End Get
-        End Property
-
-        Public Overrides Function GetPreferredSize(proposedSize As Size) As Size
-            Dim pad As Integer = UiTheme.Px(11, DeviceDpi)
-            Dim height As Integer = pad * 2 + BoldFont.Height + Font.Height + UiTheme.Px(2, DeviceDpi)
-            If Item.ProgressTotal > 0 Then height += SmallFont.Height + UiTheme.Px(5, DeviceDpi)
-            Return New Size(proposedSize.Width, Math.Max(height, UiTheme.Px(64, DeviceDpi)))
+        ' The row's height: at least 64 pixels, taller with a progress line.
+        Friend Function MeasureHeight(metrics As DeadlineMetrics) As Integer
+            Dim pad As Integer = metrics.Px(11)
+            Dim height As Integer = pad * 2 + metrics.BoldHeight + metrics.RegularHeight + metrics.Px(2)
+            If Item.ProgressTotal > 0 Then height += metrics.SmallHeight + metrics.Px(5)
+            Return Math.Max(height, metrics.Px(64))
         End Function
 
-        Protected Overrides Sub OnLayout(levent As LayoutEventArgs)
-            MyBase.OnLayout(levent)
-            _actions.Location = New Point(Width - _actions.Width - UiTheme.Px(12, DeviceDpi), (Height - _actions.Height) \ 2)
-        End Sub
+        ' Where each button sits in a row drawn at rowBounds, in order, then
+        ' the slot of the "⋯" button, which stays empty when the row has no
+        ' more actions so buttons line up down the list. Each button is 6
+        ' pixels after the one before, the slot 4, and the last 12 from the
+        ' row's right edge, centered on the row.
+        Friend Function ButtonBounds(rowBounds As Rectangle, metrics As DeadlineMetrics) As Rectangle()
 
-        Protected Overrides Sub OnFontChanged(e As EventArgs)
-            For Each cached As Font In {_boldFont, _smallFont, _dayFont}
-                cached?.Dispose()
+            Dim height As Integer = metrics.Px(30)
+            Dim slot As Integer = metrics.Px(32)
+            Dim total As Integer = metrics.Px(4) + slot
+            For Each button As RowAction In _buttons
+                total += metrics.Px(6) + metrics.ButtonWidth(button.Text)
             Next
-            _boldFont = Nothing : _smallFont = Nothing : _dayFont = Nothing
-            MyBase.OnFontChanged(e)
-        End Sub
 
-        Protected Overrides Sub OnGotFocus(e As EventArgs)
-            MyBase.OnGotFocus(e)
-            Invalidate()
-        End Sub
+            Dim top As Integer = rowBounds.Top + (rowBounds.Height - height) \ 2
+            Dim x As Integer = rowBounds.Right - metrics.Px(12) - total
+            Dim bounds(_buttons.Count) As Rectangle
+            For index As Integer = 0 To _buttons.Count - 1
+                Dim width As Integer = metrics.ButtonWidth(_buttons(index).Text)
+                x += metrics.Px(6)
+                bounds(index) = New Rectangle(x, top, width, height)
+                x += width
+            Next
+            x += metrics.Px(4)
+            bounds(_buttons.Count) = New Rectangle(x, top, slot, height)
+            Return bounds
 
-        Protected Overrides Sub OnLostFocus(e As EventArgs)
-            MyBase.OnLostFocus(e)
-            Invalidate()
-        End Sub
-
-        Protected Overrides Sub OnMouseDown(e As MouseEventArgs)
-            MyBase.OnMouseDown(e)
-            Focus()
-        End Sub
-
-        Protected Overrides Sub OnDoubleClick(e As EventArgs)
-            MyBase.OnDoubleClick(e)
-            _primary?.Invoke()
-        End Sub
-
-        Protected Overrides Function IsInputKey(keyData As Keys) As Boolean
-            Select Case keyData
-                Case Keys.Up, Keys.Down, Keys.Enter : Return True
-            End Select
-            Return MyBase.IsInputKey(keyData)
         End Function
 
-        Protected Overrides Sub OnKeyDown(e As KeyEventArgs)
-            MyBase.OnKeyDown(e)
-            Select Case e.KeyCode
-                Case Keys.Enter
-                    _primary?.Invoke()
-                    e.Handled = True
-                Case Keys.Up, Keys.Down
-                    MoveFocus(e.KeyCode = Keys.Down)
-                    e.Handled = True
-            End Select
-        End Sub
+        ' Draws the row in bounds: the card with its stripe and focus border,
+        ' when, the kind badge, what and for which manuscript, any progress,
+        ' and the buttons. Every color is the theme's at the time of drawing.
+        Friend Sub Paint(g As Graphics, bounds As Rectangle, metrics As DeadlineMetrics, state As DeadlineRowPaintState)
 
-        Private Sub MoveFocus(forward As Boolean)
-            Dim rows As List(Of DeadlineRow) = Parent.Controls.OfType(Of DeadlineRow)().Where(Function(row) row.Visible).ToList()
-            Dim index As Integer = rows.IndexOf(Me) + If(forward, 1, -1)
-            If index >= 0 AndAlso index < rows.Count Then rows(index).Focus()
-        End Sub
-
-        Protected Overrides Sub OnPaint(e As PaintEventArgs)
-
-            Dim g As Graphics = e.Graphics
-            Dim dpi As Integer = DeviceDpi
-            g.Clear(SectionCard.SurfaceBehind(Me))
+            Dim dpi As Integer = metrics.Dpi
+            Dim font As Font = metrics.Regular
+            Dim boldFont As Font = metrics.Bold
+            Dim smallFont As Font = metrics.Small
+            Dim dayFont As Font = metrics.Day
+            Dim left As Integer = bounds.Left
             g.SmoothingMode = SmoothingMode.AntiAlias
 
             Dim radius As Single = UiTheme.Px(UiTheme.CardRadius, dpi)
-            Using path As GraphicsPath = RoundedShapes.Create(New RectangleF(0.5F, 0.5F, Width - 1.0F, Height - 1.0F), radius)
+            Using path As GraphicsPath = RoundedShapes.Create(New RectangleF(left + 0.5F, bounds.Top + 0.5F, bounds.Width - 1.0F, bounds.Height - 1.0F), radius)
                 Using fill As New SolidBrush(UiTheme.CardBackground())
                     g.FillPath(fill, path)
                 End Using
@@ -269,43 +308,44 @@ Namespace Controls
                 If Item.Group = DeadlineGroup.Today Then stripe = UiTheme.WarningColor()
                 If stripe <> Color.Empty Then
                     Dim clip As Region = g.Clip
-                    g.SetClip(path)
+                    g.SetClip(path, CombineMode.Intersect)
                     Using brush As New SolidBrush(stripe)
-                        g.FillRectangle(brush, 0, 0, UiTheme.Px(3, dpi), Height)
+                        g.FillRectangle(brush, left, bounds.Top, UiTheme.Px(3, dpi), bounds.Height)
                     End Using
                     g.Clip = clip
+                    clip.Dispose()
                 End If
 
-                Using border As New Pen(If(Focused, UiTheme.AccentColor(), UiTheme.CardBorder()), If(Focused, 2.0F, 1.0F))
+                Using border As New Pen(If(state.Focused, UiTheme.AccentColor(), UiTheme.CardBorder()), If(state.Focused, 2.0F, 1.0F))
                     g.DrawPath(border, path)
                 End Using
             End Using
 
             Dim pad As Integer = UiTheme.Px(12, dpi)
-            Dim center As Integer = Height \ 2
+            Dim center As Integer = bounds.Top + bounds.Height \ 2
             Const flags As TextFormatFlags = TextFormatFlags.NoPrefix Or TextFormatFlags.NoPadding Or TextFormatFlags.SingleLine Or TextFormatFlags.EndEllipsis
 
             ' When: month, day, and how far away.
             Dim whenWidth As Integer = UiTheme.Px(62, dpi)
-            Dim whenInk As Color = If(Item.Group = DeadlineGroup.Overdue, UiTheme.DangerColor(),
-                                      If(Item.Group = DeadlineGroup.Today, UiTheme.WarningColor(), UiTheme.SecondaryText()))
+            Dim whenInk As Color = WhenInkOf(Item.Group)
             Dim centered As TextFormatFlags = flags Or TextFormatFlags.HorizontalCenter
-            Dim whenTop As Integer = center - (SmallFont.Height + DayFont.Height + SmallFont.Height) \ 2
+            Dim whenTop As Integer = center - (smallFont.Height + dayFont.Height + smallFont.Height) \ 2
             If Item.DueDate.HasValue AndAlso Item.Group <> DeadlineGroup.Done Then
-                TextRenderer.DrawText(g, Item.DueDate.Value.ToString("MMM", CultureInfo.CurrentCulture).ToUpperInvariant(), SmallFont,
-                                      New Rectangle(pad, whenTop, whenWidth, SmallFont.Height), UiTheme.SecondaryText(), centered)
-                TextRenderer.DrawText(g, Item.DueDate.Value.Day.ToString(CultureInfo.CurrentCulture), DayFont,
-                                      New Rectangle(pad, whenTop + SmallFont.Height, whenWidth, DayFont.Height), If(Item.Group = DeadlineGroup.Next7Days OrElse Item.Group = DeadlineGroup.Later, UiTheme.PrimaryText(), whenInk), centered)
+                TextRenderer.DrawText(g, Item.DueDate.Value.ToString("MMM", CultureInfo.CurrentCulture).ToUpperInvariant(), smallFont,
+                                      New Rectangle(left + pad, whenTop, whenWidth, smallFont.Height), UiTheme.SecondaryText(), centered)
+                TextRenderer.DrawText(g, Item.DueDate.Value.Day.ToString(CultureInfo.CurrentCulture), dayFont,
+                                      New Rectangle(left + pad, whenTop + smallFont.Height, whenWidth, dayFont.Height), DayInkOf(Item.Group), centered)
             Else
-                TextRenderer.DrawText(g, "—", DayFont, New Rectangle(pad, whenTop + SmallFont.Height, whenWidth, DayFont.Height), UiTheme.MutedText(), centered)
+                TextRenderer.DrawText(g, "—", dayFont, New Rectangle(left + pad, whenTop + smallFont.Height, whenWidth, dayFont.Height), UiTheme.MutedText(), centered)
             End If
-            TextRenderer.DrawText(g, WhenText(), SmallFont, New Rectangle(pad, whenTop + SmallFont.Height + DayFont.Height, whenWidth, SmallFont.Height), whenInk, centered)
+            TextRenderer.DrawText(g, WhenText(), smallFont, New Rectangle(left + pad, whenTop + smallFont.Height + dayFont.Height, whenWidth, smallFont.Height), whenInk, centered)
 
             ' Kind badge.
+            g.SmoothingMode = SmoothingMode.AntiAlias
             Dim badge As Integer = UiTheme.Px(28, dpi)
-            Dim badgeLeft As Integer = pad + whenWidth + UiTheme.Px(8, dpi)
+            Dim badgeLeft As Integer = left + pad + whenWidth + UiTheme.Px(8, dpi)
             Dim badgeBounds As New RectangleF(badgeLeft, center - badge / 2.0F, badge, badge)
-            Dim stage As PaperStage = KindStage()
+            Dim stage As PaperStage = StageOf(Item.Kind)
             Using path As GraphicsPath = RoundedShapes.Create(badgeBounds, UiTheme.Px(7, dpi))
                 Using fill As New SolidBrush(UiTheme.StageBackground(stage))
                     g.FillPath(fill, path)
@@ -316,29 +356,31 @@ Namespace Controls
                                   UiTheme.StageForeground(stage), Math.Max(1.4F, UiTheme.Px(2, dpi) * 0.75F))
             g.SmoothingMode = SmoothingMode.Default
 
-            ' What, and for which manuscript.
+            ' What, and for which manuscript; the text ends 14 pixels before
+            ' the first button.
+            Dim buttons As Rectangle() = ButtonBounds(bounds, metrics)
+            Dim actionsLeft As Integer = If(_buttons.Count > 0, buttons(0).Left - metrics.Px(6), buttons(_buttons.Count).Left - metrics.Px(4))
             Dim textLeft As Integer = badgeLeft + badge + UiTheme.Px(12, dpi)
-            Dim textWidth As Integer = Math.Max(0, _actions.Left - UiTheme.Px(14, dpi) - textLeft)
-            Dim lines As Integer = BoldFont.Height + Font.Height + UiTheme.Px(2, dpi) + If(Item.ProgressTotal > 0, SmallFont.Height + UiTheme.Px(5, dpi), 0)
+            Dim textWidth As Integer = Math.Max(0, actionsLeft - UiTheme.Px(14, dpi) - textLeft)
+            Dim lines As Integer = boldFont.Height + font.Height + UiTheme.Px(2, dpi) + If(Item.ProgressTotal > 0, smallFont.Height + UiTheme.Px(5, dpi), 0)
             Dim y As Integer = center - lines \ 2
-            TextRenderer.DrawText(g, Item.Title, BoldFont, New Rectangle(textLeft, y, textWidth, BoldFont.Height),
-                                  If(Item.Group = DeadlineGroup.Done, UiTheme.SecondaryText(), UiTheme.PrimaryText()), flags)
-            y += BoldFont.Height + UiTheme.Px(2, dpi)
-            TextRenderer.DrawText(g, ContextText(), Font, New Rectangle(textLeft, y, textWidth, Font.Height), UiTheme.SecondaryText(), flags)
-            y += Font.Height
+            TextRenderer.DrawText(g, Item.Title, boldFont, New Rectangle(textLeft, y, textWidth, boldFont.Height), TitleInkOf(Item.Group), flags)
+            y += boldFont.Height + UiTheme.Px(2, dpi)
+            TextRenderer.DrawText(g, ContextText(), font, New Rectangle(textLeft, y, textWidth, font.Height), UiTheme.SecondaryText(), flags)
+            y += font.Height
 
             If Item.ProgressTotal > 0 Then
                 y += UiTheme.Px(5, dpi)
                 Dim barWidth As Integer = UiTheme.Px(120, dpi)
                 Dim barHeight As Integer = UiTheme.Px(6, dpi)
-                Dim barTop As Integer = y + (SmallFont.Height - barHeight) \ 2
+                Dim barTop As Integer = y + (smallFont.Height - barHeight) \ 2
                 g.SmoothingMode = SmoothingMode.AntiAlias
                 Using track As GraphicsPath = RoundedShapes.Create(New RectangleF(textLeft, barTop, barWidth, barHeight), barHeight / 2.0F)
                     Using fill As New SolidBrush(UiTheme.SubtleBorder())
                         g.FillPath(fill, track)
                     End Using
                     Dim clip As Region = g.Clip
-                    g.SetClip(track)
+                    g.SetClip(track, CombineMode.Intersect)
                     Dim doneWidth As Single = barWidth * Item.ProgressDone / CSng(Item.ProgressTotal)
                     Dim activeWidth As Single = barWidth * Item.ProgressActive / CSng(Item.ProgressTotal)
                     Using doneBrush As New SolidBrush(UiTheme.SuccessColor()), activeBrush As New SolidBrush(UiTheme.AccentSecondaryColor())
@@ -346,18 +388,49 @@ Namespace Controls
                         g.FillRectangle(activeBrush, textLeft + doneWidth, barTop, activeWidth, barHeight)
                     End Using
                     g.Clip = clip
+                    clip.Dispose()
                 End Using
                 g.SmoothingMode = SmoothingMode.Default
-                TextRenderer.DrawText(g, ProgressText(), SmallFont,
-                                      New Rectangle(textLeft + barWidth + UiTheme.Px(8, dpi), y, Math.Max(0, textWidth - barWidth - UiTheme.Px(8, dpi)), SmallFont.Height),
+                TextRenderer.DrawText(g, ProgressText(), smallFont,
+                                      New Rectangle(textLeft + barWidth + UiTheme.Px(8, dpi), y, Math.Max(0, textWidth - barWidth - UiTheme.Px(8, dpi)), smallFont.Height),
                                       UiTheme.SecondaryText(), flags)
             End If
 
+            ' The buttons, drawn as the ActionButtons the row once hosted.
+            Const buttonFlags As TextFormatFlags = TextFormatFlags.HorizontalCenter Or TextFormatFlags.VerticalCenter Or
+                                                   TextFormatFlags.SingleLine Or TextFormatFlags.EndEllipsis Or TextFormatFlags.NoPrefix
+            For index As Integer = 0 To _buttons.Count - 1
+                ActionButton.PaintFace(g, buttons(index), ActionButtonRole.Secondary, _buttons(index).Text, font, buttonFlags,
+                                       state.HoverPart = index, state.PressedPart = index, state.FocusRingPart = index, state.Enabled, dpi)
+            Next
+            If HasMore Then
+                ActionButton.PaintFace(g, buttons(_buttons.Count), ActionButtonRole.Quiet, "⋯", font, buttonFlags,
+                                       state.HoverPart = MorePart, state.PressedPart = MorePart, state.FocusRingPart = MorePart, state.Enabled, dpi)
+            End If
+            g.SmoothingMode = SmoothingMode.Default
+
         End Sub
 
+        ' The inks a row picks by its group, read when it is drawn: the date
+        ' and how far away it is in danger when overdue and warning when due
+        ' today; the day of the month in primary text from tomorrow on; the
+        ' title in secondary text once done.
+        Friend Shared Function WhenInkOf(group As DeadlineGroup) As Color
+            Return If(group = DeadlineGroup.Overdue, UiTheme.DangerColor(),
+                      If(group = DeadlineGroup.Today, UiTheme.WarningColor(), UiTheme.SecondaryText()))
+        End Function
+
+        Friend Shared Function DayInkOf(group As DeadlineGroup) As Color
+            Return If(group = DeadlineGroup.Next7Days OrElse group = DeadlineGroup.Later, UiTheme.PrimaryText(), WhenInkOf(group))
+        End Function
+
+        Friend Shared Function TitleInkOf(group As DeadlineGroup) As Color
+            Return If(group = DeadlineGroup.Done, UiTheme.SecondaryText(), UiTheme.PrimaryText())
+        End Function
+
         ' Kind colors follow the board's stage pills.
-        Private Function KindStage() As PaperStage
-            Select Case Item.Kind
+        Friend Shared Function StageOf(kind As DeadlineKind) As PaperStage
+            Select Case kind
                 Case DeadlineKind.Revision : Return PaperStage.Revision
                 Case DeadlineKind.FollowUp : Return PaperStage.Submitted
                 Case DeadlineKind.Preparation : Return PaperStage.UnderReview
@@ -375,16 +448,6 @@ Namespace Controls
                 Case Else : Return RailGlyph.Reminders
             End Select
         End Function
-
-        Protected Overrides Sub Dispose(disposing As Boolean)
-            If disposing Then
-                For Each cached As Font In {_boldFont, _smallFont, _dayFont}
-                    cached?.Dispose()
-                Next
-                _menu.Dispose()
-            End If
-            MyBase.Dispose(disposing)
-        End Sub
 
     End Class
 

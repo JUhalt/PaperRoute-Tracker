@@ -28,6 +28,8 @@ Namespace Controls
                   fill As New SolidBrush(WorkTypeService.Background(palette, dark))
                 g.FillPath(fill, path)
             End Using
+            ' The fill is the window color under a contrast theme (#191).
+            RoundedShapes.OutlineUnderContrast(g, bounds, bounds.Height / 2.0F, WorkTypeService.Foreground(palette, dark))
             TextRenderer.DrawText(g, text, font, bounds, WorkTypeService.Foreground(palette, dark),
                 TextFormatFlags.HorizontalCenter Or TextFormatFlags.VerticalCenter Or TextFormatFlags.NoPadding Or TextFormatFlags.NoPrefix Or TextFormatFlags.SingleLine)
         End Sub
@@ -110,7 +112,10 @@ Namespace Controls
 
         Protected Overrides Sub OnPaint(e As PaintEventArgs)
             For Each chip In PlaceChips(Width)
+                ' A strip shorter than a chip draws a whole, shorter pill,
+                ' not one shaved at the top and bottom (#141).
                 Dim bounds As Rectangle = chip.Bounds
+                bounds.Height = Math.Min(bounds.Height, Height)
                 bounds.Offset(0, (Height - bounds.Height) \ 2)
                 TagChipPainter.Draw(e.Graphics, bounds, chip.Text, chip.Palette, Font)
             Next

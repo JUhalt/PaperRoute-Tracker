@@ -60,6 +60,21 @@ Public Class KeyboardAccessTests
     Private Const WM_KEYDOWN As UInteger =
         &H100
 
+    Private Const VK_SHIFT As Integer =
+        &H10
+
+    Private Const WM_UPDATEUISTATE As UInteger =
+        &H128
+
+    Private Const UIS_CLEAR As Integer =
+        2
+
+    Private Const UISF_HIDEFOCUS As Integer =
+        1
+
+    Private Shared ReadOnly KeyDownMethod As MethodInfo =
+        GetType(Control).GetMethod("OnKeyDown", BindingFlags.Instance Or BindingFlags.NonPublic)
+
 
     ' Every waypoint of a published route has one link that Tab reaches,
     ' in route order, and Enter on it opens that waypoint, as a double
@@ -204,6 +219,422 @@ Public Class KeyboardAccessTests
 
             End Sub
         )
+
+    End Sub
+
+
+    ' Tab reaches everything the main window's pages draw rather than host
+    ' as controls (#133), as it reached the controls they replaced: over
+    ' the catalog's pages and hosted views, Tab from a drawn list's first
+    ' stop lands on each of its items, buttons and links in reading order,
+    ' each announced as the one focused, and then leaves the list; and Tab
+    ' from Import & Export's first command lands on each of its commands in
+    ' turn. The Deadlines page draws items, buttons, a "⋯" and the Done
+    ' link, so the sweep cannot pass by finding none.
+    <TestMethod>
+    Public Sub TabReachesEveryDrawnItemButtonAndLink()
+
+        Dim reports As New List(Of String)()
+        Dim walked As New List(Of String)()
+
+        Dim failures As List(Of String) =
+            ViewCatalog.ShowEach(
+                ViewCatalog.Hosted.Select(Function(view) (view.Name, view.Build)),
+                Sub(name, shown)
+
+                    For Each list As DeadlineList In ViewCatalog.Descendants(shown).OfType(Of DeadlineList)().Where(Function(control) control.Visible).ToList()
+
+                        Dim root As AccessibleObject =
+                            list.AccessibilityObject
+
+                        Dim children As List(Of AccessibleObject) =
+                            Enumerable.Range(0, root.GetChildCount()).Select(Function(index) root.GetChild(index)).ToList()
+
+                        Dim expected As List(Of Integer) =
+                            Enumerable.Range(0, children.Count).
+                                Where(Function(index) {AccessibleRole.ListItem, AccessibleRole.PushButton, AccessibleRole.Link}.Contains(children(index).Role)).
+                                ToList()
+
+                        Dim reached As New List(Of Integer)()
+
+                        If Not list.Focus() Then
+                            reports.Add(name & ": the drawn list takes no focus.")
+                            Continue For
+                        End If
+
+                        For count As Integer = 0 To expected.Count - 1
+
+                            If Not list.Focused Then
+                                Exit For
+                            End If
+
+                            reached.Add(children.IndexOf(root.GetFocused()))
+                            Press(shown, Keys.Tab)
+
+                        Next
+
+                        walked.Add(name & ": " & reached.Count & " stops")
+
+                        If Not reached.SequenceEqual(expected) Then
+                            reports.Add(name & ": Tab reached " & String.Join(", ", reached.Select(Function(index) If(index < 0, "(nothing)", children(index).Name))) &
+                                        "; expected " & String.Join(", ", expected.Select(Function(index) children(index).Name)) & ".")
+                        ElseIf list.Focused Then
+                            reports.Add(name & ": Tab past the last stop stays in the list.")
+                        End If
+
+                    Next
+
+                    For Each list As CommandList In ViewCatalog.Descendants(shown).OfType(Of CommandList)().Where(Function(control) control.Visible).ToList()
+
+                        Dim commands As List(Of ActionButton) =
+                            list.Controls.OfType(Of ActionButton)().ToList()
+
+                        If commands.Count = 0 OrElse Not commands(0).Focus() Then
+                            reports.Add(name & ": the first command takes no focus.")
+                            Continue For
+                        End If
+
+                        Dim reached As New List(Of Control)()
+
+                        For Each command As ActionButton In commands
+                            reached.Add(DeepestActiveControl(shown))
+                            Press(shown, Keys.Tab)
+                        Next
+
+                        walked.Add(name & ": " & reached.Count & " commands")
+
+                        If Not reached.SequenceEqual(commands) Then
+                            reports.Add(name & ": Tab reached " & String.Join(", ", reached.Select(Function(control) If(control Is Nothing, "(nothing)", control.Text))) & ".")
+                        End If
+
+                    Next
+
+                End Sub
+            )
+
+        Assert.AreEqual(
+            0,
+            failures.Count,
+            Environment.NewLine & String.Join(Environment.NewLine, failures)
+        )
+
+        Assert.IsTrue(
+            walked.Any(Function(line) line.StartsWith("Deadlines page: ", StringComparison.Ordinal) AndAlso line.EndsWith(" stops", StringComparison.Ordinal)) AndAlso
+            walked.Contains("Import & Export page: 14 commands"),
+            "Both pages were walked: " & String.Join(" | ", walked)
+        )
+
+        Assert.AreEqual(
+            0,
+            reports.Count,
+            Environment.NewLine & String.Join(Environment.NewLine, reports)
+        )
+
+    End Sub
+
+
+    ' Route View opens on a stop a keyboard user can see (#192). Every
+    ' stop Tab reaches is a waypoint's link, a button, or the route map,
+    ' which a screen reader reads and which draws a focus ring; the map's
+    ' key and the route's markers, which drew none and do nothing, are no
+    ' stops. The first Tab from the window's opening focus lands on the
+    ' first waypoint's link, and Enter there opens that waypoint, never
+    ' Close; Enter on the route map does nothing at all.
+    <TestMethod>
+    Public Sub RouteViewsFirstTabIsVisibleAndEnterNeverPressesClose()
+
+        Dim manuscript As Manuscript =
+            RouteMapServiceTests.Anchoring()
+
+        Dim waypoints As List(Of ManuscriptRouteWaypoint) =
+            ManuscriptRouteProjectionService.Project(manuscript).Waypoints
+
+        StaRunner.Run(
+            Sub()
+
+                Using view As New ManuscriptRouteViewForm(manuscript)
+
+                    ShowWithOpeningFocus(view)
+
+                    Dim links As List(Of LinkLabel) =
+                        WaypointLinks(view, waypoints.Count)
+
+                    Dim opening As Control =
+                        DeepestActiveControl(view)
+
+                    Press(view, Keys.Tab)
+
+                    Dim first As Control =
+                        DeepestActiveControl(view)
+
+                    Assert.AreSame(
+                        links(0),
+                        first,
+                        "The first Tab from " & Describe(opening) & " lands on the first waypoint's link, not on " & Describe(first) & "."
+                    )
+
+                    ' Round the whole tab order once.
+                    Dim hidden As New List(Of String)()
+                    Dim seen As New HashSet(Of Control)()
+                    Dim active As Control = first
+
+                    For count As Integer = 0 To ViewCatalog.Descendants(view).Count()
+
+                        If Not seen.Add(active) Then
+                            Exit For
+                        End If
+
+                        If Not (TypeOf active Is LinkLabel OrElse TypeOf active Is ButtonBase OrElse TypeOf active Is ContextHelpControl OrElse TypeOf active Is RouteMapBar) Then
+                            hidden.Add(Describe(active))
+                        End If
+
+                        Press(view, Keys.Tab)
+                        active = DeepestActiveControl(view)
+
+                    Next
+
+                    Assert.AreEqual(
+                        0,
+                        hidden.Count,
+                        "Stops that show no focus: " & String.Join(", ", hidden)
+                    )
+
+                    Dim map As RouteMapBar =
+                        ViewCatalog.Descendants(view).OfType(Of RouteMapBar)().Single()
+
+                    Assert.IsTrue(
+                        seen.Contains(map),
+                        "The route map is a stop, so a screen reader reads it."
+                    )
+
+                    ' Focus cues show, as once a key has been pressed. The
+                    ' map is told directly, as the drawn lists' tests tell
+                    ' theirs: asked of a window Windows never activated,
+                    ' because another program had the foreground, the change
+                    ' left the map's cues hidden.
+                    view.ActiveControl = map
+                    SendMessage(map.Handle, WM_UPDATEUISTATE, New IntPtr(UIS_CLEAR Or (UISF_HIDEFOCUS << 16)), IntPtr.Zero)
+                    Application.DoEvents()
+
+                    Assert.IsTrue(
+                        map.Focused AndAlso CBool(GetType(Control).GetProperty("ShowFocusCues", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(map)),
+                        "The route map has the focus and shows focus cues."
+                    )
+
+                    Using focused As New Bitmap(map.Width, map.Height)
+
+                        map.DrawToBitmap(focused, New Rectangle(Point.Empty, map.Size))
+
+                        Dim ring As Integer =
+                            Enumerable.Range(0, map.Width * map.Height).
+                                Count(Function(index) focused.GetPixel(index Mod map.Width, index \ map.Width).ToArgb() = UiTheme.AccentSecondaryColor().ToArgb())
+
+                        Assert.IsTrue(
+                            ring >= map.Width,
+                            "Focused, the route map draws a ring: " & ring & " pixels of it."
+                        )
+
+                    End Using
+
+                    Press(view, Keys.Enter)
+
+                    Assert.IsTrue(
+                        view.Visible AndAlso view.DialogResult = DialogResult.None,
+                        "Enter on the route map does nothing; the window answered " & view.DialogResult.ToString() & "."
+                    )
+
+                    ' Windows presses the default button for Enter with
+                    ' Shift held as well.
+                    PressWithShift(view, Keys.Enter)
+
+                    Assert.IsTrue(
+                        view.Visible AndAlso view.DialogResult = DialogResult.None,
+                        "Shift+Enter on the route map does nothing; the window answered " & view.DialogResult.ToString() & "."
+                    )
+
+                    view.Close()
+
+                End Using
+
+                Using view As New ManuscriptRouteViewForm(manuscript)
+
+                    ShowWithOpeningFocus(view)
+                    Press(view, Keys.Tab)
+                    Press(view, Keys.Enter)
+
+                    Assert.AreEqual(
+                        DialogResult.Yes,
+                        view.DialogResult,
+                        "Enter at the first Tab opens a waypoint, never Close."
+                    )
+
+                    Assert.IsTrue(
+                        SameWaypoint(waypoints(0), view.SelectedWaypoint),
+                        "It opens the first waypoint."
+                    )
+
+                    view.Close()
+
+                End Using
+
+                Assert.AreEqual(
+                    0,
+                    StaRunner.OpenFormsOnThisThread().Count,
+                    "Route View leaves no form open."
+                )
+
+            End Sub
+        )
+
+    End Sub
+
+
+    ' On the Board, Tab reaches each card's title in card order, each just
+    ' before the card's ⋯ button and named by its manuscript (#192), and
+    ' Enter or Space on a title opens that manuscript's page, as a click
+    ' does; Space with Alt, Ctrl or Shift does not. Tab and Enter already
+    ' worked in this window before #192; Space did not.
+    <TestMethod>
+    <DataRow(Keys.Enter)>
+    <DataRow(Keys.Space)>
+    Public Sub BoardCardTitlesAreTabStopsInCardOrderAndOpenTheirManuscript(key As Keys)
+
+        Dim library As List(Of Manuscript) =
+            CreateRepresentativeLibrary()
+
+        library.Add(New Manuscript With {.Title = "Second Pipeline Study", .CurrentStage = PaperStage.Draft, .Location = ManuscriptLocation.Pipeline})
+        library.Add(New Manuscript With {.Title = "Third Pipeline Study", .CurrentStage = PaperStage.Revision, .Location = ManuscriptLocation.Pipeline})
+
+        Dim root As String =
+            CreateTemporaryRoot()
+
+        StorageEnvironment.RootOverride =
+            root
+
+        Try
+
+            StaRunner.Run(
+                Sub()
+
+                    Using board As Form1 = ViewCatalog.BoardOf(library)
+
+                        Dim cards As List(Of Control) =
+                            ViewCatalog.Descendants(board).OfType(Of RoundedPanel)().
+                                Where(Function(card) card.Visible AndAlso card.ContextMenuStrip IsNot Nothing).
+                                Cast(Of Control)().
+                                ToList()
+
+                        Dim titles As List(Of LinkLabel) =
+                            cards.Select(Function(card) card.Controls.OfType(Of LinkLabel)().Single(Function(link) link.Text = card.AccessibleName)).
+                                ToList()
+
+                        Assert.AreEqual(3, titles.Count, "The Pipeline shows three cards.")
+
+                        For Each title As LinkLabel In titles
+                            Assert.AreEqual(title.Text, title.AccessibilityObject.Name, "A title is named by its manuscript.")
+                        Next
+
+                        ' Round the Board from its search box.
+                        board.ActiveControl =
+                            ViewCatalog.Descendants(board).OfType(Of TextBox)().First(Function(box) box.Visible)
+
+                        Dim reached As New List(Of LinkLabel)()
+                        Dim after As New List(Of String)()
+                        Dim previous As LinkLabel = Nothing
+
+                        For count As Integer = 0 To 60
+
+                            Press(board, Keys.Tab)
+
+                            Dim active As Control =
+                                DeepestActiveControl(board)
+
+                            If previous IsNot Nothing Then
+                                after.Add(If(active?.AccessibleName, "(nothing)"))
+                                previous = Nothing
+                            End If
+
+                            Dim title As LinkLabel =
+                                TryCast(active, LinkLabel)
+
+                            If title IsNot Nothing AndAlso titles.Contains(title) Then
+                                If reached.Contains(title) Then Exit For
+                                reached.Add(title)
+                                previous = title
+                            End If
+
+                        Next
+
+                        CollectionAssert.AreEqual(
+                            titles,
+                            reached,
+                            "Tab reaches each card's title once, in card order: " & String.Join(" | ", reached.Select(Function(link) link.Text))
+                        )
+
+                        CollectionAssert.AreEqual(
+                            titles.Select(Function(link) "More actions for " & link.Text).ToList(),
+                            after,
+                            "Each title comes just before its card's ⋯."
+                        )
+
+                        ' The middle card, from its title.
+                        board.ActiveControl = titles(1)
+                        Application.DoEvents()
+
+                        ' Alt+Space is the window menu's key, which reaches
+                        ' Windows only if the key press is left alone. Given
+                        ' to the title directly, as a real Alt+Space would
+                        ' open the window menu's own loop here.
+                        For Each modifier As Keys In {Keys.Alt, Keys.Control, Keys.Shift}
+
+                            Dim held As New KeyEventArgs(modifier Or Keys.Space)
+                            KeyDownMethod.Invoke(titles(1), New Object() {held})
+                            Application.DoEvents()
+
+                            Assert.AreEqual(
+                                Form1.WorkspacePage.Board,
+                                board.ActivePage,
+                                held.KeyData.ToString() & " on a card's title leaves the Board as it is."
+                            )
+
+                            Assert.IsFalse(
+                                held.SuppressKeyPress,
+                                held.KeyData.ToString() & " on a card's title is left for Windows."
+                            )
+
+                        Next
+
+                        Press(board, key)
+
+                        Assert.AreEqual(
+                            Form1.WorkspacePage.Manuscript,
+                            board.ActivePage,
+                            key.ToString() & " on a card's title opens the manuscript's page."
+                        )
+
+                        Assert.AreEqual(
+                            library.Single(Function(item) item.Title = titles(1).Text).Id,
+                            DirectCast(GetType(Form1).GetField("currentManuscriptId", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(board), Guid),
+                            "It opens that card's manuscript."
+                        )
+
+                        board.Close()
+
+                    End Using
+
+                End Sub
+            )
+
+        Finally
+
+            StorageEnvironment.RootOverride =
+                Nothing
+
+            DeleteTemporaryRoot(
+                root
+            )
+
+        End Try
 
     End Sub
 
@@ -596,11 +1027,6 @@ Public Class KeyboardAccessTests
     End Sub
 
 
-    Private Shared Function Describe(control As Control) As String
-        Return If(control Is Nothing, "none", control.GetType().Name & " '" & If(control.AccessibleName, control.Text) & "'")
-    End Function
-
-
     ' Shows the dialog modally, offscreen, and presses Esc in it once it
     ' has shown. Nothing is returned for a dialog Esc leaves open.
     Private Shared Function EscapeResult(
@@ -794,6 +1220,51 @@ Public Class KeyboardAccessTests
     End Sub
 
 
+    ' Shows the window with the focus it opens with in the app, where it is
+    ' activated as it opens. Shown while another program has the
+    ' foreground, it is not, and nothing has the focus; activation would
+    ' select its first stop, as this does.
+    Private Shared Sub ShowWithOpeningFocus(
+        form As Form
+    )
+
+        ViewCatalog.ShowOffscreen(form)
+
+        If form.ActiveControl Is Nothing Then
+            form.SelectNextControl(Nothing, True, True, True, False)
+            Application.DoEvents()
+        End If
+
+    End Sub
+
+
+    ' Presses the key with Shift held in this thread's key state only, as
+    ' WinForms reads modifiers there, and lets Shift go again.
+    Private Shared Sub PressWithShift(
+        form As Form,
+        key As Keys
+    )
+
+        Dim state(255) As Byte
+        GetKeyboardState(state)
+
+        Dim before As Byte =
+            state(VK_SHIFT)
+
+        state(VK_SHIFT) = CByte(before Or &H80)
+        SetKeyboardState(state)
+
+        Try
+            Press(form, key)
+        Finally
+            GetKeyboardState(state)
+            state(VK_SHIFT) = before
+            SetKeyboardState(state)
+        End Try
+
+    End Sub
+
+
     Private Shared Sub Post(
         form As Form,
         key As Keys
@@ -821,6 +1292,19 @@ Public Class KeyboardAccessTests
     End Function
 
 
+    Private Shared Function Describe(
+        control As Control
+    ) As String
+
+        If control Is Nothing Then
+            Return "no control"
+        End If
+
+        Return control.GetType().Name & " '" & If(control.AccessibleName, control.Text) & "'"
+
+    End Function
+
+
     Private Shared Function DeepestActiveControl(
         form As Form
     ) As Control
@@ -839,6 +1323,18 @@ Public Class KeyboardAccessTests
 
     <DllImport("user32.dll")>
     Private Shared Function PostMessage(handle As IntPtr, message As UInteger, wParam As IntPtr, lParam As IntPtr) As Boolean
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function SendMessage(handle As IntPtr, message As UInteger, wParam As IntPtr, lParam As IntPtr) As IntPtr
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function GetKeyboardState(state As Byte()) As Boolean
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function SetKeyboardState(state As Byte()) As Boolean
     End Function
 
 

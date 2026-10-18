@@ -114,6 +114,11 @@ Namespace Services
                 Return
             End If
 
+            ' Windows 11's title bar and corners for the theme (#143).
+            WindowChrome.Apply(
+                form
+            )
+
             form.BackColor =
                 UiTheme.BoardBackground()
 
@@ -379,9 +384,26 @@ Namespace Services
                 ' A header never looks selected because a cell below it is.
                 grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = UiTheme.HeaderBackground()
                 grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = UiTheme.PrimaryText()
-                ' A header never looks selected because a cell below it is.
-                grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = UiTheme.HeaderBackground()
-                grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = UiTheme.PrimaryText()
+
+                ' Windows draws check boxes in cells from its Light theme (#106).
+                CheckGlyph.Attach(
+                    grid
+                )
+
+                Return
+
+            End If
+
+
+            ' Windows draws a list's check boxes from its Light theme (#106).
+            If TypeOf control Is ListView Then
+
+                CheckGlyph.Attach(
+                    DirectCast(
+                        control,
+                        ListView
+                    )
+                )
 
                 Return
 

@@ -9,10 +9,12 @@ Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
 ' The single-window shell: a left rail of pages, one content area, and
-' back/forward navigation. The Board is always kept; other pages are built
-' when opened and disposed when left. Library editors that save as they go
-' (journals, authors, reminders) are hosted as pages until later v0.6 work
-' converts them.
+' back/forward navigation. The Board is always kept, and so are the
+' manuscript page, Deadlines and Import & Export once built, until the
+' system colors change (#133); other pages are built when opened and
+' disposed when left. Library editors that save as they go (journals,
+' authors, reminders) are hosted as pages until later v0.6 work converts
+' them.
 Partial Public Class Form1
 
     Friend Enum WorkspacePage
@@ -61,6 +63,10 @@ Partial Public Class Form1
     ' The Import & Export page is the same every time, so it is built once
     ' and kept while the window lives (#133).
     Private importExportPage As Control = Nothing
+
+    ' Set when the system colors change while a kept page shows: that page
+    ' is let go as it is left, not kept in the old colors.
+    Private leaveDisposesKeptPage As Boolean = False
 
 
     ' =====================================================
@@ -550,32 +556,37 @@ Partial Public Class Form1
             Return
         End If
 
-        ' The Import & Export page keeps its controls for its next visit.
-        ' Every other page is disposed where it is: removed first, each of
+        ' Focus in the page moves out of it first, as removing the page
+        ' moved it.
+        MoveFocusOutOf(currentPageView)
+
+        ' A kept page is hidden where it is, with its windows, for its next
+        ' visit; taking it out of the window and putting it back costs as
+        ' much as showing it. The manuscript page's editor lets go of the
+        ' record left once the window idles. One built before the system
+        ' colors changed goes, as every other page does.
+        ' A page that goes is disposed where it is: removed first, each of
         ' its windows would move to WinForms' parking window only to be
         ' destroyed there, a few milliseconds a window on a slow machine
         ' (#133). Disposing removes it from the page area once its windows
         ' are gone.
-        ' The manuscript page is kept too: hidden, its editor letting go of
-        ' the record left once the window idles (#133).
-        If currentPageView Is importExportPage Then
-            contentHost.Controls.Remove(currentPageView)
-        ElseIf currentPageView Is manuscriptPage Then
-            MoveFocusOutOf(currentPageView)
+        If IsKeptPage(currentPageView) AndAlso Not leaveDisposesKeptPage Then
             currentPageView.Visible = False
-            QueueManuscriptPageUnload()
+            If currentPageView Is manuscriptPage Then
+                QueueManuscriptPageUnload()
+            End If
+        ElseIf currentPageView Is manuscriptPage Then
+            DropManuscriptPage()
         Else
-            MoveFocusOutOf(currentPageView)
             currentPageView.Dispose()
         End If
 
+        leaveDisposesKeptPage = False
         currentPageView = Nothing
         libraryGrid = Nothing
         libraryContent = Nothing
         libraryAuthorsForm = Nothing
         libraryFilter = Nothing
-        deadlinesList = Nothing
-        deadlinesFilter = Nothing
         insightsContent = Nothing
         insightsGrid = Nothing
 
@@ -602,6 +613,42 @@ Partial Public Class Form1
         If active IsNot Nothing AndAlso (active Is page OrElse page.Contains(active)) Then
             SelectNextControl(Nothing, True, True, True, True)
         End If
+
+    End Sub
+
+
+    ' The pages built once and kept while the window lives (#133): the
+    ' manuscript page, Deadlines and Import & Export.
+    Private Function IsKeptPage(view As Control) As Boolean
+        Return view IsNot Nothing AndAlso (view Is manuscriptPage OrElse view Is importExportPage OrElse view Is deadlinesPage)
+    End Function
+
+
+    ' A kept page's surfaces are the colors of when it was built, and what
+    ' its lists draw on them is inked in the colors of the moment, so a
+    ' Windows contrast theme turned on or off while PaperRoute runs would
+    ' leave it mixing the two. A hidden kept page is let go now, where it
+    ' is, and the one showing as it is left; each is built anew on its next
+    ' visit, as the pages that are not kept are. (The manuscript page is
+    ' also built anew when it finds the colors, the DPI or the font it was
+    ' built with changed: KeptManuscriptPage.)
+    Protected Overrides Sub OnSystemColorsChanged(e As EventArgs)
+
+        MyBase.OnSystemColorsChanged(e)
+
+        For Each page As Control In {manuscriptPage, deadlinesPage, importExportPage}
+            If page Is Nothing OrElse page.IsDisposed Then
+                Continue For
+            End If
+
+            If page Is currentPageView Then
+                leaveDisposesKeptPage = True
+            ElseIf page Is manuscriptPage Then
+                DropManuscriptPage()
+            Else
+                page.Dispose()
+            End If
+        Next
 
     End Sub
 
@@ -638,7 +685,7 @@ Partial Public Class Form1
                     "Your reusable journal records and their submission checklists. Changes are saved as you make them.",
                     CreateJournalLibraryEditor())
             Case WorkspacePage.Deadlines
-                view = BuildDeadlinesPage()
+                view = OpenDeadlinesPage()
             Case WorkspacePage.Insights
                 view = BuildInsightsPage()
             Case Else
@@ -648,9 +695,26 @@ Partial Public Class Form1
                 view = importExportPage
         End Select
 
-        view.Dock = DockStyle.Fill
         currentPageView = view
-        contentHost.Controls.Add(view)
+
+        If view.Parent Is contentHost Then
+            view.Visible = True
+        ElseIf IsKeptPage(view) Then
+            ' A kept page is put in the window hidden and laid out at the
+            ' size it is shown at, so its windows are made once, at their
+            ' final size, as it appears. A hidden page takes no part in its
+            ' parent's layout, so it is given that size here.
+            view.Dock = DockStyle.Fill
+            view.Visible = False
+            contentHost.Controls.Add(view)
+            view.Bounds = contentHost.DisplayRectangle
+            view.PerformLayout()
+            view.Visible = True
+        Else
+            view.Dock = DockStyle.Fill
+            contentHost.Controls.Add(view)
+        End If
+
         view.BringToFront()
         boardPage.Visible = False
 
@@ -695,6 +759,9 @@ Partial Public Class Form1
         For Each action As Control In actions
             tools.Controls.Add(action)
         Next
+
+        ' A page with no actions makes no window for them (#133).
+        tools.Visible = actions.Length > 0
 
         Return New SplitBar(lblPageTitle, tools) With {
             .CenterVertically = True,
@@ -1227,26 +1294,7 @@ Partial Public Class Form1
         Dim frame As TableLayoutPanel = CreatePageFrame(
             "Import & Export",
             "Every way of bringing work into PaperRoute or taking it out, and what each one keeps.")
-
-        Dim scroller As New Panel With {
-            .Dock = DockStyle.Fill,
-            .AutoScroll = True,
-            .Margin = New Padding(0),
-            .BackColor = UiTheme.BoardBackground()
-        }
-
-        Dim list As New TableLayoutPanel With {
-            .Dock = DockStyle.Top,
-            .AutoSize = True,
-            .AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            .ColumnCount = 2,
-            .Margin = New Padding(0),
-            .Padding = New Padding(0, 0, UiTheme.Px(8, DeviceDpi), 0),
-            .BackColor = UiTheme.BoardBackground()
-        }
-
-        list.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
-        list.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100.0F))
+        frame.SuspendLayout()
 
         Dim buttonWidth As Integer =
             {"Import Spreadsheet...", "Import BibTeX / RIS...", "ORCID Works...", "Get Import Template...", "Add Manuscript...",
@@ -1254,25 +1302,23 @@ Partial Public Class Form1
              "Publication & CV Export...", "Backup Library...", "Restore Backup..."}.
             Max(Function(text) GetResponsiveButtonWidth(text, 0)) + UiTheme.Px(8, DeviceDpi)
 
+        ' The buttons, with the headings and descriptions drawn around them
+        ' by one list that wraps them at the page's width (#133).
+        Dim list As New CommandList With {
+            .Dock = DockStyle.Fill,
+            .Margin = New Padding(0),
+            .HeadingFont = attentionTitleFont,
+            .ButtonWidth = buttonWidth
+        }
+        list.SuspendLayout()
+
         Dim addSection As Action(Of String) =
             Sub(heading)
-                list.RowStyles.Add(New RowStyle(SizeType.AutoSize))
-                Dim lblHeading As New Label With {
-                    .Text = heading.ToUpperInvariant(),
-                    .AutoSize = True,
-                    .UseMnemonic = False,
-                    .Font = attentionTitleFont,
-                    .ForeColor = UiTheme.MutedText(),
-                    .Margin = New Padding(0, If(list.RowCount <= 1, 0, UiTheme.Px(14, DeviceDpi)), 0, UiTheme.Px(6, DeviceDpi))
-                }
-                list.Controls.Add(lblHeading, 0, list.RowCount - 1)
-                list.SetColumnSpan(lblHeading, 2)
-                list.RowCount += 1
+                list.AddSection(heading.ToUpperInvariant())
             End Sub
 
         Dim addCommand As Action(Of String, String, EventHandler) =
             Sub(text, description, handler)
-                list.RowStyles.Add(New RowStyle(SizeType.AutoSize))
                 Dim button As New ActionButton With {
                     .Text = text,
                     .UseMnemonic = False,
@@ -1282,20 +1328,8 @@ Partial Public Class Form1
                     .AccessibleDescription = description
                 }
                 AddHandler button.Click, handler
-                Dim lblDescription As New Label With {
-                    .Text = description,
-                    .AutoSize = True,
-                    .UseMnemonic = False,
-                    .Anchor = AnchorStyles.Left Or AnchorStyles.Right,
-                    .Margin = New Padding(0, 0, 0, UiTheme.Px(8, DeviceDpi)),
-                    .ForeColor = UiTheme.SecondaryText()
-                }
-                list.Controls.Add(button, 0, list.RowCount - 1)
-                list.Controls.Add(lblDescription, 1, list.RowCount - 1)
-                list.RowCount += 1
+                list.AddCommand(button, description)
             End Sub
-
-        list.RowCount = 1
 
         addSection("Bring work in")
         addCommand("Import Spreadsheet...", "A PaperRoute template, a legacy tracker, or any workbook through column mapping. You see a preview, including likely duplicates, before anything is added.", AddressOf ImportExcelHistory)
@@ -1323,16 +1357,9 @@ Partial Public Class Form1
         addCommand("Backup Library...", "A ZIP of the complete library, including files PaperRoute manages. The only format that keeps everything.", AddressOf BackupLibrary)
         addCommand("Restore Backup...", "Replaces the current library with a backup after showing what it contains. A safety backup of the current library is made first.", AddressOf RestoreLibraryBackup)
 
-        AddHandler scroller.Resize,
-            Sub(sender, e)
-                Dim descriptionWidth As Integer = Math.Max(UiTheme.Px(200, DeviceDpi), scroller.ClientSize.Width - buttonWidth - UiTheme.Px(40, DeviceDpi))
-                For Each label As Label In list.Controls.OfType(Of Label)()
-                    If list.GetColumn(label) = 1 Then label.MaximumSize = New Size(descriptionWidth, 0)
-                Next
-            End Sub
-
-        scroller.Controls.Add(list)
-        frame.Controls.Add(scroller, 0, 2)
+        frame.Controls.Add(list, 0, 2)
+        list.ResumeLayout(False)
+        frame.ResumeLayout(False)
 
         Return frame
 

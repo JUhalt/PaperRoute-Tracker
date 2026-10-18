@@ -118,6 +118,8 @@ Namespace Controls
                                 g.FillPath(fill, path)
                             End Using
                         End Using
+                        ' The fill is the window color under a contrast theme (#191).
+                        RoundedShapes.OutlineUnderContrast(g, Rectangle.Round(badgeBounds), badgeBounds.Height / 2.0F, UiTheme.WarningColor())
                         TextRenderer.DrawText(g, badgeText, badgeFont, Rectangle.Round(badgeBounds), UiTheme.WarningColor(),
                             TextFormatFlags.HorizontalCenter Or TextFormatFlags.VerticalCenter Or TextFormatFlags.NoPadding)
                     End Using
