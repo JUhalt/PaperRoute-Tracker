@@ -137,6 +137,80 @@ Friend Module TestSupport
     End Sub
 
 
+    ' Processes the window's messages while work it does as it idles is
+    ' pending, and fails if it still is after a minute.
+    Public Sub PumpWhile(
+        pending As Func(Of Boolean),
+        failure As String
+    )
+
+        Dim waited As System.Diagnostics.Stopwatch =
+            System.Diagnostics.Stopwatch.StartNew()
+
+        While pending() AndAlso waited.Elapsed < TimeSpan.FromSeconds(60)
+            System.Windows.Forms.Application.DoEvents()
+            System.Threading.Thread.Sleep(1)
+        End While
+
+        Assert.IsFalse(pending(), failure)
+
+    End Sub
+
+
+    ' The control focus is in: the active control of each container
+    ' down from this one.
+    Public Function DeepestActiveControl(
+        container As System.Windows.Forms.ContainerControl
+    ) As System.Windows.Forms.Control
+
+        Dim active As System.Windows.Forms.Control =
+            container.ActiveControl
+
+        While TypeOf active Is System.Windows.Forms.ContainerControl AndAlso
+              DirectCast(active, System.Windows.Forms.ContainerControl).ActiveControl IsNot Nothing
+
+            active = DirectCast(active, System.Windows.Forms.ContainerControl).ActiveControl
+
+        End While
+
+        Return active
+
+    End Function
+
+
+    ' The WCAG contrast ratio of two colors, from 1 to 21.
+    Public Function ContrastRatio(
+        foreground As System.Drawing.Color,
+        background As System.Drawing.Color
+    ) As Double
+
+        Dim first As Double = RelativeLuminance(foreground)
+        Dim second As Double = RelativeLuminance(background)
+        Return (Math.Max(first, second) + 0.05) / (Math.Min(first, second) + 0.05)
+
+    End Function
+
+
+    ' The WCAG relative luminance of a color, from 0 (black) to 1 (white).
+    Public Function RelativeLuminance(
+        color As System.Drawing.Color
+    ) As Double
+
+        Return 0.2126 * LinearChannel(color.R) + 0.7152 * LinearChannel(color.G) + 0.0722 * LinearChannel(color.B)
+
+    End Function
+
+
+    Private Function LinearChannel(
+        channel As Byte
+    ) As Double
+
+        Dim value As Double = channel / 255.0
+        Return If(value <= 0.04045, value / 12.92, Math.Pow((value + 0.055) / 1.055, 2.4))
+
+    End Function
+
+
     ' Puts backup.json in a backup archive in place of any there, as a
     ' newer PaperRoute or a damaged archive would have it (#115); Nothing
     ' leaves the archive without one, as PaperRoute 0.9.1 and earlier wrote.

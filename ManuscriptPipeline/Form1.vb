@@ -202,6 +202,8 @@ Public Class Form1
         ' only the two loads above end in EndFailedStartup.
         startupComplete = True
 
+        ' The Board fills in after its first screen (#133).
+        DeferBoardFill()
         RenderManuscripts()
 
         ' A draft a shutdown or an error left behind is offered first (#123).
@@ -1154,11 +1156,15 @@ Public Class Form1
 
     Private Sub ShowShelf(shelf As ManuscriptShelfPanel)
 
+        ' A shelf not shown since startup is built now (#133).
+        BuildShelfIfUnbuilt(shelf)
+
         For Each candidate As ManuscriptShelfPanel In {pipelinePanel, publishedPanel, fileDrawerPanel}
             candidate.Visible = candidate Is shelf
         Next
 
         ResizeCards(shelf)
+        QueueBoardFill()
 
     End Sub
 
@@ -2401,6 +2407,9 @@ Public Class Form1
         manuscriptDirtyTimer.Dispose()
         libraryFilterDebounceTimer.Stop()
         libraryFilterDebounceTimer.Dispose()
+        idleWorkTimer.Stop()
+        idleWorkTimer.Dispose()
+        idleWork.Clear()
         cardToolTip.Dispose()
         DisposeSharedDashboardFonts()
 
@@ -2474,9 +2483,14 @@ Public Class Form1
         GetVisibleManuscripts()
 
         ' Each shelf's cards in order; they go on the shelf together, below.
+        ' A shelf not yet shown since startup gets no cards until it is
+        ' (#133); its tab still counts them.
         Dim pipelineCards As New List(Of Control)()
         Dim publishedCards As New List(Of Control)()
         Dim drawerCards As New List(Of Control)()
+        Dim unbuiltCounts As New Dictionary(Of ManuscriptShelfPanel, Integer) From {
+            {pipelinePanel, 0}, {publishedPanel, 0}, {fileDrawerPanel, 0}
+        }
         Dim seen As New Dictionary(Of Guid, Integer)()
 
 
@@ -2488,47 +2502,39 @@ Public Class Form1
                     seen
                 )
 
+            Dim shelf As ManuscriptShelfPanel
+
             Select Case manuscript.Location
-
                 Case ManuscriptLocation.Pipeline
-
-                    pipelineCards.Add(
-                        CardFor(
-                            manuscript,
-                            slot,
-                            pipelinePanel
-                        )
-                    )
-
-
+                    shelf = pipelinePanel
                 Case ManuscriptLocation.Published
-
-                    publishedCards.Add(
-                        CardFor(
-                            manuscript,
-                            slot,
-                            publishedPanel
-                        )
-                    )
-
-
+                    shelf = publishedPanel
                 Case ManuscriptLocation.FileDrawer
-
-                    drawerCards.Add(
-                        CardFor(
-                            manuscript,
-                            slot,
-                            fileDrawerPanel
-                        )
-                    )
-
+                    shelf = fileDrawerPanel
+                Case Else
+                    Continue For
             End Select
+
+            If unbuiltShelves.Contains(shelf) Then
+                unbuiltCounts(shelf) += 1
+                Continue For
+            End If
+
+            Dim card As RoundedPanel = CardFor(manuscript, slot, shelf)
+
+            If shelf Is pipelinePanel Then
+                pipelineCards.Add(card)
+            ElseIf shelf Is publishedPanel Then
+                publishedCards.Add(card)
+            Else
+                drawerCards.Add(card)
+            End If
 
         Next
 
-        Dim pipelineCount As Integer = pipelineCards.Count
-        Dim publishedCount As Integer = publishedCards.Count
-        Dim drawerCount As Integer = drawerCards.Count
+        Dim pipelineCount As Integer = pipelineCards.Count + unbuiltCounts(pipelinePanel)
+        Dim publishedCount As Integer = publishedCards.Count + unbuiltCounts(publishedPanel)
+        Dim drawerCount As Integer = drawerCards.Count + unbuiltCounts(fileDrawerPanel)
 
 
         ' =================================================
@@ -2561,7 +2567,7 @@ Public Class Form1
         ' Empty states
         ' =================================================
 
-        If pipelineCount = 0 Then
+        If pipelineCount = 0 AndAlso Not unbuiltShelves.Contains(pipelinePanel) Then
 
             Dim pipelineMessage As String
 
@@ -2586,7 +2592,7 @@ Public Class Form1
         End If
 
 
-        If publishedCount = 0 Then
+        If publishedCount = 0 AndAlso Not unbuiltShelves.Contains(publishedPanel) Then
 
             Dim publishedMessage As String
 
@@ -2611,7 +2617,7 @@ Public Class Form1
         End If
 
 
-        If drawerCount = 0 Then
+        If drawerCount = 0 AndAlso Not unbuiltShelves.Contains(fileDrawerPanel) Then
 
             Dim drawerMessage As String
 
@@ -2636,9 +2642,12 @@ Public Class Form1
         End If
 
 
-        FillShelf(pipelinePanel, pipelineCards)
-        FillShelf(publishedPanel, publishedCards)
-        FillShelf(fileDrawerPanel, drawerCards)
+        For Each filled In {(pipelinePanel, pipelineCards), (publishedPanel, publishedCards), (fileDrawerPanel, drawerCards)}
+            If Not unbuiltShelves.Contains(filled.Item1) Then
+                ApplyRevealLimit(filled.Item1, filled.Item2)
+                FillShelf(filled.Item1, filled.Item2)
+            End If
+        Next
 
         btnClearBoardFilters.Enabled =
         HasActiveBoardFilters()
@@ -2679,6 +2688,9 @@ Public Class Form1
         UpdateRailCounts()
         ShowWelcomeWhenEmpty()
         RefreshOpenPage()
+
+        ' Cards the shown shelf still hides show as the window idles (#133).
+        QueueBoardFill()
 
     End Sub
 
@@ -2753,6 +2765,10 @@ Public Class Form1
         Public Property Manuscript As Manuscript
         Public Property Key As String = String.Empty
 
+        ' Hidden while the shelf fills in (#133): shown once the fill
+        ' reaches it.
+        Public Property HiddenByFill As Boolean = False
+
     End Class
 
 
@@ -2825,7 +2841,9 @@ Public Class Form1
     ' Puts a shelf's cards on it in order, touching nothing when they are
     ' already there in that order. Messages such as an empty shelf are
     ' disposed; cards leaving the shelf wait, parked, for a render that
-    ' shows them again.
+    ' shows them again. Cards that stay are left where they are and only
+    ' moved into their place in the order, so a card that changes costs its
+    ' own windows, not every card's moved off the shelf and back (#133).
     Private Sub FillShelf(
         shelf As ManuscriptShelfPanel,
         cards As List(Of Control)
@@ -2848,14 +2866,28 @@ Public Class Form1
 
         End If
 
+        Dim staying As New HashSet(Of Control)(cards)
+
         For Each child As Control In shelf.Controls.Cast(Of Control)().ToList()
-            If Not TypeOf child Is RoundedPanel Then
+            If staying.Contains(child) Then
+                Continue For
+            End If
+            If TypeOf child Is RoundedPanel Then
+                shelf.Controls.Remove(child)
+            Else
                 child.Dispose()
             End If
         Next
 
-        shelf.Controls.Clear()
-        shelf.Controls.AddRange(cards.ToArray())
+        For index As Integer = 0 To cards.Count - 1
+            Dim card As Control = cards(index)
+            If card.Parent IsNot shelf Then
+                shelf.Controls.Add(card)
+            End If
+            If shelf.Controls.GetChildIndex(card) <> index Then
+                shelf.Controls.SetChildIndex(card, index)
+            End If
+        Next
 
     End Sub
 
@@ -2893,7 +2925,12 @@ Public Class Form1
         Dim footerTop As Integer = dividerTop + 1 + UiTheme.Px(8, dpi)
         Dim footerHeight As Integer = metaLine + UiTheme.Px(4, dpi)
 
-        Dim card As New RoundedPanel With {
+        ' The card may outlive this record (#133); its actions go through
+        ' the record it stands for when used. Its menu is built when first
+        ' needed (CardPanel).
+        Dim record As New CardRecord With {.Manuscript = manuscript}
+
+        Dim card As New CardPanel(Function() BuildCardMenu(record)) With {
             .Width = parentPanel.MinimumCardWidth,
             .Height = footerTop + footerHeight + pad,
             .BackColor = UiTheme.CardBackground(),
@@ -2938,17 +2975,7 @@ Public Class Form1
             cardToolTip.SetToolTip(lblStatusLine, statusText)
         End If
 
-        ' The card may outlive this record (#133); its actions go through
-        ' the record it stands for when used.
-        Dim record As New CardRecord With {.Manuscript = manuscript}
         card.Tag = record
-
-        Dim cardMenu As ContextMenuStrip = BuildCardMenu(record)
-
-        AddHandler card.Disposed,
-            Sub(sender, e)
-                cardMenu.Dispose()
-            End Sub
 
         Dim btnMore As New ActionButton With {
             .Text = ChrW(&H22EF),
@@ -2963,7 +2990,7 @@ Public Class Form1
 
         AddHandler btnMore.Click,
             Sub(sender, e)
-                cardMenu.Show(btnMore, New Point(0, btnMore.Height))
+                card.ContextMenuStrip.Show(btnMore, New Point(0, btnMore.Height))
             End Sub
 
         ' =================================================
@@ -3140,12 +3167,14 @@ Public Class Form1
         AddHandler card.MouseEnter, refreshHover
         AddHandler card.MouseLeave, refreshHover
 
-        ' Right-click (or the keyboard context-menu key on the focused title)
-        ' anywhere on the card shows the same menu.
-        card.ContextMenuStrip = cardMenu
+        ' While the shelf fills (#133), focus on a card shows the row after
+        ' it, so Tab reaches the next card.
+        AddHandler card.Enter, Sub(sender, e) RevealPastCard(card)
 
+        ' Right-click (or the keyboard context-menu key on the focused title)
+        ' anywhere on the card shows the same menu, which the card gives each
+        ' of its parts (CardPanel).
         For Each child As Control In card.Controls
-            child.ContextMenuStrip = cardMenu
             AddHandler child.MouseEnter, refreshHover
             AddHandler child.MouseLeave, refreshHover
             If Not TypeOf child Is LinkLabel AndAlso Not TypeOf child Is ButtonBase AndAlso Not TypeOf child Is TagStrip Then

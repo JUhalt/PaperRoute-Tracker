@@ -650,14 +650,6 @@ Public Class WorkflowThemeKeyboardSmokeTests
         Next
     End Sub
 
-    Private Shared Function DeepestActiveControl(dialog As Form) As Control
-        Dim active As Control = dialog.ActiveControl
-        While TypeOf active Is ContainerControl AndAlso DirectCast(active, ContainerControl).ActiveControl IsNot Nothing
-            active = DirectCast(active, ContainerControl).ActiveControl
-        End While
-        Return active
-    End Function
-
     Private Shared Function DispatchTabFromActiveControl(dialog As Form, key As Keys) As Boolean
         ' Tab must start at the active child and bubble through its containers.
         ' Form-only routing skips focus-managing SplitContainer children. Calling
@@ -833,21 +825,6 @@ Public Class WorkflowThemeKeyboardSmokeTests
         Assert.IsTrue(ratio >= 4.5,
             $"Normal-size text needs 4.5:1 contrast; '{label.Substring(0, Math.Min(90, label.Length))}' has {ratio:F2}:1 ({foreground} on {background}).")
     End Sub
-
-    Private Shared Function ContrastRatio(foreground As Color, background As Color) As Double
-        Dim first As Double = Luminance(foreground)
-        Dim second As Double = Luminance(background)
-        Return (Math.Max(first, second) + 0.05) / (Math.Min(first, second) + 0.05)
-    End Function
-
-    Private Shared Function Luminance(color As Color) As Double
-        Return 0.2126 * LinearChannel(color.R) + 0.7152 * LinearChannel(color.G) + 0.0722 * LinearChannel(color.B)
-    End Function
-
-    Private Shared Function LinearChannel(channel As Byte) As Double
-        Dim value As Double = channel / 255.0
-        Return If(value <= 0.04045, value / 12.92, Math.Pow((value + 0.055) / 1.055, 2.4))
-    End Function
 
     ' ---------------------------------------------------------------
     ' Chips, pills and menus under a contrast theme (#191)

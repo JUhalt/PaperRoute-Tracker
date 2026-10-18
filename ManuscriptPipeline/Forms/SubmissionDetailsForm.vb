@@ -447,7 +447,7 @@ Namespace Forms
                         RaiseEvent Changed(Me, EventArgs.Empty)
                     End Sub
 
-                _responsesMatrix.Visible = True
+                ' Shown below, once it is inside this form (#133).
                 responsesTab.Controls.Add(_responsesMatrix)
                 tabs.TabPages.Insert(1, responsesTab)
 
@@ -481,6 +481,14 @@ Namespace Forms
             End If
 
             Me.Controls.Add(root)
+
+            ' A form marked visible makes its window at once, on WinForms'
+            ' parking window while nothing around it has one; the responses
+            ' are shown once their tab has its window (#133).
+            If _responsesMatrix IsNot Nothing Then
+                Dim matrix As ReviewerResponseMatrixForm = _responsesMatrix
+                InPlace.WhenAttached(matrix, Sub() matrix.Visible = True)
+            End If
 
         End Sub
 

@@ -2,6 +2,7 @@ Imports System
 Imports System.Collections.Generic
 Imports System.Diagnostics
 Imports System.Drawing
+Imports System.IO
 Imports System.Linq
 Imports System.Reflection
 Imports System.Runtime.InteropServices
@@ -915,6 +916,124 @@ Public Class KeyboardAccessTests
     End Sub
 
 
+    ' Leaving a page by keyboard while focus is inside it (#133): where
+    ' focus lands, and that the control left loses it once, is the same
+    ' however the page is put away. Pinned on the window as it was when
+    ' every page was removed and then disposed, before pages were disposed
+    ' or hidden in place.
+    <TestMethod>
+    Public Sub LeavingAPageByKeyboardKeepsFocusWhereItLandsToday()
+
+        Dim root As String = CreateTemporaryRoot()
+        Dim report As New List(Of String)()
+
+        ' The Journals page reads the author library from the default root.
+        StorageEnvironment.RootOverride = Path.Combine(root, "storage")
+
+        Try
+
+            StaRunner.Run(
+                Sub()
+
+                    Dim library As LargeLibraryFixture.SyntheticLibrary =
+                        LargeLibraryFixture.WriteExample(Path.Combine(root, "library"))
+
+                    Using board As New LibraryBoard(library, Path.Combine(root, "settings"))
+
+                        board.Start()
+
+                        Dim targets As (Name As String, Open As Action, Find As Func(Of Control))() = {
+                            ("the Library filter", Sub() board.NavigateTo(Form1.WorkspacePage.Library),
+                             Function() ViewCatalog.Descendants(board).OfType(Of TextBox)().Single(Function(box) box.AccessibleName = "Filter the Library")),
+                            ("an Insights tab", Sub() board.NavigateTo(Form1.WorkspacePage.Insights),
+                             Function() ViewCatalog.Descendants(board).OfType(Of RadioButton)().Single(Function(tab) tab.Text.StartsWith("Your Routes", StringComparison.Ordinal))),
+                            ("the Journals list", Sub() board.NavigateTo(Form1.WorkspacePage.Journals),
+                             Function() ViewCatalog.Descendants(board).OfType(Of JournalLibraryForm)().Single().Controls.Cast(Of Control)().
+                                 SelectMany(Function(child) {child}.Concat(ViewCatalog.Descendants(child))).OfType(Of ListBox)().First()),
+                            ("the Deadlines filter", Sub() board.NavigateTo(Form1.WorkspacePage.Deadlines),
+                             Function() ViewCatalog.Descendants(board.PageView).OfType(Of TextBox)().Single(Function(box) box.AccessibleName = "Filter deadlines")),
+                            ("an Import & Export command", Sub() board.NavigateTo(Form1.WorkspacePage.ImportExport),
+                             Function() ViewCatalog.Descendants(board.PageView).OfType(Of ActionButton)().Single(Function(button) button.Text = "Import Spreadsheet...")),
+                            ("the manuscript page's Back link", Sub() board.Open(board.Library(0)),
+                             Function() ViewCatalog.Descendants(board.PageView).OfType(Of LinkLabel)().Single(Function(link) If(link.AccessibleName, String.Empty).StartsWith("Back to", StringComparison.Ordinal))),
+                            ("the manuscript page's Title box", Sub() board.Open(board.Library(0)),
+                             Function() board.Field("Title"))
+                        }
+
+                        Dim leaves As (Name As String, Leave As Action)() = {
+                            ("Alt+Left", Sub() board.PressCommandKey(Keys.Alt Or Keys.Left)),
+                            ("Ctrl+1", Sub() board.PressCommandKey(Keys.Control Or Keys.D1)),
+                            ("Back", Sub() board.GoBackInHistory())
+                        }
+
+                        For Each target In targets
+                            For Each leave In leaves
+
+                                target.Open()
+                                Application.DoEvents()
+
+                                Dim focused As Control = target.Find()
+                                board.ActiveControl = focused
+                                Application.DoEvents()
+
+                                Dim left As Integer = 0
+                                Dim validating As Integer = 0
+                                AddHandler focused.Leave, Sub(sender, e) left += 1
+                                AddHandler focused.Validating, Sub(sender, e) validating += 1
+
+                                Dim failure As String = String.Empty
+                                Try
+                                    leave.Leave()
+                                    Application.DoEvents()
+                                Catch ex As Exception
+                                    failure = ex.GetType().Name & ": " & ex.Message
+                                End Try
+
+                                ' No control on these pages handles Validating,
+                                ' so whether it runs is not seen: a removed
+                                ' control was never validated, a control
+                                ' focus moves away from is, once.
+                                If validating > 1 Then failure &= " Validating ran " & validating.ToString() & " times."
+
+                                report.Add(target.Name & ", " & leave.Name & ": page " & board.PageName &
+                                           ", active " & Describe(DeepestActiveControl(board)) &
+                                           ", Leave " & left.ToString() &
+                                           If(failure.Length = 0, String.Empty, ", " & failure.Trim()))
+
+                            Next
+                        Next
+
+                        board.Close()
+
+                    End Using
+
+                End Sub,
+                TimeSpan.FromMinutes(5))
+
+        Finally
+            StorageEnvironment.RootOverride = Nothing
+            DeleteTemporaryRoot(root)
+        End Try
+
+        ' Focus moves to the first stop of the window, the rail's collapse
+        ' button, and the control left loses it once, from a page disposed
+        ' as from one kept (the manuscript page, Deadlines and Import &
+        ' Export, hidden in place and shown again on the next visit).
+        Dim expected As List(Of String) =
+            {"the Library filter", "an Insights tab", "the Journals list", "the Deadlines filter", "an Import & Export command",
+             "the manuscript page's Back link", "the manuscript page's Title box"}.
+                SelectMany(Function(target) {"Alt+Left", "Ctrl+1", "Back"}.
+                    Select(Function(leave) target & ", " & leave & ": page Board, active RailCommandButton 'Collapse navigation', Leave 1")).
+                ToList()
+
+        CollectionAssert.AreEqual(
+            expected,
+            report,
+            Environment.NewLine & String.Join(Environment.NewLine, report))
+
+    End Sub
+
+
     ' Shows the dialog modally, offscreen, and presses Esc in it once it
     ' has shown. Nothing is returned for a dialog Esc leaves open.
     Private Shared Function EscapeResult(
@@ -1189,22 +1308,6 @@ Public Class KeyboardAccessTests
         End If
 
         Return control.GetType().Name & " '" & If(control.AccessibleName, control.Text) & "'"
-
-    End Function
-
-
-    Private Shared Function DeepestActiveControl(
-        form As Form
-    ) As Control
-
-        Dim active As Control =
-            form.ActiveControl
-
-        While TypeOf active Is ContainerControl AndAlso DirectCast(active, ContainerControl).ActiveControl IsNot Nothing
-            active = DirectCast(active, ContainerControl).ActiveControl
-        End While
-
-        Return active
 
     End Function
 

@@ -45,6 +45,22 @@ Namespace Services
         End Function
 
 
+        ' What the colors depend on now: Dark or Light, and under a contrast
+        ' theme, which one. Controls take their colors when they are built,
+        ' so one kept while this changes, as a Windows contrast theme can
+        ' while PaperRoute runs, is built again (#133).
+        Public Shared Function PaletteStamp() As String
+            Return String.Join(",",
+                IsHighContrast().ToString(),
+                IsDark().ToString(),
+                SystemColors.Window.ToArgb().ToString(Globalization.CultureInfo.InvariantCulture),
+                SystemColors.WindowText.ToArgb().ToString(Globalization.CultureInfo.InvariantCulture),
+                SystemColors.Highlight.ToArgb().ToString(Globalization.CultureInfo.InvariantCulture),
+                SystemColors.HotTrack.ToArgb().ToString(Globalization.CultureInfo.InvariantCulture),
+                SystemColors.GrayText.ToArgb().ToString(Globalization.CultureInfo.InvariantCulture))
+        End Function
+
+
         ' Never true under a contrast theme, even a dark one. The brightness
         ' check comes first: it is the cheaper of the two, and in Light it
         ' settles the answer without asking Windows for the contrast setting.

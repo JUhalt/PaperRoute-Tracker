@@ -19,12 +19,15 @@ Friend NotInheritable Class LibraryBoard
     Inherits Form1
 
     Private ReadOnly _library As LargeLibraryFixture.SyntheticLibrary
-    Private _journals As Control = Nothing
+    Private ReadOnly _fontScale As Single
     Private _painted As Boolean = False
 
 
-    Public Sub New(library As LargeLibraryFixture.SyntheticLibrary, settingsDirectory As String)
+    ' A text size other than 1 is the window's font scaled, as a larger
+    ' Windows text size gives it.
+    Public Sub New(library As LargeLibraryFixture.SyntheticLibrary, settingsDirectory As String, Optional fontScale As Single = 1.0F)
         _library = library
+        _fontScale = fontScale
         SetField("repository", library.Repository)
         SetField("authorRepository", library.AuthorRepository)
         SetField("settingsService", New AppSettingsService(settingsDirectory))
@@ -52,6 +55,13 @@ Friend NotInheritable Class LibraryBoard
     ' user's author library.
     Protected Overrides Function CreateAuthorLibraryEditor() As Form
         Return New Form()
+    End Function
+
+
+    ' The Journals page as the window builds it, on the test's author
+    ' library rather than the user's.
+    Protected Overrides Function CreateJournalLibraryEditor() As Form
+        Return New JournalLibraryForm(Library, _library.AuthorRepository, Nothing)
     End Function
 
 
@@ -107,12 +117,14 @@ Friend NotInheritable Class LibraryBoard
     Public Sub Start()
         SetField("appSettings", DirectCast(GetField("settingsService"), AppSettingsService).Load())
         CallPrivate("BuildInterface")
+        If _fontScale <> 1.0F Then Font = New Font(Font.FontFamily, 10.0F * _fontScale)
         CallPrivate("RefreshOnlineIndicators")
         If Not CBool(CallPrivate("LoadManuscripts")) OrElse Not LoadAuthorLibrary() Then
             CallPrivate("EndFailedStartup")
             Assert.Fail("The library did not load: " & String.Join(" | ", StartupFailures.Select(Function(failure) failure.Heading)))
         End If
         SetField("startupComplete", True)
+        CallPrivate("DeferBoardFill")
         CallPrivate("RenderManuscripts")
         recoveryDraftPrompt = Function(title) DialogResult.No
         CallPrivate("OfferRecoveryDraft")
@@ -123,6 +135,37 @@ Friend NotInheritable Class LibraryBoard
         AddHandler Me.Paint, Sub(sender, e) _painted = True
         Show()
         Application.DoEvents()
+    End Sub
+
+
+    ' A shelf of the Board and its tab, by field name.
+    Public Function Shelf(name As String) As ManuscriptPipeline.Controls.ManuscriptShelfPanel
+        Return DirectCast(GetField(name), ManuscriptPipeline.Controls.ManuscriptShelfPanel)
+    End Function
+
+
+    Public Function ShelfTab(name As String) As RadioButton
+        Return DirectCast(GetField(name), RadioButton)
+    End Function
+
+
+    ' Typing in the Board's search, then the pause its timer waits for.
+    Public Sub SearchBoard(text As String)
+        DirectCast(GetField("txtBoardSearch"), TextBox).Text = text
+        CallPrivate("BoardSearchDebounceElapsed", Nothing, EventArgs.Empty)
+    End Sub
+
+
+    ' Processes messages until the Board has shown every card of the shown
+    ' shelf, as it does in slices while the window idles (#133).
+    Public Sub WaitForBoardFill()
+        PumpWhile(Function() IsBoardFillPending, "The Board did not fill in.")
+    End Sub
+
+
+    ' Processes messages until the window's idle work is done.
+    Public Sub WaitForIdleWork()
+        PumpWhile(Function() IsIdleWorkPending, "The window's idle work did not finish.")
     End Sub
 
 
@@ -237,29 +280,135 @@ Friend NotInheritable Class LibraryBoard
     End Function
 
 
-    ' The Journals page as ShowPage builds it, from the test's author
-    ' library, and leaving it as LeaveCurrentPage leaves a hosted editor.
-    Public Sub ShowJournals()
-        Dim editor As New JournalLibraryForm(Library, _library.AuthorRepository, Nothing)
-        _journals = DirectCast(CallPrivate("BuildHostedPage", "Journals",
-                                           "Your reusable journal records and their submission checklists. Changes are saved as you make them.",
-                                           editor), Control)
-        Dim host As Panel = DirectCast(GetField("contentHost"), Panel)
-        _journals.Dock = DockStyle.Fill
-        host.Controls.Add(_journals)
-        _journals.BringToFront()
-        DirectCast(GetField("boardPage"), Panel).Visible = False
+    ' ---------------------------------------------------------------
+    ' The manuscript page, for the tests of an editor that loads one
+    ' record after another (#133)
+    ' ---------------------------------------------------------------
+
+    ' Saves that went through SaveManuscripts, as they are written.
+    Public SaveCount As Integer
+
+    Protected Overrides Function SaveManuscripts() As Boolean
+        SaveCount += 1
+        Return MyBase.SaveManuscripts()
+    End Function
+
+
+    Public ReadOnly Property Editor As EditManuscriptForm
+        Get
+            Return DirectCast(GetField("manuscriptEditor"), EditManuscriptForm)
+        End Get
+    End Property
+
+
+    ' The page area, and the Board page in it.
+    Public ReadOnly Property ContentHost As Control
+        Get
+            Return DirectCast(GetField("contentHost"), Control)
+        End Get
+    End Property
+
+
+    Public ReadOnly Property BoardPage As Control
+        Get
+            Return DirectCast(GetField("boardPage"), Control)
+        End Get
+    End Property
+
+
+    ' The page now shown in the content area, other than the Board.
+    Public ReadOnly Property PageView As Control
+        Get
+            Return DirectCast(GetField("currentPageView"), Control)
+        End Get
+    End Property
+
+
+    Public ReadOnly Property PageName As String
+        Get
+            Return GetField("currentPage").ToString()
+        End Get
+    End Property
+
+
+    Public ReadOnly Property OpenManuscriptId As Guid
+        Get
+            Return DirectCast(GetField("currentManuscriptId"), Guid)
+        End Get
+    End Property
+
+
+    Public ReadOnly Property SaveBarVisible As Boolean
+        Get
+            Dim bar As Control = DirectCast(GetField("manuscriptSaveBar"), Control)
+            Return bar IsNot Nothing AndAlso bar.Visible
+        End Get
+    End Property
+
+
+    Public ReadOnly Property SaveBarHint As String
+        Get
+            Return DirectCast(GetField("manuscriptSaveHint"), Label).Text
+        End Get
+    End Property
+
+
+    ' Opens a manuscript at a waypoint as Route View does, without
+    ' processing the messages it posts.
+    Public Sub OpenAt(manuscript As Manuscript, waypoint As ManuscriptRouteWaypoint)
+        CallPrivate("OpenManuscript", manuscript, waypoint)
     End Sub
 
 
-    Public Sub LeaveJournals()
-        DirectCast(GetField("contentHost"), Panel).Controls.Remove(_journals)
-        _journals.Dispose()
-        _journals = Nothing
-        SetField("pageHostedEditor", False)
-        LoadAuthorLibrary()
-        CallPrivate("RenderManuscripts")
-        DirectCast(GetField("boardPage"), Panel).Visible = True
+    ' The manuscript page kept between manuscripts (#133), or Nothing.
+    Public ReadOnly Property KeptPage As Control
+        Get
+            Return DirectCast(GetField("manuscriptPage"), Control)
+        End Get
+    End Property
+
+
+    ' As Windows does when a contrast theme is turned on or off.
+    Public Sub ChangeSystemColors()
+        OnSystemColorsChanged(EventArgs.Empty)
+        Application.DoEvents()
+    End Sub
+
+
+    ' The Discard button of the Unsaved changes bar.
+    Public Sub Discard()
+        CallPrivate("DiscardManuscriptChanges")
+        Application.DoEvents()
+    End Sub
+
+
+    ' Delete Manuscript... once its question is answered Yes.
+    Public Sub ConfirmDelete()
+        CallPrivate("ManuscriptDeleteConfirmed", Nothing, EventArgs.Empty)
+    End Sub
+
+
+    ' The startup offer of a recovery draft, answered Yes (#123).
+    Public Sub AcceptRecoveryDraft()
+        recoveryDraftPrompt = Function(title) DialogResult.Yes
+        Try
+            CallPrivate("OfferRecoveryDraft")
+        Finally
+            recoveryDraftPrompt = Function(title) DialogResult.No
+        End Try
+    End Sub
+
+
+    Public Sub GoBackInHistory()
+        CallPrivate("GoBack")
+    End Sub
+
+
+    ' A command key as the window handles it (Ctrl+1, Alt+Left).
+    Public Sub PressCommandKey(keyData As Keys)
+        Dim message As New Message()
+        GetType(Form1).GetMethod("ProcessCmdKey", BindingFlags.Instance Or BindingFlags.NonPublic).
+            Invoke(Me, New Object() {message, keyData})
     End Sub
 
 

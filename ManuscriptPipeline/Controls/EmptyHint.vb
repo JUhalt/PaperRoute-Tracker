@@ -1,5 +1,6 @@
 Imports System.Collections.Generic
 Imports System.Drawing
+Imports System.Linq
 Imports System.Windows.Forms
 Imports ManuscriptPipeline.Services
 
@@ -14,6 +15,11 @@ Namespace Controls
             Public Target As Control
             Public Hint As Label
             Public Text As Func(Of String)
+
+            ' Whether the hint was last shown. Its Visible reads False while
+            ' a parent is hidden, as the manuscript page is while it loads
+            ' the next record (#133), so it is no guide to what was set.
+            Public Shown As Boolean
         End Class
 
         Private Shared ReadOnly Entries As New List(Of Entry)()
@@ -58,6 +64,12 @@ Namespace Controls
                     Update(entry)
                 End Sub
 
+            ' A list not yet in any window shows its hint once it has one.
+            AddHandler target.HandleCreated,
+                Sub(sender, e)
+                    Update(entry)
+                End Sub
+
             ' A table reports its rows, so its hint follows them at once.
             Dim grid As DataGridView = TryCast(target, DataGridView)
             If grid IsNot Nothing Then
@@ -72,6 +84,14 @@ Namespace Controls
 
             Update(entry)
 
+        End Sub
+
+        ' Brings a list's hint up to date at once, as a form that loads
+        ' another record into its lists does (#133).
+        Public Shared Sub Refresh(target As Control)
+            For Each entry As Entry In Entries.Where(Function(item) item.Target Is target).ToArray()
+                Update(entry)
+            Next
         End Sub
 
         ' Lists change their items without events, so the hints follow them
@@ -90,13 +110,24 @@ Namespace Controls
                 Return
             End If
 
+            ' Shown while its list is in no window yet, the hint would make
+            ' its window on WinForms' parking window (#133); it waits until
+            ' the list has a window or a form around it.
+            If Not target.IsHandleCreated AndAlso target.FindForm() Is Nothing Then
+                Return
+            End If
+
             Dim empty As Boolean = ItemCount(target) = 0
+
+            ' The hint keeps its list's colors while hidden too, so none is
+            ' left from before the list was styled, or from a record the
+            ' list showed before (#133).
+            entry.Hint.BackColor = BackgroundOf(target)
+            entry.Hint.ForeColor = UiTheme.SecondaryText()
 
             If empty Then
                 Dim text As String = entry.Text()
                 If entry.Hint.Text <> text Then entry.Hint.Text = text
-                entry.Hint.BackColor = BackgroundOf(target)
-                entry.Hint.ForeColor = UiTheme.SecondaryText()
 
                 ' A table keeps its column headings visible above the hint.
                 Dim top As Integer = 0
@@ -109,7 +140,8 @@ Namespace Controls
                 If entry.Hint.Bounds <> bounds Then entry.Hint.Bounds = bounds
             End If
 
-            If entry.Hint.Visible <> empty Then
+            If entry.Shown <> empty Then
+                entry.Shown = empty
                 entry.Hint.Visible = empty
             End If
 

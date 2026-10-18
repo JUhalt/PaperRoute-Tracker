@@ -127,21 +127,39 @@ Public Class ResponsivenessBudgetTests
 
         Using board As New LibraryBoard(library, Path.Combine(_root, library.Name & "-settings"))
 
-            rows.Add(Time(library, "Warm startup to an interactive Board (Show, queue drained)", Startup, Sub() board.Start()))
+            rows.Add(Time(library, "Warm startup to an interactive Board (Show, queue drained)", Startup, Sub() board.Start(), enforced:=enforce))
             _paintObserved(library.Name) = board.PaintObserved
 
+            ' The shelf shown fills in after its first screen, a card at a
+            ' time while the window idles; a shelf not shown yet is built when
+            ' it is first shown (#133). The first switch is reported: it builds
+            ' the shelf's cards where startup no longer does.
+            rows.Add(Time(library, "Board: the rest of the shown shelf, shown in idle slices", UiThread, Sub() board.WaitForBoardFill(), enforced:=enforce))
+            rows.Add(Time(library, "First switch to Published (the shelf built when first shown)", PageSwitch, Sub() board.ShelfTab("tabPublished").Checked = True))
+            board.WaitForBoardFill()
+            board.ShelfTab("tabPipeline").Checked = True
+            board.WaitForBoardFill()
+
+            ' #133 enforces the Board's startup and the page switches back to it
+            ' from Insights and the manuscript page. Board to Library, Board to
+            ' Journals, Journals to Board and Board to Insights stay reported:
+            ' each builds its page's windows and measured 54-163, 80-312, 45-124
+            ' and 62-210 ms across this host's quiet and busy runs, with no room
+            ' under the 100 ms line. Library to Board, which disposes the
+            ' Library page and its 500-row grid, is reported too from
+            ' 2026-10-18: 27 to 100 ms in most runs, it read 128 to 481 ms in
+            ' others, 481 ms in a Debug run of this test alone with no other
+            ' test host, so its spikes are not the host's alone; their source
+            ' is not known yet.
             rows.Add(Time(library, "Board to Library", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Library)))
             rows.Add(Time(library, "One Library filter keystroke", FilterKeystroke, Sub() board.TypeInLibraryFilter("a"), enforced:=enforce))
-            rows.Add(Time(library, "Library filter: refill once typing pauses", UiThread, Sub() board.PauseTyping()))
+            rows.Add(Time(library, "Library filter: refill once typing pauses", UiThread, Sub() board.PauseTyping(), enforced:=enforce))
             rows.Add(Time(library, "Library to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
 
-            ' ShowPage builds the Journals page from the user's author library;
-            ' here it is built the same way from the test's, since no seam
-            ' lets a test supply one.
-            rows.Add(Time(library, "Board to Journals (built as ShowPage builds it, from the test's author library)", PageSwitch, Sub() board.ShowJournals()))
-            ' #133 brought this from 8.9 s to about 90 ms; against a 100 ms
-            ' budget that leaves no room on a busy host, so it is reported.
-            rows.Add(Time(library, "Journals to Board", PageSwitch, Sub() board.LeaveJournals()))
+            ' The Journals page on the test's author library, through the
+            ' window's own navigation (CreateJournalLibraryEditor).
+            rows.Add(Time(library, "Board to Journals", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Journals)))
+            rows.Add(Time(library, "Journals to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
 
             ' The Deadlines page draws its rows in one list and is kept (#133).
             ' Outside the timed steps, the list is checked to hold every open
@@ -173,7 +191,7 @@ Public Class ResponsivenessBudgetTests
 
             rows.Add(Time(library, "Board to Insights", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Insights)))
             rows.Add(Time(library, "Insights: figures ready (calculated off the UI thread)", UiThread, Sub() board.WaitForInsights()))
-            rows.Add(Time(library, "Insights to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
+            rows.Add(Time(library, "Insights to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
 
             ' Import & Export's commands are laid out and drawn by one list
             ' around its buttons, and the page is kept (#133).
@@ -182,13 +200,46 @@ Public Class ResponsivenessBudgetTests
             rows.Add(Time(library, "Board to Import & Export (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.ImportExport), enforced:=enforce))
             rows.Add(Time(library, "Import & Export to Board (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
 
-            rows.Add(Time(library, "Board to a manuscript page", PageSwitch, Sub() board.Open(subject)))
+            ' The first manuscript opened builds the manuscript page, which is
+            ' kept: each one opened after loads into it, and it shows in one
+            ' layout pass, its versions and the selected submission's details
+            ' following once it has painted. Leaving hides it; its editor lets
+            ' go of the record while the window idles (#133). Leaving is
+            ' enforced, and so is letting go of the record, which follows it
+            ' about 15 ms after the Board shows and holds the window as one
+            ' step: the leave row alone is not what the researcher waits.
+            ' Both opens stay reported, over the 100 ms line on this host: the
+            ' first builds the page, and any open replaces the windows of the
+            ' record's shortlist rows, tags and lists and lays the page out;
+            ' so does the idle step after an open.
+            rows.Add(Time(library, "Board to a manuscript page (the first: the page is built)", PageSwitch, Sub() board.Open(subject)))
+            rows.Add(Time(library, "Manuscript page: versions and details after its first paint", UiThread, Sub() Application.DoEvents()))
             rows.Add(TimeMedian(library, "One dirty-timer tick (median of 10)", DirtyTick, 10, Sub() board.Tick()))
             board.Field("Title").Text = title & " (edited)"
             rows.Add(Time(library, "Save from the manuscript page", Save, Sub() Assert.IsTrue(board.SaveManuscriptPage(), "The page saved."), enforced:=enforce))
-            rows.Add(Time(library, "Manuscript page to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
+            rows.Add(Time(library, "Manuscript page to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
+            rows.Add(Time(library, "Manuscript page: the record let go of while the window idles", UiThread, Sub() board.WaitForIdleWork(), enforced:=enforce))
+
+            Dim another As Manuscript =
+                If(library.Manuscripts.Where(Function(item) item IsNot subject AndAlso item.SubmissionPackets.Count > 0).
+                       OrderByDescending(Function(item) item.Submissions.Count).FirstOrDefault(),
+                   library.Manuscripts.First(Function(item) item IsNot subject))
+            rows.Add(Time(library, "Board to a manuscript page (the kept page, another manuscript)", PageSwitch, Sub() board.Open(another)))
+            Application.DoEvents()
+            rows.Add(Time(library, "Kept manuscript page to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
+            board.WaitForIdleWork()
 
             rows.Add(Time(library, "Board render (RenderManuscripts)", UiThread, Sub() board.Render(), enforced:=enforce))
+
+            ' A save that changes a card the Board shows with its windows: the
+            ' card is replaced on its shelf, the others left in place (#133).
+            Dim pipelineSubject As Manuscript = library.Manuscripts.First(Function(item) item.Location = ManuscriptLocation.Pipeline)
+            board.Open(pipelineSubject)
+            Application.DoEvents()
+            board.Field("Title").Text = pipelineSubject.Title & " (edited)"
+            rows.Add(Time(library, "Save of a Pipeline manuscript whose card changes", Save, Sub() Assert.IsTrue(board.SaveManuscriptPage(), "The page saved."), enforced:=enforce))
+            board.NavigateTo(Form1.WorkspacePage.Board)
+            Application.DoEvents()
 
             ' The handlers' work after their dialogs, behind the disabled window
             ' (#132). Backup's stall varied from 61 to 419 ms across runs on

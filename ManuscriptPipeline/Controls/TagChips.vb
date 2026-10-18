@@ -130,8 +130,11 @@ Namespace Controls
         Inherits FlowLayoutPanel
 
         Private ReadOnly _input As New TextBox()
+
+        ' What Bind was given, replaced by each Bind (#133).
         Private _tags As List(Of String) = New List(Of String)()
         Private _library As AuthorLibraryData = Nothing
+        Private _suggestions As String() = Array.Empty(Of String)()
 
         ' Raised after a tag is added or removed, or its color changes.
         Public Event TagsChanged As EventHandler
@@ -169,14 +172,26 @@ Namespace Controls
             End Get
         End Property
 
-        ' Edits this list in place.
+        ' Edits this list in place. The suggestions are set again only when
+        ' they differ: setting them makes the box a new window (#133).
         Public Sub Bind(tags As List(Of String), library As AuthorLibraryData, suggestions As IEnumerable(Of String))
             _tags = tags
             _library = library
-            _input.AutoCompleteCustomSource.Clear()
-            _input.AutoCompleteCustomSource.AddRange(If(suggestions, Enumerable.Empty(Of String)()).ToArray())
+            Dim offered As String() = If(suggestions, Enumerable.Empty(Of String)()).ToArray()
+            If Not offered.SequenceEqual(_suggestions) Then
+                _suggestions = offered
+                _input.AutoCompleteCustomSource.Clear()
+                _input.AutoCompleteCustomSource.AddRange(offered)
+            End If
             _input.Width = Math.Max(LogicalToDeviceUnits(140), TextRenderer.MeasureText(_input.PlaceholderText, _input.Font).Width + LogicalToDeviceUnits(24))
             Rebuild()
+        End Sub
+
+
+        ' Lets go of a tag typed and not yet added.
+        Friend Sub ClearInput()
+            _input.Clear()
+            _input.ClearUndo()
         End Sub
 
         Protected Overrides Sub OnSizeChanged(e As EventArgs)
@@ -221,8 +236,7 @@ Namespace Controls
         Private Sub Rebuild()
             SuspendLayout()
             For Each chip As Control In Controls.OfType(Of TagChipButton)().Cast(Of Control)().ToList()
-                Controls.Remove(chip)
-                chip.Dispose()
+                InPlace.Dispose(chip)
             Next
             Dim index As Integer = 0
             For Each tag As String In _tags

@@ -739,7 +739,7 @@ Public Class DarkThemeLegibilityTests
     ' Lighter than any surface the Dark tokens fill: the lightest, the
     ' accent of a primary button, is 0.51 in relative luminance.
     Private Shared Function IsLight(color As Color) As Boolean
-        Return color.A = 255 AndAlso Luminance(color) > 0.6
+        Return color.A = 255 AndAlso RelativeLuminance(color) > 0.6
     End Function
 
     Private Shared Function Describe(control As Control) As String
@@ -1122,21 +1122,6 @@ Public Class DarkThemeLegibilityTests
                 Yield descendant
             Next
         Next
-    End Function
-
-    Private Shared Function ContrastRatio(foreground As Color, background As Color) As Double
-        Dim first As Double = Luminance(foreground)
-        Dim second As Double = Luminance(background)
-        Return (Math.Max(first, second) + 0.05) / (Math.Min(first, second) + 0.05)
-    End Function
-
-    Private Shared Function Luminance(color As Color) As Double
-        Return 0.2126 * LinearChannel(color.R) + 0.7152 * LinearChannel(color.G) + 0.0722 * LinearChannel(color.B)
-    End Function
-
-    Private Shared Function LinearChannel(channel As Byte) As Double
-        Dim value As Double = channel / 255.0
-        Return If(value <= 0.04045, value / 12.92, Math.Pow((value + 0.055) / 1.055, 2.4))
     End Function
 
     Private Const WM_PAINT As Integer = &HF

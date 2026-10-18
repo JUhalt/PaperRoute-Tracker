@@ -128,11 +128,14 @@ Partial Public Class Form1
             End Sub
         body.Controls.Add(insightsScope, 0, 2)
 
+        ' Shown from the start, as the page opens calculating: a label made
+        ' visible before the page is in the window makes its window on
+        ' WinForms' parking window (#133).
         insightsStatus = New Label With {
             .Text = "Calculating from your records...",
             .AutoSize = True,
             .UseMnemonic = False,
-            .Visible = False,
+            .Visible = True,
             .ForeColor = UiTheme.SecondaryText(),
             .Margin = New Padding(0, 0, 0, UiTheme.Px(6, dpi))
         }
@@ -159,11 +162,22 @@ Partial Public Class Form1
 
         frame.Controls.Add(body, 0, 2)
 
-        tabInsightsJournals.Checked = True
-        AddHandler tabInsightsJournals.CheckedChanged, Sub(sender, e) If tabInsightsJournals.Checked Then FillInsights()
-        AddHandler tabInsightsRoutes.CheckedChanged, Sub(sender, e) If tabInsightsRoutes.Checked Then FillInsights()
-        AddHandler tabInsightsMap.CheckedChanged, Sub(sender, e) If tabInsightsMap.Checked Then FillInsights()
-        AddHandler tabInsightsCitations.CheckedChanged, Sub(sender, e) If tabInsightsCitations.Checked Then FillInsights()
+        ' The first tab is checked once the page is in the window, and only
+        ' then listened to, as before: a radio button checked earlier makes
+        ' its window on WinForms' parking window (#133).
+        Dim journalsTab As ShelfTabButton = tabInsightsJournals
+        Dim routesTab As ShelfTabButton = tabInsightsRoutes
+        Dim mapTab As ShelfTabButton = tabInsightsMap
+        Dim citationsTab As ShelfTabButton = tabInsightsCitations
+        InPlace.WhenAttached(
+            journalsTab,
+            Sub()
+                journalsTab.Checked = True
+                AddHandler journalsTab.CheckedChanged, Sub(sender, e) If journalsTab.Checked Then FillInsights()
+                AddHandler routesTab.CheckedChanged, Sub(sender, e) If routesTab.Checked Then FillInsights()
+                AddHandler mapTab.CheckedChanged, Sub(sender, e) If mapTab.Checked Then FillInsights()
+                AddHandler citationsTab.CheckedChanged, Sub(sender, e) If citationsTab.Checked Then FillInsights()
+            End Sub)
 
         FillInsights()
         Return frame
@@ -193,6 +207,7 @@ Partial Public Class Form1
 
         ' Without a handle there is no message queue to come back to.
         If Not IsHandleCreated Then
+            insightsStatus.Visible = False
             ShowInsights(RouteAnalyticsService.ForLibrary(library, today, journals))
             Return
         End If
