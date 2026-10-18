@@ -67,6 +67,10 @@ jobs:
         run: dotnet build ManualCertification/V04Demo/PaperRoute.V04Demo.csproj --configuration Release
 
       - name: Run automated tests
+        # The runner is disposable, so the file-dialog tests, which leave
+        # Explorer's view state under HKCU, run here too (#196).
+        env:
+          PAPERROUTE_FILE_DIALOG_TESTS: "1"
         run: dotnet test PaperRoute.Tests/PaperRoute.Tests.vbproj --configuration Release --no-build --logger "trx;LogFileName=PaperRoute.Tests.trx" --results-directory "${{ github.workspace }}/TestResults"
 
       - name: Upload test results
