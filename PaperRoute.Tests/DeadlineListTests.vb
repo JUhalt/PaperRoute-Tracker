@@ -993,6 +993,71 @@ Public Class DeadlineListTests
     End Sub
 
 
+    ' A Windows contrast theme turned on while PaperRoute runs, through the
+    ' HighContrastOverride seam: the kept pages were built on the old
+    ' surface, so the hidden one is let go at once and the one showing as
+    ' it is left. Each next visit builds its page anew, on the window
+    ' color, and that page is kept again. Nothing saves.
+    <TestMethod>
+    Public Sub KeptPagesAreBuiltAnewAfterTheSystemColorsChange()
+
+        RunOnStaThread(
+            Sub()
+                Try
+                    UiTheme.HighContrastOverride = False
+                    Using board As New DeadlineBoard(_root)
+                        board.Prepare(ManyReminders(3))
+                        board.OpenDeadlines()
+                        Dim oldDeadlines As Control = board.Page()
+                        Dim oldSurface As Integer = board.List().BackColor.ToArgb()
+                        board.NavigateTo(Form1.WorkspacePage.ImportExport)
+                        Application.DoEvents()
+                        Dim oldImportExport As Control = board.ImportExportPage()
+                        Assert.IsFalse(oldDeadlines.IsDisposed, "Leaving keeps the page.")
+                        Assert.AreNotEqual(SystemColors.Window.ToArgb(), oldSurface, "The first list is on the board color.")
+
+                        UiTheme.HighContrastOverride = True
+                        board.ChangeSystemColors()
+                        Assert.IsTrue(oldDeadlines.IsDisposed, "The hidden kept page is let go.")
+                        Assert.IsFalse(board.ContentHost().Controls.Contains(oldDeadlines))
+                        Assert.IsFalse(oldImportExport.IsDisposed, "The page showing stays while it shows.")
+                        Assert.IsTrue(oldImportExport.Visible)
+
+                        board.OpenDeadlines()
+                        Assert.IsTrue(oldImportExport.IsDisposed, "The page that was showing is let go as it is left.")
+                        Dim newDeadlines As Control = board.Page()
+                        Assert.AreNotSame(oldDeadlines, newDeadlines, "The next visit builds the page anew.")
+                        Assert.IsTrue(newDeadlines.Visible)
+                        Assert.AreEqual(3, board.List().Rows.Count)
+                        Assert.AreEqual(SystemColors.Window.ToArgb(), board.List().BackColor.ToArgb(), "The new list is on the window color.")
+
+                        board.NavigateTo(Form1.WorkspacePage.ImportExport)
+                        Application.DoEvents()
+                        Dim newImportExport As Control = board.ImportExportPage()
+                        Assert.AreNotSame(oldImportExport, newImportExport, "The next visit builds Import & Export anew.")
+                        Assert.AreEqual(SystemColors.Window.ToArgb(), ViewCatalog.Descendants(newImportExport).OfType(Of CommandList)().Single().BackColor.ToArgb(),
+                                        "The new Import & Export list is on the window color.")
+
+                        ' Built in the new colors, both are kept again.
+                        Assert.IsFalse(newDeadlines.IsDisposed, "Leaving keeps the new page.")
+                        board.OpenDeadlines()
+                        Assert.AreSame(newDeadlines, board.Page())
+                        Assert.IsFalse(newImportExport.IsDisposed, "Leaving keeps the new Import & Export page.")
+                        board.NavigateTo(Form1.WorkspacePage.ImportExport)
+                        Application.DoEvents()
+                        Assert.AreSame(newImportExport, board.ImportExportPage())
+
+                        Assert.AreEqual(0, board.SaveCount, "Nothing saved.")
+                        board.Close()
+                    End Using
+                Finally
+                    UiTheme.HighContrastOverride = Nothing
+                End Try
+            End Sub)
+
+    End Sub
+
+
     ' The page makes the same few windows however long the list is.
     <TestMethod>
     Public Sub DeadlinesPageHasAFixedWindowCount()
@@ -1485,6 +1550,16 @@ Public Class DeadlineListTests
         Public Function ContentHost() As Control
             Return DirectCast(GetField("contentHost"), Control)
         End Function
+
+        Public Function ImportExportPage() As Control
+            Return DirectCast(GetField("importExportPage"), Control)
+        End Function
+
+        ' As Windows does when a contrast theme is turned on or off.
+        Public Sub ChangeSystemColors()
+            OnSystemColorsChanged(EventArgs.Empty)
+            Application.DoEvents()
+        End Sub
 
         Public Sub SetPageDate(value As DateTime)
             SetField("deadlinesPageDate", value)

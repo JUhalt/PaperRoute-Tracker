@@ -10,8 +10,8 @@ Imports ManuscriptPipeline.Services
 
 ' The single-window shell: a left rail of pages, one content area, and
 ' back/forward navigation. The Board is always kept, and so are Deadlines
-' and Import & Export once built (#133); other pages are built when opened
-' and disposed when left. Library editors that save as they go
+' and Import & Export once built, until the system colors change (#133);
+' other pages are built when opened and disposed when left. Library editors that save as they go
 ' (journals, authors, reminders) are hosted as pages until later v0.6 work
 ' converts them.
 Partial Public Class Form1
@@ -62,6 +62,10 @@ Partial Public Class Form1
     ' The Import & Export page is the same every time, so it is built once
     ' and kept while the window lives (#133).
     Private importExportPage As Control = Nothing
+
+    ' Set when the system colors change while a kept page shows: that page
+    ' is let go as it is left, not kept in the old colors.
+    Private leaveDisposesKeptPage As Boolean = False
 
 
     ' =====================================================
@@ -553,14 +557,16 @@ Partial Public Class Form1
 
         ' A kept page is hidden where it is, with its windows, for its next
         ' visit; taking it out of the window and putting it back costs as
-        ' much as showing it.
-        If IsKeptPage(currentPageView) Then
+        ' much as showing it. One built before the system colors changed
+        ' goes, as every other page does.
+        If IsKeptPage(currentPageView) AndAlso Not leaveDisposesKeptPage Then
             currentPageView.Visible = False
         Else
             contentHost.Controls.Remove(currentPageView)
             currentPageView.Dispose()
         End If
 
+        leaveDisposesKeptPage = False
         currentPageView = Nothing
         libraryGrid = Nothing
         libraryContent = Nothing
@@ -585,6 +591,32 @@ Partial Public Class Form1
     Private Function IsKeptPage(view As Control) As Boolean
         Return view IsNot Nothing AndAlso (view Is importExportPage OrElse view Is deadlinesPage)
     End Function
+
+
+    ' A kept page's surfaces are the colors of when it was built, and what
+    ' its lists draw on them is inked in the colors of the moment, so a
+    ' Windows contrast theme turned on or off while PaperRoute runs would
+    ' leave it mixing the two. A hidden kept page is let go now and the one
+    ' showing as it is left; each is built anew on its next visit, as the
+    ' pages that are not kept are.
+    Protected Overrides Sub OnSystemColorsChanged(e As EventArgs)
+
+        MyBase.OnSystemColorsChanged(e)
+
+        For Each page As Control In {deadlinesPage, importExportPage}
+            If page Is Nothing OrElse page.IsDisposed Then
+                Continue For
+            End If
+
+            If page Is currentPageView Then
+                leaveDisposesKeptPage = True
+            Else
+                contentHost.Controls.Remove(page)
+                page.Dispose()
+            End If
+        Next
+
+    End Sub
 
 
     Private Sub ShowPage(request As PageRequest)
