@@ -164,11 +164,27 @@ Public Class ResponsivenessBudgetTests
             rows.Add(Time(library, "Board to Import & Export (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.ImportExport)))
             rows.Add(Time(library, "Import & Export to Board (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
 
-            rows.Add(Time(library, "Board to a manuscript page", PageSwitch, Sub() board.Open(subject)))
+            ' The first manuscript opened builds the manuscript page, which is
+            ' kept: each one opened after loads into it, and it shows in one
+            ' layout pass, its versions and the selected submission's details
+            ' following once it has painted. Leaving hides it; its editor lets
+            ' go of the record while the window idles (#133).
+            rows.Add(Time(library, "Board to a manuscript page (the first: the page is built)", PageSwitch, Sub() board.Open(subject)))
+            rows.Add(Time(library, "Manuscript page: versions and details after its first paint", UiThread, Sub() Application.DoEvents()))
             rows.Add(TimeMedian(library, "One dirty-timer tick (median of 10)", DirtyTick, 10, Sub() board.Tick()))
             board.Field("Title").Text = title & " (edited)"
             rows.Add(Time(library, "Save from the manuscript page", Save, Sub() Assert.IsTrue(board.SaveManuscriptPage(), "The page saved."), enforced:=enforce))
-            rows.Add(Time(library, "Manuscript page to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
+            rows.Add(Time(library, "Manuscript page to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
+            rows.Add(Time(library, "Manuscript page: the record let go of while the window idles", UiThread, Sub() board.WaitForIdleWork()))
+
+            Dim another As Manuscript =
+                If(library.Manuscripts.Where(Function(item) item IsNot subject AndAlso item.SubmissionPackets.Count > 0).
+                       OrderByDescending(Function(item) item.Submissions.Count).FirstOrDefault(),
+                   library.Manuscripts.First(Function(item) item IsNot subject))
+            rows.Add(Time(library, "Board to a manuscript page (the kept page, another manuscript)", PageSwitch, Sub() board.Open(another)))
+            Application.DoEvents()
+            rows.Add(Time(library, "Kept manuscript page to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
+            board.WaitForIdleWork()
 
             rows.Add(Time(library, "Board render (RenderManuscripts)", UiThread, Sub() board.Render(), enforced:=enforce))
 

@@ -17,6 +17,8 @@ Partial Public Class Form1
     Private manuscriptOrigin As WorkspacePage = WorkspacePage.Board
     Private pendingManuscriptWaypoint As ManuscriptRouteWaypoint = Nothing
 
+    ' The open page's editor and Unsaved changes bar; Nothing while no
+    ' manuscript page is shown.
     Private manuscriptEditor As EditManuscriptForm = Nothing
     Private manuscriptSaveBar As Control = Nothing
     Private manuscriptSaveHint As Label = Nothing
@@ -24,6 +26,20 @@ Partial Public Class Form1
     Private manuscriptStagePill As PillLabel = Nothing
     Private manuscriptMetaLabel As Label = Nothing
     Private manuscriptShelfLabel As Label = Nothing
+
+    ' The page is built once and kept for every manuscript opened (#133):
+    ' its editor loads one record after another (LoadRecord) and lets go of
+    ' each once the page is left (UnloadRecord), hidden in the page area
+    ' until the next. It is built for the first manuscript opened, and
+    ' built again if the colors change, as under a Windows contrast
+    ' theme switched while PaperRoute runs, or the window's DPI or font.
+    Private manuscriptPage As Control = Nothing
+    Private manuscriptPageEditor As EditManuscriptForm = Nothing
+    Private manuscriptPageSaveBar As Control = Nothing
+    Private manuscriptPageSaveHint As Label = Nothing
+    Private manuscriptBackLink As LinkLabel = Nothing
+    Private fitManuscriptTitle As Action = Nothing
+    Private manuscriptPagePalette As String = String.Empty
 
     Private Const SaveBarHint As String =
         "Save keeps them. Discard returns to the last saved version."
@@ -45,6 +61,7 @@ Partial Public Class Form1
 
 
     ' Creates the page's editor. Tests supply a disposable author library.
+    ' The page asks for it with no manuscript: it loads each one itself.
     Protected Overridable Function CreateManuscriptEditor(
         manuscript As Manuscript
     ) As EditManuscriptForm
@@ -117,17 +134,206 @@ Partial Public Class Form1
     ' Page
     ' =====================================================
 
-    Private Function BuildManuscriptPage(
-        manuscript As Manuscript
-    ) As Control
+    ' A page for a manuscript the library no longer holds.
+    Private Function BuildMissingManuscriptPage() As Control
 
-        If manuscript Is Nothing Then
-            Return New Label With {
-                .Text = "This manuscript is no longer in the library.",
-                .Padding = New Padding(UiTheme.Px(22, DeviceDpi)),
-                .ForeColor = UiTheme.SecondaryText()
-            }
+        Return New Label With {
+            .Text = "This manuscript is no longer in the library.",
+            .Padding = New Padding(UiTheme.Px(22, DeviceDpi)),
+            .ForeColor = UiTheme.SecondaryText()
+        }
+
+    End Function
+
+
+    ' Shows a manuscript on the kept page: its editor loads the record
+    ' while the page is hidden, the page shows in one layout pass, and the
+    ' Versions tab, the selected submission's details and any waypoint
+    ' asked for follow once it has painted (#133).
+    Private Sub ShowManuscriptPage(
+        manuscript As Manuscript
+    )
+
+        Dim page As Control = KeptManuscriptPage()
+        Dim editor As EditManuscriptForm = manuscriptPageEditor
+
+        manuscriptBackLink.Text = ChrW(&H2190) & " " & PageTitle(manuscriptOrigin)
+        manuscriptBackLink.AccessibleName = "Back to " & PageTitle(manuscriptOrigin) & " (Alt+Left)"
+        manuscriptPageSaveHint.Text = SaveBarHint
+        manuscriptPageSaveBar.Visible = False
+
+        manuscriptEditor = editor
+        manuscriptSaveBar = manuscriptPageSaveBar
+        manuscriptSaveHint = manuscriptPageSaveHint
+
+        editor.LoadRecord(manuscript, manuscripts, pendingRecoveredCopy, deferParts:=True)
+        RefreshManuscriptHeader()
+        fitManuscriptTitle()
+
+        ShowPageInOnePass(page)
+        currentPageView = page
+        manuscriptDirtyTimer.Start()
+
+        Dim token As Object = editor.RecordToken
+        Dim waypoint As ManuscriptRouteWaypoint = pendingManuscriptWaypoint
+
+        If IsHandleCreated Then
+            BeginInvoke(New Action(Sub() FinishManuscriptPage(editor, token, waypoint)))
+        Else
+            editor.EnsureDeferredParts()
         End If
+
+    End Sub
+
+
+    ' After the page's first paint, for the record it was posted for only:
+    ' while library work runs (#132) it waits for the window to idle.
+    Private Sub FinishManuscriptPage(
+        editor As EditManuscriptForm,
+        token As Object,
+        waypoint As ManuscriptRouteWaypoint
+    )
+
+        If manuscriptEditor IsNot editor OrElse editor.IsDisposed OrElse editor.RecordToken IsNot token Then
+            Return
+        End If
+
+        If libraryWorkInProgress Then
+            QueueIdleWork(Sub() FinishManuscriptPage(editor, token, waypoint))
+            Return
+        End If
+
+        RedrawWindow(manuscriptPage.Handle, IntPtr.Zero, IntPtr.Zero, RDW_INVALIDATE Or RDW_UPDATENOW Or RDW_ALLCHILDREN)
+        editor.EnsureDeferredParts()
+
+        If waypoint IsNot Nothing Then
+            editor.ShowRouteWaypoint(waypoint)
+        End If
+
+    End Sub
+
+
+    Private Const RDW_INVALIDATE As UInteger = &H1
+    Private Const RDW_ALLCHILDREN As UInteger = &H80
+    Private Const RDW_UPDATENOW As UInteger = &H100
+
+    <Runtime.InteropServices.DllImport("user32.dll")>
+    Private Shared Function RedrawWindow(handle As IntPtr, updateRect As IntPtr, updateRegion As IntPtr, flags As UInteger) As Boolean
+    End Function
+
+
+    ' Shows a page built or loaded while hidden in one layout pass: every
+    ' container holds its layout while the page and the Board change
+    ' places, and each then lays out once, inner ones first. Shown
+    ' plainly, every container lays itself out again each time one inside
+    ' it does, which on the manuscript page took longer than loading it.
+    Private Sub ShowPageInOnePass(
+        page As Control
+    )
+
+        Dim containers As List(Of Control) =
+            {page}.Concat(DescendantControls(page)).Where(Function(control) control.HasChildren).ToList()
+
+        For Each container As Control In containers
+            container.SuspendLayout()
+        Next
+
+        page.Visible = True
+        page.BringToFront()
+        boardPage.Visible = False
+
+        ' Every container is laid out once, inner ones first: what changed
+        ' while the page was hidden, as a part shown or hidden for the record
+        ' loaded, laid out nothing then, as WinForms lays out no change under
+        ' a hidden parent.
+        For index As Integer = containers.Count - 1 To 0 Step -1
+            containers(index).PerformLayout()
+            containers(index).ResumeLayout(True)
+        Next
+
+    End Sub
+
+
+    ' The kept page, built and put in the page area, hidden, if it is not
+    ' there yet or the colors it was built in have changed.
+    Private Function KeptManuscriptPage() As Control
+
+        If manuscriptPage IsNot Nothing AndAlso
+           (manuscriptPage.IsDisposed OrElse manuscriptPagePalette <> ManuscriptPageStamp()) Then
+            DropManuscriptPage()
+        End If
+
+        If manuscriptPage Is Nothing Then
+            BuildManuscriptPage()
+        End If
+
+        If manuscriptPage.Parent Is Nothing Then
+            manuscriptPage.Visible = False
+            manuscriptPage.Dock = DockStyle.Fill
+            contentHost.Controls.Add(manuscriptPage)
+            manuscriptPage.SendToBack()
+        End If
+
+        Return manuscriptPage
+
+    End Function
+
+
+    ' What the kept page took when it was built: the colors, and the
+    ' window's DPI and font, which set its sizes.
+    Private Function ManuscriptPageStamp() As String
+
+        Return UiTheme.PaletteStamp() & "," & DeviceDpi.ToString(Globalization.CultureInfo.InvariantCulture) & "," & Font.ToString()
+
+    End Function
+
+
+    ' Lets the kept page go; the next manuscript opened builds it again.
+    Private Sub DropManuscriptPage()
+
+        If manuscriptPage IsNot Nothing AndAlso Not manuscriptPage.IsDisposed Then
+            InPlace.Dispose(manuscriptPage)
+        End If
+
+        manuscriptPage = Nothing
+        manuscriptPageEditor = Nothing
+        manuscriptPageSaveBar = Nothing
+        manuscriptPageSaveHint = Nothing
+        manuscriptBackLink = Nothing
+        fitManuscriptTitle = Nothing
+
+    End Sub
+
+
+    ' After the page is left (#133): its editor lets go of the record and
+    ' its header clears while the window idles, unless a manuscript has
+    ' been opened on the page since. Leaving only hides the page, so
+    ' going back to the Board costs no more than hiding it; letting go of
+    ' a record destroys the windows made for it, which on a slow machine
+    ' takes a few hundred milliseconds.
+    Private Sub QueueManuscriptPageUnload()
+
+        Dim editor As EditManuscriptForm = manuscriptPageEditor
+
+        If editor Is Nothing Then
+            Return
+        End If
+
+        Dim token As Object = editor.RecordToken
+
+        QueueIdleWork(
+            Sub()
+                If editor Is manuscriptPageEditor AndAlso Not editor.IsDisposed AndAlso
+                   editor.RecordToken Is token AndAlso currentPageView IsNot manuscriptPage Then
+                    editor.UnloadRecord()
+                    ClearManuscriptHeader()
+                End If
+            End Sub)
+
+    End Sub
+
+    ' Builds the kept page around an editor with no manuscript loaded.
+    Private Sub BuildManuscriptPage()
 
         Dim dpi As Integer = DeviceDpi
 
@@ -167,6 +373,7 @@ Partial Public Class Form1
             .BackColor = UiTheme.BoardBackground()
         }
 
+        ' Its text names the page the manuscript was opened from (ShowManuscriptPage).
         Dim lnkBack As New LinkLabel With {
             .Text = ChrW(&H2190) & " " & PageTitle(manuscriptOrigin),
             .AutoSize = True,
@@ -348,41 +555,31 @@ Partial Public Class Form1
             End Sub
 
         ' The editor: tabs over one working copy, without its dialog footer.
-        Dim editor As EditManuscriptForm = CreateManuscriptEditor(manuscript)
+        ' It is made once, with no manuscript, and loads each one opened.
+        Dim editor As EditManuscriptForm = CreateManuscriptEditor(Nothing)
         EmbedForm(editor)
         InPlace.WhenAttached(editor, Sub() editor.Visible = True)
         AddHandler editor.DeleteConfirmed, AddressOf ManuscriptDeleteConfirmed
         AddHandler editor.StatusMessage, Sub(sender, message) lblStatus.Text = message
-        manuscriptEditor = editor
 
         frame.Controls.Add(crumb, 0, 0)
         frame.Controls.Add(header, 0, 1)
         frame.Controls.Add(editor, 0, 2)
 
-        manuscriptSaveBar = BuildSaveBar()
-        manuscriptSaveBar.Visible = False
+        Dim saveBar As Control = BuildSaveBar()
+        saveBar.Visible = False
 
         page.Controls.Add(frame, 0, 0)
-        page.Controls.Add(manuscriptSaveBar, 0, 1)
+        page.Controls.Add(saveBar, 0, 1)
 
-        RefreshManuscriptHeader()
-        fitTitle()
+        manuscriptPage = page
+        manuscriptPageEditor = editor
+        manuscriptPageSaveBar = saveBar
+        manuscriptBackLink = lnkBack
+        fitManuscriptTitle = fitTitle
+        manuscriptPagePalette = ManuscriptPageStamp()
 
-        Dim waypoint As ManuscriptRouteWaypoint = pendingManuscriptWaypoint
-
-        If waypoint IsNot Nothing AndAlso IsHandleCreated Then
-            BeginInvoke(
-                New Action(
-                    Sub()
-                        If manuscriptEditor Is editor AndAlso Not editor.IsDisposed Then
-                            editor.ShowRouteWaypoint(waypoint)
-                        End If
-                    End Sub))
-        End If
-
-        Return page
-
-    End Function
+    End Sub
 
 
     ' The Unsaved changes bar, shown only while there is something to save.
@@ -432,7 +629,7 @@ Partial Public Class Form1
             .ForeColor = UiTheme.PrimaryText()
         }
 
-        manuscriptSaveHint = New Label With {
+        manuscriptPageSaveHint = New Label With {
             .Text = SaveBarHint,
             .AutoSize = True,
             .AutoEllipsis = True,
@@ -482,7 +679,7 @@ Partial Public Class Form1
 
         bar.Controls.Add(lblDot, 0, 0)
         bar.Controls.Add(lblMessage, 1, 0)
-        bar.Controls.Add(manuscriptSaveHint, 2, 0)
+        bar.Controls.Add(manuscriptPageSaveHint, 2, 0)
         bar.Controls.Add(buttons, 3, 0)
 
         Return bar
@@ -533,6 +730,22 @@ Partial Public Class Form1
                 "  " & ChrW(&HB7) & "  ",
                 {If(String.IsNullOrWhiteSpace(manuscript.TargetJournal), "No target journal", manuscript.TargetJournal),
                  RouteSummaryService.Describe(manuscript).Text})
+
+    End Sub
+
+
+    ' The kept page's header once it is left, as its editor is (#133): it
+    ' names no manuscript while hidden.
+    Private Sub ClearManuscriptHeader()
+
+        If manuscriptTitleLabel Is Nothing OrElse manuscriptTitleLabel.IsDisposed Then
+            Return
+        End If
+
+        manuscriptTitleLabel.Text = String.Empty
+        manuscriptShelfLabel.Text = String.Empty
+        manuscriptStagePill.Text = String.Empty
+        manuscriptMetaLabel.Text = String.Empty
 
     End Sub
 

@@ -355,14 +355,6 @@ Namespace Forms
         End Sub
 
 
-        ' The library's tags, offered before any record is loaded, so the
-        ' first load finds them in place: setting them makes the tag box a
-        ' new window.
-        Friend Sub PrimeTagSuggestions(allManuscripts As IEnumerable(Of Manuscript))
-            tagEditor.Bind(_workingManuscript.Tags, _authorLibrary, WorkTypeService.AllTags(allManuscripts.ToList()))
-        End Sub
-
-
         ' The record now loaded, for work posted for it to check it still is.
         Friend ReadOnly Property RecordToken As Object
             Get

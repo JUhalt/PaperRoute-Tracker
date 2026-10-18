@@ -556,8 +556,14 @@ Partial Public Class Form1
         ' destroyed there, a few milliseconds a window on a slow machine
         ' (#133). Disposing removes it from the page area once its windows
         ' are gone.
+        ' The manuscript page is kept too: hidden, its editor letting go of
+        ' the record left once the window idles (#133).
         If currentPageView Is importExportPage Then
             contentHost.Controls.Remove(currentPageView)
+        ElseIf currentPageView Is manuscriptPage Then
+            MoveFocusOutOf(currentPageView)
+            currentPageView.Visible = False
+            QueueManuscriptPageUnload()
         Else
             MoveFocusOutOf(currentPageView)
             currentPageView.Dispose()
@@ -610,11 +616,20 @@ Partial Public Class Form1
             Return
         End If
 
+        ' A manuscript shows on the kept page (#133).
+        If request.Page = WorkspacePage.Manuscript Then
+            Dim manuscript As Manuscript = FindManuscript(request.ManuscriptId)
+            If manuscript IsNot Nothing Then
+                ShowManuscriptPage(manuscript)
+                Return
+            End If
+        End If
+
         Dim view As Control
 
         Select Case request.Page
             Case WorkspacePage.Manuscript
-                view = BuildManuscriptPage(FindManuscript(request.ManuscriptId))
+                view = BuildMissingManuscriptPage()
             Case WorkspacePage.Library
                 view = BuildLibraryPage()
             Case WorkspacePage.Journals

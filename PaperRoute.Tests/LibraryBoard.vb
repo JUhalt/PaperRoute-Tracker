@@ -372,6 +372,27 @@ Friend NotInheritable Class LibraryBoard
     End Sub
 
 
+    ' The manuscript page kept between manuscripts (#133), or Nothing.
+    Public ReadOnly Property KeptPage As Control
+        Get
+            Return DirectCast(GetField("manuscriptPage"), Control)
+        End Get
+    End Property
+
+
+    ' The Discard button of the Unsaved changes bar.
+    Public Sub Discard()
+        CallPrivate("DiscardManuscriptChanges")
+        Application.DoEvents()
+    End Sub
+
+
+    ' Delete Manuscript... once its question is answered Yes.
+    Public Sub ConfirmDelete()
+        CallPrivate("ManuscriptDeleteConfirmed", Nothing, EventArgs.Empty)
+    End Sub
+
+
     ' The startup offer of a recovery draft, answered Yes (#123).
     Public Sub AcceptRecoveryDraft()
         recoveryDraftPrompt = Function(title) DialogResult.Yes

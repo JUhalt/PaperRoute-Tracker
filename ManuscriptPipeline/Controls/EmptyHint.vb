@@ -15,6 +15,11 @@ Namespace Controls
             Public Target As Control
             Public Hint As Label
             Public Text As Func(Of String)
+
+            ' Whether the hint was last shown. Its Visible reads False while
+            ' a parent is hidden, as the manuscript page is while it loads
+            ' the next record (#133), so it is no guide to what was set.
+            Public Shown As Boolean
         End Class
 
         Private Shared ReadOnly Entries As New List(Of Entry)()
@@ -131,7 +136,8 @@ Namespace Controls
                 If entry.Hint.Bounds <> bounds Then entry.Hint.Bounds = bounds
             End If
 
-            If entry.Hint.Visible <> empty Then
+            If entry.Shown <> empty Then
+                entry.Shown = empty
                 entry.Hint.Visible = empty
             End If
 

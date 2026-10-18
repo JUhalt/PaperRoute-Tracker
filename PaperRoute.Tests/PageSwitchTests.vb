@@ -189,7 +189,8 @@ Public Class PageSwitchTests
 
     ' Leaving the Library, Journals or Insights disposes the page where it
     ' is: its windows are destroyed while it is still in the page area,
-    ' and the page area then holds the Board alone.
+    ' and the page area then holds the Board alone, with the manuscript
+    ' page kept hidden beside it.
     <TestMethod>
     Public Sub LeavingAPageDisposesItInPlace()
 
@@ -221,10 +222,13 @@ Public Class PageSwitchTests
 
                         Assert.IsTrue(destroyed AndAlso view.IsDisposed, page.ToString() & " is disposed.")
                         Assert.AreSame(host, parentWhenDestroyed, page.ToString() & "'s windows are destroyed where they are.")
+                        ' Besides the manuscript page kept, hidden, for the
+                        ' next manuscript opened (#133).
                         CollectionAssert.AreEqual(
                             {board.BoardPage},
-                            host.Controls.Cast(Of Control)().ToArray(),
+                            host.Controls.Cast(Of Control)().Where(Function(control) control IsNot board.KeptPage).ToArray(),
                             "The page area holds the Board alone after leaving " & page.ToString() & ".")
+                        Assert.IsFalse(If(board.KeptPage?.Visible, False), "The kept manuscript page is hidden.")
 
                     Next
 

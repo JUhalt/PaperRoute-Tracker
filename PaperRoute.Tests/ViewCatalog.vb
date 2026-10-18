@@ -127,6 +127,7 @@ Friend NotInheritable Class ViewCatalog
         New NamedView("Insights page", Function(root) Page(Form1.WorkspacePage.Insights)),
         New NamedView("Import & Export page", Function(root) Page(Form1.WorkspacePage.ImportExport)),
         New NamedView("EditManuscriptForm as the manuscript page", Function(root) Hosting(Of EditManuscriptForm)(ManuscriptPage())),
+        New NamedView("The manuscript page opened a second time", Function(root) Hosting(Of SubmissionDetailsForm)(ManuscriptPageAgain())),
         New NamedView("SubmissionDetailsForm inside the manuscript page", Function(root) Hosting(Of SubmissionDetailsForm)(ManuscriptPage())),
         New NamedView("ReviewerResponseMatrixForm inside the submission's details", Function(root) Hosting(Of ReviewerResponseMatrixForm)(ManuscriptPage()))
     }
@@ -574,6 +575,20 @@ Friend NotInheritable Class ViewCatalog
     Private Shared Function ManuscriptPage() As CatalogBoard
         Dim library As List(Of Manuscript) = CreateRepresentativeLibrary()
         Dim board As CatalogBoard = BoardOn(library)
+        board.Open(library(0))
+        Return board
+    End Function
+
+
+    ' The kept page (#133) after another manuscript was opened on it and
+    ' left: the representative study under review, as a second visit
+    ' shows it.
+    Private Shared Function ManuscriptPageAgain() As CatalogBoard
+        Dim library As List(Of Manuscript) = CreateRepresentativeLibrary()
+        Dim board As CatalogBoard = BoardOn(library)
+        board.Open(library(1))
+        board.NavigateTo(Form1.WorkspacePage.Board)
+        Application.DoEvents()
         board.Open(library(0))
         Return board
     End Function
