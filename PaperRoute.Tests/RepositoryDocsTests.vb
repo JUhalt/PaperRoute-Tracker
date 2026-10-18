@@ -5,8 +5,8 @@ Imports System.Text.RegularExpressions
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
 
 ' The repository's own documents, read as files: what they promise about
-' supported versions and 1.0. Each check names the words it looks for,
-' so a failure doesn't print a whole file.
+' supported versions, security updates and 1.0. Each check names the
+' words it looks for, so a failure doesn't print a whole file.
 <TestClass>
 Public Class RepositoryDocsTests
 
@@ -58,6 +58,52 @@ Public Class RepositoryDocsTests
                 )
 
             Next
+
+        Next
+
+    End Sub
+
+
+    ' #154: PaperRoute bundles the .NET runtime, so a runtime security fix
+    ' reaches users only in a PaperRoute release. The security policy
+    ' states the best-effort target in one paragraph: what affects
+    ' PaperRoute, how the fix arrives, and the issue that gives the signal.
+    <TestMethod>
+    Public Sub TheSecurityPolicyStatesTheRuntimeUpdateTarget()
+
+        Dim paragraph As String =
+            Section(
+                ReadDocument(
+                    Path.Combine(".github", "SECURITY.md")
+                ),
+                "## Supported versions"
+            ).Split(
+                ChrW(10)
+            ).FirstOrDefault(
+                Function(line) line.Contains(
+                    "30 days",
+                    StringComparison.Ordinal
+                )
+            )
+
+        Assert.IsNotNull(
+            paragraph,
+            "Supported versions has a paragraph with the 30-day target."
+        )
+
+        For Each expected As String In {
+            ".NET runtime",
+            "best-effort",
+            "component PaperRoute ships",
+            "update check",
+            "/issues/144)"
+        }
+
+            StringAssert.Contains(
+                paragraph,
+                expected,
+                "The runtime paragraph says: " & expected
+            )
 
         Next
 
