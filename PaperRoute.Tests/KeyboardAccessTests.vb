@@ -1312,22 +1312,6 @@ Public Class KeyboardAccessTests
     End Function
 
 
-    Private Shared Function DeepestActiveControl(
-        form As Form
-    ) As Control
-
-        Dim active As Control =
-            form.ActiveControl
-
-        While TypeOf active Is ContainerControl AndAlso DirectCast(active, ContainerControl).ActiveControl IsNot Nothing
-            active = DirectCast(active, ContainerControl).ActiveControl
-        End While
-
-        Return active
-
-    End Function
-
-
     <DllImport("user32.dll")>
     Private Shared Function PostMessage(handle As IntPtr, message As UInteger, wParam As IntPtr, lParam As IntPtr) As Boolean
     End Function

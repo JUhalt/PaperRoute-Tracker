@@ -1124,12 +1124,6 @@ Public Class DarkThemeLegibilityTests
         Next
     End Function
 
-    Private Shared Function ContrastRatio(foreground As Color, background As Color) As Double
-        Dim first As Double = Luminance(foreground)
-        Dim second As Double = Luminance(background)
-        Return (Math.Max(first, second) + 0.05) / (Math.Min(first, second) + 0.05)
-    End Function
-
     Private Shared Function Luminance(color As Color) As Double
         Return 0.2126 * LinearChannel(color.R) + 0.7152 * LinearChannel(color.G) + 0.0722 * LinearChannel(color.B)
     End Function

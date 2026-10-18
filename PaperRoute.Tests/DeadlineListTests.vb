@@ -1348,21 +1348,6 @@ Public Class DeadlineListTests
         Return sides.Min(Function(side) side.Max(Function(spot) ContrastRatio(picture.GetPixel(spot.X, spot.Y), surface)))
     End Function
 
-    Private Shared Function ContrastRatio(foreground As Color, background As Color) As Double
-        Dim first As Double = Luminance(foreground)
-        Dim second As Double = Luminance(background)
-        Return (Math.Max(first, second) + 0.05) / (Math.Min(first, second) + 0.05)
-    End Function
-
-    Private Shared Function Luminance(color As Color) As Double
-        Return 0.2126 * LinearChannel(color.R) + 0.7152 * LinearChannel(color.G) + 0.0722 * LinearChannel(color.B)
-    End Function
-
-    Private Shared Function LinearChannel(channel As Byte) As Double
-        Dim value As Double = channel / 255.0
-        Return If(value <= 0.04045, value / 12.92, Math.Pow((value + 0.055) / 1.055, 2.4))
-    End Function
-
     Private Shared Function FirstDifference(expected As Bitmap, actual As Bitmap) As String
         If expected.Size <> actual.Size Then Return "sizes differ"
         For y As Integer = 0 To expected.Height - 1
