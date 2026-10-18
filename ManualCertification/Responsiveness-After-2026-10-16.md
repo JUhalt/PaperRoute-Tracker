@@ -1,4 +1,4 @@
-﻿# Responsiveness budgets: the after table — 2026-10-16
+# Responsiveness budgets: the after table — 2026-10-16
 
 The same measurements as [the before table](Responsiveness-Before-2026-10-16.md), taken by the same test on the same machine after the second and third responsiveness pull requests ([#132](https://github.com/JUhalt/PaperRoute-Tracker/issues/132) and [#133](https://github.com/JUhalt/PaperRoute-Tracker/issues/133)). Read the before table's "How the numbers were taken" first; only the differences are repeated here.
 
