@@ -1,4 +1,4 @@
-# Responsiveness budgets: the after table — 2026-10-16
+﻿# Responsiveness budgets: the after table — 2026-10-16
 
 The same measurements as [the before table](Responsiveness-Before-2026-10-16.md), taken by the same test on the same machine after the second and third responsiveness pull requests ([#132](https://github.com/JUhalt/PaperRoute-Tracker/issues/132) and [#133](https://github.com/JUhalt/PaperRoute-Tracker/issues/133)). Read the before table's "How the numbers were taken" first; only the differences are repeated here.
 
@@ -165,3 +165,68 @@ Verdict: UI against the budget x 2; enforced rows marked.
 | 500 | Find Journals: results rendered (fixture responses) | 339 | 339 | 250 (UI thread) | within |
 | 500 | Look Up Journal Facts: click to first paint | 98 | 98 | 250 (UI thread) | within |
 | 500 | Look Up Journal Facts: results rendered (fixture responses) | 152 | 152 | 250 (UI thread) | within |
+
+## 2026-10-17: startup, the manuscript page and the page switches (#133, second part)
+
+Branch `fix/v092-speed-startup`, from ab5f682. The rows of the Deadlines and Import & Export pages belong to the sibling branch `fix/v092-speed-deadlines` and are left as they were. Run B is the quiet Release run of the profile behind this branch (2026-10-17, 09:27, mostly under 20% CPU, no other test host at its end), the baseline the work was planned against.
+
+### What changed
+
+- **Windows made once, where they stay.** WinForms makes a control's window as soon as it is shown, and a form's as soon as it is marked visible; with no window around it, the window is made on WinForms' parking window and moved into place later, and a control removed before it is disposed moves its windows there again before they are destroyed. On this machine each window made, moved or destroyed costs 1 to 6 ms. Pages and the editor's parts are now shown once their parent has a window (`InPlace.WhenAttached`), and a page left is disposed where it is, after focus moves out of it. The Library grid's columns are sized from their header and one cell per distinct text instead of `AllCells`.
+- **The Board fills in after its first screen.** At startup only the shelf shown is built, and only the cards that fill its view and one row more get their windows before the Board is interactive; the rest show a card at a time while the window idles (a 15 ms timer, 30 ms of work a tick, waiting while a save, backup or restore runs). A shelf not shown yet is built the first time it is shown. A card's context menu is built when its window is made or when first asked for (`CardPanel`). A render that changes one card replaces that card alone; before, every card left the shelf and came back.
+- **One manuscript page, kept.** The editor loads one record after another (`LoadRecord`, with everything it holds for a record in one `RecordState` replaced as a whole). The page is built for the first manuscript opened and kept, hidden, for the next: a manuscript loads into it, the page shows in one layout pass, and the Versions tab and the selected submission's details follow once it has painted. Leaving hides it, and the editor lets go of the record while the window idles. It is built again when the colors, the DPI or the font change.
+- Enforced from here on, on the 500 library: warm startup, the Board's fill, the Library refill, the page switches back to the Board from the Library, Insights and the manuscript page, and the save of a Pipeline manuscript whose card changes; the Library keystroke, the Board render, Save from the manuscript page and Restore's inspection as before.
+
+### Numbers
+
+500 library. Release against the budget x 1, Debug against x 2.
+
+| Action | Before (Release, above) | Run B | Release 21:10 / 21:14 | Debug 21:21 | Budget ms | Held |
+|---|---:|---:|---:|---:|---:|---|
+| Warm startup to an interactive Board | 4371 | 2928 | 1055 / 940 | 4945 | 1500 | enforced |
+| Board: the rest of the shown shelf, in idle slices (longest stall) | new | | 62 / 70 | 384 | 250 | enforced |
+| First switch to Published (the shelf built when first shown) | new | | 674 / 622 | 3653 | 100 | reported |
+| Board to Library | 228 | 103 | 55 / 81 | 219 | 100 | reported |
+| One Library filter keystroke | 1 | | 1 / 2 | 4 | 50 | enforced |
+| Library filter: refill once typing pauses | 153 | | 13 / 44 | 65 | 250 | enforced |
+| Library to Board | 339 | 115 | 274 / 38 | 66 | 100 | enforced |
+| Board to Journals | 274 | 76 | 133 / 188 | 503 | 100 | reported |
+| Journals to Board | 89 | 42 | 99 / 96 | 240 | 100 | reported |
+| Board to Insights | 265 | 101 | 206 / 129 | 212 | 100 | reported |
+| Insights to Board | 135 | 46 | 62 / 35 | 102 | 100 | enforced |
+| Board to a manuscript page, the first (the page is built) | 2925 | 1186 | 1985 / 1478 | 2267 | 100 | reported |
+| Manuscript page: versions and details after its first paint | new | | 338 / 190 | 583 | 250 | reported |
+| Save from the manuscript page | 71 | | 136 / 87 | 426 | 250 | enforced |
+| Manuscript page to Board | 205 | 617 (after Save) | 53 / 34 | 60 | 100 | enforced |
+| Manuscript page: the record let go of while the window idles | new | | 189 / 155 | 361 | 250 | reported |
+| Board to a manuscript page, the kept page | new | | 274 / 273 | 578 | 100 | reported |
+| Kept manuscript page to Board | new | | 40 / 39 | 54 | 100 | enforced |
+| Board render (RenderManuscripts) | 13 | | 59 / 40 | 109 | 250 | enforced |
+| Save of a Pipeline manuscript whose card changes | new | | 67 / 53 | 133 | 250 | enforced |
+
+The first Release run failed on Library to Board (274 ms against 100) and the second on Restore's inspection (520 ms against 250, enforced before this branch); the Debug run failed on startup (4,945 ms against 3,000). Each of those rows measured 38, 61 and 940 to 1,055 ms in the other runs: the failures are this host's, see below. The quietest run of the branch (19:28, CPU 11 to 25%, no other test host, before the kept page) held every row enforced now that it measured, with warm startup at 950 ms, Library to Board 27 ms, Board to Journals 111 ms and Board to Insights 210 ms.
+
+### Host during these runs
+
+Windows 11 build 26300, 12 logical processors, window DPI 96. CPU load sampled at the start and end of each run: 83 and 74% for the first Release run, 76 and 19% for the second, 17 and 86% for the Debug run. No other PaperRoute test host ran during the first Release run; a sibling worktree's Debug test host ran from 21:16, through the end of the second Release run and the whole Debug run, about seven CPU-minutes. Desktop programs running throughout: CrossDeviceService (the most CPU time), OneNote, PowerToys, 1Password, PrusaSlicer and several Claude sessions, plus other builds and tests of sibling worktrees on and off through the day. Another UI test host costs this branch most: window creation is shared across the desktop, and the profile measured a window at 0.9 to 1.6 ms quiet and about 5.8 ms while one ran.
+
+### Report-only rows, and why
+
+- **Board to Library, Board to Journals, Journals to Board, Board to Insights** build their pages' windows (Library 14 and a 500-row grid, Journals 19, Insights 30). Measured step by step on a quiet host (CPU 5%): Board to Library 54 to 91 ms, Board to Journals 80 to 108 ms of which the Journals editor's constructor is 26 to 74 ms, Board to Insights 62 to 106 ms, Journals to Board 45 to 67 ms. Within the 100 ms line on some quiet runs and over it on others, they have no room to hold.
+- **First switch to Published** builds that shelf's cards and gives its first screen their windows. Before this branch startup built those cards, and the first switch still gave every Published card its windows (1.1 to 2.6 s in the profile); later switches take 10 to 22 ms.
+- **Board to a manuscript page, both rows.** The first open builds the page: the editor's constructor is 0.9 s on this host (building its controls 753 ms, styling them 419 ms, measured quiet). Building it while the window idles after startup was tried and left out: it is one step of 0.8 to 0.9 s, which would hold the window once at a moment the researcher did not choose. An open on the kept page measured, quiet: loading the record 145 to 290 ms (the submissions list and the shortlist's rows 50 to 155, the journal's notes and the Overview from its top 40 to 130), the header 54 to 102 ms and the one layout pass 100 to 400 ms. Loading a record replaces the windows of its shortlist rows, tag chips and lists, and the page lays out again; reaching 100 ms needs rows and chips that are kept and re-filled rather than rebuilt, which is a change to the editor's sections, not taken here.
+- **The two idle steps after an open and a leave** build the Versions tab and the selected submission's details, and later destroy the record's windows. They hold the window 155 to 583 ms on this host; each runs once, after the page has painted or after the Board is back.
+- The **example library** runs first and carries the process's first-time costs, so its rows stay report-only, as above.
+
+### The first seconds after startup
+
+Until the fill reaches the end of the shown shelf, the cards it has not reached are hidden: the shelf's scroll range, and a screen reader's object navigation, end at the last card shown. Tab never stops there: focus entering a card shows the row after it. On the 500 library the fill takes about 5 s of idle time, a card at a time; it waits while another page covers the Board and goes on when the Board is back. A search typed meanwhile shows exactly what it finds. The tab of a shelf not shown yet counts all its manuscripts.
+
+### Merge notes
+
+- **Form1.Shell.vb.** `LeaveCurrentPage` moves focus out of the page (`MoveFocusOutOf`) and disposes every page in place, Deadlines included; Import & Export keeps `Remove`, and the kept manuscript page is hidden and let go of while the window idles (`QueueManuscriptPageUnload`). `ShowPage`: the Board branch queues the fill, a manuscript shows on the kept page (`ShowManuscriptPage`, or `BuildMissingManuscriptPage`), and Journals goes through `CreateJournalLibraryEditor`. `EmbedForm` no longer sets `Visible`; `HostEditor` and the Library tabs show through `InPlace.WhenAttached`. `FitLibraryColumns` sits beside `CreatePageGrid`; `CreatePageFrame` is unchanged.
+- **Form1.vb.** `DeferBoardFill` before `RenderManuscripts` in `Form1_Load`; `RenderManuscripts` and `ShowShelf` in fill mode; `FillShelf` in place; in `CreateManuscriptCard` the `CardPanel` menu lines and the `Enter` hook, near #187's tag-strip edit; `CardRecord.HiddenByFill`; the idle timer disposed in `OnFormClosed`.
+- **New files:** `Form1.BoardFill.vb`, `Controls/CardPanel.vb`, `Controls/InPlace.vb` (`WhenAttached`, `HoldPlace` and `Dispose` live here, not in Form1.Shell.vb).
+- **Other files:** Form1.Insights.vb, Form1.ManuscriptPage.vb, EditManuscriptForm.vb and EditManuscriptForm.Workflow.vb, SubmissionDetailsForm.vb, TagChips.vb, EmptyHint.vb, UiPolish.vb, UiTheme.vb.
+- **Overlaps with master since ab5f682.** Master's #106 adds `UiPolish.ApplyToControls(parent)`, which styles the controls under `parent`; this branch adds one by the same name that also styles the control itself. Keep one, with master's name, and style the root where this branch's callers need it (`BuildVersionHistory`, `RefreshShortlist`). Master's `RefreshShortlist` also styles `shortlistRows` after the rows are built, and this branch styles each row as it is added: keep one. Form1.vb, EditManuscriptForm.vb, TagChips.vb and ViewCatalog.vb also change on both sides; resolve them hunk by hunk.
+- **Tests:** LibraryBoard.vb, ResponsivenessBudgetTests.vb (rows to merge one by one with the sibling branch's), ViewCatalog.vb (two views), BackgroundLibraryWorkTests.vb and KeyboardAccessTests.vb (one test each), and the new BoardFillTests.vb, ManuscriptEditorReuseTests.vb, PageSwitchTests.vb and KeptManuscriptPageTests.vb. #187's additions to DashboardShelfLayoutTests and ManuscriptPageTests must pass after the merge.

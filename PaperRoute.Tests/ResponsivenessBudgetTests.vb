@@ -126,7 +126,7 @@ Public Class ResponsivenessBudgetTests
 
         Using board As New LibraryBoard(library, Path.Combine(_root, library.Name & "-settings"))
 
-            rows.Add(Time(library, "Warm startup to an interactive Board (Show, queue drained)", Startup, Sub() board.Start()))
+            rows.Add(Time(library, "Warm startup to an interactive Board (Show, queue drained)", Startup, Sub() board.Start(), enforced:=enforce))
             _paintObserved(library.Name) = board.PaintObserved
 
             ' The shelf shown fills in after its first screen, a card at a
@@ -139,10 +139,15 @@ Public Class ResponsivenessBudgetTests
             board.ShelfTab("tabPipeline").Checked = True
             board.WaitForBoardFill()
 
+            ' #133 enforces the Board's startup and the page switches back to it.
+            ' Board to Library, Board to Journals, Journals to Board and Board to
+            ' Insights stay reported: each builds its page's windows and measured
+            ' 54-163, 80-312, 45-124 and 62-210 ms across this host's quiet and
+            ' busy runs, with no room under the 100 ms line.
             rows.Add(Time(library, "Board to Library", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Library)))
             rows.Add(Time(library, "One Library filter keystroke", FilterKeystroke, Sub() board.TypeInLibraryFilter("a"), enforced:=enforce))
-            rows.Add(Time(library, "Library filter: refill once typing pauses", UiThread, Sub() board.PauseTyping()))
-            rows.Add(Time(library, "Library to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
+            rows.Add(Time(library, "Library filter: refill once typing pauses", UiThread, Sub() board.PauseTyping(), enforced:=enforce))
+            rows.Add(Time(library, "Library to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
 
             ' The Journals page on the test's author library, through the
             ' window's own navigation (CreateJournalLibraryEditor).
@@ -157,7 +162,7 @@ Public Class ResponsivenessBudgetTests
 
             rows.Add(Time(library, "Board to Insights", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Insights)))
             rows.Add(Time(library, "Insights: figures ready (calculated off the UI thread)", UiThread, Sub() board.WaitForInsights()))
-            rows.Add(Time(library, "Insights to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
+            rows.Add(Time(library, "Insights to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
 
             rows.Add(Time(library, "Board to Import & Export", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.ImportExport)))
             rows.Add(Time(library, "Import & Export to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
@@ -168,7 +173,11 @@ Public Class ResponsivenessBudgetTests
             ' kept: each one opened after loads into it, and it shows in one
             ' layout pass, its versions and the selected submission's details
             ' following once it has painted. Leaving hides it; its editor lets
-            ' go of the record while the window idles (#133).
+            ' go of the record while the window idles (#133). Leaving is
+            ' enforced. Both opens stay reported, over the 100 ms line on this
+            ' host: the first builds the page, and any open replaces the
+            ' windows of the record's shortlist rows, tags and lists and lays
+            ' the page out; so do the two idle steps after them.
             rows.Add(Time(library, "Board to a manuscript page (the first: the page is built)", PageSwitch, Sub() board.Open(subject)))
             rows.Add(Time(library, "Manuscript page: versions and details after its first paint", UiThread, Sub() Application.DoEvents()))
             rows.Add(TimeMedian(library, "One dirty-timer tick (median of 10)", DirtyTick, 10, Sub() board.Tick()))
