@@ -263,6 +263,52 @@ Public Class BoardFillTests
     End Sub
 
 
+    ' A card the fill shows after the first screen is the card it always
+    ' was: while the shelf is still filling, Tab from the card before
+    ' reaches its title, and Space on the title opens its manuscript, as
+    ' Enter and a click do (#192).
+    <TestMethod>
+    Public Sub ATitleTheFillShowsOpensItsManuscriptOnSpace()
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary = Library120()
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    Dim all As List(Of RoundedPanel) = Cards(board.Shelf("pipelinePanel"))
+                    Dim index As Integer = all.FindIndex(Function(card) Not card.Visible)
+                    Assert.IsTrue(index > 0, "The shelf is still filling.")
+                    Dim hidden As RoundedPanel = all(index)
+
+                    Dim current As Control = all(index - 1).Controls.OfType(Of LinkLabel)().First()
+                    board.ActiveControl = current
+                    For steps As Integer = 1 To 6
+                        If CardOf(current) Is hidden Then Exit For
+                        board.SelectNextControl(current, True, True, True, False)
+                        current = DeepestActiveControl(board)
+                    Next
+
+                    Dim title As LinkLabel = TryCast(current, LinkLabel)
+                    Assert.IsTrue(title IsNot Nothing AndAlso CardOf(title) Is hidden AndAlso title.Text = hidden.AccessibleName,
+                                  "Tab reaches the title of the card the fill had not shown: " & If(current?.GetType().Name, "nothing") & ".")
+                    Assert.IsTrue(board.IsBoardFillPending, "The shelf is still filling.")
+
+                    PostKey(title, Keys.Space)
+                    Application.DoEvents()
+
+                    Assert.AreEqual(Form1.WorkspacePage.Manuscript.ToString(), board.PageName, "Space on the title opens a manuscript's page.")
+                    Assert.AreEqual(hidden.AccessibleName, board.Library.Single(Function(item) item.Id = board.OpenManuscriptId).Title, "The card's own manuscript.")
+
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(5))
+
+    End Sub
+
+
     ' A card's menu is built when first asked for: a card the fill has not
     ' reached has none, and its menu, once asked for, acts on the card's own
     ' record, here one a restore put in place of the record it was built for.
