@@ -59,6 +59,21 @@ Public Class KeyboardAccessTests
     Private Const WM_KEYDOWN As UInteger =
         &H100
 
+    Private Const VK_SHIFT As Integer =
+        &H10
+
+    Private Const WM_CHANGEUISTATE As UInteger =
+        &H127
+
+    Private Const UIS_CLEAR As Integer =
+        2
+
+    Private Const UISF_HIDEFOCUS As Integer =
+        1
+
+    Private Shared ReadOnly KeyDownMethod As MethodInfo =
+        GetType(Control).GetMethod("OnKeyDown", BindingFlags.Instance Or BindingFlags.NonPublic)
+
 
     ' Every waypoint of a published route has one link that Tab reaches,
     ' in route order, and Enter on it opens that waypoint, as a double
@@ -228,7 +243,7 @@ Public Class KeyboardAccessTests
 
                 Using view As New ManuscriptRouteViewForm(manuscript)
 
-                    ViewCatalog.ShowOffscreen(view)
+                    ShowWithOpeningFocus(view)
 
                     Dim links As List(Of LinkLabel) =
                         WaypointLinks(view, waypoints.Count)
@@ -281,7 +296,11 @@ Public Class KeyboardAccessTests
                         "The route map is a stop, so a screen reader reads it."
                     )
 
+                    ' Focus cues show, as once a key has been pressed in a
+                    ' window Windows activated; in one shown while another
+                    ' program has the foreground they can stay hidden.
                     view.ActiveControl = map
+                    SendMessage(view.Handle, WM_CHANGEUISTATE, New IntPtr(UIS_CLEAR Or (UISF_HIDEFOCUS << 16)), IntPtr.Zero)
                     Application.DoEvents()
 
                     Using focused As New Bitmap(map.Width, map.Height)
@@ -306,13 +325,22 @@ Public Class KeyboardAccessTests
                         "Enter on the route map does nothing; the window answered " & view.DialogResult.ToString() & "."
                     )
 
+                    ' Windows presses the default button for Enter with
+                    ' Shift held as well.
+                    PressWithShift(view, Keys.Enter)
+
+                    Assert.IsTrue(
+                        view.Visible AndAlso view.DialogResult = DialogResult.None,
+                        "Shift+Enter on the route map does nothing; the window answered " & view.DialogResult.ToString() & "."
+                    )
+
                     view.Close()
 
                 End Using
 
                 Using view As New ManuscriptRouteViewForm(manuscript)
 
-                    ViewCatalog.ShowOffscreen(view)
+                    ShowWithOpeningFocus(view)
                     Press(view, Keys.Tab)
                     Press(view, Keys.Enter)
 
@@ -346,8 +374,8 @@ Public Class KeyboardAccessTests
     ' On the Board, Tab reaches each card's title in card order, each just
     ' before the card's ⋯ button and named by its manuscript (#192), and
     ' Enter or Space on a title opens that manuscript's page, as a click
-    ' does. Tab and Enter already worked in this window before #192; Space
-    ' did not.
+    ' does; Space with Alt, Ctrl or Shift does not. Tab and Enter already
+    ' worked in this window before #192; Space did not.
     <TestMethod>
     <DataRow(Keys.Enter)>
     <DataRow(Keys.Space)>
@@ -434,6 +462,30 @@ Public Class KeyboardAccessTests
                         ' The middle card, from its title.
                         board.ActiveControl = titles(1)
                         Application.DoEvents()
+
+                        ' Alt+Space is the window menu's key, which reaches
+                        ' Windows only if the key press is left alone. Given
+                        ' to the title directly, as a real Alt+Space would
+                        ' open the window menu's own loop here.
+                        For Each modifier As Keys In {Keys.Alt, Keys.Control, Keys.Shift}
+
+                            Dim held As New KeyEventArgs(modifier Or Keys.Space)
+                            KeyDownMethod.Invoke(titles(1), New Object() {held})
+                            Application.DoEvents()
+
+                            Assert.AreEqual(
+                                Form1.WorkspacePage.Board,
+                                board.ActivePage,
+                                held.KeyData.ToString() & " on a card's title leaves the Board as it is."
+                            )
+
+                            Assert.IsFalse(
+                                held.SuppressKeyPress,
+                                held.KeyData.ToString() & " on a card's title is left for Windows."
+                            )
+
+                        Next
+
                         Press(board, key)
 
                         Assert.AreEqual(
@@ -939,6 +991,51 @@ Public Class KeyboardAccessTests
     End Sub
 
 
+    ' Shows the window with the focus it opens with in the app, where it is
+    ' activated as it opens. Shown while another program has the
+    ' foreground, it is not, and nothing has the focus; activation would
+    ' select its first stop, as this does.
+    Private Shared Sub ShowWithOpeningFocus(
+        form As Form
+    )
+
+        ViewCatalog.ShowOffscreen(form)
+
+        If form.ActiveControl Is Nothing Then
+            form.SelectNextControl(Nothing, True, True, True, False)
+            Application.DoEvents()
+        End If
+
+    End Sub
+
+
+    ' Presses the key with Shift held in this thread's key state only, as
+    ' WinForms reads modifiers there, and lets Shift go again.
+    Private Shared Sub PressWithShift(
+        form As Form,
+        key As Keys
+    )
+
+        Dim state(255) As Byte
+        GetKeyboardState(state)
+
+        Dim before As Byte =
+            state(VK_SHIFT)
+
+        state(VK_SHIFT) = CByte(before Or &H80)
+        SetKeyboardState(state)
+
+        Try
+            Press(form, key)
+        Finally
+            GetKeyboardState(state)
+            state(VK_SHIFT) = before
+            SetKeyboardState(state)
+        End Try
+
+    End Sub
+
+
     Private Shared Sub Post(
         form As Form,
         key As Keys
@@ -997,6 +1094,18 @@ Public Class KeyboardAccessTests
 
     <DllImport("user32.dll")>
     Private Shared Function PostMessage(handle As IntPtr, message As UInteger, wParam As IntPtr, lParam As IntPtr) As Boolean
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function SendMessage(handle As IntPtr, message As UInteger, wParam As IntPtr, lParam As IntPtr) As IntPtr
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function GetKeyboardState(state As Byte()) As Boolean
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function SetKeyboardState(state As Byte()) As Boolean
     End Function
 
 

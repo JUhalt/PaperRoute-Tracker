@@ -2970,8 +2970,8 @@ Public Class Form1
         ' =================================================
 
         ' A link, so the title is the card's keyboard-focusable way to open
-        ' it: a tab stop before the card's ⋯, named by the manuscript, that
-        ' Enter or Space opens (#192).
+        ' it: a tab stop before the card's ⋯, that Enter or Space opens
+        ' (#192).
         Dim lblTitle As New LinkLabel With {
             .Text = manuscript.Title,
             .AutoSize = False,
@@ -2986,7 +2986,6 @@ Public Class Form1
             .ActiveLinkColor = UiTheme.AccentColor(),
             .VisitedLinkColor = UiTheme.PrimaryText(),
             .Cursor = Cursors.Hand,
-            .AccessibleName = manuscript.Title,
             .AccessibleDescription = String.Join(", ", {FormatStage(manuscript.CurrentStage), statusText, If(hasJournal, manuscript.TargetJournal, "no target journal"), route.Text}.Where(Function(part) part.Length > 0))
         }
         cardToolTip.SetToolTip(lblTitle, manuscript.Title)
@@ -3095,11 +3094,11 @@ Public Class Form1
                 WithLiveManuscript(record, Sub(live) OpenManuscript(live))
             End Sub
 
-        ' Enter reaches the link as the window's default button; Space,
-        ' as on a button, opens it too.
+        ' A link opens on Enter by itself; Space, as on a button, opens it
+        ' too. Only bare Space: Alt+Space is the window menu's.
         AddHandler lblTitle.KeyDown,
             Sub(sender, e)
-                If e.KeyCode = Keys.Space Then
+                If e.KeyData = Keys.Space Then
                     e.SuppressKeyPress = True
                     WithLiveManuscript(record, Sub(live) OpenManuscript(live))
                 End If

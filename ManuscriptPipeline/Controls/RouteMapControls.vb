@@ -218,10 +218,10 @@ Namespace Controls
         End Sub
 
         ' A tab stop, so a screen reader reads the route, that shows its
-        ' focus and has no key of its own: Enter on it does nothing, where
-        ' it pressed the window's Close (#192).
+        ' focus and has no key of its own: Enter on it, with a modifier or
+        ' without, does nothing, where it pressed the window's Close (#192).
         Protected Overrides Function IsInputKey(keyData As Keys) As Boolean
-            Return keyData = Keys.Enter OrElse MyBase.IsInputKey(keyData)
+            Return (keyData And Keys.KeyCode) = Keys.Enter OrElse MyBase.IsInputKey(keyData)
         End Function
 
         Protected Overrides Sub OnGotFocus(e As EventArgs)
@@ -457,7 +457,7 @@ Namespace Controls
 
         End Sub
 
-        ' The ring the app's buttons and chips show when focused from the
+        ' The 2-pixel ring the app's buttons show when focused from the
         ' keyboard, round the whole map.
         Private Sub DrawFocusRing(g As Graphics)
             If Not (Focused AndAlso ShowFocusCues) Then Return
