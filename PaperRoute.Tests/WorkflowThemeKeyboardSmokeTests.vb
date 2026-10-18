@@ -143,8 +143,9 @@ Public Class WorkflowThemeKeyboardSmokeTests
     ' Under a contrast theme a filled chip or pill takes the window color
     ' as its fill, so it keeps its shape with an outline in its text color
     ' (#191): each Needs Attention chip and stage pill on the Board, built
-    ' under the theme, and a chip of every tone, a pill of every stage and
-    ' a tag of every color. The seam stands in for the theme.
+    ' under the theme, and a chip of every tone, a pill of every stage, a
+    ' tag of every color, the rail's count badge and the Reviewer Response
+    ' Matrix's status pill. The seam stands in for the theme.
     <TestMethod>
     <DataRow(SystemColorMode.Classic)>
     <DataRow(SystemColorMode.Dark)>
@@ -220,6 +221,45 @@ Public Class WorkflowThemeKeyboardSmokeTests
                             End Using
                         End Using
                     Next
+
+                    ' A rail item wide enough that the right half of it holds
+                    ' only the count badge.
+                    Using host As New Form With {.ClientSize = New Size(320, 60), .Font = New Font("Segoe UI", 9.0F), .BackColor = UiTheme.HeaderBackground()}
+                        Dim item As New RailButton(RailGlyph.Reminders, "Reminders") With {.Location = New Point(10, 10), .Size = New Size(300, 36), .Badge = 12}
+                        host.Controls.Add(item)
+                        ViewCatalog.ShowOffscreen(host)
+                        Using picture As Bitmap = PictureOf(item)
+                            CheckOutlineWithin(missing, "The rail's count badge", picture, New Rectangle(picture.Width \ 2, 0, picture.Width - picture.Width \ 2, picture.Height), UiTheme.WarningColor(),
+                                Function(pixel) Distance(pixel, UiTheme.WarningColor()) < Distance(pixel, SystemColors.Window))
+                        End Using
+                        host.Close()
+                    End Using
+
+                    ' A row of the Reviewer Response Matrix, drawn as its list
+                    ' draws one. In progress is drawn in the accent color,
+                    ' which nothing else in the row is, so the pill is found
+                    ' by that color.
+                    Dim manuscript As New Manuscript With {.Title = "Contrast pill fixture", .CurrentStage = PaperStage.Submitted}
+                    Dim submission As New JournalSubmission With {.JournalName = "Fictional journal", .SubmittedDate = New DateTime(2026, 9, 20)}
+                    Dim decision As New EditorialDecisionEvent With {.Decision = EditorialDecision.MajorRevision}
+                    submission.Decisions.Add(decision)
+                    manuscript.Submissions.Add(submission)
+                    ReviewerResponseService.AddItem(submission, New ReviewerResponseItem With {
+                        .DecisionId = decision.Id, .RevisionRoundNumber = 1, .ReviewerLabel = "Reviewer 1",
+                        .CommentText = "Clarify the sampling frame.", .Status = ReviewerResponseStatus.InProgress
+                    })
+                    Using matrix As New ReviewerResponseMatrixForm(manuscript, submission)
+                        Dim list As ListBox = DirectCast(GetType(ReviewerResponseMatrixForm).GetField("lstResponses", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(matrix), ListBox)
+                        Dim ink As Color = ReviewerResponseMatrixForm.StatusPill(ReviewerResponseStatus.InProgress).Ink
+                        Using row As New Bitmap(600, list.Font.Height * 2 + UiTheme.Px(26, matrix.DeviceDpi))
+                            Using g As Graphics = Graphics.FromImage(row)
+                                GetType(ReviewerResponseMatrixForm).GetMethod("DrawResponseItem", BindingFlags.Instance Or BindingFlags.NonPublic).
+                                    Invoke(matrix, New Object() {list, New DrawItemEventArgs(g, list.Font, New Rectangle(Point.Empty, row.Size), 0, DrawItemState.None)})
+                            End Using
+                            CheckOutlineWithin(missing, "The Reviewer Response Matrix's In progress pill", row, New Rectangle(Point.Empty, row.Size), ink,
+                                Function(pixel) pixel.ToArgb() = ink.ToArgb())
+                        End Using
+                    End Using
                 Finally
                     UiTheme.HighContrastOverride = Nothing
                 End Try
@@ -828,6 +868,33 @@ Public Class WorkflowThemeKeyboardSmokeTests
         If top < wanted OrElse bottom < wanted Then
             missing.Add($"{label}: {top} and {bottom} pixels of {ink.Name} along its top and bottom edges, not {wanted}.")
         End If
+    End Sub
+
+    ' A shape drawn among other things, found in the region as the smallest
+    ' rectangle holding every pixel the test picks: with an outline, the
+    ' outline; without one, only its text.
+    Private Shared Sub CheckOutlineWithin(missing As List(Of String), label As String, picture As Bitmap, region As Rectangle, ink As Color, picks As Func(Of Color, Boolean))
+        Dim left As Integer = Integer.MaxValue
+        Dim top As Integer = Integer.MaxValue
+        Dim right As Integer = -1
+        Dim bottom As Integer = -1
+        For y As Integer = region.Top To region.Bottom - 1
+            For x As Integer = region.Left To region.Right - 1
+                If picks(picture.GetPixel(x, y)) Then
+                    left = Math.Min(left, x)
+                    top = Math.Min(top, y)
+                    right = Math.Max(right, x)
+                    bottom = Math.Max(bottom, y)
+                End If
+            Next
+        Next
+        If right < 0 OrElse bottom - top < 2 Then
+            missing.Add($"{label}: nothing drawn in {ink.Name} to find it by.")
+            Return
+        End If
+        Using shape As Bitmap = picture.Clone(Rectangle.FromLTRB(left, top, right + 1, bottom + 1), picture.PixelFormat)
+            CheckOutline(missing, label, shape, ink)
+        End Using
     End Sub
 
     Private Shared Function LongestInkRun(picture As Bitmap, row As Integer, left As Integer, right As Integer, ink As Color) As Integer
