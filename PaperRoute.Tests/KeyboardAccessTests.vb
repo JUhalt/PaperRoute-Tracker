@@ -62,8 +62,8 @@ Public Class KeyboardAccessTests
     Private Const VK_SHIFT As Integer =
         &H10
 
-    Private Const WM_CHANGEUISTATE As UInteger =
-        &H127
+    Private Const WM_UPDATEUISTATE As UInteger =
+        &H128
 
     Private Const UIS_CLEAR As Integer =
         2
@@ -222,6 +222,116 @@ Public Class KeyboardAccessTests
     End Sub
 
 
+    ' Tab reaches everything the main window's pages draw rather than host
+    ' as controls (#133), as it reached the controls they replaced: over
+    ' the catalog's pages and hosted views, Tab from a drawn list's first
+    ' stop lands on each of its items, buttons and links in reading order,
+    ' each announced as the one focused, and then leaves the list; and Tab
+    ' from Import & Export's first command lands on each of its commands in
+    ' turn. The Deadlines page draws items, buttons, a "⋯" and the Done
+    ' link, so the sweep cannot pass by finding none.
+    <TestMethod>
+    Public Sub TabReachesEveryDrawnItemButtonAndLink()
+
+        Dim reports As New List(Of String)()
+        Dim walked As New List(Of String)()
+
+        Dim failures As List(Of String) =
+            ViewCatalog.ShowEach(
+                ViewCatalog.Hosted.Select(Function(view) (view.Name, view.Build)),
+                Sub(name, shown)
+
+                    For Each list As DeadlineList In ViewCatalog.Descendants(shown).OfType(Of DeadlineList)().Where(Function(control) control.Visible).ToList()
+
+                        Dim root As AccessibleObject =
+                            list.AccessibilityObject
+
+                        Dim children As List(Of AccessibleObject) =
+                            Enumerable.Range(0, root.GetChildCount()).Select(Function(index) root.GetChild(index)).ToList()
+
+                        Dim expected As List(Of Integer) =
+                            Enumerable.Range(0, children.Count).
+                                Where(Function(index) {AccessibleRole.ListItem, AccessibleRole.PushButton, AccessibleRole.Link}.Contains(children(index).Role)).
+                                ToList()
+
+                        Dim reached As New List(Of Integer)()
+
+                        If Not list.Focus() Then
+                            reports.Add(name & ": the drawn list takes no focus.")
+                            Continue For
+                        End If
+
+                        For count As Integer = 0 To expected.Count - 1
+
+                            If Not list.Focused Then
+                                Exit For
+                            End If
+
+                            reached.Add(children.IndexOf(root.GetFocused()))
+                            Press(shown, Keys.Tab)
+
+                        Next
+
+                        walked.Add(name & ": " & reached.Count & " stops")
+
+                        If Not reached.SequenceEqual(expected) Then
+                            reports.Add(name & ": Tab reached " & String.Join(", ", reached.Select(Function(index) If(index < 0, "(nothing)", children(index).Name))) &
+                                        "; expected " & String.Join(", ", expected.Select(Function(index) children(index).Name)) & ".")
+                        ElseIf list.Focused Then
+                            reports.Add(name & ": Tab past the last stop stays in the list.")
+                        End If
+
+                    Next
+
+                    For Each list As CommandList In ViewCatalog.Descendants(shown).OfType(Of CommandList)().Where(Function(control) control.Visible).ToList()
+
+                        Dim commands As List(Of ActionButton) =
+                            list.Controls.OfType(Of ActionButton)().ToList()
+
+                        If commands.Count = 0 OrElse Not commands(0).Focus() Then
+                            reports.Add(name & ": the first command takes no focus.")
+                            Continue For
+                        End If
+
+                        Dim reached As New List(Of Control)()
+
+                        For Each command As ActionButton In commands
+                            reached.Add(DeepestActiveControl(shown))
+                            Press(shown, Keys.Tab)
+                        Next
+
+                        walked.Add(name & ": " & reached.Count & " commands")
+
+                        If Not reached.SequenceEqual(commands) Then
+                            reports.Add(name & ": Tab reached " & String.Join(", ", reached.Select(Function(control) If(control Is Nothing, "(nothing)", control.Text))) & ".")
+                        End If
+
+                    Next
+
+                End Sub
+            )
+
+        Assert.AreEqual(
+            0,
+            failures.Count,
+            Environment.NewLine & String.Join(Environment.NewLine, failures)
+        )
+
+        Assert.IsTrue(
+            walked.Any(Function(line) line.StartsWith("Deadlines page: ", StringComparison.Ordinal) AndAlso line.EndsWith(" stops", StringComparison.Ordinal)) AndAlso
+            walked.Contains("Import & Export page: 14 commands"),
+            "Both pages were walked: " & String.Join(" | ", walked)
+        )
+
+        Assert.AreEqual(
+            0,
+            reports.Count,
+            Environment.NewLine & String.Join(Environment.NewLine, reports)
+        )
+
+    End Sub
+
+
     ' Route View opens on a stop a keyboard user can see (#192). Every
     ' stop Tab reaches is a waypoint's link, a button, or the route map,
     ' which a screen reader reads and which draws a focus ring; the map's
@@ -296,12 +406,19 @@ Public Class KeyboardAccessTests
                         "The route map is a stop, so a screen reader reads it."
                     )
 
-                    ' Focus cues show, as once a key has been pressed in a
-                    ' window Windows activated; in one shown while another
-                    ' program has the foreground they can stay hidden.
+                    ' Focus cues show, as once a key has been pressed. The
+                    ' map is told directly, as the drawn lists' tests tell
+                    ' theirs: asked of a window Windows never activated,
+                    ' because another program had the foreground, the change
+                    ' left the map's cues hidden.
                     view.ActiveControl = map
-                    SendMessage(view.Handle, WM_CHANGEUISTATE, New IntPtr(UIS_CLEAR Or (UISF_HIDEFOCUS << 16)), IntPtr.Zero)
+                    SendMessage(map.Handle, WM_UPDATEUISTATE, New IntPtr(UIS_CLEAR Or (UISF_HIDEFOCUS << 16)), IntPtr.Zero)
                     Application.DoEvents()
+
+                    Assert.IsTrue(
+                        map.Focused AndAlso CBool(GetType(Control).GetProperty("ShowFocusCues", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(map)),
+                        "The route map has the focus and shows focus cues."
+                    )
 
                     Using focused As New Bitmap(map.Width, map.Height)
 

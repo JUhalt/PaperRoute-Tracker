@@ -1030,9 +1030,9 @@ Public Class ManuscriptPageTests
                     Assert.AreEqual("Deadlines", board.PageName)
                     Assert.IsTrue(rail.Checked)
                     CollectionAssert.AreEqual({"OVERDUE  1", "TODAY  1", "NEXT 7 DAYS  1"},
-                        Descendants(board).OfType(Of Label)().Where(Function(label) label.Text.StartsWith("OVERDUE") OrElse label.Text.StartsWith("TODAY") OrElse
-                                                                              label.Text.StartsWith("NEXT") OrElse label.Text.StartsWith("LATER") OrElse
-                                                                              label.Text.StartsWith("NO DATE")).Select(Function(label) label.Text).ToList())
+                        DeadlineTexts(board).Where(Function(text) text.StartsWith("OVERDUE") OrElse text.StartsWith("TODAY") OrElse
+                                                                  text.StartsWith("NEXT") OrElse text.StartsWith("LATER") OrElse
+                                                                  text.StartsWith("NO DATE")).ToList())
                     CollectionAssert.AreEqual({"Revision due", "Send draft to coauthors", "Follow up with Assessment"},
                         DeadlineRows(board).Select(Function(row) row.Item.Title).ToList(), "Done stays folded away.")
                     Dim revisionRow As DeadlineRow = DeadlineRows(board).First()
@@ -1040,9 +1040,11 @@ Public Class ManuscriptPageTests
                     StringAssert.Contains(revisionRow.AccessibleName, "0 of 2 comments", "A revision shows its reviewer-comment progress.")
                     CollectionAssert.AreEqual({"Open", "Postpone..."}, revisionRow.ActionTexts.ToList())
 
-                    Descendants(board).OfType(Of LinkLabel)().Single(Function(link) link.Text.StartsWith("Done in the last")).Links(0).Enabled = True
+                    StringAssert.StartsWith(DoneLink(board).Description, "Done in the last")
+                    Assert.AreEqual("Show done items", DoneLink(board).Name)
                     ClickDoneLink(board)
                     Assert.AreEqual(4, DeadlineRows(board).Count, "Show lists recently completed reminders.")
+                    Assert.AreEqual("Hide done items", DoneLink(board).Name)
                     ClickDoneLink(board)
 
                     ClickControl(Descendants(board).OfType(Of FilterChip)().Single(Function(chip) chip.Text.StartsWith("Follow-ups")))
@@ -1105,7 +1107,7 @@ Public Class ManuscriptPageTests
                     Descendants(board).OfType(Of LinkLabel)().Single(Function(link) link.Text = "View in Deadlines →").Links(0).Enabled = True
                     board.PressCommandKey(Keys.Control Or Keys.D4)
                     Assert.AreEqual(0, DeadlineRows(board).Count)
-                    Assert.IsTrue(Descendants(board).OfType(Of Label)().Any(Function(label) label.Text.StartsWith("Nothing needs action right now.")))
+                    Assert.IsTrue(DeadlineTexts(board).Any(Function(text) text.StartsWith("Nothing needs action right now.")))
                     Assert.AreEqual(0, DirectCast(board.RailPage("Deadlines"), RailButton).Badge)
                     board.Close()
                 End Using
@@ -2014,14 +2016,29 @@ Public Class ManuscriptPageTests
         Return card.ContextMenuStrip.Items.Cast(Of ToolStripItem)().SingleOrDefault(Function(item) item.Text = text)
     End Function
 
+    ' The Deadlines page draws its rows, headings and Done line in one list
+    ' (#133); what it shows is read as a screen reader reads it.
     Private Shared Function DeadlineRows(board As PageBoard) As List(Of DeadlineRow)
-        Return Descendants(board).OfType(Of DeadlineRow)().ToList()
+        Return Descendants(board).OfType(Of DeadlineList)().Single().Rows.ToList()
+    End Function
+
+    Private Shared Function DeadlineChildren(board As PageBoard) As List(Of AccessibleObject)
+        Dim list As AccessibleObject = Descendants(board).OfType(Of DeadlineList)().Single().AccessibilityObject
+        Return Enumerable.Range(0, list.GetChildCount()).Select(Function(index) list.GetChild(index)).ToList()
+    End Function
+
+    ' The headings and the sentence of an empty list.
+    Private Shared Function DeadlineTexts(board As PageBoard) As List(Of String)
+        Return DeadlineChildren(board).Where(Function(child) child.Role = AccessibleRole.StaticText).Select(Function(child) child.Name).ToList()
+    End Function
+
+    ' The Done line's one link.
+    Private Shared Function DoneLink(board As PageBoard) As AccessibleObject
+        Return DeadlineChildren(board).Single(Function(child) child.Role = AccessibleRole.Link)
     End Function
 
     Private Shared Sub ClickDoneLink(board As PageBoard)
-        Dim link As LinkLabel = Descendants(board).OfType(Of LinkLabel)().Single(Function(candidate) candidate.Text.StartsWith("Done in the last"))
-        GetType(LinkLabel).GetMethod("OnLinkClicked", BindingFlags.Instance Or BindingFlags.NonPublic).
-            Invoke(link, New Object() {New LinkLabelLinkClickedEventArgs(link.Links(0))})
+        DoneLink(board).DoDefaultAction()
         Application.DoEvents()
     End Sub
 

@@ -124,9 +124,9 @@ Friend NotInheritable Class ViewCatalog
         New NamedView("Library page", Function(root) Page(Form1.WorkspacePage.Library)),
         New NamedView("AuthorLibraryForm as the Library page", Function(root) LibraryAuthors()),
         New NamedView("Journals page, JournalLibraryForm hosted", Function(root) Hosting(Of JournalLibraryForm)(Page(Form1.WorkspacePage.Journals))),
-        New NamedView("Deadlines page", Function(root) Page(Form1.WorkspacePage.Deadlines)),
+        New NamedView("Deadlines page", Function(root) DeadlinesPage()),
         New NamedView("Insights page", Function(root) Page(Form1.WorkspacePage.Insights)),
-        New NamedView("Import & Export page", Function(root) Page(Form1.WorkspacePage.ImportExport)),
+        New NamedView("Import & Export page", Function(root) ImportExportPage()),
         New NamedView("EditManuscriptForm as the manuscript page", Function(root) Hosting(Of EditManuscriptForm)(ManuscriptPage())),
         New NamedView("SubmissionDetailsForm inside the manuscript page", Function(root) Hosting(Of SubmissionDetailsForm)(ManuscriptPage())),
         New NamedView("ReviewerResponseMatrixForm inside the submission's details", Function(root) Hosting(Of ReviewerResponseMatrixForm)(ManuscriptPage()))
@@ -812,14 +812,56 @@ Friend NotInheritable Class ViewCatalog
     End Function
 
 
-    Private Shared Function Page(target As Form1.WorkspacePage) As CatalogBoard
-        Dim board As CatalogBoard = BoardOn(CreateRepresentativeLibrary())
+    Private Shared Function Page(target As Form1.WorkspacePage, Optional library As List(Of Manuscript) = Nothing) As CatalogBoard
+        Dim board As CatalogBoard = BoardOn(If(library, CreateRepresentativeLibrary()))
         board.NavigateTo(target)
         Application.DoEvents()
         ' The Insights figures are worked out off the UI thread (#132): the
         ' page is listed with them shown, not while it says Calculating.
         TestSupport.WaitForInsights(board, TimeSpan.FromSeconds(30))
         Return board
+    End Function
+
+
+    ' The Deadlines page with something in each part of its drawn list
+    ' (#133). The representative library asks for no action, so on it the
+    ' list draws only its sentence; here a reminder is overdue and another
+    ' due today, a follow-up is due in three days, and a reminder was done
+    ' yesterday, so a sweep reads the list's headings, its rows with their
+    ' drawn buttons and "⋯", and the Done line. The factory fails when the
+    ' list does not draw each.
+    Private Shared Function DeadlinesPage() As Form
+
+        Dim today As DateTime = DateTime.Today
+        Dim library As List(Of Manuscript) = CreateRepresentativeLibrary()
+        Dim active As Manuscript = library(0)
+        active.Reminders.Add(New ManuscriptReminder With {.Title = "Send the response letter to the coauthors", .DueDate = today.AddDays(-2)})
+        active.Reminders.Add(New ManuscriptReminder With {.Title = "Check the journal's data policy", .DueDate = today})
+        active.Reminders.Add(New ManuscriptReminder With {.Title = "Book the lab for the replication", .DueDate = today.AddDays(-6), .IsCompleted = True, .CompletedDate = today.AddDays(-1)})
+        active.Submissions(0).FollowUpDate = today.AddDays(3)
+
+        Dim board As CatalogBoard = Page(Form1.WorkspacePage.Deadlines, library)
+        Dim list As DeadlineList = Descendants(board).OfType(Of DeadlineList)().Single()
+        Dim drawn As List(Of DeadlineEntryKind) = list.Entries.Select(Function(entry) entry.Kind).ToList()
+        Return Reached(board,
+                       drawn.Contains(DeadlineEntryKind.Heading) AndAlso drawn.Contains(DeadlineEntryKind.DoneToggle) AndAlso
+                           list.Rows.Any(Function(row) row.Buttons.Count > 0 AndAlso row.HasMore),
+                       "does not draw headings, rows with their buttons and ""⋯"", and the Done line")
+
+    End Function
+
+
+    ' The Import & Export page, once its list holds its commands and draws
+    ' its headings and descriptions around them (#133).
+    Private Shared Function ImportExportPage() As Form
+
+        Dim board As CatalogBoard = Page(Form1.WorkspacePage.ImportExport)
+        Dim list As CommandList = Descendants(board).OfType(Of CommandList)().Single()
+        Dim commands As Integer = list.Controls.OfType(Of ActionButton)().Count()
+        Return Reached(board,
+                       commands > 0 AndAlso list.Descriptions.Count = commands AndAlso list.AccessibilityObject.GetChildCount() > commands * 2,
+                       "does not draw its headings and descriptions around its commands")
+
     End Function
 
 

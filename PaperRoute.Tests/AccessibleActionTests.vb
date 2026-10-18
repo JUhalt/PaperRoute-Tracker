@@ -82,6 +82,80 @@ Public Class AccessibleActionTests
     End Sub
 
 
+    ' What the main window's pages draw rather than host as controls (#133)
+    ' can be pressed by a screen reader too: over the catalog's pages and
+    ' hosted views, every child a drawn list shows as a push button has
+    ' the default action Press, and every link Click. The Deadlines page
+    ' draws buttons, a "⋯" and the Done link, and Import & Export holds its
+    ' fourteen buttons, so the sweep cannot pass by finding none; that a
+    ' press does what a click does is DeadlineListTests' to show.
+    <TestMethod>
+    Public Sub EveryDrawnButtonAndLinkHasItsDefaultAction()
+
+        Dim found As New List(Of String)()
+        Dim wrong As New List(Of String)()
+
+        Dim failures As List(Of String) =
+            ViewCatalog.ShowEach(
+                ViewCatalog.Hosted.Select(Function(view) (view.Name, view.Build)),
+                Sub(name, shown)
+
+                    For Each drawn As Control In ViewCatalog.Descendants(shown).Where(Function(control) control.Visible AndAlso (TypeOf control Is DeadlineList OrElse TypeOf control Is CommandList))
+
+                        Dim root As AccessibleObject =
+                            drawn.AccessibilityObject
+
+                        For index As Integer = 0 To root.GetChildCount() - 1
+
+                            Dim child As AccessibleObject =
+                                root.GetChild(index)
+
+                            Dim expected As String =
+                                If(child.Role = AccessibleRole.PushButton, "Press", If(child.Role = AccessibleRole.Link, "Click", Nothing))
+
+                            If expected Is Nothing Then
+                                Continue For
+                            End If
+
+                            found.Add(name & ": " & child.Role.ToString())
+
+                            If Not String.Equals(child.DefaultAction, expected, StringComparison.Ordinal) Then
+                                wrong.Add(name & ": " & drawn.GetType().Name & "'s " & child.Role.ToString() & " """ & child.Name & """ has the default action """ & child.DefaultAction & """, not """ & expected & """.")
+                            End If
+
+                        Next
+
+                    Next
+
+                End Sub
+            )
+
+        Assert.AreEqual(
+            0,
+            failures.Count,
+            Environment.NewLine & String.Join(Environment.NewLine, failures)
+        )
+
+        Assert.IsTrue(
+            found.Where(Function(item) item = "Deadlines page: PushButton").Count() >= 4 AndAlso found.Contains("Deadlines page: Link"),
+            "The Deadlines page's drawn buttons and Done link are among: " & String.Join(", ", found.Distinct())
+        )
+
+        Assert.AreEqual(
+            14,
+            found.Where(Function(item) item = "Import & Export page: PushButton").Count(),
+            "Import & Export's commands."
+        )
+
+        Assert.AreEqual(
+            0,
+            wrong.Count,
+            Environment.NewLine & String.Join(Environment.NewLine, wrong)
+        )
+
+    End Sub
+
+
     <TestMethod>
     Public Sub FilterChipDefaultActionRaisesClick()
 

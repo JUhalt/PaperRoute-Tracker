@@ -10,17 +10,23 @@ Imports ManuscriptPipeline.Forms
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
-' The Deadlines page (#28): what needs action, and when. Rows are rebuilt
-' from the library each time; every action changes the record that owns the
-' row and saves, like any other edit.
+' The Deadlines page (#28): what needs action, and when. The page is built
+' once and kept (#133); its rows are rebuilt from the library on each visit
+' and each change, and drawn by one list. Every action changes the record
+' that owns the row and saves, like any other edit.
 Partial Public Class Form1
 
-    Private deadlinesList As TableLayoutPanel = Nothing
+    Private deadlinesPage As Control = Nothing
+    Private deadlinesList As DeadlineList = Nothing
     Private deadlinesFilter As TextBox = Nothing
+    Private deadlinesSubtitle As Label = Nothing
+    Private deadlineGlance As DeadlineGlance = Nothing
+    Private deadlinesPageDate As DateTime = DateTime.MinValue
+    Private deadlinesClearingFilter As Boolean = False
+    Private deadlinesPublicationsShown As Boolean? = Nothing
     Private deadlinesKind As DeadlineKind? = Nothing
     Private deadlinesShowDone As Boolean = False
     Private ReadOnly deadlineChips As New Dictionary(Of String, FilterChip)()
-    Private ReadOnly deadlineGlance As New Dictionary(Of DeadlineGroup, Label)()
 
     ' Tests answer the date and confirmation prompts.
     Friend deadlineDatePrompt As Func(Of DeadlineItem, DateTime?) = Nothing
@@ -29,6 +35,39 @@ Partial Public Class Form1
     Private Shared ReadOnly OpenGroups As DeadlineGroup() = {
         DeadlineGroup.Overdue, DeadlineGroup.Today, DeadlineGroup.Next7Days, DeadlineGroup.Later, DeadlineGroup.NoDate
     }
+
+
+    ' The page for a visit: built on the first, and on each later one shown
+    ' as a new page was, with no filter text and the list at its top. The
+    ' kind chosen with a chip and whether Done is shown carry over, as they
+    ' did when the page was built anew.
+    Private Function OpenDeadlinesPage() As Control
+
+        If deadlinesPage Is Nothing OrElse deadlinesPage.IsDisposed Then
+            deadlinesPage = BuildDeadlinesPage()
+            Return deadlinesPage
+        End If
+
+        If deadlinesFilter.TextLength > 0 Then
+            deadlinesClearingFilter = True
+            Try
+                deadlinesFilter.Text = String.Empty
+            Finally
+                deadlinesClearingFilter = False
+            End Try
+        End If
+
+        deadlinesList.ResetView()
+        FillDeadlines()
+        Return deadlinesPage
+
+    End Function
+
+
+    Private Shared Function DeadlinesDescription(today As DateTime) As String
+        Return today.ToString("dddd, MMMM d, yyyy", CultureInfo.CurrentCulture) &
+               ". Revision deadlines, journal follow-ups, your reminders, unfinished preparation, and possible publications."
+    End Function
 
 
     Private Function BuildDeadlinesPage() As Control
@@ -43,7 +82,10 @@ Partial Public Class Form1
             .AccessibleName = "Filter deadlines"
         }
         deadlinesFilter.Width = Math.Max(UiTheme.Px(240, dpi), TextRenderer.MeasureText(deadlinesFilter.PlaceholderText, Me.Font).Width + UiTheme.Px(16, dpi))
-        AddHandler deadlinesFilter.TextChanged, Sub(sender, e) FillDeadlines()
+        AddHandler deadlinesFilter.TextChanged,
+            Sub(sender, e)
+                If Not deadlinesClearingFilter Then FillDeadlines()
+            End Sub
 
         Dim btnExport As New ActionButton With {
             .Text = "Export Calendar...",
@@ -64,108 +106,48 @@ Partial Public Class Form1
 
         Dim frame As TableLayoutPanel = CreatePageFrame(
             "Deadlines",
-            DateTime.Today.ToString("dddd, MMMM d, yyyy", CultureInfo.CurrentCulture) &
-                ". Revision deadlines, journal follow-ups, your reminders, unfinished preparation, and possible publications.",
+            DeadlinesDescription(DateTime.Today),
             CreateSearchField(deadlinesFilter), btnExport, btnAdd)
+        frame.SuspendLayout()
 
-        Dim body As New TableLayoutPanel With {
-            .Dock = DockStyle.Fill,
-            .ColumnCount = 1,
-            .RowCount = 3,
-            .Margin = New Padding(0),
-            .BackColor = UiTheme.BoardBackground()
-        }
-        body.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100.0F))
-        body.RowStyles.Add(New RowStyle(SizeType.AutoSize))
-        body.RowStyles.Add(New RowStyle(SizeType.AutoSize))
-        body.RowStyles.Add(New RowStyle(SizeType.Percent, 100.0F))
+        ' The subtitle carries the date, so a page kept past midnight puts
+        ' the new one there when it is next filled.
+        deadlinesSubtitle = DirectCast(frame.GetControlFromPosition(0, 1), Label)
+        deadlinesPageDate = DateTime.Today
 
-        body.Controls.Add(BuildDeadlineGlance(), 0, 0)
-        body.Controls.Add(BuildDeadlineChips(), 0, 1)
+        ' The counts, the chips and the list take the frame's last three
+        ' rows, so the page needs no table of its own for them.
+        frame.RowStyles(2).SizeType = SizeType.AutoSize
+        frame.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+        frame.RowStyles.Add(New RowStyle(SizeType.Percent, 100.0F))
+        frame.RowCount = 5
 
-        Dim scroller As New Panel With {
-            .Dock = DockStyle.Fill,
-            .AutoScroll = True,
-            .Margin = New Padding(0),
-            .BackColor = UiTheme.BoardBackground(),
-            .AccessibleName = "Deadlines",
-            .AccessibleRole = AccessibleRole.List
-        }
-        deadlinesList = New TableLayoutPanel With {
-            .Dock = DockStyle.Top,
-            .AutoSize = True,
-            .AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            .ColumnCount = 1,
-            .Margin = New Padding(0),
-            .Padding = New Padding(0, 0, UiTheme.Px(4, dpi), UiTheme.Px(12, dpi)),
-            .BackColor = UiTheme.BoardBackground()
-        }
-        deadlinesList.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100.0F))
-        scroller.Controls.Add(deadlinesList)
-        body.Controls.Add(scroller, 0, 2)
-
-        frame.Controls.Add(body, 0, 2)
-        FillDeadlines()
-        Return frame
-
-    End Function
-
-
-    ' Four counts across the top; they ignore the filters.
-    Private Function BuildDeadlineGlance() As Control
-
-        Dim dpi As Integer = DeviceDpi
-        Dim strip As New FlowLayoutPanel With {
-            .AutoSize = True,
-            .AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            .WrapContents = True,
+        ' Four counts across the top; they ignore the filters.
+        deadlineGlance = New DeadlineGlance With {
             .Dock = DockStyle.Top,
             .Margin = New Padding(0, 0, 0, UiTheme.Px(10, dpi)),
-            .BackColor = UiTheme.BoardBackground(),
             .AccessibleName = "At a glance"
         }
+        frame.Controls.Add(deadlineGlance, 0, 2)
+        frame.Controls.Add(BuildDeadlineChips(), 0, 3)
 
-        deadlineGlance.Clear()
-
-        For Each tile In {
-            (DeadlineGroup.Overdue, "overdue", UiTheme.DangerColor()),
-            (DeadlineGroup.Today, "due today", UiTheme.WarningColor()),
-            (DeadlineGroup.Next7Days, "in the next 7 days", UiTheme.PrimaryText()),
-            (DeadlineGroup.NoDate, "without a date", UiTheme.SecondaryText())
+        deadlinesList = New DeadlineList With {
+            .Dock = DockStyle.Fill,
+            .Margin = New Padding(0),
+            .HeadingFont = attentionTitleFont,
+            .AccessibleName = "Deadlines"
         }
-            Dim panel As New RoundedPanel With {
-                .BackColor = UiTheme.CardBackground(),
-                .BorderColor = UiTheme.CardBorder(),
-                .BorderThickness = 1.0F,
-                .CornerRadius = UiTheme.Px(UiTheme.ControlRadius, dpi),
-                .Padding = New Padding(UiTheme.Px(12, dpi), UiTheme.Px(8, dpi), UiTheme.Px(12, dpi), UiTheme.Px(8, dpi)),
-                .Margin = New Padding(0, 0, UiTheme.Px(10, dpi), 0)
-            }
-            Dim count As New Label With {
-                .AutoSize = True,
-                .Text = "0",
-                .Font = New Font(Me.Font.FontFamily, Me.Font.SizeInPoints * 1.45F, FontStyle.Bold),
-                .ForeColor = tile.Item3,
-                .BackColor = UiTheme.CardBackground(),
-                .Location = New Point(panel.Padding.Left, panel.Padding.Top)
-            }
-            Dim caption As New Label With {
-                .AutoSize = True,
-                .Text = tile.Item2,
-                .ForeColor = UiTheme.SecondaryText(),
-                .BackColor = UiTheme.CardBackground()
-            }
-            panel.Controls.Add(count)
-            panel.Controls.Add(caption)
-            caption.Location = New Point(panel.Padding.Left, count.Bottom)
-            panel.Size = New Size(
-                Math.Max(UiTheme.Px(132, dpi), TextRenderer.MeasureText(tile.Item2, Me.Font).Width + panel.Padding.Horizontal),
-                caption.Bottom + panel.Padding.Bottom)
-            deadlineGlance(tile.Item1) = count
-            strip.Controls.Add(panel)
-        Next
+        AddHandler deadlinesList.DoneToggleClicked,
+            Sub(sender, e)
+                deadlinesShowDone = Not deadlinesShowDone
+                FillDeadlines()
+            End Sub
+        frame.Controls.Add(deadlinesList, 0, 4)
 
-        Return strip
+        deadlinesPublicationsShown = Nothing
+        FillDeadlines()
+        frame.ResumeLayout(False)
+        Return frame
 
     End Function
 
@@ -212,28 +194,50 @@ Partial Public Class Form1
     End Function
 
 
+    ' Refills the page from the library while it is the one shown; the list
+    ' keeps the keyboard on the same row (#133).
     Private Sub FillDeadlines()
 
-        If deadlinesList Is Nothing OrElse deadlinesList.IsDisposed Then
+        If deadlinesList Is Nothing OrElse deadlinesList.IsDisposed OrElse currentPage <> WorkspacePage.Deadlines Then
             Return
         End If
 
         Dim today As DateTime = DateTime.Today
+        If today <> deadlinesPageDate Then
+            deadlinesPageDate = today
+            If deadlinesSubtitle IsNot Nothing Then deadlinesSubtitle.Text = DeadlinesDescription(today)
+        End If
+
         Dim all As List(Of DeadlineItem) = DeadlineService.Build(manuscripts, today)
         Dim open As List(Of DeadlineItem) = all.Where(Function(item) item.Group <> DeadlineGroup.Done).ToList()
 
-        For Each tile In deadlineGlance
-            tile.Value.Text = open.Where(Function(item) item.Group = tile.Key).Count().ToString(CultureInfo.CurrentCulture)
-        Next
+        deadlineGlance.SetCounts(
+            open.Where(Function(item) item.Group = DeadlineGroup.Overdue).Count(),
+            open.Where(Function(item) item.Group = DeadlineGroup.Today).Count(),
+            open.Where(Function(item) item.Group = DeadlineGroup.Next7Days).Count(),
+            open.Where(Function(item) item.Group = DeadlineGroup.NoDate).Count())
 
+        ' Each chip changes only what differs, so an unchanged row of chips
+        ' is not laid out again.
+        Dim chipsRow As Control = deadlineChips.Values.First().Parent
+        chipsRow.SuspendLayout()
         For Each chip In deadlineChips
             Dim kind As DeadlineKind? = ChipKind(chip.Key)
             Dim count As Integer = open.Where(Function(item) Not kind.HasValue OrElse item.Kind = kind.Value).Count()
-            chip.Value.Text = chip.Key & "  " & count.ToString(CultureInfo.CurrentCulture)
-            chip.Value.Tone = If(Nullable.Equals(deadlinesKind, kind), FilterChipTone.Active, FilterChipTone.Neutral)
+            Dim text As String = chip.Key & "  " & count.ToString(CultureInfo.CurrentCulture)
+            If chip.Value.Text <> text Then chip.Value.Text = text
+            Dim tone As FilterChipTone = If(Nullable.Equals(deadlinesKind, kind), FilterChipTone.Active, FilterChipTone.Neutral)
+            If chip.Value.Tone <> tone Then chip.Value.Tone = tone
             ' Possible publications exist only after a publication check.
-            If kind = DeadlineKind.Publication Then chip.Value.Visible = count > 0 OrElse Nullable.Equals(deadlinesKind, kind)
+            If kind = DeadlineKind.Publication Then
+                Dim visible As Boolean = count > 0 OrElse Nullable.Equals(deadlinesKind, kind)
+                If Not Nullable.Equals(deadlinesPublicationsShown, visible) Then
+                    chip.Value.Visible = visible
+                    deadlinesPublicationsShown = visible
+                End If
+            End If
         Next
+        chipsRow.ResumeLayout(True)
 
         Dim filter As String = If(deadlinesFilter?.Text, String.Empty).Trim()
         Dim shown As List(Of DeadlineItem) = all.Where(
@@ -242,55 +246,41 @@ Partial Public Class Form1
                             {item.ManuscriptTitle, item.JournalName, item.Title}.Any(
                                 Function(value) If(value, String.Empty).IndexOf(filter, StringComparison.CurrentCultureIgnoreCase) >= 0))).ToList()
 
-        ' Keep the keyboard where it was across a rebuild.
-        Dim focusedIndex As Integer =
-            deadlinesList.Controls.OfType(Of DeadlineRow)().ToList().FindIndex(Function(row) row.ContainsFocus)
-
-        deadlinesList.SuspendLayout()
-        For Each child As Control In deadlinesList.Controls.Cast(Of Control)().ToList()
-            deadlinesList.Controls.Remove(child)
-            child.Dispose()
-        Next
-        deadlinesList.RowStyles.Clear()
-        deadlinesList.RowCount = 0
+        Dim entries As New List(Of DeadlineEntry)()
 
         For Each group As DeadlineGroup In OpenGroups
             Dim items As List(Of DeadlineItem) = shown.Where(Function(item) item.Group = group).ToList()
             If items.Count = 0 Then Continue For
-            AddDeadlineHeading(GroupHeading(group), items.Count, group)
+            entries.Add(DeadlineEntry.Heading(GroupHeading(group) & "  " & items.Count.ToString(CultureInfo.CurrentCulture), group))
             For Each item As DeadlineItem In items
-                AddDeadlineRow(CreateDeadlineRow(item, today))
+                entries.Add(DeadlineEntry.ForRow(CreateDeadlineRow(item, today)))
             Next
         Next
 
         If Not shown.Any(Function(item) item.Group <> DeadlineGroup.Done) Then
-            AddDeadlineRow(New Label With {
-                .Text = If(open.Count = 0,
-                           "Nothing needs action right now. Revision deadlines, journal follow-ups, your reminders, and unfinished submission preparation appear here.",
-                           "Nothing matches this filter."),
-                .AutoSize = True,
-                .UseMnemonic = False,
-                .ForeColor = UiTheme.SecondaryText(),
-                .Margin = New Padding(0, UiTheme.Px(18, DeviceDpi), 0, UiTheme.Px(18, DeviceDpi))
-            })
+            entries.Add(DeadlineEntry.Message(
+                If(open.Count = 0,
+                   "Nothing needs action right now. Revision deadlines, journal follow-ups, your reminders, and unfinished submission preparation appear here.",
+                   "Nothing matches this filter.")))
         End If
 
+        ' Done stays collapsed behind Show.
         Dim done As List(Of DeadlineItem) = shown.Where(Function(item) item.Group = DeadlineGroup.Done).ToList()
         If done.Count > 0 Then
-            AddDoneHeading(done.Count)
+            Dim link As String = If(deadlinesShowDone, "Hide", "Show")
+            entries.Add(DeadlineEntry.DoneToggle(
+                "Done in the last " & DeadlineService.DoneDays.ToString(CultureInfo.CurrentCulture) & " days: " &
+                    done.Count.ToString(CultureInfo.CurrentCulture) & "  ·  " & link,
+                link,
+                If(deadlinesShowDone, "Hide done items", "Show done items")))
             If deadlinesShowDone Then
                 For Each item As DeadlineItem In done
-                    AddDeadlineRow(CreateDeadlineRow(item, today))
+                    entries.Add(DeadlineEntry.ForRow(CreateDeadlineRow(item, today)))
                 Next
             End If
         End If
 
-        deadlinesList.ResumeLayout(True)
-
-        Dim rows As List(Of DeadlineRow) = deadlinesList.Controls.OfType(Of DeadlineRow)().ToList()
-        If focusedIndex >= 0 AndAlso rows.Count > 0 Then
-            rows(Math.Min(focusedIndex, rows.Count - 1)).Focus()
-        End If
+        deadlinesList.SetEntries(entries)
 
     End Sub
 
@@ -316,56 +306,6 @@ Partial Public Class Form1
             Case Else : Return "NO DATE"
         End Select
     End Function
-
-
-    Private Sub AddDeadlineRow(control As Control)
-        control.Anchor = AnchorStyles.Left Or AnchorStyles.Right
-        If TypeOf control Is DeadlineRow Then
-            control.Margin = New Padding(0, 0, 0, UiTheme.Px(6, DeviceDpi))
-            control.Height = control.GetPreferredSize(Size.Empty).Height
-        End If
-        deadlinesList.RowStyles.Add(New RowStyle(SizeType.AutoSize))
-        deadlinesList.Controls.Add(control, 0, deadlinesList.RowCount)
-        deadlinesList.RowCount += 1
-    End Sub
-
-
-    Private Sub AddDeadlineHeading(text As String, count As Integer, group As DeadlineGroup)
-        AddDeadlineRow(New Label With {
-            .Text = text & "  " & count.ToString(CultureInfo.CurrentCulture),
-            .AutoSize = True,
-            .UseMnemonic = False,
-            .Font = attentionTitleFont,
-            .ForeColor = If(group = DeadlineGroup.Overdue, UiTheme.DangerColor(),
-                            If(group = DeadlineGroup.Today, UiTheme.WarningColor(), UiTheme.MutedText())),
-            .Margin = New Padding(0, UiTheme.Px(10, DeviceDpi), 0, UiTheme.Px(6, DeviceDpi)),
-            .AccessibleRole = AccessibleRole.StaticText
-        })
-    End Sub
-
-
-    ' Done stays collapsed behind Show.
-    Private Sub AddDoneHeading(count As Integer)
-        Dim link As New LinkLabel With {
-            .Text = "Done in the last " & DeadlineService.DoneDays.ToString(CultureInfo.CurrentCulture) & " days: " &
-                    count.ToString(CultureInfo.CurrentCulture) & "  ·  " & If(deadlinesShowDone, "Hide", "Show"),
-            .AutoSize = True,
-            .UseMnemonic = False,
-            .LinkColor = UiTheme.AccentColor(),
-            .ActiveLinkColor = UiTheme.AccentColor(),
-            .VisitedLinkColor = UiTheme.AccentColor(),
-            .ForeColor = UiTheme.SecondaryText(),
-            .Margin = New Padding(0, UiTheme.Px(12, DeviceDpi), 0, UiTheme.Px(6, DeviceDpi)),
-            .AccessibleName = If(deadlinesShowDone, "Hide done items", "Show done items")
-        }
-        link.LinkArea = New LinkArea(link.Text.Length - 4, 4)
-        AddHandler link.LinkClicked,
-            Sub(sender, e)
-                deadlinesShowDone = Not deadlinesShowDone
-                FillDeadlines()
-            End Sub
-        AddDeadlineRow(link)
-    End Sub
 
 
     ' Each kind has its own actions; the first is also Enter's.
