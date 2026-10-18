@@ -533,14 +533,16 @@ Friend NotInheritable Class ViewCatalog
 
 
     ' The Board as startup leaves it once it has filled in while the
-    ' window idled (#133), on a library large enough to fill in slices.
+    ' window idled (#133), on a library large enough to fill in slices:
+    ' forty Pipeline cards, past the first screen's dozen or so.
     Private Shared Function FilledBoard() As Form
         Dim library As New List(Of Manuscript)()
-        For copy As Integer = 1 To 12
+        For copy As Integer = 1 To 40
             library.AddRange(CreateRepresentativeLibrary())
         Next
         Dim board As New CatalogBoard()
-        board.PrepareFilled(library)
+        board.Prepare(library, fillInSlices:=True)
+        board.WaitForIdleWork()
         Return board
     End Function
 
@@ -581,14 +583,15 @@ Friend NotInheritable Class ViewCatalog
 
 
     ' The kept page (#133) after another manuscript was opened on it and
-    ' left: the representative study under review, as a second visit
-    ' shows it.
+    ' left, and let go of while the window idled: the representative study
+    ' under review, as a second visit shows it.
     Private Shared Function ManuscriptPageAgain() As CatalogBoard
         Dim library As List(Of Manuscript) = CreateRepresentativeLibrary()
         Dim board As CatalogBoard = BoardOn(library)
+        board.CompleteStartup()
         board.Open(library(1))
         board.NavigateTo(Form1.WorkspacePage.Board)
-        Application.DoEvents()
+        board.WaitForIdleWork()
         board.Open(library(0))
         Return board
     End Function
@@ -628,10 +631,20 @@ Friend NotInheritable Class ViewCatalog
             End Get
         End Property
 
-        Public Sub Prepare(library As List(Of Manuscript))
+        ' With fillInSlices, startup's order (#133): startup is complete and
+        ' the Board shows its first screen of cards, the rest following
+        ' while the window idles.
+        Public Sub Prepare(library As List(Of Manuscript), Optional fillInSlices As Boolean = False)
             CallPrivate("BuildInterface")
             GetType(Form1).GetField("manuscripts", BindingFlags.Instance Or BindingFlags.NonPublic).SetValue(Me, library)
+            If fillInSlices Then
+                CompleteStartup()
+                CallPrivate("DeferBoardFill")
+            End If
             CallPrivate("RenderManuscripts")
+            If fillInSlices AndAlso Not IsBoardFillPending Then
+                Throw New InvalidOperationException("The Board showed every card at once: the library is too small to fill in slices.")
+            End If
             StartPosition = FormStartPosition.Manual
             Location = New Point(-20000, -20000)
             ShowInTaskbar = False
@@ -639,25 +652,13 @@ Friend NotInheritable Class ViewCatalog
             Application.DoEvents()
         End Sub
 
-        ' Startup's order (#133): the Board fills in after its first screen,
-        ' and the window's idle work is then let run to its end.
-        Public Sub PrepareFilled(library As List(Of Manuscript))
-            CallPrivate("BuildInterface")
-            GetType(Form1).GetField("manuscripts", BindingFlags.Instance Or BindingFlags.NonPublic).SetValue(Me, library)
+        ' Startup is complete, so the window's idle work runs.
+        Public Sub CompleteStartup()
             GetType(Form1).GetField("startupComplete", BindingFlags.Instance Or BindingFlags.NonPublic).SetValue(Me, True)
-            CallPrivate("DeferBoardFill")
-            CallPrivate("RenderManuscripts")
-            StartPosition = FormStartPosition.Manual
-            Location = New Point(-20000, -20000)
-            ShowInTaskbar = False
-            Show()
-            Application.DoEvents()
-            Dim watch As Diagnostics.Stopwatch = Diagnostics.Stopwatch.StartNew()
-            While IsIdleWorkPending AndAlso watch.Elapsed < TimeSpan.FromSeconds(60)
-                Application.DoEvents()
-                Thread.Sleep(1)
-            End While
-            If IsIdleWorkPending Then Throw New InvalidOperationException("The Board did not fill in.")
+        End Sub
+
+        Public Sub WaitForIdleWork()
+            PumpWhile(Function() IsIdleWorkPending, "The window's idle work did not finish.")
         End Sub
 
         Public Sub Open(manuscript As Manuscript)
