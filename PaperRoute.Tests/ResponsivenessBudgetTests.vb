@@ -174,17 +174,20 @@ Public Class ResponsivenessBudgetTests
             ' layout pass, its versions and the selected submission's details
             ' following once it has painted. Leaving hides it; its editor lets
             ' go of the record while the window idles (#133). Leaving is
-            ' enforced. Both opens stay reported, over the 100 ms line on this
-            ' host: the first builds the page, and any open replaces the
-            ' windows of the record's shortlist rows, tags and lists and lays
-            ' the page out; so do the two idle steps after them.
+            ' enforced, and so is letting go of the record, which follows it
+            ' about 15 ms after the Board shows and holds the window as one
+            ' step: the leave row alone is not what the researcher waits.
+            ' Both opens stay reported, over the 100 ms line on this host: the
+            ' first builds the page, and any open replaces the windows of the
+            ' record's shortlist rows, tags and lists and lays the page out;
+            ' so does the idle step after an open.
             rows.Add(Time(library, "Board to a manuscript page (the first: the page is built)", PageSwitch, Sub() board.Open(subject)))
             rows.Add(Time(library, "Manuscript page: versions and details after its first paint", UiThread, Sub() Application.DoEvents()))
             rows.Add(TimeMedian(library, "One dirty-timer tick (median of 10)", DirtyTick, 10, Sub() board.Tick()))
             board.Field("Title").Text = title & " (edited)"
             rows.Add(Time(library, "Save from the manuscript page", Save, Sub() Assert.IsTrue(board.SaveManuscriptPage(), "The page saved."), enforced:=enforce))
             rows.Add(Time(library, "Manuscript page to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
-            rows.Add(Time(library, "Manuscript page: the record let go of while the window idles", UiThread, Sub() board.WaitForIdleWork()))
+            rows.Add(Time(library, "Manuscript page: the record let go of while the window idles", UiThread, Sub() board.WaitForIdleWork(), enforced:=enforce))
 
             Dim another As Manuscript =
                 If(library.Manuscripts.Where(Function(item) item IsNot subject AndAlso item.SubmissionPackets.Count > 0).
