@@ -217,10 +217,25 @@ Partial Public Class Form1
     Private Function FirstScreenCount(shelf As ManuscriptShelfPanel, cardHeight As Integer) As Integer
 
         Dim columns As Integer = ShelfColumns(shelf)
-        Dim height As Integer = shelf.ClientSize.Height
+        Dim height As Integer = ShelfView(shelf).Height
         Dim rows As Integer = If(height > 0, CInt(Math.Ceiling(height / CDbl(Math.Max(1, cardHeight + shelf.CardGap)))), 4)
 
         Return columns * (rows + 1)
+
+    End Function
+
+
+    ' The view a shelf fills. A shelf not shown yet keeps the size it was
+    ' made at, as WinForms lays out no hidden control, so it is measured
+    ' by the host it fills once shown (Dock = Fill): built as it is first
+    ' shown, it shows its first screen at once.
+    Private Shared Function ShelfView(shelf As ManuscriptShelfPanel) As Size
+
+        If Not shelf.Visible AndAlso shelf.Parent IsNot Nothing Then
+            Return shelf.Parent.DisplayRectangle.Size
+        End If
+
+        Return shelf.ClientSize
 
     End Function
 
@@ -230,7 +245,7 @@ Partial Public Class Form1
 
         UpdateShelfGrid(shelf)
 
-        Dim available As Integer = shelf.ClientSize.Width - shelf.Padding.Horizontal
+        Dim available As Integer = ShelfView(shelf).Width - shelf.Padding.Horizontal
 
         If available <= 0 Then
             Return 3

@@ -241,10 +241,7 @@ Public Class KeptManuscriptPageTests
 
                     For steps As Integer = 1 To 200
                         board.SelectNextControl(current, True, True, True, True)
-                        current = board.ActiveControl
-                        While TypeOf current Is ContainerControl AndAlso DirectCast(current, ContainerControl).ActiveControl IsNot Nothing
-                            current = DirectCast(current, ContainerControl).ActiveControl
-                        End While
+                        current = DeepestActiveControl(board)
                         Assert.IsFalse(page.Contains(current), "Tab reached " & current.GetType().Name & " in the hidden page.")
                     Next
 

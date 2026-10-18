@@ -100,9 +100,10 @@ Public Class BoardFillTests
     End Sub
 
 
-    ' A search typed while the shelf fills shows exactly what it finds,
-    ' clearing it brings every card back as it was, and two records with
-    ' one Id each keep a card of their own.
+    ' A search typed while the shelf fills keeps a card for exactly what it
+    ' finds, each found card showing as the fill reaches it; clearing it
+    ' brings every card back as it was, and two records with one Id each
+    ' keep a card of their own.
     <TestMethod>
     Public Sub FillKeepsCardsAndFollowsASearch()
 
@@ -119,7 +120,9 @@ Public Class BoardFillTests
                     board.SearchBoard("sleep")
                     Dim found As List(Of String) = board.Library.Where(Function(item) item.Location = ManuscriptLocation.Pipeline AndAlso item.Title.Contains("sleep", StringComparison.CurrentCultureIgnoreCase)).Select(Function(item) item.Title).ToList()
                     Assert.IsTrue(found.Count > 0)
-                    CollectionAssert.AreEquivalent(found, Cards(pipeline).Select(Function(card) card.AccessibleName).ToList(), "The search shows what it finds.")
+                    CollectionAssert.AreEquivalent(found, Cards(pipeline).Select(Function(card) card.AccessibleName).ToList(), "The search keeps a card for what it finds.")
+                    board.WaitForBoardFill()
+                    Assert.IsTrue(Cards(pipeline).All(Function(card) card.Visible), "Every card found shows once the fill reaches it.")
 
                     board.SearchBoard(String.Empty)
                     board.WaitForBoardFill()
@@ -141,7 +144,8 @@ Public Class BoardFillTests
 
 
     ' Moving to another shelf tab with the arrow keys while the Pipeline
-    ' fills builds that shelf at once, showing its first screen.
+    ' fills builds that shelf at once, showing its first screen: the cards
+    ' that fill its view and one row more, as the Pipeline at startup.
     <TestMethod>
     Public Sub ShelfShownDuringTheFillIsBuiltAtOnce()
 
@@ -155,6 +159,15 @@ Public Class BoardFillTests
                     Dim published As ManuscriptShelfPanel = board.Shelf("publishedPanel")
                     Assert.IsTrue(board.IsBoardFillPending)
 
+                    ' Counted as the switch ends, before the window idles.
+                    Dim shownAtSwitch As Integer = -1
+                    AddHandler board.ShelfTab("tabPublished").CheckedChanged,
+                        Sub(sender, e)
+                            If board.ShelfTab("tabPublished").Checked Then
+                                shownAtSwitch = Cards(published).Where(Function(card) card.Visible AndAlso card.IsHandleCreated).Count()
+                            End If
+                        End Sub
+
                     board.ActiveControl = board.ShelfTab("tabPipeline")
                     PostKey(board.ShelfTab("tabPipeline"), Keys.Right)
                     Application.DoEvents()
@@ -163,7 +176,12 @@ Public Class BoardFillTests
                     Assert.IsTrue(published.Visible)
                     Dim total As Integer = library.Manuscripts.Where(Function(item) item.Location = ManuscriptLocation.Published).Count()
                     Assert.AreEqual(total, Cards(published).Count, "The shelf is built when shown.")
-                    Assert.IsTrue(Cards(published).Any(Function(card) card.Visible AndAlso card.IsHandleCreated), "Its first screen shows at once.")
+
+                    ' Every card has its place in the grid, shown or not.
+                    Dim columns As Integer = Cards(published).Select(Function(card) card.Left).Distinct().Count()
+                    Dim rows As Integer = CInt(Math.Ceiling(published.ClientSize.Height / CDbl(Cards(published)(0).Height + published.CardGap)))
+                    Assert.AreEqual(Math.Min(total, columns * (rows + 1)), shownAtSwitch,
+                                    "Its first screen shows at once: " & columns & " columns, " & rows & " rows in view of " & published.ClientSize.ToString() & ".")
 
                     board.WaitForBoardFill()
                     Assert.IsTrue(Cards(published).All(Function(card) card.Visible))
@@ -232,7 +250,7 @@ Public Class BoardFillTests
                         If card Is Nothing Then Exit For
                         If reached.Count = 0 OrElse reached.Last() IsNot card Then reached.Add(card)
                         board.SelectNextControl(current, True, True, True, False)
-                        current = Deepest(board)
+                        current = DeepestActiveControl(board)
                     Next
 
                     CollectionAssert.AreEqual(all, reached, "Tab reaches every card once, in order.")
@@ -355,15 +373,6 @@ Public Class BoardFillTests
             control = control.Parent
         End While
         Return DirectCast(control, RoundedPanel)
-    End Function
-
-
-    Private Shared Function Deepest(container As ContainerControl) As Control
-        Dim active As Control = container.ActiveControl
-        While TypeOf active Is ContainerControl AndAlso DirectCast(active, ContainerControl).ActiveControl IsNot Nothing
-            active = DirectCast(active, ContainerControl).ActiveControl
-        End While
-        Return active
     End Function
 
 

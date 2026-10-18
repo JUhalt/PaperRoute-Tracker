@@ -561,7 +561,7 @@ Public Class KeyboardAccessTests
                                 If validating > 1 Then failure &= " Validating ran " & validating.ToString() & " times."
 
                                 report.Add(target.Name & ", " & leave.Name & ": page " & board.PageName &
-                                           ", active " & Describe(Deepest(board)) &
+                                           ", active " & Describe(DeepestActiveControl(board)) &
                                            ", Leave " & left.ToString() &
                                            If(failure.Length = 0, String.Empty, ", " & failure.Trim()))
 
@@ -594,19 +594,6 @@ Public Class KeyboardAccessTests
             Environment.NewLine & String.Join(Environment.NewLine, report))
 
     End Sub
-
-
-    Private Shared Function Deepest(container As ContainerControl) As Control
-
-        Dim active As Control = container.ActiveControl
-
-        While TypeOf active Is ContainerControl AndAlso DirectCast(active, ContainerControl).ActiveControl IsNot Nothing
-            active = DirectCast(active, ContainerControl).ActiveControl
-        End While
-
-        Return active
-
-    End Function
 
 
     Private Shared Function Describe(control As Control) As String
