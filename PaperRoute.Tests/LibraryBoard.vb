@@ -46,10 +46,8 @@ Friend NotInheritable Class LibraryBoard
     End Property
 
 
-    ' As the window's own: a recovered draft (#123) opens as the working copy.
     Protected Overrides Function CreateManuscriptEditor(manuscript As Manuscript) As EditManuscriptForm
-        Return New EditManuscriptForm(manuscript, Library, _library.AuthorRepository, pageMode:=True,
-                                      workingCopy:=DirectCast(GetField("pendingRecoveredCopy"), Manuscript))
+        Return New EditManuscriptForm(manuscript, Library, _library.AuthorRepository, pageMode:=True)
     End Function
 
 
@@ -168,16 +166,6 @@ Friend NotInheritable Class LibraryBoard
     ' Processes messages until the window's idle work is done.
     Public Sub WaitForIdleWork()
         PumpWhile(Function() IsIdleWorkPending, "The window's idle work did not finish.")
-    End Sub
-
-
-    Private Shared Sub PumpWhile(pending As Func(Of Boolean), failure As String)
-        Dim watch As Stopwatch = Stopwatch.StartNew()
-        While pending() AndAlso watch.Elapsed < TimeSpan.FromSeconds(60)
-            Application.DoEvents()
-            Thread.Sleep(1)
-        End While
-        Assert.IsFalse(pending(), failure)
     End Sub
 
 

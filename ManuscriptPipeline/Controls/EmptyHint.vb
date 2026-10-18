@@ -119,11 +119,15 @@ Namespace Controls
 
             Dim empty As Boolean = ItemCount(target) = 0
 
+            ' The hint keeps its list's colors while hidden too, so none is
+            ' left from before the list was styled, or from a record the
+            ' list showed before (#133).
+            entry.Hint.BackColor = BackgroundOf(target)
+            entry.Hint.ForeColor = UiTheme.SecondaryText()
+
             If empty Then
                 Dim text As String = entry.Text()
                 If entry.Hint.Text <> text Then entry.Hint.Text = text
-                entry.Hint.BackColor = BackgroundOf(target)
-                entry.Hint.ForeColor = UiTheme.SecondaryText()
 
                 ' A table keeps its column headings visible above the hint.
                 Dim top As Integer = 0

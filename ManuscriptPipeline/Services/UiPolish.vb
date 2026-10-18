@@ -128,18 +128,21 @@ Namespace Services
         End Sub
 
 
-        ' Styles controls built after their form was styled: the parts the
-        ' manuscript page builds for each record it loads (#133).
-        Friend Shared Sub ApplyToControls(
-            root As Control
+        ' Styles the controls under one control, for those a window adds
+        ' after it was styled, such as rows it builds again (#106): the idle
+        ' hook styles each window once.
+        Public Shared Sub ApplyToControls(
+            parent As Control
         )
 
-            If root Is Nothing Then
+            If parent Is Nothing Then
                 Return
             End If
 
-            ApplyControlStyle(root, Nothing)
-            ApplyToControlTree(root, Nothing)
+            ApplyToControlTree(
+                parent,
+                TryCast(parent.FindForm()?.AcceptButton, Button)
+            )
 
         End Sub
 

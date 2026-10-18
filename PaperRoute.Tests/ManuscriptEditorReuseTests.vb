@@ -32,17 +32,24 @@ Public Class ManuscriptEditorReuseTests
     <TestInitialize>
     Public Sub Initialize()
         _root = CreateTemporaryRoot()
+        ' The submission's details and the version history look up the
+        ' managed library, under the default data root unless told.
+        StorageEnvironment.RootOverride = Path.Combine(_root, "storage")
     End Sub
 
 
     <TestCleanup>
     Public Sub Cleanup()
+        UiTheme.HighContrastOverride = Nothing
+        StorageEnvironment.RootOverride = Nothing
         DeleteTemporaryRoot(_root)
     End Sub
 
 
     ' Edits to a filed manuscript, let go with No, then a Pipeline
-    ' manuscript; and the other way round.
+    ' manuscript, opened from the page left; and the other way round, by
+    ' the usual way: back to the Board, where the page left lets go of the
+    ' record while the window idles, then the next card.
     <TestMethod>
     Public Sub NothingOfTheManuscriptLeftReachesTheNextOne()
 
@@ -50,10 +57,11 @@ Public Class ManuscriptEditorReuseTests
         Dim filed As Manuscript = FiledManuscript(library)
         Dim active As Manuscript = ActiveManuscript(library)
 
-        For Each pair In {(filed, active), (active, filed)}
+        For Each pair In {(filed, active, False), (active, filed, True)}
 
             Dim left As Manuscript = pair.Item1
             Dim opened As Manuscript = pair.Item2
+            Dim throughTheBoard As Boolean = pair.Item3
 
             StaRunner.Run(
                 Sub()
@@ -75,6 +83,12 @@ Public Class ManuscriptEditorReuseTests
                                              asked.Add(title)
                                              Return DialogResult.No
                                          End Function)
+
+                        If throughTheBoard Then
+                            reused.NavigateTo(Form1.WorkspacePage.Board)
+                            reused.WaitForIdleWork()
+                            Assert.IsTrue(ViewCatalog.Descendants(reused.KeptPage).OfType(Of TextBox)().All(Function(box) box.TextLength = 0), "The page left let go of the record.")
+                        End If
 
                         Open(reused, Record(reused, opened.Id))
 
@@ -280,11 +294,91 @@ Public Class ManuscriptEditorReuseTests
     End Sub
 
 
-    ' The editor itself: one that has edited a manuscript in every way and
-    ' then loads another matches, control by control, one built for that
-    ' other manuscript; and loading the first again shows it as saved.
+    ' An open that fails part way, as one whose author library cannot be
+    ' read does (#121): the page does not become the failed manuscript's,
+    ' so nothing of the manuscript left is asked about, saved or written
+    ' to a recovery draft in its name, and it opens once it can.
     <TestMethod>
-    Public Sub AnEditorThatLoadsAnotherRecordMatchesOneBuiltForIt()
+    Public Sub AnOpenThatFailsLeavesNothingToAskAboutOrSave()
+
+        Dim library As LargeLibraryFixture.SyntheticLibrary = Library40()
+        Dim filed As Manuscript = FiledManuscript(library)
+        Dim active As Manuscript = ActiveManuscript(library)
+        Dim authors As String = library.AuthorRepository.DataFilePath
+        Dim authorsBackup As String = library.AuthorRepository.BackupFilePath
+
+        StaRunner.Run(
+            Sub()
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    Open(board, Record(board, filed.Id))
+                    board.Field("Title").Text = filed.Title & " (answered No)"
+
+                    Dim asked As New List(Of String)()
+                    board.SetPrompt(Function(title)
+                                        asked.Add(title)
+                                        Return DialogResult.No
+                                    End Function)
+
+                    ' The author library becomes unreadable, with no backup.
+                    Dim saved As Byte() = If(File.Exists(authors), File.ReadAllBytes(authors), Nothing)
+                    Dim savedBackup As Byte() = If(File.Exists(authorsBackup), File.ReadAllBytes(authorsBackup), Nothing)
+                    File.WriteAllText(authors, "{ damaged")
+                    File.Delete(authorsBackup)
+
+                    Dim failure As Exception = Nothing
+                    Try
+                        board.Open(Record(board, active.Id))
+                    Catch ex As TargetInvocationException
+                        failure = ex.InnerException
+                    End Try
+
+                    Assert.IsInstanceOfType(failure, GetType(InvalidDataException), "The open failed reading the author library.")
+                    CollectionAssert.AreEqual({filed.Title}, asked, "Only the manuscript left was asked about.")
+                    Assert.IsNull(board.Editor, "The page did not become the failed manuscript's.")
+
+                    Dim reported As Boolean? = Nothing
+                    board.unhandledErrorPrompt = Function(shown, unsaved)
+                                                     reported = unsaved
+                                                     Return DialogResult.Cancel
+                                                 End Function
+                    board.ReportUnhandledError(failure)
+                    Assert.IsTrue(reported.HasValue AndAlso Not reported.Value, "The error's dialog finds no unsaved changes.")
+                    Assert.IsFalse(board.WriteRecoveryDraft("Windows was shutting down"), "No draft is written in the failed manuscript's name.")
+
+                    board.NavigateTo(Form1.WorkspacePage.Board)
+                    Application.DoEvents()
+                    CollectionAssert.AreEqual({filed.Title}, asked, "Leaving asks nothing.")
+                    Assert.AreEqual(0, board.SaveCount, "Nothing was saved.")
+                    Assert.AreEqual(filed.Title, Record(board, filed.Id).Title, "No left the manuscript as it was saved.")
+
+                    ' Readable again, the manuscript opens as saved.
+                    If saved Is Nothing Then File.Delete(authors) Else File.WriteAllBytes(authors, saved)
+                    If savedBackup IsNot Nothing Then File.WriteAllBytes(authorsBackup, savedBackup)
+                    Open(board, Record(board, active.Id))
+                    Assert.AreEqual(active.Title, board.Field("Title").Text)
+                    Assert.IsFalse(board.Editor.HasUnsavedChanges())
+
+                    board.SetPrompt(Function(title) DialogResult.No)
+                    board.Close()
+                End Using
+            End Sub, TimeSpan.FromMinutes(5))
+
+    End Sub
+
+
+    ' The editor itself: one that has edited a manuscript in every way and
+    ' then loads another matches, control by control and color by color,
+    ' one built for that other manuscript, in Light, Dark and a contrast
+    ' theme; and loading the first again shows it as saved. The second
+    ' pass loads it after letting go of the first (UnloadRecord), as the
+    ' page does once left. The parts built for each record are legible.
+    <TestMethod>
+    <DataRow(SystemColorMode.Classic, False)>
+    <DataRow(SystemColorMode.Dark, False)>
+    <DataRow(SystemColorMode.Classic, True)>
+    Public Sub AnEditorThatLoadsAnotherRecordMatchesOneBuiltForIt(mode As SystemColorMode, contrastTheme As Boolean)
 
         Dim library As LargeLibraryFixture.SyntheticLibrary = Library40()
         Dim filed As Manuscript = FiledManuscript(library)
@@ -292,41 +386,61 @@ Public Class ManuscriptEditorReuseTests
 
         StaRunner.Run(
             Sub()
-                For Each pair In {(filed, active), (active, filed)}
+                If mode = SystemColorMode.Dark AndAlso (SystemInformation.HighContrast OrElse Not OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000)) Then
+                    Assert.Inconclusive("Native WinForms dark mode requires Windows 11 or later, outside a Windows contrast theme.")
+                End If
 
-                    Dim savedLeft As String = Json(pair.Item1)
+                UiTheme.HighContrastOverride = contrastTheme
+                Try
+                    Assert.AreEqual(mode = SystemColorMode.Dark AndAlso Not contrastTheme, UiTheme.IsDark(), "The theme the row runs in.")
 
-                    Dim reused As New EditManuscriptForm(pair.Item1, library.Manuscripts, library.AuthorRepository, pageMode:=True)
+                    For Each pair In {(filed, active, False), (active, filed, True)}
 
-                    Using reusedHost As Form = Hosted(reused)
+                        Dim savedLeft As String = Json(pair.Item1)
 
-                        EditEverything(reused)
-                        Assert.IsTrue(reused.HasUnsavedChanges())
-                        Dim token As Object = reused.RecordToken
+                        Dim reused As New EditManuscriptForm(pair.Item1, library.Manuscripts, library.AuthorRepository, pageMode:=True)
 
-                        reused.LoadRecord(pair.Item2, library.Manuscripts)
-                        Application.DoEvents()
-                        Assert.AreNotSame(token, reused.RecordToken, "The record is replaced as a whole.")
-                        Assert.IsFalse(reused.HasUnsavedChanges())
-                        Assert.AreEqual(savedLeft, Json(pair.Item1), "Loading another record changes nothing in the one left.")
+                        Using reusedHost As Form = Hosted(reused)
 
-                        Dim fresh As New EditManuscriptForm(pair.Item2, library.Manuscripts, library.AuthorRepository, pageMode:=True)
-                        Using freshHost As Form = Hosted(fresh)
-                            AssertSameEditor(freshHost, fresh, reusedHost, reused, pair.Item2.Title)
-                            freshHost.Close()
+                            EditEverything(reused)
+                            Assert.IsTrue(reused.HasUnsavedChanges())
+                            Dim token As Object = reused.RecordToken
+
+                            If pair.Item3 Then
+                                reused.UnloadRecord()
+                                Application.DoEvents()
+                                Assert.AreEqual(String.Empty, Box(reused, "Title").Text, "Let go of, the record shows nothing.")
+                            End If
+
+                            reused.LoadRecord(pair.Item2, library.Manuscripts)
+                            Application.DoEvents()
+                            Assert.AreNotSame(token, reused.RecordToken, "The record is replaced as a whole.")
+                            Assert.IsFalse(reused.HasUnsavedChanges())
+                            Assert.AreEqual(savedLeft, Json(pair.Item1), "Loading another record changes nothing in the one left.")
+
+                            Dim fresh As New EditManuscriptForm(pair.Item2, library.Manuscripts, library.AuthorRepository, pageMode:=True)
+                            Using freshHost As Form = Hosted(fresh)
+                                AssertSameEditor(freshHost, fresh, reusedHost, reused, pair.Item2.Title)
+                                freshHost.Close()
+                            End Using
+
+                            AssertRecordPartsLegible(reused, pair.Item2)
+
+                            reused.LoadRecord(pair.Item1, library.Manuscripts)
+                            Application.DoEvents()
+                            Assert.AreEqual(pair.Item1.Title, Box(reused, "Title").Text, "The first manuscript opens again as saved.")
+                            Assert.IsFalse(reused.HasUnsavedChanges())
+
+                            reusedHost.Close()
                         End Using
 
-                        reused.LoadRecord(pair.Item1, library.Manuscripts)
-                        Application.DoEvents()
-                        Assert.AreEqual(pair.Item1.Title, Box(reused, "Title").Text, "The first manuscript opens again as saved.")
-                        Assert.IsFalse(reused.HasUnsavedChanges())
-
-                        reusedHost.Close()
-                    End Using
-
-                Next
+                    Next
+                Finally
+                    UiTheme.HighContrastOverride = Nothing
+                End Try
             End Sub,
-            TimeSpan.FromMinutes(5))
+            TimeSpan.FromMinutes(5),
+            mode)
 
     End Sub
 
@@ -409,7 +523,9 @@ Public Class ManuscriptEditorReuseTests
     ' ---------------------------------------------------------------
 
     ' Forty synthetic manuscripts, with the filed one given a latest
-    ' submission whose two reviewer comments can be reordered.
+    ' submission whose two reviewer comments can be reordered, and the
+    ' Pipeline one a latest submission rejected, so its shortlist offers
+    ' the next journal on it.
     Private Function Library40() As LargeLibraryFixture.SyntheticLibrary
 
         Dim library As LargeLibraryFixture.SyntheticLibrary =
@@ -423,6 +539,16 @@ Public Class ManuscriptEditorReuseTests
         latest.ReviewerResponses.Add(New ReviewerResponseItem With {.DecisionId = decision.Id, .RevisionRoundNumber = 1, .ReviewerLabel = "Reviewer 1", .CommentText = "Clarify the sample."})
         latest.ReviewerResponses.Add(New ReviewerResponseItem With {.DecisionId = decision.Id, .RevisionRoundNumber = 1, .ReviewerLabel = "Reviewer 2", .CommentText = "Share the data."})
         filed.Submissions.Add(latest)
+
+        ' Rejected today, after the researcher moved it on today, so the
+        ' rejection changes nothing of its stage.
+        Dim active As Manuscript = ActiveManuscript(library)
+        active.StageEnteredDate = LargeLibraryFixture.Today
+        active.JournalShortlist.Insert(0, New JournalCandidate With {.JournalName = "A journal offered after the rejection", .Status = CandidateStatus.Preferred})
+        Dim rejected As New JournalSubmission With {.JournalName = "A journal that rejected the manuscript", .SubmittedDate = LargeLibraryFixture.Today}
+        rejected.Decisions.Add(New EditorialDecisionEvent With {.Decision = EditorialDecision.Rejected, .DecisionDate = LargeLibraryFixture.Today})
+        active.Submissions.Add(rejected)
+        Assert.IsNotNull(JournalShortlistService.RerouteOfferFor(active, DateTime.Today), "The Pipeline manuscript's shortlist offers the next journal.")
 
         library.Repository.Save(library.Manuscripts)
         Return library
@@ -577,19 +703,117 @@ Public Class ManuscriptEditorReuseTests
 
         Assert.AreEqual(title, Box(actual, "Title").Text)
         Assert.AreEqual(ShownSection(expected), ShownSection(actual), "The section the page shows")
-        AssertSameLines(Describe(expectedRoot), Describe(actualRoot), "The page as it opened")
+        AssertSameLines(Described(expectedRoot), Described(actualRoot), "The page as it opened")
 
         For Each section As String In {"Overview", "Authors", "Versions", "Submissions", "Readiness & Packets", "Overview"}
             ShowSection(expected, section)
             ShowSection(actual, section)
-            AssertSameLines(Describe(expectedRoot), Describe(actualRoot), "The " & section & " section")
+            AssertSameLines(Described(expectedRoot), Described(actualRoot), "The " & section & " section")
         Next
 
         Assert.AreEqual(expected.HasUnsavedChanges(), actual.HasUnsavedChanges(), "Unsaved changes")
         Assert.AreEqual(Json(expected.RecoveryCopy()), Json(actual.RecoveryCopy()), "The working copy")
         Assert.AreEqual(ActiveName(expected), ActiveName(actual), "The editor's active control")
+        Assert.AreEqual(OfferedJournal(expected), OfferedJournal(actual), "The journal the reroute offer would make the target")
 
     End Sub
+
+
+    ' The page described once the window has idled, as a researcher sees
+    ' it: every list's empty hint follows its list on Application.Idle
+    ' (EmptyHint), which it hooks on the first thread to attach a hint, so
+    ' on a test thread after the first the hints are brought up to date
+    ' here. Until then a hint keeps the colors its list had before it was
+    ' styled, as a Dark run shows.
+    Private Shared Function Described(root As Control) As List(Of String)
+        For Each control As Control In {root}.Concat(ViewCatalog.Descendants(root)).ToList()
+            EmptyHint.Refresh(control)
+        Next
+        Return Describe(root)
+    End Function
+
+
+    ' What the reroute offer's button holds, shown or not.
+    Private Shared Function OfferedJournal(editor As EditManuscriptForm) As String
+        Dim candidate As JournalCandidate = TryCast(editor.ShortlistOfferButton.Tag, JournalCandidate)
+        Return If(candidate Is Nothing, "(none)", candidate.JournalName)
+    End Function
+
+
+    ' The parts the editor builds for each record after the form was
+    ' styled (#133): the version history, the shortlist's rows and the tag
+    ' chips. A comparison with a fresh editor cannot see a part left
+    ' unstyled in both, so each label, button and chip shown is judged on
+    ' its own. In Light and Dark its text is held to 4.5:1 against the
+    ' surface it is drawn on. Under a contrast theme the colors are the
+    ' user's (#138): a label's or button's text and surface are system
+    ' colors, and a chip draws in the theme's window colors.
+    Private Shared Sub AssertRecordPartsLegible(editor As EditManuscriptForm, manuscript As Manuscript)
+
+        Dim contrastTheme As Boolean = UiTheme.IsHighContrast()
+        Dim failures As New List(Of String)()
+        Dim judged As New Dictionary(Of String, Integer)()
+
+        For Each part In {("Versions", "_versionsHost"), ("Overview", "shortlistRows"), ("Overview", "tagEditor")}
+            ShowSection(editor, part.Item1)
+            Dim count As Integer = 0
+            For Each control As Control In ViewCatalog.Descendants(Field(Of Control)(editor, part.Item2))
+                Dim text As String = If(TypeOf control Is TagChipButton, DirectCast(control, TagChipButton).TagText, control.Text)
+                If Not (TypeOf control Is Label OrElse TypeOf control Is Button OrElse TypeOf control Is TagChipButton) OrElse
+                   Not control.Visible OrElse Not control.Enabled OrElse String.IsNullOrWhiteSpace(text) Then Continue For
+                Dim name As String = part.Item2 & ": " & control.GetType().Name & " '" & text & "' "
+                Dim seen As (Ratio As Double, Surface As Color) = TextContrast(control)
+                If contrastTheme Then
+                    If TypeOf control Is TagChipButton Then
+                        If seen.Surface.ToArgb() <> SystemColors.Window.ToArgb() Then failures.Add(name & "drawn on " & seen.Surface.ToString() & ", not the theme's window color")
+                    ElseIf Not control.ForeColor.IsSystemColor OrElse Not control.BackColor.IsSystemColor Then
+                        failures.Add(name & control.ForeColor.ToString() & " on " & control.BackColor.ToString() & ", not the user's colors")
+                    End If
+                ElseIf seen.Ratio < 4.5 Then
+                    failures.Add(name & seen.Ratio.ToString("F2", CultureInfo.InvariantCulture) & ":1 on " & seen.Surface.ToString())
+                End If
+                count += 1
+            Next
+            judged(part.Item2) = count
+        Next
+
+        ShowSection(editor, "Overview")
+
+        Assert.IsTrue(judged("_versionsHost") > 0, "The version history shows text to judge.")
+        Assert.AreEqual(manuscript.JournalShortlist.Count > 0, judged("shortlistRows") > 0, "The shortlist's rows show text to judge.")
+        Assert.AreEqual(manuscript.Tags.Count > 0, judged("tagEditor") > 0, "The tags show chips to judge.")
+        Assert.AreEqual(0, failures.Count, "In " & If(contrastTheme, "a contrast theme", If(UiTheme.IsDark(), "Dark", "Light")) & ":" & Environment.NewLine & String.Join(Environment.NewLine, failures))
+
+    End Sub
+
+
+    ' How far the strongest pixels of a control's text stand out from the
+    ' color of most of its picture, inside a button's or chip's frame:
+    ' smoothing leaves the rest of a stroke paler.
+    Private Shared Function TextContrast(control As Control) As (Ratio As Double, Surface As Color)
+
+        Using image As New Bitmap(control.Width, control.Height)
+            control.DrawToBitmap(image, New Rectangle(Point.Empty, control.Size))
+
+            Dim area As New Rectangle(Point.Empty, control.Size)
+            Dim frame As Integer = control.LogicalToDeviceUnits(If(TypeOf control Is Button, 6, If(TypeOf control Is TagChipButton, 3, 0)))
+            If area.Width > 2 * frame AndAlso area.Height > 2 * frame Then area.Inflate(-frame, -frame)
+
+            Dim counts As New Dictionary(Of Integer, Integer)()
+            For y As Integer = area.Top To area.Bottom - 1
+                For x As Integer = area.Left To area.Right - 1
+                    Dim pixel As Integer = image.GetPixel(x, y).ToArgb()
+                    Dim count As Integer = 0
+                    counts.TryGetValue(pixel, count)
+                    counts(pixel) = count + 1
+                Next
+            Next
+
+            Dim surface As Color = Color.FromArgb(counts.OrderByDescending(Function(entry) entry.Value).First().Key)
+            Return (counts.Keys.Max(Function(pixel) ContrastRatio(Color.FromArgb(pixel), surface)), surface)
+        End Using
+
+    End Function
 
 
     Private Shared Sub AssertSameLines(expected As List(Of String), actual As List(Of String), context As String)

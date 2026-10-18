@@ -413,7 +413,7 @@ Namespace Forms
             _versionsHost.Controls.Add(versions)
 
             ' Built after the form was styled, it is styled now.
-            UiPolish.ApplyToControls(versions)
+            UiPolish.ApplyToControls(_versionsHost)
             versionHistoryControl = versions
 
         End Sub
@@ -1786,8 +1786,6 @@ Namespace Forms
                 shortlistRows.RowStyles.Add(New RowStyle(SizeType.AutoSize))
                 Dim row As Control = CreateShortlistRow(list(index), index, list.Count)
                 shortlistRows.Controls.Add(row, 0, index)
-                ' Built after the form was styled, a row is styled now (#133).
-                UiPolish.ApplyToControls(row)
             Next
             shortlistRows.ResumeLayout(True)
             shortlistRows.Visible = list.Count > 0
@@ -1810,6 +1808,14 @@ Namespace Forms
                 lblShortlistOffer.BackColor = UiTheme.AccentMutedBackground()
                 lblShortlistOffer.ForeColor = UiTheme.PrimaryText()
                 shortlistOffer.Invalidate()
+            Else
+                ' Hidden, the offer keeps nothing of another record, as on a
+                ' form built for this one: the page shows one record after
+                ' another (#133).
+                lblShortlistOffer.Text = String.Empty
+                lblShortlistOffer.ResetBackColor()
+                btnShortlistOffer.Text = String.Empty
+                btnShortlistOffer.Tag = Nothing
             End If
 
             RefreshOnlineCommands()

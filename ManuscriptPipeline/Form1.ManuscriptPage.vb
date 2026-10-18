@@ -61,7 +61,8 @@ Partial Public Class Form1
 
 
     ' Creates the page's editor. Tests supply a disposable author library.
-    ' The page asks for it with no manuscript: it loads each one itself.
+    ' The page asks for it with no manuscript: it loads each one itself,
+    ' a recovered draft (#123) included, through LoadRecord.
     Protected Overridable Function CreateManuscriptEditor(
         manuscript As Manuscript
     ) As EditManuscriptForm
@@ -70,8 +71,7 @@ Partial Public Class Form1
             manuscript,
             manuscripts,
             authorRepository,
-            pageMode:=True,
-            workingCopy:=pendingRecoveredCopy
+            pageMode:=True
         )
 
     End Function
@@ -162,11 +162,15 @@ Partial Public Class Form1
         manuscriptPageSaveHint.Text = SaveBarHint
         manuscriptPageSaveBar.Visible = False
 
+        editor.LoadRecord(manuscript, manuscripts, pendingRecoveredCopy, deferParts:=True)
+
+        ' The page's editor only once its record has loaded: a load that
+        ' failed part way leaves no editor to ask about, save or draft,
+        ' as a page whose editor failed to build left none (#121).
         manuscriptEditor = editor
         manuscriptSaveBar = manuscriptPageSaveBar
         manuscriptSaveHint = manuscriptPageSaveHint
 
-        editor.LoadRecord(manuscript, manuscripts, pendingRecoveredCopy, deferParts:=True)
         RefreshManuscriptHeader()
         fitManuscriptTitle()
 
