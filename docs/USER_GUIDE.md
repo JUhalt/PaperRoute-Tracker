@@ -1016,7 +1016,7 @@ The number keys on the number pad work as well as the ones above the letters.
 In windows, pages, and lists:
 
 - **Tab** and **Shift+Tab** move from one control to the next. **Enter** chooses the window's main button, and **Esc** closes a window as its **Cancel** or **Close** button does. In **Fill Blanks from Crossref** and **Check for Publications**, **Esc** stops a lookup that is running, as **Stop** does. The window that shows an update installing has nothing to cancel.
-- On the Board, **Tab** to a card's title and press **Enter** to open it; the keyboard's context-menu key opens the card's **⋯** menu.
+- On the Board, **Tab** moves through each card in turn: its title, its **⋯** button, and **View route**. **Enter** or **Space** on the title opens the manuscript, and the keyboard's context-menu key opens the card's **⋯** menu.
 - On a chip, such as the Board's Needs Attention filters or the Deadlines page's filters, **Enter** or **Space** presses it.
 - In the Library table, the Insights tables, and Your Citations, **Enter** opens the selected row.
 - On the Deadlines page, **Up** and **Down** move from item to item, and **Enter** does the item's main action.
@@ -1036,12 +1036,10 @@ PaperRoute supports the Windows contrast themes (**Settings > Accessibility > Co
 
 ### What Windows draws
 
-Message boxes, the Open and Save dialogs, and the folder picker are drawn by Windows, not PaperRoute, so how they work with the keyboard and a screen reader is Windows' own, and so are their colors.
+Message boxes, the Open and Save dialogs, and the folder picker are drawn by Windows, not PaperRoute, so how they work with the keyboard and a screen reader is Windows' own, and so are their colors. Only their title bar follows PaperRoute's appearance.
 
 In PaperRoute's Dark appearance, these keep the colors Windows gives them, or PaperRoute's Light ones, for 1.0. None of them hides anything you need to read:
 
-- Message boxes, title bar included, which can be light.
-- The Open and Save dialogs and the folder picker.
 - The report preview, a web page that Windows draws.
 - The thin white frame around a table.
 - The borders of drop-down lists and number boxes, in Windows' own greys.

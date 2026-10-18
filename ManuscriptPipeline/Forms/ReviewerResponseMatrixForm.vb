@@ -276,6 +276,8 @@ Namespace Forms
                         g.FillPath(brush, path)
                     End Using
                 End Using
+                ' The fill is the window color under a contrast theme (#191).
+                RoundedShapes.OutlineUnderContrast(g, pill, pill.Height / 2.0F, colors.Ink)
                 g.SmoothingMode = Drawing2D.SmoothingMode.Default
                 TextRenderer.DrawText(g, status, bold, pill, colors.Ink, flags Or TextFormatFlags.HorizontalCenter Or TextFormatFlags.VerticalCenter)
 

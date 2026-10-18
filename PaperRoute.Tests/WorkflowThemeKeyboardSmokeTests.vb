@@ -140,6 +140,327 @@ Public Class WorkflowThemeKeyboardSmokeTests
 
     End Sub
 
+    ' Under a contrast theme a filled chip or pill takes the window color
+    ' as its fill, so it keeps its shape with an outline in its text color
+    ' (#191): each Needs Attention chip and stage pill on the Board, built
+    ' under the theme, and a chip of every tone, a pill of every stage, a
+    ' tag of every color, the rail's count badge and the Reviewer Response
+    ' Matrix's status pill. The seam stands in for the theme.
+    <TestMethod>
+    <DataRow(SystemColorMode.Classic)>
+    <DataRow(SystemColorMode.Dark)>
+    Public Sub ChipsAndPills_KeepAnOutlineInTheirTextColorUnderAContrastTheme(mode As SystemColorMode)
+
+        If SystemInformation.HighContrast Then
+            Assert.Inconclusive("Windows high-contrast themes require separate certification; these checks do not change OS settings.")
+        End If
+
+        Dim missing As New List(Of String)()
+        Dim boardShapes As Integer = 0
+
+        Dim board As Func(Of String, Form) =
+            Function(root As String) As Form
+                UiTheme.HighContrastOverride = True
+                Return ViewCatalog.Dialogs(GetType(ManuscriptPipeline.Form1))(root)
+            End Function
+
+        Try
+            Dim failures As List(Of String) = ViewCatalog.ShowEach(
+                {("The Board under a contrast theme", board)},
+                Sub(name, shown)
+                    For Each chip As FilterChip In Descendants(shown).OfType(Of FilterChip)().Where(Function(control) control.Visible)
+                        boardShapes += 1
+                        CheckOutline(missing, $"The Board's chip '{chip.Text}'", chip, ChipInk(chip))
+                    Next
+                    For Each pill As PillLabel In Descendants(shown).OfType(Of PillLabel)().Where(Function(control) control.Visible)
+                        boardShapes += 1
+                        CheckOutline(missing, $"The Board's pill '{pill.Text}'", pill, pill.ForeColor)
+                    Next
+                End Sub,
+                mode:=mode)
+            Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Finally
+            UiTheme.HighContrastOverride = Nothing
+        End Try
+
+        Assert.IsTrue(boardShapes >= 2, $"The Board showed a Needs Attention chip and a stage pill ({boardShapes}).")
+
+        RunWithColorMode(mode,
+            Sub()
+                UiTheme.HighContrastOverride = True
+                Try
+                    Using host As New Form With {.ClientSize = New Size(1200, 200), .Font = New Font("Segoe UI", 9.0F), .BackColor = UiTheme.BoardBackground()}
+                        Dim flow As New FlowLayoutPanel With {.Dock = DockStyle.Fill, .BackColor = UiTheme.BoardBackground()}
+                        host.Controls.Add(flow)
+                        For Each tone As FilterChipTone In [Enum].GetValues(GetType(FilterChipTone))
+                            flow.Controls.Add(New FilterChip With {.Text = tone.ToString() & " chip", .Tone = tone})
+                        Next
+                        For Each stage As PaperStage In [Enum].GetValues(GetType(PaperStage))
+                            flow.Controls.Add(New PillLabel With {.Text = stage.ToString().ToUpperInvariant(), .Size = New Size(120, 22), .UseMnemonic = False,
+                                                                  .BackColor = UiTheme.StageBackground(stage), .ForeColor = UiTheme.StageForeground(stage)})
+                        Next
+                        ViewCatalog.ShowOffscreen(host)
+                        For Each chip As FilterChip In flow.Controls.OfType(Of FilterChip)()
+                            CheckOutline(missing, $"A {chip.Tone} chip", chip, ChipInk(chip))
+                        Next
+                        For Each pill As PillLabel In flow.Controls.OfType(Of PillLabel)()
+                            CheckOutline(missing, $"The {pill.Text} pill", pill, pill.ForeColor)
+                        Next
+                        host.Close()
+                    End Using
+
+                    For Each palette As TagPalette In [Enum].GetValues(GetType(TagPalette))
+                        Using font As New Font("Segoe UI", 9.0F)
+                            Dim chipSize As Size = TagChipPainter.Measure("teaching", font, 96)
+                            Using picture As New Bitmap(chipSize.Width, chipSize.Height)
+                                Using g As Graphics = Graphics.FromImage(picture)
+                                    g.Clear(UiTheme.CardBackground())
+                                    TagChipPainter.Draw(g, New Rectangle(Point.Empty, chipSize), "teaching", palette, font)
+                                End Using
+                                CheckOutline(missing, $"A {palette} tag", picture, WorkTypeService.Foreground(palette, False))
+                            End Using
+                        End Using
+                    Next
+
+                    ' A rail item wide enough that the right half of it holds
+                    ' only the count badge.
+                    Using host As New Form With {.ClientSize = New Size(320, 60), .Font = New Font("Segoe UI", 9.0F), .BackColor = UiTheme.HeaderBackground()}
+                        Dim item As New RailButton(RailGlyph.Reminders, "Reminders") With {.Location = New Point(10, 10), .Size = New Size(300, 36), .Badge = 12}
+                        host.Controls.Add(item)
+                        ViewCatalog.ShowOffscreen(host)
+                        Using picture As Bitmap = PictureOf(item)
+                            CheckOutlineWithin(missing, "The rail's count badge", picture, New Rectangle(picture.Width \ 2, 0, picture.Width - picture.Width \ 2, picture.Height), UiTheme.WarningColor(),
+                                Function(pixel) Distance(pixel, UiTheme.WarningColor()) < Distance(pixel, SystemColors.Window))
+                        End Using
+                        host.Close()
+                    End Using
+
+                    ' A row of the Reviewer Response Matrix, drawn as its list
+                    ' draws one. In progress is drawn in the accent color,
+                    ' which nothing else in the row is, so the pill is found
+                    ' by that color.
+                    Dim manuscript As New Manuscript With {.Title = "Contrast pill fixture", .CurrentStage = PaperStage.Submitted}
+                    Dim submission As New JournalSubmission With {.JournalName = "Fictional journal", .SubmittedDate = New DateTime(2026, 9, 20)}
+                    Dim decision As New EditorialDecisionEvent With {.Decision = EditorialDecision.MajorRevision}
+                    submission.Decisions.Add(decision)
+                    manuscript.Submissions.Add(submission)
+                    ReviewerResponseService.AddItem(submission, New ReviewerResponseItem With {
+                        .DecisionId = decision.Id, .RevisionRoundNumber = 1, .ReviewerLabel = "Reviewer 1",
+                        .CommentText = "Clarify the sampling frame.", .Status = ReviewerResponseStatus.InProgress
+                    })
+                    Using matrix As New ReviewerResponseMatrixForm(manuscript, submission)
+                        Dim list As ListBox = DirectCast(GetType(ReviewerResponseMatrixForm).GetField("lstResponses", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(matrix), ListBox)
+                        Dim ink As Color = ReviewerResponseMatrixForm.StatusPill(ReviewerResponseStatus.InProgress).Ink
+                        Using row As New Bitmap(600, list.Font.Height * 2 + UiTheme.Px(26, matrix.DeviceDpi))
+                            Using g As Graphics = Graphics.FromImage(row)
+                                GetType(ReviewerResponseMatrixForm).GetMethod("DrawResponseItem", BindingFlags.Instance Or BindingFlags.NonPublic).
+                                    Invoke(matrix, New Object() {list, New DrawItemEventArgs(g, list.Font, New Rectangle(Point.Empty, row.Size), 0, DrawItemState.None)})
+                            End Using
+                            CheckOutlineWithin(missing, "The Reviewer Response Matrix's In progress pill", row, New Rectangle(Point.Empty, row.Size), ink,
+                                Function(pixel) pixel.ToArgb() = ink.ToArgb())
+                        End Using
+                    End Using
+                Finally
+                    UiTheme.HighContrastOverride = Nothing
+                End Try
+            End Sub)
+
+        Assert.AreEqual(0, missing.Count, $"Without an outline in their text color under a contrast theme in {mode}:{Environment.NewLine}{String.Join(Environment.NewLine, missing)}")
+
+    End Sub
+
+    ' Under a contrast theme a chip shows pressed and focused as Windows
+    ' draws them there (#191): pressed in the highlight pair, and focused
+    ' with a ring in the text color. Without one, a pressed chip is drawn
+    ' as it was before, the same as one not pressed.
+    <TestMethod>
+    <DataRow(SystemColorMode.Classic)>
+    <DataRow(SystemColorMode.Dark)>
+    Public Sub AChip_ShowsPressedAndFocusAsWindowsDoesUnderAContrastTheme(mode As SystemColorMode)
+
+        RunWithColorMode(mode,
+            Sub()
+                Try
+                    For Each contrastTheme As Boolean In {False, True}
+
+                        UiTheme.HighContrastOverride = contrastTheme
+
+                        Using host As New Form With {.ClientSize = New Size(400, 120), .Font = New Font("Segoe UI", 9.0F), .BackColor = UiTheme.BoardBackground()}
+
+                            Dim other As New TextBox With {.Location = New Point(8, 8), .Width = 120}
+                            Dim chip As New FilterChip With {.Text = "1 waiting 90+ days", .Tone = FilterChipTone.Warning, .Location = New Point(8, 48)}
+                            host.Controls.AddRange(New Control() {other, chip})
+                            ViewCatalog.ShowOffscreen(host)
+                            other.Focus()
+                            Application.DoEvents()
+
+                            Dim middle As Integer = chip.Height \ 2
+                            Dim inside As New Point(chip.Padding.Left \ 2, middle)
+                            Dim plain As Bitmap = PictureOf(chip)
+
+                            SendMessage(chip.Handle, WM_LBUTTONDOWN, New IntPtr(1), MousePoint(inside))
+                            Application.DoEvents()
+                            Dim pressed As Bitmap = PictureOf(chip)
+                            SendMessage(chip.Handle, WM_LBUTTONUP, IntPtr.Zero, MousePoint(inside))
+                            Application.DoEvents()
+
+                            ' Focus cues show, as once a key has been pressed.
+                            other.Focus()
+                            SendMessage(host.Handle, WM_CHANGEUISTATE, New IntPtr(UIS_CLEAR Or (UISF_HIDEFOCUS << 16)), IntPtr.Zero)
+                            chip.Focus()
+                            Application.DoEvents()
+                            Dim focused As Bitmap = PictureOf(chip)
+
+                            Try
+                                If contrastTheme Then
+                                    Assert.AreEqual(SystemColors.Highlight.ToArgb(), pressed.GetPixel(inside.X, inside.Y).ToArgb(), $"Pressed under a contrast theme in {mode}, the chip is the highlight color.")
+                                    Assert.AreEqual(SystemColors.Window.ToArgb(), plain.GetPixel(inside.X, inside.Y).ToArgb(), "Not pressed, it is the window color.")
+                                    Assert.IsTrue(chip.Focused, "The chip took the focus.")
+                                    Assert.AreEqual(SystemColors.WindowText.ToArgb(), focused.GetPixel(chip.Width \ 2, 2).ToArgb(), $"Focused under a contrast theme in {mode}, the chip's ring is the text color.")
+                                    Assert.AreEqual(SystemColors.Window.ToArgb(), plain.GetPixel(chip.Width \ 2, 2).ToArgb(), "Not focused, there is no ring.")
+                                Else
+                                    Assert.IsTrue(SamePicture(plain, pressed), $"In {mode} a pressed chip is drawn as one not pressed.")
+                                End If
+                            Finally
+                                plain.Dispose()
+                                pressed.Dispose()
+                                focused.Dispose()
+                            End Try
+
+                            host.Close()
+
+                        End Using
+
+                    Next
+                Finally
+                    UiTheme.HighContrastOverride = Nothing
+                End Try
+            End Sub)
+
+    End Sub
+
+    ' Under a contrast theme menus are drawn as Windows draws them (#191):
+    ' each item's text in the menu text color, and the hovered item in the
+    ' highlight pair; WinForms drew the text in the button text color,
+    ' which Night sky makes yellow. Main puts the renderer on the UI thread
+    ' (see below); here it is put on the runner's, and the Board's card
+    ' menu and a new menu both draw with it. The seam stands in for the
+    ' theme; the colors are compared by name, as Light's menu text and
+    ' button text are both black.
+    <TestMethod>
+    <DataRow(SystemColorMode.Classic)>
+    <DataRow(SystemColorMode.Dark)>
+    Public Sub Menus_UseTheMenuTextColorsUnderAContrastTheme(mode As SystemColorMode)
+
+        If SystemInformation.HighContrast Then
+            Assert.Inconclusive("Windows high-contrast themes require separate certification; these checks do not change OS settings.")
+        End If
+
+        Dim found As New List(Of String)()
+        Dim items As Integer = 0
+
+        Dim board As Func(Of String, Form) =
+            Function(root As String) As Form
+                UiTheme.HighContrastOverride = True
+                ThemedMenuRenderer.Install()
+                Return ViewCatalog.Dialogs(GetType(ManuscriptPipeline.Form1))(root)
+            End Function
+
+        Try
+            Dim failures As List(Of String) = ViewCatalog.ShowEach(
+                {("The Board under a contrast theme", board)},
+                Sub(name, shown)
+                    Dim card As Control = Descendants(shown).OfType(Of RoundedPanel)().First(Function(control) control.Visible AndAlso control.ContextMenuStrip IsNot Nothing)
+                    Using fresh As New ContextMenuStrip()
+                        fresh.Items.Add("Preferences...")
+                        For Each menu As ContextMenuStrip In {card.ContextMenuStrip, fresh}
+                            For Each item As ToolStripMenuItem In menu.Items.OfType(Of ToolStripMenuItem)()
+                                items += 1
+                                Dim ink As Color = TextColorDrawn(menu.Renderer, item)
+                                If ink <> SystemColors.MenuText Then found.Add($"'{item.Text}' is drawn in {ink.Name}, not MenuText.")
+                            Next
+                        Next
+                        Dim hovered As ToolStripMenuItem = card.ContextMenuStrip.Items.OfType(Of ToolStripMenuItem)().First()
+                        hovered.Select()
+                        If Not hovered.Selected Then
+                            found.Add("The first item could not be hovered.")
+                        Else
+                            Dim ink As Color = TextColorDrawn(card.ContextMenuStrip.Renderer, hovered)
+                            If ink <> SystemColors.HighlightText Then found.Add($"Hovered, '{hovered.Text}' is drawn in {ink.Name}, not HighlightText.")
+                            Using picture As Bitmap = BackgroundDrawn(card.ContextMenuStrip.Renderer, hovered)
+                                If picture.GetPixel(picture.Width \ 2, picture.Height \ 2).ToArgb() <> SystemColors.Highlight.ToArgb() Then found.Add($"Hovered, '{hovered.Text}' is not on the highlight color.")
+                            End Using
+                        End If
+                    End Using
+                End Sub,
+                mode:=mode)
+            Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Finally
+            UiTheme.HighContrastOverride = Nothing
+        End Try
+
+        Assert.IsTrue(items >= 4, $"The card menu's items and the new menu's were drawn ({items}).")
+        Assert.AreEqual(0, found.Count, $"Under a contrast theme in {mode}:{Environment.NewLine}{String.Join(Environment.NewLine, found)}")
+
+    End Sub
+
+    ' In Light and Dark the menu renderer draws as WinForms' own, picture
+    ' for picture: an item's text, a red Delete, and a hovered item's text
+    ' and background. A guard: it cannot fail before #191, when WinForms'
+    ' renderer drew every menu; it fails if the renderer changes either.
+    <TestMethod>
+    <DataRow(SystemColorMode.Classic)>
+    <DataRow(SystemColorMode.Dark)>
+    Public Sub Menus_DrawAsWinFormsDoesInLightAndDark(mode As SystemColorMode)
+
+        RunWithColorMode(mode,
+            Sub()
+                UiTheme.HighContrastOverride = False
+                Try
+                    Using menu As New ContextMenuStrip()
+                        menu.Items.Add("Open")
+                        Dim delete As ToolStripItem = menu.Items.Add("Delete...")
+                        delete.ForeColor = UiTheme.DangerColor()
+                        Dim hovered As ToolStripItem = menu.Items.Add("View Route")
+                        hovered.Select()
+                        Assert.IsTrue(hovered.Selected, "An item can be hovered.")
+
+                        Dim own As New ToolStripProfessionalRenderer()
+                        Dim themed As New ThemedMenuRenderer()
+
+                        For Each item As ToolStripMenuItem In menu.Items.OfType(Of ToolStripMenuItem)()
+                            Assert.AreEqual(TextColorDrawn(own, item), TextColorDrawn(themed, item), $"'{item.Text}' is drawn in the same color in {mode}.")
+                            Using expected As Bitmap = TextDrawn(own, item), actual As Bitmap = TextDrawn(themed, item)
+                                Assert.IsTrue(SamePicture(expected, actual), $"'{item.Text}' is drawn the same in {mode}.")
+                            End Using
+                            Using expected As Bitmap = BackgroundDrawn(own, item), actual As Bitmap = BackgroundDrawn(themed, item)
+                                Assert.IsTrue(SamePicture(expected, actual), $"'{item.Text}''s background is drawn the same in {mode}.")
+                            End Using
+                        Next
+                    End Using
+                Finally
+                    UiTheme.HighContrastOverride = Nothing
+                End Try
+            End Sub)
+
+    End Sub
+
+    ' Guard: Main puts the menu renderer on the UI thread, before anything
+    ' is shown. It fails before #191, when nothing did.
+    <TestMethod>
+    Public Sub MainDrawsTheUiThreadsMenusWithTheThemedRenderer()
+
+        Dim source As String =
+            File.ReadAllText(Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManuscriptPipeline", "Program.vb"))
+
+        Dim main As Integer = source.IndexOf("Public Sub Main(", StringComparison.Ordinal)
+        Dim installing As Integer = source.IndexOf("ThemedMenuRenderer.Install()", Math.Max(main, 0), StringComparison.Ordinal)
+        Dim running As Integer = source.IndexOf("Run(args, instance)", Math.Max(main, 0), StringComparison.Ordinal)
+
+        Assert.IsTrue(main >= 0 AndAlso installing > main AndAlso installing < running, "Main puts the menu renderer on the UI thread before running the app.")
+
+    End Sub
+
     <TestMethod>
     <DataRow(SystemColorMode.Classic)>
     <DataRow(SystemColorMode.Dark)>
@@ -489,6 +810,151 @@ Public Class WorkflowThemeKeyboardSmokeTests
         Dim value As Double = channel / 255.0
         Return If(value <= 0.04045, value / 12.92, Math.Pow((value + 0.055) / 1.055, 2.4))
     End Function
+
+    ' ---------------------------------------------------------------
+    ' Chips, pills and menus under a contrast theme (#191)
+    ' ---------------------------------------------------------------
+
+    Private Const WM_LBUTTONDOWN As Integer = &H201
+    Private Const WM_LBUTTONUP As Integer = &H202
+    Private Const WM_CHANGEUISTATE As Integer = &H127
+    Private Const UIS_CLEAR As Integer = 2
+    Private Const UISF_HIDEFOCUS As Integer = 1
+
+    <Runtime.InteropServices.DllImport("user32.dll")>
+    Private Shared Function SendMessage(handle As IntPtr, message As Integer, wParam As IntPtr, lParam As IntPtr) As IntPtr
+    End Function
+
+    Private Shared Function MousePoint(at As Point) As IntPtr
+        Return New IntPtr((at.Y << 16) Or (at.X And &HFFFF))
+    End Function
+
+    ' The color a chip's text is drawn in, for its tone.
+    Private Shared Function ChipInk(chip As FilterChip) As Color
+        Select Case chip.Tone
+            Case FilterChipTone.Warning
+                Return UiTheme.WarningColor()
+            Case FilterChipTone.Danger
+                Return UiTheme.DangerColor()
+            Case FilterChipTone.Active
+                Return UiTheme.AccentColor()
+            Case Else
+                Return UiTheme.SecondaryText()
+        End Select
+    End Function
+
+    Private Shared Function PictureOf(control As Control) As Bitmap
+        Dim picture As New Bitmap(control.Width, control.Height)
+        control.DrawToBitmap(picture, New Rectangle(Point.Empty, control.Size))
+        Return picture
+    End Function
+
+    Private Shared Sub CheckOutline(missing As List(Of String), label As String, control As Control, ink As Color)
+        Using picture As Bitmap = PictureOf(control)
+            CheckOutline(missing, label, picture, ink)
+        End Using
+    End Sub
+
+    ' A shape's outline: along its straight top edge and its straight bottom
+    ' edge, a run at least half as long as the edge of pixels nearer the
+    ' ink than the window color, which the shape is filled with; a smoothed
+    ' line one pixel wide is not quite the ink.
+    Private Shared Sub CheckOutline(missing As List(Of String), label As String, picture As Bitmap, ink As Color)
+        Dim left As Integer = picture.Height \ 2
+        Dim right As Integer = picture.Width - picture.Height \ 2
+        Dim wanted As Integer = Math.Max(4, (right - left) \ 2)
+        Dim top As Integer = LongestInkRun(picture, 0, left, right, ink)
+        Dim bottom As Integer = Math.Max(LongestInkRun(picture, picture.Height - 1, left, right, ink), LongestInkRun(picture, picture.Height - 2, left, right, ink))
+        If top < wanted OrElse bottom < wanted Then
+            missing.Add($"{label}: {top} and {bottom} pixels of {ink.Name} along its top and bottom edges, not {wanted}.")
+        End If
+    End Sub
+
+    ' A shape drawn among other things, found in the region as the smallest
+    ' rectangle holding every pixel the test picks: with an outline, the
+    ' outline; without one, only its text.
+    Private Shared Sub CheckOutlineWithin(missing As List(Of String), label As String, picture As Bitmap, region As Rectangle, ink As Color, picks As Func(Of Color, Boolean))
+        Dim left As Integer = Integer.MaxValue
+        Dim top As Integer = Integer.MaxValue
+        Dim right As Integer = -1
+        Dim bottom As Integer = -1
+        For y As Integer = region.Top To region.Bottom - 1
+            For x As Integer = region.Left To region.Right - 1
+                If picks(picture.GetPixel(x, y)) Then
+                    left = Math.Min(left, x)
+                    top = Math.Min(top, y)
+                    right = Math.Max(right, x)
+                    bottom = Math.Max(bottom, y)
+                End If
+            Next
+        Next
+        If right < 0 OrElse bottom - top < 2 Then
+            missing.Add($"{label}: nothing drawn in {ink.Name} to find it by.")
+            Return
+        End If
+        Using shape As Bitmap = picture.Clone(Rectangle.FromLTRB(left, top, right + 1, bottom + 1), picture.PixelFormat)
+            CheckOutline(missing, label, shape, ink)
+        End Using
+    End Sub
+
+    Private Shared Function LongestInkRun(picture As Bitmap, row As Integer, left As Integer, right As Integer, ink As Color) As Integer
+        Dim longest As Integer = 0
+        Dim run As Integer = 0
+        For x As Integer = Math.Max(0, left) To Math.Min(picture.Width, right) - 1
+            Dim pixel As Color = picture.GetPixel(x, row)
+            run = If(Distance(pixel, ink) < Distance(pixel, SystemColors.Window), run + 1, 0)
+            longest = Math.Max(longest, run)
+        Next
+        Return longest
+    End Function
+
+    Private Shared Function Distance(one As Color, other As Color) As Integer
+        Dim red As Integer = CInt(one.R) - CInt(other.R)
+        Dim green As Integer = CInt(one.G) - CInt(other.G)
+        Dim blue As Integer = CInt(one.B) - CInt(other.B)
+        Return red * red + green * green + blue * blue
+    End Function
+
+    Private Shared Function SamePicture(expected As Bitmap, actual As Bitmap) As Boolean
+        If expected.Size <> actual.Size Then Return False
+        For y As Integer = 0 To expected.Height - 1
+            For x As Integer = 0 To expected.Width - 1
+                If expected.GetPixel(x, y).ToArgb() <> actual.GetPixel(x, y).ToArgb() Then Return False
+            Next
+        Next
+        Return True
+    End Function
+
+    ' The color the renderer draws a menu item's text in.
+    Private Shared Function TextColorDrawn(renderer As ToolStripRenderer, item As ToolStripItem) As Color
+        Using picture As New Bitmap(MenuItemSize.Width, MenuItemSize.Height), g As Graphics = Graphics.FromImage(picture)
+            Dim args As New ToolStripItemTextRenderEventArgs(g, item, item.Text, New Rectangle(Point.Empty, MenuItemSize), item.ForeColor, item.Font, TextFormatFlags.Left Or TextFormatFlags.VerticalCenter)
+            renderer.DrawItemText(args)
+            Return args.TextColor
+        End Using
+    End Function
+
+    Private Shared Function TextDrawn(renderer As ToolStripRenderer, item As ToolStripItem) As Bitmap
+        Dim picture As New Bitmap(MenuItemSize.Width, MenuItemSize.Height)
+        Using g As Graphics = Graphics.FromImage(picture)
+            g.Clear(Color.White)
+            renderer.DrawItemText(New ToolStripItemTextRenderEventArgs(g, item, item.Text, New Rectangle(Point.Empty, MenuItemSize), item.ForeColor, item.Font, TextFormatFlags.Left Or TextFormatFlags.VerticalCenter))
+        End Using
+        Return picture
+    End Function
+
+    Private Shared Function BackgroundDrawn(renderer As ToolStripRenderer, item As ToolStripItem) As Bitmap
+        item.AutoSize = False
+        item.Size = MenuItemSize
+        Dim picture As New Bitmap(MenuItemSize.Width, MenuItemSize.Height)
+        Using g As Graphics = Graphics.FromImage(picture)
+            g.Clear(Color.White)
+            renderer.DrawMenuItemBackground(New ToolStripItemRenderEventArgs(g, item))
+        End Using
+        Return picture
+    End Function
+
+    Private Shared ReadOnly MenuItemSize As New Size(160, 24)
 
     ' A kind's pixels as the route map paints it on a card.
     Private Shared Function PaintedSwatch(kind As RouteSegmentKind) As Integer()

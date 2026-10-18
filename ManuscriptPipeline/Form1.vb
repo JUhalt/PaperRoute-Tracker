@@ -2969,7 +2969,9 @@ Public Class Form1
         ' Title and journal
         ' =================================================
 
-        ' A link, so the title is the card's keyboard-focusable way to open it.
+        ' A link, so the title is the card's keyboard-focusable way to open
+        ' it: a tab stop before the card's ⋯, that Enter or Space opens
+        ' (#192).
         Dim lblTitle As New LinkLabel With {
             .Text = manuscript.Title,
             .AutoSize = False,
@@ -3090,6 +3092,16 @@ Public Class Form1
         AddHandler lblTitle.LinkClicked,
             Sub(sender, e)
                 WithLiveManuscript(record, Sub(live) OpenManuscript(live))
+            End Sub
+
+        ' A link opens on Enter by itself; Space, as on a button, opens it
+        ' too. Only bare Space: Alt+Space is the window menu's.
+        AddHandler lblTitle.KeyDown,
+            Sub(sender, e)
+                If e.KeyData = Keys.Space Then
+                    e.SuppressKeyPress = True
+                    WithLiveManuscript(record, Sub(live) OpenManuscript(live))
+                End If
             End Sub
 
         AddHandler lblRoute.LinkClicked,

@@ -134,6 +134,10 @@ Namespace Controls
 
         Public Sub New()
             SetStyle(ControlStyles.UserPaint Or ControlStyles.AllPaintingInWmPaint Or ControlStyles.OptimizedDoubleBuffer Or ControlStyles.ResizeRedraw, True)
+            ' A key with nothing to do from the keyboard and no focus to
+            ' show is no tab stop (#192).
+            SetStyle(ControlStyles.Selectable, False)
+            TabStop = False
             AccessibleRole = AccessibleRole.StaticText
         End Sub
 
@@ -211,6 +215,23 @@ Namespace Controls
         Public Sub New()
             SetStyle(ControlStyles.UserPaint Or ControlStyles.AllPaintingInWmPaint Or ControlStyles.OptimizedDoubleBuffer Or ControlStyles.ResizeRedraw, True)
             AccessibleRole = AccessibleRole.Graphic
+        End Sub
+
+        ' A tab stop, so a screen reader reads the route, that shows its
+        ' focus and has no key of its own: Enter on it, with a modifier or
+        ' without, does nothing, where it pressed the window's Close (#192).
+        Protected Overrides Function IsInputKey(keyData As Keys) As Boolean
+            Return (keyData And Keys.KeyCode) = Keys.Enter OrElse MyBase.IsInputKey(keyData)
+        End Function
+
+        Protected Overrides Sub OnGotFocus(e As EventArgs)
+            MyBase.OnGotFocus(e)
+            Invalidate()
+        End Sub
+
+        Protected Overrides Sub OnLostFocus(e As EventArgs)
+            MyBase.OnLostFocus(e)
+            Invalidate()
         End Sub
 
         <DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)>
@@ -300,6 +321,7 @@ Namespace Controls
             Dim frame As Frame = Measure(Width)
             If _map.IsEmpty Then
                 TextRenderer.DrawText(g, RouteMapStyle.Summary(_map), Font, ClientRectangle, UiTheme.SecondaryText(), TextFormatFlags.VerticalCenter Or TextFormatFlags.Left Or TextFormatFlags.WordBreak)
+                DrawFocusRing(g)
                 Return
             End If
 
@@ -431,6 +453,19 @@ Namespace Controls
                 TextRenderer.DrawText(g, HatchNote, Font, New Rectangle(0, frame.NoteTop, Width, frame.NoteHeight), UiTheme.SecondaryText(), TextFormatFlags.WordBreak Or TextFormatFlags.NoPrefix)
             End If
 
+            DrawFocusRing(g)
+
+        End Sub
+
+        ' The 2-pixel ring the app's buttons show when focused from the
+        ' keyboard, round the whole map.
+        Private Sub DrawFocusRing(g As Graphics)
+            If Not (Focused AndAlso ShowFocusCues) Then Return
+            g.SmoothingMode = SmoothingMode.AntiAlias
+            Using path As GraphicsPath = RoundedShapes.Create(New RectangleF(1.0F, 1.0F, Width - 3.0F, Height - 3.0F), UiTheme.Px(UiTheme.ControlRadius, DeviceDpi)),
+                  pen As New Pen(UiTheme.AccentSecondaryColor(), 2.0F)
+                g.DrawPath(pen, path)
+            End Using
         End Sub
 
         Private Sub DrawNumber(g As Graphics, circle As RectangleF, item As RouteStep, numberFont As Font, unit As Integer)
