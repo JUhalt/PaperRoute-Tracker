@@ -62,8 +62,8 @@ Public Class KeyboardAccessTests
     Private Const VK_SHIFT As Integer =
         &H10
 
-    Private Const WM_CHANGEUISTATE As UInteger =
-        &H127
+    Private Const WM_UPDATEUISTATE As UInteger =
+        &H128
 
     Private Const UIS_CLEAR As Integer =
         2
@@ -406,12 +406,19 @@ Public Class KeyboardAccessTests
                         "The route map is a stop, so a screen reader reads it."
                     )
 
-                    ' Focus cues show, as once a key has been pressed in a
-                    ' window Windows activated; in one shown while another
-                    ' program has the foreground they can stay hidden.
+                    ' Focus cues show, as once a key has been pressed. The
+                    ' map is told directly, as the drawn lists' tests tell
+                    ' theirs: asked of a window Windows never activated,
+                    ' because another program had the foreground, the change
+                    ' left the map's cues hidden.
                     view.ActiveControl = map
-                    SendMessage(view.Handle, WM_CHANGEUISTATE, New IntPtr(UIS_CLEAR Or (UISF_HIDEFOCUS << 16)), IntPtr.Zero)
+                    SendMessage(map.Handle, WM_UPDATEUISTATE, New IntPtr(UIS_CLEAR Or (UISF_HIDEFOCUS << 16)), IntPtr.Zero)
                     Application.DoEvents()
+
+                    Assert.IsTrue(
+                        map.Focused AndAlso CBool(GetType(Control).GetProperty("ShowFocusCues", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(map)),
+                        "The route map has the focus and shows focus cues."
+                    )
 
                     Using focused As New Bitmap(map.Width, map.Height)
 
