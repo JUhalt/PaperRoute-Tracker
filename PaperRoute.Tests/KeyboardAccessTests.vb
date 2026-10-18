@@ -58,6 +58,19 @@ Public Class KeyboardAccessTests
         (GetType(TitlePageImportForm), "Use These Details")
     }
 
+    ' The fields the walk found without an access key in two dialogs that
+    ' give their other fields one (#151), each with the key that now
+    ' focuses it and the tab it is on (-1: the dialog has none), named as
+    ' a screen reader names it.
+    Private Shared ReadOnly AccessKeyGiven As (View As Type, Tab As Integer, Key As Char, Field As String)() = {
+        (GetType(ReviewerResponseItemForm), 0, "m"c, "Reviewer comment (enter a comment or action)"),
+        (GetType(ReviewerResponseItemForm), 0, "p"c, "Planned or completed action"),
+        (GetType(ReviewerResponseItemForm), 1, "e"c, "Response draft for the journal"),
+        (GetType(ReviewerResponseItemForm), 2, "l"c, "Manuscript location (page, line, or section)"),
+        (GetType(ReviewerResponseItemForm), 2, "n"c, "Working notes (included in export)"),
+        (GetType(JournalSuggestionsForm), -1, "l"c, "Published in the last")
+    }
+
     ' The five dialogs that had no CancelButton, with the result Esc closes
     ' each with: that of its Cancel or its Close button.
     Private Shared ReadOnly EscapeProbed As (View As Type, Result As DialogResult)() = {
@@ -86,6 +99,9 @@ Public Class KeyboardAccessTests
 
     Private Const WM_UPDATEUISTATE As UInteger =
         &H128
+
+    Private Const WM_SYSCHAR As UInteger =
+        &H106
 
     Private Const UIS_CLEAR As Integer =
         2
@@ -1009,6 +1025,115 @@ Public Class KeyboardAccessTests
     End Sub
 
 
+    ' In the two dialogs that gave some of their fields access keys and
+    ' not the rest (#151), each field the walk found without one now has
+    ' one: Alt and its letter, on the field's tab, focus the field its
+    ' label names, and the field is still named without the "&".
+    <TestMethod>
+    Public Sub EachFieldOfTheReviewerCommentAndFindJournalsHasAnAccessKey()
+
+        Dim reports As New List(Of String)()
+
+        Dim failures As List(Of String) =
+            ViewCatalog.ShowEach(
+                AccessKeyGiven.Select(Function(entry) entry.View).Distinct().Select(Function(type) (type.Name, ViewCatalog.Dialogs(type))),
+                Sub(name, shown)
+
+                    For Each given In AccessKeyGiven.Where(Function(entry) entry.View.Name = name)
+
+                        If given.Tab >= 0 Then
+                            ViewCatalog.Descendants(shown).OfType(Of TabControl)().Single().SelectedIndex = given.Tab
+                            Application.DoEvents()
+                        End If
+
+                        ' Start from the window's first stop, away from the field.
+                        shown.ActiveControl = Nothing
+                        shown.SelectNextControl(Nothing, True, True, True, False)
+                        Application.DoEvents()
+
+                        PressAccessKey(shown, given.Key)
+
+                        Dim active As Control =
+                            DeepestActiveControl(shown)
+
+                        If active Is Nothing OrElse active.AccessibilityObject.Name <> given.Field Then
+                            reports.Add(name & ": Alt+" & Char.ToUpperInvariant(given.Key) & " focused " & Describe(active) & If(active Is Nothing, String.Empty, ", named '" & active.AccessibilityObject.Name & "'") & ", not " & given.Field & ".")
+                        End If
+
+                    Next
+
+                End Sub
+            )
+
+        Assert.AreEqual(
+            0,
+            failures.Count,
+            Environment.NewLine & String.Join(Environment.NewLine, failures)
+        )
+
+        Assert.AreEqual(
+            0,
+            reports.Count,
+            Environment.NewLine & String.Join(Environment.NewLine, reports)
+        )
+
+    End Sub
+
+
+    ' No window gives one letter to two access keys it shows together, so
+    ' Alt and the letter always reach the one control it names (#151).
+    ' Every view and step in the catalog is read, with the keys of labels,
+    ' buttons, check boxes and options that show them. A guard: no window
+    ' repeats one today, so it cannot fail before the change; it holds the
+    ' new keys, and every later one, to that.
+    <TestMethod>
+    Public Sub NoWindowRepeatsAnAccessKeyItShowsTogether()
+
+        Dim repeated As New List(Of String)()
+        Dim keyed As New List(Of String)()
+
+        Dim failures As List(Of String) =
+            ViewCatalog.ShowEach(
+                ViewCatalog.AllViewsAndStages(),
+                Sub(name, shown)
+
+                    Dim keys As List(Of (Key As Char, Text As String)) =
+                        ViewCatalog.Descendants(shown).
+                            Where(Function(control) control.Visible AndAlso AccessKeyOf(control).HasValue).
+                            Select(Function(control) (AccessKeyOf(control).Value, control.Text)).
+                            ToList()
+
+                    If keys.Count > 0 Then
+                        keyed.Add(name)
+                    End If
+
+                    For Each letter In keys.GroupBy(Function(entry) entry.Key).Where(Function(group) group.Count() > 1)
+                        repeated.Add(name & ": Alt+" & letter.Key & " is " & String.Join(" and ", letter.Select(Function(entry) "'" & entry.Text & "'")))
+                    Next
+
+                End Sub
+            )
+
+        Assert.AreEqual(
+            0,
+            failures.Count,
+            Environment.NewLine & String.Join(Environment.NewLine, failures)
+        )
+
+        Assert.IsTrue(
+            keyed.Contains("ReviewerResponseItemForm") AndAlso keyed.Contains("JournalSuggestionsForm"),
+            "The sweep read the keys of the windows that have them: " & String.Join(", ", keyed)
+        )
+
+        Assert.AreEqual(
+            0,
+            repeated.Count,
+            Environment.NewLine & String.Join(Environment.NewLine, repeated)
+        )
+
+    End Sub
+
+
     ' Leaving a page by keyboard while focus is inside it (#133): where
     ' focus lands, and that the control left loses it once, is the same
     ' however the page is put away. Pinned on the window as it was when
@@ -1318,6 +1443,66 @@ Public Class KeyboardAccessTests
         Application.DoEvents()
 
     End Sub
+
+
+    ' Alt and the letter, as Windows delivers an access key: a WM_SYSCHAR
+    ' to the focused control, which the window hands to its mnemonics.
+    Private Shared Sub PressAccessKey(
+        form As Form,
+        key As Char
+    )
+
+        Dim target As Control =
+            If(DeepestActiveControl(form), form)
+
+        ' Bit 29 of the key data: Alt is held.
+        PostMessage(target.Handle, WM_SYSCHAR, New IntPtr(AscW(key)), New IntPtr(1 << 29))
+        Application.DoEvents()
+
+    End Sub
+
+
+    ' The letter Alt presses a label, button, check box or option with:
+    ' the one after a single "&" in its text, while it shows mnemonics.
+    Private Shared Function AccessKeyOf(
+        control As Control
+    ) As Char?
+
+        Dim label As Label =
+            TryCast(control, Label)
+
+        Dim button As ButtonBase =
+            TryCast(control, ButtonBase)
+
+        If Not ((label IsNot Nothing AndAlso label.UseMnemonic) OrElse (button IsNot Nothing AndAlso button.UseMnemonic)) Then
+            Return Nothing
+        End If
+
+        Dim text As String =
+            If(control.Text, String.Empty)
+
+        Dim index As Integer =
+            0
+
+        While index < text.Length - 1
+
+            If text(index) = "&"c Then
+
+                If text(index + 1) <> "&"c Then
+                    Return If(Char.IsLetterOrDigit(text(index + 1)), Char.ToUpperInvariant(text(index + 1)), CType(Nothing, Char?))
+                End If
+
+                index += 1
+
+            End If
+
+            index += 1
+
+        End While
+
+        Return Nothing
+
+    End Function
 
 
     ' Shows the window with the focus it opens with in the app, where it is

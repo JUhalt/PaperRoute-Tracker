@@ -103,13 +103,13 @@ Namespace Forms
             tabs.Dock = DockStyle.Fill
             tabs.AccessibleName = "Reviewer response fields"
             Dim commentTab As New TabPage("Comment && action")
-            commentTab.Controls.Add(CreateTextPair("Reviewer comment (enter a comment or action)", txtComment,
-                                                  "Planned or completed action", txtAction))
+            commentTab.Controls.Add(CreateTextPair("Reviewer co&mment (enter a comment or action)", txtComment,
+                                                  "&Planned or completed action", txtAction))
             Dim responseTab As New TabPage("Draft response")
             responseTab.Controls.Add(CreateResponseSection())
             Dim notesTab As New TabPage("Location && notes")
-            notesTab.Controls.Add(CreateTextPair("Manuscript location (page, line, or section)", txtLocation,
-                                                "Working notes (included in export)", txtNotes))
+            notesTab.Controls.Add(CreateTextPair("Manuscript &location (page, line, or section)", txtLocation,
+                                                "Working &notes (included in export)", txtNotes))
             tabs.TabPages.AddRange({commentTab, responseTab, notesTab})
             root.Controls.Add(tabs, 0, 2)
 
@@ -149,7 +149,8 @@ Namespace Forms
             field.Multiline = True
             field.ScrollBars = ScrollBars.Vertical
             field.AcceptsReturn = True
-            field.AccessibleName = label
+            ' Named for its label, without the access key's "&".
+            field.AccessibleName = label.Replace("&", String.Empty)
             panel.Controls.Add(field, 0, 1)
             Return panel
         End Function
@@ -157,7 +158,7 @@ Namespace Forms
         ' The response box, with the assistant's starting point below it when
         ' the assistant is turned on, and where an accepted one came from.
         Private Function CreateResponseSection() As Control
-            Dim panel As TableLayoutPanel = DirectCast(CreateTextSection("Response draft for the journal", txtResponse), TableLayoutPanel)
+            Dim panel As TableLayoutPanel = DirectCast(CreateTextSection("R&esponse draft for the journal", txtResponse), TableLayoutPanel)
             panel.RowCount = 3
             panel.RowStyles.Add(New RowStyle(SizeType.AutoSize))
 
