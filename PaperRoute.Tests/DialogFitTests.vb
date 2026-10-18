@@ -30,9 +30,10 @@ Public Class DialogFitTests
         Next
     End Sub
 
-    ' On the shared runner (#185): made on the test's own thread, these
-    ' two forms left WinForms' context there, and every color-mode run
-    ' after this test in the same process hung until the runner's timeout.
+    ' On the shared runner (#185). Made on the test's own thread, which
+    ' pumps no messages, these two forms left something bound to it that
+    ' outlived them, and every color-mode run after this test in the same
+    ' process hung until the runner's timeout.
     <TestMethod>
     Public Sub AWindowLargerThanTheScreenIsShrunkAndCenteredInIt()
         Dim area As New Rectangle(100, 50, 700, 500)

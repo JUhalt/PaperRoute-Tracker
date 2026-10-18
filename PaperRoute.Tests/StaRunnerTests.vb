@@ -300,6 +300,48 @@ Public Class StaRunnerTests
     End Sub
 
 
+    ' What StaRunnerGuard sees (#185): a control leaves WinForms'
+    ' synchronization context on the thread it is made on, and one made on
+    ' the runner leaves none on the test's own thread. A guard on the
+    ' guard: it passes before and after #185, and fails only if WinForms
+    ' stops leaving the context, when the guard could no longer see a form
+    ' made off the runner.
+    <TestMethod>
+    Public Sub AControlLeavesWinFormsContextOnTheThreadItIsMadeOn()
+
+        Dim before As Boolean =
+            True
+
+        Dim after As Boolean =
+            False
+
+        StaRunner.Run(
+            Sub()
+                before = TypeOf SynchronizationContext.Current Is WindowsFormsSynchronizationContext
+                Using control As New Control()
+                End Using
+                after = TypeOf SynchronizationContext.Current Is WindowsFormsSynchronizationContext
+            End Sub
+        )
+
+        Assert.IsFalse(
+            before,
+            "The runner's thread starts without WinForms' context."
+        )
+
+        Assert.IsTrue(
+            after,
+            "A control made on the runner's thread leaves WinForms' context there."
+        )
+
+        Assert.IsFalse(
+            TypeOf SynchronizationContext.Current Is WindowsFormsSynchronizationContext,
+            "None reaches the test's own thread."
+        )
+
+    End Sub
+
+
     Private Shared Function Offscreen(
         form As Form
     ) As Form
