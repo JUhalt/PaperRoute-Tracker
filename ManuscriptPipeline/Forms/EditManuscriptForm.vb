@@ -1784,8 +1784,7 @@ Namespace Forms
             shortlistRows.RowCount = Math.Max(1, list.Count)
             For index As Integer = 0 To list.Count - 1
                 shortlistRows.RowStyles.Add(New RowStyle(SizeType.AutoSize))
-                Dim row As Control = CreateShortlistRow(list(index), index, list.Count)
-                shortlistRows.Controls.Add(row, 0, index)
+                shortlistRows.Controls.Add(CreateShortlistRow(list(index), index, list.Count), 0, index)
             Next
             shortlistRows.ResumeLayout(True)
             shortlistRows.Visible = list.Count > 0
