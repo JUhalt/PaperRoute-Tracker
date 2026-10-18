@@ -11,9 +11,9 @@ Imports ManuscriptPipeline.Services
 ' The single-window shell: a left rail of pages, one content area, and
 ' back/forward navigation. The Board is always kept, and so are Deadlines
 ' and Import & Export once built, until the system colors change (#133);
-' other pages are built when opened and disposed when left. Library editors that save as they go
-' (journals, authors, reminders) are hosted as pages until later v0.6 work
-' converts them.
+' other pages are built when opened and disposed when left. Library
+' editors that save as they go (journals, authors, reminders) are hosted
+' as pages until later v0.6 work converts them.
 Partial Public Class Form1
 
     Friend Enum WorkspacePage
