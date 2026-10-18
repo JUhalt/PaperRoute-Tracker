@@ -1032,7 +1032,7 @@ Every field, list, and table has a name that a screen reader reads, and every bu
 
 ### Contrast themes
 
-PaperRoute supports the Windows contrast themes (**Settings > Accessibility > Contrast themes** in Windows). While one is on, PaperRoute's windows, route maps, and tag colors use the theme's colors in place of PaperRoute's Light or Dark appearance.
+PaperRoute supports the Windows contrast themes (**Settings > Accessibility > Contrast themes** in Windows). While one is on, PaperRoute's windows, route maps, and tag colors use the theme's colors in place of PaperRoute's Light or Dark appearance. If you turn a contrast theme on or off while PaperRoute is open, restart PaperRoute: until then, some of its colors stay as they were.
 
 ### What Windows draws
 

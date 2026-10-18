@@ -23,10 +23,11 @@ Public Class RepositoryDocsTests
         Const untested As String =
             "Windows 10 and Windows on ARM may work, but they are not tested."
 
-        ' The decision's own words. #153 set this release's update path,
-        ' not a certification rule for every later release.
+        ' #153's decision, worded for what the update check does: an older
+        ' version is offered 1.0 too, so the documents say which path is
+        ' supported and what to do before taking the other one.
         Const updatePath As String =
-            "Only the 0.9 releases update straight to 1.0; an older version updates to a 0.9 release first."
+            "Only the 0.9 releases are supported for updating straight to 1.0. An older version's update check offers 1.0 as well: the migration tests cover that update, but no release certification does, so create a backup with **Settings → Backup Library...** first."
 
         StringAssert.Contains(
             Section(
