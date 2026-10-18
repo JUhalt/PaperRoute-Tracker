@@ -52,7 +52,7 @@ Friend NotInheritable Class CertificationFixture
 
 
     ' The fixture on disk, laid out as PaperRoute lays out a library, with
-    ' what was written there.
+    ' the manuscripts written there.
     Friend NotInheritable Class CertificationLibrary
 
         ' Stands for %LocalAppData%\PaperRoute, with data\ inside.
@@ -66,8 +66,6 @@ Friend NotInheritable Class CertificationFixture
         Public Property LinkedDirectory As String = String.Empty
 
         Public Property Manuscripts As New List(Of Manuscript)()
-        Public Property Library As New AuthorLibraryData()
-        Public Property Citations As New CitationSnapshot()
 
     End Class
 
@@ -108,19 +106,19 @@ Friend NotInheritable Class CertificationFixture
         fixture.DataDirectory = Path.Combine(fixture.DataRoot, "data")
         Directory.CreateDirectory(fixture.DataDirectory)
 
-        fixture.Library = CreateLibrary()
+        Dim library As AuthorLibraryData = CreateLibrary()
         fixture.Manuscripts.Add(CreateRevision(fixture))
         fixture.Manuscripts.Add(CreateRerouted(fixture))
         fixture.Manuscripts.Add(CreatePublished(fixture))
         fixture.Manuscripts.Add(CreateDraft(fixture))
-        fixture.Citations = CreateCitations()
+        Dim citations As CitationSnapshot = CreateCitations()
 
         ' Written by PaperRoute's own stores, as a 0.9.x library is: the
         ' models are unchanged since 0.9.1, and every calendar date here is a
         ' plain date, which 0.9.x also wrote without an offset.
-        Call New AuthorLibraryRepository(fixture.DataDirectory).Save(fixture.Library)
+        Call New AuthorLibraryRepository(fixture.DataDirectory).Save(library)
         Call New ManuscriptRepository(fixture.DataDirectory, fixture.ManagedDirectory).Save(fixture.Manuscripts)
-        Call New CitationStore(fixture.DataDirectory).Save(fixture.Citations)
+        Call New CitationStore(fixture.DataDirectory).Save(citations)
 
         ' The marker a 0.9 release writes, at a fixed time.
         File.WriteAllText(

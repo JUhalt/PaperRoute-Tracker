@@ -21,13 +21,13 @@ Keep every published file and, for the v0.4 fixture,
 `synthetic-fixture-expected.json` beside it. The source is in the PaperRoute
 repository under `ManualCertification/FixtureCollector`.
 
-Only the one known synthetic manuscript and its expected submission, version,
-packet, readiness, and journal identifiers authorize collection. Empty libraries
-receive an **EmptyLibrary** report without content. An unrelated library or
-reusable metadata receives **RejectedOtherData**, with a short reason and no
-contents copied. This strict check deliberately rejects a missing expected
-record; use the unchanged fixture to collect migration evidence before deletion
-tests.
+For the v0.4 fixture, only the one known synthetic manuscript and its expected
+submission, version, packet, readiness, and journal identifiers authorize
+collection. Empty libraries receive an **EmptyLibrary** report without content.
+An unrelated library or reusable metadata receives **RejectedOtherData**, with a
+short reason and no contents copied. This strict check deliberately rejects a
+missing expected record; use the unchanged fixture to collect migration evidence
+before deletion tests.
 
 From version 1.2, a library whose every manuscript title starts with
 `ZZZ-CERT-`, such as the standing certification fixture, receives a

@@ -21,14 +21,14 @@ From v0.9.2, every release certification uses one standing fixture (#145): a fic
 
 The generator is `PaperRoute.Tests/CertificationFixture.vb`. `CertificationFixtureTests` writes the fixture twice and compares the two byte for byte, and its chained upgrade test carries the fixture through what an update to this build does to a 0.9 library: open, save, back up, restore into a new library, open again. Every record, and every managed and linked file byte for byte, must come through. The chain starts from Schema 9 because only the 0.9 releases update straight to 1.0 (#153); the Schema 3 to 9 steps keep their own migration tests.
 
-To regenerate the fixture for a certification, name a new or empty folder outside PaperRoute's own folders and run the on-demand test from the repository root:
+To regenerate the fixture for a certification, name a new or empty folder outside PaperRoute's own folders and run its writer test from the repository root:
 
 ```powershell
 $env:PAPERROUTE_CERTIFICATION_FIXTURE = 'C:\PaperRouteCertification\fixture'
 dotnet test PaperRoute.Tests/PaperRoute.Tests.vbproj --filter "FullyQualifiedName~WritesTheFixtureForACertificationOnDemand"
 ```
 
-It writes `PaperRoute\data` (the library files), `PaperRoute Library` (the managed copies), `Linked files`, and `PaperRoute-certification-fixture.zip`, a portable backup of the library. Restore the ZIP with **Restore Backup...**. The managed copies move with it; the linked files are referenced where they were written, so put `Linked files` at the same path on the certification VM.
+It writes `PaperRoute\data` (the library files), `PaperRoute Library` (the managed copies), `Linked files`, and `PaperRoute-certification-fixture.zip`, a portable backup of the library. Restore the ZIP with **Restore Backup...**. The managed copies move with it; the linked files are referenced where they were written, so put `Linked files` at the same path on the certification VM. Without the variable, the test writes all of this into its own temporary folder, so every test run checks that **Restore Backup...** accepts the fixture's backup.
 
 ## Fixture collector
 

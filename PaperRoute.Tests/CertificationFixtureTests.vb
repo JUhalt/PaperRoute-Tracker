@@ -129,7 +129,6 @@ Public Class CertificationFixtureTests
 
         Dim source As CertificationFixture.CertificationLibrary = CertificationFixture.Write(Path.Combine(_root, "0.9 library"))
         Dim schemaPath As String = StorageMigrationService.SchemaFilePath(source.DataRoot)
-        Dim marker As Byte() = File.ReadAllBytes(schemaPath)
         Dim managedFiles As Dictionary(Of String, Byte()) = RelativeTree(source.ManagedDirectory)
         Dim linkedFiles As Dictionary(Of String, Byte()) = SnapshotTree(source.LinkedDirectory)
 
@@ -145,7 +144,7 @@ Public Class CertificationFixtureTests
         ' 1. Open.
         EnsureStorage(source.DataRoot, source.ManagedDirectory)
 
-        CollectionAssert.AreEqual(marker, File.ReadAllBytes(schemaPath), "A Schema 9 library keeps its marker: there is no step to take.")
+        Assert.AreEqual(StorageMigrationService.CurrentSchemaVersion, StorageMigrationService.ReadSchemaVersion(schemaPath), "The opened library is at this build's schema.")
 
         Dim repository As New ManuscriptRepository(source.DataDirectory, source.ManagedDirectory)
         Dim authorRepository As New AuthorLibraryRepository(source.DataDirectory)
@@ -159,14 +158,14 @@ Public Class CertificationFixtureTests
         authorRepository.Save(library)
 
         Assert.AreEqual(String.Empty, repository.LastSaveWarning)
-        AssertSameRelativeTree(managedFiles, source.ManagedDirectory, "The managed library after the save")
+        AssertSameTree(managedFiles, RelativeTree(source.ManagedDirectory), "The managed library after the save")
 
         ' 3. Back up.
         Dim backupPath As String = Path.Combine(_root, "PaperRoute Backup.zip")
 
         Call New PortableBackupService(source.ManagedDirectory).CreateBackup(backupPath, manuscripts, repository)
 
-        AssertSameRelativeTree(managedFiles, source.ManagedDirectory, "The managed library after the backup")
+        AssertSameTree(managedFiles, RelativeTree(source.ManagedDirectory), "The managed library after the backup")
 
         ' 4. Restore into a fresh root.
         Dim freshRoot As String = Path.Combine(_root, "new computer", ProductInfo.DataFolderName)
@@ -187,7 +186,7 @@ Public Class CertificationFixtureTests
         ' 5. Open that.
         EnsureStorage(freshRoot, freshManaged)
 
-        Assert.AreEqual(CertificationFixture.SchemaVersion, StorageMigrationService.ReadSchemaVersion(StorageMigrationService.SchemaFilePath(freshRoot)))
+        Assert.AreEqual(StorageMigrationService.CurrentSchemaVersion, StorageMigrationService.ReadSchemaVersion(StorageMigrationService.SchemaFilePath(freshRoot)), "The restored library is at this build's schema.")
 
         Dim restored As List(Of Manuscript) = New ManuscriptRepository(freshData, freshManaged).Load()
         Dim restoredLibrary As AuthorLibraryData = New AuthorLibraryRepository(freshData).Load()
@@ -206,7 +205,7 @@ Public Class CertificationFixtureTests
         Assert.AreEqual(Json(expectedLibrary), Json(restoredLibrary), "The journals with their facts and checklists, the authors and the tag colors came through whole.")
         Assert.AreEqual(Json(expectedCitations), Json(restoredCitations), "citations.json came through whole.")
 
-        AssertSameRelativeTree(managedFiles, freshManaged, "The restored managed library")
+        AssertSameTree(managedFiles, RelativeTree(freshManaged), "The restored managed library")
 
         ' A backup holds no linked file, so each stays where it is, unchanged,
         ' and the restored records point at it as before (compared above).
@@ -217,27 +216,32 @@ Public Class CertificationFixtureTests
     End Sub
 
 
-    ' Writes the fixture for a certification into the folder
-    ' PAPERROUTE_CERTIFICATION_FIXTURE names, with the portable backup of it
-    ' that the certification VM restores. Run on demand only, because it
-    ' writes outside the test's folder; Write refuses a folder that is not
-    ' empty, and one in or around PaperRoute's own folders.
+    ' Writes the fixture with the portable backup of it that the
+    ' certification VM restores. On demand it writes them into the folder
+    ' PAPERROUTE_CERTIFICATION_FIXTURE names, for a certification; otherwise
+    ' into the test's own folder, so every run checks that Restore Backup...
+    ' accepts that backup. Write refuses a folder that is not empty, and one
+    ' in or around PaperRoute's own folders.
     <TestMethod>
     Public Sub WritesTheFixtureForACertificationOnDemand()
 
         Dim named As String = Environment.GetEnvironmentVariable(FixtureFolderVariable)
 
-        If String.IsNullOrWhiteSpace(named) Then
-            Assert.Inconclusive($"Writes outside the test's folder; set {FixtureFolderVariable} to a new or empty folder to write the certification fixture there.")
-        End If
+        Dim folder As String =
+            If(String.IsNullOrWhiteSpace(named), Path.Combine(_root, "certification fixture"), Path.GetFullPath(named))
 
-        Dim folder As String = Path.GetFullPath(named)
         Dim fixture As CertificationFixture.CertificationLibrary = CertificationFixture.Write(folder)
+        Dim backupPath As String = Path.Combine(folder, BackupFileName)
 
         Call New PortableBackupService(fixture.ManagedDirectory).CreateBackup(
-            Path.Combine(folder, BackupFileName),
+            backupPath,
             fixture.Manuscripts,
             New ManuscriptRepository(fixture.DataDirectory, fixture.ManagedDirectory))
+
+        Assert.AreEqual(
+            fixture.Manuscripts.Count,
+            New PortableRestoreService(fixture.ManagedDirectory).InspectBackup(backupPath).ManuscriptCount,
+            "Restore Backup... accepts the backup, with every manuscript.")
 
     End Sub
 
@@ -356,22 +360,5 @@ Public Class CertificationFixtureTests
             StringComparer.OrdinalIgnoreCase)
 
     End Function
-
-
-    Private Shared Sub AssertSameRelativeTree(
-        expected As Dictionary(Of String, Byte()),
-        root As String,
-        message As String
-    )
-
-        Dim actual As Dictionary(Of String, Byte()) = RelativeTree(root)
-
-        CollectionAssert.AreEquivalent(expected.Keys.ToList(), actual.Keys.ToList(), message & ": the same files and folders.")
-
-        For Each pair As KeyValuePair(Of String, Byte()) In expected
-            CollectionAssert.AreEqual(pair.Value, actual(pair.Key), message & ": " & pair.Key & " is the same, byte for byte.")
-        Next
-
-    End Sub
 
 End Class
