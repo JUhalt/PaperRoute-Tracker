@@ -48,7 +48,7 @@ The evidence collector every certification since v0.5 cites (`fixture-evidence-<
 - `display-evidence.json`: the Windows version, the primary screen's bounds and working area, the screen's DPI, `Application.HighDpiMode` and the app's version with its commit; then, for each window, its name, its scaling kind as the sweep reads it from the source, its size and `DeviceDpi`, whether its accept and cancel buttons are inside the client area, every cut the sweep would report, and, for calibration, each button, check box, option, single-line label and tab caption with its bounds in the client area and its preferred size.
 - `display-evidence.md`: the sweep's table with one column, this display, named as the sweep names its columns (working area @ DPI).
 
-`--png` adds a picture of each window, `<Window>.png`. The evidence goes to `--out <folder>`, or to `display-evidence-<yyyyMMdd-HHmmss>` beside the tool; a folder under `%TEMP%` is refused. It is written once every window is done. No dialog is ever shown: a failure goes to standard error with an exit code (2 arguments, 3 the evidence folder or the tool's own files, 4 a window failed, 5 anything else), and the windows that failed are named at the foot of both files.
+`--png` adds a picture of each window, `<Window>.png`. The evidence goes to `--out <folder>`, or to `display-evidence-<yyyyMMdd-HHmmss>` beside the tool; a folder under `%TEMP%` is refused. It is written once every window is done, and an earlier run's `display-evidence.json` and `display-evidence.md` in the same folder are removed before the first window opens. Nothing waits for an answer: an error in one of a window's handlers fails that window by name, with no dialog; a failure goes to standard error with an exit code (2 arguments, 3 the evidence folder or the tool's own files, 4 a window failed, 5 anything else), and the windows that failed are named at the foot of both files.
 
 **Publishing it.** On the host, from the repository root (the VM has no .NET SDK):
 
@@ -58,13 +58,13 @@ dotnet publish ManualCertification/DisplayEvidence/PaperRoute.DisplayEvidence.vb
 
 Copy the whole `artifacts\display-evidence` folder to the input share as `display-evidence`. Its `AppSource` folder is the app's window source, which each window's scaling kind is read from. CI builds the tool on every run, so it cannot fall behind the catalog.
 
-**Running it in the VM.** Set the display in Windows (Settings > System > Display): 1920x1080 at 150% for the first session, 1366x768 at 125% for the second. Start the tool from Run (Win+R), naming the evidence share, since the input share is read-only:
+**Running it in the VM.** Set the display in Windows (Settings > System > Display): 1920x1080 at 150% for the first session, 1366x768 at 125% for the second. Start the tool from Run (Win+R) through `cmd`, so that its standard error is kept, naming the evidence share, since the input share is read-only:
 
 ```text
-\\VBOXSVR\PaperRouteInputs\display-evidence\PaperRoute.DisplayEvidence.exe --png --out \\VBOXSVR\PaperRouteEvidence\display-evidence-150
+cmd /c "\\VBOXSVR\PaperRouteInputs\display-evidence\PaperRoute.DisplayEvidence.exe --png --out \\VBOXSVR\PaperRouteEvidence\display-evidence-150 2> \\VBOXSVR\PaperRouteEvidence\display-evidence-150.err"
 ```
 
-Use `display-evidence-125` for the second session. The windows flash past for a minute or two; the run is done when `display-evidence.md` appears. Its first line must read 144 DPI (120 at 125%) and `HighDpiMode SystemAware`; if the DPI is still the old one, sign out and back in, as a system-aware program can keep the scale the session started with, and run it again.
+Use `-125` in both names for the second session. The windows flash past for a minute or two; the run is over when the `cmd` window closes. An empty `.err` file means it finished; one that is not empty means it failed, and says why. The sentence under the heading of `display-evidence.md` must read 144 DPI (120 at 125%) and `HighDpiMode SystemAware`; if the DPI is still the old one, sign out and back in, as a system-aware program can keep the scale the session started with, and run it again into a new folder, `display-evidence-150b` with its own `.err`, so the first run's evidence stays for the record.
 
 **Comparing it with the sweep.** Take the sweep's table from the same commit, from the output of
 

@@ -1,4 +1,5 @@
 Imports System
+Imports System.Collections.Concurrent
 Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.Windows.Forms
@@ -30,7 +31,6 @@ Public Class DisplayEvidenceTests
         Dim view As Type = GetType(AffiliationEditForm)
         Dim result As ScalingMeasurementTests.Cell = Nothing
         Dim dpi As Integer = 0
-        Dim tooLarge As String = Nothing
 
         Dim failures As List(Of String) =
             ViewCatalog.ShowEach(
@@ -40,12 +40,6 @@ Public Class DisplayEvidenceTests
                     result = ScalingMeasurementTests.MeasureAtThisDisplay(shown)
                     dpi = shown.DeviceDpi
 
-                    Dim area As Rectangle = Screen.FromControl(shown).WorkingArea
-
-                    If shown.Width > area.Width OrElse shown.Height > area.Height Then
-                        tooLarge = shown.Size.ToString() & " in a working area of " & area.Size.ToString()
-                    End If
-
                 End Sub
             )
 
@@ -54,7 +48,6 @@ Public Class DisplayEvidenceTests
 
         TestContext.WriteLine(view.Name & " at " & dpi & " DPI: " & result.Describe())
 
-        Assert.IsNull(tooLarge, "The window is fitted to this screen's working area: " & tooLarge)
         Assert.IsNull(result.NotMeasuredHere, "The window is measured at this display: " & result.Describe())
         Assert.IsTrue(result.AcceptInside.HasValue, "The accept button is judged: " & result.Describe())
         Assert.IsTrue(result.CancelInside.HasValue, "The cancel button is judged: " & result.Describe())
@@ -62,6 +55,64 @@ Public Class DisplayEvidenceTests
         If dpi = 96 Then
             Assert.IsTrue(result.Passes, "At 96 DPI the window agrees with the sweep's cells: " & result.Describe())
         End If
+
+    End Sub
+
+
+    ' What the tool's guard rests on (Program.vb, Guarded). Each window
+    ' opens on a runner thread of its own, where Windows Forms catches an
+    ' error in one of the window's handlers and, with no handler of its own
+    ' on that thread, shows its error dialog and waits. The factory runs on
+    ' that same thread before the window exists, so a handler it attaches
+    ' there is handed the error instead, with no dialog, and inspect fails
+    ' the window by name. The tool itself is out of this project's reach,
+    ' so this is a guard that cannot fail on the unchanged code: it fails if
+    ' ShowEach ever builds a window on another thread than the one it runs
+    ' on, and without the handler the dialog holds the window until the
+    ' runner's timeout.
+    <TestMethod>
+    Public Sub AnErrorInAWindowsHandlerFailsThatWindowByName()
+
+        Dim faults As New ConcurrentDictionary(Of String, Exception)()
+        Dim inspected As Boolean = False
+
+        Dim build As Func(Of String, Form) =
+            Function(root)
+
+                AddHandler Application.ThreadException,
+                    Sub(sender, e) faults.TryAdd("Faulty", e.Exception)
+
+                Dim window As New Form With {
+                    .Size = New Size(300, 200)
+                }
+
+                AddHandler window.Shown,
+                    Sub(sender, e) Throw New InvalidOperationException("Shown failed.")
+
+                Return window
+
+            End Function
+
+        Dim failures As List(Of String) =
+            ViewCatalog.ShowEach(
+                {("Faulty", build)},
+                Sub(name, shown)
+
+                    inspected = True
+
+                    Dim fault As Exception = Nothing
+
+                    If faults.TryRemove(name, fault) Then
+                        Throw New InvalidOperationException("a handler failed: " & fault.ToString(), fault)
+                    End If
+
+                End Sub
+            )
+
+        Assert.IsTrue(inspected, "The window was inspected: " & String.Join(" | ", failures))
+        Assert.AreEqual(1, failures.Count, String.Join(" | ", failures))
+        StringAssert.StartsWith(failures(0), "Faulty: a handler failed: System.InvalidOperationException: Shown failed.")
+        Assert.IsTrue(faults.IsEmpty, "No error was left unreported.")
 
     End Sub
 

@@ -1,4 +1,5 @@
 Imports System
+Imports System.Collections.Concurrent
 Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.Drawing.Imaging
@@ -40,6 +41,10 @@ Friend Module Program
     Private Const WindowsFailed As Integer = 4
     Private Const Unexpected As Integer = 5
 
+    ' The evidence, written once every window is done.
+    Private Const JsonFile As String = "display-evidence.json"
+    Private Const TableFile As String = "display-evidence.md"
+
     ' One line of a caption, as the measure reads it.
     Private Const CaptionFlags As TextFormatFlags =
         TextFormatFlags.SingleLine Or TextFormatFlags.NoPadding Or TextFormatFlags.HidePrefix
@@ -56,10 +61,6 @@ Friend Module Program
         ' Before any window, the mode the app pins (ApplicationEvents.vb),
         ' so each window opens at the DPI the installed build opens it at.
         Application.SetHighDpiMode(HighDpiMode.SystemAware)
-
-        ' An error in a window's handler fails that window, by name, instead
-        ' of showing Windows Forms' error dialog.
-        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException)
 
         Try
             Return Run(args)
@@ -134,13 +135,16 @@ Friend Module Program
         }
 
         ' A folder that cannot be written is found before any window opens.
-        ' The evidence itself is written once every window is done, so a
-        ' folder that holds it holds a finished run.
+        ' The evidence itself is written once every window is done, and an
+        ' earlier run's is removed first, so a folder that holds it holds a
+        ' finished run, even a folder used again.
         Try
             Directory.CreateDirectory(folder)
             Dim probe As String = Path.Combine(folder, "display-evidence.probe")
             File.WriteAllText(probe, String.Empty)
             File.Delete(probe)
+            File.Delete(Path.Combine(folder, JsonFile))
+            File.Delete(Path.Combine(folder, TableFile))
         Catch ex As Exception
             Return Report(SetupFailed, "The evidence could not be written to " & folder & ": " & ex.Message)
         End Try
@@ -153,12 +157,15 @@ Friend Module Program
 
         Dim windows As New List(Of WindowEvidence)()
 
+        ' An error in one of a window's handlers, by the window's name.
+        Dim faults As New ConcurrentDictionary(Of String, Exception)()
+
         ' ShowEach gives each window a temporary data root and fails one
         ' that asks for the default root, so the computer's own PaperRoute
         ' data is never used.
         Dim failures As List(Of String) =
             ViewCatalog.ShowEach(
-                ViewCatalog.Dialogs.Select(Function(entry) (entry.Key.Name, entry.Value)),
+                ViewCatalog.Dialogs.Select(Function(entry) (entry.Key.Name, Guarded(entry.Key.Name, entry.Value, faults))),
                 Sub(name, shown)
 
                     Dim cell As ScalingMeasurementTests.Cell =
@@ -177,14 +184,27 @@ Friend Module Program
                         .Controls = Calibration(shown)
                     }
 
-                    windows.Add(window)
-
                     If pictures Then
                         window.Picture = SavePicture(shown, folder, name)
                     End If
 
+                    ' A window whose handler failed fails by name, and its
+                    ' evidence is left out.
+                    Dim fault As Exception = Nothing
+
+                    If faults.TryRemove(name, fault) Then
+                        Throw New InvalidOperationException(HandlerFailed(fault), fault)
+                    End If
+
+                    windows.Add(window)
+
                 End Sub
             )
+
+        ' And one whose handler failed after it was inspected, as it closed.
+        For Each late As KeyValuePair(Of String, Exception) In faults.OrderBy(Function(entry) entry.Key, StringComparer.Ordinal)
+            failures.Add(late.Key & ": " & HandlerFailed(late.Value))
+        Next
 
         evidence.Windows = windows.OrderBy(Function(window) window.Name, StringComparer.Ordinal).ToList()
         evidence.Failures = failures
@@ -200,6 +220,35 @@ Friend Module Program
         End If
 
         Return 0
+
+    End Function
+
+
+    ' Each window is built, shown and inspected on a runner thread of its
+    ' own (StaRunner), where Windows Forms catches an error in one of the
+    ' window's handlers (paint, layout, Shown, a timer) and, with no
+    ' handler of its own on that thread, shows its error dialog and waits.
+    ' The factory runs on that thread before the window exists, so it first
+    ' gives the thread a handler that records the error by the window's
+    ' name. The thread ends with its window, and the handler with it.
+    Private Function Guarded(name As String, build As Func(Of String, Form), faults As ConcurrentDictionary(Of String, Exception)) As Func(Of String, Form)
+
+        Return Function(root)
+
+                   AddHandler Application.ThreadException,
+                       Sub(sender, e) faults.TryAdd(name, e.Exception)
+
+                   Return build(root)
+
+               End Function
+
+    End Function
+
+
+    ' The error and where it was thrown, for a window that fails by it.
+    Private Function HandlerFailed(fault As Exception) As String
+
+        Return "a handler failed: " & fault.ToString()
 
     End Function
 
@@ -337,8 +386,8 @@ Friend Module Program
 
     Private Sub Write(folder As String, evidence As Evidence)
 
-        File.WriteAllText(Path.Combine(folder, "display-evidence.json"), JsonSerializer.Serialize(evidence, JsonOptions), New UTF8Encoding(False))
-        File.WriteAllText(Path.Combine(folder, "display-evidence.md"), TableOf(evidence), New UTF8Encoding(False))
+        File.WriteAllText(Path.Combine(folder, JsonFile), JsonSerializer.Serialize(evidence, JsonOptions), New UTF8Encoding(False))
+        File.WriteAllText(Path.Combine(folder, TableFile), TableOf(evidence), New UTF8Encoding(False))
 
     End Sub
 
