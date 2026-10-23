@@ -7,6 +7,16 @@ Namespace Services
 
     Public NotInheritable Class ManuscriptLifecycleService
 
+        ' How the history note begins when a submission or a decision takes
+        ' a manuscript out of the File Drawer; when and why it was filed
+        ' follow it (#207).
+        Public Const ReturnedBySubmissionNote As String =
+            "Returned to the Pipeline by a new submission"
+
+        Public Const ReturnedByDecisionNote As String =
+            "Returned to the Pipeline by an editorial decision"
+
+
         Private Enum WorkflowEventKind
             Submission
             Decision
@@ -543,7 +553,7 @@ Namespace Services
                 manuscript,
                 stageBefore,
                 enteredBefore,
-                "Returned to the Pipeline by a new submission",
+                ReturnedBySubmissionNote,
                 keepFileDrawer
             )
 
@@ -634,7 +644,7 @@ Namespace Services
                 manuscript,
                 stageBefore,
                 enteredBefore,
-                "Returned to the Pipeline by an editorial decision",
+                ReturnedByDecisionNote,
                 keepFileDrawer
             )
 
@@ -646,7 +656,9 @@ Namespace Services
         ' A submission or a decision puts the manuscript on the Pipeline. One
         ' it takes out of the File Drawer keeps when and why it was filed in
         ' a note, as Restore to Pipeline does, dated with the event in the
-        ' stage it was filed in, and the two fields are cleared (#207). A
+        ' stage it was filed in, and the two fields are cleared (#207). Not
+        ' the stage the event sets: the Route Map reads a Submitted row as a
+        ' return to review, which a submission elsewhere is not. A
         ' filed manuscript stays filed while reconciling, and when the event
         ' leaves its stage and the date it entered it as they were: the
         ' decision it was filed after the same day, applied again by an edit.

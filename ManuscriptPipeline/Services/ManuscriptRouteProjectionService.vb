@@ -161,6 +161,28 @@ Namespace Services
             submissions As List(Of JournalSubmission)
         ) As Boolean
 
+            ' A note that took the manuscript out of the File Drawer is not a
+            ' transition: it keeps when and why it was filed, which no
+            ' workflow waypoint shows (#207).
+            Dim note As String =
+                If(
+                    historyEvent.Note,
+                    String.Empty
+                )
+
+            If note.StartsWith(
+                   ManuscriptLifecycleService.ReturnedBySubmissionNote,
+                   StringComparison.Ordinal
+               ) OrElse
+               note.StartsWith(
+                   ManuscriptLifecycleService.ReturnedByDecisionNote,
+                   StringComparison.Ordinal
+               ) Then
+
+                Return False
+
+            End If
+
             ' A stage row is redundant when a canonical workflow event on
             ' the same real-world date already explains that transition.
             ' This applies equally to native and imported history; the Route

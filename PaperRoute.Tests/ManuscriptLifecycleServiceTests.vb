@@ -434,6 +434,87 @@ Public Class ManuscriptLifecycleServiceTests
     End Sub
 
 
+    ' Route View shows the note when the event leaves the manuscript in the
+    ' stage it was filed in, only with a new date: filed while waiting on
+    ' one journal, then submitted to another, it is Submitted before and
+    ' after. With the File Drawer waypoint gone, the note is the only trace
+    ' in Route View that it was ever filed (#207).
+    <TestMethod>
+    Public Sub ApplySubmission_FiledWhileWaiting_RouteViewShowsTheNote()
+
+        Dim manuscript As Manuscript =
+            FiledWhileWaiting()
+
+        Dim submission As New JournalSubmission With {
+            .JournalName = "Journal F",
+            .SubmittedDate = New DateTime(2026, 9, 1)
+        }
+
+        manuscript.Submissions.Add(submission)
+
+        Assert.IsTrue(
+            ManuscriptLifecycleService.ApplySubmission(
+                manuscript,
+                submission
+            )
+        )
+
+        Assert.AreEqual(PaperStage.Submitted, manuscript.CurrentStage)
+
+        AssertRouteViewShows(
+            manuscript,
+            "Returned to the Pipeline by a new submission (filed Aug 17, 2026: Waiting)."
+        )
+
+    End Sub
+
+
+    ' The same for a decision: given a major revision on August 1 and filed
+    ' in Revision, a second revision decision leaves it in Revision (#207).
+    <TestMethod>
+    Public Sub ApplyDecision_FiledInRevision_RouteViewShowsTheNote()
+
+        Dim manuscript As Manuscript =
+            FiledWhileWaiting()
+
+        Dim submission As JournalSubmission =
+            manuscript.Submissions.Single()
+
+        submission.Decisions.Add(
+            New EditorialDecisionEvent With {
+                .DecisionDate = New DateTime(2026, 8, 1),
+                .Decision = EditorialDecision.MajorRevision
+            }
+        )
+
+        manuscript.CurrentStage = PaperStage.Revision
+        manuscript.StageEnteredDate = New DateTime(2026, 8, 1)
+
+        Dim decision As New EditorialDecisionEvent With {
+            .DecisionDate = New DateTime(2026, 9, 1),
+            .Decision = EditorialDecision.MinorRevision
+        }
+
+        submission.Decisions.Add(decision)
+
+        Assert.IsTrue(
+            ManuscriptLifecycleService.ApplyDecision(
+                manuscript,
+                submission,
+                decision
+            )
+        )
+
+        Assert.AreEqual(PaperStage.Revision, manuscript.CurrentStage)
+
+        AssertRouteViewShows(
+            manuscript,
+            "Returned to the Pipeline by an editorial decision (filed Aug 17, 2026: Waiting)."
+        )
+
+    End Sub
+
+
     ' Reconciling, as the manuscript page does each time it opens, puts the
     ' stage right from a decision dated after the manuscript was filed, as
     ' an import can leave one, and leaves it in the File Drawer with its
@@ -465,6 +546,55 @@ Public Class ManuscriptLifecycleServiceTests
         Assert.AreEqual(New DateTime(2026, 8, 17), manuscript.FileDrawerDate.Value)
         Assert.AreEqual("Waiting", manuscript.FileDrawerReason)
         Assert.AreEqual(0, manuscript.History.Count, "No note.")
+
+        Dim reconciled As String =
+            Snapshot(manuscript)
+
+        ManuscriptLifecycleService.ReconcileFromLatestWorkflow(
+            manuscript
+        )
+
+        ManuscriptLifecycleService.ReconcileFromLatestWorkflow(
+            manuscript,
+            allowSameDay:=True
+        )
+
+        Assert.AreEqual(
+            reconciled,
+            Snapshot(manuscript),
+            "Run again, reconciling changes nothing."
+        )
+
+    End Sub
+
+
+    ' The same when the latest event is a submission dated after the
+    ' filing, as an import or an edited submission date can leave: the
+    ' stage is put right and the manuscript stays filed with no note. A
+    ' guard: this passes on the code as it stands and fails if the
+    ' reconcile's submission branch stops keeping the File Drawer (#207).
+    <TestMethod>
+    Public Sub ReconcileFromLatestWorkflow_KeepsAFiledManuscriptFiledAfterALaterSubmission()
+
+        Dim manuscript As Manuscript =
+            FiledWhileWaiting()
+
+        manuscript.Submissions.Add(
+            New JournalSubmission With {
+                .JournalName = "Journal F",
+                .SubmittedDate = New DateTime(2026, 9, 1)
+            }
+        )
+
+        Assert.IsTrue(
+            ManuscriptLifecycleService.ReconcileFromLatestWorkflow(
+                manuscript
+            )
+        )
+
+        Assert.AreEqual(PaperStage.Submitted, manuscript.CurrentStage)
+        Assert.AreEqual(New DateTime(2026, 9, 1), manuscript.StageEnteredDate)
+        AssertStillFiled(manuscript, "Waiting")
 
         Dim reconciled As String =
             Snapshot(manuscript)
@@ -634,6 +764,32 @@ Public Class ManuscriptLifecycleServiceTests
         Assert.AreEqual(New DateTime(2026, 8, 17), manuscript.FileDrawerDate.Value)
         Assert.AreEqual(reason, manuscript.FileDrawerReason)
         Assert.AreEqual(0, manuscript.History.Count, "No note.")
+
+    End Sub
+
+
+    ' Out of the File Drawer with this note, and Route View's projection
+    ' shows it as a stage waypoint.
+    Private Shared Sub AssertRouteViewShows(
+        manuscript As Manuscript,
+        note As String
+    )
+
+        Assert.AreEqual(ManuscriptLocation.Pipeline, manuscript.Location)
+        Assert.AreEqual(note, manuscript.History.Single().Note)
+
+        Dim route As ManuscriptRoute =
+            ManuscriptRouteProjectionService.Project(
+                manuscript
+            )
+
+        Assert.IsTrue(
+            route.Waypoints.Any(
+                Function(point) point.Kind = ManuscriptRouteWaypointKind.Stage AndAlso
+                                point.Note = note
+            ),
+            "Route View shows the note."
+        )
 
     End Sub
 

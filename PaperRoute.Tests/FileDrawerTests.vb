@@ -1,11 +1,8 @@
 Imports System
-Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.IO
 Imports System.Linq
 Imports System.Reflection
-Imports System.Runtime.InteropServices
-Imports System.Text
 Imports System.Text.Json
 Imports System.Windows.Forms
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
@@ -274,11 +271,11 @@ Public Class FileDrawerTests
                     OnThePage(filed,
                         Sub(editor)
                             ViewCatalog.Descendants(editor).OfType(Of ComboBox)().Single(Function(box) box.AccessibleName = "Current stage").SelectedItem = PaperStage.Submitted
-                            Using yes As New MessageBoxYes("Submission Details Required"),
+                            Using dialogs As New ManuscriptPageTests.DialogWatcher(answerYes:="Submission Details Required"),
                                   answer As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of AddSubmissionForm)(
                                       Sub(dialog) dialog.AcceptButton.PerformClick())
                                 Assert.IsTrue(editor.CommitChanges(), "Saved with the stage change.")
-                                Assert.AreEqual(1, yes.Answered, "The stage change asked to record the submission.")
+                                CollectionAssert.AreEqual({"Submission Details Required"}, dialogs.Closed, "The stage change asked to record the submission, and nothing else.")
                             End Using
                         End Sub)
 
@@ -512,71 +509,5 @@ Public Class FileDrawerTests
             GetType(Form1).GetMethod(name, BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(Me, args)
         End Sub
     End Class
-
-    ' Answers Yes to the Windows message box with this title as it opens on
-    ' the test thread, from a timer its modal loop pumps, once for each box.
-    Private NotInheritable Class MessageBoxYes
-        Implements IDisposable
-
-        Private Const WM_COMMAND As UInteger = &H111
-        Private Const IDYES As Integer = 6
-
-        Private ReadOnly _title As String
-        Private ReadOnly _timer As New System.Windows.Forms.Timer With {.Interval = 50}
-        Private ReadOnly _seen As New HashSet(Of IntPtr)()
-
-        Public Answered As Integer
-
-        Public Sub New(title As String)
-            _title = title
-            AddHandler _timer.Tick, AddressOf AnswerYes
-            _timer.Start()
-        End Sub
-
-        Private Sub AnswerYes(sender As Object, e As EventArgs)
-            EnumThreadWindows(GetCurrentThreadId(),
-                Function(handle, parameter)
-                    Dim className As New StringBuilder(64)
-                    Dim caption As New StringBuilder(256)
-                    GetClassName(handle, className, className.Capacity)
-                    GetWindowText(handle, caption, caption.Capacity)
-                    If className.ToString() = "#32770" AndAlso caption.ToString() = _title AndAlso IsWindowVisible(handle) AndAlso _seen.Add(handle) Then
-                        Answered += 1
-                        PostMessage(handle, WM_COMMAND, New IntPtr(IDYES), IntPtr.Zero)
-                    End If
-                    Return True
-                End Function, IntPtr.Zero)
-        End Sub
-
-        Public Sub Dispose() Implements IDisposable.Dispose
-            _timer.Dispose()
-        End Sub
-    End Class
-
-    Private Delegate Function EnumWindowsCallback(handle As IntPtr, parameter As IntPtr) As Boolean
-
-    <DllImport("kernel32.dll")>
-    Private Shared Function GetCurrentThreadId() As Integer
-    End Function
-
-    <DllImport("user32.dll")>
-    Private Shared Function EnumThreadWindows(threadId As Integer, callback As EnumWindowsCallback, parameter As IntPtr) As Boolean
-    End Function
-
-    <DllImport("user32.dll", CharSet:=CharSet.Unicode)>
-    Private Shared Function GetClassName(handle As IntPtr, text As StringBuilder, capacity As Integer) As Integer
-    End Function
-
-    <DllImport("user32.dll", CharSet:=CharSet.Unicode)>
-    Private Shared Function GetWindowText(handle As IntPtr, text As StringBuilder, capacity As Integer) As Integer
-    End Function
-
-    <DllImport("user32.dll")>
-    Private Shared Function IsWindowVisible(handle As IntPtr) As Boolean
-    End Function
-
-    <DllImport("user32.dll")>
-    Private Shared Function PostMessage(handle As IntPtr, message As UInteger, wParam As IntPtr, lParam As IntPtr) As Boolean
-    End Function
 
 End Class
