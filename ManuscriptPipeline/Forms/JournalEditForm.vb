@@ -365,6 +365,11 @@ Namespace Forms
             lstChecklist.Dock =
                 DockStyle.Fill
 
+            ' A row ending "• AI suggestion" was cut at the list's edge at
+            ' 150% (#93); a long row scrolls sideways, as in the other lists.
+            lstChecklist.HorizontalScrollbar =
+                True
+
             ' Not the count WinForms finds before it (#137).
             lstChecklist.AccessibleName =
                 "Checklist requirements"
