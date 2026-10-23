@@ -1176,6 +1176,10 @@ Public Class Form1
 
             ResizeCards(shelf)
 
+            ' A shelf prepared while the window was smaller shows the first
+            ' screen it fills now at once (#133).
+            RevealFirstScreen(shelf)
+
         End Using
 
         QueueBoardFill()

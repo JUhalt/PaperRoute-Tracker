@@ -134,25 +134,42 @@ Public Class ResponsivenessBudgetTests
             _paintObserved(library.Name) = board.PaintObserved
 
             ' The shelf shown fills in after its first screen, a card at a
-            ' time while the window idles; a shelf not shown yet is built when
-            ' it is first shown (#133). The first switch is reported: it builds
-            ' the shelf's cards where startup no longer does.
+            ' time while the window idles; the shelves not shown yet are put
+            ' together once it has filled, their first screens' windows made
+            ' a card at a time (#133).
             '
             ' Beside the fill, the manuscript page, Journals and Insights are
             ' prepared while the window idles (#133): each built, laid out, and
             ' its windows made a slice at a time. The fill's row holds the
             ' longest step while the fill runs against the UI thread's budget,
             ' and the next row the longest step of the idle work left after
-            ' it; their twin, reported, holds the longer of the two against
-            ' the idle queue's own slice of 30 ms.
+            ' it. One pass of the window's messages runs idle steps back to
+            ' back while each outlasts the idle timer's 15 ms, so the steps
+            ' that follow the fill, the other shelves', usually run within
+            ' the fill's row and the next reads nothing. Their twin, reported,
+            ' holds the longer of the two against the idle queue's own slice
+            ' of 30 ms.
             Dim fill As Row = Time(library, "Board: the rest of the shown shelf, shown in idle slices", UiThread, Sub() board.WaitForBoardFill(), enforced:=enforce)
             rows.Add(fill)
-            Dim prepared As Row = Time(library, "Idle work after the fill: the pages' preparation, its longest step", UiThread, Sub() board.WaitForIdleWork(), enforced:=enforce)
+            Dim prepared As Row = Time(library, "Idle work left after the fill (the other shelves put together), its longest step", UiThread, Sub() board.WaitForIdleWork(), enforced:=enforce)
             rows.Add(prepared)
             rows.Add(New Row With {.Library = library.Name, .Action = "Idle work from startup: its longest step, against the idle slice", .Wall = fill.Wall + prepared.Wall, .Ui = Math.Max(fill.Ui, prepared.Ui), .Budget = IdleSlice})
             Assert.IsNotNull(board.JournalsPage, "Journals was prepared while the window idled.")
             Assert.IsNotNull(board.InsightsPage, "Insights was prepared while the window idled.")
-            rows.Add(Time(library, "First switch to Published (the shelf built when first shown)", PageSwitch, Sub() board.ShelfTab("tabPublished").Checked = True))
+
+            ' The first switch to Published shows the shelf put together while
+            ' the window idled, its first screen's windows made. Built at the
+            ' switch, it read 274 to 337 ms in the profile's clean runs
+            ' (2026-10-18) and 210 to 1,750 in this branch's runs; it is
+            ' enforced from 2026-10-23. The row is checked to time a prepared
+            ' shelf, so it cannot pass on a shelf with nothing on it.
+            Dim publishedShelf As ManuscriptShelfPanel = board.Shelf("publishedPanel")
+            If enforce Then
+                Assert.IsTrue(library.Manuscripts.Where(Function(item) item.Location = ManuscriptLocation.Published).Count() >= 100, "The 500 library has a Published shelf to fill a screen.")
+                Assert.IsTrue(publishedShelf.Controls.OfType(Of RoundedPanel)().Count(Function(card) card.IsHandleCreated) >= 4,
+                              "The Published shelf was put together, its first screen's windows made, while the window idled.")
+            End If
+            rows.Add(Time(library, "First switch to Published (the shelf put together while the window idled)", PageSwitch, Sub() board.ShelfTab("tabPublished").Checked = True, enforced:=enforce))
             board.WaitForBoardFill()
             board.ShelfTab("tabPipeline").Checked = True
             board.WaitForBoardFill()
