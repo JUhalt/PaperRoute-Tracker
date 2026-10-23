@@ -41,6 +41,9 @@ Namespace Forms
 
         Private Sub BuildInterface()
 
+            ' Sizes below are at 96 DPI and scale with the display (#93).
+            DialogScaling.Begin(Me)
+
             Me.Text =
                 If(
                     _source Is Nothing,
@@ -68,9 +71,6 @@ Namespace Forms
                     "Segoe UI",
                     10.0F
                 )
-
-            Me.AutoScaleMode =
-                AutoScaleMode.Dpi
 
             Dim root As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
@@ -232,6 +232,7 @@ Namespace Forms
                 btnCancel
 
             Me.Controls.Add(root)
+            DialogScaling.Finish(Me)
             txtTitle.Select()
 
         End Sub

@@ -488,9 +488,18 @@ Public Class DeadlineListTests
                     ' link, reads that line, as each was a window of its own.
                     Dim heading As Point = Center(Child(list, "OVERDUE  1", AccessibleRole.StaticText).Bounds)
                     Assert.AreEqual("OVERDUE  1", list.AccessibilityObject.HitTest(heading.X, heading.Y)?.Name, "The heading under the pointer.")
+                    ' The Done line ends the list. In a short window, as on a
+                    ' 1024x768 build runner where the main window is capped to
+                    ' the screen (#93), it starts below the fold, and a point
+                    ' there hits nothing; so the list is scrolled to it first,
+                    ' and back to its top after.
+                    list.AutoScrollPosition = New Point(0, list.DisplayRectangle.Height)
+                    Application.DoEvents()
                     Dim link As Rectangle = Child(list, "Show done items", AccessibleRole.Link).Bounds
                     Assert.AreEqual("Show done items", list.AccessibilityObject.HitTest(link.Left - UiTheme.Px(20, list.DeviceDpi), link.Top + link.Height \ 2)?.Name,
                                     "The Done line's words under the pointer.")
+                    list.AutoScrollPosition = Point.Empty
+                    Application.DoEvents()
 
                     ' The glance: a group with a line for each count.
                     Dim glanceRoot As Accessibility.IAccessible = FromWindow(glance.Handle)

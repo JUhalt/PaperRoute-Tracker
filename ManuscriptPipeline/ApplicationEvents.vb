@@ -22,6 +22,13 @@ Namespace My
                     settings.Appearance
                 )
 
+            ' The framework's default, which the installed build has run
+            ' with, and what the startup window (StartupFailureForm) and the
+            ' certification harness set: pinned so the dialogs' one scaling
+            ' rule (#93) is measured against the mode PaperRoute runs in.
+            e.HighDpiMode =
+                HighDpiMode.SystemAware
+
         End Sub
 
 

@@ -24,6 +24,9 @@ Namespace Forms
             _today = today.Date
             _verb = verb
 
+            ' Sizes below are at 96 DPI and scale with the display (#93).
+            DialogScaling.Begin(Me)
+
             Text = heading
             FormBorderStyle = FormBorderStyle.FixedDialog
             MaximizeBox = False
@@ -32,7 +35,6 @@ Namespace Forms
             StartPosition = FormStartPosition.CenterParent
             AutoSize = True
             AutoSizeMode = AutoSizeMode.GrowAndShrink
-            AutoScaleMode = AutoScaleMode.Dpi
             Font = New Font("Segoe UI", 9.0F)
 
             Dim root As New TableLayoutPanel With {
@@ -120,6 +122,14 @@ Namespace Forms
             }
             btnApply.Role = ActionButtonRole.Primary
             btnApply.Height = 34
+            ' Sized for its caption by the button itself, 18 pixels a side as
+            ' the width set by hand gave it, and as tall as Cancel: a width
+            ' set from measured text before the window scales would be
+            ' scaled again.
+            btnApply.AutoSize = True
+            btnApply.AutoSizeMode = AutoSizeMode.GrowAndShrink
+            btnApply.Padding = New Padding(18, 5, 18, 5)
+            btnApply.MinimumSize = New Size(0, 34)
             btnApply.DialogResult = DialogResult.OK
             Dim btnCancel As New ActionButton With {.Text = "Cancel", .Height = 34, .Width = 90, .DialogResult = DialogResult.Cancel, .Margin = New Padding(0, 0, 8, 0)}
             buttons.Controls.Add(btnApply)
@@ -129,6 +139,7 @@ Namespace Forms
             Controls.Add(root)
             AcceptButton = btnApply
             CancelButton = btnCancel
+            DialogScaling.Finish(Me)
 
             _choices(If(current.HasValue AndAlso current.Value.Date >= _today, 1, 0)).Button.Checked = True
             UiPolish.ApplyDialog(Me)
@@ -152,7 +163,6 @@ Namespace Forms
         ' The button says exactly what will happen: "Postpone to Oct 4".
         Private Sub UpdateApply()
             btnApply.Text = _verb & " " & SelectedDate.ToString("MMM d", CultureInfo.CurrentCulture)
-            btnApply.Width = TextRenderer.MeasureText(btnApply.Text, Font).Width + 36
         End Sub
 
     End Class

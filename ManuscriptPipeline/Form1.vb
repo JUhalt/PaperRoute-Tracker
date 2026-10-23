@@ -230,6 +230,47 @@ Public Class Form1
     ' Interface
     ' =====================================================
 
+    ' The main window's start and minimum sizes for a screen (#93): 1280x840
+    ' with a 960x680 minimum at 96 DPI, scaled for the display, the start
+    ' size capped to the working area as the dialogs' are, and the minimum
+    ' lowered to the area when even it would not fit (1920x1003 at 150%).
+    ' The start size is never below the minimum, as Windows Forms would hold
+    ' it there anyway.
+    Friend Shared Function StartSizes(
+        workingArea As Rectangle,
+        deviceDpi As Integer
+    ) As (Start As Size, Minimum As Size)
+
+        Dim minimum As Size =
+            ResponsiveDialogSizingService.FitSize(
+                workingArea,
+                New Size(
+                    UiTheme.Px(960, deviceDpi),
+                    UiTheme.Px(680, deviceDpi)
+                )
+            )
+
+        Dim start As Size =
+            ResponsiveDialogSizingService.CalculateInitialSize(
+                workingArea,
+                New Size(
+                    UiTheme.Px(1280, deviceDpi),
+                    UiTheme.Px(840, deviceDpi)
+                ),
+                minimum
+            )
+
+        Return (
+            New Size(
+                Math.Max(start.Width, minimum.Width),
+                Math.Max(start.Height, minimum.Height)
+            ),
+            minimum
+        )
+
+    End Function
+
+
     Private Sub BuildInterface()
 
         Me.Controls.Clear()
@@ -245,8 +286,20 @@ Public Class Form1
                 )
             )
         Me.StartPosition = FormStartPosition.CenterScreen
-        Me.Size = New Size(1280, 840)
-        Me.MinimumSize = New Size(960, 680)
+
+        ' Scaled for the display and capped to the screen the window opens
+        ' on, as the dialogs are (#93): unscaled and uncapped, the window
+        ' was taller than a 1366x768 laptop's working area even at 100%.
+        ' CenterScreen puts an owner-less window on the screen under the
+        ' pointer, so that screen's working area is the cap.
+        Dim sizes As (Start As Size, Minimum As Size) =
+            StartSizes(
+                Screen.FromPoint(Control.MousePosition).WorkingArea,
+                DeviceDpi
+            )
+
+        Me.Size = sizes.Start
+        Me.MinimumSize = sizes.Minimum
         Me.Font = New Font("Segoe UI", 10.0F)
         Me.AutoScaleMode = AutoScaleMode.Dpi
         Me.BackColor = UiTheme.BoardBackground()

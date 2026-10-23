@@ -34,18 +34,19 @@ Namespace Forms
             releaseNotes As String
         )
 
+            ' Sizes below are at 96 DPI and scale with the display (#93);
+            ' without the base dimensions the text grew at 125% and 150% but
+            ' the dialog and its buttons did not, cutting off "Download &
+            ' Restart".
+            DialogScaling.Begin(Me)
+
             Me.Text = "PaperRoute Update Available"
             Me.StartPosition = FormStartPosition.CenterParent
             Me.FormBorderStyle = FormBorderStyle.FixedDialog
             Me.MaximizeBox = False
             Me.MinimizeBox = False
-            ' Sizes below are at 96 DPI and scale with the display; without the
-            ' base dimensions the text grew at 125% and 150% but the dialog and
-            ' its buttons did not, cutting off "Download & Restart".
-            Me.AutoScaleDimensions = New SizeF(96.0F, 96.0F)
             Me.ClientSize = New Size(620, 500)
             Me.Font = New Font("Segoe UI", 10.0F)
-            Me.AutoScaleMode = AutoScaleMode.Dpi
 
             Dim root As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
@@ -140,6 +141,8 @@ Namespace Forms
                     txtNotes.Select(0, 0)
                 End Sub
             Me.Controls.Add(root)
+
+            DialogScaling.Finish(Me)
 
         End Sub
 
