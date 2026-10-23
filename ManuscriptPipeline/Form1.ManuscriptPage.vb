@@ -30,9 +30,10 @@ Partial Public Class Form1
     ' The page is built once and kept for every manuscript opened (#133):
     ' its editor loads one record after another (LoadRecord) and lets go of
     ' each once the page is left (UnloadRecord), hidden in the page area
-    ' until the next. It is built for the first manuscript opened, and
-    ' built again if the colors change, as under a Windows contrast
-    ' theme switched while PaperRoute runs, or the window's DPI or font.
+    ' until the next. It is prepared while the window idles after startup,
+    ' or built by a manuscript opened before then, and built again if the
+    ' colors change, as under a Windows contrast theme switched while
+    ' PaperRoute runs, or the window's DPI or font.
     Private manuscriptPage As Control = Nothing
     Private manuscriptPageEditor As EditManuscriptForm = Nothing
     Private manuscriptPageSaveBar As Control = Nothing
@@ -339,6 +340,18 @@ Partial Public Class Form1
             BuildManuscriptPage()
         End If
 
+        ' What the preparation had not laid out yet lays out now.
+        manuscriptPageEditor.LetGoOfLayouts(Integer.MaxValue)
+        PutManuscriptPageInPlace()
+
+        Return manuscriptPage
+
+    End Function
+
+
+    ' The page goes in the page area hidden, behind the Board.
+    Private Sub PutManuscriptPageInPlace()
+
         If manuscriptPage.Parent Is Nothing Then
             manuscriptPage.Visible = False
             manuscriptPage.Dock = DockStyle.Fill
@@ -346,9 +359,7 @@ Partial Public Class Form1
             manuscriptPage.SendToBack()
         End If
 
-        Return manuscriptPage
-
-    End Function
+    End Sub
 
 
     ' What the kept page took when it was built: the colors, and the
@@ -360,7 +371,8 @@ Partial Public Class Form1
     End Function
 
 
-    ' Lets the kept page go; the next manuscript opened builds it again.
+    ' Lets the kept page go. Its successor is prepared while the window
+    ' idles, or built by the next manuscript opened if that comes first.
     Private Sub DropManuscriptPage()
 
         If manuscriptPage IsNot Nothing AndAlso Not manuscriptPage.IsDisposed Then
@@ -374,6 +386,82 @@ Partial Public Class Form1
         manuscriptBackLink = Nothing
         fitManuscriptTitle = Nothing
         manuscriptPageContainers = Nothing
+
+        QueueManuscriptPagePreparation()
+
+    End Sub
+
+
+    ' The page is prepared while the window idles (#133), a step at a
+    ' time: built with no manuscript and the library's tags offered, its
+    ' parts laid out a slice at a time, put in the page area hidden and
+    ' laid out at the size it shows at, and its windows made a slice at a
+    ' time. The first manuscript opened then finds it as every one after
+    ' it does. Startup queues it beside the Board's fill; a page let go
+    ' for new colors queues its successor. An open before it is ready
+    ' finishes it there and then (KeptManuscriptPage), and a page shown
+    ' makes the rest of its windows as it shows.
+    Private Sub QueueManuscriptPagePreparation()
+
+        QueueIdleWork(AddressOf PrepareManuscriptPage)
+
+    End Sub
+
+
+    Private Sub PrepareManuscriptPage()
+
+        If IsDisposed OrElse manuscriptPage IsNot Nothing Then
+            Return
+        End If
+
+        BuildManuscriptPage()
+        manuscriptPage.Visible = False
+        manuscriptPageEditor.SuggestTags(manuscripts)
+
+        Dim page As Control = manuscriptPage
+        QueueIdleWork(Sub() LayOutPreparedManuscriptPage(page))
+
+    End Sub
+
+
+    Private Function StillPreparing(page As Control) As Boolean
+
+        Return page Is manuscriptPage AndAlso Not page.IsDisposed AndAlso Not page.Visible AndAlso Not IsDisposed
+
+    End Function
+
+
+    Private Sub LayOutPreparedManuscriptPage(page As Control)
+
+        If Not StillPreparing(page) Then
+            Return
+        End If
+
+        If Not manuscriptPageEditor.LetGoOfLayouts(CInt(IdleWorkSlice)) Then
+            QueueIdleWork(Sub() LayOutPreparedManuscriptPage(page))
+            Return
+        End If
+
+        ' A hidden page takes no part in its parent's layout, so it is
+        ' given the size it shows at.
+        PutManuscriptPageInPlace()
+        page.Bounds = contentHost.DisplayRectangle
+        page.PerformLayout()
+        QueueIdleWork(Sub() MakeManuscriptPageWindows(page))
+
+    End Sub
+
+
+    ' The hidden page's windows, about a slice's worth a step.
+    Private Sub MakeManuscriptPageWindows(page As Control)
+
+        If Not StillPreparing(page) Then
+            Return
+        End If
+
+        If Not InPlace.MakeWindows(page, CInt(IdleWorkSlice)) Then
+            QueueIdleWork(Sub() MakeManuscriptPageWindows(page))
+        End If
 
     End Sub
 

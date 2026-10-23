@@ -22,14 +22,14 @@ Namespace Forms
 
         Private Function CreateJournalToolsPanel() As Control
 
-            Dim panel As New FlowLayoutPanel With {
+            Dim panel As FlowLayoutPanel = Held(New FlowLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 .FlowDirection = FlowDirection.LeftToRight,
                 .WrapContents = True,
                 .Margin = New Padding(0)
-            }
+            })
 
             btnReadiness.Text =
                 "Submission Readiness..."
@@ -73,13 +73,13 @@ Namespace Forms
         ' The Readiness & Packets tab: a summary and the two focused editors.
         Private Function CreateReadinessSection() As Control
 
-            Dim layout As New TableLayoutPanel With {
+            Dim layout As TableLayoutPanel = Held(New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .ColumnCount = 1,
                 .RowCount = 4,
                 .Padding = New Padding(0),
                 .Margin = New Padding(0)
-            }
+            })
 
             layout.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
             layout.RowStyles.Add(New RowStyle(SizeType.AutoSize))
@@ -103,14 +103,14 @@ Namespace Forms
             lblReadinessSummary.UseMnemonic = False
             lblReadinessSummary.Margin = New Padding(0, 0, 0, 10)
 
-            Dim buttons As New FlowLayoutPanel With {
+            Dim buttons As FlowLayoutPanel = Held(New FlowLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 .FlowDirection = FlowDirection.LeftToRight,
                 .WrapContents = True,
                 .Margin = New Padding(0)
-            }
+            })
 
             btnCoverLetter.Text = "Draft Cover Letter..."
             btnCoverLetter.AutoSize = True

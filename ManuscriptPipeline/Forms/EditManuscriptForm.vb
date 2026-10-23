@@ -272,6 +272,61 @@ Namespace Forms
                 LoadRecord(manuscript, allManuscripts, workingCopy)
             End If
 
+            ' An empty editor for the manuscript page leaves that to the
+            ' page, which may let go a step at a time while the window idles.
+            If manuscript IsNot Nothing OrElse Not pageMode Then
+                LetGoOfLayouts(Integer.MaxValue)
+            End If
+
+        End Sub
+
+
+        ' The form and every container BuildInterface makes hold their
+        ' layout while they are built, styled and given a record, and each
+        ' then lays out once, inner ones first (#133). Laid out as each part
+        ' went in, every container laid itself out again for each control
+        ' added to it and each style set on one, which took most of the 0.9
+        ' to 1.4 s the form took to build on this machine.
+        Private ReadOnly _heldWhileBuilt As New List(Of Control)()
+
+        Private Function Held(Of T As Control)(control As T) As T
+
+            control.SuspendLayout()
+            _heldWhileBuilt.Add(control)
+            Return control
+
+        End Function
+
+        ' Lets the containers still held lay out, inner ones first, for
+        ' about the given time; True once none is held. The constructor
+        ' lets go of them all, except in an empty editor for the manuscript
+        ' page, which the page lets go of before it shows or makes windows.
+        Friend Function LetGoOfLayouts(milliseconds As Integer) As Boolean
+
+            Dim watch As Diagnostics.Stopwatch = Diagnostics.Stopwatch.StartNew()
+
+            While _heldWhileBuilt.Count > 0
+                Dim last As Integer = _heldWhileBuilt.Count - 1
+                Dim container As Control = _heldWhileBuilt(last)
+                _heldWhileBuilt.RemoveAt(last)
+                container.ResumeLayout(True)
+                If watch.ElapsedMilliseconds >= milliseconds Then
+                    Exit While
+                End If
+            End While
+
+            Return _heldWhileBuilt.Count = 0
+
+        End Function
+
+
+        ' A page prepared while the window idles offers the library's tags
+        ' before its first record loads (#133): setting them makes the tag
+        ' box a new window, so they are set before its window is made.
+        Friend Sub SuggestTags(allManuscripts As List(Of Manuscript))
+
+            tagEditor.Suggest(WorkTypeService.AllTags(allManuscripts))
+
         End Sub
 
 
@@ -936,6 +991,8 @@ Namespace Forms
 
         Private Sub BuildInterface()
 
+            Held(Me)
+
             Me.Text = "Manuscript Details"
             Me.StartPosition = FormStartPosition.CenterParent
 
@@ -946,12 +1003,12 @@ Namespace Forms
             Me.Font = New Font("Segoe UI", 10.0F)
             Me.AutoScaleMode = AutoScaleMode.Dpi
 
-            Dim shell As New TableLayoutPanel With {
+            Dim shell As TableLayoutPanel = Held(New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .ColumnCount = 1,
                 .RowCount = 3,
                 .Padding = New Padding(0)
-            }
+            })
 
             shell.RowStyles.Add(
                 New RowStyle(
@@ -972,22 +1029,22 @@ Namespace Forms
                 )
             )
 
-            Dim scrollHost As New Panel With {
+            Dim scrollHost As Panel = Held(New Panel With {
                 .Dock = DockStyle.Fill,
                 .AutoScroll = True,
                 .Padding = New Padding(0)
-            }
+            })
 
             ' The Overview tab: the manuscript's fields and, when filed, its
             ' File Drawer details.
-            Dim root As New TableLayoutPanel With {
+            Dim root As TableLayoutPanel = Held(New TableLayoutPanel With {
                 .Dock = DockStyle.Top,
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 .ColumnCount = 1,
                 .RowCount = 5,
                 .Padding = New Padding(0)
-            }
+            })
 
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 330))
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
@@ -1000,6 +1057,7 @@ Namespace Forms
 
             ' The linked Journal Library record's notes and checklist, so its
             ' requirements are in view while editing.
+            Held(journalNotesGroup)
             journalNotesGroup.Text = "Target journal notes"
             journalNotesGroup.Dock = DockStyle.Top
             journalNotesGroup.AutoSize = True
@@ -1026,17 +1084,17 @@ Namespace Forms
             ' Manuscript metadata
             ' =================================================
 
-            Dim detailsGroup As New SectionCard With {
+            Dim detailsGroup As SectionCard = Held(New SectionCard With {
                 .Text = "Manuscript",
                 .Dock = DockStyle.Fill,
                 .Padding = New Padding(14)
-            }
+            })
 
-            Dim details As New TableLayoutPanel With {
+            Dim details As TableLayoutPanel = Held(New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .ColumnCount = 2,
                 .RowCount = 6
-            }
+            })
 
             details.ColumnStyles.Add(
                 New ColumnStyle(SizeType.AutoSize)
@@ -1082,14 +1140,14 @@ Namespace Forms
                     RefreshRevisionDeadlineDisplay()
                 End Sub
 
-            Dim revisionDeadlinePanel As New FlowLayoutPanel With {
+            Dim revisionDeadlinePanel As FlowLayoutPanel = Held(New FlowLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 .FlowDirection = FlowDirection.LeftToRight,
                 .WrapContents = True,
                 .Margin = New Padding(0)
-            }
+            })
 
             lblRevisionDeadlineValue.AutoSize = True
             lblRevisionDeadlineValue.Anchor = AnchorStyles.Left
@@ -1165,6 +1223,7 @@ Namespace Forms
             ' File Drawer metadata
             ' =================================================
 
+            Held(fileDrawerGroup)
             fileDrawerGroup.Text = "File Drawer"
             fileDrawerGroup.Dock = DockStyle.Top
             fileDrawerGroup.AutoSize = True
@@ -1175,14 +1234,14 @@ Namespace Forms
             ' Shown for a filed manuscript (LoadManuscript).
             fileDrawerGroup.Visible = False
 
-            Dim fileDrawerLayout As New TableLayoutPanel With {
+            Dim fileDrawerLayout As TableLayoutPanel = Held(New TableLayoutPanel With {
                 .Dock = DockStyle.Top,
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 .ColumnCount = 2,
                 .RowCount = 2,
                 .Margin = New Padding(0)
-            }
+            })
 
             fileDrawerLayout.ColumnStyles.Add(
                 New ColumnStyle(SizeType.AutoSize)
@@ -1241,20 +1300,20 @@ Namespace Forms
             ' Structured authors
             ' =================================================
 
-            Dim authorsGroup As New SectionCard With {
+            Dim authorsGroup As SectionCard = Held(New SectionCard With {
                 .Text = "Authors",
                 .Dock = DockStyle.Fill,
                 .Padding = New Padding(14),
                 .Margin = New Padding(3, 8, 3, 8)
-            }
+            })
 
-            Dim authorsLayout As New TableLayoutPanel With {
+            Dim authorsLayout As TableLayoutPanel = Held(New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .ColumnCount = 1,
                 .RowCount = 3,
                 .Padding = New Padding(0),
                 .Margin = New Padding(0)
-            }
+            })
 
             authorsLayout.RowStyles.Add(
                 New RowStyle(
@@ -1280,7 +1339,7 @@ Namespace Forms
             lblAuthorInfo.ForeColor = SystemColors.GrayText
             lblAuthorInfo.Margin = New Padding(0, 0, 0, 4)
 
-            Dim authorButtons As New FlowLayoutPanel With {
+            Dim authorButtons As FlowLayoutPanel = Held(New FlowLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
@@ -1288,7 +1347,7 @@ Namespace Forms
                 .WrapContents = True,
                 .Padding = New Padding(0),
                 .Margin = New Padding(0, 0, 0, 6)
-            }
+            })
 
             Dim btnManageAuthorLibrary As New Button With {
                 .Text = "Manage Library",
@@ -1377,14 +1436,14 @@ Namespace Forms
             ' Submissions
             ' =================================================
 
-            Dim submissionsGroup As New TableLayoutPanel With {
+            Dim submissionsGroup As TableLayoutPanel = Held(New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .ColumnCount = 2,
                 .RowCount = 1,
                 .Margin = New Padding(0),
                 .Padding = New Padding(0),
                 .AccessibleName = "Journal Submissions"
-            }
+            })
 
             ' Runtime-built column widths are not rescaled with the form, so
             ' scale the list's width for the display.
@@ -1393,13 +1452,13 @@ Namespace Forms
             submissionsGroup.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
             submissionsGroup.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
 
-            Dim submissionsList As New TableLayoutPanel With {
+            Dim submissionsList As TableLayoutPanel = Held(New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .ColumnCount = 1,
                 .RowCount = 3,
                 .Margin = New Padding(0, 0, 14, 0),
                 .Padding = New Padding(0)
-            }
+            })
 
             submissionsList.RowStyles.Add(New RowStyle(SizeType.AutoSize))
             submissionsList.RowStyles.Add(New RowStyle(SizeType.AutoSize))
@@ -1410,7 +1469,7 @@ Namespace Forms
             lblSubmissionInfo.ForeColor = SystemColors.GrayText
             lblSubmissionInfo.Margin = New Padding(0, 0, 0, 6)
 
-            Dim submissionButtons As New FlowLayoutPanel With {
+            Dim submissionButtons As FlowLayoutPanel = Held(New FlowLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
@@ -1418,7 +1477,7 @@ Namespace Forms
                 .WrapContents = True,
                 .Margin = New Padding(0, 0, 0, 6),
                 .Padding = New Padding(0)
-            }
+            })
 
             ' Recording a submission stays an explicit action.
             Dim btnAddSubmission As New Button With {
@@ -1480,14 +1539,14 @@ Namespace Forms
             ' Footer
             ' =================================================
 
-            Dim footer As New TableLayoutPanel With {
+            Dim footer As TableLayoutPanel = Held(New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 .ColumnCount = 2,
                 .RowCount = 1,
                 .Padding = New Padding(0, 10, 0, 2)
-            }
+            })
 
             footer.ColumnStyles.Add(
                 New ColumnStyle(SizeType.Percent, 50)
@@ -1508,14 +1567,14 @@ Namespace Forms
             AddHandler btnDeleteManuscript.Click,
                 AddressOf RequestDelete
 
-            Dim rightButtons As New FlowLayoutPanel With {
+            Dim rightButtons As FlowLayoutPanel = Held(New FlowLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 .FlowDirection = FlowDirection.RightToLeft,
                 .WrapContents = False,
                 .Margin = New Padding(0)
-            }
+            })
 
             Dim btnSave As New Button With {
                 .Text = "Save && Close",
@@ -1553,7 +1612,7 @@ Namespace Forms
             ' Sections as tabs, one visible at a time
             ' =================================================
 
-            Dim sectionTabs As New FlowLayoutPanel With {
+            Dim sectionTabs As FlowLayoutPanel = Held(New FlowLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
@@ -1563,7 +1622,7 @@ Namespace Forms
                 .Margin = New Padding(0),
                 .AccessibleName = "Manuscript sections",
                 .AccessibleRole = AccessibleRole.PageTabList
-            }
+            })
 
             AddHandler sectionTabs.Paint,
                 Sub(sender, e)
@@ -1572,11 +1631,11 @@ Namespace Forms
                     End Using
                 End Sub
 
-            Dim sectionHost As New Panel With {
+            Dim sectionHost As Panel = Held(New Panel With {
                 .Dock = DockStyle.Fill,
                 .Padding = New Padding(20, 12, 20, 8),
                 .Margin = New Padding(0)
-            }
+            })
 
             authorsGroup.Margin = New Padding(0)
             _overview = scrollHost
@@ -1653,6 +1712,7 @@ Namespace Forms
 
         Private Sub BuildShortlistGroup()
 
+            Held(shortlistGroup)
             shortlistGroup.Text = "Journal shortlist"
             shortlistGroup.Dock = DockStyle.Top
             shortlistGroup.AutoSize = True
@@ -1660,20 +1720,21 @@ Namespace Forms
             shortlistGroup.Padding = New Padding(14, 8, 14, 12)
             shortlistGroup.Margin = New Padding(3, 8, 3, 8)
 
-            Dim layout As New TableLayoutPanel With {
+            Dim layout As TableLayoutPanel = Held(New TableLayoutPanel With {
                 .Dock = DockStyle.Top,
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 .ColumnCount = 1,
                 .RowCount = 5,
                 .Margin = New Padding(0)
-            }
+            })
             layout.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
             For index As Integer = 0 To 4
                 layout.RowStyles.Add(New RowStyle(SizeType.AutoSize))
             Next
 
             ' After a rejection: the next shortlisted journal, as an offer.
+            Held(shortlistOffer)
             shortlistOffer.Dock = DockStyle.Top
             shortlistOffer.AutoSize = True
             shortlistOffer.AutoSizeMode = AutoSizeMode.GrowAndShrink
@@ -1723,12 +1784,12 @@ Namespace Forms
             lblShortlistEmpty.Margin = New Padding(3, 2, 3, 6)
             layout.Controls.Add(lblShortlistEmpty, 0, 2)
 
-            Dim actions As New FlowLayoutPanel With {
+            Dim actions As FlowLayoutPanel = Held(New FlowLayoutPanel With {
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 .WrapContents = True,
                 .Margin = New Padding(0, 4, 0, 0)
-            }
+            })
             Dim btnAdd As New Button With {.Text = "Add Journal...", .AutoSize = True, .Margin = New Padding(3, 0, 6, 0)}
             AddHandler btnAdd.Click, Sub(sender, e) AddShortlistCandidate()
             btnFindJournals.Text = "Find Journals..."
@@ -2089,6 +2150,7 @@ Namespace Forms
 
         Private Sub BuildClassificationGroup()
 
+            Held(classificationGroup)
             classificationGroup.Text = "Type and tags"
             classificationGroup.Dock = DockStyle.Top
             classificationGroup.AutoSize = True
@@ -2096,14 +2158,14 @@ Namespace Forms
             classificationGroup.Padding = New Padding(14, 8, 14, 12)
             classificationGroup.Margin = New Padding(3, 8, 3, 8)
 
-            Dim layout As New TableLayoutPanel With {
+            Dim layout As TableLayoutPanel = Held(New TableLayoutPanel With {
                 .Dock = DockStyle.Top,
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 .ColumnCount = 2,
                 .RowCount = 2,
                 .Margin = New Padding(0)
-            }
+            })
             layout.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
             layout.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
             layout.RowStyles.Add(New RowStyle(SizeType.AutoSize))

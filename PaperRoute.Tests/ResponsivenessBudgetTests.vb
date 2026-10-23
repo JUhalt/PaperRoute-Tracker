@@ -51,6 +51,9 @@ Public Class ResponsivenessBudgetTests
     ' Nothing else holds the UI thread longer than this without its work
     ' moving to a background task behind a disabled window and a status line.
     Friend Shared ReadOnly UiThread As New Budget("UI thread", 250)
+    ' The idle queue's slice: the work a window does between messages
+    ' while it idles is cut into steps about this long (#133).
+    Friend Shared ReadOnly IdleSlice As New Budget("idle slice", 30)
 
     Private _root As String = String.Empty
     Private ReadOnly _paintObserved As New Dictionary(Of String, Boolean)()
@@ -134,7 +137,17 @@ Public Class ResponsivenessBudgetTests
             ' time while the window idles; a shelf not shown yet is built when
             ' it is first shown (#133). The first switch is reported: it builds
             ' the shelf's cards where startup no longer does.
-            rows.Add(Time(library, "Board: the rest of the shown shelf, shown in idle slices", UiThread, Sub() board.WaitForBoardFill(), enforced:=enforce))
+            '
+            ' Beside the fill, the manuscript page is prepared while the window
+            ' idles (#133): built, laid out, and its windows made a slice at a
+            ' time. The fill's row holds the longest step of both against the
+            ' UI thread's budget; its twin, reported, holds it against the idle
+            ' queue's own slice of 30 ms. Whatever idle work is left then runs
+            ' before the next rows, untimed.
+            Dim fill As Row = Time(library, "Board: the rest of the shown shelf, shown in idle slices", UiThread, Sub() board.WaitForBoardFill(), enforced:=enforce)
+            rows.Add(fill)
+            rows.Add(New Row With {.Library = library.Name, .Action = "Idle work beside the fill: its longest step, the manuscript page's preparation included", .Wall = fill.Wall, .Ui = fill.Ui, .Budget = IdleSlice})
+            board.WaitForIdleWork()
             rows.Add(Time(library, "First switch to Published (the shelf built when first shown)", PageSwitch, Sub() board.ShelfTab("tabPublished").Checked = True))
             board.WaitForBoardFill()
             board.ShelfTab("tabPipeline").Checked = True
@@ -202,17 +215,17 @@ Public Class ResponsivenessBudgetTests
             rows.Add(Time(library, "Board to Import & Export (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.ImportExport), enforced:=enforce))
             rows.Add(Time(library, "Import & Export to Board (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
 
-            ' The first manuscript opened builds the manuscript page, which is
-            ' kept: each one opened after loads into it, and it shows in one
-            ' layout pass, its versions and the selected submission's details
-            ' following once it has painted. Leaving hides it; its editor lets
-            ' go of the record while the window idles (#133). Leaving is
-            ' enforced, and so is letting go of the record, which follows it
-            ' about 15 ms after the Board shows and holds the window as one
-            ' step: the leave row alone is not what the researcher waits.
-            ' Both opens stay reported, over the 100 ms line on this host: the
-            ' first builds the page, and any open replaces the windows of the
-            ' record's shortlist rows, tags and lists and lays the page out.
+            ' The manuscript page is prepared while the window idles after
+            ' startup and kept: each manuscript opened loads into it, and it
+            ' shows in one layout pass, its versions and the selected
+            ' submission's details following once it has painted. Leaving hides
+            ' it; its editor lets go of the record while the window idles
+            ' (#133). Leaving is enforced, and so is letting go of the record,
+            ' which follows it about 15 ms after the Board shows and holds the
+            ' window as one step: the leave row alone is not what the researcher
+            ' waits. The first open is timed on the prepared page; one made
+            ' before the preparation ends builds the page there and then, as
+            ' every first open did before 2026-10-23.
             ' The step after the first paint is enforced from 2026-10-23: it
             ' no longer forces that paint, which is where this machine waited
             ' on the screen (42 to 72 ms in Release, against 250).
@@ -226,7 +239,8 @@ Public Class ResponsivenessBudgetTests
             ' returns to the Board, timed on 2026-10-23), the wait the
             ' switches themselves used to take. Each paint takes 10 to 50 ms
             ' otherwise.
-            rows.Add(Time(library, "Board to a manuscript page (the first: the page is built)", PageSwitch, Sub() board.Open(subject)))
+            Assert.IsNotNull(board.KeptPage, "The manuscript page was prepared while the window idled.")
+            rows.Add(Time(library, "Board to a manuscript page (the first, on the page prepared while the window idled)", PageSwitch, Sub() board.Open(subject)))
             rows.Add(Time(library, "Manuscript page: its first paint (painting what the switch changed)", UiThread, Sub() board.PaintNow()))
             rows.Add(Time(library, "Manuscript page: versions and details after its first paint", UiThread, Sub() Application.DoEvents(), enforced:=enforce))
             rows.Add(TimeMedian(library, "One dirty-timer tick (median of 10)", DirtyTick, 10, Sub() board.Tick()))

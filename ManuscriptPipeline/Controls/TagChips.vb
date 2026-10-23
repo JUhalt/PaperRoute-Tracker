@@ -177,14 +177,19 @@ Namespace Controls
         Public Sub Bind(tags As List(Of String), library As AuthorLibraryData, suggestions As IEnumerable(Of String))
             _tags = tags
             _library = library
+            Suggest(suggestions)
+            _input.Width = Math.Max(LogicalToDeviceUnits(140), TextRenderer.MeasureText(_input.PlaceholderText, _input.Font).Width + LogicalToDeviceUnits(24))
+            Rebuild()
+        End Sub
+
+        ' The tags offered while typing, set only when they differ.
+        Friend Sub Suggest(suggestions As IEnumerable(Of String))
             Dim offered As String() = If(suggestions, Enumerable.Empty(Of String)()).ToArray()
             If Not offered.SequenceEqual(_suggestions) Then
                 _suggestions = offered
                 _input.AutoCompleteCustomSource.Clear()
                 _input.AutoCompleteCustomSource.AddRange(offered)
             End If
-            _input.Width = Math.Max(LogicalToDeviceUnits(140), TextRenderer.MeasureText(_input.PlaceholderText, _input.Font).Width + LogicalToDeviceUnits(24))
-            Rebuild()
         End Sub
 
 

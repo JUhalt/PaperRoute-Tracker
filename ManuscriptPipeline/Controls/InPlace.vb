@@ -90,6 +90,65 @@ Namespace Controls
         End Sub
 
 
+        ' Makes the windows of a control that is in the window but hidden, as
+        ' showing it would make them, a few at a time: parent first, so each
+        ' is made inside its parent, where it stays, and never inside a part
+        ' made hidden (a section not shown, a part only some records show),
+        ' which showing the control would not enter either. Each call makes
+        ' windows for about the given time and returns whether every one is
+        ' made; a later call makes the rest.
+        Public Shared Function MakeWindows(
+            root As Control,
+            milliseconds As Integer
+        ) As Boolean
+
+            If root.IsDisposed OrElse root.Parent Is Nothing OrElse Not root.Parent.IsHandleCreated Then
+                Return False
+            End If
+
+            Dim watch As Diagnostics.Stopwatch = Diagnostics.Stopwatch.StartNew()
+            Dim pending As New Collections.Generic.Stack(Of Control)()
+            pending.Push(root)
+
+            While pending.Count > 0
+
+                Dim control As Control = pending.Pop()
+
+                If control.IsDisposed Then
+                    Continue While
+                End If
+
+                If Not control.IsHandleCreated Then
+                    If watch.ElapsedMilliseconds >= milliseconds Then
+                        Return False
+                    End If
+                    Dim made As IntPtr = control.Handle
+                End If
+
+                ' The root is hidden itself; below it, a part made hidden
+                ' keeps its own parts without windows until it shows.
+                If control IsNot root AndAlso (GetWindowLong(control.Handle, GWL_STYLE) And WS_VISIBLE) = 0 Then
+                    Continue While
+                End If
+
+                For index As Integer = control.Controls.Count - 1 To 0 Step -1
+                    pending.Push(control.Controls(index))
+                Next
+
+            End While
+
+            Return True
+
+        End Function
+
+        Private Const GWL_STYLE As Integer = -16
+        Private Const WS_VISIBLE As Integer = &H10000000
+
+        <DllImport("user32.dll")>
+        Private Shared Function GetWindowLong(handle As IntPtr, index As Integer) As Integer
+        End Function
+
+
         ' Disposes a control where it is: its windows are destroyed in place
         ' and it then leaves its parent. With focus inside it, it is removed
         ' first, as before, so focus moves on the way a removal moves it.

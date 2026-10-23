@@ -12,9 +12,9 @@ Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
 
-' The manuscript page is built once and kept (#133): built for the first
-' manuscript opened, it loads each one after into the same editor and lets
-' go of it once left. ManuscriptEditorReuseTests hold what it shows to a
+' The manuscript page is built once and kept (#133): prepared while the
+' window idles after startup (or built by a manuscript opened before then),
+' it loads each one into the same editor and lets go of it once left. ManuscriptEditorReuseTests hold what it shows to a
 ' window that opened only that manuscript; these hold how it is kept.
 <TestClass>
 <DoNotParallelize>
@@ -38,11 +38,14 @@ Public Class KeptManuscriptPageTests
     End Sub
 
 
-    ' Built for the first manuscript opened, in place, and the same page for
-    ' every manuscript opened after; none of its windows is made on WinForms'
-    ' parking window, while manuscripts open or after they are left.
+    ' Prepared while the window idles after startup (#133): the page is in
+    ' the page area, hidden, holding nothing of any manuscript, with the
+    ' windows its Overview shows made in place; the first manuscript opened
+    ' shows on it, and so does every one after. None of its windows is
+    ' made on WinForms' parking window, while it is prepared, while
+    ' manuscripts open or after they are left.
     <TestMethod>
-    Public Sub TheKeptPageIsBuiltAtTheFirstOpenWithItsWindowsInPlace()
+    Public Sub ThePageIsPreparedWhileTheWindowIdles()
 
         Dim report As New List(Of String)()
 
@@ -55,16 +58,21 @@ Public Class KeptManuscriptPageTests
 
                     board.Start()
                     board.WaitForIdleWork()
-                    Assert.IsNull(board.KeptPage, "No page is built before a manuscript is opened.")
 
-                    Dim page As Control = Nothing
+                    Dim page As Control = board.KeptPage
+                    Assert.IsNotNull(page, "The page is prepared while the window idles.")
+                    Assert.AreSame(board.ContentHost, page.Parent)
+                    Assert.IsFalse(page.Visible, "It waits hidden.")
+                    Dim all As List(Of Control) = ViewCatalog.Descendants(page).ToList()
+                    Assert.IsTrue(all.OfType(Of TextBox)().All(Function(box) box.TextLength = 0), "It holds no manuscript.")
+                    Assert.IsTrue(all.OfType(Of TextBox)().Single(Function(box) box.AccessibleName = "Title").IsHandleCreated, "The Overview has its windows.")
+                    Assert.IsFalse(all.OfType(Of SubmissionDetailsForm)().Any(), "No submission's details.")
 
                     For Each manuscript As Manuscript In board.Library.Take(3)
                         board.Open(manuscript)
                         Application.DoEvents()
-                        If page Is Nothing Then page = board.KeptPage
-                        Assert.AreSame(board.ContentHost, page.Parent)
-                        Assert.AreSame(page, board.PageView, "Every manuscript opens on the kept page.")
+                        Assert.AreSame(page, board.KeptPage, "Every manuscript opens on the prepared page.")
+                        Assert.AreSame(page, board.PageView)
                         Assert.AreEqual(manuscript.Title, board.Field("Title").Text)
                         board.NavigateTo(Form1.WorkspacePage.Board)
                         Application.DoEvents()
@@ -273,8 +281,9 @@ Public Class KeptManuscriptPageTests
     ' The system colors changing, as Windows changes them when a contrast
     ' theme is turned on or off, lets the kept page go as it lets the kept
     ' Deadlines and Import & Export pages go: hidden, at once and where it
-    ' is; showing, as it is left, its manuscript on it until then. The next
-    ' manuscript opened builds the page anew, and that page is kept again.
+    ' is; showing, as it is left, its manuscript on it until then. A page in
+    ' the new colors is prepared once the window idles, or built by the
+    ' next manuscript opened before then, and that page is kept again.
     ' Nothing is saved.
     <TestMethod>
     Public Sub TheSystemColorsChangingLetsTheKeptPageGo()
@@ -297,11 +306,16 @@ Public Class KeptManuscriptPageTests
                         board.ChangeSystemColors()
                         Assert.IsTrue(hidden.IsDisposed, "The hidden page is let go at once.")
                         Assert.IsFalse(board.ContentHost.Controls.Contains(hidden), "It has left the page area.")
-                        Assert.IsNull(board.KeptPage, "No page is kept until the next manuscript is opened.")
+
+                        board.WaitForIdleWork()
+                        Dim prepared As Control = board.KeptPage
+                        Assert.IsNotNull(prepared, "A page is prepared once the window idles.")
+                        Assert.AreEqual(SystemColors.Window, prepared.BackColor, "It is prepared in the contrast theme's colors.")
 
                         board.Open(board.Library(1))
                         Application.DoEvents()
                         Dim showing As Control = board.KeptPage
+                        Assert.AreSame(prepared, showing, "The next manuscript opens on it.")
                         Assert.AreEqual(SystemColors.Window, showing.BackColor, "The next page is built in the contrast theme's colors.")
 
                         UiTheme.HighContrastOverride = False
