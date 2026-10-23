@@ -41,6 +41,11 @@ Partial Public Class Form1
     Private fitManuscriptTitle As Action = Nothing
     Private manuscriptPagePalette As String = String.Empty
 
+    ' The kept page's containers, outer ones first, listed once as it is
+    ' built: an open holds the layout of each while the record loads, and
+    ' each then lays out once (ShowPageInOnePass).
+    Private manuscriptPageContainers As List(Of Control) = Nothing
+
     Private Const SaveBarHint As String =
         "Save keeps them. Discard returns to the last saved version."
 
@@ -149,20 +154,40 @@ Partial Public Class Form1
     ' Shows a manuscript on the kept page: its editor loads the record
     ' while the page is hidden, the page shows in one layout pass, and the
     ' Versions tab, the selected submission's details and any waypoint
-    ' asked for follow once it has painted (#133).
+    ' asked for follow once it has painted (#133). Every container of the
+    ' page holds its layout from before the record loads until the page
+    ' shows: loading a record changes the text, the parts shown and the
+    ' rows of a hidden page, and each change laid out its containers
+    ' again, up to the page, though nothing of it was shown.
     Private Sub ShowManuscriptPage(
         manuscript As Manuscript
     )
 
         Dim page As Control = KeptManuscriptPage()
         Dim editor As EditManuscriptForm = manuscriptPageEditor
+        Dim containers As List(Of Control) = manuscriptPageContainers
 
-        manuscriptBackLink.Text = ChrW(&H2190) & " " & PageTitle(manuscriptOrigin)
-        manuscriptBackLink.AccessibleName = "Back to " & PageTitle(manuscriptOrigin) & " (Alt+Left)"
-        manuscriptPageSaveHint.Text = SaveBarHint
-        manuscriptPageSaveBar.Visible = False
+        For Each container As Control In containers
+            container.SuspendLayout()
+        Next
 
-        editor.LoadRecord(manuscript, manuscripts, pendingRecoveredCopy, deferParts:=True)
+        Try
+
+            manuscriptBackLink.Text = ChrW(&H2190) & " " & PageTitle(manuscriptOrigin)
+            manuscriptBackLink.AccessibleName = "Back to " & PageTitle(manuscriptOrigin) & " (Alt+Left)"
+            manuscriptPageSaveHint.Text = SaveBarHint
+            manuscriptPageSaveBar.Visible = False
+
+            editor.LoadRecord(manuscript, manuscripts, pendingRecoveredCopy, deferParts:=True)
+
+        Catch
+            ' A load that failed part way leaves the page hidden and laid
+            ' out again as each container lets go of its layout.
+            For index As Integer = containers.Count - 1 To 0 Step -1
+                containers(index).ResumeLayout(True)
+            Next
+            Throw
+        End Try
 
         ' The page's editor only once its record has loaded: a load that
         ' failed part way leaves no editor to ask about, save or draft,
@@ -174,7 +199,7 @@ Partial Public Class Form1
         RefreshManuscriptHeader()
         fitManuscriptTitle()
 
-        ShowPageInOnePass(page)
+        ShowPageInOnePass(page, containers)
         currentPageView = page
         manuscriptDirtyTimer.Start()
 
@@ -275,22 +300,16 @@ Partial Public Class Form1
     End Function
 
 
-    ' Shows a page built or loaded while hidden in one layout pass: every
-    ' container holds its layout while the page comes forward, and each
-    ' then lays out once, inner ones first. Shown plainly, every container
-    ' lays itself out again each time one inside it does, which on the
-    ' manuscript page took longer than loading it. The Board is hidden by
-    ' the switch (SwitchPage), once drawing is released.
+    ' Shows a page loaded while hidden in one layout pass: its containers,
+    ' outer ones first, hold their layout while the page comes forward,
+    ' and each then lays out once, inner ones first. Shown plainly, every
+    ' container lays itself out again each time one inside it does, which
+    ' on the manuscript page took longer than loading it. The Board is
+    ' hidden by the switch (SwitchPage), once drawing is released.
     Private Sub ShowPageInOnePass(
-        page As Control
+        page As Control,
+        containers As List(Of Control)
     )
-
-        Dim containers As List(Of Control) =
-            {page}.Concat(DescendantControls(page)).Where(Function(control) control.HasChildren).ToList()
-
-        For Each container As Control In containers
-            container.SuspendLayout()
-        Next
 
         page.Visible = True
         page.BringToFront()
@@ -354,6 +373,7 @@ Partial Public Class Form1
         manuscriptPageSaveHint = Nothing
         manuscriptBackLink = Nothing
         fitManuscriptTitle = Nothing
+        manuscriptPageContainers = Nothing
 
     End Sub
 
@@ -631,6 +651,8 @@ Partial Public Class Form1
         manuscriptBackLink = lnkBack
         fitManuscriptTitle = fitTitle
         manuscriptPagePalette = ManuscriptPageStamp()
+        manuscriptPageContainers =
+            {CType(page, Control)}.Concat(DescendantControls(page)).Where(Function(control) control.HasChildren).ToList()
 
     End Sub
 
