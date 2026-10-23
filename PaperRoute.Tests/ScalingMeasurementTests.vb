@@ -61,12 +61,13 @@ Public Class ScalingMeasurementTests
     ' step 3); each conversion adds its window. Batch one: the four that
     ' had the base dimensions but not the rest of the rule. Batch two: the
     ' top-level windows the first table showed cut or with a button
-    ' outside the client area.
+    ' outside the client area. Step 4: Edit Journal, scaled by hand until
+    ' a real 150% capture showed it failing.
     Friend Shared ReadOnly Converted As Type() = {
         GetType(AboutForm), GetType(JournalCandidateForm), GetType(UpdateProgressForm), GetType(UpdatePromptForm),
         GetType(DeadlineDateForm), GetType(DiagnosticsForm), GetType(ExcelMappingForm), GetType(JournalChecklistItemEditForm),
         GetType(ManuscriptLinksForm), GetType(ManuscriptVersionEditForm), GetType(PublicationCheckForm), GetType(StartupFailureForm),
-        GetType(SubmissionPacketEditForm), GetType(UnexpectedErrorForm)
+        GetType(SubmissionPacketEditForm), GetType(UnexpectedErrorForm), GetType(JournalEditForm)
     }
 
 
