@@ -48,6 +48,50 @@ Public Class UnexpectedErrorFormTests
             End Sub)
     End Sub
 
+    ' At a real 150% display Close PaperRoute lay over Open Log Folder, and
+    ' at 125% the same (#93, step 4). The dialog is built with its text at
+    ' the display's size, so each button first took the width of its
+    ' caption, and Windows Forms then scaled that width by the display's
+    ' factor with the rest of the dialog: at 150% the four needed 1081
+    ' pixels of an 888-pixel row. Built here in that order, as at 125% and
+    ' 150%, the four keep their order, none lies over another, and each is
+    ' whole inside its row and the dialog.
+    <TestMethod>
+    <DataRow(120)>
+    <DataRow(144)>
+    Public Sub TheFourButtonsFitTheirRowAtTheDisplaysSize(dpi As Integer)
+        RunOnStaThread(
+            Sub()
+                Using dialog As New UnexpectedErrorForm(Failure, True, Path.Combine(Path.GetTempPath(), "PaperRoute-ErrorTests-logs"))
+                    ShowOffscreen(dialog)
+                    BuildAsAtTheDisplay(dialog, dpi)
+
+                    Dim buttons As List(Of Button) = Descendants(dialog).OfType(Of Button)().ToList()
+                    Dim client As Rectangle = dialog.RectangleToScreen(dialog.ClientRectangle)
+                    Dim placed As List(Of Rectangle) = buttons.Select(Function(button) button.Parent.RectangleToScreen(button.Bounds)).ToList()
+                    Dim described As String = String.Join("; ", buttons.Select(Function(button, index) button.Text & " " & dialog.RectangleToClient(placed(index)).ToString()))
+
+                    CollectionAssert.AreEqual(
+                        {"Copy Details", "Open Log Folder", "Close PaperRoute", "Keep Working"},
+                        buttons.OrderBy(Function(button) button.Parent.RectangleToScreen(button.Bounds).Left).Select(Function(button) button.Text).ToList(),
+                        "Left to right: " & described)
+
+                    For index As Integer = 0 To buttons.Count - 1
+                        Dim parent As Rectangle = buttons(index).Parent.RectangleToScreen(buttons(index).Parent.ClientRectangle)
+                        Assert.IsTrue(parent.Contains(placed(index)) AndAlso client.Contains(placed(index)), $"{buttons(index).Text} is whole at {dpi} DPI: {described}")
+                        For other As Integer = index + 1 To buttons.Count - 1
+                            Assert.IsFalse(placed(index).IntersectsWith(placed(other)), $"{buttons(index).Text} and {buttons(other).Text} do not overlap at {dpi} DPI: {described}")
+                        Next
+                    Next
+
+                    Assert.AreSame(Of IButtonControl)(ButtonNamed(dialog, "Keep Working"), dialog.AcceptButton, "Enter keeps working.")
+                    Assert.AreSame(Of IButtonControl)(ButtonNamed(dialog, "Keep Working"), dialog.CancelButton, "Escape keeps working.")
+
+                    dialog.Close()
+                End Using
+            End Sub)
+    End Sub
+
     <TestMethod>
     Public Sub DetailsNameTheVersionAndTheError()
         Dim details As String = UnexpectedErrorForm.Details(Failure)
@@ -68,6 +112,26 @@ Public Class UnexpectedErrorFormTests
         form.Location = New Point(-20000, -20000)
         form.ShowInTaskbar = False
         form.Show()
+        Application.DoEvents()
+    End Sub
+
+    ' The dialog as a display at this DPI builds it, in a host at 96 DPI:
+    ' its text at the display's size while it is laid out, then its sizes,
+    ' written at 96 DPI, scaled by Windows Forms, then laid out again.
+    Private Shared Sub BuildAsAtTheDisplay(dialog As Form, dpi As Integer)
+        Dim factor As Single = dpi / 96.0F
+        Dim controls As List(Of Control) = New Control() {dialog}.Concat(Descendants(dialog)).ToList()
+        Dim fonts As Dictionary(Of Control, Font) = controls.ToDictionary(Function(control) control, Function(control) control.Font)
+        For Each pair As KeyValuePair(Of Control, Font) In fonts
+            pair.Key.Font = New Font(pair.Value.FontFamily, pair.Value.Size * factor, pair.Value.Style, pair.Value.Unit)
+        Next
+        For pass As Integer = 1 To 2
+            controls.ForEach(Sub(control) control.PerformLayout())
+        Next
+        dialog.Scale(New SizeF(factor, factor))
+        For pass As Integer = 1 To 2
+            controls.ForEach(Sub(control) control.PerformLayout())
+        Next
         Application.DoEvents()
     End Sub
 
