@@ -50,14 +50,6 @@ Namespace Forms
         Public Property Checks As New List(Of String)()
 
 
-        ' On a small screen or at a high scale, the window keeps its buttons
-        ' above the taskbar.
-        Protected Overrides Sub OnLoad(e As EventArgs)
-            MyBase.OnLoad(e)
-            ResponsiveDialogSizingService.FitToWorkingArea(Me)
-        End Sub
-
-
         Public Sub New(candidate As JournalCandidate, journalNames As IEnumerable(Of String), history As Func(Of String, String), Optional factsFor As Func(Of String, JournalRecord) = Nothing)
 
             _history = history
@@ -79,17 +71,17 @@ Namespace Forms
 
         Private Sub BuildInterface(isNew As Boolean, journalNames As IEnumerable(Of String))
 
+            ' Sizes below are at 96 DPI and scale with the display (#93).
+            DialogScaling.Begin(Me)
+
             Me.Text = If(isNew, "Add Journal to Shortlist", "Shortlisted Journal")
             Me.StartPosition = FormStartPosition.CenterParent
             Me.FormBorderStyle = FormBorderStyle.FixedDialog
             Me.MaximizeBox = False
             Me.MinimizeBox = False
             Me.ShowInTaskbar = False
-            ' Sizes below are at 96 DPI and scale with the display.
-            Me.AutoScaleDimensions = New SizeF(96.0F, 96.0F)
             Me.ClientSize = New Size(900, 560)
             Me.Font = New Font("Segoe UI", 10.0F)
-            Me.AutoScaleMode = AutoScaleMode.Dpi
 
             Dim root As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
@@ -228,6 +220,7 @@ Namespace Forms
             Me.AcceptButton = btnOk
             Me.CancelButton = btnCancel
             Me.Controls.Add(root)
+            DialogScaling.Finish(Me)
             RefreshJournal()
             ' Open with nothing selected in the journal box.
             AddHandler Me.Shown, Sub(sender, e) cmbJournal.Select(cmbJournal.Text.Length, 0)
@@ -253,6 +246,8 @@ Namespace Forms
                 _checkBoxes.Add(box)
                 list.Controls.Add(box)
 
+                ' Under the question's text: the box's 16 pixels and its gap
+                ' at 96 DPI, scaled with the window.
                 Dim hint As New LinkLabel With {
                     .AutoSize = True,
                     .UseMnemonic = False,
@@ -261,7 +256,7 @@ Namespace Forms
                     .LinkColor = UiTheme.AccentColor(),
                     .ActiveLinkColor = UiTheme.AccentSecondaryColor(),
                     .VisitedLinkColor = UiTheme.AccentColor(),
-                    .Margin = New Padding(CInt(Math.Ceiling(16 * DeviceDpi / 96.0)) + 8, 0, 0, 6)
+                    .Margin = New Padding(24, 0, 0, 6)
                 }
                 AddHandler hint.LinkClicked, AddressOf OpenHint
                 _hints(check.Id) = hint
@@ -270,7 +265,7 @@ Namespace Forms
             AddHandler list.Resize,
                 Sub(sender, e)
                     Dim width As Integer = Math.Max(160, list.ClientSize.Width - SystemInformation.VerticalScrollBarWidth)
-                    Dim glyph As Integer = CInt(Math.Ceiling(16 * list.DeviceDpi / 96.0)) + 8
+                    Dim glyph As Integer = CInt(Math.Ceiling(16 * DialogScaling.Dpi(list) / 96.0)) + 8
                     For Each box As CheckBox In list.Controls.OfType(Of CheckBox)()
                         box.Width = width
                         box.Height = TextRenderer.MeasureText(box.Text, box.Font, New Size(width - glyph, 0), TextFormatFlags.WordBreak).Height + 6

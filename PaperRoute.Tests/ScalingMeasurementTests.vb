@@ -9,6 +9,7 @@ Imports System.Windows.Forms
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
 Imports ManuscriptPipeline
 Imports ManuscriptPipeline.Controls
+Imports ManuscriptPipeline.Forms
 Imports ManuscriptPipeline.Services
 
 ' Every top-level window of the catalog, measured at 96, 120 and 144 DPI
@@ -47,9 +48,12 @@ Public Class ScalingMeasurementTests
         ("1366x728", New Rectangle(-30000, -30000, 1366, 728))
     }
 
-    ' The windows converted to the one scaling rule (#93, step 3). Empty
-    ' while the table is report-only; each conversion adds its window.
-    Friend Shared ReadOnly Converted As Type() = {}
+    ' The windows converted to the one scaling rule, DialogScaling (#93,
+    ' step 3); each conversion adds its window. Batch one: the four that
+    ' had the base dimensions but not the rest of the rule.
+    Friend Shared ReadOnly Converted As Type() = {
+        GetType(AboutForm), GetType(JournalCandidateForm), GetType(UpdateProgressForm), GetType(UpdatePromptForm)
+    }
 
 
     <TestMethod>

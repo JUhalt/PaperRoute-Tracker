@@ -26,15 +26,15 @@ Namespace Forms
             version As String
         )
 
+            ' Sizes below are at 96 DPI and scale with the display (#93).
+            DialogScaling.Begin(Me)
+
             Me.Text = "Updating PaperRoute"
             Me.StartPosition = FormStartPosition.CenterParent
             Me.FormBorderStyle = FormBorderStyle.FixedDialog
             Me.ControlBox = False
-            ' Sizes below are at 96 DPI and scale with the display.
-            Me.AutoScaleDimensions = New SizeF(96.0F, 96.0F)
             Me.ClientSize = New Size(500, 165)
             Me.Font = New Font("Segoe UI", 10.0F)
-            Me.AutoScaleMode = AutoScaleMode.Dpi
 
             Dim root As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
@@ -69,6 +69,8 @@ Namespace Forms
             root.Controls.Add(lblStatus, 0, 2)
 
             Me.Controls.Add(root)
+
+            DialogScaling.Finish(Me)
 
         End Sub
 

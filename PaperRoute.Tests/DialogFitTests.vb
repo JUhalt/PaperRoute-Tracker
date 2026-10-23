@@ -19,14 +19,16 @@ Public Class DialogFitTests
         "JournalCandidateForm", "JournalFactsForm", "JournalSuggestionsForm", "PacketExportForm"
     }
 
+    ' Each sets the 96-DPI base dimensions and fits itself to the screen,
+    ' itself or through the one scaling rule, DialogScaling (#93).
     <TestMethod>
     Public Sub EveryV09DialogScalesAndFitsTheScreen()
         Dim folder As String = Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManuscriptPipeline", "Forms")
         For Each name As String In V09Dialogs
             Dim code As String = String.Join(Environment.NewLine,
                 File.ReadAllLines(Path.Combine(folder, name & ".vb")).Where(Function(line) Not line.TrimStart().StartsWith("'"c)))
-            StringAssert.Contains(code, "AutoScaleDimensions = New SizeF(96.0F, 96.0F)", name & " scales its sizes from 96 DPI.")
-            StringAssert.Contains(code, "ResponsiveDialogSizingService.FitToWorkingArea(Me)", name & " keeps itself inside the screen.")
+            Assert.IsTrue(code.Contains("AutoScaleDimensions = New SizeF(96.0F, 96.0F)") OrElse code.Contains("DialogScaling.Begin(Me)"), name & " scales its sizes from 96 DPI.")
+            Assert.IsTrue(code.Contains("ResponsiveDialogSizingService.FitToWorkingArea(Me)") OrElse code.Contains("DialogScaling.Finish(Me)"), name & " keeps itself inside the screen.")
         Next
     End Sub
 
