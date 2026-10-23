@@ -224,15 +224,32 @@ Namespace Forms
                 )
             Next
 
-            ' Reserve all five fixed rows plus the GroupBox heading and layout
-            ' insets. The former 238px cell clipped the fifth (portal) row.
-            ' Normal DPI autoscaling scales this budget with the row heights;
-            ' long journal names must not determine the summary's height.
-            root.RowStyles(0).Height = summary.RowCount * summaryRowHeight +
-                summaryGroup.Padding.Vertical + summaryGroup.Margin.Vertical +
-                summary.Margin.Vertical + Me.Font.Height + 4
+            ' Reserve all five fixed rows and what the card keeps around
+            ' them: its padding, its margin and its title. The former 238px
+            ' cell clipped the fifth (portal) row. The title's room is read
+            ' from the card whenever its font is set, as when it joins the
+            ' window: a guess from the window's font, taken as the window
+            ' was built, left the portal row 2 pixels short at 150% (#93).
+            ' Long journal names must not determine the summary's height.
+            Dim reserveSummary As Action =
+                Sub()
+                    root.RowStyles(0).Height = summary.RowCount * summaryRowHeight +
+                        summaryGroup.DisplayRectangle.Top + summaryGroup.Padding.Bottom +
+                        summaryGroup.Margin.Vertical
+                End Sub
 
-            summary.ColumnStyles.Add(New ColumnStyle(SizeType.Absolute, 195))
+            reserveSummary()
+
+            AddHandler summaryGroup.FontChanged,
+                Sub(sender, e)
+                    reserveSummary()
+                End Sub
+
+            ' The captions' column fits its widest caption and is never
+            ' narrower than 195 (see CreateFieldLabel): at 150% "Journal
+            ' manuscript ID" wrapped in a fixed 195 and its row cut its
+            ' second line (#93).
+            summary.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
             summary.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
 
             summary.Controls.Add(CreateFieldLabel("Journal"), 0, 0)
@@ -579,12 +596,15 @@ Namespace Forms
         End Function
 
 
+        ' At least 189 wide, so with its margins the captions' column keeps
+        ' the 195 pixels it always had wherever the captions fit in them.
         Private Function CreateFieldLabel(text As String) As Label
 
             Return New Label With {
                 .UseMnemonic = False,
                 .Text = text,
                 .AutoSize = True,
+                .MinimumSize = New Size(189, 0),
                 .Anchor = AnchorStyles.Left,
                 .Font = New Font(Me.Font, FontStyle.Bold)
             }
