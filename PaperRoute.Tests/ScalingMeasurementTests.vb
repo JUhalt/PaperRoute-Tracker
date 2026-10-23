@@ -336,6 +336,22 @@ Public Class ScalingMeasurementTests
     End Function
 
 
+    ' The window as it opened at this computer's own display, with nothing
+    ' simulated: fitted to the working area of the screen it opens on, as
+    ' the app fits it, and inspected as a cell of the table is. For the
+    ' display evidence tool, whose run at a real 150% display calibrates
+    ' this table (#93, step 2).
+    Friend Shared Function MeasureAtThisDisplay(shown As Form) As Cell
+
+        ResponsiveDialogSizingService.FitToWorkingArea(shown)
+        shown.PerformLayout()
+        Application.DoEvents()
+
+        Return Inspect(shown)
+
+    End Function
+
+
     ' Grows the window's text for the DPI and scales the window as Windows
     ' Forms would if its source asks for that. Nothing changes at 96 DPI.
     Friend Shared Sub Simulate(
@@ -677,8 +693,15 @@ Public Class ScalingMeasurementTests
     ' "both" for both, which is where a value can be scaled twice, and
     ' "none" for neither.
     Friend Shared Function ScalingOf(view As Type) As (Scaling As String, ScalesWithWinForms As Boolean)
+        Return ScalingOf(view, Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManuscriptPipeline"))
+    End Function
 
-        Dim app As String = Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManuscriptPipeline")
+
+    ' The same, read from a copy of the app's source laid out as the
+    ' repository lays it out (Form1's files, and Forms), as the display
+    ' evidence tool carries it to a computer without the repository.
+    Friend Shared Function ScalingOf(view As Type, app As String) As (Scaling As String, ScalesWithWinForms As Boolean)
+
         Dim code As New StringBuilder()
         Dim current As Type = view
 
