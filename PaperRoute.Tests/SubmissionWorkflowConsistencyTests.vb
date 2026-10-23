@@ -3,6 +3,7 @@ Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.IO
 Imports System.Linq
+Imports System.Reflection
 Imports System.Runtime.ExceptionServices
 Imports System.Text.Json
 Imports System.Threading
@@ -45,6 +46,56 @@ Public Class SubmissionWorkflowConsistencyTests
                     dialog.Close()
                 End Using
             End Sub)
+    End Sub
+
+    ' Record Submission... on the Submissions tab starts at the target
+    ' journal, as recording one from a stage change does (#204); with no
+    ' target journal it opens blank, and Edit opens the selected submission
+    ' as before. Each dialog is read and cancelled as it opens, so nothing
+    ' is recorded and no window is left open.
+    <TestMethod>
+    Public Sub RecordSubmissionStartsAtTheTargetJournalAndEditOpensTheSelectedOne()
+        Dim root As String = CreateTemporaryRoot()
+        Try
+            RunOnStaThread(
+                Sub()
+                    StorageEnvironment.RootOverride = root
+                    Try
+                        Dim manuscript As Manuscript = CreateLinkedManuscript()
+                        manuscript.TargetJournal = "Fictional Open Psychology"
+                        Dim opened As New List(Of (Title As String, Journal As String))()
+                        Using editor As New EditManuscriptForm(manuscript, {manuscript}, New AuthorLibraryRepository(Path.Combine(root, "authors")), pageMode:=True),
+                              dialogs As New ModalAnswer(Of AddSubmissionForm)(
+                                  Sub(dialog)
+                                      opened.Add((dialog.Text, JournalBox(dialog).Text))
+                                      dialog.DialogResult = DialogResult.Cancel
+                                  End Sub)
+                            ViewCatalog.ShowOffscreen(editor)
+
+                            CallPrivate(editor, "AddSubmission")
+                            Assert.AreEqual(1, opened.Count, "Record Submission... opened its dialog.")
+                            Assert.AreEqual(("Record Journal Submission", "Fictional Open Psychology"), opened.Last(), "Record Submission... starts at the target journal.")
+
+                            Descendants(editor).OfType(Of TextBox)().Single(Function(box) box.AccessibleName = "Target journal").Text = String.Empty
+                            CallPrivate(editor, "AddSubmission")
+                            Assert.AreEqual(2, opened.Count)
+                            Assert.AreEqual(("Record Journal Submission", String.Empty), opened.Last(), "With no target journal it opens blank.")
+
+                            DirectCast(GetType(EditManuscriptForm).GetField("lstSubmissions", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(editor), ListBox).SelectedIndex = 0
+                            CallPrivate(editor, "EditSelectedSubmission")
+                            Assert.AreEqual(3, opened.Count)
+                            Assert.AreEqual(("Edit Journal Submission", "Journal A"), opened.Last(), "Edit opens the selected submission as before.")
+
+                            Assert.AreEqual(1, manuscript.Submissions.Count, "Cancelled, the dialogs record nothing.")
+                            editor.Close()
+                        End Using
+                    Finally
+                        StorageEnvironment.RootOverride = Nothing
+                    End Try
+                End Sub)
+        Finally
+            DeleteTemporaryRoot(root)
+        End Try
     End Sub
 
     <TestMethod>
@@ -213,6 +264,42 @@ Public Class SubmissionWorkflowConsistencyTests
     Private Shared Sub RunOnStaThread(action As Action)
         StaRunner.Run(action)
     End Sub
+
+    ' A handler with no arguments of its own, as a button's Click calls it.
+    Private Shared Sub CallPrivate(target As Object, name As String)
+        target.GetType().GetMethod(name, BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(target, {Nothing, EventArgs.Empty})
+    End Sub
+
+    ' The journal box of a submission dialog: the field beside Use Library...
+    Private Shared Function JournalBox(dialog As Form) As TextBox
+        Return Descendants(dialog).OfType(Of Button)().Single(Function(button) button.Text = "Use Library...").Parent.Controls.OfType(Of TextBox)().Single()
+    End Function
+
+    ' Answers each window of one kind as it opens on the test thread, with
+    ' what the test gives, so a handler that shows it modally comes back.
+    ' The answer runs from a timer the modal loop pumps, on the window as
+    ' it shows; a handler that never opens one leaves the test to fail on
+    ' its count, not to block. FileDrawerTests answers its dialog with it too.
+    Friend NotInheritable Class ModalAnswer(Of T As Form)
+        Implements IDisposable
+
+        Private ReadOnly _timer As New System.Windows.Forms.Timer With {.Interval = 50}
+        Private ReadOnly _seen As New HashSet(Of Form)()
+
+        Public Sub New(answer As Action(Of T))
+            AddHandler _timer.Tick,
+                Sub(sender, e)
+                    For Each dialog As T In Application.OpenForms.OfType(Of T)().Where(Function(form) form.Visible).ToList()
+                        If _seen.Add(dialog) Then answer(dialog)
+                    Next
+                End Sub
+            _timer.Start()
+        End Sub
+
+        Public Sub Dispose() Implements IDisposable.Dispose
+            _timer.Dispose()
+        End Sub
+    End Class
 
     Private Class NonactivatingVersionForm
         Inherits ManuscriptVersionEditForm

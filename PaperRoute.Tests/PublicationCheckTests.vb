@@ -66,6 +66,7 @@ Public Class PublicationCheckTests
     Public Sub MarkPublishedRecordsALifecycleEventAndFillsOnlyBlanks()
         Dim manuscript As Manuscript = Tracked()
         manuscript.Location = ManuscriptLocation.FileDrawer
+        manuscript.FileDrawerDate = New DateTime(2026, 8, 17)
         manuscript.FileDrawerReason = "Waiting"
         manuscript.Metadata.Pages = "e123"
         Dim submissions As String = JsonSerializer.Serialize(manuscript.Submissions)
@@ -80,6 +81,7 @@ Public Class PublicationCheckTests
         StringAssert.Contains(described(0), "Published shelf")
         Assert.IsTrue(described.Any(Function(line) line.Contains("from Open Psychology Letters to Collabra: Psychology")))
         StringAssert.Contains(described.Last(), "DOI, Journal, Publication date, Volume, Publication URL")
+        Assert.IsTrue(described.Any(Function(line) line.Contains("while in the File Drawer (filed Aug 17, 2026: Waiting).")), "The confirmation quotes the note it will add (#202).")
 
         PublicationMatchService.MarkPublished(manuscript, match, Today)
 
@@ -88,10 +90,13 @@ Public Class PublicationCheckTests
         Assert.AreEqual(Today.AddDays(-12), manuscript.StageEnteredDate)
         Assert.AreEqual("Collabra: Psychology", manuscript.TargetJournal)
         Assert.IsFalse(manuscript.TargetJournalId.HasValue, "A changed journal no longer points at the old Journal Library record.")
+        Assert.IsFalse(manuscript.FileDrawerDate.HasValue)
         Assert.AreEqual(String.Empty, manuscript.FileDrawerReason)
         Dim published As HistoryEvent = manuscript.History.Last()
         Assert.AreEqual(PaperStage.Published, published.Stage)
         StringAssert.Contains(published.Note, "Published in Collabra: Psychology (DOI 10.1525/collabra.1)")
+        Assert.AreEqual("Published in Collabra: Psychology (DOI 10.1525/collabra.1). Marked from a publication check while in the File Drawer (filed Aug 17, 2026: Waiting).",
+                        published.Note, "The note keeps when and why it was filed (#202).")
         Assert.IsTrue(published.RecordedAtUtc.HasValue)
         Assert.AreEqual("10.1525/collabra.1", manuscript.Metadata.Doi)
         Assert.AreEqual("12", manuscript.Metadata.Volume)
@@ -99,6 +104,46 @@ Public Class PublicationCheckTests
         Assert.AreEqual(submissions, JsonSerializer.Serialize(manuscript.Submissions), "Submissions and decisions are left as recorded.")
         Assert.AreEqual(PublicationMatchStatus.Confirmed, match.Status)
         Assert.AreEqual(PublicationMatchStatus.Ignored, other.Status, "Other possible matches no longer need review.")
+    End Sub
+
+    ' A manuscript filed by a spreadsheet import has no "Moved to File
+    ' Drawer" note, so the Mark Published note is the only record of when it
+    ' was filed (#202). One never filed keeps the plain note; one filed with
+    ' a reason and no date, as an import can leave it, keeps the reason.
+    <TestMethod>
+    Public Sub MarkPublishedKeepsWhenAManuscriptFiledByImportWasFiled()
+        Dim filed As Manuscript = Tracked()
+        filed.Location = ManuscriptLocation.FileDrawer
+        filed.FileDrawerDate = New DateTime(2026, 8, 17)
+        Dim match As New PublicationMatch With {.Doi = "10.5555/filed", .Title = LongTitle, .Journal = "Collabra: Psychology", .PublishedDate = Today.AddDays(-12)}
+        filed.PublicationMatches.Add(match)
+
+        PublicationMatchService.MarkPublished(filed, match, Today)
+
+        Assert.AreEqual("Published in Collabra: Psychology (DOI 10.5555/filed). Marked from a publication check while in the File Drawer (filed Aug 17, 2026).",
+                        filed.History.Last().Note)
+
+        Dim onThePipeline As Manuscript = Tracked()
+        Dim found As New PublicationMatch With {.Doi = "10.5555/tracked", .Title = LongTitle, .Journal = "Collabra: Psychology", .PublishedDate = Today.AddDays(-12)}
+        onThePipeline.PublicationMatches.Add(found)
+
+        PublicationMatchService.MarkPublished(onThePipeline, found, Today)
+
+        Assert.AreEqual("Published in Collabra: Psychology (DOI 10.5555/tracked). Marked from a publication check.", onThePipeline.History.Last().Note,
+                        "A manuscript never filed keeps the plain note.")
+
+        ' A guard on the words: this case passed before it was written and
+        ' cannot fail before a change.
+        Dim reasonOnly As Manuscript = Tracked()
+        reasonOnly.Location = ManuscriptLocation.FileDrawer
+        reasonOnly.FileDrawerReason = "Waiting"
+        Dim known As New PublicationMatch With {.Doi = "10.5555/reason", .Title = LongTitle, .Journal = "Collabra: Psychology", .PublishedDate = Today.AddDays(-12)}
+        reasonOnly.PublicationMatches.Add(known)
+
+        PublicationMatchService.MarkPublished(reasonOnly, known, Today)
+
+        Assert.AreEqual("Published in Collabra: Psychology (DOI 10.5555/reason). Marked from a publication check while in the File Drawer (filed: Waiting).", reasonOnly.History.Last().Note,
+                        "A reason without a date keeps the reason.")
     End Sub
 
     <TestMethod>

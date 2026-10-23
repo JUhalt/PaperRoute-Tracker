@@ -1056,8 +1056,11 @@ Public Class Form1
         ' File Drawer suggestion
         ' =================================================
 
+        ' Only while the latest submission ended in a rejection or a
+        ' withdrawal, and not after a revival (#203).
         If manuscript.Location =
             ManuscriptLocation.Pipeline AndAlso
+       snapshot.CanSuggestFiling AndAlso
        snapshot.RejectionCount >=
             appSettings.FileDrawerSuggestionThreshold Then
 
@@ -3498,33 +3501,26 @@ Public Class Form1
         manuscript As Manuscript
     )
 
-        Dim result As DialogResult =
-            MessageBox.Show(
-                Me,
-                "Move '" &
-                manuscript.Title &
-                "' to the File Drawer?" &
-                Environment.NewLine &
-                Environment.NewLine &
-                "Its history, submissions, decisions, and correspondence will be preserved.",
-                "Move to File Drawer",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question
-            )
+        ' One window asks the question and for the optional reason (#205):
+        ' Cancel leaves the manuscript where it is, which the input box it
+        ' replaces could not tell from no reason.
+        Dim reason As String
 
-        If result <>
-            DialogResult.Yes Then
+        Using dialog As New MoveToFileDrawerForm(
+            manuscript.Title
+        )
 
-            Return
+            If dialog.ShowDialog(Me) <>
+                DialogResult.OK Then
 
-        End If
+                Return
 
-        Dim reason As String =
-            Microsoft.VisualBasic.Interaction.InputBox(
-                "Optional: Why are you filing this manuscript?",
-                "File Drawer",
-                ""
-            )
+            End If
+
+            reason =
+                dialog.Reason
+
+        End Using
 
         manuscript.Location =
             ManuscriptLocation.FileDrawer
@@ -3575,6 +3571,15 @@ Public Class Form1
         manuscript As Manuscript
     )
 
+        ' When and why it was filed go into the note (#202): a manuscript
+        ' filed by an import has no "Moved to File Drawer" note to keep them.
+        Dim restoreNote As String =
+            ManuscriptLifecycleService.WithFiledClause(
+                ManuscriptAttentionService.RestoredFromFileDrawerNote,
+                manuscript.FileDrawerDate,
+                manuscript.FileDrawerReason
+            )
+
         manuscript.Location =
             ManuscriptLocation.Pipeline
 
@@ -3589,7 +3594,7 @@ Public Class Form1
             .Stage =
                 manuscript.CurrentStage,
             .Note =
-                "Restored from File Drawer to active Pipeline."
+                restoreNote
         }
 
         ChronologyProvenanceService.StampCreated(

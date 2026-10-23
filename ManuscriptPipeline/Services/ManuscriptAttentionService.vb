@@ -17,6 +17,12 @@ Namespace Services
         Public Property HasMissingTargetJournal As Boolean = False
         Public Property WasRecentlyRejected As Boolean = False
 
+        ' The latest submission ended in a rejection or a withdrawal, and the
+        ' manuscript was not restored from the File Drawer since (#203). The
+        ' Board suggests filing when this holds and the rejections reach the
+        ' threshold.
+        Public Property CanSuggestFiling As Boolean = False
+
         Public Property OverdueDays As Integer? = Nothing
         Public Property RevisionDaysRemaining As Integer? = Nothing
         Public Property WaitingDays As Integer? = Nothing
@@ -26,6 +32,12 @@ Namespace Services
 
 
     Public NotInheritable Class ManuscriptAttentionService
+
+        ' How Form1.RestoreToPipeline's history note begins; when and why the
+        ' manuscript was filed follow it (#202).
+        Public Const RestoredFromFileDrawerNote As String =
+            "Restored from File Drawer to active Pipeline"
+
 
         Private Sub New()
         End Sub
@@ -239,7 +251,60 @@ Namespace Services
 
             End If
 
+            If latestDecision IsNot Nothing AndAlso
+               (
+                   IsRejectionDecision(
+                       latestDecision.Decision
+                   ) OrElse
+                   latestDecision.Decision =
+                       EditorialDecision.Withdrawn
+               ) Then
+
+                snapshot.CanSuggestFiling =
+                    Not WasRestoredSince(
+                        manuscript,
+                        latestDecision.DecisionDate
+                    )
+
+            End If
+
             Return snapshot
+
+        End Function
+
+
+        ' A revival after the decision (#203): the researcher took the
+        ' manuscript out of the File Drawer knowing how its last route ended.
+        Private Shared Function WasRestoredSince(
+            manuscript As Manuscript,
+            decisionDate As DateTime
+        ) As Boolean
+
+            If manuscript.History Is Nothing Then
+                Return False
+            End If
+
+            For Each historyEvent As HistoryEvent In
+                manuscript.History
+
+                If historyEvent IsNot Nothing AndAlso
+                   historyEvent.EventDate.Date >=
+                   decisionDate.Date AndAlso
+                   If(
+                       historyEvent.Note,
+                       String.Empty
+                   ).StartsWith(
+                       RestoredFromFileDrawerNote,
+                       StringComparison.Ordinal
+                   ) Then
+
+                    Return True
+
+                End If
+
+            Next
+
+            Return False
 
         End Function
 

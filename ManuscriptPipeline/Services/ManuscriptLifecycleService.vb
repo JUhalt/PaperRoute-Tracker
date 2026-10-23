@@ -1,5 +1,6 @@
 ﻿Imports System
 Imports System.Collections.Generic
+Imports System.Globalization
 Imports ManuscriptPipeline.Models
 
 Namespace Services
@@ -419,6 +420,73 @@ Namespace Services
             End If
 
         End Sub
+
+
+        ' The history note a manuscript leaving the File Drawer keeps (#202):
+        ' the sentence, then when and why it was filed, as "Restored from
+        ' File Drawer to active Pipeline (filed Aug 17, 2026: Three
+        ' rejections; revisit with a larger sample.)". With neither known,
+        ' the sentence alone.
+        Public Shared Function WithFiledClause(
+            sentence As String,
+            filedDate As DateTime?,
+            filedReason As String
+        ) As String
+
+            Dim reason As String =
+                If(
+                    filedReason,
+                    String.Empty
+                ).Trim()
+
+            If Not filedDate.HasValue AndAlso
+               reason.Length = 0 Then
+
+                Return sentence & "."
+
+            End If
+
+            Dim clause As String =
+                "filed"
+
+            If filedDate.HasValue Then
+
+                clause &=
+                    " " &
+                    filedDate.Value.ToString(
+                        "MMM d, yyyy",
+                        CultureInfo.CurrentCulture
+                    )
+
+            End If
+
+            If reason.Length > 0 Then
+
+                clause &=
+                    ": " &
+                    reason
+
+            End If
+
+            Dim note As String =
+                sentence &
+                " (" &
+                clause &
+                ")"
+
+            ' A reason that ends in a period closes the sentence.
+            If reason.EndsWith(
+                ".",
+                StringComparison.Ordinal
+            ) Then
+
+                Return note
+
+            End If
+
+            Return note & "."
+
+        End Function
 
 
         Private Shared Function EventCanUpdateCurrentState(

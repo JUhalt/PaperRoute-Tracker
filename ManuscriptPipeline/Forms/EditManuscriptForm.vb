@@ -3505,7 +3505,11 @@ Namespace Forms
             e As EventArgs
         )
 
-            Using dialog As New AddSubmissionForm()
+            ' Starts at the target journal, as recording one from a stage
+            ' change does (#204).
+            Using dialog As New AddSubmissionForm(
+                txtTargetJournal.Text.Trim()
+            )
 
                 If dialog.ShowDialog(Me) =
                     DialogResult.OK AndAlso
