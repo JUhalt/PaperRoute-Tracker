@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>PaperRoute.DisplayEvidence</RootNamespace>
+    <StartupObject>PaperRoute.DisplayEvidence.Program</StartupObject>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- The view catalog and the scaling measure, and through them the app. -->
+    <ProjectReference Include="../../PaperRoute.Tests/PaperRoute.Tests.vbproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The app's source each window's scaling kind is read from (ScalingOf), laid out as the repository lays it out, for a computer without the repository. -->
+    <None Include="../../ManuscriptPipeline/Form1*.vb" LinkBase="AppSource" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="../../ManuscriptPipeline/Forms/*.vb" LinkBase="AppSource/Forms" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

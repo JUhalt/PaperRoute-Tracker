@@ -66,6 +66,9 @@ jobs:
       - name: Build disposable workflow demo
         run: dotnet build ManualCertification/V04Demo/PaperRoute.V04Demo.csproj --configuration Release
 
+      - name: Build display evidence tool
+        run: dotnet build ManualCertification/DisplayEvidence/PaperRoute.DisplayEvidence.vbproj --configuration Release
+
       - name: Run automated tests
         # The runner is disposable, so the file-dialog tests, which leave
         # Explorer's view state under HKCU, run here too (#196).
