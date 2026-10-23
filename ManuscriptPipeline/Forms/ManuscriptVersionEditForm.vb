@@ -212,6 +212,9 @@ Namespace Forms
 
         Private Sub BuildInterface()
 
+            ' Sizes below are at 96 DPI and scale with the display (#93).
+            DialogScaling.Begin(Me)
+
             Me.Text =
                 If(
                     _existingVersion Is Nothing,
@@ -231,14 +234,20 @@ Namespace Forms
             Me.Font =
                 New Font("Segoe UI", 10.0F)
 
-            Me.AutoScaleMode =
-                AutoScaleMode.Dpi
+            ' The rows below need 786 pixels at 96 DPI (the notes at least
+            ' 100). On a screen with less, the body scrolls and the buttons
+            ' stay below it, in view (#93).
+            Dim body As New Panel With {
+                .Dock = DockStyle.Fill,
+                .AutoScroll = True
+            }
 
             Dim root As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .ColumnCount = 2,
-                .RowCount = 12,
-                .Padding = New Padding(22)
+                .RowCount = 11,
+                .Padding = New Padding(22),
+                .MinimumSize = New Size(0, 786)
             }
 
             root.ColumnStyles.Add(
@@ -266,7 +275,6 @@ Namespace Forms
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 52))
             root.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 70))
-            root.RowStyles.Add(New RowStyle(SizeType.Absolute, 58))
 
             txtLabel.Dock =
                 DockStyle.Fill
@@ -479,9 +487,11 @@ Namespace Forms
             )
 
             Dim buttons As New FlowLayoutPanel With {
-                .Dock = DockStyle.Fill,
+                .Dock = DockStyle.Bottom,
+                .AutoSize = True,
                 .FlowDirection = FlowDirection.RightToLeft,
-                .WrapContents = False
+                .WrapContents = False,
+                .Padding = New Padding(22, 10, 22, 22)
             }
 
             Dim btnSave As New Button With {
@@ -513,26 +523,25 @@ Namespace Forms
                 btnCancel
             )
 
-            root.Controls.Add(
-                buttons,
-                0,
-                11
-            )
-
-            root.SetColumnSpan(
-                buttons,
-                2
-            )
-
             Me.AcceptButton =
                 btnSave
 
             Me.CancelButton =
                 btnCancel
 
-            Me.Controls.Add(
+            body.Controls.Add(
                 root
             )
+
+            Me.Controls.Add(
+                body
+            )
+
+            Me.Controls.Add(
+                buttons
+            )
+
+            DialogScaling.Finish(Me)
 
         End Sub
 

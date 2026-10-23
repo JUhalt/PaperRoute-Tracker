@@ -33,6 +33,9 @@ Namespace Forms
 
         Private Sub BuildInterface()
 
+            ' Sizes below are at 96 DPI and scale with the display (#93).
+            DialogScaling.Begin(Me)
+
             Me.Text = "PaperRoute Diagnostics"
             Me.StartPosition = FormStartPosition.CenterParent
             Me.FormBorderStyle = FormBorderStyle.Sizable
@@ -42,7 +45,6 @@ Namespace Forms
             Me.ClientSize = New Size(840, 580)
             Me.MinimumSize = New Size(620, 420)
             Me.Font = New Font("Segoe UI", 10.0F)
-            Me.AutoScaleMode = AutoScaleMode.Dpi
 
             Dim root As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
@@ -50,6 +52,11 @@ Namespace Forms
                 .RowCount = 4,
                 .Padding = New Padding(20)
             }
+
+            ' One column as wide as the window, so the text wraps to it and
+            ' nothing widens the table past the edge. A width set from the
+            ' table's size as it scales is scaled again (#93).
+            root.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
 
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
@@ -68,14 +75,10 @@ Namespace Forms
             Dim lblHelp As New Label With {
                 .Text = "Safe technical information for troubleshooting. Manuscript titles, notes, reviewer comments, and document contents are not included.",
                 .AutoSize = True,
+                .Dock = DockStyle.Fill,
                 .ForeColor = UiTheme.SecondaryText(),
                 .Margin = New Padding(0, 0, 0, 10)
             }
-
-            AddHandler root.SizeChanged,
-                Sub(sender As Object, e As EventArgs)
-                    lblHelp.MaximumSize = New Size(Math.Max(200, root.ClientSize.Width - root.Padding.Horizontal - 8), 0)
-                End Sub
 
             txtReport.Dock = DockStyle.Fill
             txtReport.Multiline = True
@@ -144,6 +147,8 @@ Namespace Forms
             Me.AcceptButton = btnClose
             Me.CancelButton = btnClose
             Me.Controls.Add(root)
+
+            DialogScaling.Finish(Me)
 
         End Sub
 

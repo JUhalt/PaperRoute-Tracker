@@ -65,11 +65,13 @@ Namespace Forms
                 OrderByDescending(Function(item) If(requested.Count > 0, requested.Contains(item.Id), PublicationMatchService.IsSuggested(item))).
                 ThenBy(Function(item) item.Title, StringComparer.CurrentCultureIgnoreCase).ToList()
 
+            ' Sizes below are at 96 DPI and scale with the display (#93).
+            DialogScaling.Begin(Me)
+
             Text = "Check for Publications"
             StartPosition = FormStartPosition.CenterParent
             ShowInTaskbar = False
             MinimizeBox = False
-            AutoScaleMode = AutoScaleMode.Dpi
             Font = New Font("Segoe UI", 9.0F)
             ClientSize = New Size(720, 560)
             MinimumSize = New Size(560, 440)
@@ -108,6 +110,14 @@ Namespace Forms
             }
             btnPrimary.Role = ActionButtonRole.Primary
             btnPrimary.Height = 34
+            ' Sized for its caption by the button itself, 18 pixels a side as
+            ' the width set by hand gave it, and never narrower than Cancel: a
+            ' width set from measured text before the window scales would be
+            ' scaled again.
+            btnPrimary.AutoSize = True
+            btnPrimary.AutoSizeMode = AutoSizeMode.GrowAndShrink
+            btnPrimary.Padding = New Padding(18, 5, 18, 5)
+            btnPrimary.MinimumSize = New Size(90, 34)
             AddHandler btnPrimary.Click, AddressOf PrimaryClicked
             btnCancel.Text = "Cancel"
             btnCancel.Height = 34
@@ -126,6 +136,7 @@ Namespace Forms
             btnCancel.DialogResult = DialogResult.None
 
             ShowChoices(requested, defaultOrcid)
+            DialogScaling.Finish(Me)
             UiPolish.ApplyDialog(Me)
 
         End Sub
@@ -240,7 +251,6 @@ Namespace Forms
                 lblSelected.Text = count.ToString(CultureInfo.CurrentCulture) & " of " & _eligible.Count.ToString(CultureInfo.CurrentCulture) & " selected"
             End If
             btnPrimary.Text = If(count = 1, "Check 1 Manuscript", "Check " & count.ToString(CultureInfo.CurrentCulture) & " Manuscripts")
-            btnPrimary.Width = TextRenderer.MeasureText(btnPrimary.Text, Font).Width + 36
             btnPrimary.Enabled = count > 0
         End Sub
 
@@ -377,7 +387,6 @@ Namespace Forms
             ClearBody()
             btnPrimary.Visible = True
             btnPrimary.Text = "Close"
-            btnPrimary.Width = 90
             btnPrimary.Enabled = True
             btnCancel.Visible = False
             ' Esc closes, as Close does, now Cancel is gone.

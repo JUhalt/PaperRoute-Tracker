@@ -50,9 +50,14 @@ Public Class ScalingMeasurementTests
 
     ' The windows converted to the one scaling rule, DialogScaling (#93,
     ' step 3); each conversion adds its window. Batch one: the four that
-    ' had the base dimensions but not the rest of the rule.
+    ' had the base dimensions but not the rest of the rule. Batch two: the
+    ' top-level windows the first table showed cut or with a button
+    ' outside the client area.
     Friend Shared ReadOnly Converted As Type() = {
-        GetType(AboutForm), GetType(JournalCandidateForm), GetType(UpdateProgressForm), GetType(UpdatePromptForm)
+        GetType(AboutForm), GetType(JournalCandidateForm), GetType(UpdateProgressForm), GetType(UpdatePromptForm),
+        GetType(DeadlineDateForm), GetType(DiagnosticsForm), GetType(ExcelMappingForm), GetType(JournalChecklistItemEditForm),
+        GetType(ManuscriptLinksForm), GetType(ManuscriptVersionEditForm), GetType(PublicationCheckForm), GetType(StartupFailureForm),
+        GetType(SubmissionPacketEditForm), GetType(UnexpectedErrorForm)
     }
 
 
@@ -201,6 +206,14 @@ Public Class ScalingMeasurementTests
 
         If dpi <> 96 Then
 
+            ' In the order Windows Forms keeps when a window opens: the sizes
+            ' written at 96 DPI are scaled first, and the text is laid out at
+            ' its size for the display after, so a control that grows to fit
+            ' its text grows from its scaled size, not from a grown one.
+            If scalesWithWinForms Then
+                shown.Scale(New SizeF(factor, factor))
+            End If
+
             Dim fonts As New Dictionary(Of Control, Font)()
 
             For Each control As Control In New Control() {shown}.Concat(ViewCatalog.Descendants(shown))
@@ -211,11 +224,16 @@ Public Class ScalingMeasurementTests
                 pair.Key.Font = New Font(pair.Value.FontFamily, pair.Value.Size * factor, pair.Value.Style, pair.Value.Unit)
             Next
 
-            If scalesWithWinForms Then
-                shown.Scale(New SizeF(factor, factor))
-            End If
+            ' Scale defers the layouts it causes and drops them. A window that
+            ' opens scaled is laid out by the size messages its new windows
+            ' get; these windows exist, so each control is laid out by hand,
+            ' parents first, and once more for what the first pass moved.
+            For pass As Integer = 1 To 2
+                For Each control As Control In New Control() {shown}.Concat(ViewCatalog.Descendants(shown))
+                    control.PerformLayout()
+                Next
+            Next
 
-            shown.PerformLayout()
             Application.DoEvents()
 
         End If

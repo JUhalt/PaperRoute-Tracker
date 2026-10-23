@@ -11,19 +11,15 @@ Imports ManuscriptPipeline.Services
 ' The one scaling rule for a dialog (#93, step 3): DialogScaling.Begin
 ' before the first control and Finish after the last give a window the
 ' 96-DPI base dimensions, the DPI scaling mode, one layout pass and a fit
-' to the screen's working area when it opens. The four windows that had
-' the base dimensions but not the rest of the rule use it, with every
-' hand-scaled value on a property Windows Forms scales written as its
-' 96-DPI literal. And the mode the app runs in is pinned to the one it
-' has always run in.
+' to the screen's working area when it opens. The converted windows (the
+' four that had the base dimensions but not the rest of the rule, then
+' the ones the measuring test failed) use it, with every hand-scaled
+' value on a property Windows Forms scales written as its 96-DPI
+' literal. And the mode the app runs in is pinned to the one it has
+' always run in.
 <TestClass>
 <DoNotParallelize>
 Public Class DialogScalingTests
-
-    ' Batch one: the four half-converted windows.
-    Private Shared ReadOnly BatchOne As String() = {
-        "AboutForm", "JournalCandidateForm", "UpdateProgressForm", "UpdatePromptForm"
-    }
 
 
     ' A window built with the rule has the base dimensions and the mode,
@@ -76,16 +72,20 @@ Public Class DialogScalingTests
     End Sub
 
 
-    ' Each of the four uses the rule and nothing of its own beside it: no
-    ' base dimensions, scaling mode or fit of its own, and no DeviceDpi
-    ' read, so no value is scaled by hand and by Windows Forms both.
+    ' Each converted window (ScalingMeasurementTests.Converted, which the
+    ' measuring test enforces) uses the rule and nothing of its own beside
+    ' it: no base dimensions, scaling mode or fit of its own, and no
+    ' DeviceDpi read, so no value is scaled by hand and by Windows Forms
+    ' both.
     <TestMethod>
-    Public Sub TheFourHalfConvertedWindowsUseTheRuleAlone()
+    Public Sub TheConvertedWindowsUseTheRuleAlone()
 
         Dim folder As String =
             Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManuscriptPipeline", "Forms")
 
-        For Each name As String In BatchOne
+        Assert.IsTrue(ScalingMeasurementTests.Converted.Length >= 14, "The converted windows are listed: " & ScalingMeasurementTests.Converted.Length)
+
+        For Each name As String In ScalingMeasurementTests.Converted.Select(Function(view) view.Name)
 
             Dim code As String =
                 String.Join(Environment.NewLine, File.ReadAllLines(Path.Combine(folder, name & ".vb")).Where(Function(line) Not line.TrimStart().StartsWith("'"c)))
