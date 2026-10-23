@@ -146,15 +146,17 @@ Public Class ResponsivenessBudgetTests
             ' each builds its page's windows and measured 54-163, 80-312, 45-124
             ' and 62-210 ms across this host's quiet and busy runs, with no room
             ' under the 100 ms line. Library to Board, which disposes the
-            ' Library page and its 500-row grid, is reported too from
-            ' 2026-10-18: 27 to 100 ms in most runs, it read 128 to 481 ms in
-            ' others, 481 ms in a Debug run of this test alone with no other
-            ' test host, so its spikes are not the host's alone; their source
-            ' is not known yet.
+            ' Library page and its 500-row grid, read 27 to 100 ms in most runs
+            ' and 128 to 481 ms in others: the spikes were a wait of about half
+            ' a second inside painting Windows did synchronously as the Board
+            ' came forward (PageSwitchTests.SwitchesPaintNothingSynchronously
+            ' records that painting). Since 2026-10-23 a switch paints nothing
+            ' until it has returned; the row read 12 to 50 ms in 60 trials in
+            ' a row on a Release build, and it is enforced.
             rows.Add(Time(library, "Board to Library", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Library)))
             rows.Add(Time(library, "One Library filter keystroke", FilterKeystroke, Sub() board.TypeInLibraryFilter("a"), enforced:=enforce))
             rows.Add(Time(library, "Library filter: refill once typing pauses", UiThread, Sub() board.PauseTyping(), enforced:=enforce))
-            rows.Add(Time(library, "Library to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
+            rows.Add(Time(library, "Library to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
 
             ' The Journals page on the test's author library, through the
             ' window's own navigation (CreateJournalLibraryEditor).
@@ -210,10 +212,14 @@ Public Class ResponsivenessBudgetTests
             ' step: the leave row alone is not what the researcher waits.
             ' Both opens stay reported, over the 100 ms line on this host: the
             ' first builds the page, and any open replaces the windows of the
-            ' record's shortlist rows, tags and lists and lays the page out;
-            ' so does the idle step after an open.
+            ' record's shortlist rows, tags and lists and lays the page out.
+            ' The step after the first paint is enforced from 2026-10-23: it
+            ' no longer forces that paint, which is where this machine waited
+            ' on the screen; the paint waiting is dispatched as the loop would
+            ' dispatch it, then the parts are built (12 to 23 ms and 42 to 72
+            ' ms in Release, against 250).
             rows.Add(Time(library, "Board to a manuscript page (the first: the page is built)", PageSwitch, Sub() board.Open(subject)))
-            rows.Add(Time(library, "Manuscript page: versions and details after its first paint", UiThread, Sub() Application.DoEvents()))
+            rows.Add(Time(library, "Manuscript page: versions and details after its first paint", UiThread, Sub() Application.DoEvents(), enforced:=enforce))
             rows.Add(TimeMedian(library, "One dirty-timer tick (median of 10)", DirtyTick, 10, Sub() board.Tick()))
             board.Field("Title").Text = title & " (edited)"
             rows.Add(Time(library, "Save from the manuscript page", Save, Sub() Assert.IsTrue(board.SaveManuscriptPage(), "The page saved."), enforced:=enforce))

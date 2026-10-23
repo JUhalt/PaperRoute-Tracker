@@ -246,6 +246,105 @@ Public Class PageSwitchTests
     End Sub
 
 
+    ' A page switch draws nothing while it runs (#133): no window in the
+    ' page area is painted, its frame drawn or its background erased before
+    ' the switch returns, from the Board to each page and from each page to
+    ' each other, the manuscript page included; nor is any window in the
+    ' shelves' host while the Board changes shelves (the two shelf tabs
+    ' themselves repaint as WinForms checks a radio button, in its Checked
+    ' setter before CheckedChanged, outside what a shelf switch can hold).
+    ' What the switch changed is drawn once it is done, as the window
+    ' processes its messages. Drawing during a switch is where this
+    ' machine held a switch half a second, waiting on the screen. Before
+    ' switches held drawing (a80a319) this test read 789 lines, Library to
+    ' Board among them: "WM_PAINT to ComboBox 'Filter by stage'" and
+    ' "WM_PAINT to ComboBox 'Sort the board'", sent as the Board came back
+    ' and the boxes were resized, with erases of the Board's panels; and a
+    ' shelf switch had drawn everything before it returned, so nothing was
+    ' left to draw once the window processed its messages.
+    <TestMethod>
+    Public Sub SwitchesPaintNothingSynchronously()
+
+        Dim report As New List(Of String)()
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary =
+                    LargeLibraryFixture.Create(Path.Combine(_root, "library"), 60)
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+                    Dim subject As Models.Manuscript = board.Library.First(Function(item) item.Location = Models.ManuscriptLocation.Pipeline)
+
+                    ' The manuscript page and the kept pages exist, as after a
+                    ' first visit to each.
+                    board.Open(subject)
+                    Application.DoEvents()
+                    board.NavigateTo(Form1.WorkspacePage.Board)
+                    board.WaitForIdleWork()
+
+                    Dim pages As Form1.WorkspacePage() = {
+                        Form1.WorkspacePage.Library, Form1.WorkspacePage.Journals, Form1.WorkspacePage.Deadlines,
+                        Form1.WorkspacePage.Insights, Form1.WorkspacePage.ImportExport, Form1.WorkspacePage.Manuscript}
+
+                    Dim go As Action(Of Form1.WorkspacePage) =
+                        Sub(page)
+                            If page = Form1.WorkspacePage.Manuscript Then
+                                board.Open(subject)
+                            Else
+                                board.NavigateTo(page)
+                            End If
+                        End Sub
+
+                    Dim watchSwitch As Action(Of String, Control, Action) =
+                        Sub(name, within, switch)
+                            Dim painted As Boolean = False
+                            Using watch As New PaintWatch(within)
+                                switch()
+                                report.AddRange(watch.Sent().Select(Function(message) name & ": " & message))
+                            End Using
+                            Dim shown As Control = If(board.PageView, board.BoardPage)
+                            Dim handler As PaintEventHandler = Sub(sender, e) painted = True
+                            Dim parts As List(Of Control) = {shown}.Concat(ViewCatalog.Descendants(shown)).Where(Function(control) control.Visible).ToList()
+                            For Each part As Control In parts
+                                AddHandler part.Paint, handler
+                            Next
+                            Application.DoEvents()
+                            For Each part As Control In parts
+                                RemoveHandler part.Paint, handler
+                            Next
+                            If Not painted Then report.Add(name & ": nothing was drawn once the window processed its messages")
+                            If board.PageName = Form1.WorkspacePage.Insights.ToString() Then board.WaitForInsights()
+                            board.WaitForIdleWork()
+                        End Sub
+
+                    For Each first As Form1.WorkspacePage In pages
+                        watchSwitch("Board to " & first.ToString(), board.ContentHost, Sub() go(first))
+                        For Each second As Form1.WorkspacePage In pages.Where(Function(page) page <> first)
+                            watchSwitch(first.ToString() & " to " & second.ToString(), board.ContentHost, Sub() go(second))
+                            watchSwitch(second.ToString() & " back to " & first.ToString(), board.ContentHost, Sub() go(first))
+                        Next
+                        watchSwitch(first.ToString() & " to Board", board.ContentHost, Sub() board.NavigateTo(Form1.WorkspacePage.Board))
+                    Next
+
+                    Dim shelves As Control = board.Shelf("pipelinePanel").Parent
+                    For Each tab As String In {"tabPublished", "tabFileDrawer", "tabPipeline", "tabFileDrawer", "tabPublished", "tabPipeline"}
+                        watchSwitch("the shelf " & tab, shelves, Sub() board.ShelfTab(tab).Checked = True)
+                    Next
+
+                    board.SetPrompt(Function(title) DialogResult.No)
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(10))
+
+        Assert.AreEqual(0, report.Count, "Drawn while a switch ran:" & Environment.NewLine & String.Join(Environment.NewLine, report.Take(40)))
+
+    End Sub
+
+
     Private Shared Sub AssertColumnsFitAllCells(grid As DataGridView, context As String)
 
         ' The width sizing to all cells gave each column in the window: its
@@ -264,6 +363,94 @@ Public Class PageSwitchTests
         Next
 
     End Sub
+
+End Class
+
+
+' Records each paint, frame drawing and background erase sent to a window
+' inside a control while it is alive: the ones a window is given there and
+' then, rather than when its thread next has nothing else to do (a
+' thread-local WH_CALLWNDPROC hook, which hears only messages sent, so
+' paints the message loop dispatches later are not counted).
+Friend NotInheritable Class PaintWatch
+    Implements IDisposable
+
+    Private ReadOnly _callback As HookProc
+    Private ReadOnly _hook As IntPtr
+    Private ReadOnly _within As IntPtr
+    Private ReadOnly _sent As New List(Of String)()
+
+    Private Delegate Function HookProc(code As Integer, wParam As IntPtr, lParam As IntPtr) As IntPtr
+
+    Private Const WH_CALLWNDPROC As Integer = 4
+    Private Const WM_PAINT As Integer = &HF
+    Private Const WM_ERASEBKGND As Integer = &H14
+    Private Const WM_NCPAINT As Integer = &H85
+
+    <StructLayout(LayoutKind.Sequential)>
+    Private Structure CWPSTRUCT
+        Public lParam As IntPtr
+        Public wParam As IntPtr
+        Public message As Integer
+        Public hwnd As IntPtr
+    End Structure
+
+
+    Public Sub New(within As Control)
+        _within = within.Handle
+        _callback = AddressOf Hook
+        _hook = SetWindowsHookEx(WH_CALLWNDPROC, _callback, IntPtr.Zero, GetCurrentThreadId())
+    End Sub
+
+
+    ' Each message sent, as "WM_PAINT to Label 'name'".
+    Public Function Sent() As List(Of String)
+        Return _sent.ToList()
+    End Function
+
+
+    Private Function Hook(code As Integer, wParam As IntPtr, lParam As IntPtr) As IntPtr
+        If code >= 0 Then
+            Try
+                Dim sent As CWPSTRUCT = Marshal.PtrToStructure(Of CWPSTRUCT)(lParam)
+                If (sent.message = WM_PAINT OrElse sent.message = WM_ERASEBKGND OrElse sent.message = WM_NCPAINT) AndAlso
+                   (sent.hwnd = _within OrElse IsChild(_within, sent.hwnd)) Then
+                    Dim target As Control = Control.FromHandle(sent.hwnd)
+                    _sent.Add(If(sent.message = WM_PAINT, "WM_PAINT", If(sent.message = WM_NCPAINT, "WM_NCPAINT", "WM_ERASEBKGND")) & " to " &
+                              If(target Is Nothing, "a window of no control", target.GetType().Name & If(String.IsNullOrEmpty(target.AccessibleName), String.Empty, " '" & target.AccessibleName & "'")))
+                End If
+            Catch ex As Exception
+                _sent.Add("a message not read: " & ex.GetType().Name)
+            End Try
+        End If
+        Return CallNextHookEx(_hook, code, wParam, lParam)
+    End Function
+
+
+    Public Sub Dispose() Implements IDisposable.Dispose
+        UnhookWindowsHookEx(_hook)
+    End Sub
+
+
+    <DllImport("user32.dll")>
+    Private Shared Function SetWindowsHookEx(idHook As Integer, lpfn As HookProc, hMod As IntPtr, threadId As Integer) As IntPtr
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function UnhookWindowsHookEx(hook As IntPtr) As Boolean
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function CallNextHookEx(hook As IntPtr, code As Integer, wParam As IntPtr, lParam As IntPtr) As IntPtr
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function IsChild(parent As IntPtr, window As IntPtr) As Boolean
+    End Function
+
+    <DllImport("kernel32.dll")>
+    Private Shared Function GetCurrentThreadId() As Integer
+    End Function
 
 End Class
 

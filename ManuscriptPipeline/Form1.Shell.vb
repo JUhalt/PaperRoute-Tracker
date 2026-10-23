@@ -464,26 +464,75 @@ Partial Public Class Form1
 
         Dim previous As PageRequest = CurrentRequest
 
-        LeaveCurrentPage()
+        SwitchPage(request)
 
         If recordHistory Then
             backHistory.Push(previous)
             forwardHistory.Clear()
         End If
 
-        If request.Page = WorkspacePage.Manuscript Then
-            If previous.Page <> WorkspacePage.Manuscript Then
-                manuscriptOrigin = previous.Page
-            End If
-            currentManuscriptId = request.ManuscriptId
-        End If
-
-        currentPage = request.Page
-        ShowPage(request)
         SyncRail()
         Return True
 
     End Function
+
+
+    ' One page switch (#133), once any question about the page left has
+    ' been answered. The page left is prepared first, outside the hold: its
+    ' draft and its timers, and focus out of it. Then, with the page area's
+    ' drawing held, it is put away and the next page shown, so nothing
+    ' under the page area is painted until the switch has returned; one
+    ' paint of it is posted as the hold is released. The Board is hidden
+    ' last (HideBoardPage).
+    Private Sub SwitchPage(request As PageRequest)
+
+        LeaveCurrentPage()
+
+        Using New RedrawHold(contentHost)
+
+            PutAwayCurrentPage()
+
+            If request.Page = WorkspacePage.Manuscript Then
+                If currentPage <> WorkspacePage.Manuscript Then
+                    manuscriptOrigin = currentPage
+                End If
+                currentManuscriptId = request.ManuscriptId
+            End If
+
+            currentPage = request.Page
+            ShowPage(request)
+
+        End Using
+
+        If request.Page <> WorkspacePage.Board Then
+            HideBoardPage()
+        End If
+
+    End Sub
+
+
+    ' Hides the Board behind the page shown. Hiding it has Windows erase
+    ' and frame the page now exposed over it there and then, so the hide
+    ' is held too. WinForms moves focus on from a Board that holds it as
+    ' the Board is hidden (SelectNextControl from the Board, as below); a
+    ' control under a held window cannot take focus, so that same move is
+    ' made first, while the page area still draws, and focus lands where
+    ' it always did (KeyboardAccessTests pins it).
+    Private Sub HideBoardPage()
+
+        If Not boardPage.Visible Then
+            Return
+        End If
+
+        If boardPage.ContainsFocus Then
+            SelectNextControl(boardPage, True, True, True, True)
+        End If
+
+        Using New RedrawHold(contentHost)
+            boardPage.Visible = False
+        End Using
+
+    End Sub
 
 
     Private Sub GoBack()
@@ -538,6 +587,9 @@ Partial Public Class Form1
     End Function
 
 
+    ' What leaving a page does before the page area's drawing is held
+    ' (SwitchPage): its draft and its timers, and focus out of it, since a
+    ' control under a held window cannot take focus.
     Private Sub LeaveCurrentPage()
 
         ' A manuscript page is left only once its edits were saved or let go
@@ -552,13 +604,21 @@ Partial Public Class Form1
         manuscriptSaveBar = Nothing
         manuscriptSaveHint = Nothing
 
+        ' Focus in the page moves out of it first, as removing the page
+        ' moved it.
+        If currentPageView IsNot Nothing Then
+            MoveFocusOutOf(currentPageView)
+        End If
+
+    End Sub
+
+
+    ' Puts the page left away, with the page area's drawing held.
+    Private Sub PutAwayCurrentPage()
+
         If currentPageView Is Nothing Then
             Return
         End If
-
-        ' Focus in the page moves out of it first, as removing the page
-        ' moved it.
-        MoveFocusOutOf(currentPageView)
 
         ' A kept page is hidden where it is, with its windows, for its next
         ' visit; taking it out of the window and putting it back costs as
@@ -653,6 +713,9 @@ Partial Public Class Form1
     End Sub
 
 
+    ' Shows the page asked for, with the page area's drawing held
+    ' (SwitchPage); the Board is hidden by the switch once the hold is
+    ' released.
     Private Sub ShowPage(request As PageRequest)
 
         If request.Page = WorkspacePage.Board Then
@@ -716,7 +779,6 @@ Partial Public Class Form1
         End If
 
         view.BringToFront()
-        boardPage.Visible = False
 
         If request.Page = WorkspacePage.Manuscript Then
             manuscriptDirtyTimer.Start()

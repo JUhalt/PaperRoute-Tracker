@@ -1,4 +1,5 @@
 Imports System
+Imports System.Runtime.InteropServices
 Imports System.Windows.Forms
 
 Namespace Controls
@@ -106,6 +107,85 @@ Namespace Controls
             control.Dispose()
 
         End Sub
+
+    End Class
+
+
+    ' Holds a window's drawing while a page switch changes what is under
+    ' it, and asks for one paint of all of it once released (#133). Windows
+    ' paints a window shown, resized or brought forward there and then,
+    ' before the switch returns, and on this machine that drawing waited on
+    ' the screen about half a second at times. With drawing held
+    ' (WM_SETREDRAW) nothing under the window is painted until it is
+    ' released; the paint asked for then is posted, so the switch returns
+    ' first and the window paints once, whole.
+    '
+    ' Held, a window loses WS_VISIBLE, so it and everything in it read as
+    ' not visible to Windows: Control.Focus and SelectNextControl refuse a
+    ' control they cannot see. So a hold comes only after focus has moved
+    ' out of what goes away, and on the page area or the shelves' host,
+    ' never the form. A window with no handle, or not visible, is left
+    ' alone: releasing a hold on a hidden window would mark it visible.
+    Friend NotInheritable Class RedrawHold
+        Implements IDisposable
+
+        Private Const WM_SETREDRAW As Integer = &HB
+        Private Const RDW_INVALIDATE As UInteger = &H1
+        Private Const RDW_ERASE As UInteger = &H4
+        Private Const RDW_ALLCHILDREN As UInteger = &H80
+        Private Const RDW_FRAME As UInteger = &H400
+
+        Private _handle As IntPtr = IntPtr.Zero
+
+
+        Public Sub New(
+            control As Control
+        )
+
+            If control Is Nothing OrElse Not control.IsHandleCreated OrElse Not IsWindowVisible(control.Handle) Then
+                Return
+            End If
+
+            _handle = control.Handle
+            SendMessage(_handle, WM_SETREDRAW, IntPtr.Zero, IntPtr.Zero)
+
+        End Sub
+
+
+        ' True while drawing is held.
+        Public ReadOnly Property IsHolding As Boolean
+            Get
+                Return _handle <> IntPtr.Zero
+            End Get
+        End Property
+
+
+        Public Sub Dispose() Implements IDisposable.Dispose
+
+            If _handle = IntPtr.Zero Then
+                Return
+            End If
+
+            Dim handle As IntPtr = _handle
+            _handle = IntPtr.Zero
+
+            SendMessage(handle, WM_SETREDRAW, New IntPtr(1), IntPtr.Zero)
+            RedrawWindow(handle, IntPtr.Zero, IntPtr.Zero, RDW_INVALIDATE Or RDW_ERASE Or RDW_FRAME Or RDW_ALLCHILDREN)
+
+        End Sub
+
+
+        <DllImport("user32.dll")>
+        Private Shared Function SendMessage(handle As IntPtr, message As Integer, wParam As IntPtr, lParam As IntPtr) As IntPtr
+        End Function
+
+        <DllImport("user32.dll")>
+        Private Shared Function IsWindowVisible(handle As IntPtr) As Boolean
+        End Function
+
+        <DllImport("user32.dll")>
+        Private Shared Function RedrawWindow(handle As IntPtr, updateRect As IntPtr, updateRegion As IntPtr, flags As UInteger) As Boolean
+        End Function
 
     End Class
 

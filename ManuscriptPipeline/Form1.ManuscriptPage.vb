@@ -181,6 +181,8 @@ Partial Public Class Form1
         Dim token As Object = editor.RecordToken
         Dim waypoint As ManuscriptRouteWaypoint = pendingManuscriptWaypoint
 
+        ' The Versions tab and the selected submission's details follow the
+        ' page's first paint (FinishManuscriptPage).
         If IsHandleCreated Then
             BeginInvoke(New Action(Sub() FinishManuscriptPage(editor, token, waypoint)))
         Else
@@ -191,7 +193,11 @@ Partial Public Class Form1
 
 
     ' After the page's first paint, for the record it was posted for only:
-    ' while library work runs (#132) it waits for the window to idle.
+    ' while library work runs (#132) it waits for the window to idle. The
+    ' paints waiting are dispatched first, as the message loop would
+    ' dispatch them next (PumpPaints): the page shows, then the parts are
+    ' built. Nothing is forced to paint; forcing it (RedrawWindow with
+    ' RDW_UPDATENOW) is where this machine waited on the screen.
     Private Sub FinishManuscriptPage(
         editor As EditManuscriptForm,
         token As Object,
@@ -207,7 +213,13 @@ Partial Public Class Form1
             Return
         End If
 
-        RedrawWindow(manuscriptPage.Handle, IntPtr.Zero, IntPtr.Zero, RDW_INVALIDATE Or RDW_UPDATENOW Or RDW_ALLCHILDREN)
+        PumpPaints()
+
+        ' A paint handler may have moved on: the record is checked again.
+        If manuscriptEditor IsNot editor OrElse editor.IsDisposed OrElse editor.RecordToken IsNot token Then
+            Return
+        End If
+
         editor.EnsureDeferredParts()
 
         If waypoint IsNot Nothing Then
@@ -217,20 +229,58 @@ Partial Public Class Form1
     End Sub
 
 
-    Private Const RDW_INVALIDATE As UInteger = &H1
-    Private Const RDW_ALLCHILDREN As UInteger = &H80
-    Private Const RDW_UPDATENOW As UInteger = &H100
+    ' Dispatches the paints waiting for the thread's windows, as the
+    ' message loop would next, and nothing else: no input, no posted
+    ' message, no timer. It works from any message loop, the window's or a
+    ' dialog's, and from a test's Application.DoEvents. A paint that
+    ' invalidates again cannot hold it (the cap).
+    Private Shared Sub PumpPaints()
+
+        Dim message As NativeMessage
+        Dim remaining As Integer = 1000
+
+        While remaining > 0 AndAlso PeekMessage(message, IntPtr.Zero, WM_PAINT, WM_PAINT, PM_REMOVE)
+            TranslateMessage(message)
+            DispatchMessage(message)
+            remaining -= 1
+        End While
+
+    End Sub
+
+
+    Private Const WM_PAINT As UInteger = &HF
+    Private Const PM_REMOVE As UInteger = &H1
+
+    <Runtime.InteropServices.StructLayout(Runtime.InteropServices.LayoutKind.Sequential)>
+    Private Structure NativeMessage
+        Public Handle As IntPtr
+        Public Message As UInteger
+        Public WParam As IntPtr
+        Public LParam As IntPtr
+        Public Time As UInteger
+        Public X As Integer
+        Public Y As Integer
+    End Structure
 
     <Runtime.InteropServices.DllImport("user32.dll")>
-    Private Shared Function RedrawWindow(handle As IntPtr, updateRect As IntPtr, updateRegion As IntPtr, flags As UInteger) As Boolean
+    Private Shared Function PeekMessage(ByRef message As NativeMessage, handle As IntPtr, filterMin As UInteger, filterMax As UInteger, remove As UInteger) As Boolean
+    End Function
+
+    <Runtime.InteropServices.DllImport("user32.dll")>
+    Private Shared Function TranslateMessage(ByRef message As NativeMessage) As Boolean
+    End Function
+
+    <Runtime.InteropServices.DllImport("user32.dll")>
+    Private Shared Function DispatchMessage(ByRef message As NativeMessage) As IntPtr
     End Function
 
 
     ' Shows a page built or loaded while hidden in one layout pass: every
-    ' container holds its layout while the page and the Board change
-    ' places, and each then lays out once, inner ones first. Shown
-    ' plainly, every container lays itself out again each time one inside
-    ' it does, which on the manuscript page took longer than loading it.
+    ' container holds its layout while the page comes forward, and each
+    ' then lays out once, inner ones first. Shown plainly, every container
+    ' lays itself out again each time one inside it does, which on the
+    ' manuscript page took longer than loading it. The Board is hidden by
+    ' the switch (SwitchPage), once drawing is released.
     Private Sub ShowPageInOnePass(
         page As Control
     )
@@ -244,7 +294,6 @@ Partial Public Class Form1
 
         page.Visible = True
         page.BringToFront()
-        boardPage.Visible = False
 
         ' Every container is laid out once, inner ones first: what changed
         ' while the page was hidden, as a part shown or hidden for the record
@@ -842,10 +891,7 @@ Partial Public Class Form1
             Return
         End If
 
-        Dim request As PageRequest = CurrentRequest
-
-        LeaveCurrentPage()
-        ShowPage(request)
+        SwitchPage(CurrentRequest)
 
         lblStatus.Text = "Unsaved changes discarded."
 
@@ -868,8 +914,7 @@ Partial Public Class Form1
         CheckForPublications({currentManuscriptId})
 
         If currentPage = WorkspacePage.Manuscript AndAlso FindManuscript(currentManuscriptId) IsNot Nothing Then
-            LeaveCurrentPage()
-            ShowPage(request)
+            SwitchPage(request)
         End If
 
     End Sub
