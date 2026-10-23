@@ -250,6 +250,14 @@ Namespace Forms
                 .MinimumSize = New Size(0, 786)
             }
 
+            ' A panel leaves a child docked to fill it out of its scroll
+            ' range, so the body scrolls as far as the table's minimum,
+            ' read as Windows Forms has scaled it for the display.
+            AddHandler body.Layout,
+                Sub(sender, e)
+                    body.AutoScrollMinSize = New Size(0, root.MinimumSize.Height)
+                End Sub
+
             root.ColumnStyles.Add(
                 New ColumnStyle(
                     SizeType.Absolute,

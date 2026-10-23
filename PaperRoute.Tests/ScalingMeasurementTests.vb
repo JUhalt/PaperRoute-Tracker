@@ -96,7 +96,6 @@ Public Class ScalingMeasurementTests
         Dim table As String = TableOf(rows.Values)
 
         TestContext.WriteLine(table)
-        KeepTable(table)
 
         Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
         Assert.AreEqual(ViewCatalog.Dialogs.Count, rows.Count, "Every top-level window was measured.")
@@ -189,6 +188,56 @@ Public Class ScalingMeasurementTests
     End Function
 
 
+    ' The measure counts only what scrolling reaches. A panel that scrolls
+    ' leaves a child docked to fill it out of its scroll range, so a button
+    ' near that child's foot, below the panel's client area, is reported
+    ' clipped. Docked to the top, the same child is in the scroll range and
+    ' its button is not reported.
+    <TestMethod>
+    Public Sub ContentPastAScrollRangeIsReported()
+
+        For Each dock As DockStyle In {DockStyle.Fill, DockStyle.Top}
+
+            Dim docked As DockStyle = dock
+            Dim result As Cell = Nothing
+
+            ViewCatalog.ShowAndClose(
+                "The scrolling probe",
+                Function() ScrollingProbe(docked),
+                Sub(name, shown)
+                    result = Measure(shown, 96, False).Single(Function(cell) cell.Screen = "1366x728").Result
+                End Sub
+            )
+
+            Dim reported As Boolean = result.Cut.Any(Function(cut) cut.Contains("Reach Me", StringComparison.Ordinal))
+
+            If docked = DockStyle.Fill Then
+                Assert.IsTrue(reported, "Past the scroll range of the panel it fills, the button is reported: " & result.Describe())
+            Else
+                Assert.IsFalse(reported, "Inside the scroll range, the button is reached: " & result.Describe())
+            End If
+
+        Next
+
+    End Sub
+
+
+    ' A 600x500 window whose body scrolls, holding a 900-pixel panel with a
+    ' button near its foot.
+    Private Shared Function ScrollingProbe(dock As DockStyle) As Form
+
+        Dim form As New Form With {.ClientSize = New Size(600, 500), .Font = New Font("Segoe UI", 10.0F), .AutoScaleMode = AutoScaleMode.Dpi}
+        Dim body As New Panel With {.Dock = DockStyle.Fill, .AutoScroll = True}
+        Dim content As New Panel With {.Dock = dock, .Height = 900, .MinimumSize = New Size(0, 900)}
+        Dim reach As New Button With {.Text = "Reach Me", .Location = New Point(20, 850), .Size = New Size(120, 30)}
+        content.Controls.Add(reach)
+        body.Controls.Add(content)
+        form.Controls.Add(body)
+        Return form
+
+    End Function
+
+
     ' ---------------------------------------------------------------
     ' Simulating the display
     ' ---------------------------------------------------------------
@@ -201,6 +250,30 @@ Public Class ScalingMeasurementTests
         dpi As Integer,
         scalesWithWinForms As Boolean
     ) As List(Of (Screen As String, Dpi As Integer, Result As Cell))
+
+        Simulate(shown, dpi, scalesWithWinForms)
+
+        Dim results As New List(Of (Screen As String, Dpi As Integer, Result As Cell))()
+
+        For Each screen As (Name As String, Area As Rectangle) In Screens
+            ResponsiveDialogSizingService.FitToWorkingArea(shown, screen.Area)
+            shown.PerformLayout()
+            Application.DoEvents()
+            results.Add((screen.Name, dpi, Inspect(shown)))
+        Next
+
+        Return results
+
+    End Function
+
+
+    ' Grows the window's text for the DPI and scales the window as Windows
+    ' Forms would if its source asks for that. Nothing changes at 96 DPI.
+    Friend Shared Sub Simulate(
+        shown As Form,
+        dpi As Integer,
+        scalesWithWinForms As Boolean
+    )
 
         Dim factor As Single = dpi / 96.0F
 
@@ -238,18 +311,7 @@ Public Class ScalingMeasurementTests
 
         End If
 
-        Dim results As New List(Of (Screen As String, Dpi As Integer, Result As Cell))()
-
-        For Each screen As (Name As String, Area As Rectangle) In Screens
-            ResponsiveDialogSizingService.FitToWorkingArea(shown, screen.Area)
-            shown.PerformLayout()
-            Application.DoEvents()
-            results.Add((screen.Name, dpi, Inspect(shown)))
-        Next
-
-        Return results
-
-    End Function
+    End Sub
 
 
     ' ---------------------------------------------------------------
@@ -324,7 +386,8 @@ Public Class ScalingMeasurementTests
 
     ' Every visible child, clipped by its parents down to the window's
     ' client area, except inside a container that scrolls, whose content
-    ' is reached by scrolling and so is never cut by it. Each page of a tab
+    ' is reached by scrolling and so is measured against its scroll range:
+    ' what lies past that range cannot be reached. Each page of a tab
     ' control is shown in turn so its content is measured too.
     Private Shared Sub InspectChildren(parent As Control, clip As Rectangle, cut As List(Of String))
 
@@ -360,7 +423,7 @@ Public Class ScalingMeasurementTests
             Dim scrolls As ScrollableControl = TryCast(child, ScrollableControl)
             Dim childClip As Rectangle =
                 If(scrolls IsNot Nothing AndAlso scrolls.AutoScroll,
-                   Unbounded,
+                   ScrollRange(scrolls),
                    Rectangle.Intersect(clip, child.RectangleToScreen(child.ClientRectangle)))
 
             InspectChildren(child, childClip, cut)
@@ -370,7 +433,27 @@ Public Class ScalingMeasurementTests
     End Sub
 
 
-    Private Shared ReadOnly Unbounded As New Rectangle(Integer.MinValue \ 2, Integer.MinValue \ 2, Integer.MaxValue, Integer.MaxValue)
+    ' What a container that scrolls can bring into view, on screen: its
+    ' display rectangle, which is its scroll range less its padding (the
+    ' padding is reached too), and never less than its client area. A
+    ' panel leaves a child docked to fill it out of that range, so the
+    ' part of such a child below the client area cannot be reached.
+    Private Shared Function ScrollRange(scrolls As ScrollableControl) As Rectangle
+
+        Dim display As Rectangle = scrolls.DisplayRectangle
+        Dim padding As Padding = scrolls.Padding
+
+        Dim range As New Rectangle(
+            display.X - padding.Left,
+            display.Y - padding.Top,
+            display.Width + padding.Horizontal,
+            display.Height + padding.Vertical
+        )
+
+        Return scrolls.RectangleToScreen(Rectangle.Union(range, scrolls.ClientRectangle))
+
+    End Function
+
 
     Private Const CaptionFlags As TextFormatFlags =
         TextFormatFlags.SingleLine Or TextFormatFlags.NoPadding Or TextFormatFlags.HidePrefix
@@ -563,26 +646,5 @@ Public Class ScalingMeasurementTests
         Return text.ToString()
 
     End Function
-
-
-    ' Beside the run's other results, for the issue.
-    Private Sub KeepTable(table As String)
-
-        Dim folder As String = TestContext.TestRunResultsDirectory
-
-        If String.IsNullOrEmpty(folder) Then
-            Return
-        End If
-
-        Try
-            Directory.CreateDirectory(folder)
-            Dim path As String = IO.Path.Combine(folder, "ScalingMeasurement.md")
-            File.WriteAllText(path, table)
-            TestContext.AddResultFile(path)
-        Catch ex As Exception
-            TestContext.WriteLine("The table could not be kept beside the results: " & ex.Message)
-        End Try
-
-    End Sub
 
 End Class

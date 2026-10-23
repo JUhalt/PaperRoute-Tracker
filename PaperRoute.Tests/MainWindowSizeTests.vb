@@ -1,4 +1,5 @@
 Imports System
+Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.Linq
 Imports System.Windows.Forms
@@ -68,28 +69,32 @@ Public Class MainWindowSizeTests
     ' The window the catalog builds opens at the computed size for one of
     ' this computer's screens, so BuildInterface applies the sizes and not
     ' the old literals. On a roomy screen both agree, so this cannot fail
-    ' before the change there; the three tests above carry the proof.
+    ' before the change there; the three tests above carry the proof. The
+    ' catalog builds it on a temporary root, as it builds every view, so
+    ' the window never reads the user's own data folder.
     <TestMethod>
     Public Sub TheBoardOpensAtTheComputedSize()
 
-        ViewCatalog.ShowAndClose(
-            "The Board",
-            Function() ViewCatalog.BoardOf(CreateRepresentativeLibrary()),
-            Sub(name, board)
+        Dim failures As List(Of String) =
+            ViewCatalog.ShowEach(
+                {("The Board", ViewCatalog.Dialogs(GetType(Form1)))},
+                Sub(name, board)
 
-                Dim expected As String() =
-                    Screen.AllScreens.
-                        Select(Function(screen) Form1.StartSizes(screen.WorkingArea, board.DeviceDpi).Start.ToString()).
-                        Distinct().
-                        ToArray()
+                    Dim expected As String() =
+                        Screen.AllScreens.
+                            Select(Function(screen) Form1.StartSizes(screen.WorkingArea, board.DeviceDpi).Start.ToString()).
+                            Distinct().
+                            ToArray()
 
-                Assert.IsTrue(
-                    expected.Contains(board.Size.ToString()),
-                    "The Board opened at " & board.Size.ToString() & "; computed for this computer's screens: " & String.Join(", ", expected)
-                )
+                    Assert.IsTrue(
+                        expected.Contains(board.Size.ToString()),
+                        "The Board opened at " & board.Size.ToString() & "; computed for this computer's screens: " & String.Join(", ", expected)
+                    )
 
-            End Sub
-        )
+                End Sub
+            )
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
 
     End Sub
 

@@ -108,7 +108,9 @@ Public Class UnderlineTabControlTests
     End Sub
 
 
-    ' The list of five is complete: no other form makes the control.
+    ' A guard, so it passes before the change too: it keeps the list of
+    ' five that the test above walks complete, since no other form makes
+    ' the control.
     <TestMethod>
     Public Sub TheFiveWindowsAreTheOnesThatUseTheControl()
 
