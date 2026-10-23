@@ -41,6 +41,15 @@ Public Class ScalingMeasurementTests
 
     Private Shared ReadOnly Dpis As Integer() = {96, 120, 144}
 
+    ' The probe's own screens, small enough that a 1024x768 build runner
+    ' holds the probe at their size, so the probe keeps its teeth there: a
+    ' roomy one that holds it whole at 96 DPI and a short one that cuts its
+    ' lowest rows.
+    Private Shared ReadOnly ProbeScreens As (Name As String, Area As Rectangle)() = {
+        ("roomy", New Rectangle(-30000, -30000, 1000, 740)),
+        ("short", New Rectangle(-30000, -30000, 1000, 400))
+    }
+
     ' The larger screen first: fitting shrinks only, so one window serves
     ' both. Off screen, so a window the fit centers stays off screen too.
     Private Shared ReadOnly Screens As (Name As String, Area As Rectangle)() = {
@@ -118,9 +127,11 @@ Public Class ScalingMeasurementTests
     ' The measure has teeth. A probe window that is not scaled keeps its
     ' 96-DPI sizes while its text grows: at 144 DPI its fixed-width button's
     ' caption is cut, and its accept button, which does not move when the
-    ' window is fitted to a 728-pixel screen, is outside the client area.
-    ' The same window scaled as Windows Forms scales it has room for the
-    ' caption. At 96 DPI on the larger screen the probe passes.
+    ' window is fitted to a short screen, is outside the client area. The
+    ' same window scaled as Windows Forms scales it has room for the
+    ' caption. At 96 DPI on the roomy screen the probe passes. The probe
+    ' and its screens fit inside what a 1024x768 build runner can hold, so
+    ' none of its cells is left unmeasured there.
     <TestMethod>
     Public Sub ACutCaptionAndAnOffScreenButtonAreReported()
 
@@ -133,13 +144,15 @@ Public Class ScalingMeasurementTests
                 "The probe",
                 Function() Probe(),
                 Sub(name, shown)
-                    For Each cell As (Screen As String, Dpi As Integer, Result As Cell) In Measure(shown, 144, isScaled)
+                    For Each cell As (Screen As String, Dpi As Integer, Result As Cell) In Measure(shown, 144, isScaled, ProbeScreens)
                         results(cell.Screen) = cell.Result
                     Next
                 End Sub
             )
 
-            Dim small As Cell = results("1366x728")
+            Dim small As Cell = results("short")
+
+            Assert.IsNull(small.NotMeasuredHere, "The probe is measured on this computer: " & small.Describe())
             Dim captionCut As Boolean = small.Cut.Any(Function(cut) cut.Contains("Look Up Journal Facts", StringComparison.Ordinal))
 
             Assert.IsTrue(small.AcceptInside.HasValue AndAlso Not small.AcceptInside.Value, "The accept button left below the fitted client area is reported outside it: " & small.Describe())
@@ -158,28 +171,64 @@ Public Class ScalingMeasurementTests
             "The probe at 96",
             Function() Probe(),
             Sub(name, shown)
-                For Each cell As (Screen As String, Dpi As Integer, Result As Cell) In Measure(shown, 96, False)
+                For Each cell As (Screen As String, Dpi As Integer, Result As Cell) In Measure(shown, 96, False, ProbeScreens)
                     unscaled(cell.Screen) = cell.Result
                 Next
             End Sub
         )
 
-        Assert.IsTrue(unscaled("1920x1003").Passes, "At 96 DPI the probe passes: " & unscaled("1920x1003").Describe())
+        Assert.IsNull(unscaled("roomy").NotMeasuredHere, "The probe is measured on this computer: " & unscaled("roomy").Describe())
+        Assert.IsTrue(unscaled("roomy").Passes, "At 96 DPI the probe passes: " & unscaled("roomy").Describe())
 
     End Sub
 
 
-    ' A 700x780 window with a 160-pixel button whose caption fits at 96
-    ' DPI, and OK and Cancel at the bottom, not anchored: fitted to a
-    ' 728-pixel screen the window loses its lowest rows and the two stay
+    ' A window larger than this computer's screen can hold is held at the
+    ' screen's largest tracking size, so a cell whose area is larger still
+    ' says it was not measured here instead of reporting the cuts the hold
+    ' makes, and is not failed. On any computer: the window asks for more
+    ' than the screen can track.
+    <TestMethod>
+    Public Sub AWindowTheScreenCannotHoldIsNotMeasured()
+
+        Dim track As Size =
+            SystemInformation.MaxWindowTrackSize
+
+        Dim beyond As (Name As String, Area As Rectangle)() = {
+            ("beyond", New Rectangle(-30000, -30000, track.Width + 400, track.Height + 400))
+        }
+
+        Dim result As Cell = Nothing
+
+        ViewCatalog.ShowAndClose(
+            "A window larger than the screen",
+            Function()
+                Dim form As Form = Probe()
+                form.Size = New Size(track.Width + 200, track.Height + 200)
+                Return form
+            End Function,
+            Sub(name, shown)
+                result = Measure(shown, 96, False, beyond).Single().Result
+            End Sub
+        )
+
+        StringAssert.StartsWith(result.NotMeasuredHere, "not measured: this screen holds a window to ", "The cell is not measured: " & result.Describe())
+        Assert.IsTrue(result.Passes, "A cell not measured here is not failed.")
+        Assert.AreEqual(result.NotMeasuredHere, result.Describe(), "The table says why.")
+
+    End Sub
+
+    ' A 600x500 window with a 160-pixel button whose caption fits at 96
+    ' DPI, and OK and Cancel at the bottom, not anchored: fitted to the
+    ' 400-pixel screen the window loses its lowest rows and the two stay
     ' where they were, below the client area; at 144 DPI, unscaled, the
     ' text has grown 1.5 times.
     Private Shared Function Probe() As Form
 
-        Dim form As New Form With {.ClientSize = New Size(700, 780), .Font = New Font("Segoe UI", 10.0F), .AutoScaleMode = AutoScaleMode.Dpi}
+        Dim form As New Form With {.ClientSize = New Size(600, 500), .Font = New Font("Segoe UI", 10.0F), .AutoScaleMode = AutoScaleMode.Dpi}
         Dim lookup As New Button With {.Text = "Look Up Journal Facts", .Location = New Point(20, 20), .Size = New Size(160, 30)}
-        Dim ok As New Button With {.Text = "OK", .Location = New Point(500, 740), .Size = New Size(90, 30)}
-        Dim cancel As New Button With {.Text = "Cancel", .Location = New Point(600, 740), .Size = New Size(90, 30)}
+        Dim ok As New Button With {.Text = "OK", .Location = New Point(400, 460), .Size = New Size(90, 30)}
+        Dim cancel As New Button With {.Text = "Cancel", .Location = New Point(500, 460), .Size = New Size(90, 30)}
         form.Controls.AddRange({lookup, ok, cancel})
         form.AcceptButton = ok
         form.CancelButton = cancel
@@ -248,18 +297,38 @@ Public Class ScalingMeasurementTests
     Friend Shared Function Measure(
         shown As Form,
         dpi As Integer,
-        scalesWithWinForms As Boolean
+        scalesWithWinForms As Boolean,
+        Optional areas As (Name As String, Area As Rectangle)() = Nothing
     ) As List(Of (Screen As String, Dpi As Integer, Result As Cell))
 
         Simulate(shown, dpi, scalesWithWinForms)
 
         Dim results As New List(Of (Screen As String, Dpi As Integer, Result As Cell))()
 
-        For Each screen As (Name As String, Area As Rectangle) In Screens
+        ' Windows Forms holds a window to the largest size this computer's
+        ' screen can track. On a screen smaller than a cell's area, as on a
+        ' 1024x768 build runner, a window held there is not the window the
+        ' cell asks about, so the cell says it was not measured here rather
+        ' than report the cuts the hold makes.
+        Dim track As Size =
+            SystemInformation.MaxWindowTrackSize
+
+        For Each screen As (Name As String, Area As Rectangle) In If(areas, Screens)
+
             ResponsiveDialogSizingService.FitToWorkingArea(shown, screen.Area)
             shown.PerformLayout()
             Application.DoEvents()
-            results.Add((screen.Name, dpi, Inspect(shown)))
+
+            Dim cell As Cell =
+                Inspect(shown)
+
+            If (shown.Width >= track.Width AndAlso screen.Area.Width > track.Width) OrElse
+               (shown.Height >= track.Height AndAlso screen.Area.Height > track.Height) Then
+                cell.NotMeasuredHere = "not measured: this screen holds a window to " & track.Width & "x" & track.Height
+            End If
+
+            results.Add((screen.Name, dpi, cell))
+
         Next
 
         Return results
@@ -324,9 +393,14 @@ Public Class ScalingMeasurementTests
         Public CancelInside As Boolean?
         Public ReadOnly Cut As New List(Of String)()
 
+        ' Set when this computer's screen could not hold the window at the
+        ' cell's size (see Measure): nothing here is judged.
+        Public NotMeasuredHere As String
+
         Public ReadOnly Property Passes As Boolean
             Get
-                Return Not Outside(AcceptInside) AndAlso Not Outside(CancelInside) AndAlso Cut.Count = 0
+                Return NotMeasuredHere IsNot Nothing OrElse
+                       (Not Outside(AcceptInside) AndAlso Not Outside(CancelInside) AndAlso Cut.Count = 0)
             End Get
         End Property
 
@@ -336,6 +410,10 @@ Public Class ScalingMeasurementTests
         End Function
 
         Public Function Describe() As String
+
+            If NotMeasuredHere IsNot Nothing Then
+                Return NotMeasuredHere
+            End If
 
             If Passes Then
                 Return "ok"
