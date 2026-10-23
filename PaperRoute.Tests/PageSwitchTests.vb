@@ -71,8 +71,8 @@ Public Class PageSwitchTests
     End Sub
 
 
-    ' Every window the Library, its Authors view, Journals, Insights and
-    ' the kept Deadlines and Import & Export pages (each visited twice, so
+    ' Every window the Library, its Authors view, and the kept Journals,
+    ' Deadlines, Insights and Import & Export pages (each visited twice, so
     ' a kept page shown again is held too) make as they open is made
     ' inside the main window, where it stays: none is made on WinForms'
     ' parking window and moved in afterwards, which costs every window
@@ -99,7 +99,13 @@ Public Class PageSwitchTests
                              ViewCatalog.Descendants(board).OfType(Of RadioButton)().Single(Function(tab) tab.Text = "Authors & Affiliations").Checked = True
                          End Sub),
                         ("Journals", Sub() board.NavigateTo(Form1.WorkspacePage.Journals)),
+                        ("Journals, shown again", Sub() board.NavigateTo(Form1.WorkspacePage.Journals)),
                         ("Insights",
+                         Sub()
+                             board.NavigateTo(Form1.WorkspacePage.Insights)
+                             board.WaitForInsights()
+                         End Sub),
+                        ("Insights, shown again",
                          Sub()
                              board.NavigateTo(Form1.WorkspacePage.Insights)
                              board.WaitForInsights()
@@ -193,10 +199,9 @@ Public Class PageSwitchTests
     End Sub
 
 
-    ' Leaving the Library, Journals or Insights disposes the page where it
-    ' is: its windows are destroyed while it is still in the page area,
-    ' and the page area then holds the Board alone, with the manuscript
-    ' page kept hidden beside it.
+    ' Leaving the Library disposes the page where it is: its windows are
+    ' destroyed while it is still in the page area, and the page area then
+    ' holds the Board alone, with the pages kept (#133) hidden beside it.
     <TestMethod>
     Public Sub LeavingAPageDisposesItInPlace()
 
@@ -210,36 +215,354 @@ Public Class PageSwitchTests
                     board.Start()
                     Dim host As Control = board.ContentHost
 
-                    For Each page As Form1.WorkspacePage In {Form1.WorkspacePage.Library, Form1.WorkspacePage.Journals, Form1.WorkspacePage.Insights}
+                    board.NavigateTo(Form1.WorkspacePage.Library)
+                    Application.DoEvents()
+                    Dim view As Control = board.PageView
+                    Dim parentWhenDestroyed As Control = Nothing
+                    Dim destroyed As Boolean = False
+                    AddHandler view.HandleDestroyed,
+                        Sub(sender, e)
+                            destroyed = True
+                            parentWhenDestroyed = view.Parent
+                        End Sub
+
+                    board.NavigateTo(Form1.WorkspacePage.Board)
+                    Application.DoEvents()
+
+                    Assert.IsTrue(destroyed AndAlso view.IsDisposed, "The Library is disposed.")
+                    Assert.AreSame(host, parentWhenDestroyed, "The Library's windows are destroyed where they are.")
+                    Dim kept As Control() = {board.KeptPage, board.JournalsPage, board.InsightsPage}
+                    CollectionAssert.AreEqual(
+                        {board.BoardPage},
+                        host.Controls.Cast(Of Control)().Where(Function(control) Not kept.Contains(control)).ToArray(),
+                        "The page area holds the Board alone after leaving the Library.")
+                    Assert.IsFalse(host.Controls.Cast(Of Control)().Any(Function(control) control IsNot board.BoardPage AndAlso control.Visible), "The kept pages are hidden.")
+
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(3))
+
+    End Sub
+
+
+    ' Leaving Journals or Insights hides the page where it is, with its
+    ' windows, and the next visit shows that same page (#133). Before, each
+    ' visit built the page and leaving disposed it.
+    <TestMethod>
+    Public Sub LeavingJournalsAndInsightsHidesThemInPlace()
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary =
+                    LargeLibraryFixture.Create(Path.Combine(_root, "library"), 60)
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    Dim host As Control = board.ContentHost
+
+                    For Each page As Form1.WorkspacePage In {Form1.WorkspacePage.Journals, Form1.WorkspacePage.Insights}
 
                         board.NavigateTo(page)
+                        If page = Form1.WorkspacePage.Insights Then board.WaitForInsights()
                         Application.DoEvents()
                         Dim view As Control = board.PageView
-                        Dim parentWhenDestroyed As Control = Nothing
                         Dim destroyed As Boolean = False
-                        AddHandler view.HandleDestroyed,
-                            Sub(sender, e)
-                                destroyed = True
-                                parentWhenDestroyed = view.Parent
-                            End Sub
+                        AddHandler view.HandleDestroyed, Sub(sender, e) destroyed = True
 
                         board.NavigateTo(Form1.WorkspacePage.Board)
                         Application.DoEvents()
 
-                        Assert.IsTrue(destroyed AndAlso view.IsDisposed, page.ToString() & " is disposed.")
-                        Assert.AreSame(host, parentWhenDestroyed, page.ToString() & "'s windows are destroyed where they are.")
-                        ' Besides the manuscript page kept, hidden, for the
-                        ' next manuscript opened (#133).
-                        CollectionAssert.AreEqual(
-                            {board.BoardPage},
-                            host.Controls.Cast(Of Control)().Where(Function(control) control IsNot board.KeptPage).ToArray(),
-                            "The page area holds the Board alone after leaving " & page.ToString() & ".")
-                        Assert.IsFalse(If(board.KeptPage?.Visible, False), "The kept manuscript page is hidden.")
+                        Assert.IsFalse(destroyed OrElse view.IsDisposed, page.ToString() & " is kept.")
+                        Assert.AreSame(host, view.Parent, page.ToString() & " stays in the page area.")
+                        Assert.IsFalse(view.Visible, page.ToString() & " is hidden.")
+                        Assert.IsTrue(board.BoardPage.Visible, "The Board shows.")
+
+                        board.NavigateTo(page)
+                        If page = Form1.WorkspacePage.Insights Then board.WaitForInsights()
+                        Application.DoEvents()
+                        Assert.AreSame(view, board.PageView, "The next visit shows the same " & page.ToString() & " page.")
+                        Assert.IsTrue(view.Visible AndAlso Not destroyed)
+
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        Application.DoEvents()
 
                     Next
 
                     board.Close()
                 End Using
+            End Sub,
+            TimeSpan.FromMinutes(3))
+
+    End Sub
+
+
+    ' Journals and Insights are prepared while the window idles after
+    ' startup (#133): each is put in the page area hidden, laid out at the
+    ' size it shows at, and its windows made there a slice at a time, none
+    ' on WinForms' parking window. The first visit then shows that page,
+    ' as every later one does. Before, the first visit built it.
+    <TestMethod>
+    Public Sub JournalsAndInsightsArePreparedWhileTheWindowIdles()
+
+        Dim report As New List(Of String)()
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary =
+                    LargeLibraryFixture.Create(Path.Combine(_root, "library"), 60)
+
+                Using watch As New WindowCreationWatch(),
+                      board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+
+                    Dim journals As Control = board.JournalsPage
+                    Dim insights As Control = board.InsightsPage
+
+                    For Each prepared As Control In {journals, insights}
+                        Assert.IsNotNull(prepared, "Journals and Insights were prepared while the window idled.")
+                        Assert.AreSame(board.ContentHost, prepared.Parent, "A prepared page is in the page area.")
+                        Assert.IsFalse(prepared.Visible, "A prepared page waits hidden.")
+                        Assert.AreEqual(board.ContentHost.DisplayRectangle.Size, prepared.Size, "A prepared page is laid out at the size it shows at.")
+                        Assert.IsTrue(prepared.IsHandleCreated, "A prepared page has its window.")
+                    Next
+
+                    Assert.IsTrue(ViewCatalog.Descendants(journals).OfType(Of ListBox)().Single().IsHandleCreated, "The journals list has its window.")
+                    Assert.IsTrue(ViewCatalog.Descendants(insights).OfType(Of RadioButton)().All(Function(tab) tab.IsHandleCreated), "Insights' tabs have their windows.")
+
+                    ' Tab never reaches a prepared page while it waits.
+                    Dim current As Control = board.ActiveControl
+                    For steps As Integer = 1 To 200
+                        board.SelectNextControl(current, True, True, True, True)
+                        current = DeepestActiveControl(board)
+                        Assert.IsFalse(current IsNot Nothing AndAlso (journals.Contains(current) OrElse insights.Contains(current)),
+                                       "Tab reached " & If(current?.GetType().Name, "nothing") & " in a prepared page.")
+                    Next
+
+                    For Each visit As (Page As Form1.WorkspacePage, View As Control) In {(Form1.WorkspacePage.Journals, journals), (Form1.WorkspacePage.Insights, insights)}
+                        board.NavigateTo(visit.Page)
+                        If visit.Page = Form1.WorkspacePage.Insights Then board.WaitForInsights()
+                        Application.DoEvents()
+                        Assert.AreSame(visit.View, board.PageView, "The first visit to " & visit.Page.ToString() & " shows the prepared page.")
+                        Assert.IsTrue(visit.View.Visible)
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        Application.DoEvents()
+                    Next
+
+                    report.AddRange(watch.Parked())
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(3))
+
+        Assert.AreEqual(0, report.Count, "Windows made on the parking window:" & Environment.NewLine & String.Join(Environment.NewLine, report))
+
+    End Sub
+
+
+    ' The Journals page shown again reads the author library and the
+    ' manuscripts as they are now (#133), as the page built for each visit
+    ' did: a journal added and a tag color set since (as the manuscript
+    ' page or the Authors view saves them) show and are kept when the page
+    ' saves an edit, since the page saves the whole library; a manuscript
+    ' newly targeting a journal is counted; and no journal is chosen.
+    <TestMethod>
+    Public Sub TheJournalsPageShownAgainReadsTheLibraryAfresh()
+
+        StaRunner.Run(
+            Sub()
+                OnlineAccess.ResetForTests()
+                Dim keys As New ProtectedKeyStore(Path.Combine(_root, "keys"))
+                OnlineAccess.KeyStoreFactory = Function() keys
+
+                Try
+                    Dim library As LargeLibraryFixture.SyntheticLibrary =
+                        LargeLibraryFixture.Create(Path.Combine(_root, "library"), 60)
+
+                    Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                        board.Start()
+                        board.WaitForIdleWork()
+
+                        board.NavigateTo(Form1.WorkspacePage.Journals)
+                        Application.DoEvents()
+                        Dim page As Control = board.PageView
+                        Dim editor As Forms.JournalLibraryForm = ViewCatalog.Descendants(page).OfType(Of Forms.JournalLibraryForm)().Single()
+                        Dim first As Models.JournalRecord = library.AuthorRepository.Load().Journals.First()
+                        editor.SelectJournal(first.Id)
+                        Assert.IsNotNull(editor.SelectedJournal)
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        Application.DoEvents()
+
+                        ' Saved elsewhere while the page is hidden.
+                        Dim added As New Models.JournalRecord With {.Name = "A Journal Added Since"}
+                        Dim since As Models.AuthorLibraryData = library.AuthorRepository.Load()
+                        since.Journals.Add(added)
+                        since.TagColors.Add(New Models.TagColor With {.Tag = "kept-page tag", .Color = Models.TagPalette.Violet})
+                        library.AuthorRepository.Save(since)
+                        board.Library.First(Function(item) item.Location = Models.ManuscriptLocation.Pipeline).TargetJournalId = added.Id
+
+                        board.NavigateTo(Form1.WorkspacePage.Journals)
+                        Application.DoEvents()
+                        Assert.AreSame(page, board.PageView, "The page is kept.")
+                        Assert.IsNull(editor.SelectedJournal, "No journal is chosen, as on a new page.")
+
+                        editor.SelectJournal(added.Id)
+                        Application.DoEvents()
+                        Assert.IsNotNull(editor.SelectedJournal, "The journal added since is listed.")
+                        StringAssert.Contains(editor.Card.ShownText, "Target of 1 manuscript", "The manuscript targeting it since is counted.")
+
+                        editor.lookupPrompt =
+                            Function(copy)
+                                copy.Publisher = "Looked up on the kept page"
+                                Return copy
+                            End Function
+                        editor.LookUpFactsForTest()
+                        Application.DoEvents()
+
+                        Dim saved As Models.AuthorLibraryData = library.AuthorRepository.Load()
+                        Assert.AreEqual("Looked up on the kept page", saved.Journals.Single(Function(item) item.Id = added.Id).Publisher, "The edit is saved.")
+                        Assert.IsTrue(saved.TagColors.Any(Function(item) item.Tag = "kept-page tag" AndAlso item.Color = Models.TagPalette.Violet), "The tag color set since is kept.")
+
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        Application.DoEvents()
+                        board.Close()
+                    End Using
+                Finally
+                    OnlineAccess.ResetForTests()
+                End Try
+            End Sub,
+            TimeSpan.FromMinutes(3))
+
+    End Sub
+
+
+    ' Each visit to Insights begins as a new page did (#133): on Your
+    ' Journals, no journal chosen, and the figures worked out anew from the
+    ' records as they are, though the page is kept and was left on a
+    ' journal's routes.
+    <TestMethod>
+    Public Sub AnInsightsVisitBeginsAsANewPageDid()
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary =
+                    LargeLibraryFixture.Create(Path.Combine(_root, "library"), 60)
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+
+                    board.NavigateTo(Form1.WorkspacePage.Insights)
+                    board.WaitForInsights()
+                    Dim page As Control = board.PageView
+                    Dim journals As DataGridView = ViewCatalog.Descendants(page).OfType(Of DataGridView)().Single()
+                    Assert.IsTrue(journals.Columns.Contains("Journal") AndAlso journals.Rows.Count > 0)
+                    journals.CurrentCell = journals.Rows(0).Cells(0)
+                    GetType(Control).GetMethod("OnKeyDown", Reflection.BindingFlags.Instance Or Reflection.BindingFlags.NonPublic).
+                        Invoke(journals, New Object() {New KeyEventArgs(Keys.Enter)})
+                    Application.DoEvents()
+                    board.WaitForInsights()
+                    Dim routes As DataGridView = ViewCatalog.Descendants(page).OfType(Of DataGridView)().Single()
+                    Assert.IsTrue(routes.Columns.Contains("Title"), "A journal's routes show.")
+                    Assert.IsTrue(ViewCatalog.Descendants(page).OfType(Of LinkLabel)().Any(Function(link) link.Visible AndAlso link.Text.StartsWith("Showing manuscripts sent to ", StringComparison.Ordinal)))
+
+                    board.NavigateTo(Form1.WorkspacePage.Board)
+                    Application.DoEvents()
+
+                    ' The records change while the page is hidden.
+                    board.Library.First(Function(item) item.Location = Models.ManuscriptLocation.Pipeline).Location = Models.ManuscriptLocation.Published
+                    Dim published As Integer = board.Library.Where(Function(item) item.Location = Models.ManuscriptLocation.Published).Count()
+
+                    board.NavigateTo(Form1.WorkspacePage.Insights)
+                    board.WaitForInsights()
+                    Assert.AreSame(page, board.PageView, "The page is kept.")
+                    Dim checkedTabs As List(Of String) = ViewCatalog.Descendants(page).OfType(Of RadioButton)().Where(Function(tab) tab.Checked).Select(Function(tab) tab.Text).ToList()
+                    Assert.AreEqual(1, checkedTabs.Count, String.Join(" | ", checkedTabs))
+                    StringAssert.StartsWith(checkedTabs(0), "Your Journals", "The visit begins on Your Journals.")
+                    Assert.IsFalse(ViewCatalog.Descendants(page).OfType(Of LinkLabel)().Any(Function(link) link.Visible), "No journal is chosen.")
+                    Assert.IsTrue(routes.IsDisposed, "The routes shown before are gone.")
+                    Dim grid As DataGridView = ViewCatalog.Descendants(page).OfType(Of DataGridView)().Single()
+                    Assert.IsTrue(grid.Columns.Contains("Journal"), "Your Journals shows.")
+                    Dim tiles As List(Of String) = ViewCatalog.Descendants(page).OfType(Of Controls.RoundedPanel)().Select(Function(tile) tile.AccessibleName).ToList()
+                    Dim expected As String = board.Library.Count.ToString(Globalization.CultureInfo.CurrentCulture) & " manuscripts  ·  " & published.ToString(Globalization.CultureInfo.CurrentCulture) & " published"
+                    Assert.IsTrue(tiles.Contains(expected), "The figures are worked out anew: " & String.Join(" | ", tiles))
+
+                    board.NavigateTo(Form1.WorkspacePage.Board)
+                    Application.DoEvents()
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(3))
+
+    End Sub
+
+
+    ' A Windows contrast theme turned on while PaperRoute runs, through the
+    ' HighContrastOverride seam (#133): a prepared Journals or Insights page
+    ' built on the old surface is let go at once, and one showing as it is
+    ' left; each is prepared again in the new colors once the window idles,
+    ' and that page is the one the next visit shows.
+    <TestMethod>
+    Public Sub JournalsAndInsightsArePreparedAnewAfterTheSystemColorsChange()
+
+        StaRunner.Run(
+            Sub()
+                Try
+                    UiTheme.HighContrastOverride = False
+                    Dim library As LargeLibraryFixture.SyntheticLibrary =
+                        LargeLibraryFixture.Create(Path.Combine(_root, "library"), 60)
+
+                    Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                        board.Start()
+                        board.WaitForIdleWork()
+                        Dim oldJournals As Control = board.JournalsPage
+                        Dim oldInsights As Control = board.InsightsPage
+                        Assert.IsNotNull(oldJournals)
+                        Assert.IsNotNull(oldInsights)
+                        Assert.AreNotEqual(Drawing.SystemColors.Window.ToArgb(), oldInsights.BackColor.ToArgb(), "The first pages are on the board color.")
+
+                        board.NavigateTo(Form1.WorkspacePage.Journals)
+                        Application.DoEvents()
+                        Assert.AreSame(oldJournals, board.PageView)
+
+                        UiTheme.HighContrastOverride = True
+                        board.ChangeSystemColors()
+                        Assert.IsTrue(oldInsights.IsDisposed, "The hidden prepared page is let go.")
+                        Assert.IsFalse(oldJournals.IsDisposed, "The page showing stays while it shows.")
+
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        Application.DoEvents()
+                        Assert.IsTrue(oldJournals.IsDisposed, "The page that was showing is let go as it is left.")
+
+                        board.WaitForIdleWork()
+                        Dim newJournals As Control = board.JournalsPage
+                        Dim newInsights As Control = board.InsightsPage
+
+                        For Each visit As (Page As Form1.WorkspacePage, View As Control, Old As Control) In
+                            {(Form1.WorkspacePage.Journals, newJournals, oldJournals), (Form1.WorkspacePage.Insights, newInsights, oldInsights)}
+                            Assert.IsNotNull(visit.View, visit.Page.ToString() & " is prepared again.")
+                            Assert.AreNotSame(visit.Old, visit.View)
+                            Assert.IsFalse(visit.View.IsDisposed OrElse visit.View.Visible)
+                            Assert.AreEqual(Drawing.SystemColors.Window.ToArgb(), visit.View.BackColor.ToArgb(), visit.Page.ToString() & " is prepared on the window color.")
+                            board.NavigateTo(visit.Page)
+                            If visit.Page = Form1.WorkspacePage.Insights Then board.WaitForInsights()
+                            Application.DoEvents()
+                            Assert.AreSame(visit.View, board.PageView, "The next visit shows the page prepared again.")
+                            board.NavigateTo(Form1.WorkspacePage.Board)
+                            Application.DoEvents()
+                        Next
+
+                        board.Close()
+                    End Using
+                Finally
+                    UiTheme.HighContrastOverride = Nothing
+                End Try
             End Sub,
             TimeSpan.FromMinutes(3))
 

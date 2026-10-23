@@ -138,27 +138,30 @@ Public Class ResponsivenessBudgetTests
             ' it is first shown (#133). The first switch is reported: it builds
             ' the shelf's cards where startup no longer does.
             '
-            ' Beside the fill, the manuscript page is prepared while the window
-            ' idles (#133): built, laid out, and its windows made a slice at a
-            ' time. The fill's row holds the longest step of both against the
-            ' UI thread's budget; its twin, reported, holds it against the idle
-            ' queue's own slice of 30 ms. Whatever idle work is left then runs
-            ' before the next rows, untimed.
+            ' Beside the fill, the manuscript page, Journals and Insights are
+            ' prepared while the window idles (#133): each built, laid out, and
+            ' its windows made a slice at a time. The fill's row holds the
+            ' longest step while the fill runs against the UI thread's budget,
+            ' and the next row the longest step of the idle work left after
+            ' it; their twin, reported, holds the longer of the two against
+            ' the idle queue's own slice of 30 ms.
             Dim fill As Row = Time(library, "Board: the rest of the shown shelf, shown in idle slices", UiThread, Sub() board.WaitForBoardFill(), enforced:=enforce)
             rows.Add(fill)
-            rows.Add(New Row With {.Library = library.Name, .Action = "Idle work beside the fill: its longest step, the manuscript page's preparation included", .Wall = fill.Wall, .Ui = fill.Ui, .Budget = IdleSlice})
-            board.WaitForIdleWork()
+            Dim prepared As Row = Time(library, "Idle work after the fill: the pages' preparation, its longest step", UiThread, Sub() board.WaitForIdleWork(), enforced:=enforce)
+            rows.Add(prepared)
+            rows.Add(New Row With {.Library = library.Name, .Action = "Idle work from startup: its longest step, against the idle slice", .Wall = fill.Wall + prepared.Wall, .Ui = Math.Max(fill.Ui, prepared.Ui), .Budget = IdleSlice})
+            Assert.IsNotNull(board.JournalsPage, "Journals was prepared while the window idled.")
+            Assert.IsNotNull(board.InsightsPage, "Insights was prepared while the window idled.")
             rows.Add(Time(library, "First switch to Published (the shelf built when first shown)", PageSwitch, Sub() board.ShelfTab("tabPublished").Checked = True))
             board.WaitForBoardFill()
             board.ShelfTab("tabPipeline").Checked = True
             board.WaitForBoardFill()
 
             ' #133 enforces the Board's startup and the page switches back to it
-            ' from Insights and the manuscript page. Board to Library, Board to
-            ' Journals, Journals to Board and Board to Insights stay reported:
-            ' each builds its page's windows and measured 54-163, 80-312, 45-124
-            ' and 62-210 ms across this host's quiet and busy runs, with no room
-            ' under the 100 ms line. Library to Board, which disposes the
+            ' from Insights and the manuscript page. Board to Library stays
+            ' reported: it builds its page's windows and measured 54-163 ms
+            ' across this host's quiet and busy runs, with no room under the 100
+            ' ms line. Library to Board, which disposes the
             ' Library page and its 500-row grid, read 27 to 100 ms in most runs
             ' and 128 to 481 ms in others: the spikes were a wait of about half
             ' a second inside painting Windows did synchronously as the Board
@@ -172,9 +175,20 @@ Public Class ResponsivenessBudgetTests
             rows.Add(Time(library, "Library to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
 
             ' The Journals page on the test's author library, through the
-            ' window's own navigation (CreateJournalLibraryEditor).
-            rows.Add(Time(library, "Board to Journals", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Journals)))
+            ' window's own navigation (CreateJournalLibraryEditor). Journals and
+            ' Insights are kept and prepared while the window idles (#133);
+            ' each visit reads the author library afresh, or works its figures
+            ' out anew. Built at each visit, Board to Journals read 80 to 312 ms
+            ' and Board to Insights 62 to 210; on the prepared pages, 13 to 54
+            ' and 10 to 47 ms in six Release runs on 2026-10-23 (second visits
+            ' 13 to 32 and 20 to 56), and both are enforced, first and second
+            ' visits. Journals to Board stays reported: leaving reads the
+            ' author library its editor saved and renders the Board again, as
+            ' it did after the Journal Library dialog (49 to 161 ms).
+            rows.Add(Time(library, "Board to Journals (the page prepared while the window idled)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Journals), enforced:=enforce))
             rows.Add(Time(library, "Journals to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
+            rows.Add(Time(library, "Board to Journals (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Journals), enforced:=enforce))
+            rows.Add(Time(library, "Journals to Board (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
 
             ' The Deadlines page draws its rows in one list and is kept (#133).
             ' Outside the timed steps, the list is checked to hold every open
@@ -182,7 +196,7 @@ Public Class ResponsivenessBudgetTests
             ' matches every item on the 500 library, so the keystroke refills
             ' all of them. Painting is timed as a row of its own, since the
             ' other rows do not pump messages. These rows and Import & Export's
-            ' are enforced, unlike Journals to Board, because #133 requires it;
+            ' are enforced, as Board to Journals is, because #133 requires it;
             ' the first visits read 39 to 53 ms on a quiet host, but a busy one
             ' can push them past 100 ms (or 200 in Debug), so a failure here is
             ' run again on a quiet host before it is read as a regression.
@@ -204,9 +218,12 @@ Public Class ResponsivenessBudgetTests
             Assert.AreEqual(openItems, ShownDeadlines(board).Rows.Count, "The list holds every open item after the second visit.")
             rows.Add(Time(library, "Deadlines to Board (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
 
-            rows.Add(Time(library, "Board to Insights", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Insights)))
+            rows.Add(Time(library, "Board to Insights (the page prepared while the window idled)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Insights), enforced:=enforce))
             rows.Add(Time(library, "Insights: figures ready (calculated off the UI thread)", UiThread, Sub() board.WaitForInsights()))
             rows.Add(Time(library, "Insights to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
+            rows.Add(Time(library, "Board to Insights (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Insights), enforced:=enforce))
+            rows.Add(Time(library, "Insights: figures ready (second visit)", UiThread, Sub() board.WaitForInsights()))
+            rows.Add(Time(library, "Insights to Board (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
 
             ' Import & Export's commands are laid out and drawn by one list
             ' around its buttons, and the page is kept (#133).

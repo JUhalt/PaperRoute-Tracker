@@ -722,6 +722,25 @@ Namespace Forms
         End Sub
 
 
+        ' A Journals page kept between visits begins each one as a new page
+        ' did (#133): the library and the manuscripts read afresh, as the
+        ' manuscript page or the Authors view may have saved the library
+        ' since and each edit here saves the whole of it, so it never works
+        ' from an old copy; and no journal chosen.
+        Friend Sub Reload(manuscripts As IEnumerable(Of Manuscript))
+
+            _manuscripts.Clear()
+            _manuscripts.AddRange(If(manuscripts, Enumerable.Empty(Of Manuscript)()).Where(Function(item) item IsNot Nothing))
+
+            _library =
+                _repository.Load()
+
+            lstJournals.ClearSelected()
+            RefreshList()
+
+        End Sub
+
+
         ' On failure the library is read back from disk, so nothing unsaved
         ' stays on screen as if it were kept.
         Private Sub SaveAndRefresh()

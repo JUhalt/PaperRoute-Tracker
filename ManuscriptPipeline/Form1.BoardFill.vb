@@ -143,8 +143,10 @@ Partial Public Class Form1
         shelfRevealLimits(shown) = FirstScreen
         QueueBoardFill()
 
-        ' Beside the fill, a step at a time: the manuscript page.
+        ' Beside the fill, a step at a time: the manuscript page, then
+        ' Journals and Insights.
         QueueManuscriptPagePreparation()
+        QueueKeptPagesPreparation()
 
     End Sub
 

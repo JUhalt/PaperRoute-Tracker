@@ -403,6 +403,22 @@ Friend NotInheritable Class LibraryBoard
     End Property
 
 
+    ' The Journals and Insights pages kept between visits (#133), or
+    ' Nothing.
+    Public ReadOnly Property JournalsPage As Control
+        Get
+            Return DirectCast(GetField("journalsPage"), Control)
+        End Get
+    End Property
+
+
+    Public ReadOnly Property InsightsPage As Control
+        Get
+            Return DirectCast(GetField("insightsPage"), Control)
+        End Get
+    End Property
+
+
     ' As Windows does when a contrast theme is turned on or off.
     Public Sub ChangeSystemColors()
         OnSystemColorsChanged(EventArgs.Empty)
