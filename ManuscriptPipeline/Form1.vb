@@ -1056,8 +1056,11 @@ Public Class Form1
         ' File Drawer suggestion
         ' =================================================
 
+        ' Only while the latest submission ended in a rejection or a
+        ' withdrawal, and not after a revival (#203).
         If manuscript.Location =
             ManuscriptLocation.Pipeline AndAlso
+       snapshot.CanSuggestFiling AndAlso
        snapshot.RejectionCount >=
             appSettings.FileDrawerSuggestionThreshold Then
 
@@ -3579,7 +3582,7 @@ Public Class Form1
         ' filed by an import has no "Moved to File Drawer" note to keep them.
         Dim restoreNote As String =
             ManuscriptLifecycleService.WithFiledClause(
-                "Restored from File Drawer to active Pipeline",
+                ManuscriptAttentionService.RestoredFromFileDrawerNote,
                 manuscript.FileDrawerDate,
                 manuscript.FileDrawerReason
             )
