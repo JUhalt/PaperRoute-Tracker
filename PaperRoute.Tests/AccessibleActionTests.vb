@@ -100,7 +100,7 @@ Public Class AccessibleActionTests
                 ViewCatalog.Hosted.Select(Function(view) (view.Name, view.Build)),
                 Sub(name, shown)
 
-                    For Each drawn As Control In ViewCatalog.Descendants(shown).Where(Function(control) control.Visible AndAlso (TypeOf control Is DeadlineList OrElse TypeOf control Is CommandList))
+                    For Each drawn As Control In ViewCatalog.Descendants(shown).Where(Function(control) control.Visible AndAlso (TypeOf control Is DeadlineList OrElse TypeOf control Is CommandList OrElse TypeOf control Is JournalShortlistList))
 
                         Dim root As AccessibleObject =
                             drawn.AccessibilityObject

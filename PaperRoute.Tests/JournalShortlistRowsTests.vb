@@ -766,9 +766,12 @@ Public Class JournalShortlistRowsTests
 
     ' Each row as a list item, then its status, its name with its details,
     ' its facts and its evidence when it has them, and its two buttons;
-    ' pressing a button from a screen reader does what a click does.
+    ' pressing a button from a screen reader does what a click does. The
+    ' one line changed since f5c6947 is the shortlist's own: a panel of rows
+    ' read as a Client then, it is a list that draws its rows since #133, and
+    ' a list reads as one.
     Private Shared ReadOnly ReaderExpected As New List(Of String) From {
-        "the shortlist: Client 'Shortlisted journals' focusable",
+        "the shortlist: List 'Shortlisted journals' focusable",
         "ListItem 'Fictional Journal 01' focusable",
         "StaticText '1.  Preferred'",
         "StaticText 'Fictional Journal 01" & Environment.NewLine & "Target journal  ·  Fits the scope.  ·  1 of 7 trust checks  ·  1 of 6 fit checks'",

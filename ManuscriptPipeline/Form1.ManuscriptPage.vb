@@ -314,12 +314,12 @@ Partial Public Class Form1
         page.Visible = True
         page.BringToFront()
 
-        ' Every container is laid out once, inner ones first: what changed
-        ' while the page was hidden, as a part shown or hidden for the record
-        ' loaded, laid out nothing then, as WinForms lays out no change under
-        ' a hidden parent.
+        ' Each container lets go of its layout, inner ones first, and lays
+        ' out once if anything in it changed since it was held: the record
+        ' loaded, the header, a part shown or hidden for the record. One in
+        ' which nothing changed is not laid out again; laying out every
+        ' container whatever changed took twice as long on this machine.
         For index As Integer = containers.Count - 1 To 0 Step -1
-            containers(index).PerformLayout()
             containers(index).ResumeLayout(True)
         Next
 

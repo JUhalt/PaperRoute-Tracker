@@ -118,11 +118,63 @@ Public Class KeptManuscriptPageTests
                     Assert.IsFalse(all.OfType(Of SubmissionDetailsForm)().Any(), "No submission's details.")
                     Assert.IsFalse(all.OfType(Of ManuscriptVersionHistoryControl)().Any(), "No version history.")
                     Assert.IsFalse(all.Any(Function(control) control.AccessibleRole = AccessibleRole.ListItem), "No shortlisted journal.")
+                    Assert.IsTrue(all.OfType(Of JournalShortlistList)().All(Function(list) list.AccessibilityObject.GetChildCount() = 0 AndAlso list.Entries.Count = 0), "No shortlisted journal drawn.")
 
                     board.Close()
                 End Using
             End Sub,
             TimeSpan.FromMinutes(5))
+
+    End Sub
+
+
+    ' An open on the kept page makes no window but its tag chips' (#133):
+    ' the shortlist draws its rows, so a manuscript choosing among its
+    ' shortlisted journals opens on the windows the page already has.
+    <TestMethod>
+    Public Sub AnOpenMakesNoWindowButItsTagChips()
+
+        Dim report As New List(Of String)()
+        Dim chips As Integer = 0
+        Dim tags As Integer = 0
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary = Library60()
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+                    Dim subjects As List(Of Manuscript) =
+                        board.Library.Where(Function(item) item.Location = ManuscriptLocation.Pipeline AndAlso item.JournalShortlist.Count > 1 AndAlso item.Tags.Count > 0).Take(2).ToList()
+                    Assert.AreEqual(2, subjects.Count, "Two Pipeline manuscripts with shortlisted journals and tags.")
+
+                    ' The page is built for the first; the second opens on it.
+                    board.Open(subjects(0))
+                    Application.DoEvents()
+                    board.NavigateTo(Form1.WorkspacePage.Board)
+                    board.WaitForIdleWork()
+
+                    Using watch As New WindowCreationWatch()
+                        board.Open(subjects(1))
+                        Application.DoEvents()
+                        Dim made As List(Of String) = watch.Children()
+                        chips = made.Where(Function(window) window.Contains(" in TagEditor 'Tags'", StringComparison.Ordinal)).Count()
+                        report.AddRange(made.Where(Function(window) Not window.Contains(" in TagEditor 'Tags'", StringComparison.Ordinal)))
+                    End Using
+
+                    tags = subjects(1).Tags.Count
+                    Dim shortlist As JournalShortlistList = ViewCatalog.Descendants(board.Editor).OfType(Of JournalShortlistList)().Single()
+                    Assert.AreEqual(subjects(1).JournalShortlist.Count, shortlist.Entries.Count, "The shortlist shows the manuscript's journals.")
+
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(5))
+
+        Assert.AreEqual(0, report.Count, "Windows the open made besides its tag chips:" & Environment.NewLine & String.Join(Environment.NewLine, report))
+        Assert.AreEqual(tags, chips, "A window for each tag chip.")
 
     End Sub
 

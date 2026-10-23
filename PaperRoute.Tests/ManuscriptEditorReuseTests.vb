@@ -757,6 +757,11 @@ Public Class ManuscriptEditorReuseTests
         For Each part In {("Versions", "_versionsHost"), ("Overview", "shortlistRows"), ("Overview", "tagEditor")}
             ShowSection(editor, part.Item1)
             Dim count As Integer = 0
+            Dim drawn As JournalShortlistList = TryCast(Field(Of Control)(editor, part.Item2), JournalShortlistList)
+            If drawn IsNot Nothing Then
+                judged(part.Item2) = JudgeDrawn(drawn, part.Item2, contrastTheme, failures)
+                Continue For
+            End If
             For Each control As Control In ViewCatalog.Descendants(Field(Of Control)(editor, part.Item2))
                 Dim text As String = If(TypeOf control Is TagChipButton, DirectCast(control, TagChipButton).TagText, control.Text)
                 If Not (TypeOf control Is Label OrElse TypeOf control Is Button OrElse TypeOf control Is TagChipButton) OrElse
@@ -785,6 +790,62 @@ Public Class ManuscriptEditorReuseTests
         Assert.AreEqual(0, failures.Count, "In " & If(contrastTheme, "a contrast theme", If(UiTheme.IsDark(), "Dark", "Light")) & ":" & Environment.NewLine & String.Join(Environment.NewLine, failures))
 
     End Sub
+
+
+    ' A list that draws its rows (the shortlist, #133) is judged item by
+    ' item where each is drawn, as JournalShortlistRowsTests judges it:
+    ' each line's and each button's text at 4.5:1 on what it is drawn on in
+    ' Light and Dark, and drawn on one of the user's colors under a contrast
+    ' theme (#138). Returns how many items were judged.
+    Private Shared Function JudgeDrawn(list As Control, part As String, contrastTheme As Boolean, failures As List(Of String)) As Integer
+
+        If Not list.Visible OrElse list.Width <= 0 OrElse list.Height <= 0 Then Return 0
+
+        Dim judged As Integer = 0
+        Dim accessible As AccessibleObject = list.AccessibilityObject
+
+        Using picture As New Bitmap(list.Width, list.Height)
+            list.DrawToBitmap(picture, New Rectangle(Point.Empty, list.Size))
+
+            For index As Integer = 0 To accessible.GetChildCount() - 1
+                Dim item As AccessibleObject = accessible.GetChild(index)
+                If Not (item.Role = AccessibleRole.StaticText OrElse item.Role = AccessibleRole.PushButton) OrElse String.IsNullOrWhiteSpace(item.Name) Then Continue For
+
+                Dim bounds As Rectangle = list.RectangleToClient(item.Bounds)
+                If item.Role = AccessibleRole.PushButton Then bounds.Inflate(-list.LogicalToDeviceUnits(6), -list.LogicalToDeviceUnits(6))
+                bounds.Intersect(New Rectangle(Point.Empty, picture.Size))
+                Dim name As String = part & ": drawn " & item.Role.ToString() & " '" & item.Name.Replace(Environment.NewLine, " ") & "' "
+                If bounds.Width <= 0 OrElse bounds.Height <= 0 Then
+                    failures.Add(name & "is not drawn inside the list")
+                    Continue For
+                End If
+
+                Dim counts As New Dictionary(Of Integer, Integer)()
+                For y As Integer = bounds.Top To bounds.Bottom - 1
+                    For x As Integer = bounds.Left To bounds.Right - 1
+                        Dim pixel As Integer = picture.GetPixel(x, y).ToArgb()
+                        Dim count As Integer = 0
+                        counts.TryGetValue(pixel, count)
+                        counts(pixel) = count + 1
+                    Next
+                Next
+                Dim surface As Color = Color.FromArgb(counts.OrderByDescending(Function(entry) entry.Value).First().Key)
+                Dim ratio As Double = counts.Keys.Max(Function(pixel) ContrastRatio(Color.FromArgb(pixel), surface))
+
+                If contrastTheme Then
+                    If Not {SystemColors.Window, SystemColors.Control, SystemColors.ButtonFace, SystemColors.Highlight, SystemColors.Info}.Any(Function(system) system.ToArgb() = surface.ToArgb()) Then
+                        failures.Add(name & "drawn on " & surface.ToString() & ", not one of the user's colors")
+                    End If
+                ElseIf ratio < 4.5 Then
+                    failures.Add(name & ratio.ToString("F2", CultureInfo.InvariantCulture) & ":1 on " & surface.ToString())
+                End If
+                judged += 1
+            Next
+        End Using
+
+        Return judged
+
+    End Function
 
 
     ' How far the strongest pixels of a control's text stand out from the
@@ -903,6 +964,21 @@ Public Class ManuscriptEditorReuseTests
         If chip IsNot Nothing Then parts.Add("tag=" & chip.TagText)
 
         lines.Add(String.Join("; ", parts))
+
+        ' A list that draws its rows (the shortlist, #133) is described by
+        ' what it draws, as a screen reader reads it: each item's role,
+        ' name and action, and, while it shows, where it is drawn.
+        Dim drawn As JournalShortlistList = TryCast(control, JournalShortlistList)
+        If drawn IsNot Nothing Then
+            Dim accessible As AccessibleObject = drawn.AccessibilityObject
+            For index As Integer = 0 To accessible.GetChildCount() - 1
+                Dim item As AccessibleObject = accessible.GetChild(index)
+                Dim line As String = path & "/drawn " & index.ToString(CultureInfo.InvariantCulture) & ": " & item.Role.ToString() & " '" & item.Name & "'" &
+                                     If(String.IsNullOrEmpty(item.DefaultAction), String.Empty, " action '" & item.DefaultAction & "'")
+                If control.Visible AndAlso drawn.IsHandleCreated Then line &= "; bounds=" & drawn.RectangleToClient(item.Bounds).ToString()
+                lines.Add(line)
+            Next
+        End If
 
         For index As Integer = 0 To control.Controls.Count - 1
             Dim child As Control = control.Controls(index)

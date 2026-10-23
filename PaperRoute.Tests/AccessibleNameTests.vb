@@ -319,7 +319,8 @@ Public Class AccessibleNameTests
 
         Return TypeOf control Is DeadlineList OrElse
             TypeOf control Is DeadlineGlance OrElse
-            TypeOf control Is CommandList
+            TypeOf control Is CommandList OrElse
+            TypeOf control Is JournalShortlistList
 
     End Function
 

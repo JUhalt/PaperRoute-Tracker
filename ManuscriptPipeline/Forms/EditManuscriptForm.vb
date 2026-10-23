@@ -174,7 +174,7 @@ Namespace Forms
         ' The kind of work and its tags (#64), edited in the working copy.
         Private ReadOnly classificationGroup As New SectionCard()
         Private ReadOnly shortlistGroup As New SectionCard()
-        Private ReadOnly shortlistRows As New TableLayoutPanel()
+        Private ReadOnly shortlistRows As New JournalShortlistList()
         Private ReadOnly shortlistOffer As New TableLayoutPanel()
         Private ReadOnly lblShortlistOffer As New Label()
         Private ReadOnly btnShortlistOffer As New Button()
@@ -1708,13 +1708,11 @@ Namespace Forms
             ' Hidden until a rejection, ahead of the rows a record shows (#133).
             InPlace.HoldPlace(shortlistOffer)
 
+            ' The journals, drawn by one list the record fills (#133).
             shortlistRows.Dock = DockStyle.Top
-            shortlistRows.AutoSize = True
-            shortlistRows.AutoSizeMode = AutoSizeMode.GrowAndShrink
-            shortlistRows.ColumnCount = 1
             shortlistRows.Margin = New Padding(0)
             shortlistRows.AccessibleName = "Shortlisted journals"
-            shortlistRows.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
+            shortlistRows.ToolTip = shortlistToolTip
             layout.Controls.Add(shortlistRows, 0, 1)
 
             lblShortlistEmpty.Text = "Add the journals you are considering for this manuscript, in your order of preference, with your reasons. " &
@@ -1776,17 +1774,14 @@ Namespace Forms
             If _workingManuscript.JournalShortlist Is Nothing Then _workingManuscript.JournalShortlist = New List(Of JournalCandidate)()
             Dim list As List(Of JournalCandidate) = _workingManuscript.JournalShortlist
 
-            shortlistRows.SuspendLayout()
-            For Each child As Control In shortlistRows.Controls.Cast(Of Control)().ToList()
-                InPlace.Dispose(child)
-            Next
-            shortlistRows.RowStyles.Clear()
-            shortlistRows.RowCount = Math.Max(1, list.Count)
-            For index As Integer = 0 To list.Count - 1
-                shortlistRows.RowStyles.Add(New RowStyle(SizeType.AutoSize))
-                shortlistRows.Controls.Add(CreateShortlistRow(list(index), index, list.Count), 0, index)
-            Next
-            shortlistRows.ResumeLayout(True)
+            ' The keyboard on a row's button moves to the editor's first stop,
+            ' as it moved when the button went with its row (the editor
+            ' chose the next control after one removed, or none).
+            If ActiveControl Is shortlistRows AndAlso Not SelectNextControl(Nothing, True, True, True, True) Then
+                ActiveControl = Nothing
+            End If
+
+            shortlistRows.SetEntries(list.Select(Function(candidate, index) ShortlistEntryFor(candidate, index, list.Count)).ToList())
             shortlistRows.Visible = list.Count > 0
             lblShortlistEmpty.Visible = list.Count = 0
 
@@ -1819,9 +1814,6 @@ Namespace Forms
 
             RefreshOnlineCommands()
 
-            ' The rows are new; styled as the page was (#106).
-            UiPolish.ApplyToControls(shortlistRows)
-
         End Sub
 
 
@@ -1841,42 +1833,13 @@ Namespace Forms
         End Sub
 
 
-        Private Function CreateShortlistRow(candidate As JournalCandidate, index As Integer, count As Integer) As Control
+        ' What a journal's row on the shortlist shows and does: its place and
+        ' status, its name with the details known about it, its facts from
+        ' the Journals page (#87), why Find Journals suggested it with the
+        ' keywords on hover (#88), and its Edit... and ⋯ menu.
+        Private Function ShortlistEntryFor(candidate As JournalCandidate, index As Integer, count As Integer) As ShortlistEntry
 
             Dim isTarget As Boolean = RouteAnalyticsService.NameKey(candidate.JournalName) = RouteAnalyticsService.NameKey(txtTargetJournal.Text)
-            Dim row As New TableLayoutPanel With {
-                .Dock = DockStyle.Top,
-                .AutoSize = True,
-                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                .ColumnCount = 4,
-                .RowCount = 1,
-                .Margin = New Padding(0, 0, 0, 6),
-                .AccessibleName = candidate.JournalName,
-                .AccessibleRole = AccessibleRole.ListItem
-            }
-            Dim statusWidth As Integer
-            Using bold As New Font(Me.Font, FontStyle.Bold)
-                statusWidth = TextRenderer.MeasureText(count.ToString(Globalization.CultureInfo.CurrentCulture) & ".  Considering", bold).Width + 12
-            End Using
-            row.ColumnStyles.Add(New ColumnStyle(SizeType.Absolute, statusWidth))
-            row.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
-            row.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
-            row.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
-
-            Dim statusColor As Color
-            Select Case candidate.Status
-                Case CandidateStatus.Preferred : statusColor = UiTheme.AccentColor()
-                Case CandidateStatus.RuledOut : statusColor = UiTheme.MutedText()
-                Case Else : statusColor = UiTheme.SecondaryText()
-            End Select
-            Dim lblStatus As New Label With {
-                .Text = (index + 1).ToString(Globalization.CultureInfo.CurrentCulture) & ".  " & JournalShortlistService.StatusName(candidate.Status),
-                .AutoSize = True,
-                .UseMnemonic = False,
-                .ForeColor = statusColor,
-                .Font = New Font(Me.Font, FontStyle.Bold),
-                .Margin = New Padding(0, 3, 6, 0)
-            }
 
             Dim details As New List(Of String)
             If isTarget Then details.Add("Target journal")
@@ -1888,79 +1851,30 @@ Namespace Forms
             Dim checks As String = JournalChoiceGuide.Summary(candidate)
             If checks.Length > 0 Then details.Add(checks)
 
-            Dim text As New Label With {
-                .AutoSize = True,
-                .UseMnemonic = False,
-                .Text = candidate.JournalName & If(details.Count > 0, Environment.NewLine & String.Join("  ·  ", details), String.Empty),
-                .Margin = New Padding(0, 3, 8, 0),
-                .Font = If(candidate.Status = CandidateStatus.RuledOut, New Font(Me.Font, FontStyle.Strikeout), Me.Font)
-            }
-
-            ' One line of the journal's facts from the Journals page (#87).
-            Dim linked As JournalRecord = ShortlistRecord(candidate)
-            Dim factsLine As String = JournalFactsService.OneLine(linked)
-            Dim facts As New Label With {
-                .AutoSize = True,
-                .UseMnemonic = False,
-                .Text = factsLine,
-                .Visible = factsLine.Length > 0,
-                .ForeColor = UiTheme.MutedText(),
-                .Margin = New Padding(0, 2, 8, 0)
-            }
-            Dim textStack As New FlowLayoutPanel With {
-                .AutoSize = True,
-                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                .FlowDirection = FlowDirection.TopDown,
-                .WrapContents = False,
-                .Margin = New Padding(0)
-            }
-            textStack.Controls.Add(text)
-            textStack.Controls.Add(facts)
-
-            ' Why Find Journals suggested it (#88), with the keywords on hover.
-            Dim evidenceLine As String = JournalShortlistService.EvidenceLine(candidate.Evidence)
-            Dim evidence As New Label With {
-                .AutoSize = True,
-                .UseMnemonic = False,
-                .Text = evidenceLine,
-                .Visible = evidenceLine.Length > 0,
-                .ForeColor = UiTheme.MutedText(),
-                .Margin = New Padding(0, 2, 8, 0)
-            }
+            Dim tip As String = String.Empty
             If candidate.Evidence IsNot Nothing Then
-                shortlistToolTip.SetToolTip(evidence, "Keywords: " & String.Join(If(candidate.Evidence.MatchAll, " AND ", " OR "), candidate.Evidence.Keywords.Select(Function(item) """" & item & """")) &
-                    If(candidate.Evidence.Examples.Count > 0, Environment.NewLine & "For example: " & candidate.Evidence.Examples(0).Title, String.Empty))
+                tip = "Keywords: " & String.Join(If(candidate.Evidence.MatchAll, " AND ", " OR "), candidate.Evidence.Keywords.Select(Function(item) """" & item & """")) &
+                    If(candidate.Evidence.Examples.Count > 0, Environment.NewLine & "For example: " & candidate.Evidence.Examples(0).Title, String.Empty)
             End If
-            textStack.Controls.Add(evidence)
 
-            Dim btnEdit As New Button With {.Text = "Edit...", .AutoSize = True, .AccessibleName = "Edit " & candidate.JournalName, .Margin = New Padding(3, 0, 3, 0)}
-            AddHandler btnEdit.Click, Sub(sender, e) EditShortlistCandidate(candidate)
-
-            Dim menu As New ContextMenuStrip()
-            Dim makeTarget As ToolStripItem = menu.Items.Add("Make Target Journal", Nothing, Sub(sender, e) MakeShortlistTarget(candidate))
-            makeTarget.Enabled = Not isTarget
-            Dim moveUp As ToolStripItem = menu.Items.Add("Move Up", Nothing, Sub(sender, e) MoveShortlistCandidate(candidate, -1))
-            moveUp.Enabled = index > 0
-            Dim moveDown As ToolStripItem = menu.Items.Add("Move Down", Nothing, Sub(sender, e) MoveShortlistCandidate(candidate, 1))
-            moveDown.Enabled = index < count - 1
-            menu.Items.Add(New ToolStripSeparator())
-            menu.Items.Add("Remove from Shortlist", Nothing, Sub(sender, e) RemoveShortlistCandidate(candidate))
-            Dim btnMore As New Button With {.Text = ChrW(&H22EF), .AutoSize = True, .AccessibleName = "More actions for " & candidate.JournalName, .Margin = New Padding(3, 0, 0, 0)}
-            AddHandler btnMore.Click, Sub(sender, e) menu.Show(btnMore, New Point(0, btnMore.Height))
-            AddHandler row.Disposed, Sub(sender, e) menu.Dispose()
-            AddHandler row.Resize,
-                Sub(sender, e)
-                    Dim width As Integer = Math.Max(200, row.ClientSize.Width - statusWidth - btnEdit.Width - btnMore.Width - 24)
-                    text.MaximumSize = New Size(width, 0)
-                    facts.MaximumSize = New Size(width, 0)
-                    evidence.MaximumSize = New Size(width, 0)
-                End Sub
-
-            row.Controls.Add(lblStatus, 0, 0)
-            row.Controls.Add(textStack, 1, 0)
-            row.Controls.Add(btnEdit, 2, 0)
-            row.Controls.Add(btnMore, 3, 0)
-            Return row
+            Return New ShortlistEntry With {
+                .JournalName = candidate.JournalName,
+                .Status = candidate.Status,
+                .StatusText = (index + 1).ToString(Globalization.CultureInfo.CurrentCulture) & ".  " & JournalShortlistService.StatusName(candidate.Status),
+                .Text = candidate.JournalName & If(details.Count > 0, Environment.NewLine & String.Join("  ·  ", details), String.Empty),
+                .StruckOut = candidate.Status = CandidateStatus.RuledOut,
+                .Facts = If(JournalFactsService.OneLine(ShortlistRecord(candidate)), String.Empty),
+                .Evidence = If(JournalShortlistService.EvidenceLine(candidate.Evidence), String.Empty),
+                .EvidenceTip = tip,
+                .CanMakeTarget = Not isTarget,
+                .CanMoveUp = index > 0,
+                .CanMoveDown = index < count - 1,
+                .Edit = Sub() EditShortlistCandidate(candidate),
+                .MakeTarget = Sub() MakeShortlistTarget(candidate),
+                .MoveUp = Sub() MoveShortlistCandidate(candidate, -1),
+                .MoveDown = Sub() MoveShortlistCandidate(candidate, 1),
+                .Remove = Sub() RemoveShortlistCandidate(candidate)
+            }
 
         End Function
 

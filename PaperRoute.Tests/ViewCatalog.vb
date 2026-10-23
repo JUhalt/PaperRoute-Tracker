@@ -750,7 +750,11 @@ Friend NotInheritable Class ViewCatalog
         Dim editor As EditManuscriptForm = Descendants(board).OfType(Of EditManuscriptForm)().Single()
         CallPrivate(editor, "RefreshShortlist")
         Application.DoEvents()
-        Return Reached(board, Descendants(editor).OfType(Of Button)().Any(Function(button) button.Visible AndAlso button.AccessibleName = "Edit PLOS ONE"), "shows no shortlist row")
+        ' The shortlist draws its rows (#133): a row's Edit... is a child of
+        ' the list's accessible object.
+        Return Reached(board, Descendants(editor).OfType(Of JournalShortlistList)().Any(
+                           Function(list) list.Visible AndAlso Enumerable.Range(0, list.AccessibilityObject.GetChildCount()).
+                               Any(Function(index) list.AccessibilityObject.GetChild(index).Name = "Edit PLOS ONE")), "shows no shortlist row")
     End Function
 
 
