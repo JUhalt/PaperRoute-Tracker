@@ -229,11 +229,28 @@ Public Class ResponsivenessBudgetTests
             rows.Add(Time(library, "Kept manuscript page to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
             board.WaitForIdleWork()
 
+            ' The open most researchers make most often: a Pipeline manuscript
+            ' still choosing its journal, with three journals on its shortlist
+            ' and its tags, which the kept page builds rows and chips for. The
+            ' manuscript above is a Published one with neither, so this row
+            ' is checked to have them, and cannot pass on an easier record.
+            Dim pipelineSubject As Manuscript = library.Manuscripts.First(Function(item) item.Location = ManuscriptLocation.Pipeline)
+            Dim choosing As Manuscript =
+                library.Manuscripts.FirstOrDefault(Function(item) item.Location = ManuscriptLocation.Pipeline AndAlso item.JournalShortlist.Count = 3 AndAlso
+                                                                  item.Tags.Count >= 2 AndAlso item IsNot subject AndAlso item IsNot another AndAlso item IsNot pipelineSubject)
+            If enforce Then Assert.IsNotNull(choosing, "The 500 library has a Pipeline manuscript with three shortlisted journals and two tags or more.")
+            If choosing IsNot Nothing Then
+                Assert.IsTrue(choosing.JournalShortlist.Count = 3 AndAlso choosing.Tags.Count >= 2)
+                rows.Add(Time(library, "Board to a manuscript page (the kept page, a Pipeline manuscript with three shortlisted journals and tags)", PageSwitch, Sub() board.Open(choosing)))
+                Application.DoEvents()
+                board.NavigateTo(Form1.WorkspacePage.Board)
+                board.WaitForIdleWork()
+            End If
+
             rows.Add(Time(library, "Board render (RenderManuscripts)", UiThread, Sub() board.Render(), enforced:=enforce))
 
             ' A save that changes a card the Board shows with its windows: the
             ' card is replaced on its shelf, the others left in place (#133).
-            Dim pipelineSubject As Manuscript = library.Manuscripts.First(Function(item) item.Location = ManuscriptLocation.Pipeline)
             board.Open(pipelineSubject)
             Application.DoEvents()
             board.Field("Title").Text = pipelineSubject.Title & " (edited)"
