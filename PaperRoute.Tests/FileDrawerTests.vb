@@ -8,13 +8,14 @@ Imports System.Windows.Forms
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
 Imports ManuscriptPipeline
 Imports ManuscriptPipeline.Controls
+Imports ManuscriptPipeline.Forms
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
-' The ways out of the File Drawer from a Board card (#202) and the card's
-' suggestion to file (#203): what each writes to the manuscript and its
-' history, and what the card then says, on the real main window over
-' in-memory records, with saves counted and not written.
+' The ways into and out of the File Drawer from a Board card (#202, #205)
+' and the card's suggestion to file (#203): what each writes to the
+' manuscript and its history, and what the card then says, on the real
+' main window over in-memory records, with saves counted and not written.
 <TestClass>
 <DoNotParallelize>
 Public Class FileDrawerTests
@@ -24,6 +25,83 @@ Public Class FileDrawerTests
     Private Const Reason As String = "Three rejections; revisit with a larger sample."
 
     Private Const ConsiderFiling As String = "consider filing"
+
+    ' Move to File Drawer asks once (#205). Cancel, with nothing typed or
+    ' with a reason typed, leaves the manuscript where it was and saves
+    ' nothing.
+    <TestMethod>
+    Public Sub CancelOnMoveToFileDrawerLeavesTheManuscriptWhereItWas()
+        StaRunner.Run(
+            Sub()
+                Using board As New FileDrawerBoard()
+                    Dim manuscript As Manuscript = RejectedThreeTimes()
+                    Dim before As String = Snapshot(manuscript)
+                    board.Prepare(manuscript)
+
+                    For Each typed As String In {String.Empty, "Not worth another round."}
+                        Using answer As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of MoveToFileDrawerForm)(
+                            Sub(dialog)
+                                ReasonBox(dialog).Text = typed
+                                DirectCast(dialog.CancelButton, Button).PerformClick()
+                            End Sub)
+                            MenuItem(board.Card(manuscript.Title), "Move to File Drawer...").PerformClick()
+                        End Using
+                        Application.DoEvents()
+
+                        Assert.AreEqual(ManuscriptLocation.Pipeline, manuscript.Location, "Cancelled with '" & typed & "' typed: still on the Pipeline.")
+                        Assert.AreEqual(before, Snapshot(manuscript), "Cancelled with '" & typed & "' typed: nothing changes.")
+                        Assert.AreEqual(0, board.SaveCount, "Cancelled: nothing is saved.")
+                    Next
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    ' OK with no reason files the manuscript without one; OK with a reason
+    ' files it with that reason in the field and the history note, as
+    ' before (#205).
+    <TestMethod>
+    Public Sub MoveToFileDrawerFilesWithTheReasonGivenOrWithoutOne()
+        StaRunner.Run(
+            Sub()
+                Using board As New FileDrawerBoard()
+                    Dim withoutReason As Manuscript = RejectedThreeTimes()
+                    Dim withReason As Manuscript = RejectedThreeTimes()
+                    withReason.Title = "Rejected three times, with a reason"
+                    board.Prepare(withoutReason, withReason)
+
+                    Using answer As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of MoveToFileDrawerForm)(
+                        Sub(dialog) DirectCast(dialog.AcceptButton, Button).PerformClick())
+                        MenuItem(board.Card(withoutReason.Title), "Move to File Drawer...").PerformClick()
+                    End Using
+                    Application.DoEvents()
+
+                    Assert.AreEqual(ManuscriptLocation.FileDrawer, withoutReason.Location)
+                    Assert.IsTrue(withoutReason.FileDrawerDate.HasValue, "Filed today.")
+                    Assert.AreEqual(String.Empty, withoutReason.FileDrawerReason)
+                    Assert.AreEqual("Moved to File Drawer.", withoutReason.History.Last().Note)
+                    Assert.AreEqual(1, board.SaveCount)
+
+                    Using answer As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of MoveToFileDrawerForm)(
+                        Sub(dialog)
+                            ReasonBox(dialog).Text = "  Not worth another round.  "
+                            DirectCast(dialog.AcceptButton, Button).PerformClick()
+                        End Sub)
+                        MenuItem(board.Card(withReason.Title), "Move to File Drawer...").PerformClick()
+                    End Using
+                    Application.DoEvents()
+
+                    Assert.AreEqual(ManuscriptLocation.FileDrawer, withReason.Location)
+                    Assert.AreEqual("Not worth another round.", withReason.FileDrawerReason)
+                    Assert.AreEqual("Moved to File Drawer. Reason: Not worth another round.", withReason.History.Last().Note)
+                    Assert.AreEqual(2, board.SaveCount)
+                    Assert.IsNotNull(MenuItem(board.Card(withReason.Title), "Restore to Pipeline"), "The card now offers the File Drawer's menu.")
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
 
     ' The card reads "3 rejections; consider filing" while the latest
     ' submission ended in a rejection, at the default threshold of three,
@@ -179,6 +257,10 @@ Public Class FileDrawerTests
             Where(Function(label) Not TypeOf label Is LinkLabel AndAlso Not TypeOf label Is PillLabel).
             Select(Function(label) label.Text).
             FirstOrDefault(Function(text) text.Contains(ConsiderFiling) OrElse text.Contains("day")), String.Empty)
+    End Function
+
+    Private Shared Function ReasonBox(dialog As Form) As TextBox
+        Return ViewCatalog.Descendants(dialog).OfType(Of TextBox)().Single(Function(box) box.AccessibleName = "File Drawer reason")
     End Function
 
     Private Shared Function Snapshot(manuscript As Manuscript) As String

@@ -3501,33 +3501,26 @@ Public Class Form1
         manuscript As Manuscript
     )
 
-        Dim result As DialogResult =
-            MessageBox.Show(
-                Me,
-                "Move '" &
-                manuscript.Title &
-                "' to the File Drawer?" &
-                Environment.NewLine &
-                Environment.NewLine &
-                "Its history, submissions, decisions, and correspondence will be preserved.",
-                "Move to File Drawer",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question
-            )
+        ' One window asks the question and for the optional reason (#205):
+        ' Cancel leaves the manuscript where it is, which the input box it
+        ' replaces could not tell from no reason.
+        Dim reason As String
 
-        If result <>
-            DialogResult.Yes Then
+        Using dialog As New MoveToFileDrawerForm(
+            manuscript.Title
+        )
 
-            Return
+            If dialog.ShowDialog(Me) <>
+                DialogResult.OK Then
 
-        End If
+                Return
 
-        Dim reason As String =
-            Microsoft.VisualBasic.Interaction.InputBox(
-                "Optional: Why are you filing this manuscript?",
-                "File Drawer",
-                ""
-            )
+            End If
+
+            reason =
+                dialog.Reason
+
+        End Using
 
         manuscript.Location =
             ManuscriptLocation.FileDrawer
