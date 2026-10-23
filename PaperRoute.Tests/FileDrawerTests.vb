@@ -1,6 +1,6 @@
 Imports System
-Imports System.Collections.Generic
 Imports System.Drawing
+Imports System.IO
 Imports System.Linq
 Imports System.Reflection
 Imports System.Text.Json
@@ -20,11 +20,27 @@ Imports ManuscriptPipeline.Services
 <DoNotParallelize>
 Public Class FileDrawerTests
 
+    Private _root As String = String.Empty
+
     Private Shared ReadOnly FiledOn As New DateTime(2026, 8, 17)
 
     Private Const Reason As String = "Three rejections; revisit with a larger sample."
 
     Private Const ConsiderFiling As String = "consider filing"
+
+    ' The main window's fields resolve the storage roots as it is built;
+    ' the override keeps them off the user's profile.
+    <TestInitialize>
+    Public Sub Initialize()
+        _root = CreateTemporaryRoot()
+        StorageEnvironment.RootOverride = Path.Combine(_root, "storage")
+    End Sub
+
+    <TestCleanup>
+    Public Sub Cleanup()
+        StorageEnvironment.RootOverride = Nothing
+        DeleteTemporaryRoot(_root)
+    End Sub
 
     ' Move to File Drawer asks once (#205). Cancel, with nothing typed or
     ' with a reason typed, leaves the manuscript where it was and saves
