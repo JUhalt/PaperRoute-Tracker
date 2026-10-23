@@ -215,15 +215,25 @@ Public Class ResponsivenessBudgetTests
             ' record's shortlist rows, tags and lists and lays the page out.
             ' The step after the first paint is enforced from 2026-10-23: it
             ' no longer forces that paint, which is where this machine waited
-            ' on the screen; the paint waiting is dispatched as the loop would
-            ' dispatch it, then the parts are built (12 to 23 ms and 42 to 72
-            ' ms in Release, against 250).
+            ' on the screen (42 to 72 ms in Release, against 250).
+            '
+            ' A switch paints nothing until it has returned (#133); what it
+            ' changed is painted once the window processes its messages. That
+            ' paint is timed in a row of its own, reported, before a row that
+            ' processes messages to time its own work: on this host the first
+            ' paint after a switch has waited up to half a second with no CPU
+            ' used (in 6 of 18 opens of the manuscript page and 1 of 18
+            ' returns to the Board, timed on 2026-10-23), the wait the
+            ' switches themselves used to take. Each paint takes 10 to 50 ms
+            ' otherwise.
             rows.Add(Time(library, "Board to a manuscript page (the first: the page is built)", PageSwitch, Sub() board.Open(subject)))
+            rows.Add(Time(library, "Manuscript page: its first paint (painting what the switch changed)", UiThread, Sub() board.PaintNow()))
             rows.Add(Time(library, "Manuscript page: versions and details after its first paint", UiThread, Sub() Application.DoEvents(), enforced:=enforce))
             rows.Add(TimeMedian(library, "One dirty-timer tick (median of 10)", DirtyTick, 10, Sub() board.Tick()))
             board.Field("Title").Text = title & " (edited)"
             rows.Add(Time(library, "Save from the manuscript page", Save, Sub() Assert.IsTrue(board.SaveManuscriptPage(), "The page saved."), enforced:=enforce))
             rows.Add(Time(library, "Manuscript page to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
+            rows.Add(Time(library, "Board: its paint once the manuscript page is left", UiThread, Sub() board.PaintNow()))
             rows.Add(Time(library, "Manuscript page: the record let go of while the window idles", UiThread, Sub() board.WaitForIdleWork(), enforced:=enforce))
 
             Dim another As Manuscript =
