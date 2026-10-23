@@ -260,6 +260,19 @@ Public Class ResponsivenessBudgetTests
             ' waits. The first open is timed on the prepared page; one made
             ' before the preparation ends builds the page there and then, as
             ' every first open did before 2026-10-23.
+            '
+            ' The three opens (the first, another manuscript on the kept page,
+            ' and the Pipeline manuscript with three shortlisted journals
+            ' below) stay reported. From 510 to 1,023 ms for the first and 64
+            ' to 1,321 for the kept page in the profile (2026-10-18), they
+            ' read 36 to 196, 32 to 318 and 42 to 190 ms across this host's
+            ' Release runs on 2026-10-23: within the 100 ms line on a quiet
+            ' host, over it on a busy one. What is left of an open is one
+            ' layout pass over the editor's containers, 90 to 144 ms of it
+            ' timed by a probe with a VM running; the page's frame, the
+            ' Overview's table and its scrolling host, which lays out four
+            ' times an open, take about half of the pass.
+            '
             ' The step after the first paint is enforced from 2026-10-23: it
             ' no longer forces that paint, which is where this machine waited
             ' on the screen (42 to 72 ms in Release, against 250).
@@ -279,6 +292,16 @@ Public Class ResponsivenessBudgetTests
             rows.Add(Time(library, "Manuscript page: versions and details after its first paint", UiThread, Sub() Application.DoEvents(), enforced:=enforce))
             rows.Add(TimeMedian(library, "One dirty-timer tick (median of 10)", DirtyTick, 10, Sub() board.Tick()))
             board.Field("Title").Text = title & " (edited)"
+
+            ' The edit is set here without the window processing messages, as
+            ' typing would, so what it changed is painted in a row of its
+            ' own, reported, before the save, which processes messages while
+            ' its work runs off the UI thread (#132) and would otherwise time
+            ' that paint as its own. On 2026-10-23, with the desktop locked,
+            ' the save's row read 445 and 490 ms in two runs where it read 57
+            ' to 172 in the others: the half-second wait this host's painting
+            ' can take, as the first paint after a switch shows (above).
+            rows.Add(Time(library, "Manuscript page: its paint after the edit", UiThread, Sub() board.PaintNow()))
             rows.Add(Time(library, "Save from the manuscript page", Save, Sub() Assert.IsTrue(board.SaveManuscriptPage(), "The page saved."), enforced:=enforce))
             rows.Add(Time(library, "Manuscript page to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
             rows.Add(Time(library, "Board: its paint once the manuscript page is left", UiThread, Sub() board.PaintNow()))
@@ -318,6 +341,7 @@ Public Class ResponsivenessBudgetTests
             board.Open(pipelineSubject)
             Application.DoEvents()
             board.Field("Title").Text = pipelineSubject.Title & " (edited)"
+            board.PaintNow()
             rows.Add(Time(library, "Save of a Pipeline manuscript whose card changes", Save, Sub() Assert.IsTrue(board.SaveManuscriptPage(), "The page saved."), enforced:=enforce))
             board.NavigateTo(Form1.WorkspacePage.Board)
             Application.DoEvents()
