@@ -116,6 +116,11 @@ jobs:
 
       - name: Run automated tests
         shell: pwsh
+        # The runner is disposable, so the file-dialog tests, which leave
+        # Explorer's view state under HKCU, run here too and the gate below
+        # still finds none skipped (#196).
+        env:
+          PAPERROUTE_FILE_DIALOG_TESTS: "1"
         run: |
           dotnet test PaperRoute.Tests/PaperRoute.Tests.vbproj --configuration Release --no-build --no-restore `
               --logger 'trx;LogFileName=PaperRoute.Tests.trx' --results-directory "$env:GITHUB_WORKSPACE/TestResults"

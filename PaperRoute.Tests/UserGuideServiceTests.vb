@@ -525,6 +525,42 @@ Public Class UserGuideServiceTests
     End Sub
 
 
+    ' #155: for 1.0, a packet or a report is what you share; a backup
+    ' holds the whole library and moves it between your own computers.
+    ' The sharing answer says so, beside Export Packet. It says the whole
+    ' library, not everything: linked originals stay references, and a
+    ' backup leaves out `removed` and the preferences.
+    <TestMethod>
+    Public Sub ShareAPacket_SaysABackupIsNotForSharing()
+
+        Dim answer As String =
+            SectionText(
+                File.ReadAllText(
+                    UserGuideService.GuideFilePath()
+                ).Replace(
+                    vbCrLf,
+                    vbLf
+                ),
+                "How do I share a packet's files or keep a copy?"
+            )
+
+        For Each expected As String In {
+            "A backup is for moving your own library",
+            "not for sharing",
+            "it holds your whole library"
+        }
+
+            StringAssert.Contains(
+                answer,
+                expected,
+                "The sharing answer says: " & expected
+            )
+
+        Next
+
+    End Sub
+
+
     ' #139: the guide's Accessibility section lists every keyboard
     ' shortcut PaperRoute handles. Its table of window-wide shortcuts is
     ' exactly the keys Form1.ProcessCmdKey acts on, and every key any other

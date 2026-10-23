@@ -247,7 +247,7 @@ Namespace Forms
             rbAny.AutoSize = True
             rbAny.Margin = New Padding(0, 4, 24, 0)
             AddHandler rbAll.CheckedChanged, Sub(sender, e) RefreshRequest()
-            Dim lblYears As New Label With {.Text = "Published in the last", .AutoSize = True, .Margin = New Padding(0, 6, 8, 0)}
+            Dim lblYears As New Label With {.Text = "Published in the &last", .AutoSize = True, .Margin = New Padding(0, 6, 8, 0)}
             cboYears.DropDownStyle = ComboBoxStyle.DropDownList
             cboYears.Items.AddRange({"3 years", "5 years", "10 years"})
             cboYears.SelectedIndex = 1

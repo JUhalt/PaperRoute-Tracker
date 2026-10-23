@@ -326,6 +326,7 @@ Namespace Forms
             footer.Controls.Add(btnCancel, 1, 0)
             footer.Controls.Add(btnUse, 2, 0)
 
+            Me.AcceptButton = btnUse
             Me.CancelButton = btnCancel
 
             Return footer

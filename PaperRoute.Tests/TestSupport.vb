@@ -275,7 +275,18 @@ Friend Module TestSupport
         message As String
     )
 
-        Dim actual As Dictionary(Of String, Byte()) = SnapshotTree(root)
+        AssertSameTree(expected, SnapshotTree(root), message)
+
+    End Sub
+
+
+    ' Two snapshots, so a test can compare trees keyed some other way, such
+    ' as by path within libraries in different places.
+    Public Sub AssertSameTree(
+        expected As Dictionary(Of String, Byte()),
+        actual As Dictionary(Of String, Byte()),
+        message As String
+    )
 
         CollectionAssert.AreEquivalent(expected.Keys.ToList(), actual.Keys.ToList(), message & ": the same files and folders.")
 

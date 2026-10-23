@@ -4,7 +4,7 @@
 
 # PaperRoute
 
-[![Build PaperRoute Tracker](https://github.com/JUhalt/PaperRoute-Tracker/actions/workflows/build.yml/badge.svg)](https://github.com/JUhalt/PaperRoute-Tracker/actions/workflows/build.yml)
+[![CI](https://github.com/JUhalt/PaperRoute-Tracker/actions/workflows/build.yml/badge.svg)](https://github.com/JUhalt/PaperRoute-Tracker/actions/workflows/build.yml)
 [![Latest Release](https://img.shields.io/github/v/release/JUhalt/PaperRoute-Tracker)](https://github.com/JUhalt/PaperRoute-Tracker/releases/latest)
 [![License: GPL-3.0-only](https://img.shields.io/badge/License-GPL--3.0--only-blue.svg)](LICENSE.txt)
 
