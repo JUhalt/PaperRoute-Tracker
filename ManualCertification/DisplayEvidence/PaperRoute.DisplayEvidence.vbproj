@@ -5,6 +5,8 @@
     <UseWindowsForms>true</UseWindowsForms>
     <RootNamespace>PaperRoute.DisplayEvidence</RootNamespace>
     <StartupObject>PaperRoute.DisplayEvidence.Program</StartupObject>
+    <!-- The app comes in through the test project, so a self-contained publish meets its own launcher, deps and runtimeconfig files twice, built with and without the runtime identifier (NETSDK1152). The tool loads the app as a library and runs none of those files. -->
+    <ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
   </PropertyGroup>
   <ItemGroup>
     <!-- The view catalog and the scaling measure, and through them the app. -->
