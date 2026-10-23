@@ -108,7 +108,8 @@ Public Class PublicationCheckTests
 
     ' A manuscript filed by a spreadsheet import has no "Moved to File
     ' Drawer" note, so the Mark Published note is the only record of when it
-    ' was filed (#202). One never filed keeps the plain note.
+    ' was filed (#202). One never filed keeps the plain note; one filed with
+    ' a reason and no date, as an import can leave it, keeps the reason.
     <TestMethod>
     Public Sub MarkPublishedKeepsWhenAManuscriptFiledByImportWasFiled()
         Dim filed As Manuscript = Tracked()
@@ -130,6 +131,19 @@ Public Class PublicationCheckTests
 
         Assert.AreEqual("Published in Collabra: Psychology (DOI 10.5555/tracked). Marked from a publication check.", onThePipeline.History.Last().Note,
                         "A manuscript never filed keeps the plain note.")
+
+        ' A guard on the words: this case passed before it was written and
+        ' cannot fail before a change.
+        Dim reasonOnly As Manuscript = Tracked()
+        reasonOnly.Location = ManuscriptLocation.FileDrawer
+        reasonOnly.FileDrawerReason = "Waiting"
+        Dim known As New PublicationMatch With {.Doi = "10.5555/reason", .Title = LongTitle, .Journal = "Collabra: Psychology", .PublishedDate = Today.AddDays(-12)}
+        reasonOnly.PublicationMatches.Add(known)
+
+        PublicationMatchService.MarkPublished(reasonOnly, known, Today)
+
+        Assert.AreEqual("Published in Collabra: Psychology (DOI 10.5555/reason). Marked from a publication check while in the File Drawer (filed: Waiting).", reasonOnly.History.Last().Note,
+                        "A reason without a date keeps the reason.")
     End Sub
 
     <TestMethod>
