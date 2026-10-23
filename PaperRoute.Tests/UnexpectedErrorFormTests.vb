@@ -53,9 +53,10 @@ Public Class UnexpectedErrorFormTests
     ' the display's size, so each button first took the width of its
     ' caption, and Windows Forms then scaled that width by the display's
     ' factor with the rest of the dialog: at 150% the four needed 1081
-    ' pixels of an 888-pixel row. Built here in that order, as at 125% and
-    ' 150%, the four keep their order, none lies over another, and each is
-    ' whole inside its row and the dialog.
+    ' pixels of an 888-pixel row. Built here in that order, as the
+    ' measuring sweep simulates 125% and 150%, the four keep their order,
+    ' none lies over another, and each is whole inside its row and the
+    ' dialog.
     <TestMethod>
     <DataRow(120)>
     <DataRow(144)>
@@ -64,7 +65,7 @@ Public Class UnexpectedErrorFormTests
             Sub()
                 Using dialog As New UnexpectedErrorForm(Failure, True, Path.Combine(Path.GetTempPath(), "PaperRoute-ErrorTests-logs"))
                     ShowOffscreen(dialog)
-                    BuildAsAtTheDisplay(dialog, dpi)
+                    ScalingMeasurementTests.Simulate(dialog, dpi, ScalingMeasurementTests.ScalingOf(GetType(UnexpectedErrorForm)).ScalesWithWinForms)
 
                     Dim buttons As List(Of Button) = Descendants(dialog).OfType(Of Button)().ToList()
                     Dim client As Rectangle = dialog.RectangleToScreen(dialog.ClientRectangle)
@@ -112,26 +113,6 @@ Public Class UnexpectedErrorFormTests
         form.Location = New Point(-20000, -20000)
         form.ShowInTaskbar = False
         form.Show()
-        Application.DoEvents()
-    End Sub
-
-    ' The dialog as a display at this DPI builds it, in a host at 96 DPI:
-    ' its text at the display's size while it is laid out, then its sizes,
-    ' written at 96 DPI, scaled by Windows Forms, then laid out again.
-    Private Shared Sub BuildAsAtTheDisplay(dialog As Form, dpi As Integer)
-        Dim factor As Single = dpi / 96.0F
-        Dim controls As List(Of Control) = New Control() {dialog}.Concat(Descendants(dialog)).ToList()
-        Dim fonts As Dictionary(Of Control, Font) = controls.ToDictionary(Function(control) control, Function(control) control.Font)
-        For Each pair As KeyValuePair(Of Control, Font) In fonts
-            pair.Key.Font = New Font(pair.Value.FontFamily, pair.Value.Size * factor, pair.Value.Style, pair.Value.Unit)
-        Next
-        For pass As Integer = 1 To 2
-            controls.ForEach(Sub(control) control.PerformLayout())
-        Next
-        dialog.Scale(New SizeF(factor, factor))
-        For pass As Integer = 1 To 2
-            controls.ForEach(Sub(control) control.PerformLayout())
-        Next
         Application.DoEvents()
     End Sub
 
