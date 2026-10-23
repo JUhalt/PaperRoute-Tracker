@@ -7,6 +7,16 @@ Namespace Services
 
     Public NotInheritable Class ManuscriptLifecycleService
 
+        ' How the history note begins when a submission or a decision takes
+        ' a manuscript out of the File Drawer; when and why it was filed
+        ' follow it (#207).
+        Public Const ReturnedBySubmissionNote As String =
+            "Returned to the Pipeline by a new submission"
+
+        Public Const ReturnedByDecisionNote As String =
+            "Returned to the Pipeline by an editorial decision"
+
+
         Private Enum WorkflowEventKind
             Submission
             Decision
@@ -157,13 +167,18 @@ Namespace Services
 
             End If
 
+            ' Reconciling, as the manuscript page does when it opens and after
+            ' an edit, puts the stage right and never takes a manuscript out
+            ' of the File Drawer: only a submission or a decision recorded
+            ' does (#207).
             Select Case latest.Kind
 
                 Case WorkflowEventKind.Submission
 
                     ApplySubmissionState(
                         manuscript,
-                        latest.Submission
+                        latest.Submission,
+                        keepFileDrawer:=True
                     )
 
                     Return True
@@ -173,7 +188,8 @@ Namespace Services
                     Return ApplyDecisionState(
                         manuscript,
                         latest.Submission,
-                        latest.Decision
+                        latest.Decision,
+                        keepFileDrawer:=True
                     )
 
                 Case Else
@@ -351,9 +367,8 @@ Namespace Services
             manuscript As Manuscript
         ) As Boolean
 
-            Dim originalLocation As ManuscriptLocation =
-                manuscript.Location
-
+            ' Putting the stage back after a deletion keeps a filed
+            ' manuscript filed (#207), as the fallback does.
             Dim latestSubmission As JournalSubmission =
                 ManuscriptAttentionService.
                     GetLatestSubmission(
@@ -380,29 +395,24 @@ Namespace Services
 
                     ApplySubmissionState(
                         manuscript,
-                        latestSubmission
+                        latestSubmission,
+                        keepFileDrawer:=True
                     )
 
                 ElseIf Not ApplyDecisionState(
                     manuscript,
                     latestSubmission,
-                    latestDecision
+                    latestDecision,
+                    keepFileDrawer:=True
                 ) Then
 
                     ApplySubmissionState(
                         manuscript,
-                        latestSubmission
+                        latestSubmission,
+                        keepFileDrawer:=True
                     )
 
                 End If
-
-            End If
-
-            If originalLocation =
-               ManuscriptLocation.FileDrawer Then
-
-                manuscript.Location =
-                    ManuscriptLocation.FileDrawer
 
             End If
 
@@ -520,8 +530,15 @@ Namespace Services
 
         Private Shared Sub ApplySubmissionState(
             manuscript As Manuscript,
-            submission As JournalSubmission
+            submission As JournalSubmission,
+            Optional keepFileDrawer As Boolean = False
         )
+
+            Dim stageBefore As PaperStage =
+                manuscript.CurrentStage
+
+            Dim enteredBefore As DateTime =
+                manuscript.StageEnteredDate
 
             manuscript.CurrentStage =
                 PaperStage.Submitted
@@ -532,8 +549,13 @@ Namespace Services
             manuscript.RevisionDeadline =
                 Nothing
 
-            manuscript.Location =
-                ManuscriptLocation.Pipeline
+            MoveToPipeline(
+                manuscript,
+                stageBefore,
+                enteredBefore,
+                ReturnedBySubmissionNote,
+                keepFileDrawer
+            )
 
             SetCurrentTarget(
                 manuscript,
@@ -546,7 +568,8 @@ Namespace Services
         Private Shared Function ApplyDecisionState(
             manuscript As Manuscript,
             submission As JournalSubmission,
-            decision As EditorialDecisionEvent
+            decision As EditorialDecisionEvent,
+            Optional keepFileDrawer As Boolean = False
         ) As Boolean
 
             If decision Is Nothing OrElse
@@ -556,6 +579,12 @@ Namespace Services
                 Return False
 
             End If
+
+            Dim stageBefore As PaperStage =
+                manuscript.CurrentStage
+
+            Dim enteredBefore As DateTime =
+                manuscript.StageEnteredDate
 
             Select Case decision.Decision
 
@@ -611,12 +640,96 @@ Namespace Services
             manuscript.StageEnteredDate =
                 decision.DecisionDate.Date
 
-            manuscript.Location =
-                ManuscriptLocation.Pipeline
+            MoveToPipeline(
+                manuscript,
+                stageBefore,
+                enteredBefore,
+                ReturnedByDecisionNote,
+                keepFileDrawer
+            )
 
             Return True
 
         End Function
+
+
+        ' A submission or a decision puts the manuscript on the Pipeline. One
+        ' it takes out of the File Drawer keeps when and why it was filed in
+        ' a note, as Restore to Pipeline does, dated with the event in the
+        ' stage it was filed in, and the two fields are cleared (#207). Not
+        ' the stage the event sets: the Route Map reads a Submitted row as a
+        ' return to review, which a submission elsewhere is not. A
+        ' filed manuscript stays filed while reconciling, and when the event
+        ' leaves its stage and the date it entered it as they were: the
+        ' decision it was filed after the same day, applied again by an edit.
+        Private Shared Sub MoveToPipeline(
+            manuscript As Manuscript,
+            stageBefore As PaperStage,
+            enteredBefore As DateTime,
+            sentence As String,
+            keepFileDrawer As Boolean
+        )
+
+            If manuscript.Location <>
+               ManuscriptLocation.FileDrawer Then
+
+                manuscript.Location =
+                    ManuscriptLocation.Pipeline
+
+                Return
+
+            End If
+
+            If keepFileDrawer OrElse
+               (
+                   manuscript.CurrentStage =
+                       stageBefore AndAlso
+                   manuscript.StageEnteredDate.Date =
+                       enteredBefore.Date
+               ) Then
+
+                Return
+
+            End If
+
+            Dim returned As New HistoryEvent With {
+                .EventDate =
+                    manuscript.StageEnteredDate,
+                .Stage =
+                    stageBefore,
+                .Note =
+                    WithFiledClause(
+                        sentence,
+                        manuscript.FileDrawerDate,
+                        manuscript.FileDrawerReason
+                    )
+            }
+
+            ChronologyProvenanceService.StampCreated(
+                returned
+            )
+
+            If manuscript.History Is Nothing Then
+
+                manuscript.History =
+                    New List(Of HistoryEvent)()
+
+            End If
+
+            manuscript.History.Add(
+                returned
+            )
+
+            manuscript.Location =
+                ManuscriptLocation.Pipeline
+
+            manuscript.FileDrawerDate =
+                Nothing
+
+            manuscript.FileDrawerReason =
+                String.Empty
+
+        End Sub
 
 
         Private Shared Sub ApplyFallbackDraftState(

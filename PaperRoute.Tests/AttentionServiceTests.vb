@@ -557,6 +557,75 @@ Public Class AttentionServiceTests
     End Sub
 
 
+    ' A rejection that came after the manuscript was filed takes it out of
+    ' the File Drawer (#207), but the researcher did not revive it: its
+    ' note, "Returned to the Pipeline by an editorial decision (filed
+    ' ...)", does not begin as the restore note does, and the card may
+    ' suggest filing again. A guard: before #207 no note was written and
+    ' the suggestion showed as it does now.
+    <TestMethod>
+    Public Sub FilingSuggestion_TakenOutOfTheFileDrawerByARejection_CanSuggest()
+
+        Dim manuscript As Manuscript =
+            CreateRejectedThreeTimes()
+
+        Dim waiting As New JournalSubmission With {
+            .JournalName =
+                "Fourth Journal",
+            .SubmittedDate =
+                _today.AddDays(-60)
+        }
+
+        manuscript.Submissions.Add(
+            waiting
+        )
+
+        manuscript.CurrentStage =
+            PaperStage.Submitted
+
+        manuscript.StageEnteredDate =
+            _today.AddDays(-60)
+
+        manuscript.Location =
+            ManuscriptLocation.FileDrawer
+
+        manuscript.FileDrawerDate =
+            _today.AddDays(-30)
+
+        manuscript.FileDrawerReason =
+            "Waited too long."
+
+        Dim rejection As New EditorialDecisionEvent With {
+            .Decision =
+                EditorialDecision.Rejected,
+            .DecisionDate =
+                _today.AddDays(-10)
+        }
+
+        waiting.Decisions.Add(
+            rejection
+        )
+
+        ManuscriptLifecycleService.ApplyDecision(
+            manuscript,
+            waiting,
+            rejection
+        )
+
+        Assert.AreEqual(
+            ManuscriptLocation.Pipeline,
+            manuscript.Location
+        )
+
+        Assert.IsTrue(
+            Evaluate(
+                manuscript
+            ).CanSuggestFiling
+        )
+
+    End Sub
+
+
     ' =====================================================
     ' Helpers
     ' =====================================================

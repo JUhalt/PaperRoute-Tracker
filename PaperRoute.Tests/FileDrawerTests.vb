@@ -16,6 +16,8 @@ Imports ManuscriptPipeline.Services
 ' and the card's suggestion to file (#203): what each writes to the
 ' manuscript and its history, and what the card then says, on the real
 ' main window over in-memory records, with saves counted and not written.
+' A submission recorded on the manuscript page is the third way out
+' (#207).
 <TestClass>
 <DoNotParallelize>
 Public Class FileDrawerTests
@@ -228,6 +230,177 @@ Public Class FileDrawerTests
                 End Using
             End Sub)
     End Sub
+
+    ' Recording a submission is the third way out of the File Drawer
+    ' (#207). Record Submission... on the manuscript page, answered as it
+    ' opens and saved with the page's own Save, takes a filed manuscript
+    ' out with when and why it was filed in its note, with a reason and
+    ' without one.
+    <TestMethod>
+    Public Sub RecordSubmissionOnThePageKeepsWhenAndWhyTheManuscriptWasFiled()
+        StaRunner.Run(
+            Sub()
+                For Each filedReason As String In {Reason, String.Empty}
+                    Dim filed As Manuscript = FiledByImport(filedReason)
+                    Dim before As String = Snapshot(filed)
+
+                    OnThePage(filed,
+                        Sub(editor)
+                            Using answer As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of AddSubmissionForm)(
+                                Sub(dialog) dialog.AcceptButton.PerformClick())
+                                CallPrivate(editor, "AddSubmission", Nothing, EventArgs.Empty)
+                            End Using
+                            Assert.IsTrue(editor.CommitChanges(), "Saved.")
+                        End Sub)
+
+                    AssertLeftForASubmission(filed, before, filedReason)
+                Next
+            End Sub)
+    End Sub
+
+    ' The same from a stage change: Submitted asks to record the
+    ' submission, Yes records it, and Save completes the change.
+    <TestMethod>
+    Public Sub AStageChangeToSubmittedKeepsWhenAndWhyTheManuscriptWasFiled()
+        StaRunner.Run(
+            Sub()
+                For Each filedReason As String In {Reason, String.Empty}
+                    Dim filed As Manuscript = FiledByImport(filedReason)
+                    Dim before As String = Snapshot(filed)
+
+                    OnThePage(filed,
+                        Sub(editor)
+                            ViewCatalog.Descendants(editor).OfType(Of ComboBox)().Single(Function(box) box.AccessibleName = "Current stage").SelectedItem = PaperStage.Submitted
+                            Using dialogs As New ManuscriptPageTests.DialogWatcher(answerYes:="Submission Details Required"),
+                                  answer As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of AddSubmissionForm)(
+                                      Sub(dialog) dialog.AcceptButton.PerformClick())
+                                Assert.IsTrue(editor.CommitChanges(), "Saved with the stage change.")
+                                CollectionAssert.AreEqual({"Submission Details Required"}, dialogs.Closed, "The stage change asked to record the submission, and nothing else.")
+                            End Using
+                        End Sub)
+
+                    AssertLeftForASubmission(filed, before, filedReason)
+                Next
+            End Sub)
+    End Sub
+
+    ' The same from a prepared packet: its submission is recorded through
+    ' SubmissionPacketWorkflowService, on a copy of the manuscript, and
+    ' the packet is linked to it.
+    <TestMethod>
+    Public Sub RecordingAPacketsSubmissionKeepsWhenAndWhyTheManuscriptWasFiled()
+        StaRunner.Run(
+            Sub()
+                For Each filedReason As String In {Reason, String.Empty}
+                    Dim filed As Manuscript = FiledByImport(filedReason)
+                    Dim version As New ManuscriptVersion With {.Label = "Exact submitted version"}
+                    filed.Versions.Add(version)
+                    filed.CurrentVersionId = version.Id
+                    Dim packet As SubmissionPacket = SubmissionPacketService.CreatePacket(filed, version.Id, "Prepared packet", "Preparation only")
+                    Dim before As String = Snapshot(filed)
+
+                    OnThePage(filed,
+                        Sub(editor)
+                            Using answer As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of AddSubmissionForm)(
+                                Sub(dialog) dialog.AcceptButton.PerformClick())
+                                CallPrivate(editor, "RecordPreparedPacketSubmission", New SubmissionWorkflowRequest With {
+                                    .Target = SubmissionWorkflowTarget.RecordSubmission,
+                                    .PacketId = packet.Id
+                                })
+                            End Using
+                            Assert.IsTrue(editor.CommitChanges(), "Saved.")
+                        End Sub)
+
+                    Dim linked As SubmissionPacket = filed.SubmissionPackets.Single()
+                    Assert.AreEqual(filed.Submissions.Single().Id, linked.SubmissionId.Value, "The packet is linked to the submission.")
+                    linked.SubmissionId = Nothing
+                    linked.LastModifiedAtUtc = Nothing
+
+                    AssertLeftForASubmission(filed, before, filedReason)
+                Next
+            End Sub)
+    End Sub
+
+    ' A decision dated after the manuscript was filed, recorded in the
+    ' Submissions tab's detail pane, takes it out the same way, and Save
+    ' with the Overview showing keeps the reason cleared (#207).
+    <TestMethod>
+    Public Sub ADecisionOnThePageKeepsWhenAndWhyTheManuscriptWasFiled()
+        StaRunner.Run(
+            Sub()
+                Dim filed As Manuscript = FiledByImport(Reason)
+                filed.CurrentStage = PaperStage.Submitted
+                filed.StageEnteredDate = New DateTime(2026, 7, 1)
+                filed.Submissions.Add(New JournalSubmission With {.JournalName = "A fictional journal", .SubmittedDate = filed.StageEnteredDate})
+
+                OnThePage(filed,
+                    Sub(editor)
+                        Dim detail As SubmissionDetailsForm = DirectCast(GetType(EditManuscriptForm).GetProperty("_submissionDetail", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(editor), SubmissionDetailsForm)
+                        Assert.IsNotNull(detail, "The submission's details are on the page.")
+                        CallPrivate(detail, "RecordDecision", New EditorialDecisionEvent With {.Decision = EditorialDecision.Rejected, .DecisionDate = New DateTime(2026, 9, 1)})
+                        Assert.IsTrue(editor.CommitChanges(), "Saved.")
+                    End Sub)
+
+                Assert.AreEqual(ManuscriptLocation.Pipeline, filed.Location)
+                Assert.AreEqual(PaperStage.Draft, filed.CurrentStage)
+                Assert.IsFalse(filed.FileDrawerDate.HasValue, "Out of the File Drawer, the filed date is cleared.")
+                Assert.AreEqual(String.Empty, filed.FileDrawerReason, "Out of the File Drawer, the reason is cleared.")
+                Assert.AreEqual(2, filed.History.Count, "One note is added.")
+                Assert.AreEqual("Returned to the Pipeline by an editorial decision (filed Aug 17, 2026: Three rejections; revisit with a larger sample.)", filed.History.Last().Note)
+            End Sub)
+    End Sub
+
+    ' Out of the File Drawer by a new submission (#207): on the Pipeline as
+    ' Submitted, the filed date and reason cleared and kept in one note,
+    ' dated with the submission in the stage the manuscript was filed in,
+    ' which Route View shows. With the submission undone, the record reads
+    ' as it did.
+    Private Shared Sub AssertLeftForASubmission(filed As Manuscript, before As String, filedReason As String)
+        Dim submission As JournalSubmission = filed.Submissions.Single()
+        Assert.AreEqual(ManuscriptLocation.Pipeline, filed.Location)
+        Assert.AreEqual(PaperStage.Submitted, filed.CurrentStage)
+        Assert.IsFalse(filed.FileDrawerDate.HasValue, "Out of the File Drawer, the filed date is cleared.")
+        Assert.AreEqual(String.Empty, filed.FileDrawerReason, "Out of the File Drawer, the reason is cleared.")
+        Assert.AreEqual(2, filed.History.Count, "One note is added.")
+
+        Dim returned As HistoryEvent = filed.History.Last()
+        Assert.AreEqual(If(filedReason.Length = 0,
+                           "Returned to the Pipeline by a new submission (filed Aug 17, 2026).",
+                           "Returned to the Pipeline by a new submission (filed Aug 17, 2026: Three rejections; revisit with a larger sample.)"),
+                        returned.Note)
+        Assert.AreEqual(PaperStage.Draft, returned.Stage, "The stage it was filed in.")
+        Assert.AreEqual(submission.SubmittedDate.Date, returned.EventDate, "Dated with the submission.")
+        Assert.IsTrue(returned.RecordedAtUtc.HasValue)
+
+        Dim route As ManuscriptRoute = ManuscriptRouteProjectionService.Project(filed)
+        Assert.IsTrue(route.Waypoints.Any(Function(point) point.Kind = ManuscriptRouteWaypointKind.Stage AndAlso point.Note = returned.Note),
+                      "Route View shows the note.")
+
+        filed.History.Remove(returned)
+        filed.Submissions.Remove(submission)
+        filed.Location = ManuscriptLocation.FileDrawer
+        filed.FileDrawerDate = FiledOn
+        filed.FileDrawerReason = filedReason
+        filed.CurrentStage = PaperStage.Draft
+        filed.StageEnteredDate = New DateTime(2026, 3, 2)
+        filed.TargetJournal = "A fictional journal"
+        filed.TargetJournalId = Nothing
+        Assert.AreEqual(before, Snapshot(filed), "Nothing else in the manuscript changes.")
+    End Sub
+
+    ' The manuscript page on the record, over the temporary root, closed
+    ' when the test is done with it.
+    Private Sub OnThePage(manuscript As Manuscript, use As Action(Of EditManuscriptForm))
+        Using editor As New EditManuscriptForm(manuscript, {manuscript}, New AuthorLibraryRepository(Path.Combine(_root, "authors")), pageMode:=True)
+            ViewCatalog.ShowOffscreen(editor)
+            use(editor)
+            editor.Close()
+        End Using
+    End Sub
+
+    Private Shared Function CallPrivate(target As Object, name As String, ParamArray args As Object()) As Object
+        Return target.GetType().GetMethod(name, BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(target, args)
+    End Function
 
     ' Filed as an import writes it: the stage it was in, with no note of
     ' the move.
