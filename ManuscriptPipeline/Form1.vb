@@ -3575,6 +3575,15 @@ Public Class Form1
         manuscript As Manuscript
     )
 
+        ' When and why it was filed go into the note (#202): a manuscript
+        ' filed by an import has no "Moved to File Drawer" note to keep them.
+        Dim restoreNote As String =
+            ManuscriptLifecycleService.WithFiledClause(
+                "Restored from File Drawer to active Pipeline",
+                manuscript.FileDrawerDate,
+                manuscript.FileDrawerReason
+            )
+
         manuscript.Location =
             ManuscriptLocation.Pipeline
 
@@ -3589,7 +3598,7 @@ Public Class Form1
             .Stage =
                 manuscript.CurrentStage,
             .Note =
-                "Restored from File Drawer to active Pipeline."
+                restoreNote
         }
 
         ChronologyProvenanceService.StampCreated(
