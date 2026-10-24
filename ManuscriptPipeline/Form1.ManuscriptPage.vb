@@ -30,9 +30,10 @@ Partial Public Class Form1
     ' The page is built once and kept for every manuscript opened (#133):
     ' its editor loads one record after another (LoadRecord) and lets go of
     ' each once the page is left (UnloadRecord), hidden in the page area
-    ' until the next. It is built for the first manuscript opened, and
-    ' built again if the colors change, as under a Windows contrast
-    ' theme switched while PaperRoute runs, or the window's DPI or font.
+    ' until the next. It is prepared while the window idles after startup,
+    ' or built by a manuscript opened before then, and built again if the
+    ' colors change, as under a Windows contrast theme switched while
+    ' PaperRoute runs, or the window's DPI or font.
     Private manuscriptPage As Control = Nothing
     Private manuscriptPageEditor As EditManuscriptForm = Nothing
     Private manuscriptPageSaveBar As Control = Nothing
@@ -40,6 +41,11 @@ Partial Public Class Form1
     Private manuscriptBackLink As LinkLabel = Nothing
     Private fitManuscriptTitle As Action = Nothing
     Private manuscriptPagePalette As String = String.Empty
+
+    ' The kept page's containers, outer ones first, listed once as it is
+    ' built: an open holds the layout of each while the record loads, and
+    ' each then lays out once (ShowPageInOnePass).
+    Private manuscriptPageContainers As List(Of Control) = Nothing
 
     Private Const SaveBarHint As String =
         "Save keeps them. Discard returns to the last saved version."
@@ -149,20 +155,40 @@ Partial Public Class Form1
     ' Shows a manuscript on the kept page: its editor loads the record
     ' while the page is hidden, the page shows in one layout pass, and the
     ' Versions tab, the selected submission's details and any waypoint
-    ' asked for follow once it has painted (#133).
+    ' asked for follow once it has painted (#133). Every container of the
+    ' page holds its layout from before the record loads until the page
+    ' shows: loading a record changes the text, the parts shown and the
+    ' rows of a hidden page, and each change laid out its containers
+    ' again, up to the page, though nothing of it was shown.
     Private Sub ShowManuscriptPage(
         manuscript As Manuscript
     )
 
         Dim page As Control = KeptManuscriptPage()
         Dim editor As EditManuscriptForm = manuscriptPageEditor
+        Dim containers As List(Of Control) = manuscriptPageContainers
 
-        manuscriptBackLink.Text = ChrW(&H2190) & " " & PageTitle(manuscriptOrigin)
-        manuscriptBackLink.AccessibleName = "Back to " & PageTitle(manuscriptOrigin) & " (Alt+Left)"
-        manuscriptPageSaveHint.Text = SaveBarHint
-        manuscriptPageSaveBar.Visible = False
+        For Each container As Control In containers
+            container.SuspendLayout()
+        Next
 
-        editor.LoadRecord(manuscript, manuscripts, pendingRecoveredCopy, deferParts:=True)
+        Try
+
+            manuscriptBackLink.Text = ChrW(&H2190) & " " & PageTitle(manuscriptOrigin)
+            manuscriptBackLink.AccessibleName = "Back to " & PageTitle(manuscriptOrigin) & " (Alt+Left)"
+            manuscriptPageSaveHint.Text = SaveBarHint
+            manuscriptPageSaveBar.Visible = False
+
+            editor.LoadRecord(manuscript, manuscripts, pendingRecoveredCopy, deferParts:=True)
+
+        Catch
+            ' A load that failed part way leaves the page hidden and laid
+            ' out again as each container lets go of its layout.
+            For index As Integer = containers.Count - 1 To 0 Step -1
+                containers(index).ResumeLayout(True)
+            Next
+            Throw
+        End Try
 
         ' The page's editor only once its record has loaded: a load that
         ' failed part way leaves no editor to ask about, save or draft,
@@ -174,13 +200,15 @@ Partial Public Class Form1
         RefreshManuscriptHeader()
         fitManuscriptTitle()
 
-        ShowPageInOnePass(page)
+        ShowPageInOnePass(page, containers)
         currentPageView = page
         manuscriptDirtyTimer.Start()
 
         Dim token As Object = editor.RecordToken
         Dim waypoint As ManuscriptRouteWaypoint = pendingManuscriptWaypoint
 
+        ' The Versions tab and the selected submission's details follow the
+        ' page's first paint (FinishManuscriptPage).
         If IsHandleCreated Then
             BeginInvoke(New Action(Sub() FinishManuscriptPage(editor, token, waypoint)))
         Else
@@ -191,7 +219,11 @@ Partial Public Class Form1
 
 
     ' After the page's first paint, for the record it was posted for only:
-    ' while library work runs (#132) it waits for the window to idle.
+    ' while library work runs (#132) it waits for the window to idle. The
+    ' paints waiting are dispatched first, as the message loop would
+    ' dispatch them next (PumpPaints): the page shows, then the parts are
+    ' built. Nothing is forced to paint; forcing it (RedrawWindow with
+    ' RDW_UPDATENOW) is where this machine waited on the screen.
     Private Sub FinishManuscriptPage(
         editor As EditManuscriptForm,
         token As Object,
@@ -207,7 +239,13 @@ Partial Public Class Form1
             Return
         End If
 
-        RedrawWindow(manuscriptPage.Handle, IntPtr.Zero, IntPtr.Zero, RDW_INVALIDATE Or RDW_UPDATENOW Or RDW_ALLCHILDREN)
+        PumpPaints()
+
+        ' A paint handler may have moved on: the record is checked again.
+        If manuscriptEditor IsNot editor OrElse editor.IsDisposed OrElse editor.RecordToken IsNot token Then
+            Return
+        End If
+
         editor.EnsureDeferredParts()
 
         If waypoint IsNot Nothing Then
@@ -217,41 +255,73 @@ Partial Public Class Form1
     End Sub
 
 
-    Private Const RDW_INVALIDATE As UInteger = &H1
-    Private Const RDW_ALLCHILDREN As UInteger = &H80
-    Private Const RDW_UPDATENOW As UInteger = &H100
+    ' Dispatches the paints waiting for the thread's windows, as the
+    ' message loop would next, and nothing else: no input, no posted
+    ' message, no timer. It works from any message loop, the window's or a
+    ' dialog's, and from a test's Application.DoEvents. A paint that
+    ' invalidates again cannot hold it (the cap). The budget test times
+    ' the paint after a switch with it (LibraryBoard.PaintNow).
+    Friend Shared Sub PumpPaints()
+
+        Dim message As NativeMessage
+        Dim remaining As Integer = 1000
+
+        While remaining > 0 AndAlso PeekMessage(message, IntPtr.Zero, WM_PAINT, WM_PAINT, PM_REMOVE)
+            TranslateMessage(message)
+            DispatchMessage(message)
+            remaining -= 1
+        End While
+
+    End Sub
+
+
+    Private Const WM_PAINT As UInteger = &HF
+    Private Const PM_REMOVE As UInteger = &H1
+
+    <Runtime.InteropServices.StructLayout(Runtime.InteropServices.LayoutKind.Sequential)>
+    Private Structure NativeMessage
+        Public Handle As IntPtr
+        Public Message As UInteger
+        Public WParam As IntPtr
+        Public LParam As IntPtr
+        Public Time As UInteger
+        Public X As Integer
+        Public Y As Integer
+    End Structure
 
     <Runtime.InteropServices.DllImport("user32.dll")>
-    Private Shared Function RedrawWindow(handle As IntPtr, updateRect As IntPtr, updateRegion As IntPtr, flags As UInteger) As Boolean
+    Private Shared Function PeekMessage(ByRef message As NativeMessage, handle As IntPtr, filterMin As UInteger, filterMax As UInteger, remove As UInteger) As Boolean
+    End Function
+
+    <Runtime.InteropServices.DllImport("user32.dll")>
+    Private Shared Function TranslateMessage(ByRef message As NativeMessage) As Boolean
+    End Function
+
+    <Runtime.InteropServices.DllImport("user32.dll")>
+    Private Shared Function DispatchMessage(ByRef message As NativeMessage) As IntPtr
     End Function
 
 
-    ' Shows a page built or loaded while hidden in one layout pass: every
-    ' container holds its layout while the page and the Board change
-    ' places, and each then lays out once, inner ones first. Shown
-    ' plainly, every container lays itself out again each time one inside
-    ' it does, which on the manuscript page took longer than loading it.
+    ' Shows a page loaded while hidden in one layout pass: its containers,
+    ' outer ones first, hold their layout while the page comes forward,
+    ' and each then lays out once, inner ones first. Shown plainly, every
+    ' container lays itself out again each time one inside it does, which
+    ' on the manuscript page took longer than loading it. The Board is
+    ' hidden by the switch (SwitchPage), once drawing is released.
     Private Sub ShowPageInOnePass(
-        page As Control
+        page As Control,
+        containers As List(Of Control)
     )
-
-        Dim containers As List(Of Control) =
-            {page}.Concat(DescendantControls(page)).Where(Function(control) control.HasChildren).ToList()
-
-        For Each container As Control In containers
-            container.SuspendLayout()
-        Next
 
         page.Visible = True
         page.BringToFront()
-        boardPage.Visible = False
 
-        ' Every container is laid out once, inner ones first: what changed
-        ' while the page was hidden, as a part shown or hidden for the record
-        ' loaded, laid out nothing then, as WinForms lays out no change under
-        ' a hidden parent.
+        ' Each container lets go of its layout, inner ones first, and lays
+        ' out once if anything in it changed since it was held: the record
+        ' loaded, the header, a part shown or hidden for the record. One in
+        ' which nothing changed is not laid out again; laying out every
+        ' container whatever changed took twice as long on this machine.
         For index As Integer = containers.Count - 1 To 0 Step -1
-            containers(index).PerformLayout()
             containers(index).ResumeLayout(True)
         Next
 
@@ -271,6 +341,18 @@ Partial Public Class Form1
             BuildManuscriptPage()
         End If
 
+        ' What the preparation had not laid out yet lays out now.
+        manuscriptPageEditor.LetGoOfLayouts(Integer.MaxValue)
+        PutManuscriptPageInPlace()
+
+        Return manuscriptPage
+
+    End Function
+
+
+    ' The page goes in the page area hidden, behind the Board.
+    Private Sub PutManuscriptPageInPlace()
+
         If manuscriptPage.Parent Is Nothing Then
             manuscriptPage.Visible = False
             manuscriptPage.Dock = DockStyle.Fill
@@ -278,9 +360,7 @@ Partial Public Class Form1
             manuscriptPage.SendToBack()
         End If
 
-        Return manuscriptPage
-
-    End Function
+    End Sub
 
 
     ' What the kept page took when it was built: the colors, and the
@@ -292,7 +372,8 @@ Partial Public Class Form1
     End Function
 
 
-    ' Lets the kept page go; the next manuscript opened builds it again.
+    ' Lets the kept page go. Its successor is prepared while the window
+    ' idles, or built by the next manuscript opened if that comes first.
     Private Sub DropManuscriptPage()
 
         If manuscriptPage IsNot Nothing AndAlso Not manuscriptPage.IsDisposed Then
@@ -305,6 +386,83 @@ Partial Public Class Form1
         manuscriptPageSaveHint = Nothing
         manuscriptBackLink = Nothing
         fitManuscriptTitle = Nothing
+        manuscriptPageContainers = Nothing
+
+        QueueManuscriptPagePreparation()
+
+    End Sub
+
+
+    ' The page is prepared while the window idles (#133), a step at a
+    ' time: built with no manuscript and the library's tags offered, its
+    ' parts laid out a slice at a time, put in the page area hidden and
+    ' laid out at the size it shows at, and its windows made a slice at a
+    ' time. The first manuscript opened then finds it as every one after
+    ' it does. Startup queues it beside the Board's fill; a page let go
+    ' for new colors queues its successor. An open before it is ready
+    ' finishes it there and then (KeptManuscriptPage), and a page shown
+    ' makes the rest of its windows as it shows.
+    Private Sub QueueManuscriptPagePreparation()
+
+        QueueIdleWork(AddressOf PrepareManuscriptPage)
+
+    End Sub
+
+
+    Private Sub PrepareManuscriptPage()
+
+        If IsDisposed OrElse manuscriptPage IsNot Nothing Then
+            Return
+        End If
+
+        BuildManuscriptPage()
+        manuscriptPage.Visible = False
+        manuscriptPageEditor.SuggestTags(manuscripts)
+
+        Dim page As Control = manuscriptPage
+        QueueIdleWork(Sub() LayOutPreparedManuscriptPage(page))
+
+    End Sub
+
+
+    Private Function StillPreparing(page As Control) As Boolean
+
+        Return page Is manuscriptPage AndAlso Not page.IsDisposed AndAlso Not page.Visible AndAlso Not IsDisposed
+
+    End Function
+
+
+    Private Sub LayOutPreparedManuscriptPage(page As Control)
+
+        If Not StillPreparing(page) Then
+            Return
+        End If
+
+        If Not manuscriptPageEditor.LetGoOfLayouts(CInt(IdleWorkSlice)) Then
+            QueueIdleWork(Sub() LayOutPreparedManuscriptPage(page))
+            Return
+        End If
+
+        ' A hidden page takes no part in its parent's layout, so it is
+        ' given the size it shows at.
+        PutManuscriptPageInPlace()
+        page.Bounds = contentHost.DisplayRectangle
+        page.PerformLayout()
+        QueueIdleWork(Sub() MakeManuscriptPageWindows(page))
+
+    End Sub
+
+
+    ' The hidden page's windows, about a slice's worth a step.
+    Private Sub MakeManuscriptPageWindows(page As Control)
+
+        If Not StillPreparing(page) Then
+            Return
+        End If
+
+        If Not InPlace.MakeWindows(page, CInt(IdleWorkSlice)) Then
+            QueueIdleWork(Sub() MakeManuscriptPageWindows(page))
+        End If
 
     End Sub
 
@@ -582,6 +740,8 @@ Partial Public Class Form1
         manuscriptBackLink = lnkBack
         fitManuscriptTitle = fitTitle
         manuscriptPagePalette = ManuscriptPageStamp()
+        manuscriptPageContainers =
+            {CType(page, Control)}.Concat(DescendantControls(page)).Where(Function(control) control.HasChildren).ToList()
 
     End Sub
 
@@ -842,10 +1002,7 @@ Partial Public Class Form1
             Return
         End If
 
-        Dim request As PageRequest = CurrentRequest
-
-        LeaveCurrentPage()
-        ShowPage(request)
+        SwitchPage(CurrentRequest)
 
         lblStatus.Text = "Unsaved changes discarded."
 
@@ -868,8 +1025,7 @@ Partial Public Class Form1
         CheckForPublications({currentManuscriptId})
 
         If currentPage = WorkspacePage.Manuscript AndAlso FindManuscript(currentManuscriptId) IsNot Nothing Then
-            LeaveCurrentPage()
-            ShowPage(request)
+            SwitchPage(request)
         End If
 
     End Sub

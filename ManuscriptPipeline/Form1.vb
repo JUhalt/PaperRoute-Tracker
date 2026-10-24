@@ -1212,14 +1212,32 @@ Public Class Form1
 
     Private Sub ShowShelf(shelf As ManuscriptShelfPanel)
 
-        ' A shelf not shown since startup is built now (#133).
-        BuildShelfIfUnbuilt(shelf)
+        ' The shelves' host holds its drawing while they change places
+        ' (#133): a shelf shown is painted there and then otherwise, before
+        ' the switch returns, and on this machine that drawing waited on
+        ' the screen. The host paints once, when the switch has returned.
+        ' A shelf put away with focus inside it moves focus on as it hides,
+        ' which a held host would refuse (RedrawHold), so it is not held.
+        Dim focusLeaves As Boolean =
+            {pipelinePanel, publishedPanel, fileDrawerPanel}.Any(Function(candidate) candidate IsNot shelf AndAlso candidate.ContainsFocus)
 
-        For Each candidate As ManuscriptShelfPanel In {pipelinePanel, publishedPanel, fileDrawerPanel}
-            candidate.Visible = candidate Is shelf
-        Next
+        Using New RedrawHold(If(focusLeaves, Nothing, shelfHost))
 
-        ResizeCards(shelf)
+            ' A shelf not shown since startup is built now (#133).
+            BuildShelfIfUnbuilt(shelf)
+
+            For Each candidate As ManuscriptShelfPanel In {pipelinePanel, publishedPanel, fileDrawerPanel}
+                candidate.Visible = candidate Is shelf
+            Next
+
+            ResizeCards(shelf)
+
+            ' A shelf prepared while the window was smaller shows the first
+            ' screen it fills now at once (#133).
+            RevealFirstScreen(shelf)
+
+        End Using
+
         QueueBoardFill()
 
     End Sub

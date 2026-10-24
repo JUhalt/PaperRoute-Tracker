@@ -65,6 +65,21 @@ Friend NotInheritable Class LibraryBoard
     End Function
 
 
+    ' Whether the page area could paint each time the window read the
+    ' author library once it was shown: reading it can ask a question
+    ' (#111), which must not sit over a page area whose drawing is held.
+    Public ReadOnly AuthorLibraryReads As New List(Of Boolean)()
+
+    Protected Overrides Function LoadAuthorLibrary() As Boolean
+        If Visible Then AuthorLibraryReads.Add(IsWindowVisible(ContentHost.Handle))
+        Return MyBase.LoadAuthorLibrary()
+    End Function
+
+    <Runtime.InteropServices.DllImport("user32.dll")>
+    Private Shared Function IsWindowVisible(handle As IntPtr) As Boolean
+    End Function
+
+
     ' Backup and Restore on the test's managed root, never the user's (#132).
     Protected Overrides Function CreateBackupService() As PortableBackupService
         Return New PortableBackupService(_library.ManagedDirectory)
@@ -166,6 +181,14 @@ Friend NotInheritable Class LibraryBoard
     ' Processes messages until the window's idle work is done.
     Public Sub WaitForIdleWork()
         PumpWhile(Function() IsIdleWorkPending, "The window's idle work did not finish.")
+    End Sub
+
+
+    ' Paints what waits to be painted, and nothing else, as the message
+    ' loop would paint it next: a page switch paints nothing until it has
+    ' returned (#133), so a row timed after one can leave that paint out.
+    Public Sub PaintNow()
+        PumpPaints()
     End Sub
 
 
@@ -364,6 +387,22 @@ Friend NotInheritable Class LibraryBoard
     Public ReadOnly Property KeptPage As Control
         Get
             Return DirectCast(GetField("manuscriptPage"), Control)
+        End Get
+    End Property
+
+
+    ' The Journals and Insights pages kept between visits (#133), or
+    ' Nothing.
+    Public ReadOnly Property JournalsPage As Control
+        Get
+            Return DirectCast(GetField("journalsPage"), Control)
+        End Get
+    End Property
+
+
+    Public ReadOnly Property InsightsPage As Control
+        Get
+            Return DirectCast(GetField("insightsPage"), Control)
         End Get
     End Property
 

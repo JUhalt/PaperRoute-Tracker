@@ -33,6 +33,12 @@ Partial Public Class Form1
     Private insightsRequest As Integer = 0
     Private insightsPending As Boolean = False
 
+    ' The page is kept once built, and prepared while the window idles
+    ' (#133); each visit begins as a new page did. It knows the colors,
+    ' DPI and font it was built with.
+    Private insightsPage As Control = Nothing
+    Private insightsPageStamp As String = String.Empty
+
 
     ' True while the page's figures are being worked out; tests wait on it.
     Friend ReadOnly Property InsightsCalculating As Boolean
@@ -42,7 +48,82 @@ Partial Public Class Form1
     End Property
 
 
-    Private Function BuildInsightsPage() As Control
+    ' The page for a visit: built on the first, or after the colors, the
+    ' DPI or the font changed. Kept or prepared, it begins as a new page
+    ' did: on Your Journals, no journal chosen, what another tab showed
+    ' gone, and the figures worked out anew from the records as they are.
+    Private Function OpenInsightsPage() As Control
+
+        If insightsPage IsNot Nothing AndAlso (insightsPage.IsDisposed OrElse insightsPageStamp <> ManuscriptPageStamp()) Then
+            DropInsightsPage()
+        End If
+
+        If insightsPage Is Nothing Then
+            insightsPage = BuildInsightsPage(fill:=True)
+            insightsPageStamp = ManuscriptPageStamp()
+            Return insightsPage
+        End If
+
+        insightsJournal = Nothing
+        insightsScope.Visible = False
+        insightsFootnote.Visible = True
+
+        ' Nothing of the last visit's figures shows until they are worked
+        ' out anew, as a new page showed none: its tiles and its view wait
+        ' hidden, and the tabs carry no counts, until ShowInsights. Hidden
+        ' rather than destroyed, so the switch does no more than before.
+        insightsTiles.Visible = False
+        insightsContent.Visible = False
+        tabInsightsJournals.Text = "Your Journals"
+        tabInsightsRoutes.Text = "Your Routes"
+
+        ' Another tab is chosen only on a page that has shown, so its tabs
+        ' have their windows; a prepared page whose tabs have none yet checks
+        ' Your Journals as they are made (BuildInsightsPage).
+        If tabInsightsJournals.IsHandleCreated AndAlso Not tabInsightsJournals.Checked Then
+            For Each child As Control In insightsContent.Controls.Cast(Of Control)().ToList()
+                InPlace.Dispose(child)
+            Next
+            insightsGrid = Nothing
+            ' Listened to once the page is in the window, the tab fills it.
+            tabInsightsJournals.Checked = True
+        End If
+
+        If Not insightsPending Then
+            FillInsights()
+        End If
+
+        Return insightsPage
+
+    End Function
+
+
+    ' Leaving the kept page drops the calculation it was waiting for.
+    Private Sub LeaveInsightsKept()
+
+        insightsRequest += 1
+        insightsPending = False
+
+    End Sub
+
+
+    ' Lets the kept page go; the next visit builds it, or it is prepared
+    ' again while the window idles.
+    Private Sub DropInsightsPage()
+
+        If insightsPage IsNot Nothing AndAlso Not insightsPage.IsDisposed Then
+            InPlace.Dispose(insightsPage)
+        End If
+
+        LeaveInsightsKept()
+        insightsPage = Nothing
+        insightsContent = Nothing
+        insightsGrid = Nothing
+
+    End Sub
+
+
+    Private Function BuildInsightsPage(fill As Boolean) As Control
 
         insightsJournal = Nothing
 
@@ -179,7 +260,11 @@ Partial Public Class Form1
                 AddHandler citationsTab.CheckedChanged, Sub(sender, e) If citationsTab.Checked Then FillInsights()
             End Sub)
 
-        FillInsights()
+        ' A page prepared ahead is filled when it is first shown.
+        If fill Then
+            FillInsights()
+        End If
+
         Return frame
 
     End Function
@@ -251,14 +336,16 @@ Partial Public Class Form1
         End If
 
         FillInsightTiles(statistics)
+        insightsTiles.Visible = True
 
         tabInsightsJournals.Text = "Your Journals (" & statistics.Journals.Count.ToString(CultureInfo.CurrentCulture) & ")"
         tabInsightsRoutes.Text = "Your Routes (" & statistics.Manuscripts.Where(Function(item) item.Submissions.Count > 0).Count().ToString(CultureInfo.CurrentCulture) & ")"
 
+        ' Destroyed where they are: the kept page's views have windows.
         For Each child As Control In insightsContent.Controls.Cast(Of Control)().ToList()
-            insightsContent.Controls.Remove(child)
-            child.Dispose()
+            InPlace.Dispose(child)
         Next
+        insightsContent.Visible = True
 
         insightsScope.Visible = insightsJournal IsNot Nothing AndAlso Not tabInsightsJournals.Checked AndAlso Not tabInsightsCitations.Checked
         insightsFootnote.Visible = Not tabInsightsCitations.Checked
@@ -289,8 +376,7 @@ Partial Public Class Form1
 
         insightsTiles.SuspendLayout()
         For Each child As Control In insightsTiles.Controls.Cast(Of Control)().ToList()
-            insightsTiles.Controls.Remove(child)
-            child.Dispose()
+            InPlace.Dispose(child)
         Next
 
         Dim published As Integer = manuscripts.Where(Function(item) item.Location = ManuscriptLocation.Published).Count()

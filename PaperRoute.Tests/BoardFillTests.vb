@@ -14,7 +14,8 @@ Imports Microsoft.VisualStudio.TestTools.UnitTesting
 
 ' The Board at startup (#133): the shelf shown shows its first screen of
 ' cards before the Board is interactive and the rest a card at a time while
-' the window idles; a shelf not shown yet is built when it is first shown.
+' the window idles; the shelves not shown yet are prepared once it has
+' filled, and one shown before then is built when it is first shown.
 ' Once the fill has passed, the Board is the Board it always was: a card
 ' for every manuscript, with everything a card offers.
 <TestClass>
@@ -398,6 +399,88 @@ Public Class BoardFillTests
                 End Using
             End Sub,
             TimeSpan.FromMinutes(5))
+
+    End Sub
+
+
+    ' Once the shown shelf has filled, the shelves not shown yet are
+    ' prepared while the window idles (#133), and not while another page
+    ' covers the Board: each holds a card for every manuscript, hidden, and
+    ' its first screen of cards has its windows, made inside the shelf and
+    ' none on WinForms' parking window, while the cards the fill has not
+    ' reached have none. The first switch to a shelf then shows those very
+    ' cards, whose windows are already made, and the fill goes on there.
+    ' Before, the first switch built the shelf there and then.
+    <TestMethod>
+    Public Sub OtherShelvesArePreparedAfterTheFill()
+
+        Dim report As New List(Of String)()
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary = Library120()
+
+                Using watch As New WindowCreationWatch(),
+                      board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    Dim published As ManuscriptShelfPanel = board.Shelf("publishedPanel")
+                    Dim drawer As ManuscriptShelfPanel = board.Shelf("fileDrawerPanel")
+                    board.WaitForBoardFill()
+
+                    board.NavigateTo(Form1.WorkspacePage.Library)
+                    Application.DoEvents()
+                    Dim before As Integer = published.Controls.Count + drawer.Controls.Count
+                    Dim windowsBefore As Integer = Cards(published).Concat(Cards(drawer)).Where(Function(card) card.IsHandleCreated).Count()
+                    Pump(TimeSpan.FromSeconds(1))
+                    Assert.AreEqual(before, published.Controls.Count + drawer.Controls.Count, "No shelf is put together behind another page.")
+                    Assert.AreEqual(windowsBefore, Cards(published).Concat(Cards(drawer)).Where(Function(card) card.IsHandleCreated).Count(), "No card's windows are made behind another page.")
+                    board.NavigateTo(Form1.WorkspacePage.Board)
+                    board.WaitForIdleWork()
+
+                    For Each entry In {(published, ManuscriptLocation.Published), (drawer, ManuscriptLocation.FileDrawer)}
+                        Dim location As ManuscriptLocation = entry.Item2
+                        Dim onShelf As Integer = library.Manuscripts.Where(Function(item) item.Location = location).Count()
+                        Assert.IsFalse(entry.Item1.Visible, location.ToString() & " stays hidden.")
+                        Assert.AreEqual(onShelf, Cards(entry.Item1).Count, location.ToString() & ": a card for every manuscript.")
+                        Assert.IsTrue(Cards(entry.Item1).Any(Function(card) card.IsHandleCreated), location.ToString() & ": its first screen has its windows.")
+                        Assert.IsTrue(Cards(entry.Item1).Where(Function(card) card.IsHandleCreated).All(Function(card) DirectCast(card, CardPanel).HasMenu),
+                                      location.ToString() & ": a card given its windows has its menu.")
+                    Next
+
+                    Dim prepared As List(Of RoundedPanel) = Cards(published)
+                    Dim withWindows As List(Of RoundedPanel) = prepared.Where(Function(card) card.IsHandleCreated).ToList()
+                    Dim shownAtSwitch As List(Of RoundedPanel) = Nothing
+                    AddHandler board.ShelfTab("tabPublished").CheckedChanged,
+                        Sub(sender, e)
+                            If board.ShelfTab("tabPublished").Checked Then
+                                shownAtSwitch = Cards(published).Where(Function(card) card.Visible).ToList()
+                            End If
+                        End Sub
+
+                    Using switchWatch As New WindowCreationWatch()
+                        board.ShelfTab("tabPublished").Checked = True
+                        Assert.AreEqual(0, switchWatch.Children().Count, "The switch makes no window: " & String.Join(" | ", switchWatch.Children()))
+                    End Using
+
+                    CollectionAssert.AreEqual(prepared, Cards(published), "The switch shows the cards prepared.")
+                    CollectionAssert.AreEqual(withWindows, shownAtSwitch, "The cards shown at the switch are those whose windows were made while the window idled.")
+                    Dim total As Integer = library.Manuscripts.Where(Function(item) item.Location = ManuscriptLocation.Published).Count()
+                    Dim columns As Integer = prepared.Select(Function(card) card.Left).Distinct().Count()
+                    Dim rows As Integer = CInt(Math.Ceiling(published.ClientSize.Height / CDbl(prepared(0).Height + published.CardGap)))
+                    Assert.AreEqual(Math.Min(total, columns * (rows + 1)), withWindows.Count,
+                                    "The first screen had its windows, and only it: " & columns & " columns, " & rows & " rows in view of " & published.ClientSize.ToString() & ".")
+
+                    board.WaitForBoardFill()
+                    Assert.IsTrue(Cards(published).All(Function(card) card.Visible AndAlso card.IsHandleCreated), "The fill goes on on the shelf shown.")
+
+                    report.AddRange(watch.Parked())
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(5))
+
+        Assert.AreEqual(0, report.Count, "Windows made on the parking window:" & Environment.NewLine & String.Join(Environment.NewLine, report))
 
     End Sub
 

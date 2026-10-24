@@ -64,6 +64,14 @@ Partial Public Class Form1
     ' and kept while the window lives (#133).
     Private importExportPage As Control = Nothing
 
+    ' The Journals page is kept too once built, and prepared while the
+    ' window idles (#133); shown again, it reads the author library and
+    ' the manuscripts afresh. It knows the colors, DPI and font it was
+    ' built with.
+    Private journalsPage As Control = Nothing
+    Private journalsEditor As Form = Nothing
+    Private journalsPageStamp As String = String.Empty
+
     ' Set when the system colors change while a kept page shows: that page
     ' is let go as it is left, not kept in the old colors.
     Private leaveDisposesKeptPage As Boolean = False
@@ -464,26 +472,90 @@ Partial Public Class Form1
 
         Dim previous As PageRequest = CurrentRequest
 
-        LeaveCurrentPage()
+        SwitchPage(request)
 
         If recordHistory Then
             backHistory.Push(previous)
             forwardHistory.Clear()
         End If
 
-        If request.Page = WorkspacePage.Manuscript Then
-            If previous.Page <> WorkspacePage.Manuscript Then
-                manuscriptOrigin = previous.Page
-            End If
-            currentManuscriptId = request.ManuscriptId
-        End If
-
-        currentPage = request.Page
-        ShowPage(request)
         SyncRail()
         Return True
 
     End Function
+
+
+    ' One page switch (#133), once any question about the page left has
+    ' been answered. The page left is prepared first, outside the hold: its
+    ' draft and its timers, focus out of it, and the author library its
+    ' editor saved read back. Then, with the page area's drawing held, it
+    ' is put away and the next page shown, so nothing under the page area
+    ' is painted until the switch has returned; one paint of it is posted
+    ' as the hold is released. The Board is hidden last (HideBoardPage).
+    Private Sub SwitchPage(request As PageRequest)
+
+        LeaveCurrentPage()
+
+        ' Hosted editors save as they go. The board's copies are refreshed
+        ' from what they saved, as the board did after their dialogs
+        ' closed; the library is read before the hold, since reading it can
+        ' ask about a recovered save (LoadAuthorLibrary), and a question
+        ' over a held page area would sit on what it showed before.
+        Dim authorsRead As Boolean = False
+        If pageHostedEditor Then
+            pageHostedEditor = False
+            authorsRead = LoadAuthorLibrary()
+        End If
+
+        Using New RedrawHold(contentHost)
+
+            PutAwayCurrentPage()
+
+            If authorsRead Then
+                RenderManuscripts()
+            End If
+
+            If request.Page = WorkspacePage.Manuscript Then
+                If currentPage <> WorkspacePage.Manuscript Then
+                    manuscriptOrigin = currentPage
+                End If
+                currentManuscriptId = request.ManuscriptId
+            End If
+
+            currentPage = request.Page
+            ShowPage(request)
+
+        End Using
+
+        If request.Page <> WorkspacePage.Board Then
+            HideBoardPage()
+        End If
+
+    End Sub
+
+
+    ' Hides the Board behind the page shown. Hiding it has Windows erase
+    ' and frame the page now exposed over it there and then, so the hide
+    ' is held too. WinForms moves focus on from a Board that holds it as
+    ' the Board is hidden (SelectNextControl from the Board, as below); a
+    ' control under a held window cannot take focus, so that same move is
+    ' made first, while the page area still draws, and focus lands where
+    ' it always did (KeyboardAccessTests pins it).
+    Private Sub HideBoardPage()
+
+        If Not boardPage.Visible Then
+            Return
+        End If
+
+        If boardPage.ContainsFocus Then
+            SelectNextControl(boardPage, True, True, True, True)
+        End If
+
+        Using New RedrawHold(contentHost)
+            boardPage.Visible = False
+        End Using
+
+    End Sub
 
 
     Private Sub GoBack()
@@ -538,6 +610,9 @@ Partial Public Class Form1
     End Function
 
 
+    ' What leaving a page does before the page area's drawing is held
+    ' (SwitchPage): its draft and its timers, and focus out of it, since a
+    ' control under a held window cannot take focus.
     Private Sub LeaveCurrentPage()
 
         ' A manuscript page is left only once its edits were saved or let go
@@ -552,13 +627,21 @@ Partial Public Class Form1
         manuscriptSaveBar = Nothing
         manuscriptSaveHint = Nothing
 
+        ' Focus in the page moves out of it first, as removing the page
+        ' moved it.
+        If currentPageView IsNot Nothing Then
+            MoveFocusOutOf(currentPageView)
+        End If
+
+    End Sub
+
+
+    ' Puts the page left away, with the page area's drawing held.
+    Private Sub PutAwayCurrentPage()
+
         If currentPageView Is Nothing Then
             Return
         End If
-
-        ' Focus in the page moves out of it first, as removing the page
-        ' moved it.
-        MoveFocusOutOf(currentPageView)
 
         ' A kept page is hidden where it is, with its windows, for its next
         ' visit; taking it out of the window and putting it back costs as
@@ -574,11 +657,18 @@ Partial Public Class Form1
             currentPageView.Visible = False
             If currentPageView Is manuscriptPage Then
                 QueueManuscriptPageUnload()
+            ElseIf currentPageView Is insightsPage Then
+                LeaveInsightsKept()
             End If
         ElseIf currentPageView Is manuscriptPage Then
             DropManuscriptPage()
+        ElseIf currentPageView Is insightsPage Then
+            DropInsightsPage()
+            QueueKeptPagesPreparation()
         Else
+            Dim wasKept As Boolean = currentPageView Is journalsPage
             currentPageView.Dispose()
+            If wasKept Then QueueKeptPagesPreparation()
         End If
 
         leaveDisposesKeptPage = False
@@ -587,17 +677,6 @@ Partial Public Class Form1
         libraryContent = Nothing
         libraryAuthorsForm = Nothing
         libraryFilter = Nothing
-        insightsContent = Nothing
-        insightsGrid = Nothing
-
-        ' Hosted editors save as they go. Refresh the board's copies, as the
-        ' board did after their dialogs closed.
-        If pageHostedEditor Then
-            pageHostedEditor = False
-            If LoadAuthorLibrary() Then
-                RenderManuscripts()
-            End If
-        End If
 
     End Sub
 
@@ -618,9 +697,10 @@ Partial Public Class Form1
 
 
     ' The pages built once and kept while the window lives (#133): the
-    ' manuscript page, Deadlines and Import & Export.
+    ' manuscript page, Journals, Deadlines, Insights and Import & Export.
     Private Function IsKeptPage(view As Control) As Boolean
-        Return view IsNot Nothing AndAlso (view Is manuscriptPage OrElse view Is importExportPage OrElse view Is deadlinesPage)
+        Return view IsNot Nothing AndAlso
+            (view Is manuscriptPage OrElse view Is importExportPage OrElse view Is deadlinesPage OrElse view Is journalsPage OrElse view Is insightsPage)
     End Function
 
 
@@ -629,14 +709,16 @@ Partial Public Class Form1
     ' Windows contrast theme turned on or off while PaperRoute runs would
     ' leave it mixing the two. A hidden kept page is let go now, where it
     ' is, and the one showing as it is left; each is built anew on its next
-    ' visit, as the pages that are not kept are. (The manuscript page is
-    ' also built anew when it finds the colors, the DPI or the font it was
-    ' built with changed: KeptManuscriptPage.)
+    ' visit, as the pages that are not kept are, and the manuscript page,
+    ' Journals and Insights are prepared again while the window idles.
+    ' (The manuscript page, Journals and Insights are also built anew when
+    ' they find the colors, the DPI or the font they were built with
+    ' changed.)
     Protected Overrides Sub OnSystemColorsChanged(e As EventArgs)
 
         MyBase.OnSystemColorsChanged(e)
 
-        For Each page As Control In {manuscriptPage, deadlinesPage, importExportPage}
+        For Each page As Control In {manuscriptPage, deadlinesPage, importExportPage, journalsPage, insightsPage}
             If page Is Nothing OrElse page.IsDisposed Then
                 Continue For
             End If
@@ -645,14 +727,22 @@ Partial Public Class Form1
                 leaveDisposesKeptPage = True
             ElseIf page Is manuscriptPage Then
                 DropManuscriptPage()
+            ElseIf page Is insightsPage Then
+                DropInsightsPage()
             Else
                 page.Dispose()
             End If
         Next
 
+        ' Journals and Insights are prepared again in the new colors.
+        QueueKeptPagesPreparation()
+
     End Sub
 
 
+    ' Shows the page asked for, with the page area's drawing held
+    ' (SwitchPage); the Board is hidden by the switch once the hold is
+    ' released.
     Private Sub ShowPage(request As PageRequest)
 
         If request.Page = WorkspacePage.Board Then
@@ -680,14 +770,11 @@ Partial Public Class Form1
             Case WorkspacePage.Library
                 view = BuildLibraryPage()
             Case WorkspacePage.Journals
-                view = BuildHostedPage(
-                    "Journals",
-                    "Your reusable journal records and their submission checklists. Changes are saved as you make them.",
-                    CreateJournalLibraryEditor())
+                view = OpenJournalsPage()
             Case WorkspacePage.Deadlines
                 view = OpenDeadlinesPage()
             Case WorkspacePage.Insights
-                view = BuildInsightsPage()
+                view = OpenInsightsPage()
             Case Else
                 If importExportPage Is Nothing OrElse importExportPage.IsDisposed Then
                     importExportPage = BuildImportExportPage()
@@ -700,15 +787,7 @@ Partial Public Class Form1
         If view.Parent Is contentHost Then
             view.Visible = True
         ElseIf IsKeptPage(view) Then
-            ' A kept page is put in the window hidden and laid out at the
-            ' size it is shown at, so its windows are made once, at their
-            ' final size, as it appears. A hidden page takes no part in its
-            ' parent's layout, so it is given that size here.
-            view.Dock = DockStyle.Fill
-            view.Visible = False
-            contentHost.Controls.Add(view)
-            view.Bounds = contentHost.DisplayRectangle
-            view.PerformLayout()
+            PlaceKeptPageHidden(view)
             view.Visible = True
         Else
             view.Dock = DockStyle.Fill
@@ -716,10 +795,143 @@ Partial Public Class Form1
         End If
 
         view.BringToFront()
-        boardPage.Visible = False
 
         If request.Page = WorkspacePage.Manuscript Then
             manuscriptDirtyTimer.Start()
+        End If
+
+    End Sub
+
+
+    ' A kept page is put in the window hidden and laid out at the size it
+    ' is shown at, so its windows are made once, at their final size, as it
+    ' appears or while the window idles. A hidden page takes no part in its
+    ' parent's layout, so it is given that size here.
+    Private Sub PlaceKeptPageHidden(view As Control)
+
+        view.Dock = DockStyle.Fill
+        view.Visible = False
+        contentHost.Controls.Add(view)
+        view.SendToBack()
+        view.Bounds = contentHost.DisplayRectangle
+        view.PerformLayout()
+
+    End Sub
+
+
+    ' The Journals page for a visit: built on the first, or after the
+    ' colors, the DPI or the font changed; kept or prepared, it reads the
+    ' author library and the manuscripts afresh, so it never shows or saves
+    ' a library the manuscript page or the Authors view has changed since.
+    ' Its editor saves as it goes, so leaving it refreshes the Board's copy
+    ' (SwitchPage).
+    Private Function OpenJournalsPage() As Control
+
+        If journalsPage IsNot Nothing AndAlso (journalsPage.IsDisposed OrElse journalsPageStamp <> ManuscriptPageStamp()) Then
+            If Not journalsPage.IsDisposed Then InPlace.Dispose(journalsPage)
+            journalsPage = Nothing
+        End If
+
+        If journalsPage Is Nothing Then
+            journalsPage = BuildJournalsPage()
+        Else
+            TryCast(journalsEditor, JournalLibraryForm)?.Reload(manuscripts)
+        End If
+
+        pageHostedEditor = True
+        Return journalsPage
+
+    End Function
+
+
+    Private Function BuildJournalsPage() As Control
+
+        journalsEditor = CreateJournalLibraryEditor()
+        journalsPageStamp = ManuscriptPageStamp()
+
+        Return BuildHostedPage(
+            "Journals",
+            "Your reusable journal records and their submission checklists. Changes are saved as you make them.",
+            journalsEditor)
+
+    End Function
+
+
+    ' Journals and Insights are prepared while the window idles (#133),
+    ' after the manuscript page, each in steps: built; put in the page area
+    ' hidden and laid out at the size it shows at; its windows made a slice
+    ' at a time. A first visit then costs what a later one does, and a
+    ' visit before a page is ready finishes it there and then (ShowPage).
+    Private Sub QueueKeptPagesPreparation()
+
+        QueueIdleWork(AddressOf PrepareJournalsPage)
+        QueueIdleWork(AddressOf PrepareInsightsPage)
+
+    End Sub
+
+
+    Private Sub PrepareJournalsPage()
+
+        If IsDisposed OrElse (journalsPage IsNot Nothing AndAlso Not journalsPage.IsDisposed) Then
+            Return
+        End If
+
+        ' An author library that cannot be read now is left for the visit,
+        ' which reads it again and says why if it still cannot, as it did
+        ' before the page was prepared.
+        Try
+            journalsPage = BuildJournalsPage()
+        Catch ex As Exception When TypeOf ex Is IO.IOException OrElse
+                                   TypeOf ex Is UnauthorizedAccessException OrElse
+                                   TypeOf ex Is IO.InvalidDataException
+            journalsPage = Nothing
+            Return
+        End Try
+
+        Dim page As Control = journalsPage
+        QueueIdleWork(Sub() PlacePreparedPage(page))
+
+    End Sub
+
+
+    Private Sub PrepareInsightsPage()
+
+        If IsDisposed OrElse (insightsPage IsNot Nothing AndAlso Not insightsPage.IsDisposed) Then
+            Return
+        End If
+
+        Dim page As Control = BuildInsightsPage(fill:=False)
+        insightsPage = page
+        insightsPageStamp = ManuscriptPageStamp()
+        QueueIdleWork(Sub() PlacePreparedPage(page))
+
+    End Sub
+
+
+    ' A prepared page goes in the page area hidden, unless a visit has put
+    ' it there already or it has been let go since.
+    Private Sub PlacePreparedPage(page As Control)
+
+        If IsDisposed OrElse page.IsDisposed OrElse page.Parent IsNot Nothing OrElse Not IsKeptPage(page) OrElse Not contentHost.IsHandleCreated Then
+            Return
+        End If
+
+        PlaceKeptPageHidden(page)
+        QueueIdleWork(Sub() MakeKeptPageWindows(page))
+
+    End Sub
+
+
+    ' A prepared page's windows, about a slice's worth a step, while it is
+    ' still kept and hidden.
+    Private Sub MakeKeptPageWindows(page As Control)
+
+        If page.IsDisposed OrElse page.Visible OrElse Not IsKeptPage(page) OrElse Not contentHost.IsHandleCreated Then
+            Return
+        End If
+
+        If Not InPlace.MakeWindows(page, CInt(IdleWorkSlice)) Then
+            QueueIdleWork(Sub() MakeKeptPageWindows(page))
         End If
 
     End Sub
@@ -811,7 +1023,8 @@ Partial Public Class Form1
 
 
     ' Shows an existing library editor inside a page. Its Close button is
-    ' hidden: leaving the page closes it.
+    ' hidden: leaving the page closes it. The page that shows it marks that
+    ' it hosts an editor that saves as it goes (pageHostedEditor).
     Private Function HostEditor(editor As Form) As Form
 
         EmbedForm(editor)
@@ -824,7 +1037,6 @@ Partial Public Class Form1
         Next
 
         InPlace.WhenAttached(editor, Sub() editor.Visible = True)
-        pageHostedEditor = True
         Return editor
 
     End Function
@@ -1000,6 +1212,7 @@ Partial Public Class Form1
 
         ClearLibraryContent()
         libraryAuthorsForm = HostEditor(CreateAuthorLibraryEditor())
+        pageHostedEditor = True
         libraryContent.Controls.Add(libraryAuthorsForm)
 
     End Sub

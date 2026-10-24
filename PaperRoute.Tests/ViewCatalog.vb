@@ -151,8 +151,13 @@ Friend NotInheritable Class ViewCatalog
         New NamedView("TitlePageImportForm, with the authors it read", Function(root) TitlePageRead()),
         New NamedView("Insights page, Your Citations before an update", Function(root) Citations(root, saved:=False)),
         New NamedView("Insights page, Your Citations from a saved update", Function(root) Citations(root, saved:=True)),
-        New NamedView("EditManuscriptForm as the manuscript page, after its shortlist is rebuilt", Function(root) ShortlistRebuilt())
+        New NamedView(ShortlistStage, Function(root) ShortlistRebuilt())
     }
+
+
+    ' The one view whose shortlist has rows to draw (#133); the names and
+    ' default-action sweeps read it beside the views and pages.
+    Public Const ShortlistStage As String = "EditManuscriptForm as the manuscript page, after its shortlist is rebuilt"
 
 
     ' Forms no test builds yet, each with what its factory will need. Each
@@ -751,7 +756,11 @@ Friend NotInheritable Class ViewCatalog
         Dim editor As EditManuscriptForm = Descendants(board).OfType(Of EditManuscriptForm)().Single()
         CallPrivate(editor, "RefreshShortlist")
         Application.DoEvents()
-        Return Reached(board, Descendants(editor).OfType(Of Button)().Any(Function(button) button.Visible AndAlso button.AccessibleName = "Edit PLOS ONE"), "shows no shortlist row")
+        ' The shortlist draws its rows (#133): a row's Edit... is a child of
+        ' the list's accessible object.
+        Return Reached(board, Descendants(editor).OfType(Of JournalShortlistList)().Any(
+                           Function(list) list.Visible AndAlso Enumerable.Range(0, list.AccessibilityObject.GetChildCount()).
+                               Any(Function(index) list.AccessibilityObject.GetChild(index).Name = "Edit PLOS ONE")), "shows no shortlist row")
     End Function
 
 

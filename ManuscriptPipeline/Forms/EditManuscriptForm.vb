@@ -174,7 +174,7 @@ Namespace Forms
         ' The kind of work and its tags (#64), edited in the working copy.
         Private ReadOnly classificationGroup As New SectionCard()
         Private ReadOnly shortlistGroup As New SectionCard()
-        Private ReadOnly shortlistRows As New TableLayoutPanel()
+        Private ReadOnly shortlistRows As New JournalShortlistList()
         Private ReadOnly shortlistOffer As New TableLayoutPanel()
         Private ReadOnly lblShortlistOffer As New Label()
         Private ReadOnly btnShortlistOffer As New Button()
@@ -271,6 +271,61 @@ Namespace Forms
             If manuscript IsNot Nothing Then
                 LoadRecord(manuscript, allManuscripts, workingCopy)
             End If
+
+            ' An empty editor for the manuscript page leaves that to the
+            ' page, which may let go a step at a time while the window idles.
+            If manuscript IsNot Nothing OrElse Not pageMode Then
+                LetGoOfLayouts(Integer.MaxValue)
+            End If
+
+        End Sub
+
+
+        ' The form and every container BuildInterface makes hold their
+        ' layout while they are built, styled and given a record, and each
+        ' then lays out once, inner ones first (#133). Laid out as each part
+        ' went in, every container laid itself out again for each control
+        ' added to it and each style set on one, which took most of the 0.9
+        ' to 1.4 s the form took to build on this machine.
+        Private ReadOnly _heldWhileBuilt As New List(Of Control)()
+
+        Private Function Held(Of T As Control)(control As T) As T
+
+            control.SuspendLayout()
+            _heldWhileBuilt.Add(control)
+            Return control
+
+        End Function
+
+        ' Lets the containers still held lay out, inner ones first, for
+        ' about the given time; True once none is held. The constructor
+        ' lets go of them all, except in an empty editor for the manuscript
+        ' page, which the page lets go of before it shows or makes windows.
+        Friend Function LetGoOfLayouts(milliseconds As Integer) As Boolean
+
+            Dim watch As Diagnostics.Stopwatch = Diagnostics.Stopwatch.StartNew()
+
+            While _heldWhileBuilt.Count > 0
+                Dim last As Integer = _heldWhileBuilt.Count - 1
+                Dim container As Control = _heldWhileBuilt(last)
+                _heldWhileBuilt.RemoveAt(last)
+                container.ResumeLayout(True)
+                If watch.ElapsedMilliseconds >= milliseconds Then
+                    Exit While
+                End If
+            End While
+
+            Return _heldWhileBuilt.Count = 0
+
+        End Function
+
+
+        ' A page prepared while the window idles offers the library's tags
+        ' before its first record loads (#133): setting them makes the tag
+        ' box a new window, so they are set before its window is made.
+        Friend Sub SuggestTags(allManuscripts As List(Of Manuscript))
+
+            tagEditor.Suggest(WorkTypeService.AllTags(allManuscripts))
 
         End Sub
 
@@ -468,7 +523,10 @@ Namespace Forms
                 Return True
             End If
 
-            If fileDrawerGroup.Visible AndAlso
+            ' The location the File Drawer group's visibility is set from: the
+            ' group's own Visible reads False whenever another tab hides the
+            ' Overview, and a reason typed there would be dropped.
+            If _workingManuscript.Location = ManuscriptLocation.FileDrawer AndAlso
                Not String.Equals(txtFileDrawerReason.Text.Trim(), If(_workingManuscript.FileDrawerReason, String.Empty).Trim(), StringComparison.Ordinal) Then
                 Return True
             End If
@@ -503,7 +561,7 @@ Namespace Forms
             copy.TargetJournal =
                 journalText
 
-            If fileDrawerGroup.Visible Then
+            If _workingManuscript.Location = ManuscriptLocation.FileDrawer Then
                 copy.FileDrawerReason = txtFileDrawerReason.Text.Trim()
             End If
 
@@ -936,6 +994,8 @@ Namespace Forms
 
         Private Sub BuildInterface()
 
+            Held(Me)
+
             Me.Text = "Manuscript Details"
             Me.StartPosition = FormStartPosition.CenterParent
 
@@ -946,12 +1006,12 @@ Namespace Forms
             Me.Font = New Font("Segoe UI", 10.0F)
             Me.AutoScaleMode = AutoScaleMode.Dpi
 
-            Dim shell As New TableLayoutPanel With {
+            Dim shell As TableLayoutPanel = Held(New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .ColumnCount = 1,
                 .RowCount = 3,
                 .Padding = New Padding(0)
-            }
+            })
 
             shell.RowStyles.Add(
                 New RowStyle(
@@ -972,22 +1032,22 @@ Namespace Forms
                 )
             )
 
-            Dim scrollHost As New Panel With {
+            Dim scrollHost As Panel = Held(New Panel With {
                 .Dock = DockStyle.Fill,
                 .AutoScroll = True,
                 .Padding = New Padding(0)
-            }
+            })
 
             ' The Overview tab: the manuscript's fields and, when filed, its
             ' File Drawer details.
-            Dim root As New TableLayoutPanel With {
+            Dim root As TableLayoutPanel = Held(New TableLayoutPanel With {
                 .Dock = DockStyle.Top,
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 .ColumnCount = 1,
                 .RowCount = 5,
                 .Padding = New Padding(0)
-            }
+            })
 
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 330))
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
@@ -1000,6 +1060,7 @@ Namespace Forms
 
             ' The linked Journal Library record's notes and checklist, so its
             ' requirements are in view while editing.
+            Held(journalNotesGroup)
             journalNotesGroup.Text = "Target journal notes"
             journalNotesGroup.Dock = DockStyle.Top
             journalNotesGroup.AutoSize = True
@@ -1026,17 +1087,17 @@ Namespace Forms
             ' Manuscript metadata
             ' =================================================
 
-            Dim detailsGroup As New SectionCard With {
+            Dim detailsGroup As SectionCard = Held(New SectionCard With {
                 .Text = "Manuscript",
                 .Dock = DockStyle.Fill,
                 .Padding = New Padding(14)
-            }
+            })
 
-            Dim details As New TableLayoutPanel With {
+            Dim details As TableLayoutPanel = Held(New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .ColumnCount = 2,
                 .RowCount = 6
-            }
+            })
 
             details.ColumnStyles.Add(
                 New ColumnStyle(SizeType.AutoSize)
@@ -1082,14 +1143,14 @@ Namespace Forms
                     RefreshRevisionDeadlineDisplay()
                 End Sub
 
-            Dim revisionDeadlinePanel As New FlowLayoutPanel With {
+            Dim revisionDeadlinePanel As FlowLayoutPanel = Held(New FlowLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 .FlowDirection = FlowDirection.LeftToRight,
                 .WrapContents = True,
                 .Margin = New Padding(0)
-            }
+            })
 
             lblRevisionDeadlineValue.AutoSize = True
             lblRevisionDeadlineValue.Anchor = AnchorStyles.Left
@@ -1165,6 +1226,7 @@ Namespace Forms
             ' File Drawer metadata
             ' =================================================
 
+            Held(fileDrawerGroup)
             fileDrawerGroup.Text = "File Drawer"
             fileDrawerGroup.Dock = DockStyle.Top
             fileDrawerGroup.AutoSize = True
@@ -1175,14 +1237,14 @@ Namespace Forms
             ' Shown for a filed manuscript (LoadManuscript).
             fileDrawerGroup.Visible = False
 
-            Dim fileDrawerLayout As New TableLayoutPanel With {
+            Dim fileDrawerLayout As TableLayoutPanel = Held(New TableLayoutPanel With {
                 .Dock = DockStyle.Top,
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 .ColumnCount = 2,
                 .RowCount = 2,
                 .Margin = New Padding(0)
-            }
+            })
 
             fileDrawerLayout.ColumnStyles.Add(
                 New ColumnStyle(SizeType.AutoSize)
@@ -1241,20 +1303,20 @@ Namespace Forms
             ' Structured authors
             ' =================================================
 
-            Dim authorsGroup As New SectionCard With {
+            Dim authorsGroup As SectionCard = Held(New SectionCard With {
                 .Text = "Authors",
                 .Dock = DockStyle.Fill,
                 .Padding = New Padding(14),
                 .Margin = New Padding(3, 8, 3, 8)
-            }
+            })
 
-            Dim authorsLayout As New TableLayoutPanel With {
+            Dim authorsLayout As TableLayoutPanel = Held(New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .ColumnCount = 1,
                 .RowCount = 3,
                 .Padding = New Padding(0),
                 .Margin = New Padding(0)
-            }
+            })
 
             authorsLayout.RowStyles.Add(
                 New RowStyle(
@@ -1280,7 +1342,7 @@ Namespace Forms
             lblAuthorInfo.ForeColor = SystemColors.GrayText
             lblAuthorInfo.Margin = New Padding(0, 0, 0, 4)
 
-            Dim authorButtons As New FlowLayoutPanel With {
+            Dim authorButtons As FlowLayoutPanel = Held(New FlowLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
@@ -1288,7 +1350,7 @@ Namespace Forms
                 .WrapContents = True,
                 .Padding = New Padding(0),
                 .Margin = New Padding(0, 0, 0, 6)
-            }
+            })
 
             Dim btnManageAuthorLibrary As New Button With {
                 .Text = "Manage Library",
@@ -1377,14 +1439,14 @@ Namespace Forms
             ' Submissions
             ' =================================================
 
-            Dim submissionsGroup As New TableLayoutPanel With {
+            Dim submissionsGroup As TableLayoutPanel = Held(New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .ColumnCount = 2,
                 .RowCount = 1,
                 .Margin = New Padding(0),
                 .Padding = New Padding(0),
                 .AccessibleName = "Journal Submissions"
-            }
+            })
 
             ' Runtime-built column widths are not rescaled with the form, so
             ' scale the list's width for the display.
@@ -1393,13 +1455,13 @@ Namespace Forms
             submissionsGroup.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
             submissionsGroup.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
 
-            Dim submissionsList As New TableLayoutPanel With {
+            Dim submissionsList As TableLayoutPanel = Held(New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .ColumnCount = 1,
                 .RowCount = 3,
                 .Margin = New Padding(0, 0, 14, 0),
                 .Padding = New Padding(0)
-            }
+            })
 
             submissionsList.RowStyles.Add(New RowStyle(SizeType.AutoSize))
             submissionsList.RowStyles.Add(New RowStyle(SizeType.AutoSize))
@@ -1410,7 +1472,7 @@ Namespace Forms
             lblSubmissionInfo.ForeColor = SystemColors.GrayText
             lblSubmissionInfo.Margin = New Padding(0, 0, 0, 6)
 
-            Dim submissionButtons As New FlowLayoutPanel With {
+            Dim submissionButtons As FlowLayoutPanel = Held(New FlowLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
@@ -1418,7 +1480,7 @@ Namespace Forms
                 .WrapContents = True,
                 .Margin = New Padding(0, 0, 0, 6),
                 .Padding = New Padding(0)
-            }
+            })
 
             ' Recording a submission stays an explicit action.
             Dim btnAddSubmission As New Button With {
@@ -1480,14 +1542,14 @@ Namespace Forms
             ' Footer
             ' =================================================
 
-            Dim footer As New TableLayoutPanel With {
+            Dim footer As TableLayoutPanel = Held(New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 .ColumnCount = 2,
                 .RowCount = 1,
                 .Padding = New Padding(0, 10, 0, 2)
-            }
+            })
 
             footer.ColumnStyles.Add(
                 New ColumnStyle(SizeType.Percent, 50)
@@ -1508,14 +1570,14 @@ Namespace Forms
             AddHandler btnDeleteManuscript.Click,
                 AddressOf RequestDelete
 
-            Dim rightButtons As New FlowLayoutPanel With {
+            Dim rightButtons As FlowLayoutPanel = Held(New FlowLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 .FlowDirection = FlowDirection.RightToLeft,
                 .WrapContents = False,
                 .Margin = New Padding(0)
-            }
+            })
 
             Dim btnSave As New Button With {
                 .Text = "Save && Close",
@@ -1553,7 +1615,7 @@ Namespace Forms
             ' Sections as tabs, one visible at a time
             ' =================================================
 
-            Dim sectionTabs As New FlowLayoutPanel With {
+            Dim sectionTabs As FlowLayoutPanel = Held(New FlowLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
@@ -1563,7 +1625,7 @@ Namespace Forms
                 .Margin = New Padding(0),
                 .AccessibleName = "Manuscript sections",
                 .AccessibleRole = AccessibleRole.PageTabList
-            }
+            })
 
             AddHandler sectionTabs.Paint,
                 Sub(sender, e)
@@ -1572,11 +1634,11 @@ Namespace Forms
                     End Using
                 End Sub
 
-            Dim sectionHost As New Panel With {
+            Dim sectionHost As Panel = Held(New Panel With {
                 .Dock = DockStyle.Fill,
                 .Padding = New Padding(20, 12, 20, 8),
                 .Margin = New Padding(0)
-            }
+            })
 
             authorsGroup.Margin = New Padding(0)
             _overview = scrollHost
@@ -1653,6 +1715,7 @@ Namespace Forms
 
         Private Sub BuildShortlistGroup()
 
+            Held(shortlistGroup)
             shortlistGroup.Text = "Journal shortlist"
             shortlistGroup.Dock = DockStyle.Top
             shortlistGroup.AutoSize = True
@@ -1660,20 +1723,21 @@ Namespace Forms
             shortlistGroup.Padding = New Padding(14, 8, 14, 12)
             shortlistGroup.Margin = New Padding(3, 8, 3, 8)
 
-            Dim layout As New TableLayoutPanel With {
+            Dim layout As TableLayoutPanel = Held(New TableLayoutPanel With {
                 .Dock = DockStyle.Top,
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 .ColumnCount = 1,
                 .RowCount = 5,
                 .Margin = New Padding(0)
-            }
+            })
             layout.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
             For index As Integer = 0 To 4
                 layout.RowStyles.Add(New RowStyle(SizeType.AutoSize))
             Next
 
             ' After a rejection: the next shortlisted journal, as an offer.
+            Held(shortlistOffer)
             shortlistOffer.Dock = DockStyle.Top
             shortlistOffer.AutoSize = True
             shortlistOffer.AutoSizeMode = AutoSizeMode.GrowAndShrink
@@ -1708,13 +1772,11 @@ Namespace Forms
             ' Hidden until a rejection, ahead of the rows a record shows (#133).
             InPlace.HoldPlace(shortlistOffer)
 
+            ' The journals, drawn by one list the record fills (#133).
             shortlistRows.Dock = DockStyle.Top
-            shortlistRows.AutoSize = True
-            shortlistRows.AutoSizeMode = AutoSizeMode.GrowAndShrink
-            shortlistRows.ColumnCount = 1
             shortlistRows.Margin = New Padding(0)
             shortlistRows.AccessibleName = "Shortlisted journals"
-            shortlistRows.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
+            shortlistRows.ToolTip = shortlistToolTip
             layout.Controls.Add(shortlistRows, 0, 1)
 
             lblShortlistEmpty.Text = "Add the journals you are considering for this manuscript, in your order of preference, with your reasons. " &
@@ -1725,12 +1787,12 @@ Namespace Forms
             lblShortlistEmpty.Margin = New Padding(3, 2, 3, 6)
             layout.Controls.Add(lblShortlistEmpty, 0, 2)
 
-            Dim actions As New FlowLayoutPanel With {
+            Dim actions As FlowLayoutPanel = Held(New FlowLayoutPanel With {
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 .WrapContents = True,
                 .Margin = New Padding(0, 4, 0, 0)
-            }
+            })
             Dim btnAdd As New Button With {.Text = "Add Journal...", .AutoSize = True, .Margin = New Padding(3, 0, 6, 0)}
             AddHandler btnAdd.Click, Sub(sender, e) AddShortlistCandidate()
             btnFindJournals.Text = "Find Journals..."
@@ -1776,17 +1838,14 @@ Namespace Forms
             If _workingManuscript.JournalShortlist Is Nothing Then _workingManuscript.JournalShortlist = New List(Of JournalCandidate)()
             Dim list As List(Of JournalCandidate) = _workingManuscript.JournalShortlist
 
-            shortlistRows.SuspendLayout()
-            For Each child As Control In shortlistRows.Controls.Cast(Of Control)().ToList()
-                InPlace.Dispose(child)
-            Next
-            shortlistRows.RowStyles.Clear()
-            shortlistRows.RowCount = Math.Max(1, list.Count)
-            For index As Integer = 0 To list.Count - 1
-                shortlistRows.RowStyles.Add(New RowStyle(SizeType.AutoSize))
-                shortlistRows.Controls.Add(CreateShortlistRow(list(index), index, list.Count), 0, index)
-            Next
-            shortlistRows.ResumeLayout(True)
+            ' The keyboard on a row's button moves to the editor's first stop,
+            ' as it moved when the button went with its row (the editor
+            ' chose the next control after one removed, or none).
+            If ActiveControl Is shortlistRows AndAlso Not SelectNextControl(Nothing, True, True, True, True) Then
+                ActiveControl = Nothing
+            End If
+
+            shortlistRows.SetEntries(list.Select(Function(candidate, index) ShortlistEntryFor(candidate, index, list.Count)).ToList())
             shortlistRows.Visible = list.Count > 0
             lblShortlistEmpty.Visible = list.Count = 0
 
@@ -1819,9 +1878,6 @@ Namespace Forms
 
             RefreshOnlineCommands()
 
-            ' The rows are new; styled as the page was (#106).
-            UiPolish.ApplyToControls(shortlistRows)
-
         End Sub
 
 
@@ -1841,42 +1897,13 @@ Namespace Forms
         End Sub
 
 
-        Private Function CreateShortlistRow(candidate As JournalCandidate, index As Integer, count As Integer) As Control
+        ' What a journal's row on the shortlist shows and does: its place and
+        ' status, its name with the details known about it, its facts from
+        ' the Journals page (#87), why Find Journals suggested it with the
+        ' keywords on hover (#88), and its Edit... and ⋯ menu.
+        Private Function ShortlistEntryFor(candidate As JournalCandidate, index As Integer, count As Integer) As ShortlistEntry
 
             Dim isTarget As Boolean = RouteAnalyticsService.NameKey(candidate.JournalName) = RouteAnalyticsService.NameKey(txtTargetJournal.Text)
-            Dim row As New TableLayoutPanel With {
-                .Dock = DockStyle.Top,
-                .AutoSize = True,
-                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                .ColumnCount = 4,
-                .RowCount = 1,
-                .Margin = New Padding(0, 0, 0, 6),
-                .AccessibleName = candidate.JournalName,
-                .AccessibleRole = AccessibleRole.ListItem
-            }
-            Dim statusWidth As Integer
-            Using bold As New Font(Me.Font, FontStyle.Bold)
-                statusWidth = TextRenderer.MeasureText(count.ToString(Globalization.CultureInfo.CurrentCulture) & ".  Considering", bold).Width + 12
-            End Using
-            row.ColumnStyles.Add(New ColumnStyle(SizeType.Absolute, statusWidth))
-            row.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
-            row.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
-            row.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
-
-            Dim statusColor As Color
-            Select Case candidate.Status
-                Case CandidateStatus.Preferred : statusColor = UiTheme.AccentColor()
-                Case CandidateStatus.RuledOut : statusColor = UiTheme.MutedText()
-                Case Else : statusColor = UiTheme.SecondaryText()
-            End Select
-            Dim lblStatus As New Label With {
-                .Text = (index + 1).ToString(Globalization.CultureInfo.CurrentCulture) & ".  " & JournalShortlistService.StatusName(candidate.Status),
-                .AutoSize = True,
-                .UseMnemonic = False,
-                .ForeColor = statusColor,
-                .Font = New Font(Me.Font, FontStyle.Bold),
-                .Margin = New Padding(0, 3, 6, 0)
-            }
 
             Dim details As New List(Of String)
             If isTarget Then details.Add("Target journal")
@@ -1888,79 +1915,30 @@ Namespace Forms
             Dim checks As String = JournalChoiceGuide.Summary(candidate)
             If checks.Length > 0 Then details.Add(checks)
 
-            Dim text As New Label With {
-                .AutoSize = True,
-                .UseMnemonic = False,
-                .Text = candidate.JournalName & If(details.Count > 0, Environment.NewLine & String.Join("  ·  ", details), String.Empty),
-                .Margin = New Padding(0, 3, 8, 0),
-                .Font = If(candidate.Status = CandidateStatus.RuledOut, New Font(Me.Font, FontStyle.Strikeout), Me.Font)
-            }
-
-            ' One line of the journal's facts from the Journals page (#87).
-            Dim linked As JournalRecord = ShortlistRecord(candidate)
-            Dim factsLine As String = JournalFactsService.OneLine(linked)
-            Dim facts As New Label With {
-                .AutoSize = True,
-                .UseMnemonic = False,
-                .Text = factsLine,
-                .Visible = factsLine.Length > 0,
-                .ForeColor = UiTheme.MutedText(),
-                .Margin = New Padding(0, 2, 8, 0)
-            }
-            Dim textStack As New FlowLayoutPanel With {
-                .AutoSize = True,
-                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                .FlowDirection = FlowDirection.TopDown,
-                .WrapContents = False,
-                .Margin = New Padding(0)
-            }
-            textStack.Controls.Add(text)
-            textStack.Controls.Add(facts)
-
-            ' Why Find Journals suggested it (#88), with the keywords on hover.
-            Dim evidenceLine As String = JournalShortlistService.EvidenceLine(candidate.Evidence)
-            Dim evidence As New Label With {
-                .AutoSize = True,
-                .UseMnemonic = False,
-                .Text = evidenceLine,
-                .Visible = evidenceLine.Length > 0,
-                .ForeColor = UiTheme.MutedText(),
-                .Margin = New Padding(0, 2, 8, 0)
-            }
+            Dim tip As String = String.Empty
             If candidate.Evidence IsNot Nothing Then
-                shortlistToolTip.SetToolTip(evidence, "Keywords: " & String.Join(If(candidate.Evidence.MatchAll, " AND ", " OR "), candidate.Evidence.Keywords.Select(Function(item) """" & item & """")) &
-                    If(candidate.Evidence.Examples.Count > 0, Environment.NewLine & "For example: " & candidate.Evidence.Examples(0).Title, String.Empty))
+                tip = "Keywords: " & String.Join(If(candidate.Evidence.MatchAll, " AND ", " OR "), candidate.Evidence.Keywords.Select(Function(item) """" & item & """")) &
+                    If(candidate.Evidence.Examples.Count > 0, Environment.NewLine & "For example: " & candidate.Evidence.Examples(0).Title, String.Empty)
             End If
-            textStack.Controls.Add(evidence)
 
-            Dim btnEdit As New Button With {.Text = "Edit...", .AutoSize = True, .AccessibleName = "Edit " & candidate.JournalName, .Margin = New Padding(3, 0, 3, 0)}
-            AddHandler btnEdit.Click, Sub(sender, e) EditShortlistCandidate(candidate)
-
-            Dim menu As New ContextMenuStrip()
-            Dim makeTarget As ToolStripItem = menu.Items.Add("Make Target Journal", Nothing, Sub(sender, e) MakeShortlistTarget(candidate))
-            makeTarget.Enabled = Not isTarget
-            Dim moveUp As ToolStripItem = menu.Items.Add("Move Up", Nothing, Sub(sender, e) MoveShortlistCandidate(candidate, -1))
-            moveUp.Enabled = index > 0
-            Dim moveDown As ToolStripItem = menu.Items.Add("Move Down", Nothing, Sub(sender, e) MoveShortlistCandidate(candidate, 1))
-            moveDown.Enabled = index < count - 1
-            menu.Items.Add(New ToolStripSeparator())
-            menu.Items.Add("Remove from Shortlist", Nothing, Sub(sender, e) RemoveShortlistCandidate(candidate))
-            Dim btnMore As New Button With {.Text = ChrW(&H22EF), .AutoSize = True, .AccessibleName = "More actions for " & candidate.JournalName, .Margin = New Padding(3, 0, 0, 0)}
-            AddHandler btnMore.Click, Sub(sender, e) menu.Show(btnMore, New Point(0, btnMore.Height))
-            AddHandler row.Disposed, Sub(sender, e) menu.Dispose()
-            AddHandler row.Resize,
-                Sub(sender, e)
-                    Dim width As Integer = Math.Max(200, row.ClientSize.Width - statusWidth - btnEdit.Width - btnMore.Width - 24)
-                    text.MaximumSize = New Size(width, 0)
-                    facts.MaximumSize = New Size(width, 0)
-                    evidence.MaximumSize = New Size(width, 0)
-                End Sub
-
-            row.Controls.Add(lblStatus, 0, 0)
-            row.Controls.Add(textStack, 1, 0)
-            row.Controls.Add(btnEdit, 2, 0)
-            row.Controls.Add(btnMore, 3, 0)
-            Return row
+            Return New ShortlistEntry With {
+                .JournalName = candidate.JournalName,
+                .Status = candidate.Status,
+                .StatusText = (index + 1).ToString(Globalization.CultureInfo.CurrentCulture) & ".  " & JournalShortlistService.StatusName(candidate.Status),
+                .Text = candidate.JournalName & If(details.Count > 0, Environment.NewLine & String.Join("  ·  ", details), String.Empty),
+                .StruckOut = candidate.Status = CandidateStatus.RuledOut,
+                .Facts = If(JournalFactsService.OneLine(ShortlistRecord(candidate)), String.Empty),
+                .Evidence = If(JournalShortlistService.EvidenceLine(candidate.Evidence), String.Empty),
+                .EvidenceTip = tip,
+                .CanMakeTarget = Not isTarget,
+                .CanMoveUp = index > 0,
+                .CanMoveDown = index < count - 1,
+                .Edit = Sub() EditShortlistCandidate(candidate),
+                .MakeTarget = Sub() MakeShortlistTarget(candidate),
+                .MoveUp = Sub() MoveShortlistCandidate(candidate, -1),
+                .MoveDown = Sub() MoveShortlistCandidate(candidate, 1),
+                .Remove = Sub() RemoveShortlistCandidate(candidate)
+            }
 
         End Function
 
@@ -2175,6 +2153,7 @@ Namespace Forms
 
         Private Sub BuildClassificationGroup()
 
+            Held(classificationGroup)
             classificationGroup.Text = "Type and tags"
             classificationGroup.Dock = DockStyle.Top
             classificationGroup.AutoSize = True
@@ -2182,14 +2161,14 @@ Namespace Forms
             classificationGroup.Padding = New Padding(14, 8, 14, 12)
             classificationGroup.Margin = New Padding(3, 8, 3, 8)
 
-            Dim layout As New TableLayoutPanel With {
+            Dim layout As TableLayoutPanel = Held(New TableLayoutPanel With {
                 .Dock = DockStyle.Top,
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 .ColumnCount = 2,
                 .RowCount = 2,
                 .Margin = New Padding(0)
-            }
+            })
             layout.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
             layout.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
             layout.RowStyles.Add(New RowStyle(SizeType.AutoSize))
@@ -4253,7 +4232,8 @@ Namespace Forms
 
         Private Sub UpdateFileDrawerReasonIfNeeded()
 
-            If Not fileDrawerGroup.Visible Then
+            ' By location, as HasUnsavedChanges: Save may be clicked on any tab.
+            If _workingManuscript.Location <> ManuscriptLocation.FileDrawer Then
                 Return
             End If
 

@@ -167,10 +167,11 @@ Public Class DarkThemeLegibilityTests
 
     End Sub
 
-    ' The shortlist builds its rows again after the manuscript page was
-    ' styled, and its rows' buttons are styled as the page's are: flat, on
-    ' the card color. The view is the main window, which the shared loop
-    ' does not style, so only RefreshShortlist can have styled them.
+    ' The shortlist draws its rows again after the manuscript page was
+    ' styled (#133), and draws their buttons as the page's buttons are
+    ' styled: on the card color, with text 4.5:1 or more on it. The view is
+    ' the main window, which the shared loop does not style, so only the
+    ' list's own drawing can have styled them.
     <TestMethod>
     Public Sub TheShortlistsRebuiltRowsAreStyled()
 
@@ -183,12 +184,33 @@ Public Class DarkThemeLegibilityTests
         Dim failures As List(Of String) = ViewCatalog.ShowEach({(view.Name, view.Build)},
             Sub(name, shown)
                 If Not UiTheme.IsDark() Then found.Add("The view is not shown in Dark.")
-                Dim rows As List(Of Button) = Descendants(shown).OfType(Of Button)().Where(Function(button) names.Contains(button.AccessibleName)).ToList()
-                If rows.Count <> 4 Then found.Add($"{rows.Count} of the four buttons of two rows, each with Edit... and More actions.")
-                For Each button As Button In rows
-                    If button.FlatStyle <> FlatStyle.Flat Then found.Add($"{Describe(button)} is not styled.")
-                    If button.BackColor <> UiTheme.CardBackground() Then found.Add($"{Describe(button)} is on {button.BackColor}, not the card color.")
-                Next
+                Dim list As JournalShortlistList = Descendants(shown).OfType(Of JournalShortlistList)().SingleOrDefault(Function(control) control.Visible)
+                If list Is Nothing Then
+                    found.Add("No shortlist is shown.")
+                    Return
+                End If
+                Dim accessible As AccessibleObject = list.AccessibilityObject
+                Dim buttons As List(Of AccessibleObject) =
+                    Enumerable.Range(0, accessible.GetChildCount()).Select(Function(index) accessible.GetChild(index)).
+                        Where(Function(item) item.Role = AccessibleRole.PushButton AndAlso names.Contains(item.Name)).ToList()
+                If buttons.Count <> 4 Then found.Add($"{buttons.Count} of the four buttons of two rows, each with Edit... and More actions.")
+                Using image As Bitmap = Picture(list)
+                    For Each button As AccessibleObject In buttons
+                        Dim face As Rectangle = list.RectangleToClient(button.Bounds)
+                        face.Inflate(-list.LogicalToDeviceUnits(6), -list.LogicalToDeviceUnits(6))
+                        face.Intersect(New Rectangle(Point.Empty, image.Size))
+                        If face.Width <= 0 OrElse face.Height <= 0 Then
+                            found.Add($"{button.Name} is not drawn inside the list.")
+                            Continue For
+                        End If
+                        Using inside As Bitmap = image.Clone(face, image.PixelFormat)
+                            Dim fill As Color = CommonestColor(inside)
+                            If fill.ToArgb() <> UiTheme.CardBackground().ToArgb() Then found.Add($"{button.Name} is drawn on {fill}, not the card color.")
+                        End Using
+                        Dim ratio As Double = StrongestContrast(image, face, UiTheme.CardBackground())
+                        If ratio < 4.5 Then found.Add($"{button.Name}'s text has {ratio:F2}:1 on the card color.")
+                    Next
+                End Using
             End Sub,
             mode:=SystemColorMode.Dark)
 

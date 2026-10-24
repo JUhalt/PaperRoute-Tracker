@@ -350,6 +350,38 @@ Public Class FileDrawerTests
             End Sub)
     End Sub
 
+    ' A reason typed on the Overview of a filed manuscript, with another
+    ' tab then showing, is still an unsaved change, goes into a recovery
+    ' draft, and is written by Save: the Overview hidden hides the File
+    ' Drawer group with it, and that is not what decides.
+    <TestMethod>
+    Public Sub AReasonTypedOnTheOverviewIsSavedFromAnotherTab()
+        StaRunner.Run(
+            Sub()
+                Const Typed As String = "Revisit once the replication is in."
+                Dim filed As Manuscript = FiledByImport(Reason)
+
+                OnThePage(filed,
+                    Sub(editor)
+                        Dim box As TextBox = ReasonBox(editor)
+                        Assert.IsTrue(box.Visible, "The reason shows on the Overview.")
+                        box.Text = Typed
+                        ViewCatalog.Descendants(editor).OfType(Of ShelfTabButton)().Single(Function(tab) tab.Text = "Submissions").Checked = True
+                        Application.DoEvents()
+                        Assert.IsFalse(box.Visible, "The Submissions tab hides the Overview.")
+
+                        Assert.IsTrue(editor.HasUnsavedChanges(), "The typed reason is unsaved.")
+                        Assert.AreEqual(Typed, editor.RecoveryCopy().FileDrawerReason, "A recovery draft keeps it.")
+                        Assert.IsTrue(editor.CommitChanges(), "Saved.")
+                        Assert.IsFalse(editor.HasUnsavedChanges(), "Nothing is left unsaved.")
+                    End Sub)
+
+                Assert.AreEqual(ManuscriptLocation.FileDrawer, filed.Location)
+                Assert.AreEqual(Typed, filed.FileDrawerReason)
+                Assert.AreEqual("File Drawer reason updated. Reason: " & Typed, filed.History.Last().Note)
+            End Sub)
+    End Sub
+
     ' Out of the File Drawer by a new submission (#207): on the Pipeline as
     ' Submitted, the filed date and reason cleared and kept in one note,
     ' dated with the submission in the stage the manuscript was filed in,

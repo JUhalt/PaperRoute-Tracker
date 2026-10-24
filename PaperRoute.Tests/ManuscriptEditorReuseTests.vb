@@ -757,6 +757,11 @@ Public Class ManuscriptEditorReuseTests
         For Each part In {("Versions", "_versionsHost"), ("Overview", "shortlistRows"), ("Overview", "tagEditor")}
             ShowSection(editor, part.Item1)
             Dim count As Integer = 0
+            Dim drawn As JournalShortlistList = TryCast(Field(Of Control)(editor, part.Item2), JournalShortlistList)
+            If drawn IsNot Nothing Then
+                judged(part.Item2) = JudgeDrawn(drawn, part.Item2, contrastTheme, failures)
+                Continue For
+            End If
             For Each control As Control In ViewCatalog.Descendants(Field(Of Control)(editor, part.Item2))
                 Dim text As String = If(TypeOf control Is TagChipButton, DirectCast(control, TagChipButton).TagText, control.Text)
                 If Not (TypeOf control Is Label OrElse TypeOf control Is Button OrElse TypeOf control Is TagChipButton) OrElse
@@ -787,6 +792,52 @@ Public Class ManuscriptEditorReuseTests
     End Sub
 
 
+    ' A list that draws its rows (the shortlist, #133) is judged item by
+    ' item where each is drawn, as JournalShortlistRowsTests judges it:
+    ' each line's and each button's text at 4.5:1 on what it is drawn on in
+    ' Light and Dark, and drawn on one of the user's colors under a contrast
+    ' theme (#138). Returns how many items were judged.
+    Private Shared Function JudgeDrawn(list As Control, part As String, contrastTheme As Boolean, failures As List(Of String)) As Integer
+
+        If Not list.Visible OrElse list.Width <= 0 OrElse list.Height <= 0 Then Return 0
+
+        Dim judged As Integer = 0
+        Dim accessible As AccessibleObject = list.AccessibilityObject
+
+        Using picture As New Bitmap(list.Width, list.Height)
+            list.DrawToBitmap(picture, New Rectangle(Point.Empty, list.Size))
+
+            For index As Integer = 0 To accessible.GetChildCount() - 1
+                Dim item As AccessibleObject = accessible.GetChild(index)
+                If Not (item.Role = AccessibleRole.StaticText OrElse item.Role = AccessibleRole.PushButton) OrElse String.IsNullOrWhiteSpace(item.Name) Then Continue For
+
+                Dim bounds As Rectangle = list.RectangleToClient(item.Bounds)
+                If item.Role = AccessibleRole.PushButton Then bounds.Inflate(-list.LogicalToDeviceUnits(6), -list.LogicalToDeviceUnits(6))
+                bounds.Intersect(New Rectangle(Point.Empty, picture.Size))
+                Dim name As String = part & ": drawn " & item.Role.ToString() & " '" & item.Name.Replace(Environment.NewLine, " ") & "' "
+                If bounds.Width <= 0 OrElse bounds.Height <= 0 Then
+                    failures.Add(name & "is not drawn inside the list")
+                    Continue For
+                End If
+
+                Dim seen As (Ratio As Double, Surface As Color, Ink As Color) = JournalShortlistRowsTests.Contrast(picture, bounds)
+
+                If contrastTheme Then
+                    If Not JournalShortlistRowsTests.IsUserColor(seen.Surface) Then
+                        failures.Add(name & "drawn on " & seen.Surface.ToString() & ", not one of the user's colors")
+                    End If
+                ElseIf seen.Ratio < 4.5 Then
+                    failures.Add(name & seen.Ratio.ToString("F2", CultureInfo.InvariantCulture) & ":1 on " & seen.Surface.ToString())
+                End If
+                judged += 1
+            Next
+        End Using
+
+        Return judged
+
+    End Function
+
+
     ' How far the strongest pixels of a control's text stand out from the
     ' color of most of its picture, inside a button's or chip's frame:
     ' smoothing leaves the rest of a stroke paler.
@@ -799,18 +850,8 @@ Public Class ManuscriptEditorReuseTests
             Dim frame As Integer = control.LogicalToDeviceUnits(If(TypeOf control Is Button, 6, If(TypeOf control Is TagChipButton, 3, 0)))
             If area.Width > 2 * frame AndAlso area.Height > 2 * frame Then area.Inflate(-frame, -frame)
 
-            Dim counts As New Dictionary(Of Integer, Integer)()
-            For y As Integer = area.Top To area.Bottom - 1
-                For x As Integer = area.Left To area.Right - 1
-                    Dim pixel As Integer = image.GetPixel(x, y).ToArgb()
-                    Dim count As Integer = 0
-                    counts.TryGetValue(pixel, count)
-                    counts(pixel) = count + 1
-                Next
-            Next
-
-            Dim surface As Color = Color.FromArgb(counts.OrderByDescending(Function(entry) entry.Value).First().Key)
-            Return (counts.Keys.Max(Function(pixel) ContrastRatio(Color.FromArgb(pixel), surface)), surface)
+            Dim seen As (Ratio As Double, Surface As Color, Ink As Color) = JournalShortlistRowsTests.Contrast(image, area)
+            Return (seen.Ratio, seen.Surface)
         End Using
 
     End Function
@@ -850,12 +891,17 @@ Public Class ManuscriptEditorReuseTests
     ' at keeps its last layout while hidden.
     Friend Shared Function Describe(root As Control) As List(Of String)
         Dim lines As New List(Of String)()
-        Describe(root, root.GetType().Name, lines)
+        ' The root's own tab index is its place among what its parent holds,
+        ' not part of what it shows: the page area keeps the pages prepared
+        ' while the window idles (#133) in the order the idle steps added
+        ' them, and only the page shown takes the keyboard. Every control
+        ' under the root is held to its tab index.
+        Describe(root, root.GetType().Name, lines, describeTabIndex:=False)
         Return lines
     End Function
 
 
-    Private Shared Sub Describe(control As Control, path As String, lines As List(Of String))
+    Private Shared Sub Describe(control As Control, path As String, lines As List(Of String), Optional describeTabIndex As Boolean = True)
 
         Dim shown As Boolean = control.Parent Is Nothing OrElse control.Parent.Visible
 
@@ -865,7 +911,7 @@ Public Class ManuscriptEditorReuseTests
             "enabled=" & control.Enabled.ToString(),
             "colors=" & control.BackColor.ToArgb().ToString("X8", CultureInfo.InvariantCulture) & "/" & control.ForeColor.ToArgb().ToString("X8", CultureInfo.InvariantCulture),
             "name=" & If(control.AccessibleName, String.Empty),
-            "tab=" & control.TabStop.ToString() & "," & control.TabIndex.ToString(CultureInfo.InvariantCulture)
+            "tab=" & control.TabStop.ToString() & If(describeTabIndex, "," & control.TabIndex.ToString(CultureInfo.InvariantCulture), String.Empty)
         }
 
         If shown Then parts.Add("own visible=" & OwnVisible(control).ToString())
@@ -903,6 +949,21 @@ Public Class ManuscriptEditorReuseTests
         If chip IsNot Nothing Then parts.Add("tag=" & chip.TagText)
 
         lines.Add(String.Join("; ", parts))
+
+        ' A list that draws its rows (the shortlist, #133) is described by
+        ' what it draws, as a screen reader reads it: each item's role,
+        ' name and action, and, while it shows, where it is drawn.
+        Dim drawn As JournalShortlistList = TryCast(control, JournalShortlistList)
+        If drawn IsNot Nothing Then
+            Dim accessible As AccessibleObject = drawn.AccessibilityObject
+            For index As Integer = 0 To accessible.GetChildCount() - 1
+                Dim item As AccessibleObject = accessible.GetChild(index)
+                Dim line As String = path & "/drawn " & index.ToString(CultureInfo.InvariantCulture) & ": " & item.Role.ToString() & " '" & item.Name & "'" &
+                                     If(String.IsNullOrEmpty(item.DefaultAction), String.Empty, " action '" & item.DefaultAction & "'")
+                If control.Visible AndAlso drawn.IsHandleCreated Then line &= "; bounds=" & drawn.RectangleToClient(item.Bounds).ToString()
+                lines.Add(line)
+            Next
+        End If
 
         For index As Integer = 0 To control.Controls.Count - 1
             Dim child As Control = control.Controls(index)

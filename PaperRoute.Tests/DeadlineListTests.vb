@@ -1423,28 +1423,35 @@ Public Class DeadlineListTests
                       control.GetType().Name & " shows focus cues.")
     End Sub
 
-    ' Each EVENT_OBJECT_FOCUS raised for the window, read back the way a
-    ' screen reader reads it: AccessibleObjectFromEvent, then the name.
-    Private NotInheritable Class FocusHook
+    ' Each EVENT_OBJECT_FOCUS raised for the window, or each event of the
+    ' kind asked for (the shortlist's EVENT_OBJECT_REORDER, #133), read
+    ' back the way a screen reader reads it: AccessibleObjectFromEvent,
+    ' then the name.
+    Friend NotInheritable Class FocusHook
         Implements IDisposable
+
+        Friend Const EVENT_OBJECT_REORDER As UInteger = &H8004UI
 
         Private ReadOnly _window As IntPtr
         Private ReadOnly _heard As List(Of String)
         Private ReadOnly _callback As WinEventProc
         Private ReadOnly _hook As IntPtr
+        Private ReadOnly _focus As Boolean
 
-        Public Sub New(window As IntPtr, heard As List(Of String))
+        Public Sub New(window As IntPtr, heard As List(Of String), Optional eventType As UInteger = &H8005UI)
             _window = window
             _heard = heard
+            _focus = eventType = EVENT_OBJECT_FOCUS
             _callback = AddressOf OnEvent
-            _hook = SetWinEventHook(EVENT_OBJECT_FOCUS, EVENT_OBJECT_FOCUS, IntPtr.Zero, _callback, CUInt(Environment.ProcessId), 0UI, 0UI)
-            Assert.AreNotEqual(IntPtr.Zero, _hook, "The focus hook is set.")
+            _hook = SetWinEventHook(eventType, eventType, IntPtr.Zero, _callback, CUInt(Environment.ProcessId), 0UI, 0UI)
+            Assert.AreNotEqual(IntPtr.Zero, _hook, "The event hook is set.")
         End Sub
 
         ' Windows' own event for the window as it takes focus names the list
-        ' itself; only the list's events for its children are kept.
+        ' itself; only the list's focus events for its children are kept.
+        ' Another event the list raises for itself names the list.
         Private Sub OnEvent(hook As IntPtr, eventType As UInteger, window As IntPtr, objectId As Integer, childId As Integer, thread As UInteger, time As UInteger)
-            If window <> _window OrElse objectId <> OBJID_CLIENT OrElse childId = 0 Then Return
+            If window <> _window OrElse objectId <> OBJID_CLIENT OrElse (_focus AndAlso childId = 0) Then Return
             Dim accessible As Accessibility.IAccessible = Nothing
             Dim child As Object = Nothing
             If AccessibleObjectFromEvent(window, objectId, childId, accessible, child) <> 0 OrElse accessible Is Nothing Then

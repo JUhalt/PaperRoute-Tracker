@@ -12,9 +12,9 @@ Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
 
-' The manuscript page is built once and kept (#133): built for the first
-' manuscript opened, it loads each one after into the same editor and lets
-' go of it once left. ManuscriptEditorReuseTests hold what it shows to a
+' The manuscript page is built once and kept (#133): prepared while the
+' window idles after startup (or built by a manuscript opened before then),
+' it loads each one into the same editor and lets go of it once left. ManuscriptEditorReuseTests hold what it shows to a
 ' window that opened only that manuscript; these hold how it is kept.
 <TestClass>
 <DoNotParallelize>
@@ -38,11 +38,14 @@ Public Class KeptManuscriptPageTests
     End Sub
 
 
-    ' Built for the first manuscript opened, in place, and the same page for
-    ' every manuscript opened after; none of its windows is made on WinForms'
-    ' parking window, while manuscripts open or after they are left.
+    ' Prepared while the window idles after startup (#133): the page is in
+    ' the page area, hidden, holding nothing of any manuscript, with the
+    ' windows its Overview shows made in place; the first manuscript opened
+    ' shows on it, and so does every one after. None of its windows is
+    ' made on WinForms' parking window, while it is prepared, while
+    ' manuscripts open or after they are left.
     <TestMethod>
-    Public Sub TheKeptPageIsBuiltAtTheFirstOpenWithItsWindowsInPlace()
+    Public Sub ThePageIsPreparedWhileTheWindowIdles()
 
         Dim report As New List(Of String)()
 
@@ -55,16 +58,21 @@ Public Class KeptManuscriptPageTests
 
                     board.Start()
                     board.WaitForIdleWork()
-                    Assert.IsNull(board.KeptPage, "No page is built before a manuscript is opened.")
 
-                    Dim page As Control = Nothing
+                    Dim page As Control = board.KeptPage
+                    Assert.IsNotNull(page, "The page is prepared while the window idles.")
+                    Assert.AreSame(board.ContentHost, page.Parent)
+                    Assert.IsFalse(page.Visible, "It waits hidden.")
+                    Dim all As List(Of Control) = ViewCatalog.Descendants(page).ToList()
+                    Assert.IsTrue(all.OfType(Of TextBox)().All(Function(box) box.TextLength = 0), "It holds no manuscript.")
+                    Assert.IsTrue(all.OfType(Of TextBox)().Single(Function(box) box.AccessibleName = "Title").IsHandleCreated, "The Overview has its windows.")
+                    Assert.IsFalse(all.OfType(Of SubmissionDetailsForm)().Any(), "No submission's details.")
 
                     For Each manuscript As Manuscript In board.Library.Take(3)
                         board.Open(manuscript)
                         Application.DoEvents()
-                        If page Is Nothing Then page = board.KeptPage
-                        Assert.AreSame(board.ContentHost, page.Parent)
-                        Assert.AreSame(page, board.PageView, "Every manuscript opens on the kept page.")
+                        Assert.AreSame(page, board.KeptPage, "Every manuscript opens on the prepared page.")
+                        Assert.AreSame(page, board.PageView)
                         Assert.AreEqual(manuscript.Title, board.Field("Title").Text)
                         board.NavigateTo(Form1.WorkspacePage.Board)
                         Application.DoEvents()
@@ -118,11 +126,63 @@ Public Class KeptManuscriptPageTests
                     Assert.IsFalse(all.OfType(Of SubmissionDetailsForm)().Any(), "No submission's details.")
                     Assert.IsFalse(all.OfType(Of ManuscriptVersionHistoryControl)().Any(), "No version history.")
                     Assert.IsFalse(all.Any(Function(control) control.AccessibleRole = AccessibleRole.ListItem), "No shortlisted journal.")
+                    Assert.IsTrue(all.OfType(Of JournalShortlistList)().All(Function(list) list.AccessibilityObject.GetChildCount() = 0 AndAlso list.Entries.Count = 0), "No shortlisted journal drawn.")
 
                     board.Close()
                 End Using
             End Sub,
             TimeSpan.FromMinutes(5))
+
+    End Sub
+
+
+    ' An open on the kept page makes no window but its tag chips' (#133):
+    ' the shortlist draws its rows, so a manuscript choosing among its
+    ' shortlisted journals opens on the windows the page already has.
+    <TestMethod>
+    Public Sub AnOpenMakesNoWindowButItsTagChips()
+
+        Dim report As New List(Of String)()
+        Dim chips As Integer = 0
+        Dim tags As Integer = 0
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary = Library60()
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+                    Dim subjects As List(Of Manuscript) =
+                        board.Library.Where(Function(item) item.Location = ManuscriptLocation.Pipeline AndAlso item.JournalShortlist.Count > 1 AndAlso item.Tags.Count > 0).Take(2).ToList()
+                    Assert.AreEqual(2, subjects.Count, "Two Pipeline manuscripts with shortlisted journals and tags.")
+
+                    ' The page is built for the first; the second opens on it.
+                    board.Open(subjects(0))
+                    Application.DoEvents()
+                    board.NavigateTo(Form1.WorkspacePage.Board)
+                    board.WaitForIdleWork()
+
+                    Using watch As New WindowCreationWatch()
+                        board.Open(subjects(1))
+                        Application.DoEvents()
+                        Dim made As List(Of String) = watch.Children()
+                        chips = made.Where(Function(window) window.Contains(" in TagEditor 'Tags'", StringComparison.Ordinal)).Count()
+                        report.AddRange(made.Where(Function(window) Not window.Contains(" in TagEditor 'Tags'", StringComparison.Ordinal)))
+                    End Using
+
+                    tags = subjects(1).Tags.Count
+                    Dim shortlist As JournalShortlistList = ViewCatalog.Descendants(board.Editor).OfType(Of JournalShortlistList)().Single()
+                    Assert.AreEqual(subjects(1).JournalShortlist.Count, shortlist.Entries.Count, "The shortlist shows the manuscript's journals.")
+
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(5))
+
+        Assert.AreEqual(0, report.Count, "Windows the open made besides its tag chips:" & Environment.NewLine & String.Join(Environment.NewLine, report))
+        Assert.AreEqual(tags, chips, "A window for each tag chip.")
 
     End Sub
 
@@ -221,8 +281,9 @@ Public Class KeptManuscriptPageTests
     ' The system colors changing, as Windows changes them when a contrast
     ' theme is turned on or off, lets the kept page go as it lets the kept
     ' Deadlines and Import & Export pages go: hidden, at once and where it
-    ' is; showing, as it is left, its manuscript on it until then. The next
-    ' manuscript opened builds the page anew, and that page is kept again.
+    ' is; showing, as it is left, its manuscript on it until then. A page in
+    ' the new colors is prepared once the window idles, or built by the
+    ' next manuscript opened before then, and that page is kept again.
     ' Nothing is saved.
     <TestMethod>
     Public Sub TheSystemColorsChangingLetsTheKeptPageGo()
@@ -245,11 +306,16 @@ Public Class KeptManuscriptPageTests
                         board.ChangeSystemColors()
                         Assert.IsTrue(hidden.IsDisposed, "The hidden page is let go at once.")
                         Assert.IsFalse(board.ContentHost.Controls.Contains(hidden), "It has left the page area.")
-                        Assert.IsNull(board.KeptPage, "No page is kept until the next manuscript is opened.")
+
+                        board.WaitForIdleWork()
+                        Dim prepared As Control = board.KeptPage
+                        Assert.IsNotNull(prepared, "A page is prepared once the window idles.")
+                        Assert.AreEqual(SystemColors.Window, prepared.BackColor, "It is prepared in the contrast theme's colors.")
 
                         board.Open(board.Library(1))
                         Application.DoEvents()
                         Dim showing As Control = board.KeptPage
+                        Assert.AreSame(prepared, showing, "The next manuscript opens on it.")
                         Assert.AreEqual(SystemColors.Window, showing.BackColor, "The next page is built in the contrast theme's colors.")
 
                         UiTheme.HighContrastOverride = False

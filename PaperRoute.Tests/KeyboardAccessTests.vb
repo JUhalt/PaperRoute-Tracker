@@ -95,6 +95,9 @@ Public Class KeyboardAccessTests
     Private Const WM_KEYDOWN As UInteger =
         &H100
 
+    Private Const WM_KEYUP As UInteger =
+        &H101
+
     Private Const VK_SHIFT As Integer =
         &H10
 
@@ -1281,6 +1284,318 @@ Public Class KeyboardAccessTests
     End Sub
 
 
+    ' Entering a page by keyboard (#133): a card's title opened with Enter
+    ' or Space on two shelves, each rail page by its command key and by the
+    ' arrow keys along the rail, Alt+Left back, and the shelf tabs moved
+    ' along with the arrow keys. Where focus lands, how often the control
+    ' it left lost it and was validated, and how often the control it
+    ' landed on was entered, are the same however a page is built, shown
+    ' or painted. Pinned on the window before pages were prepared while it
+    ' idled or switched without painting.
+    <TestMethod>
+    Public Sub EnteringAPageByKeyboardKeepsFocusWhereItLandsToday()
+
+        Dim root As String = CreateTemporaryRoot()
+        Dim report As New List(Of String)()
+
+        StorageEnvironment.RootOverride = Path.Combine(root, "storage")
+
+        Try
+
+            StaRunner.Run(
+                Sub()
+
+                    Dim library As LargeLibraryFixture.SyntheticLibrary =
+                        LargeLibraryFixture.Create(Path.Combine(root, "library"), 60)
+
+                    Using board As New LibraryBoard(library, Path.Combine(root, "settings"))
+
+                        board.Start()
+                        board.WaitForIdleWork()
+
+                        ' Counts what happens to the control focus leaves and
+                        ' the one it lands on, while one action runs.
+                        Dim record As Action(Of String, Control, Action) =
+                            Sub(name, origin, act)
+                                Dim entered As New Dictionary(Of Control, Integer)()
+                                Dim watched As List(Of Control) = {DirectCast(board, Control)}.Concat(ViewCatalog.Descendants(board)).ToList()
+                                Dim onEnter As EventHandler =
+                                    Sub(sender, e)
+                                        Dim control As Control = DirectCast(sender, Control)
+                                        Dim count As Integer = 0
+                                        entered.TryGetValue(control, count)
+                                        entered(control) = count + 1
+                                    End Sub
+                                For Each control As Control In watched
+                                    AddHandler control.Enter, onEnter
+                                Next
+                                Dim left As Integer = 0
+                                Dim validating As Integer = 0
+                                AddHandler origin.Leave, Sub(sender, e) left += 1
+                                AddHandler origin.Validating, Sub(sender, e) validating += 1
+
+                                Dim failure As String = String.Empty
+                                Try
+                                    act()
+                                    Application.DoEvents()
+                                    board.WaitForIdleWork()
+                                Catch ex As Exception
+                                    failure = ", " & ex.GetType().Name & ": " & ex.Message
+                                End Try
+
+                                For Each control As Control In watched
+                                    RemoveHandler control.Enter, onEnter
+                                Next
+
+                                Dim landed As Control = DeepestActiveControl(board)
+                                Dim landedEntered As Integer = 0
+                                Dim hooked As Boolean = landed IsNot Nothing AndAlso watched.Contains(landed)
+                                If hooked Then entered.TryGetValue(landed, landedEntered)
+
+                                report.Add(name & ": page " & board.PageName &
+                                           ", active " & DescribeOnBoard(landed) &
+                                           ", entered " & If(hooked, landedEntered.ToString(), "new") &
+                                           ", left " & left.ToString() &
+                                           ", validated " & Math.Min(validating, 2).ToString() &
+                                           ", origin entered " & If(entered.ContainsKey(origin), entered(origin), 0).ToString() &
+                                           failure)
+                            End Sub
+
+                        ' Opens a manuscript once first, so every open below is
+                        ' an open of the kept page, as most opens are.
+                        board.Open(board.Library.First(Function(item) item.Location = ManuscriptLocation.Pipeline))
+                        Application.DoEvents()
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        board.WaitForIdleWork()
+
+                        For Each shelf In {("Pipeline", "tabPipeline", "pipelinePanel"), ("Published", "tabPublished", "publishedPanel")}
+                            For Each key As Keys In {Keys.Enter, Keys.Space}
+
+                                board.ShelfTab(shelf.Item2).Checked = True
+                                Application.DoEvents()
+                                board.WaitForBoardFill()
+                                Dim card As Control = board.Shelf(shelf.Item3).Controls.OfType(Of RoundedPanel)().First()
+                                Dim title As LinkLabel = card.Controls.OfType(Of LinkLabel)().First()
+                                board.ActiveControl = title
+                                Application.DoEvents()
+
+                                record(shelf.Item1 & " title, " & key.ToString(), title,
+                                       Sub()
+                                           Press(board, key)
+                                           If key = Keys.Space Then PostMessage(title.Handle, WM_KEYUP, New IntPtr(CInt(key)), New IntPtr(1))
+                                       End Sub)
+
+                                Dim landed As Control = DeepestActiveControl(board)
+                                record(shelf.Item1 & " title, " & key.ToString() & ", then Alt+Left", If(landed, DirectCast(board, Control)),
+                                       Sub() board.PressCommandKey(Keys.Alt Or Keys.Left))
+
+                            Next
+                        Next
+
+                        board.ShelfTab("tabPipeline").Checked = True
+                        Application.DoEvents()
+
+                        ' Each rail page by its command key, from the Board's
+                        ' search box, and back.
+                        Dim search As TextBox = ViewCatalog.Descendants(board).OfType(Of TextBox)().Single(Function(box) box.AccessibleName = "Search the board (Ctrl+F)")
+                        For Each page As Form1.WorkspacePage In {Form1.WorkspacePage.Library, Form1.WorkspacePage.Journals, Form1.WorkspacePage.Deadlines,
+                                                                 Form1.WorkspacePage.Insights, Form1.WorkspacePage.ImportExport}
+                            board.ActiveControl = search
+                            Application.DoEvents()
+                            record("Ctrl+" & (CInt(page) + 1).ToString() & " from the search box", search,
+                                   Sub() board.PressCommandKey(Keys.Control Or CType(Keys.D0 + CInt(page) + 1, Keys)))
+                            If board.PageName = Form1.WorkspacePage.Insights.ToString() Then board.WaitForInsights()
+                            Dim landed As Control = DeepestActiveControl(board)
+                            record("Ctrl+" & (CInt(page) + 1).ToString() & ", then Alt+Left", If(landed, DirectCast(board, Control)),
+                                   Sub() board.PressCommandKey(Keys.Alt Or Keys.Left))
+                        Next
+
+                        ' Down along the rail visits each page with focus on the
+                        ' rail, and Up comes back.
+                        Dim rail As List(Of RailButton) = ViewCatalog.Descendants(board).OfType(Of RailButton)().ToList()
+                        board.ActiveControl = rail(0)
+                        Application.DoEvents()
+                        For Each direction As Keys In {Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Up, Keys.Up, Keys.Up, Keys.Up, Keys.Up}
+                            Dim origin As Control = If(DeepestActiveControl(board), DirectCast(board, Control))
+                            record(direction.ToString() & " on the rail from " & DescribeOnBoard(origin), origin, Sub() Press(board, direction))
+                            If board.PageName = Form1.WorkspacePage.Insights.ToString() Then board.WaitForInsights()
+                        Next
+
+                        ' The shelf tabs along with the arrow keys.
+                        board.ActiveControl = board.ShelfTab("tabPipeline")
+                        Application.DoEvents()
+                        For Each direction As Keys In {Keys.Right, Keys.Right, Keys.Left, Keys.Left}
+                            Dim origin As Control = If(DeepestActiveControl(board), DirectCast(board, Control))
+                            record(direction.ToString() & " on the shelf tabs from " & DescribeOnBoard(origin), origin, Sub() Press(board, direction))
+                            report(report.Count - 1) &= ", checked " & {"tabPipeline", "tabPublished", "tabFileDrawer"}.Single(Function(name) board.ShelfTab(name).Checked)
+                        Next
+
+                        board.Close()
+
+                    End Using
+
+                End Sub,
+                TimeSpan.FromMinutes(5))
+
+        Finally
+            StorageEnvironment.RootOverride = Nothing
+            DeleteTemporaryRoot(root)
+        End Try
+
+        CollectionAssert.AreEqual(
+            EnteringAPageExpected,
+            report,
+            Environment.NewLine & String.Join(Environment.NewLine, report))
+
+    End Sub
+
+
+    ' Where focus landed entering each page on f5c6947, before pages were
+    ' prepared while the window idled or switched without painting.
+    ' A title opened from the Board or the Board's search box left by Ctrl+N
+    ' keeps the keyboard where it was, on the hidden Board, until focus is
+    ' moved; a rail button or a shelf tab reached with an arrow key is
+    ' entered once, the one left loses focus once and is validated once.
+    Private Shared ReadOnly EnteringAPageExpected As New List(Of String) From {
+        "Pipeline title, Enter: page Manuscript, active LinkLabel 0 of card 0 on its shelf, entered 0, left 0, validated 0, origin entered 0",
+        "Pipeline title, Enter, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 0, left 0, validated 0, origin entered 0",
+        "Pipeline title, Space: page Manuscript, active LinkLabel 0 of card 0 on its shelf, entered 0, left 0, validated 0, origin entered 0",
+        "Pipeline title, Space, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 0, left 0, validated 0, origin entered 0",
+        "Published title, Enter: page Manuscript, active LinkLabel 0 of card 0 on its shelf, entered 0, left 0, validated 0, origin entered 0",
+        "Published title, Enter, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 0, left 0, validated 0, origin entered 0",
+        "Published title, Space: page Manuscript, active LinkLabel 0 of card 0 on its shelf, entered 0, left 0, validated 0, origin entered 0",
+        "Published title, Space, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 0, left 0, validated 0, origin entered 0",
+        "Ctrl+2 from the search box: page Library, active TextBox 'Search the board (Ctrl+F)', entered 0, left 0, validated 0, origin entered 0",
+        "Ctrl+2, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 0, left 0, validated 0, origin entered 0",
+        "Ctrl+3 from the search box: page Journals, active TextBox 'Search the board (Ctrl+F)', entered 0, left 0, validated 0, origin entered 0",
+        "Ctrl+3, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 0, left 0, validated 0, origin entered 0",
+        "Ctrl+4 from the search box: page Deadlines, active TextBox 'Search the board (Ctrl+F)', entered 0, left 0, validated 0, origin entered 0",
+        "Ctrl+4, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 0, left 0, validated 0, origin entered 0",
+        "Ctrl+5 from the search box: page Insights, active TextBox 'Search the board (Ctrl+F)', entered 0, left 0, validated 0, origin entered 0",
+        "Ctrl+5, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 0, left 0, validated 0, origin entered 0",
+        "Ctrl+6 from the search box: page ImportExport, active TextBox 'Search the board (Ctrl+F)', entered 0, left 0, validated 0, origin entered 0",
+        "Ctrl+6, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 0, left 0, validated 0, origin entered 0",
+        "Down on the rail from RailButton 'Board': page Library, active RailButton 'Library', entered 1, left 1, validated 1, origin entered 0",
+        "Down on the rail from RailButton 'Library': page Journals, active RailButton 'Journals', entered 1, left 1, validated 1, origin entered 0",
+        "Down on the rail from RailButton 'Journals': page Deadlines, active RailButton 'Deadlines', entered 1, left 1, validated 1, origin entered 0",
+        "Down on the rail from RailButton 'Deadlines': page Insights, active RailButton 'Insights', entered 1, left 1, validated 1, origin entered 0",
+        "Down on the rail from RailButton 'Insights': page ImportExport, active RailButton 'Import & Export', entered 1, left 1, validated 1, origin entered 0",
+        "Up on the rail from RailButton 'Import & Export': page Insights, active RailButton 'Insights', entered 1, left 1, validated 1, origin entered 0",
+        "Up on the rail from RailButton 'Insights': page Deadlines, active RailButton 'Deadlines', entered 1, left 1, validated 1, origin entered 0",
+        "Up on the rail from RailButton 'Deadlines': page Journals, active RailButton 'Journals', entered 1, left 1, validated 1, origin entered 0",
+        "Up on the rail from RailButton 'Journals': page Library, active RailButton 'Library', entered 1, left 1, validated 1, origin entered 0",
+        "Up on the rail from RailButton 'Library': page Board, active RailButton 'Board', entered 1, left 1, validated 1, origin entered 0",
+        "Right on the shelf tabs from ShelfTabButton 'Pipeline': page Board, active ShelfTabButton 'Published', entered 1, left 1, validated 1, origin entered 0, checked tabPublished",
+        "Right on the shelf tabs from ShelfTabButton 'Published': page Board, active ShelfTabButton 'File Drawer', entered 1, left 1, validated 1, origin entered 0, checked tabFileDrawer",
+        "Left on the shelf tabs from ShelfTabButton 'File Drawer': page Board, active ShelfTabButton 'Published', entered 1, left 1, validated 1, origin entered 0, checked tabPublished",
+        "Left on the shelf tabs from ShelfTabButton 'Published': page Board, active ShelfTabButton 'Pipeline', entered 1, left 1, validated 1, origin entered 0, checked tabPipeline"
+    }
+
+
+    ' A card's title opened with Enter while the window really has the
+    ' keyboard (#133). The pins above run in a window that never had it,
+    ' so the Board never holds focus as it hides there, and the move of
+    ' focus off it that HideBoardPage makes first, the move WinForms makes
+    ' as a control holding focus is hidden (SelectNextIfFocused), is never
+    ' taken. Here it is, and focus lands where it landed with the Board
+    ' hidden as f5c6947 hid it, leaving that move to WinForms (run on
+    ' 2026-10-23 with HideBoardPage put back that way): WinForms' move
+    ' from the Board goes into the Board, to its first stop, the search
+    ' box, and the keyboard stays there, behind the page, until it is
+    ' moved, as the pins above record for a window without the keyboard.
+    <TestMethod>
+    Public Sub OpeningACardHoldingTheKeyboardLandsFocusAsBefore()
+
+        Dim root As String = CreateTemporaryRoot()
+        Dim report As New List(Of String)()
+
+        StorageEnvironment.RootOverride = Path.Combine(root, "storage")
+
+        Try
+
+            StaRunner.Run(
+                Sub()
+
+                    Dim library As LargeLibraryFixture.SyntheticLibrary =
+                        LargeLibraryFixture.Create(Path.Combine(root, "library"), 60)
+
+                    Using board As New LibraryBoard(library, Path.Combine(root, "settings"))
+
+                        board.Start()
+                        board.WaitForIdleWork()
+                        board.Open(board.Library.First(Function(item) item.Location = ManuscriptLocation.Pipeline))
+                        Application.DoEvents()
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        board.WaitForIdleWork()
+
+                        Dim landing As Func(Of String) =
+                            Function()
+                                Return "page " & board.PageName &
+                                       ", active " & DescribeOnBoard(DeepestActiveControl(board)) &
+                                       ", focus " & DescribeOnBoard(Control.FromChildHandle(GetFocus())) &
+                                       ", the Board holds focus " & board.BoardPage.ContainsFocus.ToString()
+                            End Function
+
+                        Dim card As Control = board.Shelf("pipelinePanel").Controls.OfType(Of RoundedPanel)().First()
+                        Dim title As LinkLabel = card.Controls.OfType(Of LinkLabel)().First()
+                        If Not title.Focus() OrElse Not title.Focused Then
+                            Assert.Inconclusive("The test window was given no keyboard focus on this host.")
+                        End If
+                        report.Add("Before: " & landing())
+
+                        Press(board, Keys.Enter)
+                        board.WaitForIdleWork()
+                        report.Add("Enter: " & landing())
+
+                        board.PressCommandKey(Keys.Alt Or Keys.Left)
+                        Application.DoEvents()
+                        board.WaitForIdleWork()
+                        report.Add("Alt+Left: " & landing())
+
+                        board.Close()
+
+                    End Using
+
+                End Sub,
+                TimeSpan.FromMinutes(3))
+
+        Finally
+            StorageEnvironment.RootOverride = Nothing
+            DeleteTemporaryRoot(root)
+        End Try
+
+        CollectionAssert.AreEqual(
+            New List(Of String) From {
+                "Before: page Board, active LinkLabel 0 of card 0 on its shelf, focus LinkLabel 0 of card 0 on its shelf, the Board holds focus True",
+                "Enter: page Manuscript, active TextBox 'Search the board (Ctrl+F)', focus TextBox 'Search the board (Ctrl+F)', the Board holds focus True",
+                "Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', focus TextBox 'Search the board (Ctrl+F)', the Board holds focus True"
+            },
+            report,
+            Environment.NewLine & String.Join(Environment.NewLine, report))
+
+    End Sub
+
+
+    ' A control as the pins name it: a card's parts by their place on the
+    ' card and the card's on its shelf, since a card's text follows the
+    ' day the test runs; a shelf tab without its count, which follows the
+    ' library.
+    Private Shared Function DescribeOnBoard(
+        control As Control
+    ) As String
+
+        Dim card As CardPanel = TryCast(control?.Parent, CardPanel)
+
+        If card IsNot Nothing AndAlso card.Parent IsNot Nothing Then
+            Return control.GetType().Name & " " & card.Controls.GetChildIndex(control).ToString() &
+                " of card " & card.Parent.Controls.GetChildIndex(card).ToString() & " on its shelf"
+        End If
+
+        Return Regex.Replace(Describe(control), " \(\d+\)'$", "'")
+
+    End Function
+
+
     ' Shows the dialog modally, offscreen, and presses Esc in it once it
     ' has shown. Nothing is returned for a dialog Esc leaves open.
     Private Shared Function EscapeResult(
@@ -1625,6 +1940,10 @@ Public Class KeyboardAccessTests
 
     <DllImport("user32.dll")>
     Private Shared Function GetKeyboardState(state As Byte()) As Boolean
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function GetFocus() As IntPtr
     End Function
 
     <DllImport("user32.dll")>
