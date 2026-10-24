@@ -162,7 +162,11 @@ Public Class ResponsivenessBudgetTests
             ' switch, it read 274 to 337 ms in the profile's clean runs
             ' (2026-10-18) and 210 to 1,750 in this branch's runs; it is
             ' enforced from 2026-10-23. The row is checked to time a prepared
-            ' shelf, so it cannot pass on a shelf with nothing on it.
+            ' shelf, so it cannot pass on a shelf with nothing on it. A switch
+            ' paints nothing until it has returned (#133), so what it changed
+            ' is painted in the reported row after it, as after every switch
+            ' whose next row would not paint it: the screen's wait a switch
+            ' used to hold moved there, and is timed there.
             Dim publishedShelf As ManuscriptShelfPanel = board.Shelf("publishedPanel")
             If enforce Then
                 Assert.IsTrue(library.Manuscripts.Where(Function(item) item.Location = ManuscriptLocation.Published).Count() >= 100, "The 500 library has a Published shelf to fill a screen.")
@@ -170,6 +174,7 @@ Public Class ResponsivenessBudgetTests
                               "The Published shelf was put together, its first screen's windows made, while the window idled.")
             End If
             rows.Add(Time(library, "First switch to Published (the shelf put together while the window idled)", PageSwitch, Sub() board.ShelfTab("tabPublished").Checked = True, enforced:=enforce))
+            rows.Add(Time(library, "Published: its paint after the first switch", UiThread, Sub() board.PaintNow()))
             board.WaitForBoardFill()
             board.ShelfTab("tabPipeline").Checked = True
             board.WaitForBoardFill()
@@ -185,11 +190,14 @@ Public Class ResponsivenessBudgetTests
             ' came forward (PageSwitchTests.SwitchesPaintNothingSynchronously
             ' records that painting). Since 2026-10-23 a switch paints nothing
             ' until it has returned; the row read 12 to 50 ms in 60 trials in
-            ' a row on a Release build, and it is enforced.
+            ' a row on a Release build, and it is enforced. The wait did not
+            ' end: it moved into the paint after the switch, which the
+            ' researcher still waits on and the row after it reports.
             rows.Add(Time(library, "Board to Library", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Library)))
             rows.Add(Time(library, "One Library filter keystroke", FilterKeystroke, Sub() board.TypeInLibraryFilter("a"), enforced:=enforce))
             rows.Add(Time(library, "Library filter: refill once typing pauses", UiThread, Sub() board.PauseTyping(), enforced:=enforce))
             rows.Add(Time(library, "Library to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
+            rows.Add(Time(library, "Board: its paint after Library to Board", UiThread, Sub() board.PaintNow()))
 
             ' The Journals page on the test's author library, through the
             ' window's own navigation (CreateJournalLibraryEditor). Journals and
@@ -201,10 +209,14 @@ Public Class ResponsivenessBudgetTests
             ' 13 to 32 and 20 to 56), and both are enforced, first and second
             ' visits. Journals to Board stays reported: leaving reads the
             ' author library its editor saved and renders the Board again, as
-            ' it did after the Journal Library dialog (49 to 161 ms).
+            ' it did after the Journal Library dialog (49 to 161 ms). Each
+            ' visit's paint is reported in the row after it; Insights' too,
+            ' before its figures, whose row processes messages.
             rows.Add(Time(library, "Board to Journals (the page prepared while the window idled)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Journals), enforced:=enforce))
+            rows.Add(Time(library, "Journals: its paint after the switch", UiThread, Sub() board.PaintNow()))
             rows.Add(Time(library, "Journals to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
             rows.Add(Time(library, "Board to Journals (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Journals), enforced:=enforce))
+            rows.Add(Time(library, "Journals: its paint after the switch (second visit)", UiThread, Sub() board.PaintNow()))
             rows.Add(Time(library, "Journals to Board (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
 
             ' The Deadlines page draws its rows in one list and is kept (#133).
@@ -236,9 +248,11 @@ Public Class ResponsivenessBudgetTests
             rows.Add(Time(library, "Deadlines to Board (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
 
             rows.Add(Time(library, "Board to Insights (the page prepared while the window idled)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Insights), enforced:=enforce))
+            rows.Add(Time(library, "Insights: its paint after the switch", UiThread, Sub() board.PaintNow()))
             rows.Add(Time(library, "Insights: figures ready (calculated off the UI thread)", UiThread, Sub() board.WaitForInsights()))
             rows.Add(Time(library, "Insights to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
             rows.Add(Time(library, "Board to Insights (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Insights), enforced:=enforce))
+            rows.Add(Time(library, "Insights: its paint after the switch (second visit)", UiThread, Sub() board.PaintNow()))
             rows.Add(Time(library, "Insights: figures ready (second visit)", UiThread, Sub() board.WaitForInsights()))
             rows.Add(Time(library, "Insights to Board (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
 
