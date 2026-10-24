@@ -68,6 +68,15 @@ Partial Public Class Form1
         insightsScope.Visible = False
         insightsFootnote.Visible = True
 
+        ' Nothing of the last visit's figures shows until they are worked
+        ' out anew, as a new page showed none: its tiles and its view wait
+        ' hidden, and the tabs carry no counts, until ShowInsights. Hidden
+        ' rather than destroyed, so the switch does no more than before.
+        insightsTiles.Visible = False
+        insightsContent.Visible = False
+        tabInsightsJournals.Text = "Your Journals"
+        tabInsightsRoutes.Text = "Your Routes"
+
         ' Another tab is chosen only on a page that has shown, so its tabs
         ' have their windows; a prepared page whose tabs have none yet checks
         ' Your Journals as they are made (BuildInsightsPage).
@@ -327,6 +336,7 @@ Partial Public Class Form1
         End If
 
         FillInsightTiles(statistics)
+        insightsTiles.Visible = True
 
         tabInsightsJournals.Text = "Your Journals (" & statistics.Journals.Count.ToString(CultureInfo.CurrentCulture) & ")"
         tabInsightsRoutes.Text = "Your Routes (" & statistics.Manuscripts.Where(Function(item) item.Submissions.Count > 0).Count().ToString(CultureInfo.CurrentCulture) & ")"
@@ -335,6 +345,7 @@ Partial Public Class Form1
         For Each child As Control In insightsContent.Controls.Cast(Of Control)().ToList()
             InPlace.Dispose(child)
         Next
+        insightsContent.Visible = True
 
         insightsScope.Visible = insightsJournal IsNot Nothing AndAlso Not tabInsightsJournals.Checked AndAlso Not tabInsightsCitations.Checked
         insightsFootnote.Visible = Not tabInsightsCitations.Checked

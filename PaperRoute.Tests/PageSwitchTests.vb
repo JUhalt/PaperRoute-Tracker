@@ -443,7 +443,9 @@ Public Class PageSwitchTests
     ' Each visit to Insights begins as a new page did (#133): on Your
     ' Journals, no journal chosen, and the figures worked out anew from the
     ' records as they are, though the page is kept and was left on a
-    ' journal's routes.
+    ' journal's routes, or on Your Journals. Until the figures are back,
+    ' nothing of the last visit's shows: no tile, no list, no count on a
+    ' tab, only the line that says they are being worked out.
     <TestMethod>
     Public Sub AnInsightsVisitBeginsAsANewPageDid()
 
@@ -479,6 +481,7 @@ Public Class PageSwitchTests
                     Dim published As Integer = board.Library.Where(Function(item) item.Location = Models.ManuscriptLocation.Published).Count()
 
                     board.NavigateTo(Form1.WorkspacePage.Insights)
+                    AssertNothingOfTheLastVisitShows(page, "left on a journal's routes")
                     board.WaitForInsights()
                     Assert.AreSame(page, board.PageView, "The page is kept.")
                     Dim checkedTabs As List(Of String) = ViewCatalog.Descendants(page).OfType(Of RadioButton)().Where(Function(tab) tab.Checked).Select(Function(tab) tab.Text).ToList()
@@ -491,6 +494,17 @@ Public Class PageSwitchTests
                     Dim tiles As List(Of String) = ViewCatalog.Descendants(page).OfType(Of Controls.RoundedPanel)().Select(Function(tile) tile.AccessibleName).ToList()
                     Dim expected As String = board.Library.Count.ToString(Globalization.CultureInfo.CurrentCulture) & " manuscripts  ·  " & published.ToString(Globalization.CultureInfo.CurrentCulture) & " published"
                     Assert.IsTrue(tiles.Contains(expected), "The figures are worked out anew: " & String.Join(" | ", tiles))
+                    Assert.IsTrue(grid.Visible AndAlso ViewCatalog.Descendants(page).OfType(Of Controls.RoundedPanel)().All(Function(tile) tile.Visible), "The figures show once they are back.")
+
+                    ' Left on Your Journals, as it most often is.
+                    board.NavigateTo(Form1.WorkspacePage.Board)
+                    Application.DoEvents()
+                    board.NavigateTo(Form1.WorkspacePage.Insights)
+                    AssertNothingOfTheLastVisitShows(page, "left on Your Journals")
+                    board.WaitForInsights()
+                    Dim again As DataGridView = ViewCatalog.Descendants(page).OfType(Of DataGridView)().Single()
+                    Assert.IsTrue(grid.IsDisposed AndAlso again.Visible AndAlso again.Columns.Contains("Journal"), "Your Journals shows anew.")
+                    StringAssert.StartsWith(tabs(page).First().Text, "Your Journals (", "The tab counts once the figures are back.")
 
                     board.NavigateTo(Form1.WorkspacePage.Board)
                     Application.DoEvents()
@@ -500,6 +514,22 @@ Public Class PageSwitchTests
             TimeSpan.FromMinutes(3))
 
     End Sub
+
+
+    ' A kept Insights page just shown again, before its figures are back.
+    Private Shared Sub AssertNothingOfTheLastVisitShows(page As Control, left As String)
+        Dim shown As List(Of String) =
+            ViewCatalog.Descendants(page).Where(Function(control) control.Visible AndAlso (TypeOf control Is DataGridView OrElse TypeOf control Is Controls.RoundedPanel)).
+                Select(Function(control) control.GetType().Name & " '" & control.AccessibleName & "'").ToList()
+        Assert.AreEqual(0, shown.Count, "Shown again after it was " & left & ", before its figures are back: " & String.Join(" | ", shown))
+        CollectionAssert.AreEqual({"Your Journals", "Your Routes", "Route Map", "Your Citations"}, tabs(page).Select(Function(tab) tab.Text).ToList(), "The tabs carry no counts yet.")
+        Assert.IsTrue(ViewCatalog.Descendants(page).OfType(Of Label)().Any(Function(label) label.Visible AndAlso label.Text = "Calculating from your records..."), "The page says its figures are being worked out.")
+    End Sub
+
+
+    Private Shared Function Tabs(page As Control) As List(Of RadioButton)
+        Return ViewCatalog.Descendants(page).OfType(Of RadioButton)().ToList()
+    End Function
 
 
     ' A Windows contrast theme turned on while PaperRoute runs, through the
