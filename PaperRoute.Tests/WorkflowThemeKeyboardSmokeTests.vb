@@ -754,7 +754,8 @@ Public Class WorkflowThemeKeyboardSmokeTests
         pairs.Add(("A danger chip", UiTheme.DangerColor(), UiTheme.DangerMutedBackground()))
 
         ' Filter chips hovered (#142): a plain chip on the hover color, a
-        ' toned one on its own fill a step toward the text color.
+        ' toned one on its own fill part way back to the card surface
+        ' (FilterChip.HoverFill).
         For Each chip As (Tone As FilterChipTone, Ink As Color, Fill As Color) In {
             (FilterChipTone.Neutral, UiTheme.SecondaryText(), UiTheme.CardBackground()),
             (FilterChipTone.Warning, UiTheme.WarningColor(), UiTheme.WarningMutedBackground()),

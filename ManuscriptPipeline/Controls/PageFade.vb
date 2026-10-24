@@ -44,12 +44,11 @@ Namespace Controls
         ' few of Windows' frames.
         Private Const SettleMilliseconds As Double = 50
 
-        ' Test seams: how long the worker waits before it reads, whether
+        ' Test seams: how long the worker waits before it reads, and whether
         ' Begin waits for the picture (functional tests only; the budget
-        ' never does), and a point at which a fade holds, for captures.
+        ' never does).
         Friend Shared CaptureDelayMilliseconds As Integer = 0
         Friend Shared AwaitPicture As Boolean = False
-        Friend Shared HoldAtMilliseconds As Double? = Nothing
 
 
         Public Sub New(owner As Form, area As Control)
@@ -77,10 +76,6 @@ Namespace Controls
         Friend Property LastBeginMilliseconds As Double = 0
         Friend Property FadesShown As Integer = 0
         Friend Property OverlaysMade As Integer = 0
-
-        ' When the last picture was being read, in Stopwatch ticks.
-        Friend Property LastPictureStarted As Long = 0
-        Friend Property LastPictureFinished As Long = 0
 
         Friend ReadOnly Property Fading As Boolean
             Get
@@ -142,8 +137,6 @@ Namespace Controls
 
             [End]()
             Abandon()
-            LastPictureStarted = 0
-            LastPictureFinished = 0
             LastBeginMilliseconds = 0
 
             If Not allowed Then
@@ -244,8 +237,6 @@ Namespace Controls
                 ' A picture still being read is let go; the worker finishes
                 ' with the hidden overlay and frees what it made.
                 Dim taken As Boolean = Interlocked.CompareExchange(picture.State, Abandoned, Taking) <> Taking
-                LastPictureStarted = Volatile.Read(picture.Started)
-                LastPictureFinished = If(taken, Volatile.Read(picture.Finished), 0)
 
                 If Not taken Then
                     LastOutcome = "cut: the picture was not ready"
@@ -366,7 +357,6 @@ Namespace Controls
             End If
 
             Dim elapsed As Double = _watch.Elapsed.TotalMilliseconds
-            If HoldAtMilliseconds.HasValue Then elapsed = Math.Min(elapsed, HoldAtMilliseconds.Value)
 
             Dim alpha As Double = Math.Round(255.0 * (1.0 - UiMotion.EaseOut(elapsed / UiMotion.FadeMilliseconds)))
 
@@ -433,8 +423,6 @@ Namespace Controls
             Public State As Integer = Taking
             Public Placed As Boolean = False
             Public Screen As Rectangle
-            Public Started As Long
-            Public Finished As Long
         End Class
 
 
@@ -455,11 +443,10 @@ Namespace Controls
 
             Dim bitmap As IntPtr = IntPtr.Zero
             Dim placed As Boolean = False
+            Dim started As Long = Stopwatch.GetTimestamp()
             Dim readAt As Long = 0
 
             Try
-
-                picture.Started = Stopwatch.GetTimestamp()
 
                 If CaptureDelayMilliseconds > 0 Then
                     Thread.Sleep(CaptureDelayMilliseconds)
@@ -509,9 +496,9 @@ Namespace Controls
                 placed = False
             Finally
                 If bitmap <> IntPtr.Zero Then DeleteObject(bitmap)
-                picture.Finished = Stopwatch.GetTimestamp()
-                Volatile.Write(_lastReadTicks, If(readAt = 0, picture.Finished, readAt) - picture.Started)
-                Volatile.Write(_lastPlaceTicks, If(readAt = 0, 0, picture.Finished - readAt))
+                Dim finished As Long = Stopwatch.GetTimestamp()
+                Volatile.Write(_lastReadTicks, If(readAt = 0, finished, readAt) - started)
+                Volatile.Write(_lastPlaceTicks, If(readAt = 0, 0, finished - readAt))
                 picture.Placed = placed
                 Interlocked.CompareExchange(picture.State, Ready, Taking)
                 Interlocked.Decrement(_inFlight)

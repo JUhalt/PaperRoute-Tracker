@@ -51,7 +51,6 @@ Public Class MotionFadeTests
         UiTheme.HighContrastOverride = Nothing
         PageFade.CaptureDelayMilliseconds = 0
         PageFade.AwaitPicture = False
-        PageFade.HoldAtMilliseconds = Nothing
     End Sub
 
 
