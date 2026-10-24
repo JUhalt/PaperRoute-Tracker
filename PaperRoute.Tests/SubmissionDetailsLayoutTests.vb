@@ -213,7 +213,9 @@ Public Class SubmissionDetailsLayoutTests
     ' size, on a 1366x768 screen at 100% and 125% and a 1920x1080 one at
     ' 150%, every list and text box in the dialog shows two rows or more, in
     ' view or in reach of a scroll, and Close is in view: the measure finds
-    ' nothing cut.
+    ' nothing cut. A screen smaller than the one asked for (a 1024x768 build
+    ' runner holds about 1043x787) can cut a label the asked screen holds
+    ' whole, so there only the lists and Close are judged.
     <TestMethod>
     <DataRow(96, 1366, 720)>
     <DataRow(120, 1366, 708)>
@@ -233,7 +235,13 @@ Public Class SubmissionDetailsLayoutTests
 
                     Assert.IsNull(cell.NotMeasuredHere, "The dialog is measured on this computer: " & cell.Describe())
                     Assert.IsTrue(cell.AcceptInside.HasValue AndAlso cell.AcceptInside.Value, $"Close is in view at {dpi} DPI on {screen(0).Name}: " & cell.Describe())
-                    Assert.IsTrue(cell.Passes, $"Submission Details at {dpi} DPI on {screen(0).Name}: " & cell.Describe())
+                    Assert.IsFalse(
+                        cell.Cut.Any(Function(cut) cut.EndsWith(" under two rows", StringComparison.Ordinal)),
+                        $"Every list keeps two rows at {dpi} DPI on {screen(0).Name}: " & cell.Describe())
+
+                    If screen(0).Area.Size = New Size(width, height) Then
+                        Assert.IsTrue(cell.Passes, $"Submission Details at {dpi} DPI on {screen(0).Name}: " & cell.Describe())
+                    End If
 
                 End Sub
             )
