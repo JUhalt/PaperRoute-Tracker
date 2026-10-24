@@ -752,6 +752,18 @@ Public Class WorkflowThemeKeyboardSmokeTests
         Next
         pairs.Add(("A warning chip, the rail's count, or an Unresolved pill", UiTheme.WarningColor(), UiTheme.WarningMutedBackground()))
         pairs.Add(("A danger chip", UiTheme.DangerColor(), UiTheme.DangerMutedBackground()))
+
+        ' Filter chips hovered (#142): a plain chip on the hover color, a
+        ' toned one on its own fill a step toward the text color.
+        For Each chip As (Tone As FilterChipTone, Ink As Color, Fill As Color) In {
+            (FilterChipTone.Neutral, UiTheme.SecondaryText(), UiTheme.CardBackground()),
+            (FilterChipTone.Warning, UiTheme.WarningColor(), UiTheme.WarningMutedBackground()),
+            (FilterChipTone.Danger, UiTheme.DangerColor(), UiTheme.DangerMutedBackground()),
+            (FilterChipTone.Active, UiTheme.AccentColor(), UiTheme.AccentMutedBackground())
+        }
+            pairs.Add(($"A {chip.Tone} filter chip, hovered", chip.Ink, FilterChip.HoverFill(chip.Tone, chip.Fill)))
+        Next
+
         pairs.Add(("Working offline in the rail", UiTheme.InfoColor(), UiTheme.InfoMutedBackground()))
         pairs.Add(("Working offline in the rail, hovered", UiTheme.InfoColor(), UiTheme.Blend(UiTheme.InfoMutedBackground(), UiTheme.PrimaryText(), 0.08F)))
         pairs.Add(("The assistant's banner in Record Editorial Decision", UiTheme.PrimaryText(), UiTheme.InfoMutedBackground()))

@@ -16,7 +16,9 @@ Namespace Controls
 
     ' A rounded chip that applies a board filter. It is a Label so existing
     ' text and layout code keeps working, but it takes keyboard focus and
-    ' Enter or Space click it, like a button.
+    ' Enter or Space click it, like a button. Hovered, its fill eases to
+    ' the hover color (#142), except under a contrast theme, where every
+    ' fill is the window color.
     Friend Class FilterChip
         Inherits Label
 
@@ -24,6 +26,9 @@ Namespace Controls
 
         ' Held down by the mouse; drawn only under a contrast theme (#191).
         Private _pressed As Boolean = False
+
+        ' Made on the first hover.
+        Private _hover As HoverTween = Nothing
 
         Public Sub New()
             SetStyle(
@@ -102,10 +107,26 @@ Namespace Controls
             SetPressed(False)
         End Sub
 
+        Protected Overrides Sub OnMouseEnter(e As EventArgs)
+            MyBase.OnMouseEnter(e)
+            If _hover Is Nothing Then _hover = New HoverTween(Me)
+            _hover.MoveTo(True)
+        End Sub
+
         Protected Overrides Sub OnMouseLeave(e As EventArgs)
             MyBase.OnMouseLeave(e)
             SetPressed(False)
+            _hover?.MoveTo(False)
         End Sub
+
+        ' The fill hovered: the card surface's hover color for a plain chip;
+        ' for a toned chip its own fill part way back to the card surface,
+        ' which keeps its text at least as legible as at rest in Light and
+        ' Dark (a step toward the text, as the rail's tinted item hovers,
+        ' left a warning chip at 3.8:1).
+        Friend Shared Function HoverFill(tone As FilterChipTone, fill As Color) As Color
+            Return If(tone = FilterChipTone.Neutral, UiTheme.HoverBackground(), UiTheme.Blend(fill, UiTheme.CardBackground(), 0.4F))
+        End Function
 
         Private Sub SetPressed(pressed As Boolean)
             If _pressed = pressed Then Return
@@ -166,6 +187,9 @@ Namespace Controls
                     fill = SystemColors.Highlight
                     ink = SystemColors.HighlightText
                 End If
+            ElseIf _hover IsNot Nothing AndAlso _hover.Amount > 0.0F Then
+                Dim hovered As Color = HoverFill(_tone, fill)
+                fill = If(_hover.Amount >= 1.0F, hovered, UiTheme.Blend(fill, hovered, _hover.Amount))
             End If
 
             Dim shape As New RectangleF(0.5F, 0.5F, Width - 1.0F, Height - 1.0F)
