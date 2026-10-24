@@ -1492,6 +1492,90 @@ Public Class KeyboardAccessTests
     }
 
 
+    ' A card's title opened with Enter while the window really has the
+    ' keyboard (#133). The pins above run in a window that never had it,
+    ' so the Board never holds focus as it hides there, and the move of
+    ' focus off it that HideBoardPage makes first, the move WinForms makes
+    ' as a control holding focus is hidden (SelectNextIfFocused), is never
+    ' taken. Here it is, and focus lands where it landed with the Board
+    ' hidden as f5c6947 hid it, leaving that move to WinForms (run on
+    ' 2026-10-23 with HideBoardPage put back that way): WinForms' move
+    ' from the Board goes into the Board, to its first stop, the search
+    ' box, and the keyboard stays there, behind the page, until it is
+    ' moved, as the pins above record for a window without the keyboard.
+    <TestMethod>
+    Public Sub OpeningACardHoldingTheKeyboardLandsFocusAsBefore()
+
+        Dim root As String = CreateTemporaryRoot()
+        Dim report As New List(Of String)()
+
+        StorageEnvironment.RootOverride = Path.Combine(root, "storage")
+
+        Try
+
+            StaRunner.Run(
+                Sub()
+
+                    Dim library As LargeLibraryFixture.SyntheticLibrary =
+                        LargeLibraryFixture.Create(Path.Combine(root, "library"), 60)
+
+                    Using board As New LibraryBoard(library, Path.Combine(root, "settings"))
+
+                        board.Start()
+                        board.WaitForIdleWork()
+                        board.Open(board.Library.First(Function(item) item.Location = ManuscriptLocation.Pipeline))
+                        Application.DoEvents()
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        board.WaitForIdleWork()
+
+                        Dim landing As Func(Of String) =
+                            Function()
+                                Return "page " & board.PageName &
+                                       ", active " & DescribeOnBoard(DeepestActiveControl(board)) &
+                                       ", focus " & DescribeOnBoard(Control.FromChildHandle(GetFocus())) &
+                                       ", the Board holds focus " & board.BoardPage.ContainsFocus.ToString()
+                            End Function
+
+                        Dim card As Control = board.Shelf("pipelinePanel").Controls.OfType(Of RoundedPanel)().First()
+                        Dim title As LinkLabel = card.Controls.OfType(Of LinkLabel)().First()
+                        If Not title.Focus() OrElse Not title.Focused Then
+                            Assert.Inconclusive("The test window was given no keyboard focus on this host.")
+                        End If
+                        report.Add("Before: " & landing())
+
+                        Press(board, Keys.Enter)
+                        board.WaitForIdleWork()
+                        report.Add("Enter: " & landing())
+
+                        board.PressCommandKey(Keys.Alt Or Keys.Left)
+                        Application.DoEvents()
+                        board.WaitForIdleWork()
+                        report.Add("Alt+Left: " & landing())
+
+                        board.Close()
+
+                    End Using
+
+                End Sub,
+                TimeSpan.FromMinutes(3))
+
+        Finally
+            StorageEnvironment.RootOverride = Nothing
+            DeleteTemporaryRoot(root)
+        End Try
+
+        CollectionAssert.AreEqual(
+            New List(Of String) From {
+                "Before: page Board, active LinkLabel 0 of card 0 on its shelf, focus LinkLabel 0 of card 0 on its shelf, the Board holds focus True",
+                "Enter: page Manuscript, active TextBox 'Search the board (Ctrl+F)', focus TextBox 'Search the board (Ctrl+F)', the Board holds focus True",
+                "Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', focus TextBox 'Search the board (Ctrl+F)', the Board holds focus True"
+            },
+            report,
+            Environment.NewLine & String.Join(Environment.NewLine, report))
+
+    End Sub
+
+
     ' A control as the pins name it: a card's parts by their place on the
     ' card and the card's on its shelf, since a card's text follows the
     ' day the test runs; a shelf tab without its count, which follows the
@@ -1856,6 +1940,10 @@ Public Class KeyboardAccessTests
 
     <DllImport("user32.dll")>
     Private Shared Function GetKeyboardState(state As Byte()) As Boolean
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function GetFocus() As IntPtr
     End Function
 
     <DllImport("user32.dll")>
