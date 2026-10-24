@@ -1293,6 +1293,9 @@ Public Class KeyboardAccessTests
     ' or painted. Pinned on the window before pages were prepared while it
     ' idled or switched without painting, and changed by #213 only where
     ' a page opened from the Board left the keyboard on the hidden Board.
+    ' The way back to the Board names each control the keyboard passes
+    ' through in turn: leaving the page puts it on the window's first stop,
+    ' the rail's collapse button, before the Board's control takes it.
     <TestMethod>
     Public Sub EnteringAPageByKeyboardKeepsFocusWhereItLandsToday()
 
@@ -1315,10 +1318,13 @@ Public Class KeyboardAccessTests
                         board.WaitForIdleWork()
 
                         ' Counts what happens to the control focus leaves and
-                        ' the one it lands on, while one action runs.
+                        ' the one it lands on, while one action runs; for the
+                        ' way back to the Board, every control the keyboard
+                        ' passes through on the way, in turn.
                         Dim record As Action(Of String, Control, Action) =
                             Sub(name, origin, act)
                                 Dim entered As New Dictionary(Of Control, Integer)()
+                                Dim path As New List(Of String)()
                                 Dim watched As List(Of Control) = {DirectCast(board, Control)}.Concat(ViewCatalog.Descendants(board)).ToList()
                                 Dim onEnter As EventHandler =
                                     Sub(sender, e)
@@ -1326,6 +1332,7 @@ Public Class KeyboardAccessTests
                                         Dim count As Integer = 0
                                         entered.TryGetValue(control, count)
                                         entered(control) = count + 1
+                                        If Not control.HasChildren Then path.Add(DescribeOnBoard(control))
                                     End Sub
                                 For Each control As Control In watched
                                     AddHandler control.Enter, onEnter
@@ -1359,6 +1366,7 @@ Public Class KeyboardAccessTests
                                            ", left " & left.ToString() &
                                            ", validated " & Math.Min(validating, 2).ToString() &
                                            ", origin entered " & If(entered.ContainsKey(origin), entered(origin), 0).ToString() &
+                                           If(name.EndsWith("then Alt+Left", StringComparison.Ordinal), ", through " & String.Join(" then ", path), String.Empty) &
                                            failure)
                             End Sub
 
@@ -1456,31 +1464,33 @@ Public Class KeyboardAccessTests
     ' the opened page's first stop: the manuscript page's Overview tab, a
     ' rail page's own first control, entered once, the control left losing
     ' focus once; and Alt+Left back puts it on the control that opened the
-    ' page. (On f5c6947, before pages were prepared while the window idled
-    ' or switched without painting, and until #213, these rows left the
-    ' keyboard where it was, on the hidden Board, entered, left and
-    ' validated 0 times.) A rail button or a shelf tab reached with an
-    ' arrow key is entered once, the one left loses focus once and is
-    ' validated once, as on f5c6947.
+    ' page, by way of the rail's collapse button, which takes it for a
+    ' moment as the page is left (two focus changes, which the Narrator
+    ' pass listens for). (On f5c6947, before pages were prepared while the
+    ' window idled or switched without painting, and until #213, these
+    ' rows left the keyboard where it was, on the hidden Board, entered,
+    ' left and validated 0 times.) A rail button or a shelf tab reached
+    ' with an arrow key is entered once, the one left loses focus once and
+    ' is validated once, as on f5c6947.
     Private Shared ReadOnly EnteringAPageExpected As New List(Of String) From {
         "Pipeline title, Enter: page Manuscript, active ShelfTabButton 'Overview', entered 1, left 1, validated 1, origin entered 0",
-        "Pipeline title, Enter, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 1, left 1, validated 1, origin entered 0",
+        "Pipeline title, Enter, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 1, left 1, validated 1, origin entered 0, through RailCommandButton 'Collapse navigation' then LinkLabel 0 of card 0 on its shelf",
         "Pipeline title, Space: page Manuscript, active ShelfTabButton 'Overview', entered 1, left 1, validated 1, origin entered 0",
-        "Pipeline title, Space, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 1, left 1, validated 1, origin entered 0",
+        "Pipeline title, Space, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 1, left 1, validated 1, origin entered 0, through RailCommandButton 'Collapse navigation' then LinkLabel 0 of card 0 on its shelf",
         "Published title, Enter: page Manuscript, active ShelfTabButton 'Overview', entered 1, left 1, validated 1, origin entered 0",
-        "Published title, Enter, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 1, left 1, validated 1, origin entered 0",
+        "Published title, Enter, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 1, left 1, validated 1, origin entered 0, through RailCommandButton 'Collapse navigation' then LinkLabel 0 of card 0 on its shelf",
         "Published title, Space: page Manuscript, active ShelfTabButton 'Overview', entered 1, left 1, validated 1, origin entered 0",
-        "Published title, Space, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 1, left 1, validated 1, origin entered 0",
+        "Published title, Space, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 1, left 1, validated 1, origin entered 0, through RailCommandButton 'Collapse navigation' then LinkLabel 0 of card 0 on its shelf",
         "Ctrl+2 from the search box: page Library, active TextBox 'Filter the Library', entered new, left 1, validated 1, origin entered 0",
-        "Ctrl+2, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 1, left 1, validated 1, origin entered 0",
+        "Ctrl+2, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 1, left 1, validated 1, origin entered 0, through RailCommandButton 'Collapse navigation' then TextBox 'Search the board (Ctrl+F)'",
         "Ctrl+3 from the search box: page Journals, active ListBox 'Journals', entered 1, left 1, validated 1, origin entered 0",
-        "Ctrl+3, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 1, left 1, validated 1, origin entered 0",
+        "Ctrl+3, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 1, left 1, validated 1, origin entered 0, through RailCommandButton 'Collapse navigation' then TextBox 'Search the board (Ctrl+F)'",
         "Ctrl+4 from the search box: page Deadlines, active TextBox 'Filter deadlines', entered new, left 1, validated 1, origin entered 0",
-        "Ctrl+4, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 1, left 1, validated 1, origin entered 0",
+        "Ctrl+4, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 1, left 1, validated 1, origin entered 0, through RailCommandButton 'Collapse navigation' then TextBox 'Search the board (Ctrl+F)'",
         "Ctrl+5 from the search box: page Insights, active ActionButton 'Pipeline Report...', entered 1, left 1, validated 1, origin entered 0",
-        "Ctrl+5, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 1, left 1, validated 1, origin entered 0",
+        "Ctrl+5, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 1, left 1, validated 1, origin entered 0, through RailCommandButton 'Collapse navigation' then TextBox 'Search the board (Ctrl+F)'",
         "Ctrl+6 from the search box: page ImportExport, active ActionButton 'Import Spreadsheet...', entered new, left 1, validated 1, origin entered 0",
-        "Ctrl+6, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 1, left 1, validated 1, origin entered 0",
+        "Ctrl+6, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 1, left 1, validated 1, origin entered 0, through RailCommandButton 'Collapse navigation' then TextBox 'Search the board (Ctrl+F)'",
         "Down on the rail from RailButton 'Board': page Library, active RailButton 'Library', entered 1, left 1, validated 1, origin entered 0",
         "Down on the rail from RailButton 'Library': page Journals, active RailButton 'Journals', entered 1, left 1, validated 1, origin entered 0",
         "Down on the rail from RailButton 'Journals': page Deadlines, active RailButton 'Deadlines', entered 1, left 1, validated 1, origin entered 0",
@@ -1737,6 +1747,121 @@ Public Class KeyboardAccessTests
                 "  then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)'" & backWhereOpened,
                 "the search box, a manuscript no longer in the library: page Manuscript, active RailCommandButton 'Collapse navigation', shown, outside the page area",
                 "  then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)'" & backWhereOpened
+            },
+            report,
+            Environment.NewLine & String.Join(Environment.NewLine, report))
+
+    End Sub
+
+
+    ' Back on the Board after the manuscript opened from a card's title by
+    ' keyboard was saved or deleted (#213). A save that changes the card's
+    ' text rebuilds the card at once, so the title the page was opened
+    ' from is gone: Alt+Left puts the keyboard on the new card's title,
+    ' shown, in the Board. A manuscript deleted from its page takes its
+    ' card with it: back on the Board the keyboard is where leaving the
+    ' page put it, the window's first stop, outside the Board and on no
+    ' control that is gone.
+    <TestMethod>
+    Public Sub ReturningAfterASaveOrADeleteLandsOnAShownControl()
+
+        Dim root As String = CreateTemporaryRoot()
+        Dim report As New List(Of String)()
+
+        StorageEnvironment.RootOverride = Path.Combine(root, "storage")
+
+        Try
+
+            StaRunner.Run(
+                Sub()
+
+                    Dim library As LargeLibraryFixture.SyntheticLibrary =
+                        LargeLibraryFixture.Create(Path.Combine(root, "library"), 60)
+
+                    Using board As New LibraryBoard(library, Path.Combine(root, "settings"))
+
+                        board.Start()
+                        board.WaitForIdleWork()
+
+                        ' Every open below is an open of the kept page, as most are.
+                        board.Open(board.Library.First(Function(item) item.Location = ManuscriptLocation.Pipeline))
+                        Application.DoEvents()
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        board.WaitForIdleWork()
+
+                        Dim placeOf As Func(Of Control, String) =
+                            Function(control)
+                                If control Is Nothing Then Return "nowhere"
+                                If control.IsDisposed Then Return "disposed"
+                                Dim shown As Boolean = control.Visible AndAlso control.IsHandleCreated AndAlso IsWindowVisible(control.Handle)
+                                Dim place As String =
+                                    If(board.PageView IsNot Nothing AndAlso board.PageView.Contains(control), "in the page",
+                                       If(board.BoardPage.Contains(control), If(board.BoardPage.Visible, "in the Board", "in the hidden Board"), "outside the page area"))
+                                Return If(shown, "shown", "not shown") & ", " & place
+                            End Function
+
+                        Dim openFrom As Func(Of LinkLabel, String) =
+                            Function(link)
+                                If Not link.Focus() Then board.ActiveControl = link
+                                Application.DoEvents()
+                                Press(board, Keys.Enter)
+                                board.WaitForIdleWork()
+                                Return "page " & board.PageName & ", active " & DescribeOnBoard(DeepestActiveControl(board))
+                            End Function
+
+                        ' Opened, renamed and saved, then Alt+Left.
+                        Dim first As LinkLabel = board.Shelf("pipelinePanel").Controls.OfType(Of RoundedPanel)().First().Controls.OfType(Of LinkLabel)().First()
+                        report.Add("Enter on a title: " & openFrom(first))
+                        Dim subject As Manuscript = board.Library.Single(Function(item) item.Id = board.OpenManuscriptId)
+                        Dim renamed As String = subject.Title & " (renamed)"
+                        board.Field("Title").Text = renamed
+                        Assert.IsTrue(board.SaveManuscriptPage(), "The page saved.")
+                        Application.DoEvents()
+                        report.Add("Saved: the title opened from is " & If(first.IsDisposed, "disposed", "kept"))
+
+                        board.PressCommandKey(Keys.Alt Or Keys.Left)
+                        Application.DoEvents()
+                        board.WaitForIdleWork()
+                        Dim back As Control = DeepestActiveControl(board)
+                        report.Add("Alt+Left: page " & board.PageName & ", active " & If(back?.GetType().Name, "nothing") &
+                                   If(TypeOf back Is LinkLabel AndAlso back.Text = renamed, " titled as saved", String.Empty) & ", " & placeOf(back))
+
+                        ' Opened again from that title, then deleted from the page.
+                        Dim title As LinkLabel = TryCast(back, LinkLabel)
+                        Assert.IsNotNull(title, "The keyboard is on a title to open the manuscript from again.")
+                        report.Add("Enter on it: " & openFrom(title))
+                        board.SetPrompt(Function(asked)
+                                            Assert.Fail("Nothing is unsaved, so nothing is asked.")
+                                            Return DialogResult.Cancel
+                                        End Function)
+                        board.ConfirmDelete()
+                        Application.DoEvents()
+                        board.WaitForIdleWork()
+                        Dim landed As Control = DeepestActiveControl(board)
+                        report.Add("Deleted: page " & board.PageName & ", the manuscript " & If(board.Library.Contains(subject), "kept", "gone") &
+                                   ", the title opened from " & If(title.IsDisposed, "disposed", "kept") &
+                                   ", active " & DescribeOnBoard(landed) & ", " & placeOf(landed))
+
+                        board.SetPrompt(Function(asked) DialogResult.No)
+                        board.Close()
+
+                    End Using
+
+                End Sub,
+                TimeSpan.FromMinutes(5))
+
+        Finally
+            StorageEnvironment.RootOverride = Nothing
+            DeleteTemporaryRoot(root)
+        End Try
+
+        CollectionAssert.AreEqual(
+            New List(Of String) From {
+                "Enter on a title: page Manuscript, active ShelfTabButton 'Overview'",
+                "Saved: the title opened from is disposed",
+                "Alt+Left: page Board, active LinkLabel titled as saved, shown, in the Board",
+                "Enter on it: page Manuscript, active ShelfTabButton 'Overview'",
+                "Deleted: page Board, the manuscript gone, the title opened from disposed, active RailCommandButton 'Collapse navigation', shown, outside the page area"
             },
             report,
             Environment.NewLine & String.Join(Environment.NewLine, report))

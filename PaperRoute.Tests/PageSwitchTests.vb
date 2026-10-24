@@ -654,15 +654,17 @@ Public Class PageSwitchTests
     ' "WM_PAINT to ComboBox 'Sort the board'", sent as the Board came back
     ' and the boxes were resized, with erases of the Board's panels; and a
     ' shelf switch had drawn everything before it returned, so nothing was
-    ' left to draw once the window processed its messages. Nor is the
-    ' rail's pages panel drawn while any switch runs: its two buttons a
-    ' page switch checks and unchecks drew themselves there and then until
-    ' SyncRail held the rail (#142). With motion on (#142), each switch but
-    ' a manuscript's open also reads the page left and shows its picture
-    ' over the page area as it returns (the picture waited for here, so
-    ' every switch that can fade does): that draws nothing either. Each
-    ' fade is let end before the next switch, as the key or click that
-    ' starts a switch ends a fade still showing before the switch begins.
+    ' left to draw once the window processed its messages. Nor is the rail
+    ' drawn while any switch runs: the two page buttons a switch checks
+    ' and unchecks drew themselves there and then until SyncRail held the
+    ' rail's pages (#142), and its collapse button takes the keyboard for a
+    ' moment on the way back to the Board (#213). With motion on (#142),
+    ' each switch but a manuscript's open also reads the page left and
+    ' shows its picture over the page area as it returns (the picture
+    ' waited for here, so every switch that can fade does): that draws
+    ' nothing either. Each fade is let end before the next switch, as the
+    ' key or click that starts a switch ends a fade still showing before
+    ' the switch begins.
     <TestMethod>
     <DataRow(False)>
     <DataRow(True)>
@@ -705,9 +707,11 @@ Public Class PageSwitchTests
                             End If
                         End Sub
 
-                    ' The rail's pages, whose two buttons a switch checks and
-                    ' unchecks (SyncRail), are watched through every switch too.
-                    Dim rail As Control = ViewCatalog.Descendants(board).OfType(Of Controls.RailButton)().First().Parent
+                    ' The rail is watched through every switch too: the two page
+                    ' buttons a switch checks and unchecks (SyncRail), and the
+                    ' collapse button, which the keyboard passes through on the
+                    ' way back to the Board from a page that had it (#213).
+                    Dim rail As Control = ViewCatalog.Descendants(board).OfType(Of Controls.RailButton)().First().Parent.Parent
 
                     Dim watchSwitch As Action(Of String, Control, Action) =
                         Sub(name, within, switch)
