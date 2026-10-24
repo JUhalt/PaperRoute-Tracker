@@ -77,6 +77,11 @@ Namespace Forms
 
         Private Sub BuildInterface()
 
+            ' Sizes below are at 96 DPI and scale with the display: at 150%
+            ' the window opened at its 96-DPI size while its text grew, and
+            ' its lowest rows slid under Save and Cancel (#93).
+            DialogScaling.Begin(Me)
+
             Me.Text =
                 If(
                     _source Is Nothing,
@@ -105,15 +110,17 @@ Namespace Forms
                     10.0F
                 )
 
-            Me.AutoScaleMode =
-                AutoScaleMode.Dpi
-
             Dim shell As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .ColumnCount = 1,
                 .RowCount = 2,
                 .Padding = New Padding(14)
             }
+
+            ' One column as wide as the window. Sized to its widest control,
+            ' it kept the tabs' scaled width when the window was narrowed,
+            ' and Save and Cancel ran off the right edge (#93).
+            shell.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
 
             shell.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
             shell.RowStyles.Add(New RowStyle(SizeType.AutoSize))
@@ -172,6 +179,8 @@ Namespace Forms
 
             Me.Controls.Add(shell)
 
+            DialogScaling.Finish(Me)
+
         End Sub
 
 
@@ -184,11 +193,29 @@ Namespace Forms
             tab.Padding =
                 New Padding(14)
 
+            ' The rows below need 465 pixels at 96 DPI (the notes at least
+            ' 90). On a screen with less, as at 125% on a 1366x768 screen,
+            ' they scroll, and Save and Cancel stay below the tabs, in view
+            ' (#93).
+            Dim body As New Panel With {
+                .Dock = DockStyle.Fill,
+                .AutoScroll = True
+            }
+
             Dim general As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .ColumnCount = 2,
-                .RowCount = 10
+                .RowCount = 10,
+                .MinimumSize = New Size(0, 465)
             }
+
+            ' A panel leaves a child docked to fill it out of its scroll
+            ' range, so the body scrolls as far as the table's minimum,
+            ' read as Windows Forms has scaled it for the display.
+            AddHandler body.Layout,
+                Sub(sender, e)
+                    body.AutoScrollMinSize = New Size(0, general.MinimumSize.Height)
+                End Sub
 
             general.ColumnStyles.Add(
                 New ColumnStyle(
@@ -308,7 +335,8 @@ Namespace Forms
             general.Controls.Add(CreateLabel("Notes"), 0, 9)
             general.Controls.Add(txtNotes, 1, 9)
 
-            tab.Controls.Add(general)
+            body.Controls.Add(general)
+            tab.Controls.Add(body)
 
             Return tab
 
@@ -330,6 +358,10 @@ Namespace Forms
                 .RowCount = 4
             }
 
+            ' One column as wide as the tab, so the selected requirement's
+            ' details wrap to it rather than run past the window.
+            root.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
+
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
             root.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
@@ -347,6 +379,12 @@ Namespace Forms
 
             lblChecklistInfo.AutoSize =
                 True
+
+            ' Docked into the column, so it wraps to the tab's width. A
+            ' width set from the table's size as it scales is scaled again
+            ' (#93).
+            lblChecklistInfo.Dock =
+                DockStyle.Fill
 
             lblChecklistInfo.UseMnemonic =
                 False
@@ -479,13 +517,6 @@ Namespace Forms
             root.Controls.Add(lblChecklistInfo, 0, 1)
             root.Controls.Add(lstChecklist, 0, 2)
             root.Controls.Add(buttons, 0, 3)
-
-            ' The selected requirement's details wrap rather than run past
-            ' the window.
-            AddHandler root.SizeChanged,
-                Sub(sender, e)
-                    lblChecklistInfo.MaximumSize = New Size(Math.Max(LogicalToDeviceUnits(200), root.ClientSize.Width - LogicalToDeviceUnits(8)), 0)
-                End Sub
 
             tab.Controls.Add(root)
 
@@ -1157,6 +1188,10 @@ Namespace Forms
             Dim tab As New TabPage("Facts and Metrics") With {.Padding = New Padding(14)}
 
             Dim layout As New TableLayoutPanel With {.Dock = DockStyle.Fill, .ColumnCount = 1, .RowCount = 4}
+            ' One column as wide as the tab: the two notes dock into it and
+            ' wrap to it. A width set from the table's size as it scales is
+            ' scaled again (#93).
+            layout.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
             layout.RowStyles.Add(New RowStyle(SizeType.AutoSize))
             layout.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
             layout.RowStyles.Add(New RowStyle(SizeType.AutoSize))
@@ -1165,6 +1200,7 @@ Namespace Forms
             Dim intro As New Label With {
                 .Text = "Facts from DOAJ and OpenAlex come from Look Up Facts... on the Journals page. Add metrics such as the Journal Impact Factor or CiteScore here, exactly as their publishers report them, with the year.",
                 .AutoSize = True,
+                .Dock = DockStyle.Fill,
                 .UseMnemonic = False,
                 .Margin = New Padding(0, 0, 0, 8)
             }
@@ -1179,10 +1215,13 @@ Namespace Forms
             lvFacts.ShowItemToolTips = True
             lvFacts.BackColor = UiTheme.CardBackground()
             lvFacts.ForeColor = UiTheme.PrimaryText()
-            lvFacts.Columns.Add("Fact", LogicalToDeviceUnits(200))
-            lvFacts.Columns.Add("Value", LogicalToDeviceUnits(250))
-            lvFacts.Columns.Add("Source", LogicalToDeviceUnits(150))
-            lvFacts.Columns.Add("Year or checked", LogicalToDeviceUnits(120))
+            ' Windows Forms does not scale a list's columns with the window,
+            ' so they are scaled for the display here.
+            Dim dpi As Integer = DialogScaling.Dpi(lvFacts)
+            lvFacts.Columns.Add("Fact", UiTheme.Px(200, dpi))
+            lvFacts.Columns.Add("Value", UiTheme.Px(250, dpi))
+            lvFacts.Columns.Add("Source", UiTheme.Px(150, dpi))
+            lvFacts.Columns.Add("Year or checked", UiTheme.Px(120, dpi))
             lvFacts.Groups.Add(New ListViewGroup("open", "From open indexes"))
             lvFacts.Groups.Add(New ListViewGroup("yours", "Entered by you"))
             AddHandler lvFacts.SelectedIndexChanged, Sub(sender, e) RefreshFactButtons()
@@ -1206,6 +1245,7 @@ Namespace Forms
             Dim dora As New LinkLabel With {
                 .Text = JournalFactCatalog.DoraNote & " About journal metrics (DORA)",
                 .AutoSize = True,
+                .Dock = DockStyle.Fill,
                 .UseMnemonic = False,
                 .Margin = New Padding(0, 8, 0, 0)
             }
@@ -1217,13 +1257,6 @@ Namespace Forms
                     Catch ex As Exception
                         MessageBox.Show(Me, ex.Message, "Open Link", MessageBoxButtons.OK, MessageBoxIcon.Information)
                     End Try
-                End Sub
-
-            AddHandler layout.SizeChanged,
-                Sub(sender, e)
-                    Dim width As Integer = Math.Max(LogicalToDeviceUnits(200), layout.ClientSize.Width - LogicalToDeviceUnits(8))
-                    intro.MaximumSize = New Size(width, 0)
-                    dora.MaximumSize = New Size(width, 0)
                 End Sub
 
             layout.Controls.Add(intro, 0, 0)

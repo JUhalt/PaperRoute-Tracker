@@ -174,6 +174,11 @@ Namespace Forms
         End Sub
 
 
+        ' A button that only grows took its caption's width at the display's
+        ' text size as the dialog was built, and kept it when Windows Forms
+        ' then scaled it with the dialog: at 150% the four needed 1081 of 888
+        ' pixels and Close PaperRoute lay over Open Log Folder (#93). One
+        ' that also shrinks goes back to its scaled minimum or its caption.
         Private Function MakeButton(
             text As String,
             width As Integer
@@ -182,7 +187,7 @@ Namespace Forms
             Return New Button With {
                 .Text = text,
                 .AutoSize = True,
-                .AutoSizeMode = AutoSizeMode.GrowOnly,
+                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 .MinimumSize = New Size(width, 36),
                 .Padding = New Padding(8, 0, 8, 0),
                 .Margin = New Padding(0, 0, 8, 0)

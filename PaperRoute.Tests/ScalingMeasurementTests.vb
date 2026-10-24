@@ -20,15 +20,21 @@ Imports ManuscriptPipeline.Services
 ' markdown, for #93.
 '
 ' The host runs at 96 DPI, so a display is simulated. Every font grows by
-' the DPI's factor, as text does on a real display, and a window whose
-' source sets the 96-DPI base dimensions, or uses DialogScaling, is scaled
-' by the same factor, as Windows Forms scales it when it opens. What the
-' test cannot see: a value the code scales by hand from DeviceDpi or
+' the DPI's factor, as text does on a real display, and then a window
+' whose source sets the 96-DPI base dimensions, or uses DialogScaling, is
+' scaled by the same factor, as Windows Forms scales it when it opens
+' with its text already at the display's size. What the test cannot
+' see: a value the code scales by hand from DeviceDpi or
 ' LogicalToDeviceUnits reads 96 here, so a hand-scaled window shows its
 ' text grown but its hand-scaled sizes not, and a converted window with a
 ' hand-scaled value left on a property Windows Forms scales shows no
-' double scaling. Both are proven only at a real 150% display, against
-' which this table is calibrated once.
+' double scaling, and the same holds for what a shared control scales by
+' hand in any window (the underline tabs' padding, a card's title gap).
+' A size a window computes from a font while it is built is computed
+' here before the text grows, and a window's frame keeps its 96-DPI
+' size. These are proven only at a real display, against which this
+' table is calibrated (#93: step 2, and step 4 after the first real
+' 150% and 125% sessions).
 '
 ' Report-only for the windows not yet converted: the table is the proof.
 ' Enforcing for the windows in Converted, which must pass at 120 and 144
@@ -61,12 +67,13 @@ Public Class ScalingMeasurementTests
     ' step 3); each conversion adds its window. Batch one: the four that
     ' had the base dimensions but not the rest of the rule. Batch two: the
     ' top-level windows the first table showed cut or with a button
-    ' outside the client area.
+    ' outside the client area. Step 4: Edit Journal, scaled by hand until
+    ' a real 150% capture showed it failing.
     Friend Shared ReadOnly Converted As Type() = {
         GetType(AboutForm), GetType(JournalCandidateForm), GetType(UpdateProgressForm), GetType(UpdatePromptForm),
         GetType(DeadlineDateForm), GetType(DiagnosticsForm), GetType(ExcelMappingForm), GetType(JournalChecklistItemEditForm),
         GetType(ManuscriptLinksForm), GetType(ManuscriptVersionEditForm), GetType(PublicationCheckForm), GetType(StartupFailureForm),
-        GetType(SubmissionPacketEditForm), GetType(UnexpectedErrorForm)
+        GetType(SubmissionPacketEditForm), GetType(UnexpectedErrorForm), GetType(JournalEditForm)
     }
 
 
@@ -237,6 +244,84 @@ Public Class ScalingMeasurementTests
     End Function
 
 
+    ' The measure sees a size scaled twice (#93, step 4). At a real display
+    ' a window's text has the display's size while the window is built, so
+    ' a button that sizes itself to its caption has its caption's width
+    ' there when Windows Forms scales the window, and one that only grows
+    ' keeps the scaled width. The error dialog's four buttons, so built,
+    ' overran their row at 125% and 150% and Close PaperRoute lay over Open
+    ' Log Folder, which the measure before, scaling the window before it
+    ' grew the text, reported whole. The same row of buttons that only
+    ' grow is reported cut at 144 DPI; buttons that also shrink go back to
+    ' their scaled minimums and fit; at 96 DPI both fit.
+    <TestMethod>
+    Public Sub AButtonSizedToItsCaptionIsScaledAgain()
+
+        For Each mode As AutoSizeMode In {AutoSizeMode.GrowOnly, AutoSizeMode.GrowAndShrink}
+
+            Dim current As AutoSizeMode = mode
+
+            For Each dpi As Integer In {96, 144}
+
+                Dim at As Integer = dpi
+                Dim result As Cell = Nothing
+
+                ViewCatalog.ShowAndClose(
+                    "The button row probe",
+                    Function() ButtonRowProbe(current),
+                    Sub(name, shown)
+                        result = Measure(shown, at, True, ProbeScreens).Single(Function(cell) cell.Screen = "roomy").Result
+                    End Sub
+                )
+
+                Assert.IsNull(result.NotMeasuredHere, "The probe is measured on this computer: " & result.Describe())
+
+                If current = AutoSizeMode.GrowOnly AndAlso at = 144 Then
+                    Assert.IsTrue(result.Cut.Any(Function(cut) cut.StartsWith("button 'Open Log Folder'", StringComparison.Ordinal)), "Grown to their captions and then scaled, the buttons overrun their row: " & result.Describe())
+                Else
+                    Assert.IsTrue(result.Passes, $"{current} at {at} DPI, the row holds its buttons: " & result.Describe())
+                End If
+
+            Next
+
+        Next
+
+    End Sub
+
+    ' The error dialog's last row as it was: a 640-pixel window built with
+    ' DialogScaling, two buttons on the left and two on the right, each
+    ' sizing itself to its caption over a minimum width, 572 pixels of
+    ' buttons in a 592-pixel row at 96 DPI.
+    Private Shared Function ButtonRowProbe(mode As AutoSizeMode) As Form
+
+        Dim form As New Form()
+        DialogScaling.Begin(form)
+        form.ClientSize = New Size(640, 120)
+        form.Font = New Font("Segoe UI", 10.0F)
+
+        Dim row As New TableLayoutPanel With {.Dock = DockStyle.Bottom, .AutoSize = True, .ColumnCount = 2, .RowCount = 1, .Padding = New Padding(24)}
+        row.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
+        row.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
+
+        Dim tools As New FlowLayoutPanel With {.AutoSize = True, .AutoSizeMode = AutoSizeMode.GrowAndShrink, .WrapContents = False, .Anchor = AnchorStyles.Left, .Margin = New Padding(0)}
+        Dim decisions As New FlowLayoutPanel With {.AutoSize = True, .AutoSizeMode = AutoSizeMode.GrowAndShrink, .WrapContents = False, .FlowDirection = FlowDirection.RightToLeft, .Anchor = AnchorStyles.Right, .Margin = New Padding(0)}
+
+        For Each spec As (Text As String, Width As Integer, Group As FlowLayoutPanel) In {
+            ("Copy Details", 120, tools), ("Open Log Folder", 140, tools), ("Keep Working", 130, decisions), ("Close PaperRoute", 150, decisions)
+        }
+            spec.Group.Controls.Add(New Button With {.Text = spec.Text, .AutoSize = True, .AutoSizeMode = mode, .MinimumSize = New Size(spec.Width, 36), .Padding = New Padding(8, 0, 8, 0), .Margin = New Padding(0, 0, 8, 0)})
+        Next
+
+        row.Controls.Add(tools, 0, 0)
+        row.Controls.Add(decisions, 1, 0)
+        form.Controls.Add(row)
+
+        DialogScaling.Finish(form)
+        Return form
+
+    End Function
+
+
     ' The measure counts only what scrolling reaches. A panel that scrolls
     ' leaves a child docked to fill it out of its scroll range, so a button
     ' near that child's foot, below the panel's client area, is reported
@@ -291,9 +376,9 @@ Public Class ScalingMeasurementTests
     ' Simulating the display
     ' ---------------------------------------------------------------
 
-    ' Grows the window's text for the DPI, scales the window as Windows
-    ' Forms would if its source asks for that, then fits it to each screen
-    ' and inspects it.
+    ' Grows the window's text for the DPI, then scales the window as
+    ' Windows Forms would if its source asks for that, then fits it to each
+    ' screen and inspects it.
     Friend Shared Function Measure(
         shown As Form,
         dpi As Integer,
@@ -352,8 +437,9 @@ Public Class ScalingMeasurementTests
     End Function
 
 
-    ' Grows the window's text for the DPI and scales the window as Windows
-    ' Forms would if its source asks for that. Nothing changes at 96 DPI.
+    ' Grows the window's text for the DPI and then scales the window as
+    ' Windows Forms would if its source asks for that. Nothing changes at
+    ' 96 DPI.
     Friend Shared Sub Simulate(
         shown As Form,
         dpi As Integer,
@@ -364,14 +450,14 @@ Public Class ScalingMeasurementTests
 
         If dpi <> 96 Then
 
-            ' In the order Windows Forms keeps when a window opens: the sizes
-            ' written at 96 DPI are scaled first, and the text is laid out at
-            ' its size for the display after, so a control that grows to fit
-            ' its text grows from its scaled size, not from a grown one.
-            If scalesWithWinForms Then
-                shown.Scale(New SizeF(factor, factor))
-            End If
-
+            ' In the order a window is built at a real display (#93, step
+            ' 4): its text has the display's size from the start, so a
+            ' control that sizes itself to its text is laid out at that size
+            ' before Windows Forms scales the sizes written at 96 DPI, and a
+            ' button that only grows keeps the width the scale gives it. At
+            ' a real 150% the error dialog's buttons were 1.5 times their
+            ' caption widths; scaling first, as this did before, gave them
+            ' their scaled minimums and missed the overlap they made.
             Dim fonts As New Dictionary(Of Control, Font)()
 
             For Each control As Control In New Control() {shown}.Concat(ViewCatalog.Descendants(shown))
@@ -382,19 +468,31 @@ Public Class ScalingMeasurementTests
                 pair.Key.Font = New Font(pair.Value.FontFamily, pair.Value.Size * factor, pair.Value.Style, pair.Value.Unit)
             Next
 
-            ' Scale defers the layouts it causes and drops them. A window that
-            ' opens scaled is laid out by the size messages its new windows
-            ' get; these windows exist, so each control is laid out by hand,
-            ' parents first, and once more for what the first pass moved.
-            For pass As Integer = 1 To 2
-                For Each control As Control In New Control() {shown}.Concat(ViewCatalog.Descendants(shown))
-                    control.PerformLayout()
-                Next
-            Next
+            LayOutEveryControl(shown)
+
+            If scalesWithWinForms Then
+                shown.Scale(New SizeF(factor, factor))
+                LayOutEveryControl(shown)
+            End If
 
             Application.DoEvents()
 
         End If
+
+    End Sub
+
+
+    ' Grown text and Scale defer the layouts they cause, and Scale drops
+    ' them. A window that opens is laid out by the size messages its new
+    ' windows get; these windows exist, so each control is laid out by
+    ' hand, parents first, and once more for what the first pass moved.
+    Private Shared Sub LayOutEveryControl(shown As Form)
+
+        For pass As Integer = 1 To 2
+            For Each control As Control In New Control() {shown}.Concat(ViewCatalog.Descendants(shown))
+                control.PerformLayout()
+            Next
+        Next
 
     End Sub
 
