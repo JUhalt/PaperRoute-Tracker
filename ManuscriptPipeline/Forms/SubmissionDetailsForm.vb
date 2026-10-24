@@ -154,24 +154,62 @@ Namespace Forms
                     referenceControl
                 ).WorkingArea
 
+            Dim opening As (Bounds As Rectangle, Minimum As Size) =
+                OpeningBounds(
+                    workingArea,
+                    Me.MinimumSize
+                )
+
+            Me.MinimumSize =
+                opening.Minimum
+
+            Me.Bounds =
+                opening.Bounds
+
+        End Sub
+
+
+        ' Where the dialog opens on a screen: 1040x880 capped to the working
+        ' area less a margin, and never below its minimum, which holds it.
+        ' A minimum taller than the area is lowered to it, as the dialogs
+        ' on DialogScaling lower theirs: on a 1366x768 screen the 780-pixel
+        ' minimum held the window below the taskbar, Close with it (#93).
+        Friend Shared Function OpeningBounds(
+            workingArea As Rectangle,
+            minimum As Size
+        ) As (Bounds As Rectangle, Minimum As Size)
+
+            Dim fitted As Size =
+                ResponsiveDialogSizingService.FitSize(
+                    workingArea,
+                    minimum
+                )
+
             Dim initialSize As Size =
                 ResponsiveDialogSizingService.CalculateInitialSize(
                     workingArea,
                     New Size(1040, 880),
-                    Me.MinimumSize,
+                    fitted,
                     72
                 )
 
-            Me.Size =
-                initialSize
+            Dim size As New Size(
+                Math.Max(initialSize.Width, fitted.Width),
+                Math.Max(initialSize.Height, fitted.Height)
+            )
 
-            Me.Location =
-                ResponsiveDialogSizingService.CalculateCenteredLocation(
-                    workingArea,
-                    initialSize
-                )
+            Return (
+                New Rectangle(
+                    ResponsiveDialogSizingService.CalculateCenteredLocation(
+                        workingArea,
+                        size
+                    ),
+                    size
+                ),
+                fitted
+            )
 
-        End Sub
+        End Function
 
 
         ' =====================================================

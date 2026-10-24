@@ -272,6 +272,37 @@ Public Class SubmissionDetailsLayoutTests
 
     End Sub
 
+    ' The dialog opened at its 780-pixel minimum height on a 1366x768
+    ' screen, whose working area is 720 pixels tall at 100% and 708 at 125%
+    ' with Windows 11's taskbar, centered as if it were shorter: its lowest
+    ' rows and Close lay behind the taskbar and off the screen (#93, step
+    ' 4). The measure and the display evidence tool fit each window to its
+    ' screen themselves, so neither saw it. On those screens the dialog now
+    ' opens inside the working area, its minimum lowered to fit, and where
+    ' it has room it opens at 1040x880 with its minimum as it was.
+    <TestMethod>
+    Public Sub TheDialogOpensInsideItsScreensWorkingArea()
+
+        Dim minimum As New Size(780, 780)
+
+        For Each area As Rectangle In {New Rectangle(0, 0, 1366, 720), New Rectangle(0, 0, 1366, 708), New Rectangle(0, 0, 1920, 1008), New Rectangle(0, 0, 1024, 728)}
+
+            Dim opening As (Bounds As Rectangle, Minimum As Size) =
+                SubmissionDetailsForm.OpeningBounds(area, minimum)
+
+            Assert.IsTrue(area.Contains(opening.Bounds), $"On {area.Size} the dialog opens inside the working area: {opening.Bounds}")
+            Assert.IsTrue(opening.Bounds.Width >= opening.Minimum.Width AndAlso opening.Bounds.Height >= opening.Minimum.Height, $"On {area.Size} it opens at or above its minimum {opening.Minimum}: {opening.Bounds}")
+
+        Next
+
+        Dim roomy As (Bounds As Rectangle, Minimum As Size) =
+            SubmissionDetailsForm.OpeningBounds(New Rectangle(0, 0, 1920, 1200), minimum)
+
+        Assert.AreEqual(New Size(1040, 880), roomy.Bounds.Size, "With room, its size is as it was.")
+        Assert.AreEqual(minimum, roomy.Minimum, "With room, its minimum is as it was.")
+
+    End Sub
+
     Private Shared Sub AssertInsideAncestors(control As Control)
         Assert.IsTrue(control.Visible)
         Assert.IsTrue(control.Width > 0 AndAlso control.Height > 0)
