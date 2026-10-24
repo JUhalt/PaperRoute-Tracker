@@ -154,24 +154,62 @@ Namespace Forms
                     referenceControl
                 ).WorkingArea
 
+            Dim opening As (Bounds As Rectangle, Minimum As Size) =
+                OpeningBounds(
+                    workingArea,
+                    Me.MinimumSize
+                )
+
+            Me.MinimumSize =
+                opening.Minimum
+
+            Me.Bounds =
+                opening.Bounds
+
+        End Sub
+
+
+        ' Where the dialog opens on a screen: 1040x880 capped to the working
+        ' area less a margin, and never below its minimum, which holds it.
+        ' A minimum taller than the area is lowered to it, as the dialogs
+        ' on DialogScaling lower theirs: on a 1366x768 screen the 780-pixel
+        ' minimum held the window below the taskbar, Close with it (#93).
+        Friend Shared Function OpeningBounds(
+            workingArea As Rectangle,
+            minimum As Size
+        ) As (Bounds As Rectangle, Minimum As Size)
+
+            Dim fitted As Size =
+                ResponsiveDialogSizingService.FitSize(
+                    workingArea,
+                    minimum
+                )
+
             Dim initialSize As Size =
                 ResponsiveDialogSizingService.CalculateInitialSize(
                     workingArea,
                     New Size(1040, 880),
-                    Me.MinimumSize,
+                    fitted,
                     72
                 )
 
-            Me.Size =
-                initialSize
+            Dim size As New Size(
+                Math.Max(initialSize.Width, fitted.Width),
+                Math.Max(initialSize.Height, fitted.Height)
+            )
 
-            Me.Location =
-                ResponsiveDialogSizingService.CalculateCenteredLocation(
-                    workingArea,
-                    initialSize
-                )
+            Return (
+                New Rectangle(
+                    ResponsiveDialogSizingService.CalculateCenteredLocation(
+                        workingArea,
+                        size
+                    ),
+                    size
+                ),
+                fitted
+            )
 
-        End Sub
+        End Function
 
 
         ' =====================================================
@@ -377,6 +415,27 @@ Namespace Forms
 
             notesGroup.Controls.Add(txtSubmissionNotes)
 
+            ' The notes keep two lines of their box, with the card around
+            ' it, and never less than the 110 pixels they always had: at
+            ' 125% and 150% the text grew in the fixed row and the box held
+            ' under two lines (#93). Read as the summary's row is, whenever
+            ' the card's font is set.
+            Dim reserveNotes As Action =
+                Sub()
+                    root.RowStyles(1).Height = Math.Max(
+                        110,
+                        notesGroup.DisplayRectangle.Top + notesGroup.Padding.Bottom + notesGroup.Margin.Vertical +
+                        TwoLinesTall(txtSubmissionNotes, txtSubmissionNotes.BorderStyle)
+                    )
+                End Sub
+
+            reserveNotes()
+
+            AddHandler notesGroup.FontChanged,
+                Sub(sender, e)
+                    reserveNotes()
+                End Sub
+
             ' =================================================
             ' Tabs
             ' =================================================
@@ -451,6 +510,8 @@ Namespace Forms
                 buttons.Controls.Add(btnPackets)
             End If
 
+            Dim body As Panel = Nothing
+
             If _inline Then
 
                 ' Reviewer responses for this submission, edited in place.
@@ -496,14 +557,62 @@ Namespace Forms
                 root.Controls.Add(summaryGroup, 0, 0)
                 root.Controls.Add(notesGroup, 0, 1)
                 root.Controls.Add(tabs, 0, 2)
-                root.Controls.Add(buttons, 0, 3)
+
+                ' The summary, the notes and the tabs scroll on a screen too
+                ' short for them, and Close stays below them, in view, where
+                ' the footer row was. At 125% on a 1366x768 screen the tabs
+                ' had what the rows above them left, and the Correspondence
+                ' list got no height (#93).
+                root.RowStyles(3).Height = 0
+                root.Padding = New Padding(20, 20, 20, 0)
+
+                buttons.Dock = DockStyle.Bottom
+                buttons.Height = 78
+                buttons.Padding = New Padding(23, 11, 23, 23)
+
+                body = New Panel With {
+                    .Dock = DockStyle.Fill,
+                    .AutoScroll = True
+                }
+
+                body.Controls.Add(root)
+
+                ' A panel leaves a child docked to fill it out of its scroll
+                ' range, so the body scrolls as far as the rows' least
+                ' height: the summary's and the notes' rows, and the tabs
+                ' with two rows of each list and two lines of each details
+                ' box below its toolbar, as the display has sized the text.
+                AddHandler body.Layout,
+                    Sub(sender, e)
+
+                        Dim least As Integer =
+                            root.Padding.Vertical +
+                            CInt(root.RowStyles(0).Height) +
+                            CInt(root.RowStyles(1).Height) +
+                            tabs.Margin.Vertical +
+                            tabs.DisplayRectangle.Top +
+                            decisionsTab.Padding.Vertical +
+                            Math.Max(
+                                PageMinimumHeight(lstDecisions, txtDecisionDetails),
+                                PageMinimumHeight(lstCorrespondence, txtCorrespondenceDetails)
+                            )
+
+                        root.MinimumSize = New Size(0, least)
+                        body.AutoScrollMinSize = New Size(0, least)
+
+                    End Sub
 
                 Me.AcceptButton = btnClose
                 Me.CancelButton = btnClose
 
             End If
 
-            Me.Controls.Add(root)
+            If body Is Nothing Then
+                Me.Controls.Add(root)
+            Else
+                Me.Controls.Add(body)
+                Me.Controls.Add(buttons)
+            End If
 
             ' A form marked visible makes its window at once, on WinForms'
             ' parking window while nothing around it has one; the responses
@@ -627,6 +736,60 @@ Namespace Forms
                 .AutoEllipsis = True,
                 .TextAlign = ContentAlignment.MiddleLeft
             }
+
+        End Function
+
+
+        ' How tall a tab's panel must be to show two rows of its list and
+        ' two lines of its details box, side by side below its toolbar
+        ' (#93): the panel's padding, the toolbar's row, the split's margins,
+        ' and the taller of the two. The list sits in a split's panel in the
+        ' tab's panel.
+        Private Shared Function PageMinimumHeight(
+            list As ListBox,
+            details As TextBox
+        ) As Integer
+
+            Dim split As Control =
+                list.Parent.Parent
+
+            Dim panel As TableLayoutPanel =
+                DirectCast(split.Parent, TableLayoutPanel)
+
+            Return panel.Padding.Vertical +
+                CInt(panel.RowStyles(0).Height) +
+                split.Margin.Vertical +
+                Math.Max(
+                    TwoLinesTall(list, list.BorderStyle),
+                    TwoLinesTall(details, details.BorderStyle)
+                )
+
+        End Function
+
+
+        ' Two lines of a control's font, each as tall as Windows lays out a
+        ' line of it either way (a list's item is a pixel taller than the
+        ' font's height at 150%), and its border above and below, from its
+        ' border's style: one squeezed to no height has none to measure.
+        Private Shared Function TwoLinesTall(
+            control As Control,
+            border As BorderStyle
+        ) As Integer
+
+            Dim line As Integer =
+                Math.Max(
+                    control.Font.Height,
+                    TextRenderer.MeasureText("Xg", control.Font).Height
+                )
+
+            Dim edge As Integer =
+                If(
+                    border = BorderStyle.Fixed3D,
+                    SystemInformation.Border3DSize.Height,
+                    If(border = BorderStyle.FixedSingle, SystemInformation.BorderSize.Height, 0)
+                )
+
+            Return 2 * line + 2 * edge
 
         End Function
 

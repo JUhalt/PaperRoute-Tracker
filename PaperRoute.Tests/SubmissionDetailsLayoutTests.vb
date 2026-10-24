@@ -133,11 +133,7 @@ Public Class SubmissionDetailsLayoutTests
     <DataRow(120, 1366, 708)>
     Public Sub TheSummaryIsWholeAtTheDisplaysSize(dpi As Integer, width As Integer, height As Integer)
 
-        ' A screen larger than this computer's can hold is measured at the
-        ' largest it can hold, which leaves the window less room, not more.
-        Dim track As Size = SystemInformation.MaxWindowTrackSize
-        Dim held As New Size(Math.Min(width, track.Width - 1), Math.Min(height, track.Height - 1))
-        Dim screen As (Name As String, Area As Rectangle)() = {(held.Width & "x" & held.Height, New Rectangle(New Point(-30000, -30000), held))}
+        Dim screen As (Name As String, Area As Rectangle)() = ScalingMeasurementTests.HeldScreen(width, height)
         Dim address As String = Nothing
 
         Dim view As Type = GetType(SubmissionDetailsForm)
@@ -206,6 +202,133 @@ Public Class SubmissionDetailsLayoutTests
             )
 
         Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+
+    End Sub
+
+    ' At the real 1366x708 working area at 125%, Submission Details gave its
+    ' Correspondence & Files list no height and its Editorial History list
+    ' one row, so the letters and files could not be seen (#93, step 4):
+    ' its summary, notes and footer keep their pixel sizes while their text
+    ' grows, and the tabs had what was left. With the text at the display's
+    ' size, on a 1366x768 screen at 100% and 125% and a 1920x1080 one at
+    ' 150%, every list and text box in the dialog shows two rows or more, in
+    ' view or in reach of a scroll, and Close is in view: the measure finds
+    ' nothing cut. A screen smaller than the one asked for (a 1024x768 build
+    ' runner holds about 1043x787) can cut a label the asked screen holds
+    ' whole, so there only the lists and Close are judged.
+    <TestMethod>
+    <DataRow(96, 1366, 720)>
+    <DataRow(120, 1366, 708)>
+    <DataRow(144, 1920, 1008)>
+    Public Sub EveryListShowsTwoRowsAtTheDisplaysSize(dpi As Integer, width As Integer, height As Integer)
+
+        Dim screen As (Name As String, Area As Rectangle)() = ScalingMeasurementTests.HeldScreen(width, height)
+
+        Dim view As Type = GetType(SubmissionDetailsForm)
+        Dim failures As List(Of String) =
+            ViewCatalog.ShowEach(
+                {(view.Name, ViewCatalog.Dialogs(view))},
+                Sub(name, shown)
+
+                    Dim cell As ScalingMeasurementTests.Cell =
+                        ScalingMeasurementTests.Measure(shown, dpi, ScalingMeasurementTests.ScalingOf(view).ScalesWithWinForms, screen).Single().Result
+
+                    Assert.IsNull(cell.NotMeasuredHere, "The dialog is measured on this computer: " & cell.Describe())
+                    Assert.IsTrue(cell.AcceptInside.HasValue AndAlso cell.AcceptInside.Value, $"Close is in view at {dpi} DPI on {screen(0).Name}: " & cell.Describe())
+                    Assert.IsFalse(
+                        cell.Cut.Any(Function(cut) cut.EndsWith(" under two rows", StringComparison.Ordinal)),
+                        $"Every list keeps two rows at {dpi} DPI on {screen(0).Name}: " & cell.Describe())
+
+                    If screen(0).Area.Size = New Size(width, height) Then
+                        Assert.IsTrue(cell.Passes, $"Submission Details at {dpi} DPI on {screen(0).Name}: " & cell.Describe())
+                    End If
+
+                End Sub
+            )
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+
+    End Sub
+
+    ' Hosted in the manuscript page, the detail is built as before and its
+    ' lists and details boxes keep two rows. The page sits in the main
+    ' window, which scales by hand, where a simulated display tells
+    ' nothing, so it is measured at the main window's minimum size at this
+    ' computer's display, which any screen holds, a 1024x768 build runner's
+    ' included. A guard: it cannot fail on the code before the dialog's
+    ' change, which left the hosted detail as it was.
+    <TestMethod>
+    Public Sub HostedTheDetailsListsKeepTwoRows()
+
+        Dim hosted As ViewCatalog.NamedView =
+            ViewCatalog.Hosted.Single(Function(entry) entry.Name = "SubmissionDetailsForm inside the manuscript page")
+
+        Dim inDetail As String() = {"'Editorial history'", "'Selected decision details'", "'Correspondence and files'", "'Selected item details'"}
+
+        Dim failures As List(Of String) =
+            ViewCatalog.ShowEach(
+                {(hosted.Name, hosted.Build)},
+                Sub(name, host)
+
+                    ' At the main window's minimum size, the smallest a
+                    ' researcher can make it.
+                    host.Size = host.MinimumSize
+                    host.PerformLayout()
+                    Application.DoEvents()
+
+                    Dim submission As JournalSubmission =
+                        DirectCast(GetType(SubmissionDetailsForm).GetField("_submission", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Descendants(host).OfType(Of SubmissionDetailsForm)().Single()), JournalSubmission)
+                    Descendants(host).OfType(Of EditManuscriptForm)().Single().ShowSubmission(submission.Id, showResponses:=False)
+                    Application.DoEvents()
+
+                    Assert.IsTrue(Descendants(host).OfType(Of SubmissionDetailsForm)().Single().Visible, "The detail is in view, so its lists are measured.")
+
+                    Dim screen As (Name As String, Area As Rectangle)() = {("its own size", New Rectangle(New Point(-30000, -30000), host.Size))}
+
+                    ' At 96 the measure simulates nothing.
+                    Dim cell As ScalingMeasurementTests.Cell =
+                        ScalingMeasurementTests.Measure(host, 96, False, screen).Single().Result
+
+                    Dim squeezed As List(Of String) =
+                        cell.Cut.Where(Function(cut) inDetail.Any(Function(part) cut.Contains(part, StringComparison.Ordinal))).ToList()
+
+                    Assert.AreEqual(0, squeezed.Count, $"Hosted at the main window's minimum size {host.Size}, the detail's lists keep two rows: " & String.Join("; ", squeezed))
+
+                End Sub
+            )
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+
+    End Sub
+
+    ' The dialog opened at its 780-pixel minimum height on a 1366x768
+    ' screen, whose working area is 720 pixels tall at 100% and 708 at 125%
+    ' with Windows 11's taskbar, centered as if it were shorter: its lowest
+    ' rows and Close lay behind the taskbar and off the screen (#93, step
+    ' 4). The measure and the display evidence tool fit each window to its
+    ' screen themselves, so neither saw it. On those screens the dialog now
+    ' opens inside the working area, its minimum lowered to fit, and where
+    ' it has room it opens at 1040x880 with its minimum as it was.
+    <TestMethod>
+    Public Sub TheDialogOpensInsideItsScreensWorkingArea()
+
+        Dim minimum As New Size(780, 780)
+
+        For Each area As Rectangle In {New Rectangle(0, 0, 1366, 720), New Rectangle(0, 0, 1366, 708), New Rectangle(0, 0, 1920, 1008), New Rectangle(0, 0, 1024, 728)}
+
+            Dim opening As (Bounds As Rectangle, Minimum As Size) =
+                SubmissionDetailsForm.OpeningBounds(area, minimum)
+
+            Assert.IsTrue(area.Contains(opening.Bounds), $"On {area.Size} the dialog opens inside the working area: {opening.Bounds}")
+            Assert.IsTrue(opening.Bounds.Width >= opening.Minimum.Width AndAlso opening.Bounds.Height >= opening.Minimum.Height, $"On {area.Size} it opens at or above its minimum {opening.Minimum}: {opening.Bounds}")
+
+        Next
+
+        Dim roomy As (Bounds As Rectangle, Minimum As Size) =
+            SubmissionDetailsForm.OpeningBounds(New Rectangle(0, 0, 1920, 1200), minimum)
+
+        Assert.AreEqual(New Size(1040, 880), roomy.Bounds.Size, "With room, its size is as it was.")
+        Assert.AreEqual(minimum, roomy.Minimum, "With room, its minimum is as it was.")
 
     End Sub
 

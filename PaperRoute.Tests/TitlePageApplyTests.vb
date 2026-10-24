@@ -1,5 +1,6 @@
 Imports System
 Imports System.Collections.Generic
+Imports System.Drawing
 Imports System.Linq
 Imports System.Reflection
 Imports System.Windows.Forms
@@ -203,6 +204,48 @@ Public Class TitlePageApplyTests
                     Assert.IsFalse(dialog.AuthorLibraryChanged)
                 End Using
             End Sub)
+
+    End Sub
+
+
+    ' At 150%, on a 1366x768 screen and a 1920x1080 one, the box for the
+    ' text that was not placed showed under two lines (#93, step 4): the
+    ' dialog keeps its pixel sizes while its text grows, so its captions and
+    ' one-line boxes take more of its height, and that box's row had 22 parts
+    ' in a hundred of what was left. With the text at the display's size on
+    ' the screens of the measuring sweep, the measure finds nothing cut: the
+    ' authors' grid and both boxes show two rows or more. A screen larger
+    ' than this computer's can hold is measured at the largest it holds.
+    ' The 100% and 125% rows are a guard: they passed before the change and
+    ' keep the new split from costing those displays their two lines.
+    <TestMethod>
+    <DataRow(96, 1366, 720)>
+    <DataRow(120, 1366, 708)>
+    <DataRow(144, 1366, 696)>
+    <DataRow(144, 1920, 1008)>
+    Public Sub EveryBoxShowsTwoLinesAtTheDisplaysSize(dpi As Integer, width As Integer, height As Integer)
+
+        Dim screen As (Name As String, Area As Rectangle)() = ScalingMeasurementTests.HeldScreen(width, height)
+        Dim view As Type = GetType(TitlePageImportForm)
+
+        Dim failures As List(Of String) =
+            ViewCatalog.ShowEach(
+                {(view.Name, ViewCatalog.Dialogs(view))},
+                Sub(name, shown)
+
+                    Dim cell As ScalingMeasurementTests.Cell =
+                        ScalingMeasurementTests.Measure(shown, dpi, ScalingMeasurementTests.ScalingOf(view).ScalesWithWinForms, screen).Single().Result
+
+                    Dim rows As String =
+                        String.Join(", ", {"gridAuthors", "txtAbstract", "txtUnplaced"}.Select(Function(field) field & " " & DirectCast(GetField(shown, field), Control).ClientSize.Height))
+
+                    Assert.IsNull(cell.NotMeasuredHere, "The dialog is measured on this computer: " & cell.Describe())
+                    Assert.IsTrue(cell.Passes, $"Paste a Title Page at {dpi} DPI on {screen(0).Name} ({rows}): " & cell.Describe())
+
+                End Sub
+            )
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
 
     End Sub
 

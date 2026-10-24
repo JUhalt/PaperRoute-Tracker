@@ -35,9 +35,7 @@ Public Class JournalEditScalingTests
 
         Dim view As Type = GetType(JournalEditForm)
         Dim scales As Boolean = ScalingMeasurementTests.ScalingOf(view).ScalesWithWinForms
-        Dim track As Size = SystemInformation.MaxWindowTrackSize
-        Dim held As New Size(Math.Min(width, track.Width - 1), Math.Min(height, track.Height - 1))
-        Dim screen As (Name As String, Area As Rectangle)() = {(held.Width & "x" & held.Height, New Rectangle(New Point(-30000, -30000), held))}
+        Dim screen As (Name As String, Area As Rectangle)() = ScalingMeasurementTests.HeldScreen(width, height)
         Dim result As ScalingMeasurementTests.Cell = Nothing
 
         Dim failures As List(Of String) =

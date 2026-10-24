@@ -10,21 +10,22 @@ Imports ManuscriptPipeline.Forms
 Imports ManuscriptPipeline.Services
 
 ' The version editor's rows need 786 pixels at 96 DPI, more than its body
-' has on a 1366x728 screen, or at 150% on a 1920x1003 one, so the body
-' scrolls (#93, step 3). Its table is docked to fill the body, and a panel
-' leaves a child docked to fill it out of its scroll range: the body showed
-' no scroll bar, and the notes and the make-current box could not be
-' reached. Each is scrolled into view, and the table's last row reached,
-' at 96 and 120 DPI on the smaller screen and at 144 DPI on the larger,
-' with the display simulated as the measuring test simulates it.
+' has on a 1366x768 screen (a 1366x720 working area at 100%), or at 150%
+' on a 1920x1080 one (1920x1008), so the body scrolls (#93, step 3). Its
+' table is docked to fill the body, and a panel leaves a child docked to
+' fill it out of its scroll range: the body showed no scroll bar, and the
+' notes and the make-current box could not be reached. Each is scrolled
+' into view, and the table's last row reached, at 96 and 120 DPI on the
+' smaller screen and at 144 DPI on the larger, with the display simulated
+' as the measuring test simulates it, on its working areas at each DPI.
 <TestClass>
 <DoNotParallelize>
 Public Class VersionEditorScrollTests
 
     Private Shared ReadOnly Cells As (Dpi As Integer, Screen As String, Area As Rectangle)() = {
-        (96, "1366x728", New Rectangle(-30000, -30000, 1366, 728)),
-        (120, "1366x728", New Rectangle(-30000, -30000, 1366, 728)),
-        (144, "1920x1003", New Rectangle(-30000, -30000, 1920, 1003))
+        (96, "1366x720", New Rectangle(-30000, -30000, 1366, 720)),
+        (120, "1366x708", New Rectangle(-30000, -30000, 1366, 708)),
+        (144, "1920x1008", New Rectangle(-30000, -30000, 1920, 1008))
     }
 
 
