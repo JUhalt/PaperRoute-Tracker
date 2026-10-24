@@ -130,11 +130,7 @@ Public Class SubmissionDetailsLayoutTests
     <DataRow(120, 1366, 708)>
     Public Sub TheSummaryIsWholeAtTheDisplaysSize(dpi As Integer, width As Integer, height As Integer)
 
-        ' A screen larger than this computer's can hold is measured at the
-        ' largest it can hold, which leaves the window less room, not more.
-        Dim track As Size = SystemInformation.MaxWindowTrackSize
-        Dim held As New Size(Math.Min(width, track.Width - 1), Math.Min(height, track.Height - 1))
-        Dim screen As (Name As String, Area As Rectangle)() = {(held.Width & "x" & held.Height, New Rectangle(New Point(-30000, -30000), held))}
+        Dim screen As (Name As String, Area As Rectangle)() = ScalingMeasurementTests.HeldScreen(width, height)
         Dim address As String = Nothing
 
         Dim view As Type = GetType(SubmissionDetailsForm)
@@ -217,11 +213,7 @@ Public Class SubmissionDetailsLayoutTests
     <DataRow(144, 1920, 1008)>
     Public Sub EveryListShowsTwoRowsAtTheDisplaysSize(dpi As Integer, width As Integer, height As Integer)
 
-        ' A screen larger than this computer's can hold is measured at the
-        ' largest it can hold, which leaves the window less room, not more.
-        Dim track As Size = SystemInformation.MaxWindowTrackSize
-        Dim held As New Size(Math.Min(width, track.Width - 1), Math.Min(height, track.Height - 1))
-        Dim screen As (Name As String, Area As Rectangle)() = {(held.Width & "x" & held.Height, New Rectangle(New Point(-30000, -30000), held))}
+        Dim screen As (Name As String, Area As Rectangle)() = ScalingMeasurementTests.HeldScreen(width, height)
 
         Dim view As Type = GetType(SubmissionDetailsForm)
         Dim failures As List(Of String) =

@@ -79,6 +79,18 @@ Public Class ScalingMeasurementTests
         Return (width & "x" & height, New Rectangle(-30000, -30000, width, height))
     End Function
 
+
+    ' One screen, for a test that measures a window at a display's size. A
+    ' screen larger than this computer's can hold is measured at the
+    ' largest it can hold, which leaves the window less room, not more.
+    Friend Shared Function HeldScreen(width As Integer, height As Integer) As (Name As String, Area As Rectangle)()
+
+        Dim track As Size = SystemInformation.MaxWindowTrackSize
+
+        Return {WorkingArea(Math.Min(width, track.Width - 1), Math.Min(height, track.Height - 1))}
+
+    End Function
+
     ' The windows converted to the one scaling rule, DialogScaling (#93,
     ' step 3); each conversion adds its window. Batch one: the four that
     ' had the base dimensions but not the rest of the rule. Batch two: the

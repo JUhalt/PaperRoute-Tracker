@@ -225,9 +225,7 @@ Public Class TitlePageApplyTests
     <DataRow(144, 1920, 1008)>
     Public Sub EveryBoxShowsTwoLinesAtTheDisplaysSize(dpi As Integer, width As Integer, height As Integer)
 
-        Dim track As Size = SystemInformation.MaxWindowTrackSize
-        Dim held As New Size(Math.Min(width, track.Width - 1), Math.Min(height, track.Height - 1))
-        Dim screen As (Name As String, Area As Rectangle)() = {(held.Width & "x" & held.Height, New Rectangle(New Point(-30000, -30000), held))}
+        Dim screen As (Name As String, Area As Rectangle)() = ScalingMeasurementTests.HeldScreen(width, height)
         Dim view As Type = GetType(TitlePageImportForm)
 
         Dim failures As List(Of String) =
