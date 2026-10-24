@@ -210,8 +210,7 @@ Public Class SubmissionDetailsLayoutTests
     ' size, on a 1366x768 screen at 100% and 125% and a 1920x1080 one at
     ' 150%, every list and text box in the dialog shows two rows or more, in
     ' view or in reach of a scroll, and Close is in view: the measure finds
-    ' nothing cut. Hosted in the manuscript page, the detail's lists and
-    ' details boxes keep two rows too (a guard there: they did before).
+    ' nothing cut.
     <TestMethod>
     <DataRow(96, 1366, 720)>
     <DataRow(120, 1366, 708)>
@@ -242,28 +241,51 @@ Public Class SubmissionDetailsLayoutTests
 
         Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
 
+    End Sub
+
+    ' Hosted in the manuscript page, the detail is built as before and its
+    ' lists and details boxes keep two rows. The page sits in the main
+    ' window, which scales by hand, where a simulated display tells
+    ' nothing, so it is measured at the main window's minimum size at this
+    ' computer's display, which any screen holds, a 1024x768 build runner's
+    ' included. A guard: it cannot fail on the code before the dialog's
+    ' change, which left the hosted detail as it was.
+    <TestMethod>
+    Public Sub HostedTheDetailsListsKeepTwoRows()
+
         Dim hosted As ViewCatalog.NamedView =
             ViewCatalog.Hosted.Single(Function(entry) entry.Name = "SubmissionDetailsForm inside the manuscript page")
 
         Dim inDetail As String() = {"'Editorial history'", "'Selected decision details'", "'Correspondence and files'", "'Selected item details'"}
 
-        failures =
+        Dim failures As List(Of String) =
             ViewCatalog.ShowEach(
                 {(hosted.Name, hosted.Build)},
                 Sub(name, host)
+
+                    ' At the main window's minimum size, the smallest a
+                    ' researcher can make it.
+                    host.Size = host.MinimumSize
+                    host.PerformLayout()
+                    Application.DoEvents()
 
                     Dim submission As JournalSubmission =
                         DirectCast(GetType(SubmissionDetailsForm).GetField("_submission", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Descendants(host).OfType(Of SubmissionDetailsForm)().Single()), JournalSubmission)
                     Descendants(host).OfType(Of EditManuscriptForm)().Single().ShowSubmission(submission.Id, showResponses:=False)
                     Application.DoEvents()
 
+                    Assert.IsTrue(Descendants(host).OfType(Of SubmissionDetailsForm)().Single().Visible, "The detail is in view, so its lists are measured.")
+
+                    Dim screen As (Name As String, Area As Rectangle)() = {("its own size", New Rectangle(New Point(-30000, -30000), host.Size))}
+
+                    ' At 96 the measure simulates nothing.
                     Dim cell As ScalingMeasurementTests.Cell =
-                        ScalingMeasurementTests.Measure(host, dpi, ScalingMeasurementTests.ScalingOf(GetType(Form1)).ScalesWithWinForms, screen).Single().Result
+                        ScalingMeasurementTests.Measure(host, 96, False, screen).Single().Result
 
                     Dim squeezed As List(Of String) =
                         cell.Cut.Where(Function(cut) inDetail.Any(Function(part) cut.Contains(part, StringComparison.Ordinal))).ToList()
 
-                    Assert.AreEqual(0, squeezed.Count, $"Hosted at {dpi} DPI on {screen(0).Name}, the detail's lists keep two rows: " & String.Join("; ", squeezed))
+                    Assert.AreEqual(0, squeezed.Count, $"Hosted at the main window's minimum size {host.Size}, the detail's lists keep two rows: " & String.Join("; ", squeezed))
 
                 End Sub
             )
