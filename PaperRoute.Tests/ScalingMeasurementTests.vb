@@ -13,8 +13,9 @@ Imports ManuscriptPipeline.Forms
 Imports ManuscriptPipeline.Services
 
 ' Every top-level window of the catalog, measured at 96, 120 and 144 DPI
-' after fitting to a 1920x1003 and then to a 1366x728 working area (#93,
-' step 2): whether the accept and cancel buttons are inside the client
+' after fitting to the working area of a 1920x1080 and then of a 1366x768
+' screen at that DPI (ScreensAt) (#93, step 2, and the working areas of
+' step 4): whether the accept and cancel buttons are inside the client
 ' area, whether any button, check box, single-line label or tab caption
 ' is cut, and whether any list, list view, grid, tree view or multi-line
 ' text box shows less than two rows (step 4). The per-window table goes
@@ -57,12 +58,26 @@ Public Class ScalingMeasurementTests
         ("short", New Rectangle(-30000, -30000, 1000, 400))
     }
 
-    ' The larger screen first: fitting shrinks only, so one window serves
-    ' both. Off screen, so a window the fit centers stays off screen too.
-    Private Shared ReadOnly Screens As (Name As String, Area As Rectangle)() = {
-        ("1920x1003", New Rectangle(-30000, -30000, 1920, 1003)),
-        ("1366x728", New Rectangle(-30000, -30000, 1366, 728))
-    }
+    ' The screens 1.0 certifies (#93's plan amendment A), 1920x1080 and
+    ' 1366x768, with Windows 11's taskbar, 48 pixels tall at 100% and grown
+    ' with the scale: working areas of 1920x1032 and 1366x720 at 96 DPI,
+    ' 1920x1020 and 1366x708 at 120, and 1920x1008 and 1366x696 at 144, as
+    ' the certification VM measured at 150% and 125%. The tightest that 1.0
+    ' certifies is 1366x708 at 125%. The larger screen first: fitting
+    ' shrinks only, so one window serves both. Off screen, so a window the
+    ' fit centers stays off screen too.
+    Friend Shared Function ScreensAt(dpi As Integer) As (Name As String, Area As Rectangle)()
+
+        Dim taskbar As Integer = 48 * dpi \ 96
+
+        Return {WorkingArea(1920, 1080 - taskbar), WorkingArea(1366, 768 - taskbar)}
+
+    End Function
+
+
+    Private Shared Function WorkingArea(width As Integer, height As Integer) As (Name As String, Area As Rectangle)
+        Return (width & "x" & height, New Rectangle(-30000, -30000, width, height))
+    End Function
 
     ' The windows converted to the one scaling rule, DialogScaling (#93,
     ' step 3); each conversion adds its window. Batch one: the four that
@@ -187,6 +202,40 @@ Public Class ScalingMeasurementTests
 
         Assert.IsNull(unscaled("roomy").NotMeasuredHere, "The probe is measured on this computer: " & unscaled("roomy").Describe())
         Assert.IsTrue(unscaled("roomy").Passes, "At 96 DPI the probe passes: " & unscaled("roomy").Describe())
+
+    End Sub
+
+
+    ' The sweep's screens are the two 1.0 certifies as Windows 11 lays them
+    ' out at each DPI (#93, step 4): 1920x1080 and 1366x768, less a taskbar
+    ' 48 pixels tall at 100% that grows with the scale. The certification
+    ' VM measured 1920x1008 at 150% and 1366x708 at 125%, where the sweep
+    ' had 1920x1003 and 1366x728 at every DPI.
+    <TestMethod>
+    Public Sub TheScreensAreWindows11sWorkingAreasAtEachDpi()
+
+        Dim expected As New Dictionary(Of Integer, String()) From {
+            {96, {"1920x1032", "1366x720"}},
+            {120, {"1920x1020", "1366x708"}},
+            {144, {"1920x1008", "1366x696"}}
+        }
+
+        For Each dpi As Integer In Dpis
+
+            Dim at As Integer = dpi
+            Dim names As List(Of String) = Nothing
+
+            ViewCatalog.ShowAndClose(
+                "The probe",
+                Function() Probe(),
+                Sub(name, shown)
+                    names = Measure(shown, at, False).Select(Function(cell) cell.Screen).ToList()
+                End Sub
+            )
+
+            CollectionAssert.AreEqual(expected(at), names, $"At {at} DPI the screens are {String.Join(", ", expected(at))}: {String.Join(", ", names)}")
+
+        Next
 
     End Sub
 
@@ -603,7 +652,7 @@ Public Class ScalingMeasurementTests
                 "The scrolling probe",
                 Function() ScrollingProbe(docked),
                 Sub(name, shown)
-                    result = Measure(shown, 96, False).Single(Function(cell) cell.Screen = "1366x728").Result
+                    result = Measure(shown, 96, False).Single(Function(cell) cell.Screen = "1366x720").Result
                 End Sub
             )
 
@@ -662,7 +711,7 @@ Public Class ScalingMeasurementTests
         Dim track As Size =
             SystemInformation.MaxWindowTrackSize
 
-        For Each screen As (Name As String, Area As Rectangle) In If(areas, Screens)
+        For Each screen As (Name As String, Area As Rectangle) In If(areas, ScreensAt(dpi))
 
             ResponsiveDialogSizingService.FitToWorkingArea(shown, screen.Area)
             shown.PerformLayout()
@@ -1170,7 +1219,7 @@ Public Class ScalingMeasurementTests
     Private Shared Function TableOf(rows As IEnumerable(Of WindowRow)) As String
 
         Dim columns As List(Of String) =
-            Dpis.SelectMany(Function(dpi) Screens.Reverse().Select(Function(screen) screen.Name & " " & dpi)).ToList()
+            Dpis.SelectMany(Function(dpi) ScreensAt(dpi).Reverse().Select(Function(screen) screen.Name & " " & dpi)).ToList()
 
         Dim text As New StringBuilder()
         text.AppendLine("| Window | Scaling | " & String.Join(" | ", columns.Select(Function(column) column.Replace(" ", " @ "))) & " |")

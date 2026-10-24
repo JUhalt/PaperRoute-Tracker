@@ -9,19 +9,20 @@ Imports ManuscriptPipeline
 ' The main window's start and minimum size (#93, step 0). It opened at
 ' 1280x840 with a 960x680 minimum, unscaled and with no screen cap, so on
 ' a 1366x768 laptop the first window a new user saw was taller than the
-' 728-pixel working area even at 100%. Both sizes now scale with the
+' 720-pixel working area even at 100%. Both sizes now scale with the
 ' display, and the start size is capped to the working area as the
 ' dialogs' are. The content's own hand scaling is unchanged.
 <TestClass>
 <DoNotParallelize>
 Public Class MainWindowSizeTests
 
-    ' A 1366x768 laptop at 100%: the window fits the 728-pixel working
-    ' area, no smaller than its minimum, which is unchanged.
+    ' A 1366x768 laptop at 100%: the window fits the 720-pixel working
+    ' area Windows 11's taskbar leaves, no smaller than its minimum, which
+    ' is unchanged.
     <TestMethod>
-    Public Sub FitsA1366x728WorkingAreaAt96Dpi()
+    Public Sub FitsA1366x720WorkingAreaAt96Dpi()
 
-        Dim area As New Rectangle(0, 0, 1366, 728)
+        Dim area As New Rectangle(0, 0, 1366, 720)
 
         Dim sizes As (Start As Size, Minimum As Size) =
             Form1.StartSizes(area, 96)
@@ -33,13 +34,13 @@ Public Class MainWindowSizeTests
     End Sub
 
 
-    ' The certification VM: 1920x1080 at 150%, a 1003-pixel working area.
+    ' The certification VM: 1920x1080 at 150%, a 1008-pixel working area.
     ' The minimum scales by 1.5 to 1440 wide; its 1020 height is more
     ' than the screen has, so it is lowered to the screen.
     <TestMethod>
-    Public Sub FitsA1920x1003WorkingAreaAt144Dpi()
+    Public Sub FitsA1920x1008WorkingAreaAt144Dpi()
 
-        Dim area As New Rectangle(0, 0, 1920, 1003)
+        Dim area As New Rectangle(0, 0, 1920, 1008)
 
         Dim sizes As (Start As Size, Minimum As Size) =
             Form1.StartSizes(area, 144)
