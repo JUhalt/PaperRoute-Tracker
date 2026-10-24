@@ -86,9 +86,11 @@ Public Class AccessibleActionTests
     ' can be pressed by a screen reader too: over the catalog's pages and
     ' hosted views, every child a drawn list shows as a push button has
     ' the default action Press, and every link Click. The Deadlines page
-    ' draws buttons, a "⋯" and the Done link, and Import & Export holds its
-    ' fourteen buttons, so the sweep cannot pass by finding none; that a
-    ' press does what a click does is DeadlineListTests' to show.
+    ' draws buttons, a "⋯" and the Done link, Import & Export holds its
+    ' fourteen buttons, and the manuscript page with two journals on its
+    ' shortlist (the one stage read too) draws two buttons a row, so the
+    ' sweep cannot pass by finding none; that a press does what a click
+    ' does is DeadlineListTests' and JournalShortlistRowsTests' to show.
     <TestMethod>
     Public Sub EveryDrawnButtonAndLinkHasItsDefaultAction()
 
@@ -97,7 +99,8 @@ Public Class AccessibleActionTests
 
         Dim failures As List(Of String) =
             ViewCatalog.ShowEach(
-                ViewCatalog.Hosted.Select(Function(view) (view.Name, view.Build)),
+                ViewCatalog.Hosted.Concat(ViewCatalog.Stages.Where(Function(view) view.Name = ViewCatalog.ShortlistStage)).
+                    Select(Function(view) (view.Name, view.Build)),
                 Sub(name, shown)
 
                     For Each drawn As Control In ViewCatalog.Descendants(shown).Where(Function(control) control.Visible AndAlso (TypeOf control Is DeadlineList OrElse TypeOf control Is CommandList OrElse TypeOf control Is JournalShortlistList))
@@ -145,6 +148,12 @@ Public Class AccessibleActionTests
             14,
             found.Where(Function(item) item = "Import & Export page: PushButton").Count(),
             "Import & Export's commands."
+        )
+
+        Assert.AreEqual(
+            4,
+            found.Where(Function(item) item = ViewCatalog.ShortlistStage & ": PushButton").Count(),
+            "The shortlist's Edit... and ⋯ for each of its two journals."
         )
 
         Assert.AreEqual(

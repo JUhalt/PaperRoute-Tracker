@@ -25,19 +25,27 @@ Public Class AccessibleNameTests
     ' every view has a name, and none is named by a link, a button or a
     ' sentence that happens to come before it; every button with no
     ' letters on its face has an AccessibleName, and a ? help button's
-    ' says what it helps with, not just "Help".
+    ' says what it helps with, not just "Help". The manuscript page with
+    ' journals on its shortlist is read too: the catalog's manuscripts have
+    ' none, so only that stage shows the drawn rows (#133).
     <TestMethod>
     Public Sub EveryInputAndEveryButtonWithNoLettersHasAName()
 
         Dim reports As New List(Of String)()
+        Dim shortlistItems As Integer = 0
 
         Dim failures As List(Of String) =
             ViewCatalog.ShowEach(
-                ViewCatalog.AllViews(),
+                ViewCatalog.AllViews().Concat(
+                    ViewCatalog.Stages.Where(Function(view) view.Name = ViewCatalog.ShortlistStage).Select(Function(view) (view.Name, view.Build))),
                 Sub(name, shown)
                     reports.AddRange(
                         Unnamed(shown).Select(Function(line) name & ": " & line)
                     )
+                    If name = ViewCatalog.ShortlistStage Then
+                        shortlistItems = ViewCatalog.Descendants(shown).OfType(Of JournalShortlistList)().
+                            Where(Function(list) list.Visible).Sum(Function(list) list.AccessibilityObject.GetChildCount())
+                    End If
                 End Sub
             )
 
@@ -46,6 +54,9 @@ Public Class AccessibleNameTests
             failures.Count,
             Environment.NewLine & String.Join(Environment.NewLine, failures)
         )
+
+        ' The sweep cannot pass by finding no drawn row to read.
+        Assert.IsTrue(shortlistItems > 0, "The sweep read the drawn shortlist's items.")
 
         ' A view hosted in the main window is reported under each name the
         ' catalog shows it by, so the count can name one control twice.
