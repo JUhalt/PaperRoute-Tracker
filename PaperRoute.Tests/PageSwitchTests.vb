@@ -440,6 +440,40 @@ Public Class PageSwitchTests
     End Sub
 
 
+    ' Leaving Journals reads back the author library its editor saved and
+    ' renders the Board from it, as after the Journal Library dialog. The
+    ' library is read while the page area still draws (#133): reading it
+    ' can ask about a recovered save (#111), and that question over a page
+    ' area whose drawing is held would sit on what the page area showed.
+    <TestMethod>
+    Public Sub LeavingJournalsReadsTheAuthorLibraryWhileThePageAreaDraws()
+
+        Dim reads As List(Of Boolean) = Nothing
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary =
+                    LargeLibraryFixture.Create(Path.Combine(_root, "library"), 60)
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+                    board.Start()
+                    board.WaitForIdleWork()
+                    board.NavigateTo(Form1.WorkspacePage.Journals)
+                    Application.DoEvents()
+                    board.AuthorLibraryReads.Clear()
+                    board.NavigateTo(Form1.WorkspacePage.Board)
+                    Application.DoEvents()
+                    reads = board.AuthorLibraryReads.ToList()
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(3))
+
+        CollectionAssert.AreEqual(New List(Of Boolean) From {True}, reads, "Each read on leaving Journals: whether the page area could paint.")
+
+    End Sub
+
+
     ' Each visit to Insights begins as a new page did (#133): on Your
     ' Journals, no journal chosen, and the figures worked out anew from the
     ' records as they are, though the page is kept and was left on a

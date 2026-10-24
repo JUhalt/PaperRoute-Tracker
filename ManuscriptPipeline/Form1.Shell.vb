@@ -487,18 +487,33 @@ Partial Public Class Form1
 
     ' One page switch (#133), once any question about the page left has
     ' been answered. The page left is prepared first, outside the hold: its
-    ' draft and its timers, and focus out of it. Then, with the page area's
-    ' drawing held, it is put away and the next page shown, so nothing
-    ' under the page area is painted until the switch has returned; one
-    ' paint of it is posted as the hold is released. The Board is hidden
-    ' last (HideBoardPage).
+    ' draft and its timers, focus out of it, and the author library its
+    ' editor saved read back. Then, with the page area's drawing held, it
+    ' is put away and the next page shown, so nothing under the page area
+    ' is painted until the switch has returned; one paint of it is posted
+    ' as the hold is released. The Board is hidden last (HideBoardPage).
     Private Sub SwitchPage(request As PageRequest)
 
         LeaveCurrentPage()
 
+        ' Hosted editors save as they go. The board's copies are refreshed
+        ' from what they saved, as the board did after their dialogs
+        ' closed; the library is read before the hold, since reading it can
+        ' ask about a recovered save (LoadAuthorLibrary), and a question
+        ' over a held page area would sit on what it showed before.
+        Dim authorsRead As Boolean = False
+        If pageHostedEditor Then
+            pageHostedEditor = False
+            authorsRead = LoadAuthorLibrary()
+        End If
+
         Using New RedrawHold(contentHost)
 
             PutAwayCurrentPage()
+
+            If authorsRead Then
+                RenderManuscripts()
+            End If
 
             If request.Page = WorkspacePage.Manuscript Then
                 If currentPage <> WorkspacePage.Manuscript Then
@@ -663,15 +678,6 @@ Partial Public Class Form1
         libraryAuthorsForm = Nothing
         libraryFilter = Nothing
 
-        ' Hosted editors save as they go. Refresh the board's copies, as the
-        ' board did after their dialogs closed.
-        If pageHostedEditor Then
-            pageHostedEditor = False
-            If LoadAuthorLibrary() Then
-                RenderManuscripts()
-            End If
-        End If
-
     End Sub
 
 
@@ -818,7 +824,7 @@ Partial Public Class Form1
     ' author library and the manuscripts afresh, so it never shows or saves
     ' a library the manuscript page or the Authors view has changed since.
     ' Its editor saves as it goes, so leaving it refreshes the Board's copy
-    ' (LeaveCurrentPage).
+    ' (SwitchPage).
     Private Function OpenJournalsPage() As Control
 
         If journalsPage IsNot Nothing AndAlso (journalsPage.IsDisposed OrElse journalsPageStamp <> ManuscriptPageStamp()) Then

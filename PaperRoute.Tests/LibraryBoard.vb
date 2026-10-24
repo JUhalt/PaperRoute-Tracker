@@ -65,6 +65,21 @@ Friend NotInheritable Class LibraryBoard
     End Function
 
 
+    ' Whether the page area could paint each time the window read the
+    ' author library once it was shown: reading it can ask a question
+    ' (#111), which must not sit over a page area whose drawing is held.
+    Public ReadOnly AuthorLibraryReads As New List(Of Boolean)()
+
+    Protected Overrides Function LoadAuthorLibrary() As Boolean
+        If Visible Then AuthorLibraryReads.Add(IsWindowVisible(ContentHost.Handle))
+        Return MyBase.LoadAuthorLibrary()
+    End Function
+
+    <Runtime.InteropServices.DllImport("user32.dll")>
+    Private Shared Function IsWindowVisible(handle As IntPtr) As Boolean
+    End Function
+
+
     ' Backup and Restore on the test's managed root, never the user's (#132).
     Protected Overrides Function CreateBackupService() As PortableBackupService
         Return New PortableBackupService(_library.ManagedDirectory)
