@@ -202,6 +202,76 @@ Public Class SubmissionDetailsLayoutTests
 
     End Sub
 
+    ' At the real 1366x708 working area at 125%, Submission Details gave its
+    ' Correspondence & Files list no height and its Editorial History list
+    ' one row, so the letters and files could not be seen (#93, step 4):
+    ' its summary, notes and footer keep their pixel sizes while their text
+    ' grows, and the tabs had what was left. With the text at the display's
+    ' size, on a 1366x768 screen at 100% and 125% and a 1920x1080 one at
+    ' 150%, every list and text box in the dialog shows two rows or more, in
+    ' view or in reach of a scroll, and Close is in view: the measure finds
+    ' nothing cut. Hosted in the manuscript page, the detail's lists and
+    ' details boxes keep two rows too (a guard there: they did before).
+    <TestMethod>
+    <DataRow(96, 1366, 720)>
+    <DataRow(120, 1366, 708)>
+    <DataRow(144, 1920, 1008)>
+    Public Sub EveryListShowsTwoRowsAtTheDisplaysSize(dpi As Integer, width As Integer, height As Integer)
+
+        ' A screen larger than this computer's can hold is measured at the
+        ' largest it can hold, which leaves the window less room, not more.
+        Dim track As Size = SystemInformation.MaxWindowTrackSize
+        Dim held As New Size(Math.Min(width, track.Width - 1), Math.Min(height, track.Height - 1))
+        Dim screen As (Name As String, Area As Rectangle)() = {(held.Width & "x" & held.Height, New Rectangle(New Point(-30000, -30000), held))}
+
+        Dim view As Type = GetType(SubmissionDetailsForm)
+        Dim failures As List(Of String) =
+            ViewCatalog.ShowEach(
+                {(view.Name, ViewCatalog.Dialogs(view))},
+                Sub(name, shown)
+
+                    Dim cell As ScalingMeasurementTests.Cell =
+                        ScalingMeasurementTests.Measure(shown, dpi, ScalingMeasurementTests.ScalingOf(view).ScalesWithWinForms, screen).Single().Result
+
+                    Assert.IsNull(cell.NotMeasuredHere, "The dialog is measured on this computer: " & cell.Describe())
+                    Assert.IsTrue(cell.AcceptInside.HasValue AndAlso cell.AcceptInside.Value, $"Close is in view at {dpi} DPI on {screen(0).Name}: " & cell.Describe())
+                    Assert.IsTrue(cell.Passes, $"Submission Details at {dpi} DPI on {screen(0).Name}: " & cell.Describe())
+
+                End Sub
+            )
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+
+        Dim hosted As ViewCatalog.NamedView =
+            ViewCatalog.Hosted.Single(Function(entry) entry.Name = "SubmissionDetailsForm inside the manuscript page")
+
+        Dim inDetail As String() = {"'Editorial history'", "'Selected decision details'", "'Correspondence and files'", "'Selected item details'"}
+
+        failures =
+            ViewCatalog.ShowEach(
+                {(hosted.Name, hosted.Build)},
+                Sub(name, host)
+
+                    Dim submission As JournalSubmission =
+                        DirectCast(GetType(SubmissionDetailsForm).GetField("_submission", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Descendants(host).OfType(Of SubmissionDetailsForm)().Single()), JournalSubmission)
+                    Descendants(host).OfType(Of EditManuscriptForm)().Single().ShowSubmission(submission.Id, showResponses:=False)
+                    Application.DoEvents()
+
+                    Dim cell As ScalingMeasurementTests.Cell =
+                        ScalingMeasurementTests.Measure(host, dpi, ScalingMeasurementTests.ScalingOf(GetType(Form1)).ScalesWithWinForms, screen).Single().Result
+
+                    Dim squeezed As List(Of String) =
+                        cell.Cut.Where(Function(cut) inDetail.Any(Function(part) cut.Contains(part, StringComparison.Ordinal))).ToList()
+
+                    Assert.AreEqual(0, squeezed.Count, $"Hosted at {dpi} DPI on {screen(0).Name}, the detail's lists keep two rows: " & String.Join("; ", squeezed))
+
+                End Sub
+            )
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+
+    End Sub
+
     Private Shared Sub AssertInsideAncestors(control As Control)
         Assert.IsTrue(control.Visible)
         Assert.IsTrue(control.Width > 0 AndAlso control.Height > 0)
