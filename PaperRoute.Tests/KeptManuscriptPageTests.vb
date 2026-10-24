@@ -138,7 +138,8 @@ Public Class KeptManuscriptPageTests
 
     ' An open on the kept page makes no window but its tag chips' (#133):
     ' the shortlist draws its rows, so a manuscript choosing among its
-    ' shortlisted journals opens on the windows the page already has.
+    ' shortlisted journals opens on the windows the page already has. With
+    ' motion on (#142): a switch's cross-fade makes no child window.
     <TestMethod>
     Public Sub AnOpenMakesNoWindowButItsTagChips()
 
@@ -146,6 +147,8 @@ Public Class KeptManuscriptPageTests
         Dim chips As Integer = 0
         Dim tags As Integer = 0
 
+        UiMotion.EnabledOverride = True
+        Try
         StaRunner.Run(
             Sub()
                 Dim library As LargeLibraryFixture.SyntheticLibrary = Library60()
@@ -176,10 +179,20 @@ Public Class KeptManuscriptPageTests
                     Dim shortlist As JournalShortlistList = ViewCatalog.Descendants(board.Editor).OfType(Of JournalShortlistList)().Single()
                     Assert.AreEqual(subjects(1).JournalShortlist.Count, shortlist.Entries.Count, "The shortlist shows the manuscript's journals.")
 
+                    ' Leaving fades, and makes no child window either.
+                    Using watch As New WindowCreationWatch()
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        Application.DoEvents()
+                        report.AddRange(watch.Children().Select(Function(window) "leaving: " & window))
+                    End Using
+
                     board.Close()
                 End Using
             End Sub,
             TimeSpan.FromMinutes(5))
+        Finally
+            UiMotion.EnabledOverride = Nothing
+        End Try
 
         Assert.AreEqual(0, report.Count, "Windows the open made besides its tag chips:" & Environment.NewLine & String.Join(Environment.NewLine, report))
         Assert.AreEqual(tags, chips, "A window for each tag chip.")

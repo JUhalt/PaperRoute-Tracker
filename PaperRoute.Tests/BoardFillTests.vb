@@ -410,12 +410,16 @@ Public Class BoardFillTests
     ' none on WinForms' parking window, while the cards the fill has not
     ' reached have none. The first switch to a shelf then shows those very
     ' cards, whose windows are already made, and the fill goes on there.
-    ' Before, the first switch built the shelf there and then.
+    ' Before, the first switch built the shelf there and then. With motion
+    ' on (#142): the page switches fade, the shelf switch does not, and
+    ' neither makes a child window.
     <TestMethod>
     Public Sub OtherShelvesArePreparedAfterTheFill()
 
         Dim report As New List(Of String)()
 
+        UiMotion.EnabledOverride = True
+        Try
         StaRunner.Run(
             Sub()
                 Dim library As LargeLibraryFixture.SyntheticLibrary = Library120()
@@ -479,6 +483,9 @@ Public Class BoardFillTests
                 End Using
             End Sub,
             TimeSpan.FromMinutes(5))
+        Finally
+            UiMotion.EnabledOverride = Nothing
+        End Try
 
         Assert.AreEqual(0, report.Count, "Windows made on the parking window:" & Environment.NewLine & String.Join(Environment.NewLine, report))
 

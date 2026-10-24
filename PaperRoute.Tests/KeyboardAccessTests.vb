@@ -1593,15 +1593,20 @@ Public Class KeyboardAccessTests
     ' the keyboard goes to the window's first stop, outside the hidden
     ' Board. Where the window has the keyboard, Windows' focus is held to
     ' the same; without it, as on a locked desktop, the window's own record
-    ' of the focused control is.
+    ' of the focused control is. The same with motion off and on (#142): a
+    ' switch's cross-fade moves the keyboard nowhere.
     <TestMethod>
-    Public Sub OpeningEachPageFromTheBoardByKeyboardLandsInsideIt()
+    <DataRow(False)>
+    <DataRow(True)>
+    Public Sub OpeningEachPageFromTheBoardByKeyboardLandsInsideIt(motion As Boolean)
 
         Dim root As String = CreateTemporaryRoot()
         Dim report As New List(Of String)()
         Dim windowsFocusChecked As Integer = 0
 
         StorageEnvironment.RootOverride = Path.Combine(root, "storage")
+        UiMotion.EnabledOverride = motion
+        PageFade.AwaitPicture = motion
 
         Try
 
@@ -1696,6 +1701,8 @@ Public Class KeyboardAccessTests
                 TimeSpan.FromMinutes(5))
 
         Finally
+            UiMotion.EnabledOverride = Nothing
+            PageFade.AwaitPicture = False
             StorageEnvironment.RootOverride = Nothing
             DeleteTemporaryRoot(root)
         End Try

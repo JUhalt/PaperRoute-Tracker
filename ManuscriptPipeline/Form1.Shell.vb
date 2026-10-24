@@ -1,5 +1,6 @@
 Imports System
 Imports System.Collections.Generic
+Imports System.Diagnostics
 Imports System.Drawing
 Imports System.Linq
 Imports System.Windows.Forms
@@ -82,6 +83,10 @@ Partial Public Class Form1
     Private boardFocusToReturn As Control = Nothing
     Private boardFocusCardId As Guid = Guid.Empty
     Private boardFocusLanded As Control = Nothing
+
+    ' A page switch's cross-fade (#142), made on the first switch with
+    ' motion on.
+    Private pageFade As PageFade = Nothing
 
 
     ' =====================================================
@@ -388,13 +393,20 @@ Partial Public Class Form1
 
         syncingRail = True
 
-        Try
-            For Each pair In railButtons
-                pair.Value.Checked = pair.Key = highlighted
-            Next
-        Finally
-            syncingRail = False
-        End Try
+        ' A rail button checked or unchecked draws itself there and then;
+        ' held, the rail draws once the switch has returned (#142). Drawing
+        ' while a switch's cross-fade reads the screen waited as long as the
+        ' read waited on it: 3 of 50 switches held up to 449 ms by reads of
+        ' 250 ms and more, with the display asleep.
+        Using New RedrawHold(railButtons.Values.FirstOrDefault()?.Parent)
+            Try
+                For Each pair In railButtons
+                    pair.Value.Checked = pair.Key = highlighted
+                Next
+            Finally
+                syncingRail = False
+            End Try
+        End Using
 
     End Sub
 
@@ -477,19 +489,55 @@ Partial Public Class Form1
             Return False
         End If
 
+        ' The cross-fade (#142): the page left is read as the switch begins
+        ' and, once the switch has returned, faded out over the page shown,
+        ' if the switch was quicker than the fade. What it costs is part of
+        ' the switch.
+        Dim switchTime As Stopwatch = Stopwatch.StartNew()
+        CapturePageLeft(request)
+
         Dim previous As PageRequest = CurrentRequest
+        Dim switched As Boolean = False
 
-        SwitchPage(request)
+        Try
 
-        If recordHistory Then
-            backHistory.Push(previous)
-            forwardHistory.Clear()
-        End If
+            SwitchPage(request)
 
-        SyncRail()
+            If recordHistory Then
+                backHistory.Push(previous)
+                forwardHistory.Clear()
+            End If
+
+            SyncRail()
+            switched = True
+
+        Finally
+            pageFade?.Begin(switchTime.Elapsed.TotalMilliseconds, switched)
+        End Try
+
         Return True
 
     End Function
+
+
+    ' The page left, as the screen shows it, for the switch's cross-fade
+    ' (#142), unless motion is off. A manuscript opens as a cut: its
+    ' versions and the selected submission's details are built once the
+    ' page has painted (FinishManuscriptPage), on the UI thread, and the
+    ' fade's frames could not run until they were, so the picture of the
+    ' page left would sit over the manuscript page that long and then go.
+    Private Sub CapturePageLeft(request As PageRequest)
+
+        If pageFade Is Nothing Then
+            If Not UiMotion.Enabled Then
+                Return
+            End If
+            pageFade = New PageFade(Me, contentHost)
+        End If
+
+        pageFade.Capture(request.Page <> WorkspacePage.Manuscript, "a manuscript opens as a cut")
+
+    End Sub
 
 
     ' One page switch (#133), once any question about the page left has
