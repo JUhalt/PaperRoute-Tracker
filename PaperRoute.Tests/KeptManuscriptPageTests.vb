@@ -148,6 +148,7 @@ Public Class KeptManuscriptPageTests
         Dim tags As Integer = 0
 
         UiMotion.EnabledOverride = True
+        UiTheme.HighContrastOverride = False
         Try
         StaRunner.Run(
             Sub()
@@ -192,6 +193,7 @@ Public Class KeptManuscriptPageTests
             TimeSpan.FromMinutes(5))
         Finally
             UiMotion.EnabledOverride = Nothing
+            UiTheme.HighContrastOverride = Nothing
         End Try
 
         Assert.AreEqual(0, report.Count, "Windows the open made besides its tag chips:" & Environment.NewLine & String.Join(Environment.NewLine, report))

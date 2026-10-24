@@ -1617,6 +1617,8 @@ Public Class KeyboardAccessTests
         StorageEnvironment.RootOverride = Path.Combine(root, "storage")
         UiMotion.EnabledOverride = motion
         PageFade.AwaitPicture = motion
+        ' Motion on is on whatever the host's theme: a contrast theme stops it.
+        If motion Then UiTheme.HighContrastOverride = False
 
         Try
 
@@ -1713,6 +1715,7 @@ Public Class KeyboardAccessTests
         Finally
             UiMotion.EnabledOverride = Nothing
             PageFade.AwaitPicture = False
+            UiTheme.HighContrastOverride = Nothing
             StorageEnvironment.RootOverride = Nothing
             DeleteTemporaryRoot(root)
         End Try
