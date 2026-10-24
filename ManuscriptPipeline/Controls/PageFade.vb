@@ -130,13 +130,6 @@ Namespace Controls
         End Property
 
 
-        ' The overlay's UI Automation element, as a screen reader would be
-        ' given it, for the test that it is in the raw view only.
-        Friend Function AutomationProperty(propertyId As Integer) As Object
-            Return New OverlayProvider(OverlayHandle).GetPropertyValue(propertyId)
-        End Function
-
-
         ' ---------------------------------------------------------------
         ' A switch
         ' ---------------------------------------------------------------

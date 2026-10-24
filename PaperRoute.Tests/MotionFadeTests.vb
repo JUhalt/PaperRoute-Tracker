@@ -6,6 +6,7 @@ Imports System.IO
 Imports System.Linq
 Imports System.Runtime.InteropServices
 Imports System.Threading
+Imports System.Threading.Tasks
 Imports System.Windows.Forms
 Imports ManuscriptPipeline
 Imports ManuscriptPipeline.Controls
@@ -293,9 +294,10 @@ Public Class MotionFadeTests
     ' The overlay takes nothing: Windows' focus, the active window and the
     ' window's own record of the focused control are the same before and
     ' during a fade; the overlay is disabled and no control; the window's
-    ' controls and its accessible children are the same; and UI
-    ' Automation is told it is neither a control nor content and takes no
-    ' focus, so it is in the raw view only.
+    ' controls are the same; and UI Automation, asked through Windows from
+    ' another thread as a screen reader asks it, says it is neither a
+    ' control nor content and takes no focus, so it is in the raw view
+    ' only and the window's children in the control view are the same.
     <TestMethod>
     Public Sub TheOverlayTakesNoFocusInputOrPlaceInTheTree()
 
@@ -332,19 +334,33 @@ Public Class MotionFadeTests
                 Assert.IsNull(Control.FromHandle(fade.OverlayHandle), "The overlay is no control.")
                 Assert.IsNull(Control.FromChildHandle(fade.OverlayHandle), "The overlay is in no control.")
                 Assert.AreEqual(forms, Application.OpenForms.Count, "No form was opened.")
-                Assert.AreEqual(Of Object)(False, fade.AutomationProperty(PageFade.UIA_IsControlElementPropertyId), "Not a control element.")
-                Assert.AreEqual(Of Object)(False, fade.AutomationProperty(PageFade.UIA_IsContentElementPropertyId), "Not a content element.")
-                Assert.AreEqual(Of Object)(False, fade.AutomationProperty(PageFade.UIA_IsKeyboardFocusablePropertyId), "Takes no keyboard focus.")
 
-                ' The window's controls and what a screen reader is given of it
-                ' are the same with the overlay showing as once it has gone.
+                ' UI Automation, asked through Windows as a screen reader asks
+                ' it: the overlay's element is neither a control nor content
+                ' and takes no focus, so the control view, the one a screen
+                ' reader reads, passes over it.
+                Dim showing As UiaReading = AskUiAutomation(board.Handle, fade.OverlayHandle)
+                Console.WriteLine("With the overlay showing: " & showing.ToString())
+                Assert.AreEqual(Of Object)(False, showing.IsControlElement, "Not a control element.")
+                Assert.AreEqual(Of Object)(False, showing.IsContentElement, "Not a content element.")
+                Assert.AreEqual(Of Object)(False, showing.IsKeyboardFocusable, "Takes no keyboard focus.")
+                Assert.AreNotEqual(fade.OverlayHandle, showing.ControlViewHandle, "The control view passes over the overlay.")
+                Assert.AreEqual(board.Handle, showing.RawParentHandle, "In the raw view the overlay is the window's.")
+                Dim overlayKey As String = fade.OverlayHandle.ToString("X") & " "
+                Assert.IsTrue(showing.RawChildren.Any(Function(child) child.StartsWith(overlayKey, StringComparison.Ordinal)), "The window's children in the raw view hold the overlay.")
+                Assert.IsFalse(showing.ControlChildren.Any(Function(child) child.StartsWith(overlayKey, StringComparison.Ordinal)), "The window's children in the control view do not.")
+
+                ' The window's controls, and its children in UI Automation's
+                ' control view, are the same with the overlay showing as once
+                ' it has gone.
                 Dim controls As List(Of Control) = ViewCatalog.Descendants(board).ToList()
-                Dim children As List(Of String) = AccessibleChildren(board)
                 Assert.IsTrue(fade.Showing, "The fade still shows: nothing it took ended it.")
                 fade.End()
                 Application.DoEvents()
+                Dim gone As UiaReading = AskUiAutomation(board.Handle, IntPtr.Zero)
                 CollectionAssert.AreEqual(controls, ViewCatalog.Descendants(board).ToList(), "The window's controls are the same.")
-                CollectionAssert.AreEqual(children, AccessibleChildren(board), "The window's accessible children are the same.")
+                CollectionAssert.AreEqual(gone.ControlChildren, showing.ControlChildren,
+                                          "The window's children in the control view are the same. Showing: " & String.Join("; ", showing.ControlChildren) & ". Gone: " & String.Join("; ", gone.ControlChildren))
             End Sub)
 
     End Sub
@@ -754,18 +770,95 @@ Public Class MotionFadeTests
     End Function
 
 
-    ' The window's accessible children, by role and name, as its accessible
-    ' object gives them, or for each of its controls where it leaves them
-    ' to Windows (a count of -1).
-    Private Shared Function AccessibleChildren(form As Form) As List(Of String)
-        Dim accessible As AccessibleObject = form.AccessibilityObject
-        Dim count As Integer = accessible.GetChildCount()
-        Dim children As IEnumerable(Of AccessibleObject) =
-            If(count >= 0,
-               Enumerable.Range(0, count).Select(Function(index) accessible.GetChild(index)),
-               form.Controls.Cast(Of Control)().Select(Function(control) control.AccessibilityObject))
-        Return children.Select(Function(child) If(child Is Nothing, "nothing", child.Role.ToString() & " '" & child.Name & "'")).ToList()
+    ' What UI Automation told a client of the overlay and the window.
+    Private NotInheritable Class UiaReading
+        Public IsControlElement As Object
+        Public IsContentElement As Object
+        Public IsKeyboardFocusable As Object
+        ' The window of the element the control view gives for the
+        ' overlay's (itself if it is in that view, else the nearest one
+        ' above it that is), and of its parent in the raw view.
+        Public ControlViewHandle As IntPtr
+        Public RawParentHandle As IntPtr
+        ' The window's children in each view, by window and name.
+        Public ControlChildren As New List(Of String)()
+        Public RawChildren As New List(Of String)()
+
+        Public Overrides Function ToString() As String
+            Return $"control element {IsControlElement}, content element {IsContentElement}, keyboard focusable {IsKeyboardFocusable}; " &
+                   $"the control view gives {ControlViewHandle:X}, its raw parent {RawParentHandle:X}; " &
+                   $"control children {String.Join(", ", ControlChildren)}; raw children {String.Join(", ", RawChildren)}"
+        End Function
+    End Class
+
+
+    ' Asks UI Automation, as a screen reader does from its own process,
+    ' from a worker thread of the multithreaded apartment while this thread
+    ' goes on processing its messages, since UI Automation asks the
+    ' window's own thread (WM_GETOBJECT, and the overlay's provider and the
+    ' window's are called there).
+    Private Shared Function AskUiAutomation(window As IntPtr, overlay As IntPtr) As UiaReading
+
+        Dim reading As New UiaReading()
+        Dim failure As Exception = Nothing
+
+        Dim worker As Task = Task.Run(
+            Sub()
+                Try
+                    Dim automation As IUIAutomationClient = DirectCast(Activator.CreateInstance(Type.GetTypeFromCLSID(New Guid("ff48dba4-60ef-4201-aa87-54103eef594e"))), IUIAutomationClient)
+                    Dim controlView As IUIAutomationTreeWalkerClient = automation.ControlViewWalker
+                    Dim rawView As IUIAutomationTreeWalkerClient = automation.RawViewWalker
+
+                    If overlay <> IntPtr.Zero Then
+                        Dim element As IUIAutomationElementClient = automation.ElementFromHandle(overlay)
+                        reading.IsControlElement = element.GetCurrentPropertyValue(PageFade.UIA_IsControlElementPropertyId)
+                        reading.IsContentElement = element.GetCurrentPropertyValue(PageFade.UIA_IsContentElementPropertyId)
+                        reading.IsKeyboardFocusable = element.GetCurrentPropertyValue(PageFade.UIA_IsKeyboardFocusablePropertyId)
+                        reading.ControlViewHandle = HandleOf(controlView.NormalizeElement(element))
+                        reading.RawParentHandle = HandleOf(rawView.GetParentElement(element))
+                    End If
+
+                    Dim root As IUIAutomationElementClient = automation.ElementFromHandle(window)
+                    reading.ControlChildren = ChildrenOf(controlView, root)
+                    reading.RawChildren = ChildrenOf(rawView, root)
+                Catch ex As Exception
+                    failure = ex
+                End Try
+            End Sub)
+
+        Dim waited As Stopwatch = Stopwatch.StartNew()
+        While Not worker.IsCompleted AndAlso waited.ElapsedMilliseconds < 20000
+            Application.DoEvents()
+            Thread.Sleep(1)
+        End While
+
+        Assert.IsTrue(worker.IsCompleted, "UI Automation answered within 20 s.")
+        If failure IsNot Nothing Then Assert.Fail("UI Automation: " & failure.ToString())
+        Return reading
+
     End Function
+
+
+    Private Shared Function HandleOf(element As IUIAutomationElementClient) As IntPtr
+        If element Is Nothing Then Return IntPtr.Zero
+        Dim value As Object = element.GetCurrentPropertyValue(UIA_NativeWindowHandlePropertyId)
+        Return If(TypeOf value Is Integer, New IntPtr(CInt(value)), IntPtr.Zero)
+    End Function
+
+
+    Private Shared Function ChildrenOf(walker As IUIAutomationTreeWalkerClient, parent As IUIAutomationElementClient) As List(Of String)
+        Dim found As New List(Of String)()
+        Dim child As IUIAutomationElementClient = walker.GetFirstChildElement(parent)
+        While child IsNot Nothing AndAlso found.Count < 100
+            found.Add(HandleOf(child).ToString("X") & " '" & TryCast(child.GetCurrentPropertyValue(UIA_NamePropertyId), String) & "'")
+            child = walker.GetNextSiblingElement(child)
+        End While
+        Return found
+    End Function
+
+
+    Private Const UIA_NamePropertyId As Integer = 30005
+    Private Const UIA_NativeWindowHandlePropertyId As Integer = 30020
 
 
     ' The thread's top-level windows made as the fade's overlay is: layered,
@@ -893,3 +986,55 @@ Public Class MotionFadeTests
     End Function
 
 End Class
+
+
+' UI Automation's client interfaces, as UIAutomationClient declares them
+' (CUIAutomation): only the members the tests call are named; each other
+' member before them holds its place in the interface.
+<ComImport>
+<Guid("30cbe57d-d9d0-452a-ab13-7ac5ac4825ee")>
+<InterfaceType(ComInterfaceType.InterfaceIsIUnknown)>
+Friend Interface IUIAutomationClient
+    Sub CompareElements()
+    Sub CompareRuntimeIds()
+    Sub GetRootElement()
+    Function ElementFromHandle(window As IntPtr) As IUIAutomationElementClient
+    Sub ElementFromPoint()
+    Sub GetFocusedElement()
+    Sub GetRootElementBuildCache()
+    Sub ElementFromHandleBuildCache()
+    Sub ElementFromPointBuildCache()
+    Sub GetFocusedElementBuildCache()
+    Sub CreateTreeWalker()
+    ReadOnly Property ControlViewWalker As IUIAutomationTreeWalkerClient
+    ReadOnly Property ContentViewWalker As IUIAutomationTreeWalkerClient
+    ReadOnly Property RawViewWalker As IUIAutomationTreeWalkerClient
+End Interface
+
+
+<ComImport>
+<Guid("d22108aa-8ac5-49a5-837b-37bbb3d7591e")>
+<InterfaceType(ComInterfaceType.InterfaceIsIUnknown)>
+Friend Interface IUIAutomationElementClient
+    Sub SetFocus()
+    Sub GetRuntimeId()
+    Sub FindFirst()
+    Sub FindAll()
+    Sub FindFirstBuildCache()
+    Sub FindAllBuildCache()
+    Sub BuildUpdatedCache()
+    Function GetCurrentPropertyValue(propertyId As Integer) As Object
+End Interface
+
+
+<ComImport>
+<Guid("4042c624-389c-4afc-a630-9df854a541fc")>
+<InterfaceType(ComInterfaceType.InterfaceIsIUnknown)>
+Friend Interface IUIAutomationTreeWalkerClient
+    Function GetParentElement(element As IUIAutomationElementClient) As IUIAutomationElementClient
+    Function GetFirstChildElement(element As IUIAutomationElementClient) As IUIAutomationElementClient
+    Function GetLastChildElement(element As IUIAutomationElementClient) As IUIAutomationElementClient
+    Function GetNextSiblingElement(element As IUIAutomationElementClient) As IUIAutomationElementClient
+    Function GetPreviousSiblingElement(element As IUIAutomationElementClient) As IUIAutomationElementClient
+    Function NormalizeElement(element As IUIAutomationElementClient) As IUIAutomationElementClient
+End Interface
