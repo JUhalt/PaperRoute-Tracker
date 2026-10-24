@@ -252,14 +252,18 @@ Public Class ScalingMeasurementTests
     ' overran their row at 125% and 150% and Close PaperRoute lay over Open
     ' Log Folder, which the measure before, scaling the window before it
     ' grew the text, reported whole. The same row of buttons that only
-    ' grow is reported cut at 144 DPI; buttons that also shrink go back to
-    ' their scaled minimums and fit; at 96 DPI both fit.
+    ' grow, in a window that sets the base dimensions itself, is reported
+    ' cut at 144 DPI. Built with the one scaling rule, DialogScaling, they
+    ' are scaled once and fit, as buttons that also shrink do; at 96 DPI
+    ' all fit.
     <TestMethod>
     Public Sub AButtonSizedToItsCaptionIsScaledAgain()
 
-        For Each mode As AutoSizeMode In {AutoSizeMode.GrowOnly, AutoSizeMode.GrowAndShrink}
+        For Each probe As (Mode As AutoSizeMode, Ruled As Boolean) In {
+            (AutoSizeMode.GrowOnly, False), (AutoSizeMode.GrowOnly, True), (AutoSizeMode.GrowAndShrink, True)
+        }
 
-            Dim current As AutoSizeMode = mode
+            Dim current As (Mode As AutoSizeMode, Ruled As Boolean) = probe
 
             For Each dpi As Integer In {96, 144}
 
@@ -268,18 +272,20 @@ Public Class ScalingMeasurementTests
 
                 ViewCatalog.ShowAndClose(
                     "The button row probe",
-                    Function() ButtonRowProbe(current),
+                    Function() ButtonRowProbe(current.Mode, current.Ruled),
                     Sub(name, shown)
                         result = Measure(shown, at, True, ProbeScreens).Single(Function(cell) cell.Screen = "roomy").Result
                     End Sub
                 )
 
+                Dim built As String = current.Mode.ToString() & If(current.Ruled, " with DialogScaling", " with base dimensions alone")
+
                 Assert.IsNull(result.NotMeasuredHere, "The probe is measured on this computer: " & result.Describe())
 
-                If current = AutoSizeMode.GrowOnly AndAlso at = 144 Then
+                If current.Mode = AutoSizeMode.GrowOnly AndAlso Not current.Ruled AndAlso at = 144 Then
                     Assert.IsTrue(result.Cut.Any(Function(cut) cut.StartsWith("button 'Open Log Folder'", StringComparison.Ordinal)), "Grown to their captions and then scaled, the buttons overrun their row: " & result.Describe())
                 Else
-                    Assert.IsTrue(result.Passes, $"{current} at {at} DPI, the row holds its buttons: " & result.Describe())
+                    Assert.IsTrue(result.Passes, $"{built} at {at} DPI, the row holds its buttons: " & result.Describe())
                 End If
 
             Next
@@ -289,13 +295,22 @@ Public Class ScalingMeasurementTests
     End Sub
 
     ' The error dialog's last row as it was: a 640-pixel window built with
-    ' DialogScaling, two buttons on the left and two on the right, each
-    ' sizing itself to its caption over a minimum width, 572 pixels of
-    ' buttons in a 592-pixel row at 96 DPI.
-    Private Shared Function ButtonRowProbe(mode As AutoSizeMode) As Form
+    ' DialogScaling, or with the base dimensions and nothing else of the
+    ' rule, two buttons on the left and two on the right, each sizing
+    ' itself to its caption over a minimum width, 572 pixels of buttons in
+    ' a 592-pixel row at 96 DPI.
+    Private Shared Function ButtonRowProbe(mode As AutoSizeMode, ruled As Boolean) As Form
 
         Dim form As New Form()
-        DialogScaling.Begin(form)
+
+        If ruled Then
+            DialogScaling.Begin(form)
+        Else
+            form.SuspendLayout()
+            form.AutoScaleDimensions = New SizeF(96.0F, 96.0F)
+            form.AutoScaleMode = AutoScaleMode.Dpi
+        End If
+
         form.ClientSize = New Size(640, 120)
         form.Font = New Font("Segoe UI", 10.0F)
 
@@ -316,8 +331,162 @@ Public Class ScalingMeasurementTests
         row.Controls.Add(decisions, 1, 0)
         form.Controls.Add(row)
 
-        DialogScaling.Finish(form)
+        If ruled Then
+            DialogScaling.Finish(form)
+        Else
+            form.ResumeLayout(False)
+            form.PerformLayout()
+        End If
+
         Return form
+
+    End Function
+
+
+    ' A button that sizes itself to its caption is scaled once in every
+    ' window on DialogScaling (#93, step 4). At a real 150% display such a
+    ' button that only grows took its caption's width at the display's text
+    ' size while its window was built, then kept that width scaled by 1.5:
+    ' ManuscriptLinksForm's "Choose from Library..." was 291 pixels,
+    ' UpdatePromptForm's "Download && Restart" 332, SubmissionPacketEditForm's
+    ' "Save Changes" 214 and AboutForm's "Copy Version Info" 268, about 1.5
+    ' times their captions. At a simulated 144 DPI each such button of every
+    ' converted window is the larger of its least size, scaled, and its
+    ' caption's preferred size, on each side. Its least size is its
+    ' MinimumSize and, for a button that only grows, the size it was given
+    ' too, which Windows Forms gives back when AutoSize is turned off: a
+    ' button given no size is never narrower than its 75-pixel default.
+    ' Buttons whose equal width comes from a shared minimum keep it.
+    <TestMethod>
+    Public Sub EveryTextSizedButtonIsScaledOnce()
+
+        Dim found As New List(Of String)()
+        Dim measured As New List(Of String)()
+
+        found.AddRange(
+            ViewCatalog.ShowEach(
+                Converted.Select(Function(view) (view.Name, ViewCatalog.Dialogs(view))),
+                Sub(name, shown)
+
+                    ' As built at 96 DPI: what each text-sized button is held at.
+                    Dim least As New Dictionary(Of Button, Size)()
+
+                    For Each button As Button In ViewCatalog.Descendants(shown).OfType(Of Button)().Where(Function(candidate) candidate.AutoSize).ToList()
+                        least(button) = LeastSize(button)
+                    Next
+
+                    Simulate(shown, 144, True)
+
+                    CompareTextSizedButtons(shown, name, least, found, measured)
+
+                End Sub
+            )
+        )
+
+        TestContext.WriteLine(String.Join(Environment.NewLine, measured))
+
+        Assert.IsTrue(measured.Count >= 40, "The converted windows' text-sized buttons were measured: " & measured.Count)
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+
+    End Sub
+
+
+    ' Each text-sized button in view, the pages of a tab control in turn.
+    Private Shared Sub CompareTextSizedButtons(parent As Control, window As String, least As Dictionary(Of Button, Size), found As List(Of String), measured As List(Of String))
+
+        Dim tabs As TabControl = TryCast(parent, TabControl)
+
+        If tabs IsNot Nothing Then
+
+            Dim selected As TabPage = tabs.SelectedTab
+
+            For index As Integer = 0 To tabs.TabCount - 1
+                tabs.SelectedIndex = index
+                Application.DoEvents()
+                CompareTextSizedButtons(tabs.TabPages(index), window, least, found, measured)
+            Next
+
+            tabs.SelectedTab = selected
+            Application.DoEvents()
+            Return
+
+        End If
+
+        For Each child As Control In parent.Controls
+
+            Dim button As Button = TryCast(child, Button)
+
+            If button IsNot Nothing AndAlso button.Visible AndAlso least.ContainsKey(button) Then
+
+                Dim held As Size = least(button)
+                Dim caption As Size = CaptionSize(button)
+                Dim expected As New Size(
+                    Math.Max(CInt(Math.Round(held.Width * 1.5)), caption.Width),
+                    Math.Max(CInt(Math.Round(held.Height * 1.5)), caption.Height)
+                )
+                Dim line As String =
+                    $"{window} '{Abbreviate(button.Text)}' at 144 DPI: {button.Width}x{button.Height}; its least size {held.Width}x{held.Height} scaled, or its caption {caption.Width}x{caption.Height}, gives {expected.Width}x{expected.Height}"
+
+                measured.Add(line)
+
+                If Math.Abs(button.Width - expected.Width) > 1 OrElse Math.Abs(button.Height - expected.Height) > 1 Then
+                    found.Add(line)
+                End If
+
+                least.Remove(button)
+
+            End If
+
+            CompareTextSizedButtons(child, window, least, found, measured)
+
+        Next
+
+    End Sub
+
+
+    ' What a text-sized button is held at however short its caption: its
+    ' MinimumSize and, if it only grows, the size it was given, which
+    ' Windows Forms gives back when AutoSize is turned off. Its parent is
+    ' held meanwhile and laid out after, so the button is as it was.
+    Private Shared Function LeastSize(button As Button) As Size
+
+        If button.AutoSizeMode = AutoSizeMode.GrowAndShrink Then
+            Return button.MinimumSize
+        End If
+
+        Dim parent As Control = button.Parent
+        parent.SuspendLayout()
+        button.AutoSize = False
+        Dim given As Size = button.Size
+        button.AutoSize = True
+        parent.ResumeLayout(True)
+
+        Return New Size(Math.Max(given.Width, button.MinimumSize.Width), Math.Max(given.Height, button.MinimumSize.Height))
+
+    End Function
+
+
+    ' The size a button's caption asks for on its own: a button of its kind
+    ' with its text, font, padding and style, that grows and shrinks to its
+    ' caption with no minimum.
+    Private Shared Function CaptionSize(button As Button) As Size
+
+        Using probe As Button = DirectCast(Activator.CreateInstance(button.GetType()), Button)
+
+            probe.Text = button.Text
+            probe.Font = button.Font
+            probe.Padding = button.Padding
+            probe.FlatStyle = button.FlatStyle
+            probe.FlatAppearance.BorderSize = button.FlatAppearance.BorderSize
+            probe.UseMnemonic = button.UseMnemonic
+            probe.Image = button.Image
+            probe.TextImageRelation = button.TextImageRelation
+            probe.AutoSize = True
+            probe.AutoSizeMode = AutoSizeMode.GrowAndShrink
+
+            Return probe.GetPreferredSize(Size.Empty)
+
+        End Using
 
     End Function
 

@@ -1,5 +1,7 @@
 ﻿Imports System
+Imports System.Collections.Generic
 Imports System.Drawing
+Imports System.Linq
 Imports System.Windows.Forms
 
 Namespace Services
@@ -34,9 +36,10 @@ Namespace Services
         End Sub
 
 
-        ' After the last control: one layout pass, and the window kept inside
-        ' its screen's working area when it opens, so its buttons are
-        ' reachable on a small or a 150% display.
+        ' After the last control: the buttons sized to their captions held
+        ' at the sizes they were given (HoldAtGivenSize), one layout pass,
+        ' and the window kept inside its screen's working area when it
+        ' opens, so its buttons are reachable on a small or a 150% display.
         Public Shared Sub Finish(
             dialog As Form
         )
@@ -44,6 +47,10 @@ Namespace Services
             If dialog Is Nothing Then
                 Throw New ArgumentNullException(NameOf(dialog))
             End If
+
+            For Each button As Button In TextSizedButtons(dialog).ToList()
+                HoldAtGivenSize(button)
+            Next
 
             dialog.ResumeLayout(False)
             dialog.PerformLayout()
@@ -62,6 +69,69 @@ Namespace Services
             ResponsiveDialogSizingService.FitToWorkingArea(
                 DirectCast(sender, Form)
             )
+
+        End Sub
+
+
+        ' The buttons that size themselves to their captions and only grow,
+        ' as a Button does unless told otherwise.
+        Private Shared Iterator Function TextSizedButtons(
+            parent As Control
+        ) As IEnumerable(Of Button)
+
+            For Each child As Control In parent.Controls
+
+                Dim button As Button = TryCast(child, Button)
+
+                If button IsNot Nothing AndAlso
+                   button.AutoSize AndAlso
+                   button.AutoSizeMode = AutoSizeMode.GrowOnly Then
+
+                    Yield button
+
+                End If
+
+                For Each inner As Button In TextSizedButtons(child)
+                    Yield inner
+                Next
+
+            Next
+
+        End Function
+
+
+        ' The dialog is built with its text at the display's size, so a
+        ' button that sizes itself to its caption has already grown to the
+        ' caption there, and one that only grows would keep that width
+        ' when Windows Forms scales the dialog: at 150% it was 1.5 times
+        ' its caption (#93). Turning AutoSize off gives it back the size it
+        ' was given, written at 96 DPI (its default 75x23 if none); that
+        ' becomes its minimum, which the scale scales, and it grows and
+        ' shrinks from there, so it ends at the larger of that minimum and
+        ' its caption. A minimum it already had, such as one shared to give
+        ' buttons one width, is kept. Its parent waits meanwhile, so the
+        ' size read is the one it was given.
+        Private Shared Sub HoldAtGivenSize(
+            button As Button
+        )
+
+            Dim parent As Control =
+                button.Parent
+
+            parent.SuspendLayout()
+
+            button.AutoSize = False
+
+            button.MinimumSize =
+                New Size(
+                    Math.Max(button.MinimumSize.Width, button.Width),
+                    Math.Max(button.MinimumSize.Height, button.Height)
+                )
+
+            button.AutoSizeMode = AutoSizeMode.GrowAndShrink
+            button.AutoSize = True
+
+            parent.ResumeLayout(True)
 
         End Sub
 
