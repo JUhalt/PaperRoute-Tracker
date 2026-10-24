@@ -996,15 +996,7 @@ Public Class ScalingMeasurementTests
             ' a real 150% the error dialog's buttons were 1.5 times their
             ' caption widths; scaling first, as this did before, gave them
             ' their scaled minimums and missed the overlap they made.
-            Dim fonts As New Dictionary(Of Control, Font)()
-
-            For Each control As Control In New Control() {shown}.Concat(ViewCatalog.Descendants(shown))
-                fonts(control) = control.Font
-            Next
-
-            For Each pair As KeyValuePair(Of Control, Font) In fonts
-                pair.Key.Font = New Font(pair.Value.FontFamily, pair.Value.Size * factor, pair.Value.Style, pair.Value.Unit)
-            Next
+            GrowText(shown, dpi)
 
             LayOutEveryControl(shown)
 
@@ -1016,6 +1008,27 @@ Public Class ScalingMeasurementTests
             Application.DoEvents()
 
         End If
+
+    End Sub
+
+
+    ' Every font in the window grown for the DPI, as text has the display's
+    ' size at a real display. Each control's font is read before any is
+    ' set, so a font a control takes from its parent grows once. A test
+    ' may grow a window's text while its layouts are held, as a window is
+    ' built at a real display.
+    Friend Shared Sub GrowText(shown As Control, dpi As Integer)
+
+        Dim factor As Single = dpi / 96.0F
+        Dim fonts As New Dictionary(Of Control, Font)()
+
+        For Each control As Control In New Control() {shown}.Concat(ViewCatalog.Descendants(shown))
+            fonts(control) = control.Font
+        Next
+
+        For Each pair As KeyValuePair(Of Control, Font) In fonts
+            pair.Key.Font = New Font(pair.Value.FontFamily, pair.Value.Size * factor, pair.Value.Style, pair.Value.Unit)
+        Next
 
     End Sub
 
