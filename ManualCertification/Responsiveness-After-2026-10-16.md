@@ -580,3 +580,48 @@ Windows 11 (NT 10.0.26300), 12 logical processors, window DPI 96 (the display at
 - **Still over budget, reported as before, and not changed here:** the three manuscript-page opens (the first 32 to 124 ms, the kept page 41 to 80, the Pipeline manuscript 47 to 96 in runs A to D), whose cost is the editor's one layout pass (see 2026-10-23), and Board to Library in the busy run B (509 ms; 26 to 60 in the others), which builds its page and its 500-row grid at each visit. The paint rows and the idle slice stay reported as in part C.
 - **Left to the release certification:** the Acceptance's captures (a mid-fade frame, and a card and a button at rest, hover and press, at 125% in Light and Dark), which need the harness on an unlocked desktop with the display on and the overlay captured from the screen, which the harness's `PrintWindow` does not reach; the on-screen check that the picture is the page left; and the Narrator pass on the certification VM for #213 (the page is announced, not the search box) and #142 (nothing new is announced).
 - **For the maintainer:** opens as a cut (4c above); the overlay kept hidden rather than destroyed; the setting read once a session, as #142 asks, so a change in Windows' setting takes effect at the next start (a contrast theme stops motion at once).
+
+### Review follow-ups (2026-10-24, afternoon)
+
+A review of this branch found that the fade's picture could hold PaperRoute's own windows, that several of the claims above had no test that could fail, and that some test seams were never used. The commits after `c74ba2b`:
+
+- **`63471d2`, more cuts.** Leaving the manuscript page after the Unsaved Changes question is a cut ("a question was just answered"), whatever the answer. The message box is centred over the page, and with Animation effects on Windows animates its close, so the read could hold the question and fade it out over the page shown. A switch begun while another visible window of the window's thread, such as a tooltip going away, is over the page area is a cut too ("another window is over the page area"). The check (`EnumThreadWindows`) took 0.006 ms a call in Release with the window's 12 top-level windows. An overlay Windows cannot make (out of window handles) is also a cut, so the fade never stops a switch. Covered by `MotionFadeTests.LeavingAfterTheUnsavedChangesQuestionIsACut` and `AnotherWindowOverThePageAreaMakesTheSwitchACut`.
+- **`cebc43c`, the overlay through UI Automation.** `TheOverlayTakesNoFocusInputOrPlaceInTheTree` now asks UI Automation from a worker thread, the way a screen reader does (`CUIAutomation`). The overlay's element is neither a control, nor content, nor focusable. The control view passes over it, and the window's control-view children are the same with it showing as with it gone; in the raw view it is the window's child. With the overlay's `WM_GETOBJECT` branch disabled for one run, the test failed: the overlay read as a control, a content element and keyboard-focusable, in the window's control view. The in-process `AutomationProperty` helper is gone.
+- **`c5145c2`.** `HoldAtMilliseconds`, `LastPictureStarted` and `LastPictureFinished`, which nothing used, are removed. A stale note on hovered filter chips is corrected.
+- **`6aa56aa`, click-through.** In both rows of `AClickDuringTheFadeEndsItAndReachesTheControlUnderThePointer`, the overlay must answer `WM_NCHITTEST` at the tab with `HTTRANSPARENT`. A second row runs on the screen (with `PAPERROUTE_ON_SCREEN_TESTS=1`) and requires `WindowFromPoint` at the tab, with the overlay showing, to find the tab and the click to check it. Run at about 12:48 (the commit body says 12:55), it found the lock screen's window (`LockScreenBackstopFrame`) over the whole screen, although the input desktop could be switched to, which is the check both on-screen tests make. With a check without the fade first, it is now Inconclusive whenever another window covers the tab. It is left for a run on an unlocked desktop that is in use, with the captures.
+- **`59ace02` and `17d3073`, the rail and the way back to the Board.** `SwitchesPaintNothingSynchronously` watches the whole rail through every switch. With SyncRail's hold taken out for one run, the motion-off row failed with two `WM_PAINT`s to the rail's buttons on every page switch. The hold stays with motion off. `KeyboardAccessTests.ReturningAfterASaveOrADeleteLandsOnAShownControl` drives `ReturnFocusToBoard`'s other two branches. After a save that rebuilt the card, the keyboard lands on the new card's title, shown, in the Board. After a delete, it lands on the collapse button, outside the Board. With either branch disabled, the test failed. The Alt+Left rows of `EnteringAPageByKeyboardKeepsFocusWhereItLandsToday` now list each control entered, in turn. The keyboard passes through Collapse navigation, as the page is left, before the Board's control takes it: two focus changes. That hop is new with #213 and is not removed here, and the Narrator pass (`Narrator-Pass.md`) now listens for it. If Narrator speaks it, the fix is to show the Board and select the control it came from under the hold, before the page is put away, in place of `MoveFocusOutOf`. That reorders part C's switch.
+- **`f783dd8`.** Tests that force motion on also turn the contrast seam off, so on a host with a contrast theme they still test motion.
+- **This section's commit, the budget test.** `PageSwitchesWithMotionOnGrowByNoMoreThanTheFade` also fails any enforced switch that, with motion on, takes more than the fade's length (150 ms × the multiplier) longer than its motion-off row, as #142's Acceptance puts it. Before, it held only the absolute 100 + 150 ms.
+
+#### Release, 500 library, after the follow-ups
+
+Run 4 (14:16) passed both budget tests. The lock screen was up with no input for 3 minutes or more, and a sibling worktree's Debug test host ran for 15 of 56 samples (14:17:54 to 14:18:52, the end of the first test and the start of the second); CPU 2 to 76%, mean 23. With motion off (`EveryActionIsMeasuredOnBothLibraries`), every enforced row held:
+
+| Switch, motion off | ms | Held |
+|---|---:|---|
+| First switch to Published | 5 | enforced |
+| Board to Library | 25 | reported |
+| Library to Board | 11 | enforced |
+| Board to Journals / second visit | 8 / 9 | enforced |
+| Journals to Board / second visit | 25 / 35 | reported |
+| Board to Deadlines / second visit | 36 / 21 | enforced |
+| Deadlines to Board / second visit | 18 / 10 | enforced |
+| Board to Insights / second visit | 11 / 15 | enforced |
+| Insights to Board / second visit | 19 / 11 | enforced |
+| Board to Import & Export / second visit | 36 / 4 | enforced |
+| Import & Export to Board / second visit | 15 / 15 | enforced |
+| Board to a manuscript page, the first | 46 | reported |
+| Manuscript page: versions and details after its first paint | 39 | enforced (250) |
+| Manuscript page to Board | 18 | enforced |
+| Board to a manuscript page, the kept page / the Pipeline manuscript | 36 / 47 | reported |
+| Kept manuscript page to Board | 11 | enforced |
+
+With motion on against motion off (`PageSwitchesWithMotionOnGrowByNoMoreThanTheFade`, the same run), 20 of 22 switches faded (the two opens are cuts by design), and no picture was late. Showing the picture (Begin) took 1.3 to 4.2 ms. The differences, on less off, ranged from -19 to +19 ms over the switches that fade, against the 150 allowed: Board to Library 44 / 53, Library to Board 15 / 15, Journals to Board 25 / 44 and its second visit 43 / 24, Board to Deadlines 23 / 22, Board to Import & Export 33 / 33, Import & Export to Board 12 / 24, Manuscript page to Board 14 / 13, kept page to Board 11 / 13. The first open read 57 / 88 (a cut).
+
+The three runs before it fell on a busier host, and none of their failures is on the code these commits changed:
+
+- **Run 1 (13:29).** The desktop was in use and a sibling's Debug test host ran throughout (139 of 139 samples, CPU mean 53). The main test failed seven enforced rows, two of them switches: Board to Deadlines 283 ms and Board to Import & Export 404 ms. The others were warm startup 1,868, the versions and details 979, the two saves 444 and 282, and the record let go of 406. The motion test passed, with 17 of 22 faded; three switches of 167 to 246 ms were cuts because they outlasted the fade.
+- **Run 2 (13:48).** The sibling ran for 34 of 78 samples and the desktop was in use. The main test failed seven enforced rows, among them Board to Deadlines 3,089 ms and Board to Import & Export 408. The motion test failed one switch, Board to Import & Export with motion on at 419 ms against 35 with motion off. Both the absolute row and the new growth check failed it: a cut that outlasted the fade, the host's stall.
+- **Run 3 (13:57), the motion test alone.** The desktop was in use and the sibling ran for 11 of 36 samples. The test passed. The differences ranged from -11 to +67 ms and Begin from 1.3 to 8.2.
+
+The window check is not the cause of the higher readings while the desktop was in use: it costs microseconds (measured above).

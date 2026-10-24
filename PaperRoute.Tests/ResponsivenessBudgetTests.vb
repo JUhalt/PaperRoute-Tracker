@@ -444,7 +444,9 @@ Public Class ResponsivenessBudgetTests
     ' of their own and with the same pauses between them, so the two can
     ' be told apart switch by switch: a pause lets the processor idle, and
     ' the switch after it is slower than one run straight after other
-    ' work, as the test above runs them.
+    ' work, as the test above runs them. Each enforced switch with motion
+    ' on is also held to grow by no more than the fade's length against
+    ' its motion-off row, as #142's Acceptance puts it.
     <TestMethod>
     Public Sub PageSwitchesWithMotionOnGrowByNoMoreThanTheFade()
 
@@ -454,6 +456,9 @@ Public Class ResponsivenessBudgetTests
 
         RunOnStaThread(
             Sub()
+                ' Motion on is on whatever the host's theme: a contrast theme
+                ' stops it.
+                UiTheme.HighContrastOverride = False
                 Try
                     Dim example = LargeLibraryFixture.WriteExample(Path.Combine(_root, "example"))
                     Dim large = LargeLibraryFixture.Create(Path.Combine(_root, "large"), 500)
@@ -464,20 +469,23 @@ Public Class ResponsivenessBudgetTests
                     MeasureSwitchesWithMotion(large, rows, enforce:=True, motion:=True)
                 Finally
                     UiMotion.EnabledOverride = Nothing
+                    UiTheme.HighContrastOverride = Nothing
                 End Try
             End Sub)
 
         Report(libraries, rows, dpi)
 
-        ' Each switch with motion on against itself with motion off.
+        ' Each switch with motion on, and the same switch with motion off.
+        Dim offPair As Func(Of Row, Row) =
+            Function(row) rows.FirstOrDefault(Function(item) item.Library = "500" AndAlso item.Action = row.Action.Replace(" (motion on)", String.Empty) & " (motion off, the same pauses)")
+
         Dim text As New StringBuilder()
         text.AppendLine("| Switch, 500 library | Motion off ms | Motion on ms | On less off ms | With motion on |")
         text.AppendLine("|---|---:|---:|---:|---|")
         For Each row As Row In rows.Where(Function(item) item.Library = "500" AndAlso Not String.IsNullOrEmpty(item.Motion))
-            Dim action As String = row.Action.Replace(" (motion on)", String.Empty)
-            Dim off As Row = rows.FirstOrDefault(Function(item) item.Library = "500" AndAlso item.Action = action & " (motion off, the same pauses)")
+            Dim off As Row = offPair(row)
             If off IsNot Nothing Then
-                text.AppendLine("| " & action & " | " & Ms(off.Ui) & " | " & Ms(row.Ui) & " | " & Ms(row.Ui - off.Ui) & " | " & row.Motion & " |")
+                text.AppendLine("| " & row.Action.Replace(" (motion on)", String.Empty) & " | " & Ms(off.Ui) & " | " & Ms(row.Ui) & " | " & Ms(row.Ui - off.Ui) & " | " & row.Motion & " |")
             End If
         Next
         TestContext.WriteLine(text.ToString())
@@ -494,6 +502,18 @@ Public Class ResponsivenessBudgetTests
         Dim notReady As Integer = switches.Where(Function(row) row.Motion.Contains("the picture was not ready", StringComparison.Ordinal)).Count()
 
         If faded = 0 Then failures.Add("No switch on the 500 library faded.")
+
+        ' #142's Acceptance: with motion on, an enforced switch grows by no
+        ' more than the fade's own length against itself with motion off.
+        Dim growth As Double = UiMotion.DefaultFadeMilliseconds * multiplier
+        For Each row As Row In switches.Where(Function(item) item.Enforced)
+            Dim off As Row = offPair(row)
+            If off Is Nothing Then
+                failures.Add("500: " & row.Action & " has no motion-off row to be held against.")
+            ElseIf row.Ui - off.Ui > growth Then
+                failures.Add("500: " & row.Action & " took " & Ms(row.Ui) & " ms, " & Ms(row.Ui - off.Ui) & " ms more than with motion off (" & Ms(off.Ui) & " ms), against the fade's " & Ms(growth) & " ms")
+            End If
+        Next
 
         For Each row As Row In switches.Where(Function(item) item.Motion.StartsWith("cut", StringComparison.Ordinal) AndAlso item.Ui < UiMotion.DefaultFadeMilliseconds AndAlso
                                                         Not item.Motion.Contains("the picture was not ready", StringComparison.Ordinal) AndAlso
