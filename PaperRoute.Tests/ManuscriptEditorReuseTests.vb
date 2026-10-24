@@ -820,24 +820,14 @@ Public Class ManuscriptEditorReuseTests
                     Continue For
                 End If
 
-                Dim counts As New Dictionary(Of Integer, Integer)()
-                For y As Integer = bounds.Top To bounds.Bottom - 1
-                    For x As Integer = bounds.Left To bounds.Right - 1
-                        Dim pixel As Integer = picture.GetPixel(x, y).ToArgb()
-                        Dim count As Integer = 0
-                        counts.TryGetValue(pixel, count)
-                        counts(pixel) = count + 1
-                    Next
-                Next
-                Dim surface As Color = Color.FromArgb(counts.OrderByDescending(Function(entry) entry.Value).First().Key)
-                Dim ratio As Double = counts.Keys.Max(Function(pixel) ContrastRatio(Color.FromArgb(pixel), surface))
+                Dim seen As (Ratio As Double, Surface As Color, Ink As Color) = JournalShortlistRowsTests.Contrast(picture, bounds)
 
                 If contrastTheme Then
-                    If Not {SystemColors.Window, SystemColors.Control, SystemColors.ButtonFace, SystemColors.Highlight, SystemColors.Info}.Any(Function(system) system.ToArgb() = surface.ToArgb()) Then
-                        failures.Add(name & "drawn on " & surface.ToString() & ", not one of the user's colors")
+                    If Not JournalShortlistRowsTests.IsUserColor(seen.Surface) Then
+                        failures.Add(name & "drawn on " & seen.Surface.ToString() & ", not one of the user's colors")
                     End If
-                ElseIf ratio < 4.5 Then
-                    failures.Add(name & ratio.ToString("F2", CultureInfo.InvariantCulture) & ":1 on " & surface.ToString())
+                ElseIf seen.Ratio < 4.5 Then
+                    failures.Add(name & seen.Ratio.ToString("F2", CultureInfo.InvariantCulture) & ":1 on " & seen.Surface.ToString())
                 End If
                 judged += 1
             Next
@@ -860,18 +850,8 @@ Public Class ManuscriptEditorReuseTests
             Dim frame As Integer = control.LogicalToDeviceUnits(If(TypeOf control Is Button, 6, If(TypeOf control Is TagChipButton, 3, 0)))
             If area.Width > 2 * frame AndAlso area.Height > 2 * frame Then area.Inflate(-frame, -frame)
 
-            Dim counts As New Dictionary(Of Integer, Integer)()
-            For y As Integer = area.Top To area.Bottom - 1
-                For x As Integer = area.Left To area.Right - 1
-                    Dim pixel As Integer = image.GetPixel(x, y).ToArgb()
-                    Dim count As Integer = 0
-                    counts.TryGetValue(pixel, count)
-                    counts(pixel) = count + 1
-                Next
-            Next
-
-            Dim surface As Color = Color.FromArgb(counts.OrderByDescending(Function(entry) entry.Value).First().Key)
-            Return (counts.Keys.Max(Function(pixel) ContrastRatio(Color.FromArgb(pixel), surface)), surface)
+            Dim seen As (Ratio As Double, Surface As Color, Ink As Color) = JournalShortlistRowsTests.Contrast(image, area)
+            Return (seen.Ratio, seen.Surface)
         End Using
 
     End Function

@@ -158,13 +158,6 @@ Namespace Controls
             End Get
         End Property
 
-        ' The menu a row's ⋯ and the context-menu key open.
-        Friend ReadOnly Property Menu As ContextMenuStrip
-            Get
-                Return _menu
-            End Get
-        End Property
-
 
         ' ---------------------------------------------------------------
         ' Filling
@@ -186,6 +179,7 @@ Namespace Controls
             _down = Spot.None
             _keyPressed = False
             _menuEntry = Nothing
+            ClearTip()
 
             Dim stopChild As New List(Of Integer)()
 
@@ -210,7 +204,13 @@ Namespace Controls
             Arrange()
             Invalidate()
 
-            Dim signature As String = String.Join(ChrW(0), _entries.Select(Function(entry) entry.JournalName))
+            ' Every child is new; a screen reader is told so whenever what it
+            ' reads of the rows changed, their journals and order, a row's
+            ' status, details, facts or evidence, or what its menu allows, as
+            ' DeadlineList tells it.
+            Dim signature As String = String.Join(ChrW(0), _entries.Select(
+                Function(entry) String.Join(ChrW(1), entry.JournalName, entry.StatusText, entry.Text, entry.Facts, entry.Evidence,
+                                            entry.CanMakeTarget.ToString(), entry.CanMoveUp.ToString(), entry.CanMoveDown.ToString())))
             If signature <> _signature Then
                 _signature = signature
                 If IsHandleCreated Then DeadlineList.RaiseAccessibleEvent(Me, AccessibleEvents.Reorder, -1)
@@ -470,24 +470,6 @@ Namespace Controls
             End If
         End Sub
 
-        ' Whether the keyboard is on the list: it has the focus, or it is the
-        ' control each window around it has active, as when the main window
-        ' is not the active one, where focus returns once it is.
-        Private ReadOnly Property HasKeyboard As Boolean
-            Get
-                If Focused Then Return True
-                Dim inner As Control = Me
-                Dim container As ContainerControl = TryCast(GetContainerControl(), ContainerControl)
-                While container IsNot Nothing
-                    If container.ActiveControl IsNot inner Then Return False
-                    If container.Parent Is Nothing Then Return True
-                    inner = container
-                    container = TryCast(container.Parent.GetContainerControl(), ContainerControl)
-                End While
-                Return False
-            End Get
-        End Property
-
         ' A screen reader hears which button the keyboard is on.
         Private Sub NotifyFocus()
             If _current < 0 OrElse Not Focused OrElse Not IsHandleCreated Then Return
@@ -707,6 +689,14 @@ Namespace Controls
             InvalidateSpot(_hover)
             _hover = Spot.None
             If Cursor IsNot Cursors.Default Then Cursor = Cursors.Default
+            ClearTip()
+        End Sub
+
+        ' The tip is set on the list, a Tab stop, so it would show when the
+        ' keyboard reaches the list, and keep a record let go of; it holds
+        ' the evidence's keywords only while the pointer is over that line.
+        Private Sub ClearTip()
+            If _toolTip IsNot Nothing AndAlso _toolTip.GetToolTip(Me).Length > 0 Then _toolTip.SetToolTip(Me, String.Empty)
         End Sub
 
 
@@ -751,8 +741,10 @@ Namespace Controls
                 Return _list.ReadableChild(index)
             End Function
 
+            ' A button is focused only while the list has the keyboard, as a
+            ' native button is, and not while another window has it.
             Public Overrides Function GetFocused() As AccessibleObject
-                If Not _list.HasKeyboard Then Return Nothing
+                If Not _list.Focused Then Return Nothing
                 If _list._current < 0 Then Return Me
                 Return _list.ReadableChild(_list._stopChild(_list._current))
             End Function
@@ -835,7 +827,7 @@ Namespace Controls
                     If _spot.Part = RowPart.Item OrElse _spot.IsButton Then
                         states = states Or AccessibleStates.Focusable
                         Dim stopIndex As Integer = _list.StopOf(_spot)
-                        If stopIndex >= 0 AndAlso _list.HasKeyboard AndAlso _list._current = stopIndex Then states = states Or AccessibleStates.Focused
+                        If stopIndex >= 0 AndAlso _list.Focused AndAlso _list._current = stopIndex Then states = states Or AccessibleStates.Focused
                         If Not _list.Enabled Then states = states Or AccessibleStates.Unavailable
                     Else
                         states = states Or AccessibleStates.ReadOnly

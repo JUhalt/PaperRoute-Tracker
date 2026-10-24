@@ -31,7 +31,15 @@ Public Class JournalShortlistRowsTests
 
     Private Const WM_KEYDOWN As UInteger = &H100
     Private Const WM_KEYUP As UInteger = &H101
+    Private Const WM_CONTEXTMENU As UInteger = &H7B
     Private Const WM_MOUSEMOVE As UInteger = &H200
+    Private Const WM_LBUTTONDOWN As UInteger = &H201
+    Private Const WM_LBUTTONUP As UInteger = &H202
+    Private Const WM_RBUTTONDOWN As UInteger = &H204
+    Private Const WM_RBUTTONUP As UInteger = &H205
+    Private Const WM_MOUSELEAVE As UInteger = &H2A3
+    Private Const MK_LBUTTON As Integer = 1
+    Private Const MK_RBUTTON As Integer = 2
     Private Const VK_SHIFT As Integer = &H10
 
     Private Shared ReadOnly Journals As String() = {"Fictional Journal 01", "Fictional Journal 02", "Fictional Journal 03"}
@@ -53,25 +61,31 @@ Public Class JournalShortlistRowsTests
 
 
     ' Tab and Shift+Tab across the Overview, through the rows, and the
-    ' arrow keys inside a row.
+    ' arrow keys inside a row. A screen reader hears each Tab onto a drawn
+    ' button as that button, in order, as Windows announced each native
+    ' button taking focus: the list raises the focus event itself.
     <TestMethod>
     Public Sub TheKeyboardReachesEachRowsActionsInOrder()
 
         Dim report As New List(Of String)()
+        Dim heard As New List(Of String)()
 
         OnShortlistPage(
             Sub(board)
                 board.ActiveControl = board.Field("Title")
                 Application.DoEvents()
                 report.Add("start: " & FocusName(board))
-                For steps As Integer = 1 To 14
-                    Press(board, Keys.Tab)
-                    report.Add("Tab: " & FocusName(board))
-                Next
-                For steps As Integer = 1 To 14
-                    PressWithShift(board, Keys.Tab)
-                    report.Add("Shift+Tab: " & FocusName(board))
-                Next
+                Using hook As New DeadlineListTests.FocusHook(ShortlistOf(board).Handle, heard)
+                    For steps As Integer = 1 To 14
+                        Press(board, Keys.Tab)
+                        report.Add("Tab: " & FocusName(board))
+                    Next
+                    For steps As Integer = 1 To 14
+                        PressWithShift(board, Keys.Tab)
+                        report.Add("Shift+Tab: " & FocusName(board))
+                    Next
+                    Application.DoEvents()
+                End Using
 
                 For Each start As String In {"Edit " & Journals(1), "More actions for " & Journals(1)}
                     FocusItem(board, start)
@@ -84,6 +98,105 @@ Public Class JournalShortlistRowsTests
             End Sub)
 
         AssertPinned(KeyboardExpected, report)
+
+        Dim forward As List(Of String) = Journals.SelectMany(Function(journal) {"Edit " & journal, "More actions for " & journal}).ToList()
+        Dim expectedHeard As List(Of String) = forward.Concat(Enumerable.Reverse(forward)).ToList()
+        CollectionAssert.AreEqual(expectedHeard, heard, "Heard: " & String.Join(" | ", heard))
+
+    End Sub
+
+
+    ' A drawn button is focused only while the list has the keyboard, as a
+    ' native button is: with another window holding it, as an Edit...
+    ' dialog does, a screen reader finds no button focused.
+    <TestMethod>
+    Public Sub AButtonIsFocusedOnlyWhileTheListHasTheKeyboard()
+
+        Dim report As New List(Of String)()
+
+        OnShortlistPage(
+            Sub(board)
+                Dim shortlist As Control = ShortlistOf(board)
+                Dim focusedNow As Func(Of String) =
+                    Function()
+                        Dim focused As AccessibleObject = shortlist.AccessibilityObject.GetFocused()
+                        Dim states As String = String.Join(", ", ReadingOrder(shortlist).Where(Function(item) (item.State And AccessibleStates.Focused) <> 0).Select(Function(item) item.Name))
+                        Return "focus " & If(focused?.Name, "(none)") & "; focused " & If(states.Length = 0, "(none)", states)
+                    End Function
+
+                FocusItem(board, "Edit " & Journals(1))
+                report.Add("The list has the keyboard: " & focusedNow())
+                Using other As New Form With {.StartPosition = FormStartPosition.Manual, .Location = New Point(-20000, -20000), .ShowInTaskbar = False}
+                    Dim box As New TextBox()
+                    other.Controls.Add(box)
+                    other.Show()
+                    Assert.IsTrue(box.Focus(), "The other window takes the keyboard.")
+                    Application.DoEvents()
+                    report.Add("Another window has it: " & focusedNow())
+                    other.Close()
+                End Using
+                Application.DoEvents()
+            End Sub)
+
+        AssertPinned(New List(Of String) From {
+            "The list has the keyboard: focus Edit Fictional Journal 02; focused Edit Fictional Journal 02",
+            "Another window has it: focus (none); focused (none)"
+        }, report)
+
+    End Sub
+
+
+    ' A change to what a screen reader reads of the rows is announced, as
+    ' DeadlineList announces it (EVENT_OBJECT_REORDER on the list), though
+    ' the journals and their order stay: Make Target Journal moves "Target
+    ' journal" to another row, and Edit... changes a row's notes. A refill
+    ' that changes nothing a reader reads announces nothing.
+    <TestMethod>
+    Public Sub EachChangeAScreenReaderReadsIsAnnounced()
+
+        Dim report As New List(Of String)()
+
+        OnShortlistPage(
+            Sub(board)
+                Dim editor As EditManuscriptForm = board.Editor
+                Dim heard As New List(Of String)()
+                Dim said As Func(Of String) =
+                    Function()
+                        Application.DoEvents()
+                        Dim line As String = If(heard.Count = 0, "(nothing)", String.Join(", ", heard))
+                        heard.Clear()
+                        Return line
+                    End Function
+
+                Using hook As New DeadlineListTests.FocusHook(ShortlistOf(board).Handle, heard, DeadlineListTests.FocusHook.EVENT_OBJECT_REORDER)
+
+                    editor.GetType().GetMethod("RefreshShortlist", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(editor, Nothing)
+                    report.Add("Refilled, nothing changed: rows " & RowNames(board) & "; heard " & said())
+
+                    FocusItem(board, "More actions for " & Journals(1))
+                    said()
+                    Using watch As New MenuWatch()
+                        PressKey(board, Keys.Enter)
+                        watch.Item("Make Target Journal").PerformClick()
+                    End Using
+                    report.Add("Make Target Journal on " & Journals(1) & ": rows " & RowNames(board) & "; heard " & said())
+
+                    editor.candidatePrompt =
+                        Function(existing)
+                            Return New JournalCandidate With {.JournalName = existing.JournalName, .JournalId = existing.JournalId, .Status = existing.Status,
+                                                              .Notes = "Edited for the reader.", .Checks = existing.Checks.ToList(), .Evidence = existing.Evidence}
+                        End Function
+                    FocusItem(board, "Edit " & Journals(2))
+                    said()
+                    PressKey(board, Keys.Enter)
+                    editor.candidatePrompt = Nothing
+                    report.Add("Edit " & Journals(2) & ", its notes changed: rows " & RowNames(board) & "; heard " & said())
+
+                End Using
+                board.Discard()
+            End Sub)
+
+        AssertPinned(AnnouncedExpected, report)
 
     End Sub
 
@@ -215,12 +328,16 @@ Public Class JournalShortlistRowsTests
 
 
     ' The evidence line's tooltip names the keywords and an example, when
-    ' the pointer is over it.
+    ' the pointer is over it, and only then: the pointer leaving the list
+    ' from that line leaves no tip on the list, a Tab stop the keyboard
+    ' would show it at, and the page letting go of the record keeps none.
     <TestMethod>
     Public Sub TheEvidenceShowsItsKeywordsOnHover()
 
         Dim tip As String = String.Empty
         Dim elsewhere As String = String.Empty
+        Dim afterLeaving As String = Nothing
+        Dim afterLettingGo As String = Nothing
 
         OnShortlistPage(
             Sub(board)
@@ -230,10 +347,97 @@ Public Class JournalShortlistRowsTests
                 tip = HoverTip(shortlist, tips, evidence.Bounds)
                 Dim name As AccessibleObject = ReadingOrder(shortlist).First(Function(item) item.Role = AccessibleRole.StaticText AndAlso If(item.Name, String.Empty).StartsWith(Journals(0), StringComparison.Ordinal))
                 elsewhere = HoverTip(shortlist, tips, name.Bounds)
+
+                Assert.AreEqual(tip, HoverTip(shortlist, tips, evidence.Bounds))
+                PostMessage(shortlist.Handle, WM_MOUSELEAVE, IntPtr.Zero, IntPtr.Zero)
+                Application.DoEvents()
+                afterLeaving = tips.GetToolTip(shortlist)
+
+                Assert.AreEqual(tip, HoverTip(shortlist, tips, evidence.Bounds))
+                board.NavigateTo(Form1.WorkspacePage.Board)
+                board.WaitForIdleWork()
+                Assert.AreEqual(0, DirectCast(shortlist, JournalShortlistList).Entries.Count, "The page let go of the record.")
+                afterLettingGo = tips.GetToolTip(shortlist)
             End Sub)
 
         Assert.AreEqual("Keywords: ""anchoring"" AND ""risk""" & Environment.NewLine & "For example: Anchoring in risk estimates", tip)
         Assert.AreEqual(String.Empty, elsewhere, "The journal's name has no tooltip.")
+        Assert.AreEqual(String.Empty, afterLeaving, "Leaving the list from the evidence line leaves no tip on it.")
+        Assert.AreEqual(String.Empty, afterLettingGo, "The page left holds no tip of the record.")
+
+    End Sub
+
+
+    ' The pointer presses each row's Edit... and ⋯ as a click pressed the
+    ' row's buttons: the keyboard goes to the button clicked, Edit... asks
+    ' about its journal and ⋯ opens the row's menu; a press let go off the
+    ' button does nothing, and a right-click opens nothing, as on the rows.
+    ' The context-menu key (Shift+F10) on either button opens its row's
+    ' menu, which the rows' buttons, with no menu of their own, did not.
+    <TestMethod>
+    Public Sub ThePointerAndTheMenuKeyPressEachRowsActions()
+
+        Dim report As New List(Of String)()
+
+        OnShortlistPage(
+            Sub(board)
+                Dim editor As EditManuscriptForm = board.Editor
+                Dim shortlist As Control = ShortlistOf(board)
+                editor.candidatePrompt =
+                    Function(existing)
+                        report.Add("  asked about " & If(existing?.JournalName, "a new journal"))
+                        Return Nothing
+                    End Function
+
+                For Each journal As String In Journals
+                    For Each name As String In {"Edit " & journal, "More actions for " & journal}
+                        Dim face As Point = Center(shortlist, name)
+                        report.Add("Click on " & name)
+                        Using watch As New MenuWatch()
+                            PostMouse(shortlist, WM_LBUTTONDOWN, MK_LBUTTON, face)
+                            PostMouse(shortlist, WM_LBUTTONUP, 0, face)
+                            Application.DoEvents()
+                            If watch.Shown().Count > 0 Then report.Add("  menu " & watch.Describe())
+                        End Using
+                        report.Add("  focus " & FocusName(board))
+                    Next
+                Next
+
+                Dim edit As Point = Center(shortlist, "Edit " & Journals(1))
+                Dim off As Point = Center(shortlist, ReadingOrder(shortlist).First(Function(item) item.Role = AccessibleRole.StaticText AndAlso If(item.Name, String.Empty).StartsWith(Journals(1), StringComparison.Ordinal)).Name)
+                report.Add("Press on Edit " & Journals(1) & ", let go off it")
+                PostMouse(shortlist, WM_LBUTTONDOWN, MK_LBUTTON, edit)
+                PostMouse(shortlist, WM_MOUSEMOVE, MK_LBUTTON, off)
+                PostMouse(shortlist, WM_LBUTTONUP, 0, off)
+                Application.DoEvents()
+                report.Add("  focus " & FocusName(board))
+
+                Dim more As Point = Center(shortlist, "More actions for " & Journals(1))
+                report.Add("Right-click on More actions for " & Journals(1))
+                Using watch As New MenuWatch()
+                    PostMouse(shortlist, WM_RBUTTONDOWN, MK_RBUTTON, more)
+                    PostMouse(shortlist, WM_RBUTTONUP, 0, more)
+                    Application.DoEvents()
+                    report.Add("  menu " & watch.Describe())
+                End Using
+
+                For Each journal As String In Journals
+                    For Each name As String In {"Edit " & journal, "More actions for " & journal}
+                        FocusItem(board, name)
+                        report.Add("Context-menu key on " & name)
+                        Using watch As New MenuWatch()
+                            PostMessage(shortlist.Handle, WM_CONTEXTMENU, shortlist.Handle, New IntPtr(-1))
+                            Application.DoEvents()
+                            report.Add("  menu " & watch.Describe())
+                        End Using
+                        report.Add("  focus " & FocusName(board))
+                    Next
+                Next
+
+                editor.candidatePrompt = Nothing
+            End Sub)
+
+        AssertPinned(PointerExpected, report)
 
     End Sub
 
@@ -399,6 +603,10 @@ Public Class JournalShortlistRowsTests
                         board.Open(board.Library.Single(Function(item) item.Id = subject.Id))
                         Application.DoEvents()
                         board.WaitForIdleWork()
+                        ' The window has the keyboard, as a researcher's has: a
+                        ' drawn button is focused, and announced, only while
+                        ' the list really has the keyboard, as a native one is.
+                        Assert.IsTrue(board.Field("Title").Focus(), "The window takes the keyboard.")
                         work(board)
                         board.SetPrompt(Function(title) DialogResult.No)
                         board.Close()
@@ -570,7 +778,9 @@ Public Class JournalShortlistRowsTests
 
 
     ' The tooltip shown for a place under the pointer: the pointer moves
-    ' over the control drawn there, and its tooltip is read.
+    ' over the control drawn there, and its tooltip is read at once. The
+    ' test's pointer is not really there, so Windows says it has left once
+    ' messages are processed, as it would when it really left.
     Private Shared Function HoverTip(shortlist As Control, tips As ToolTip, bounds As Rectangle) As String
         Dim spot As New Point(bounds.Left + Math.Min(8, bounds.Width \ 2), bounds.Top + bounds.Height \ 2)
         Dim under As Control = shortlist
@@ -580,15 +790,34 @@ Public Class JournalShortlistRowsTests
             under = inner
         Loop
         Dim local As Point = under.PointToClient(spot)
-        PostMessage(under.Handle, WM_MOUSEMOVE, IntPtr.Zero, New IntPtr((local.Y << 16) Or (local.X And &HFFFF)))
-        Application.DoEvents()
+        SendMessage(under.Handle, WM_MOUSEMOVE, IntPtr.Zero, Coordinates(local))
         Return If(tips.GetToolTip(under), String.Empty)
     End Function
 
 
+    ' The middle of a drawn item, by the name a screen reader reads, in
+    ' the shortlist's own coordinates.
+    Private Shared Function Center(shortlist As Control, name As String) As Point
+        Dim bounds As Rectangle = shortlist.RectangleToClient(ReadingOrder(shortlist).First(Function(item) item.Name = name).Bounds)
+        Return New Point(bounds.Left + bounds.Width \ 2, bounds.Top + bounds.Height \ 2)
+    End Function
+
+
+    ' A mouse message as Windows posts it, at a point in the shortlist.
+    Private Shared Sub PostMouse(shortlist As Control, message As UInteger, buttons As Integer, point As Point)
+        PostMessage(shortlist.Handle, message, New IntPtr(buttons), Coordinates(point))
+    End Sub
+
+
+    Private Shared Function Coordinates(point As Point) As IntPtr
+        Return New IntPtr((point.Y << 16) Or (point.X And &HFFFF))
+    End Function
+
+
     ' How far the strongest pixel stands out from the commonest one, which
-    ' is the surface the text is drawn on.
-    Private Shared Function Contrast(picture As Bitmap, area As Rectangle) As (Ratio As Double, Surface As Color, Ink As Color)
+    ' is the surface the text is drawn on. ManuscriptEditorReuseTests
+    ' judges the parts it builds for each record by it too.
+    Friend Shared Function Contrast(picture As Bitmap, area As Rectangle) As (Ratio As Double, Surface As Color, Ink As Color)
         Dim counts As New Dictionary(Of Integer, Integer)()
         For y As Integer = area.Top To area.Bottom - 1
             For x As Integer = area.Left To area.Right - 1
@@ -605,7 +834,7 @@ Public Class JournalShortlistRowsTests
 
 
     ' A color the user's theme sets: a window, button or highlight color.
-    Private Shared Function IsUserColor(color As Color) As Boolean
+    Friend Shared Function IsUserColor(color As Color) As Boolean
         Return {SystemColors.Window, SystemColors.Control, SystemColors.ButtonFace, SystemColors.Highlight, SystemColors.Info}.
             Any(Function(system) system.ToArgb() = color.ToArgb())
     End Function
@@ -764,6 +993,64 @@ Public Class JournalShortlistRowsTests
         "Remove from Shortlist on Fictional Journal 03: focus RadioButton 'Overview'; rows Fictional Journal 01, Fictional Journal 02"
     }
 
+    ' A screen reader is told the rows changed when what it reads of them
+    ' changed, and only then. (New: the rows' panel was rebuilt for every
+    ' change, and Windows announced its windows made and destroyed.)
+    Private Shared ReadOnly AnnouncedExpected As New List(Of String) From {
+        "Refilled, nothing changed: rows Fictional Journal 01, Fictional Journal 02, Fictional Journal 03; heard (nothing)",
+        "Make Target Journal on Fictional Journal 02: rows Fictional Journal 01, Fictional Journal 02, Fictional Journal 03; heard Shortlisted journals",
+        "Edit Fictional Journal 03, its notes changed: rows Fictional Journal 01, Fictional Journal 02, Fictional Journal 03; heard Shortlisted journals"
+    }
+
+    ' A click on Edit... asks about the journal and one on ⋯ opens the
+    ' row's menu, the keyboard on the button clicked, as on the rows'
+    ' buttons; a press let go off the button and a right-click do nothing;
+    ' the context-menu key opens the menu of the row the keyboard is on and
+    ' leaves the keyboard there. (The context-menu key is new: the rows'
+    ' buttons had no menu of their own.)
+    Private Shared ReadOnly PointerExpected As New List(Of String) From {
+        "Click on Edit Fictional Journal 01",
+        "  asked about Fictional Journal 01",
+        "  focus PushButton 'Edit Fictional Journal 01'",
+        "Click on More actions for Fictional Journal 01",
+        "  menu Make Target Journal (off), Move Up (off), Move Down, -, Remove from Shortlist",
+        "  focus PushButton 'More actions for Fictional Journal 01'",
+        "Click on Edit Fictional Journal 02",
+        "  asked about Fictional Journal 02",
+        "  focus PushButton 'Edit Fictional Journal 02'",
+        "Click on More actions for Fictional Journal 02",
+        "  menu Make Target Journal, Move Up, Move Down, -, Remove from Shortlist",
+        "  focus PushButton 'More actions for Fictional Journal 02'",
+        "Click on Edit Fictional Journal 03",
+        "  asked about Fictional Journal 03",
+        "  focus PushButton 'Edit Fictional Journal 03'",
+        "Click on More actions for Fictional Journal 03",
+        "  menu Make Target Journal, Move Up, Move Down (off), -, Remove from Shortlist",
+        "  focus PushButton 'More actions for Fictional Journal 03'",
+        "Press on Edit Fictional Journal 02, let go off it",
+        "  focus PushButton 'Edit Fictional Journal 02'",
+        "Right-click on More actions for Fictional Journal 02",
+        "  menu (none)",
+        "Context-menu key on Edit Fictional Journal 01",
+        "  menu Make Target Journal (off), Move Up (off), Move Down, -, Remove from Shortlist",
+        "  focus PushButton 'Edit Fictional Journal 01'",
+        "Context-menu key on More actions for Fictional Journal 01",
+        "  menu Make Target Journal (off), Move Up (off), Move Down, -, Remove from Shortlist",
+        "  focus PushButton 'More actions for Fictional Journal 01'",
+        "Context-menu key on Edit Fictional Journal 02",
+        "  menu Make Target Journal, Move Up, Move Down, -, Remove from Shortlist",
+        "  focus PushButton 'Edit Fictional Journal 02'",
+        "Context-menu key on More actions for Fictional Journal 02",
+        "  menu Make Target Journal, Move Up, Move Down, -, Remove from Shortlist",
+        "  focus PushButton 'More actions for Fictional Journal 02'",
+        "Context-menu key on Edit Fictional Journal 03",
+        "  menu Make Target Journal, Move Up, Move Down (off), -, Remove from Shortlist",
+        "  focus PushButton 'Edit Fictional Journal 03'",
+        "Context-menu key on More actions for Fictional Journal 03",
+        "  menu Make Target Journal, Move Up, Move Down (off), -, Remove from Shortlist",
+        "  focus PushButton 'More actions for Fictional Journal 03'"
+    }
+
     ' Each row as a list item, then its status, its name with its details,
     ' its facts and its evidence when it has them, and its two buttons;
     ' pressing a button from a screen reader does what a click does. The
@@ -810,6 +1097,10 @@ Public Class JournalShortlistRowsTests
 
     <DllImport("user32.dll")>
     Private Shared Function PostMessage(handle As IntPtr, message As UInteger, wParam As IntPtr, lParam As IntPtr) As Boolean
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function SendMessage(handle As IntPtr, message As UInteger, wParam As IntPtr, lParam As IntPtr) As IntPtr
     End Function
 
     <DllImport("user32.dll")>
