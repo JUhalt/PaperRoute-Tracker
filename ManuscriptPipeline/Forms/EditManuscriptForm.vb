@@ -523,7 +523,10 @@ Namespace Forms
                 Return True
             End If
 
-            If fileDrawerGroup.Visible AndAlso
+            ' The location the File Drawer group's visibility is set from: the
+            ' group's own Visible reads False whenever another tab hides the
+            ' Overview, and a reason typed there would be dropped.
+            If _workingManuscript.Location = ManuscriptLocation.FileDrawer AndAlso
                Not String.Equals(txtFileDrawerReason.Text.Trim(), If(_workingManuscript.FileDrawerReason, String.Empty).Trim(), StringComparison.Ordinal) Then
                 Return True
             End If
@@ -558,7 +561,7 @@ Namespace Forms
             copy.TargetJournal =
                 journalText
 
-            If fileDrawerGroup.Visible Then
+            If _workingManuscript.Location = ManuscriptLocation.FileDrawer Then
                 copy.FileDrawerReason = txtFileDrawerReason.Text.Trim()
             End If
 
@@ -4229,7 +4232,8 @@ Namespace Forms
 
         Private Sub UpdateFileDrawerReasonIfNeeded()
 
-            If Not fileDrawerGroup.Visible Then
+            ' By location, as HasUnsavedChanges: Save may be clicked on any tab.
+            If _workingManuscript.Location <> ManuscriptLocation.FileDrawer Then
                 Return
             End If
 
