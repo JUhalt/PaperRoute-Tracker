@@ -281,6 +281,9 @@ Namespace Forms
             Dim offersRecovery As Boolean =
                 offersPreviousSave OrElse offersRestore
 
+            ' Sizes below are at 96 DPI and scale with the display (#93).
+            DialogScaling.Begin(Me)
+
             Me.Text = "PaperRoute could not start"
             Me.StartPosition = FormStartPosition.CenterParent
             Me.FormBorderStyle = FormBorderStyle.Sizable
@@ -290,7 +293,6 @@ Namespace Forms
             Me.ClientSize = New Size(If(offersRecovery, 820, 680), 440)
             Me.MinimumSize = New Size(560, 380)
             Me.Font = New Font("Segoe UI", 10.0F)
-            Me.AutoScaleMode = AutoScaleMode.Dpi
 
             Dim root As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
@@ -298,6 +300,11 @@ Namespace Forms
                 .RowCount = 6,
                 .Padding = New Padding(20)
             }
+
+            ' One column as wide as the window, so the text wraps to it and
+            ' nothing widens the table past the edge. A width set from the
+            ' table's size as it scales is scaled again (#93).
+            root.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
 
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
@@ -318,6 +325,7 @@ Namespace Forms
             Dim lblHeading As New Label With {
                 .Text = _failure.Heading,
                 .AutoSize = True,
+                .Dock = DockStyle.Fill,
                 .Font = New Font(Me.Font, FontStyle.Bold),
                 .Margin = New Padding(0, 0, 0, 6)
             }
@@ -325,16 +333,10 @@ Namespace Forms
             Dim lblExplanation As New Label With {
                 .Text = _failure.Explanation,
                 .AutoSize = True,
+                .Dock = DockStyle.Fill,
                 .ForeColor = UiTheme.SecondaryText(),
                 .Margin = New Padding(0, 0, 0, 10)
             }
-
-            AddHandler root.SizeChanged,
-                Sub(sender As Object, e As EventArgs)
-                    Dim width As Integer = Math.Max(200, root.ClientSize.Width - root.Padding.Horizontal - 8)
-                    lblHeading.MaximumSize = New Size(width, 0)
-                    lblExplanation.MaximumSize = New Size(width, 0)
-                End Sub
 
             txtDetails.Dock = DockStyle.Fill
             txtDetails.Multiline = True
@@ -435,6 +437,8 @@ Namespace Forms
             Me.AcceptButton = btnClose
             Me.CancelButton = btnClose
             Me.Controls.Add(root)
+
+            DialogScaling.Finish(Me)
 
         End Sub
 

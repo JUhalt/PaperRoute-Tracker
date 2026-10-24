@@ -35,17 +35,12 @@ Namespace Forms
         End Sub
 
 
-        ' Scaled sizes can outgrow a small or 150% display: stay inside it,
-        ' above the taskbar.
-        Protected Overrides Sub OnLoad(e As EventArgs)
-            MyBase.OnLoad(e)
-            ResponsiveDialogSizingService.FitToWorkingArea(Me)
-        End Sub
-
-
         Private Sub BuildInterface(
             unsavedChanges As Boolean
         )
+
+            ' Sizes below are at 96 DPI and scale with the display (#93).
+            DialogScaling.Begin(Me)
 
             Me.Text = "PaperRoute"
             Me.StartPosition = FormStartPosition.CenterParent
@@ -53,11 +48,10 @@ Namespace Forms
             Me.MaximizeBox = False
             Me.MinimizeBox = False
             Me.ShowInTaskbar = False
-            ' Sizes below are at 96 DPI and scale with the display.
-            Me.AutoScaleDimensions = New SizeF(96.0F, 96.0F)
-            Me.ClientSize = New Size(560, 250)
+            ' Wide enough for its four buttons (572 pixels with their gaps,
+            ' inside 24 of padding a side): at 560 Keep Working was cut.
+            Me.ClientSize = New Size(640, 250)
             Me.Font = New Font("Segoe UI", 10.0F)
-            Me.AutoScaleMode = AutoScaleMode.Dpi
 
             Dim root As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
@@ -65,6 +59,11 @@ Namespace Forms
                 .RowCount = 5,
                 .Padding = New Padding(24)
             }
+
+            ' One column as wide as the dialog, so long messages wrap to it
+            ' and nothing widens the table past the edge. A width set from
+            ' the table's size as it scales is scaled again (#93).
+            root.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
 
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
@@ -83,6 +82,7 @@ Namespace Forms
             Dim lblMessage As New Label With {
                 .Text = If(String.IsNullOrWhiteSpace(_failure?.Message), "An unexpected error occurred.", _failure.Message),
                 .AutoSize = True,
+                .Dock = DockStyle.Fill,
                 .UseMnemonic = False,
                 .Margin = New Padding(0, 0, 0, 12)
             }
@@ -96,19 +96,12 @@ Namespace Forms
                         "Nothing is waiting to be saved."
                     ),
                 .AutoSize = True,
+                .Dock = DockStyle.Fill,
                 .UseMnemonic = False,
                 .Font = New Font(Me.Font, FontStyle.Bold),
                 .ForeColor = If(unsavedChanges, UiTheme.WarningColor(), UiTheme.SecondaryText()),
                 .Margin = New Padding(0)
             }
-
-            ' Long messages wrap to the dialog's width.
-            AddHandler root.SizeChanged,
-                Sub(sender, e)
-                    Dim width As Integer = Math.Max(200, root.ClientSize.Width - root.Padding.Horizontal)
-                    lblMessage.MaximumSize = New Size(width, 0)
-                    lblUnsaved.MaximumSize = New Size(width, 0)
-                End Sub
 
             lblNote.AutoSize = True
             lblNote.UseMnemonic = False
@@ -175,6 +168,8 @@ Namespace Forms
             Me.CancelButton = btnKeep
 
             Me.Controls.Add(root)
+
+            DialogScaling.Finish(Me)
 
         End Sub
 

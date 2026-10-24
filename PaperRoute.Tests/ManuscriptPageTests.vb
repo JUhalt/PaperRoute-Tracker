@@ -2411,16 +2411,20 @@ Public Class ManuscriptPageTests
     ' Closes any Windows dialog (a message box or a file dialog, class #32770)
     ' that opens on the test thread while it is alive, and keeps their titles:
     ' a production dialog then fails a test by name instead of blocking it.
+    ' Given a title, it answers Yes to the Yes/No box with that title
+    ' instead, which closing cannot do, and keeps its title the same way.
     Friend NotInheritable Class DialogWatcher
         Implements IDisposable
 
         Private ReadOnly _threadId As Integer = GetCurrentThreadId()
         Private ReadOnly _timer As New System.Windows.Forms.Timer With {.Interval = 50}
         Private ReadOnly _seen As New HashSet(Of IntPtr)()
+        Private ReadOnly _answerYes As String
 
         Public ReadOnly Closed As New List(Of String)()
 
-        Public Sub New()
+        Public Sub New(Optional answerYes As String = Nothing)
+            _answerYes = answerYes
             AddHandler _timer.Tick, AddressOf CloseDialogs
             _timer.Start()
         End Sub
@@ -2434,7 +2438,11 @@ Public Class ManuscriptPageTests
                         Dim title As New System.Text.StringBuilder(256)
                         GetWindowText(handle, title, title.Capacity)
                         Closed.Add(title.ToString())
-                        PostMessage(handle, WM_CLOSE, IntPtr.Zero, IntPtr.Zero)
+                        If _answerYes IsNot Nothing AndAlso title.ToString() = _answerYes Then
+                            PostMessage(handle, WM_COMMAND, New IntPtr(IDYES), IntPtr.Zero)
+                        Else
+                            PostMessage(handle, WM_CLOSE, IntPtr.Zero, IntPtr.Zero)
+                        End If
                     End If
                     Return True
                 End Function, IntPtr.Zero)
@@ -2533,6 +2541,8 @@ Public Class ManuscriptPageTests
     End Function
 
     Private Const WM_CLOSE As UInteger = &H10
+    Private Const WM_COMMAND As UInteger = &H111
+    Private Const IDYES As Integer = 6
 
     <System.Runtime.InteropServices.DllImport("user32.dll")>
     Private Shared Function PostMessage(handle As IntPtr, message As UInteger, wParam As IntPtr, lParam As IntPtr) As Boolean

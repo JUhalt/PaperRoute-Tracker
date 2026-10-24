@@ -43,6 +43,10 @@ Namespace Services
             manuscript.StageEnteredDate = candidate.StageEnteredDate
             manuscript.RevisionDeadline = candidate.RevisionDeadline
             manuscript.Location = candidate.Location
+            ' Taken out of the File Drawer, its date and reason are cleared and kept in a note (#207).
+            manuscript.FileDrawerDate = candidate.FileDrawerDate
+            manuscript.FileDrawerReason = candidate.FileDrawerReason
+            manuscript.History = candidate.History
             manuscript.TargetJournal = candidate.TargetJournal
             manuscript.TargetJournalId = candidate.TargetJournalId
         End Sub

@@ -19,17 +19,18 @@ Namespace Forms
 
         Private Sub BuildInterface()
 
+            ' Sizes below are at 96 DPI and scale with the display (#93);
+            ' without the base dimensions the text grew at 150% but the
+            ' dialog did not.
+            DialogScaling.Begin(Me)
+
             Me.Text = "About PaperRoute"
             Me.StartPosition = FormStartPosition.CenterParent
             Me.FormBorderStyle = FormBorderStyle.FixedDialog
             Me.MaximizeBox = False
             Me.MinimizeBox = False
-            ' Sizes below are at 96 DPI and scale with the display; without the
-            ' base dimensions the text grew at 150% but the dialog did not.
-            Me.AutoScaleDimensions = New SizeF(96.0F, 96.0F)
             Me.ClientSize = New Size(640, 410)
             Me.Font = New Font("Segoe UI", 10.0F)
-            Me.AutoScaleMode = AutoScaleMode.Dpi
             Me.BackColor = UiTheme.BoardBackground()
 
             Dim root As New TableLayoutPanel With {
@@ -161,6 +162,8 @@ Namespace Forms
             Me.AcceptButton = btnClose
             Me.CancelButton = btnClose
             Me.Controls.Add(root)
+
+            DialogScaling.Finish(Me)
 
         End Sub
 

@@ -73,12 +73,14 @@ Namespace Forms
 
         Private Sub BuildInterface()
 
+            ' Sizes below are at 96 DPI and scale with the display (#93).
+            DialogScaling.Begin(Me)
+
             Me.Text = "Map Spreadsheet Columns"
             Me.StartPosition = FormStartPosition.CenterParent
             Me.Size = New Size(980, 700)
             Me.MinimumSize = New Size(800, 560)
             Me.Font = New Font("Segoe UI", 10.0F)
-            Me.AutoScaleMode = AutoScaleMode.Dpi
             Me.BackColor = UiTheme.BoardBackground()
 
             Dim root As New TableLayoutPanel With {
@@ -88,6 +90,12 @@ Namespace Forms
                 .Padding = New Padding(22),
                 .BackColor = UiTheme.BoardBackground()
             }
+
+            ' One column as wide as the window, so the help wraps to it and
+            ' nothing widens the table past the edge (#93): at 150% on a
+            ' 1366-pixel screen the help, 880 pixels wide at 96 DPI, pushed
+            ' the footer's buttons past the right edge.
+            root.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
 
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 78))
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 56))
@@ -102,6 +110,7 @@ Namespace Forms
                 .BackColor = UiTheme.BoardBackground()
             }
 
+            intro.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
             intro.RowStyles.Add(New RowStyle(SizeType.AutoSize))
             intro.RowStyles.Add(New RowStyle(SizeType.AutoSize))
 
@@ -115,7 +124,7 @@ Namespace Forms
             Dim lblHelp As New Label With {
                 .Text = "PaperRoute could not identify this workbook as the standard template or legacy tracker. Match your columns below; Title is the only required field.",
                 .AutoSize = True,
-                .MaximumSize = New Size(880, 0),
+                .Dock = DockStyle.Fill,
                 .ForeColor = UiTheme.SecondaryText(),
                 .Margin = New Padding(0, 4, 0, 0)
             }
@@ -205,6 +214,8 @@ Namespace Forms
 
             Me.Controls.Add(root)
             Me.CancelButton = btnCancel
+
+            DialogScaling.Finish(Me)
 
             AddHandler cboWorksheet.SelectedIndexChanged, AddressOf WorkbookOptionChanged
             AddHandler numHeaderRow.ValueChanged, AddressOf WorkbookOptionChanged

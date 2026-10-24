@@ -230,6 +230,47 @@ Public Class Form1
     ' Interface
     ' =====================================================
 
+    ' The main window's start and minimum sizes for a screen (#93): 1280x840
+    ' with a 960x680 minimum at 96 DPI, scaled for the display, the start
+    ' size capped to the working area as the dialogs' are, and the minimum
+    ' lowered to the area when even it would not fit (1920x1003 at 150%).
+    ' The start size is never below the minimum, as Windows Forms would hold
+    ' it there anyway.
+    Friend Shared Function StartSizes(
+        workingArea As Rectangle,
+        deviceDpi As Integer
+    ) As (Start As Size, Minimum As Size)
+
+        Dim minimum As Size =
+            ResponsiveDialogSizingService.FitSize(
+                workingArea,
+                New Size(
+                    UiTheme.Px(960, deviceDpi),
+                    UiTheme.Px(680, deviceDpi)
+                )
+            )
+
+        Dim start As Size =
+            ResponsiveDialogSizingService.CalculateInitialSize(
+                workingArea,
+                New Size(
+                    UiTheme.Px(1280, deviceDpi),
+                    UiTheme.Px(840, deviceDpi)
+                ),
+                minimum
+            )
+
+        Return (
+            New Size(
+                Math.Max(start.Width, minimum.Width),
+                Math.Max(start.Height, minimum.Height)
+            ),
+            minimum
+        )
+
+    End Function
+
+
     Private Sub BuildInterface()
 
         Me.Controls.Clear()
@@ -245,8 +286,20 @@ Public Class Form1
                 )
             )
         Me.StartPosition = FormStartPosition.CenterScreen
-        Me.Size = New Size(1280, 840)
-        Me.MinimumSize = New Size(960, 680)
+
+        ' Scaled for the display and capped to the screen the window opens
+        ' on, as the dialogs are (#93): unscaled and uncapped, the window
+        ' was taller than a 1366x768 laptop's working area even at 100%.
+        ' CenterScreen puts an owner-less window on the screen under the
+        ' pointer, so that screen's working area is the cap.
+        Dim sizes As (Start As Size, Minimum As Size) =
+            StartSizes(
+                Screen.FromPoint(Control.MousePosition).WorkingArea,
+                DeviceDpi
+            )
+
+        Me.Size = sizes.Start
+        Me.MinimumSize = sizes.Minimum
         Me.Font = New Font("Segoe UI", 10.0F)
         Me.AutoScaleMode = AutoScaleMode.Dpi
         Me.BackColor = UiTheme.BoardBackground()
@@ -1056,8 +1109,11 @@ Public Class Form1
         ' File Drawer suggestion
         ' =================================================
 
+        ' Only while the latest submission ended in a rejection or a
+        ' withdrawal, and not after a revival (#203).
         If manuscript.Location =
             ManuscriptLocation.Pipeline AndAlso
+       snapshot.CanSuggestFiling AndAlso
        snapshot.RejectionCount >=
             appSettings.FileDrawerSuggestionThreshold Then
 
@@ -3516,33 +3572,26 @@ Public Class Form1
         manuscript As Manuscript
     )
 
-        Dim result As DialogResult =
-            MessageBox.Show(
-                Me,
-                "Move '" &
-                manuscript.Title &
-                "' to the File Drawer?" &
-                Environment.NewLine &
-                Environment.NewLine &
-                "Its history, submissions, decisions, and correspondence will be preserved.",
-                "Move to File Drawer",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question
-            )
+        ' One window asks the question and for the optional reason (#205):
+        ' Cancel leaves the manuscript where it is, which the input box it
+        ' replaces could not tell from no reason.
+        Dim reason As String
 
-        If result <>
-            DialogResult.Yes Then
+        Using dialog As New MoveToFileDrawerForm(
+            manuscript.Title
+        )
 
-            Return
+            If dialog.ShowDialog(Me) <>
+                DialogResult.OK Then
 
-        End If
+                Return
 
-        Dim reason As String =
-            Microsoft.VisualBasic.Interaction.InputBox(
-                "Optional: Why are you filing this manuscript?",
-                "File Drawer",
-                ""
-            )
+            End If
+
+            reason =
+                dialog.Reason
+
+        End Using
 
         manuscript.Location =
             ManuscriptLocation.FileDrawer
@@ -3593,6 +3642,15 @@ Public Class Form1
         manuscript As Manuscript
     )
 
+        ' When and why it was filed go into the note (#202): a manuscript
+        ' filed by an import has no "Moved to File Drawer" note to keep them.
+        Dim restoreNote As String =
+            ManuscriptLifecycleService.WithFiledClause(
+                ManuscriptAttentionService.RestoredFromFileDrawerNote,
+                manuscript.FileDrawerDate,
+                manuscript.FileDrawerReason
+            )
+
         manuscript.Location =
             ManuscriptLocation.Pipeline
 
@@ -3607,7 +3665,7 @@ Public Class Form1
             .Stage =
                 manuscript.CurrentStage,
             .Note =
-                "Restored from File Drawer to active Pipeline."
+                restoreNote
         }
 
         ChronologyProvenanceService.StampCreated(

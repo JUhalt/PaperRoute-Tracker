@@ -2277,6 +2277,13 @@ Namespace Forms
             cmbStage.SelectedItem =
                 _workingManuscript.CurrentStage
 
+            ' A submission or a decision can take the manuscript out of the
+            ' File Drawer (#207); its group goes with it, so Save does not
+            ' write the cleared reason back.
+            fileDrawerGroup.Visible =
+                _workingManuscript.Location =
+                ManuscriptLocation.FileDrawer
+
             RefreshRevisionDeadlineDisplay()
 
         End Sub
@@ -3340,6 +3347,9 @@ Namespace Forms
 
             RefreshRevisionDeadlineDisplay()
 
+            ' A decision can take the manuscript out of the File Drawer (#207).
+            fileDrawerGroup.Visible = _workingManuscript.Location = ManuscriptLocation.FileDrawer
+
             ' Update the list's accessible text without re-selecting, which
             ' would rebuild the pane being edited.
             _refreshingSubmissions = True
@@ -3481,7 +3491,11 @@ Namespace Forms
             e As EventArgs
         )
 
-            Using dialog As New AddSubmissionForm()
+            ' Starts at the target journal, as recording one from a stage
+            ' change does (#204).
+            Using dialog As New AddSubmissionForm(
+                txtTargetJournal.Text.Trim()
+            )
 
                 If dialog.ShowDialog(Me) =
                     DialogResult.OK AndAlso

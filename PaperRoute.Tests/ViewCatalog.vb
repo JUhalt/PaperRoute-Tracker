@@ -93,6 +93,7 @@ Friend NotInheritable Class ViewCatalog
         {GetType(ManuscriptRouteViewForm), Function(root) New ManuscriptRouteViewForm(InRevision())},
         {GetType(ManuscriptVersionEditForm), Function(root) VersionEditor()},
         {GetType(MarkPublishedForm), Function(root) New MarkPublishedForm(Routed(), Found(), DateTime.Today)},
+        {GetType(MoveToFileDrawerForm), Function(root) New MoveToFileDrawerForm("Active Study")},
         {GetType(OrcidLookupForm), Function(root) New OrcidLookupForm(AuthorLibrary().Authors(0))},
         {GetType(PacketExportForm), Function(root) PacketExport(root)},
         {GetType(PublicationCheckForm), Function(root) New PublicationCheckForm(CreateRepresentativeLibrary(), Nothing, String.Empty, New NoPublications(), Function() True, DateTime.Today)},

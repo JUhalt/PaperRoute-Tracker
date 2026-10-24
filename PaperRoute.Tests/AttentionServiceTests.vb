@@ -404,8 +404,310 @@ Public Class AttentionServiceTests
 
 
     ' =====================================================
+    ' File Drawer suggestion (#203)
+    ' =====================================================
+
+    <TestMethod>
+    Public Sub FilingSuggestion_LatestSubmissionRejected_CanSuggest()
+
+        Dim snapshot As ManuscriptAttentionSnapshot =
+            Evaluate(
+                CreateRejectedThreeTimes()
+            )
+
+        Assert.AreEqual(
+            3,
+            snapshot.RejectionCount
+        )
+
+        Assert.IsTrue(
+            snapshot.CanSuggestFiling
+        )
+
+    End Sub
+
+
+    <TestMethod>
+    Public Sub FilingSuggestion_LatestSubmissionWithdrawn_CanSuggest()
+
+        Dim manuscript As Manuscript =
+            CreateRejectedThreeTimes()
+
+        manuscript.Submissions.Add(
+            CreateSubmission(
+                "Fourth Journal",
+                _today.AddDays(-40),
+                EditorialDecision.Withdrawn,
+                _today.AddDays(-35)
+            )
+        )
+
+        Dim snapshot As ManuscriptAttentionSnapshot =
+            Evaluate(
+                manuscript
+            )
+
+        Assert.AreEqual(
+            3,
+            snapshot.RejectionCount,
+            "A withdrawal is not a rejection."
+        )
+
+        Assert.IsTrue(
+            snapshot.CanSuggestFiling
+        )
+
+    End Sub
+
+
+    <TestMethod>
+    Public Sub FilingSuggestion_NewerSubmissionOpen_CannotSuggest()
+
+        Dim manuscript As Manuscript =
+            CreateRejectedThreeTimes()
+
+        manuscript.Submissions.Add(
+            New JournalSubmission With {
+                .JournalName =
+                    "Fourth Journal",
+                .SubmittedDate =
+                    _today.AddDays(-10)
+            }
+        )
+
+        Assert.IsFalse(
+            Evaluate(
+                manuscript
+            ).CanSuggestFiling
+        )
+
+    End Sub
+
+
+    <TestMethod>
+    Public Sub FilingSuggestion_LatestDecisionAsksForRevision_CannotSuggest()
+
+        Dim manuscript As Manuscript =
+            CreateRejectedThreeTimes()
+
+        manuscript.Submissions.Add(
+            CreateSubmission(
+                "Fourth Journal",
+                _today.AddDays(-40),
+                EditorialDecision.MajorRevision,
+                _today.AddDays(-5)
+            )
+        )
+
+        Assert.IsFalse(
+            Evaluate(
+                manuscript
+            ).CanSuggestFiling
+        )
+
+    End Sub
+
+
+    ' The note Form1.RestoreToPipeline writes, with when and why the
+    ' manuscript was filed after it (#202). A revival before the last
+    ' rejection belongs to an older route.
+    <TestMethod>
+    Public Sub FilingSuggestion_RestoredAfterTheLastRejection_CannotSuggest()
+
+        Dim manuscript As Manuscript =
+            CreateRejectedThreeTimes()
+
+        manuscript.History.Add(
+            New HistoryEvent With {
+                .EventDate =
+                    _today.AddDays(-300),
+                .Stage =
+                    PaperStage.Draft,
+                .Note =
+                    ManuscriptAttentionService.RestoredFromFileDrawerNote & "."
+            }
+        )
+
+        Assert.IsTrue(
+            Evaluate(
+                manuscript
+            ).CanSuggestFiling,
+            "Restored before the last rejection."
+        )
+
+        manuscript.History.Add(
+            New HistoryEvent With {
+                .EventDate =
+                    _today.AddDays(-5),
+                .Stage =
+                    PaperStage.Draft,
+                .Note =
+                    ManuscriptAttentionService.RestoredFromFileDrawerNote &
+                    " (filed Aug 17, 2026: Three rejections; revisit with a larger sample.)"
+            }
+        )
+
+        Assert.IsFalse(
+            Evaluate(
+                manuscript
+            ).CanSuggestFiling,
+            "Restored after the last rejection."
+        )
+
+    End Sub
+
+
+    ' A rejection that came after the manuscript was filed takes it out of
+    ' the File Drawer (#207), but the researcher did not revive it: its
+    ' note, "Returned to the Pipeline by an editorial decision (filed
+    ' ...)", does not begin as the restore note does, and the card may
+    ' suggest filing again. A guard: before #207 no note was written and
+    ' the suggestion showed as it does now.
+    <TestMethod>
+    Public Sub FilingSuggestion_TakenOutOfTheFileDrawerByARejection_CanSuggest()
+
+        Dim manuscript As Manuscript =
+            CreateRejectedThreeTimes()
+
+        Dim waiting As New JournalSubmission With {
+            .JournalName =
+                "Fourth Journal",
+            .SubmittedDate =
+                _today.AddDays(-60)
+        }
+
+        manuscript.Submissions.Add(
+            waiting
+        )
+
+        manuscript.CurrentStage =
+            PaperStage.Submitted
+
+        manuscript.StageEnteredDate =
+            _today.AddDays(-60)
+
+        manuscript.Location =
+            ManuscriptLocation.FileDrawer
+
+        manuscript.FileDrawerDate =
+            _today.AddDays(-30)
+
+        manuscript.FileDrawerReason =
+            "Waited too long."
+
+        Dim rejection As New EditorialDecisionEvent With {
+            .Decision =
+                EditorialDecision.Rejected,
+            .DecisionDate =
+                _today.AddDays(-10)
+        }
+
+        waiting.Decisions.Add(
+            rejection
+        )
+
+        ManuscriptLifecycleService.ApplyDecision(
+            manuscript,
+            waiting,
+            rejection
+        )
+
+        Assert.AreEqual(
+            ManuscriptLocation.Pipeline,
+            manuscript.Location
+        )
+
+        Assert.IsTrue(
+            Evaluate(
+                manuscript
+            ).CanSuggestFiling
+        )
+
+    End Sub
+
+
+    ' =====================================================
     ' Helpers
     ' =====================================================
+
+    Private Function Evaluate(
+        manuscript As Manuscript
+    ) As ManuscriptAttentionSnapshot
+
+        Return ManuscriptAttentionService.Evaluate(
+            manuscript,
+            _today,
+            revisionWarningDays:=14,
+            longReviewThresholdDays:=90,
+            recentRejectionThresholdDays:=30
+        )
+
+    End Function
+
+
+    ' Back in Draft on the Pipeline after three rejections, the last of
+    ' them 100 days ago.
+    Private Function CreateRejectedThreeTimes() As Manuscript
+
+        Dim manuscript As New Manuscript With {
+            .Title =
+                "Rejected Three Times",
+            .CurrentStage =
+                PaperStage.Draft,
+            .Location =
+                ManuscriptLocation.Pipeline,
+            .TargetJournal =
+                "Journal of Fourth Attempts"
+        }
+
+        For round As Integer = 3 To 1 Step -1
+
+            Dim decided As DateTime =
+                _today.AddDays(-100 * round)
+
+            manuscript.Submissions.Add(
+                CreateSubmission(
+                    "Journal " & round.ToString(),
+                    decided.AddDays(-60),
+                    EditorialDecision.Rejected,
+                    decided
+                )
+            )
+
+        Next
+
+        Return manuscript
+
+    End Function
+
+
+    Private Function CreateSubmission(
+        journalName As String,
+        submittedDate As DateTime,
+        decision As EditorialDecision,
+        decisionDate As DateTime
+    ) As JournalSubmission
+
+        Dim submission As New JournalSubmission With {
+            .JournalName =
+                journalName,
+            .SubmittedDate =
+                submittedDate
+        }
+
+        submission.Decisions.Add(
+            New EditorialDecisionEvent With {
+                .DecisionDate =
+                    decisionDate,
+                .Decision =
+                    decision
+            }
+        )
+
+        Return submission
+
+    End Function
+
 
     Private Function CreateRevisionManuscript(
         deadline As DateTime

@@ -122,6 +122,10 @@ Public Class UiTextMnemonicTests
                 Using confirm As New DeleteManuscriptForm(manuscript.Title)
                     AssertNoLostAmpersands(confirm)
                 End Using
+
+                Using move As New MoveToFileDrawerForm(manuscript.Title)
+                    AssertNoLostAmpersands(move)
+                End Using
             End Sub)
 
     End Sub

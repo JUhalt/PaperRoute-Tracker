@@ -108,6 +108,9 @@ Namespace Forms
 
         Private Sub BuildInterface()
 
+            ' Sizes below are at 96 DPI and scale with the display (#93).
+            DialogScaling.Begin(Me)
+
             Me.Text =
                 "Journal, Preprint & Project Links"
 
@@ -132,9 +135,6 @@ Namespace Forms
                     10.0F
                 )
 
-            Me.AutoScaleMode =
-                AutoScaleMode.Dpi
-
             Dim scrollHost As New Panel With {
                 .Dock = DockStyle.Fill,
                 .AutoScroll = True,
@@ -146,7 +146,7 @@ Namespace Forms
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 .ColumnCount = 1,
-                .RowCount = 4,
+                .RowCount = 3,
                 .Padding = New Padding(18)
             }
 
@@ -160,7 +160,6 @@ Namespace Forms
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 220))
-            root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
 
             Dim journalGroup As New SectionCard With {
                 .Text = "Target Journal",
@@ -458,12 +457,14 @@ Namespace Forms
 
             linksGroup.Controls.Add(linksLayout)
 
+            ' Below the scrolling body, not inside it, so the two buttons stay
+            ' in view at every size (#93): inside, they sat below the fold.
             Dim footer As New FlowLayoutPanel With {
-                .Dock = DockStyle.Fill,
+                .Dock = DockStyle.Bottom,
                 .AutoSize = True,
                 .FlowDirection = FlowDirection.RightToLeft,
                 .WrapContents = False,
-                .Padding = New Padding(0, 10, 0, 0)
+                .Padding = New Padding(18, 10, 18, 18)
             }
 
             Dim btnSave As New Button With {
@@ -488,7 +489,6 @@ Namespace Forms
             root.Controls.Add(journalGroup, 0, 0)
             root.Controls.Add(preprintGroup, 0, 1)
             root.Controls.Add(linksGroup, 0, 2)
-            root.Controls.Add(footer, 0, 3)
 
             Me.AcceptButton = btnSave
             Me.CancelButton = btnCancel
@@ -500,6 +500,12 @@ Namespace Forms
             Me.Controls.Add(
                 scrollHost
             )
+
+            Me.Controls.Add(
+                footer
+            )
+
+            DialogScaling.Finish(Me)
 
         End Sub
 

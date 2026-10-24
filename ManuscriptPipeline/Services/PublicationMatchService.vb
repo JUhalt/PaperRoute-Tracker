@@ -263,7 +263,7 @@ Namespace Services
             Dim lines As New List(Of String) From {
                 "Move it to the Published shelf with the stage Published, from " &
                     PublishedFrom(match, today).ToString("MMMM d, yyyy", CultureInfo.CurrentCulture) & ".",
-                "Add """ & HistoryNote(match) & """ to its history."
+                "Add """ & HistoryNote(manuscript, match) & """ to its history."
             }
 
             If Not String.IsNullOrWhiteSpace(match.Journal) AndAlso
@@ -292,6 +292,9 @@ Namespace Services
 
             Dim publishedOn As DateTime = PublishedFrom(match, today)
 
+            ' Worded while the File Drawer fields it may quote still stand (#202).
+            Dim note As String = HistoryNote(manuscript, match)
+
             ApplyFill(manuscript, PlanFill(manuscript, ToWork(match)))
 
             If Not String.IsNullOrWhiteSpace(match.Journal) AndAlso
@@ -309,7 +312,7 @@ Namespace Services
             Dim published As New HistoryEvent With {
                 .EventDate = publishedOn,
                 .Stage = PaperStage.Published,
-                .Note = HistoryNote(match)
+                .Note = note
             }
             ChronologyProvenanceService.StampCreated(published)
             If manuscript.History Is Nothing Then manuscript.History = New List(Of HistoryEvent)()
@@ -333,9 +336,15 @@ Namespace Services
         End Function
 
 
-        Private Shared Function HistoryNote(match As PublicationMatch) As String
+        ' A manuscript marked from the File Drawer keeps when and why it was
+        ' filed (#202), as its restore note would.
+        Private Shared Function HistoryNote(manuscript As Manuscript, match As PublicationMatch) As String
             Dim note As String = "Published" & If(String.IsNullOrWhiteSpace(match.Journal), String.Empty, " in " & match.Journal.Trim())
             If Not String.IsNullOrWhiteSpace(match.Doi) Then note &= " (DOI " & match.Doi & ")"
+            If manuscript.Location = ManuscriptLocation.FileDrawer Then
+                Return note & ". " & ManuscriptLifecycleService.WithFiledClause(
+                    "Marked from a publication check while in the File Drawer", manuscript.FileDrawerDate, manuscript.FileDrawerReason)
+            End If
             Return note & ". Marked from a publication check."
         End Function
 
