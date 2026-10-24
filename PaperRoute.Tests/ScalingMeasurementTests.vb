@@ -633,25 +633,35 @@ Public Class ScalingMeasurementTests
     ' row: a list, a list view, a grid, a tree view, a multi-line text box,
     ' and a list under a toolbar of its own, as Submission Details' list is.
     ' On the roomy screen each shows two rows or more and none is reported;
-    ' fitted to the short one each shows less, the last none, and each is.
+    ' fitted to the short one each shows less, the last with no height at
+    ' all, and each is: a list with none is judged before the measure skips
+    ' a control with no size.
     <TestMethod>
     Public Sub ASqueezedListIsReported()
 
         Dim results As New Dictionary(Of String, Cell)()
+        Dim filesHeight As Integer = -1
 
         ViewCatalog.ShowAndClose(
             "The list probe",
             Function() ListProbe(),
             Sub(name, shown)
+
                 For Each cell As (Screen As String, Dpi As Integer, Result As Cell) In Measure(shown, 96, False, ProbeScreens)
                     results(cell.Screen) = cell.Result
                 Next
+
+                ' As fitted to the short screen, the last.
+                filesHeight = ViewCatalog.Descendants(shown).OfType(Of ListBox)().Single(Function(list) list.AccessibleName = "Files").Height
+
             End Sub
         )
 
         For Each screen As String In {"roomy", "short"}
             Assert.IsNull(results(screen).NotMeasuredHere, "The probe is measured on this computer: " & results(screen).Describe())
         Next
+
+        Assert.AreEqual(0, filesHeight, "On the short screen the last list has no height at all.")
 
         Assert.IsTrue(results("roomy").Passes, "With room, every list shows two rows: " & results("roomy").Describe())
 
@@ -665,8 +675,9 @@ Public Class ScalingMeasurementTests
     ' A 900x500 window: a 340-pixel row, then one row that takes the rest,
     ' with a list, a list view in details view, a grid, a tree view and a
     ' multi-line text box side by side, each with two rows of its own, and
-    ' a list under a 60-pixel toolbar. Fitted to the 400-pixel screen, the
-    ' window keeps about 20 pixels for that row.
+    ' a list docked to fill a panel below a 60-pixel toolbar docked to its
+    ' top. Fitted to the 400-pixel screen, the window keeps about 20 pixels
+    ' for that row, and the toolbar leaves the last list none.
     Private Shared Function ListProbe() As Form
 
         Dim form As New Form With {.ClientSize = New Size(900, 500), .Font = New Font("Segoe UI", 10.0F), .AutoScaleMode = AutoScaleMode.Dpi}
@@ -698,11 +709,10 @@ Public Class ScalingMeasurementTests
 
         Dim notes As New TextBox With {.Dock = DockStyle.Fill, .Multiline = True, .AccessibleName = "Notes", .Text = "First line" & Environment.NewLine & "Second line"}
 
-        Dim files As New TableLayoutPanel With {.Dock = DockStyle.Fill, .ColumnCount = 1, .RowCount = 2, .Margin = New Padding(0)}
-        files.RowStyles.Add(New RowStyle(SizeType.Absolute, 60))
-        files.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
-        files.Controls.Add(New Label With {.Text = "Toolbar", .AutoSize = True}, 0, 0)
-        files.Controls.Add(New ListBox With {.Dock = DockStyle.Fill, .IntegralHeight = False, .AccessibleName = "Files"}, 0, 1)
+        ' Docked last, the list fills what the toolbar leaves of the panel.
+        Dim files As New Panel With {.Dock = DockStyle.Fill, .Margin = New Padding(0)}
+        files.Controls.Add(New ListBox With {.Dock = DockStyle.Fill, .IntegralHeight = False, .AccessibleName = "Files"})
+        files.Controls.Add(New Panel With {.Dock = DockStyle.Top, .Height = 60})
 
         root.Controls.Add(New Label With {.Text = "Summary", .AutoSize = True}, 0, 0)
         root.Controls.Add(letters, 0, 1)

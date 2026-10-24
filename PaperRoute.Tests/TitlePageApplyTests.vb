@@ -216,6 +216,8 @@ Public Class TitlePageApplyTests
     ' the screens of the measuring sweep, the measure finds nothing cut: the
     ' authors' grid and both boxes show two rows or more. A screen larger
     ' than this computer's can hold is measured at the largest it holds.
+    ' The 100% and 125% rows are a guard: they passed before the change and
+    ' keep the new split from costing those displays their two lines.
     <TestMethod>
     <DataRow(96, 1366, 720)>
     <DataRow(120, 1366, 708)>

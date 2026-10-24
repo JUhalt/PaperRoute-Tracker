@@ -470,9 +470,6 @@ Namespace Forms
                 .DialogResult = DialogResult.OK
             }
 
-            ' The dialog's rows scroll in a body of their own (below).
-            Dim body As Panel = Nothing
-
             buttons.Controls.Add(btnClose)
 
             Dim btnResponses As New Button With {
@@ -506,6 +503,8 @@ Namespace Forms
                     End Sub
                 buttons.Controls.Add(btnPackets)
             End If
+
+            Dim body As Panel = Nothing
 
             If _inline Then
 
