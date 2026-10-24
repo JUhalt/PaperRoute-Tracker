@@ -15,9 +15,10 @@ Imports ManuscriptPipeline.Services
 ' Every top-level window of the catalog, measured at 96, 120 and 144 DPI
 ' after fitting to a 1920x1003 and then to a 1366x728 working area (#93,
 ' step 2): whether the accept and cancel buttons are inside the client
-' area, and whether any button, check box, single-line label or tab
-' caption is cut. The per-window table goes to the test output, as GitHub
-' markdown, for #93.
+' area, whether any button, check box, single-line label or tab caption
+' is cut, and whether any list, list view, grid, tree view or multi-line
+' text box shows less than two rows (step 4). The per-window table goes
+' to the test output, as GitHub markdown, for #93.
 '
 ' The host runs at 96 DPI, so a display is simulated. Every font grows by
 ' the DPI's factor, as text does on a real display, and then a window
@@ -491,6 +492,100 @@ Public Class ScalingMeasurementTests
     End Function
 
 
+    ' The measure judges lists (#93, step 4). At the real 1366x708 working
+    ' area at 125%, Submission Details gave its Correspondence & Files list
+    ' no height at all and its Editorial History list one row, so its
+    ' letters and files could not be seen, and the measure, which judged
+    ' only buttons, check boxes, single-line labels and tab captions, read
+    ' "ok". A probe holds one of each kind it now judges below a tall fixed
+    ' row: a list, a list view, a grid, a tree view, a multi-line text box,
+    ' and a list under a toolbar of its own, as Submission Details' list is.
+    ' On the roomy screen each shows two rows or more and none is reported;
+    ' fitted to the short one each shows less, the last none, and each is.
+    <TestMethod>
+    Public Sub ASqueezedListIsReported()
+
+        Dim results As New Dictionary(Of String, Cell)()
+
+        ViewCatalog.ShowAndClose(
+            "The list probe",
+            Function() ListProbe(),
+            Sub(name, shown)
+                For Each cell As (Screen As String, Dpi As Integer, Result As Cell) In Measure(shown, 96, False, ProbeScreens)
+                    results(cell.Screen) = cell.Result
+                Next
+            End Sub
+        )
+
+        For Each screen As String In {"roomy", "short"}
+            Assert.IsNull(results(screen).NotMeasuredHere, "The probe is measured on this computer: " & results(screen).Describe())
+        Next
+
+        Assert.IsTrue(results("roomy").Passes, "With room, every list shows two rows: " & results("roomy").Describe())
+
+        For Each squeezed As String In {"list 'Letters'", "list view 'Facts'", "grid 'Mappings'", "tree view 'Outline'", "text box 'Notes'", "list 'Files'"}
+            Assert.IsTrue(results("short").Cut.Any(Function(cut) cut.StartsWith(squeezed, StringComparison.Ordinal)), "Squeezed, it is reported, " & squeezed & ": " & String.Join("; ", results("short").Cut))
+        Next
+
+    End Sub
+
+
+    ' A 900x500 window: a 340-pixel row, then one row that takes the rest,
+    ' with a list, a list view in details view, a grid, a tree view and a
+    ' multi-line text box side by side, each with two rows of its own, and
+    ' a list under a 60-pixel toolbar. Fitted to the 400-pixel screen, the
+    ' window keeps about 20 pixels for that row.
+    Private Shared Function ListProbe() As Form
+
+        Dim form As New Form With {.ClientSize = New Size(900, 500), .Font = New Font("Segoe UI", 10.0F), .AutoScaleMode = AutoScaleMode.Dpi}
+
+        Dim root As New TableLayoutPanel With {.Dock = DockStyle.Fill, .ColumnCount = 6, .RowCount = 2}
+        root.RowStyles.Add(New RowStyle(SizeType.Absolute, 340))
+        root.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
+
+        For column As Integer = 0 To 5
+            root.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100 / 6.0F))
+        Next
+
+        Dim letters As New ListBox With {.Dock = DockStyle.Fill, .IntegralHeight = False, .AccessibleName = "Letters"}
+        letters.Items.AddRange({"Decision letter", "Reviews", "Revised manuscript"})
+
+        Dim facts As New ListView With {.Dock = DockStyle.Fill, .View = View.Details, .AccessibleName = "Facts"}
+        facts.Columns.Add("Fact", 100)
+        facts.Items.Add("Impact")
+        facts.Items.Add("Turnaround")
+
+        Dim mappings As New DataGridView With {.Dock = DockStyle.Fill, .AccessibleName = "Mappings", .AllowUserToAddRows = False}
+        mappings.Columns.Add("column", "Column")
+        mappings.Rows.Add("Title")
+        mappings.Rows.Add("Journal")
+
+        Dim outline As New TreeView With {.Dock = DockStyle.Fill, .AccessibleName = "Outline"}
+        outline.Nodes.Add("Introduction")
+        outline.Nodes.Add("Methods")
+
+        Dim notes As New TextBox With {.Dock = DockStyle.Fill, .Multiline = True, .AccessibleName = "Notes", .Text = "First line" & Environment.NewLine & "Second line"}
+
+        Dim files As New TableLayoutPanel With {.Dock = DockStyle.Fill, .ColumnCount = 1, .RowCount = 2, .Margin = New Padding(0)}
+        files.RowStyles.Add(New RowStyle(SizeType.Absolute, 60))
+        files.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
+        files.Controls.Add(New Label With {.Text = "Toolbar", .AutoSize = True}, 0, 0)
+        files.Controls.Add(New ListBox With {.Dock = DockStyle.Fill, .IntegralHeight = False, .AccessibleName = "Files"}, 0, 1)
+
+        root.Controls.Add(New Label With {.Text = "Summary", .AutoSize = True}, 0, 0)
+        root.Controls.Add(letters, 0, 1)
+        root.Controls.Add(facts, 1, 1)
+        root.Controls.Add(mappings, 2, 1)
+        root.Controls.Add(outline, 3, 1)
+        root.Controls.Add(notes, 4, 1)
+        root.Controls.Add(files, 5, 1)
+        form.Controls.Add(root)
+
+        Return form
+
+    End Function
+
+
     ' The measure counts only what scrolling reaches. A panel that scrolls
     ' leaves a child docked to fill it out of its scroll range, so a button
     ' near that child's foot, below the panel's client area, is reported
@@ -745,11 +840,12 @@ Public Class ScalingMeasurementTests
     End Function
 
 
-    ' Every visible child, clipped by its parents down to the window's
-    ' client area, except inside a container that scrolls, whose content
-    ' is reached by scrolling and so is measured against its scroll range:
-    ' what lies past that range cannot be reached. Each page of a tab
-    ' control is shown in turn so its content is measured too.
+    ' Every visible child, lists among them (InspectRows), clipped by its
+    ' parents down to the window's client area, except inside a container
+    ' that scrolls, whose content is reached by scrolling and so is
+    ' measured against its scroll range: what lies past that range cannot
+    ' be reached. Each page of a tab control is shown in turn so its
+    ' content is measured too.
     Private Shared Sub InspectChildren(parent As Control, clip As Rectangle, cut As List(Of String))
 
         Dim tabs As TabControl = TryCast(parent, TabControl)
@@ -773,7 +869,14 @@ Public Class ScalingMeasurementTests
 
         For Each child As Control In parent.Controls
 
-            If Not child.Visible OrElse child.Width <= 0 OrElse child.Height <= 0 Then
+            If Not child.Visible Then
+                Continue For
+            End If
+
+            ' Before the size: a list squeezed to no height is reported too.
+            InspectRows(child, clip, cut)
+
+            If child.Width <= 0 OrElse child.Height <= 0 Then
                 Continue For
             End If
 
@@ -906,6 +1009,73 @@ Public Class ScalingMeasurementTests
                 cut.Add("label '" & Abbreviate(label.Text) & "'")
             End If
 
+        End If
+
+    End Sub
+
+
+    ' A list, list view, grid, tree view or multi-line text box that shows
+    ' less than two of its rows (#93, step 4): what is seen of it is its
+    ' client area inside its parents and the window, or in reach of a
+    ' scroll, and one squeezed to no height shows none. A row is a list
+    ' box's or a tree view's item height; a list view's first item, or a
+    ' line of its font while it has none, below the details view's column
+    ' header (the first item's top, or one row while it has none); a grid's
+    ' first row, or its row template while it has none, below its column
+    ' headers; and a line of a text box's font.
+    Private Shared Sub InspectRows(control As Control, clip As Rectangle, cut As List(Of String))
+
+        Dim kind As String
+        Dim row As Integer
+        Dim above As Integer = 0
+
+        If TypeOf control Is ListBox Then
+
+            kind = "list"
+            row = DirectCast(control, ListBox).ItemHeight
+
+        ElseIf TypeOf control Is ListView Then
+
+            Dim items As ListView = DirectCast(control, ListView)
+            Dim first As Rectangle = If(items.Items.Count > 0, items.GetItemRect(0), Rectangle.Empty)
+
+            kind = "list view"
+            row = If(first.Height > 0, first.Height, TextRenderer.MeasureText("Xg", items.Font, New Size(Integer.MaxValue, Integer.MaxValue), CaptionFlags).Height)
+
+            If items.View = View.Details AndAlso items.HeaderStyle <> ColumnHeaderStyle.None Then
+                above = If(first.Height > 0, Math.Max(0, first.Top), row)
+            End If
+
+        ElseIf TypeOf control Is DataGridView Then
+
+            Dim grid As DataGridView = DirectCast(control, DataGridView)
+
+            kind = "grid"
+            row = If(grid.Rows.Count > 0, grid.Rows(0).Height, grid.RowTemplate.Height)
+            above = If(grid.ColumnHeadersVisible, grid.ColumnHeadersHeight, 0)
+
+        ElseIf TypeOf control Is TreeView Then
+
+            kind = "tree view"
+            row = DirectCast(control, TreeView).ItemHeight
+
+        ElseIf TypeOf control Is TextBoxBase AndAlso DirectCast(control, TextBoxBase).Multiline Then
+
+            kind = "text box"
+            row = control.Font.Height
+
+        Else
+
+            Return
+
+        End If
+
+        Dim seen As Rectangle =
+            Rectangle.Intersect(clip, control.RectangleToScreen(control.ClientRectangle))
+
+        If seen.Height - above < 2 * row Then
+            Dim name As String = If(String.IsNullOrWhiteSpace(control.AccessibleName), control.Name, control.AccessibleName)
+            cut.Add(kind & If(String.IsNullOrWhiteSpace(name), String.Empty, " '" & Abbreviate(name) & "'") & " under two rows")
         End If
 
     End Sub
