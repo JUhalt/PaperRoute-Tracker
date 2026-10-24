@@ -891,12 +891,17 @@ Public Class ManuscriptEditorReuseTests
     ' at keeps its last layout while hidden.
     Friend Shared Function Describe(root As Control) As List(Of String)
         Dim lines As New List(Of String)()
-        Describe(root, root.GetType().Name, lines)
+        ' The root's own tab index is its place among what its parent holds,
+        ' not part of what it shows: the page area keeps the pages prepared
+        ' while the window idles (#133) in the order the idle steps added
+        ' them, and only the page shown takes the keyboard. Every control
+        ' under the root is held to its tab index.
+        Describe(root, root.GetType().Name, lines, describeTabIndex:=False)
         Return lines
     End Function
 
 
-    Private Shared Sub Describe(control As Control, path As String, lines As List(Of String))
+    Private Shared Sub Describe(control As Control, path As String, lines As List(Of String), Optional describeTabIndex As Boolean = True)
 
         Dim shown As Boolean = control.Parent Is Nothing OrElse control.Parent.Visible
 
@@ -906,7 +911,7 @@ Public Class ManuscriptEditorReuseTests
             "enabled=" & control.Enabled.ToString(),
             "colors=" & control.BackColor.ToArgb().ToString("X8", CultureInfo.InvariantCulture) & "/" & control.ForeColor.ToArgb().ToString("X8", CultureInfo.InvariantCulture),
             "name=" & If(control.AccessibleName, String.Empty),
-            "tab=" & control.TabStop.ToString() & "," & control.TabIndex.ToString(CultureInfo.InvariantCulture)
+            "tab=" & control.TabStop.ToString() & If(describeTabIndex, "," & control.TabIndex.ToString(CultureInfo.InvariantCulture), String.Empty)
         }
 
         If shown Then parts.Add("own visible=" & OwnVisible(control).ToString())
