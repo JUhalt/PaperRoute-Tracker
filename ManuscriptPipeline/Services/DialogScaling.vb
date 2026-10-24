@@ -11,8 +11,13 @@ Namespace Services
     ' Begin before the first control, Finish after the last. A value Windows
     ' Forms scales (a size, a location, a margin, a padding, a minimum, a
     ' table's absolute column or row) is written as its 96-DPI literal and
-    ' never scaled by hand as well, or it is scaled twice. Only what is
-    ' drawn by hand, or set after the window has opened, is scaled from Dpi.
+    ' never scaled by hand as well, or it is scaled twice. Three things are
+    ' scaled from Dpi: what is drawn by hand, what is set after the window
+    ' has opened, and what is set while it is built on a property Windows
+    ' Forms does not scale with the window, such as a list view's column
+    ' widths: Edit Journal's facts columns are written
+    ' UiTheme.Px(n, DialogScaling.Dpi(lvFacts)), as a column of 200 stays
+    ' 200 when its window is scaled.
     Public NotInheritable Class DialogScaling
 
         Private Sub New()
@@ -136,7 +141,7 @@ Namespace Services
         End Sub
 
 
-        ' The DPI a control is shown at, for what is drawn by hand.
+        ' The DPI a control is shown at, for the three things above.
         Public Shared Function Dpi(
             control As Control
         ) As Integer
