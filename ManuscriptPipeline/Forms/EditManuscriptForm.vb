@@ -1159,7 +1159,15 @@ Namespace Forms
 
             btnRevisionDeadline.Text = "Set / Edit..."
             btnRevisionDeadline.AutoSize = True
-            btnRevisionDeadline.Height = 34
+
+            ' Sized to its caption on every layout, so the row holds it to
+            ' its height, as it did while the form laid out as each part
+            ' went in. Laid out once, after the form is built (#133), a
+            ' button that only grows kept the height its caption asked for
+            ' before the row had its size, and at 150% it and the date ran
+            ' past the row's foot (#93). Never smaller than it was given.
+            btnRevisionDeadline.AutoSizeMode = AutoSizeMode.GrowAndShrink
+            btnRevisionDeadline.MinimumSize = New Size(75, 34)
 
             AddHandler btnRevisionDeadline.Click,
                 AddressOf OpenRevisionDeadlineEditor

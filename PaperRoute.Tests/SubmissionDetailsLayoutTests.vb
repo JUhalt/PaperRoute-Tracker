@@ -257,6 +257,103 @@ Public Class SubmissionDetailsLayoutTests
 
     End Sub
 
+    ' An empty list has room for its whole hint (#93). At 125% on a
+    ' 1366x768 screen the empty Correspondence & Files list kept its two
+    ' rows, and its hint, which says what belongs there and how to add the
+    ' first item, needs four lines and its padding there: the list had room
+    ' for one line of it. The real display reported the help above the list
+    ' clipped too; that was the measure's misreading, which
+    ' ScalingMeasurementTests.APageIsMeasuredWhereShowingItScrolled covers.
+    ' With the text at the display's size, on a 1366x768 screen at 100% and
+    ' 125% and a 1920x1080 one at 150%, the empty list's hint has the height
+    ' its text needs at its width, the list is in reach of the body's
+    ' scroll, every list keeps two rows, Close is in view and the measure
+    ' finds nothing cut. A screen smaller than the one asked for (a 1024x768
+    ' build runner holds about 1043x787) can cut what the asked screen holds
+    ' whole, so there only the hint, the lists and Close are judged.
+    ' Not proved here, and not met: hosted at the main window's minimum
+    ' size (960x680) the empty list is 94x101 and its hint has 99 of the
+    ' 317 pixels it needs at 92 wide. The hosted detail has no body to
+    ' scroll and is unchanged; that is left to the maintainer.
+    <TestMethod>
+    <DataRow(96, 1366, 720)>
+    <DataRow(120, 1366, 708)>
+    <DataRow(144, 1920, 1008)>
+    Public Sub AnEmptyListHasRoomForItsWholeHint(dpi As Integer, width As Integer, height As Integer)
+
+        Dim screen As (Name As String, Area As Rectangle)() = ScalingMeasurementTests.HeldScreen(width, height)
+
+        Dim view As Type = GetType(SubmissionDetailsForm)
+        Dim failures As List(Of String) =
+            ViewCatalog.ShowEach(
+                {(view.Name, ViewCatalog.Dialogs(view))},
+                Sub(name, shown)
+
+                    Dim cell As ScalingMeasurementTests.Cell =
+                        ScalingMeasurementTests.Measure(shown, dpi, ScalingMeasurementTests.ScalingOf(view).ScalesWithWinForms, screen).Single().Result
+
+                    Dim at As String = $"At {dpi} DPI on {screen(0).Name}"
+                    Dim list As ListBox = ShowCorrespondence(shown)
+                    Dim hint As Label = list.Controls.OfType(Of Label)().Single()
+
+                    Assert.IsTrue(hint.Visible, "The empty list shows its hint.")
+                    AssertWholeHint(hint, at)
+
+                    ' In reach of the body's scroll, all of it.
+                    Dim body As Panel = shown.Controls.OfType(Of Panel)().Single(Function(panel) panel.AutoScroll)
+                    Dim reach As Integer = Math.Max(body.DisplayRectangle.Height, body.ClientSize.Height)
+                    Dim foot As Integer = body.RectangleToClient(list.Parent.RectangleToScreen(list.Bounds)).Bottom - body.DisplayRectangle.Y
+                    Assert.IsTrue(foot <= reach, $"{at} the list's foot, {foot} pixels down the body, is in reach of its {reach}-pixel scroll.")
+
+                    Assert.IsNull(cell.NotMeasuredHere, "The dialog is measured on this computer: " & cell.Describe())
+                    Assert.IsTrue(cell.AcceptInside.HasValue AndAlso cell.AcceptInside.Value, $"{at} Close is in view: " & cell.Describe())
+                    Assert.IsFalse(cell.Cut.Any(Function(cut) cut.EndsWith(" under two rows", StringComparison.Ordinal)), $"{at} every list keeps two rows: " & cell.Describe())
+
+                    If screen(0).Area.Size = New Size(width, height) Then
+                        Assert.IsTrue(cell.Passes, $"Submission Details {at}: " & cell.Describe())
+                    End If
+
+                End Sub
+            )
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+
+    End Sub
+
+    ' The Correspondence & Files page in front, and its list, which the
+    ' sample leaves empty.
+    Private Shared Function ShowCorrespondence(detail As Control) As ListBox
+
+        Dim list As ListBox = Descendants(detail).OfType(Of ListBox)().Single(Function(item) item.AccessibleName = "Correspondence and files")
+        Assert.AreEqual(0, list.Items.Count, "The sample submission has no letters or files.")
+
+        Dim page As Control = list.Parent
+
+        While Not TypeOf page Is TabPage
+            page = page.Parent
+        End While
+
+        DirectCast(page.Parent, TabControl).SelectedTab = DirectCast(page, TabPage)
+        Application.DoEvents()
+
+        Return list
+
+    End Function
+
+    ' The hint's text, wrapped at its width inside its padding, and the
+    ' padding fit its height.
+    Private Shared Sub AssertWholeHint(hint As Label, at As String)
+
+        Dim width As Integer = hint.ClientSize.Width - hint.Padding.Horizontal
+
+        Dim needed As Integer =
+            TextRenderer.MeasureText(hint.Text, hint.Font, New Size(width, Integer.MaxValue), TextFormatFlags.WordBreak Or TextFormatFlags.NoPrefix).Height +
+            hint.Padding.Vertical
+
+        Assert.IsTrue(hint.ClientSize.Height >= needed, $"{at} the hint has {hint.ClientSize.Height} of the {needed} pixels its text and padding need at {hint.ClientSize.Width} wide.")
+
+    End Sub
+
     ' Hosted in the manuscript page, the detail is built as before and its
     ' lists and details boxes keep two rows. The page sits in the main
     ' window, which scales by hand, where a simulated display tells
@@ -339,9 +436,23 @@ Public Class SubmissionDetailsLayoutTests
 
     End Sub
 
+    ' Whole where a researcher can see it: a control inside a body that
+    ' scrolls (the dialog's since #214) is judged once it is scrolled into
+    ' view, as the measure judges what a scroll reaches. On a short screen
+    ' the body can open scrolled, so a caption at its top starts above the
+    ' visible area without being cut.
     Private Shared Sub AssertInsideAncestors(control As Control)
         Assert.IsTrue(control.Visible)
         Assert.IsTrue(control.Width > 0 AndAlso control.Height > 0)
+        Dim scroller As Control = control.Parent
+        While scroller IsNot Nothing
+            Dim scrollable As ScrollableControl = TryCast(scroller, ScrollableControl)
+            If scrollable IsNot Nothing AndAlso scrollable.AutoScroll Then
+                scrollable.ScrollControlIntoView(control)
+                Application.DoEvents()
+            End If
+            scroller = scroller.Parent
+        End While
         Dim screenBounds As Rectangle = control.Parent.RectangleToScreen(control.Bounds)
         Dim ancestor As Control = control.Parent
         While ancestor IsNot Nothing

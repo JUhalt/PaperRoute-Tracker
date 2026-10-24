@@ -64,6 +64,11 @@ Namespace Forms
 
         Private Sub BuildInterface()
 
+            ' Sizes below are at 96 DPI and scale with the display (#93): at
+            ' 150% the window opened at its 96-DPI size while its text grew,
+            ' and the preview had room for one line.
+            DialogScaling.Begin(Me)
+
             Me.Text =
                 "DOI & Crossref Metadata"
 
@@ -88,14 +93,20 @@ Namespace Forms
                     10.0F
                 )
 
-            Me.AutoScaleMode =
-                AutoScaleMode.Dpi
+            ' Scaled, the rows need more than a 1366x768 screen holds at 125%,
+            ' and the preview, which takes what they leave, had less than a
+            ' line there. The body scrolls as far as the rows with two lines
+            ' of the preview, and the buttons stay below it, in view (#93).
+            Dim body As New Panel With {
+                .Dock = DockStyle.Fill,
+                .AutoScroll = True
+            }
 
             Dim root As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .ColumnCount = 1,
-                .RowCount = 7,
-                .Padding = New Padding(18)
+                .RowCount = 6,
+                .Padding = New Padding(18, 18, 18, 0)
             }
 
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
@@ -104,7 +115,21 @@ Namespace Forms
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
-            root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+
+            ' A panel leaves a child docked to fill it out of its scroll
+            ' range, so the range is read on every layout, as the display has
+            ' sized the text: each row's own height at the body's width, and
+            ' the preview's two lines, border and margins (BodyHeight).
+            AddHandler body.Layout,
+                Sub(sender, e)
+
+                    Dim least As Integer =
+                        BodyHeight(root, body.ClientSize.Width)
+
+                    root.MinimumSize = New Size(0, least)
+                    body.AutoScrollMinSize = New Size(0, least)
+
+                End Sub
 
             Dim intro As New Label With {
                 .Text =
@@ -284,12 +309,16 @@ Namespace Forms
                 .Margin = New Padding(0, 0, 0, 10)
             }
 
+            ' Below the body, where it sat inside the table's padding and its
+            ' own margin. Flowing right to left, the panel counts its left
+            ' padding from the right too.
             Dim footer As New FlowLayoutPanel With {
                 .Dock = DockStyle.Bottom,
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 .FlowDirection = FlowDirection.RightToLeft,
-                .WrapContents = False
+                .WrapContents = False,
+                .Padding = New Padding(0, 3, 21, 21)
             }
 
             btnApply.Text =
@@ -358,23 +387,58 @@ Namespace Forms
                 5
             )
 
-            root.Controls.Add(
-                footer,
-                0,
-                6
-            )
-
             Me.AcceptButton =
                 btnLookup
 
             Me.CancelButton =
                 btnCancel
 
-            Me.Controls.Add(
+            body.Controls.Add(
                 root
             )
 
+            Me.Controls.Add(
+                body
+            )
+
+            Me.Controls.Add(
+                footer
+            )
+
+            DialogScaling.Finish(Me)
+
         End Sub
+
+
+        ' How tall the body's table must be at a width: its padding, the
+        ' height each row other than the preview's asks for, and two lines
+        ' of the preview with its 3-D border and margins. A table counts its
+        ' percent row at the height it has, so each row is asked alone.
+        Private Function BodyHeight(
+            root As TableLayoutPanel,
+            width As Integer
+        ) As Integer
+
+            Dim inner As Integer =
+                width - root.Padding.Horizontal
+
+            Dim least As Integer =
+                root.Padding.Vertical +
+                txtPreview.Margin.Vertical +
+                2 * txtPreview.Font.Height +
+                2 * SystemInformation.Border3DSize.Height
+
+            For Each row As Control In root.Controls
+
+                If row IsNot txtPreview Then
+                    least += row.GetPreferredSize(New Size(inner - row.Margin.Horizontal, 0)).Height + row.Margin.Vertical
+                End If
+
+            Next
+
+            Return least
+
+        End Function
 
 
         Private Shared Sub ConfigureOption(

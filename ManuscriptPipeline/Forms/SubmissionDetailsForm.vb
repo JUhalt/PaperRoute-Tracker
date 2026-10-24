@@ -24,6 +24,12 @@ Namespace Forms
         Private ReadOnly _inline As Boolean
         Private _responsesMatrix As ReviewerResponseMatrixForm = Nothing
 
+        ' Reserves the tabs' least height in the dialog's scrolling body
+        ' (BuildInterface), read again when a list gains its first item or
+        ' loses its last, which changes it (PageMinimumHeight). Inline there
+        ' is no body.
+        Private _reserveTabs As Action = Nothing
+
         ' Raised after a decision, correspondence, or reviewer-response change.
         Friend Event Changed As EventHandler
 
@@ -581,9 +587,14 @@ Namespace Forms
                 ' range, so the body scrolls as far as the rows' least
                 ' height: the summary's and the notes' rows, and the tabs
                 ' with two rows of each list and two lines of each details
-                ' box below its toolbar, as the display has sized the text.
-                AddHandler body.Layout,
-                    Sub(sender, e)
+                ' box below its toolbar, as the display has sized the text,
+                ' and the shown page's empty list's whole hint.
+                Dim reserveTabs As Action =
+                    Sub()
+
+                        ' A hint wraps to its list's width, so the shown
+                        ' page's lists take the body's width first.
+                        root.Width = body.ClientSize.Width
 
                         Dim least As Integer =
                             root.Padding.Vertical +
@@ -593,14 +604,31 @@ Namespace Forms
                             tabs.DisplayRectangle.Top +
                             decisionsTab.Padding.Vertical +
                             Math.Max(
-                                PageMinimumHeight(lstDecisions, txtDecisionDetails),
-                                PageMinimumHeight(lstCorrespondence, txtCorrespondenceDetails)
+                                PageMinimumHeight(lstDecisions, txtDecisionDetails, tabs.SelectedTab Is decisionsTab),
+                                PageMinimumHeight(lstCorrespondence, txtCorrespondenceDetails, tabs.SelectedTab Is correspondenceTab)
                             )
 
                         root.MinimumSize = New Size(0, least)
                         body.AutoScrollMinSize = New Size(0, least)
 
                     End Sub
+
+                AddHandler body.Layout,
+                    Sub(sender, e)
+                        reserveTabs()
+                    End Sub
+
+                ' The pages share the tabs' height, so a hint counts only
+                ' while its page shows; a page not shown keeps the size it
+                ' last had, so its hint is read once it shows. Read outside
+                ' a layout, the scroll range follows at once: set inside the
+                ' body's layout it waits for the next one.
+                AddHandler tabs.SelectedIndexChanged,
+                    Sub(sender, e)
+                        reserveTabs()
+                    End Sub
+
+                _reserveTabs = reserveTabs
 
                 Me.AcceptButton = btnClose
                 Me.CancelButton = btnClose
@@ -743,11 +771,12 @@ Namespace Forms
         ' How tall a tab's panel must be to show two rows of its list and
         ' two lines of its details box, side by side below its toolbar
         ' (#93): the panel's padding, the toolbar's row, the split's margins,
-        ' and the taller of the two. The list sits in a split's panel in the
-        ' tab's panel.
+        ' and the taller of the two, or of its empty list's whole hint while
+        ' the page shows. The list sits in a split's panel in the tab's panel.
         Private Shared Function PageMinimumHeight(
             list As ListBox,
-            details As TextBox
+            details As TextBox,
+            shown As Boolean
         ) As Integer
 
             Dim split As Control =
@@ -760,9 +789,25 @@ Namespace Forms
                 CInt(panel.RowStyles(0).Height) +
                 split.Margin.Vertical +
                 Math.Max(
-                    TwoLinesTall(list, list.BorderStyle),
+                    Math.Max(TwoLinesTall(list, list.BorderStyle), If(shown, HintTall(list), 0)),
                     TwoLinesTall(details, details.BorderStyle)
                 )
+
+        End Function
+
+
+        ' An empty list's whole hint at the list's width, inside its border,
+        ' and nothing while it has items (#93). At 125% on a 1366x768 screen
+        ' the empty Correspondence & Files list kept its two rows, and its
+        ' hint, four lines with its padding, showed one.
+        Private Shared Function HintTall(
+            list As ListBox
+        ) As Integer
+
+            Dim needed As Integer =
+                EmptyHint.NeededHeight(list)
+
+            Return If(needed = 0, 0, needed + 2 * BorderTall(list.BorderStyle))
 
         End Function
 
@@ -782,14 +827,21 @@ Namespace Forms
                     TextRenderer.MeasureText("Xg", control.Font).Height
                 )
 
-            Dim edge As Integer =
-                If(
-                    border = BorderStyle.Fixed3D,
-                    SystemInformation.Border3DSize.Height,
-                    If(border = BorderStyle.FixedSingle, SystemInformation.BorderSize.Height, 0)
-                )
+            Return 2 * line + 2 * BorderTall(border)
 
-            Return 2 * line + 2 * edge
+        End Function
+
+
+        ' A border's height on one side, from its style.
+        Private Shared Function BorderTall(
+            border As BorderStyle
+        ) As Integer
+
+            Return If(
+                border = BorderStyle.Fixed3D,
+                SystemInformation.Border3DSize.Height,
+                If(border = BorderStyle.FixedSingle, SystemInformation.BorderSize.Height, 0)
+            )
 
         End Function
 
@@ -988,6 +1040,9 @@ Namespace Forms
 
             ' Decisions determine which reviewer comments can be added.
             _responsesMatrix?.RefreshFromSubmission()
+
+            ' Empty, the list needs room for its hint; with items, two rows.
+            _reserveTabs?.Invoke()
 
             RaiseEvent Changed(Me, EventArgs.Empty)
 
@@ -1602,6 +1657,9 @@ Namespace Forms
             End If
 
             UpdateCorrespondenceButtons()
+
+            ' Empty, the list needs room for its hint; with items, two rows.
+            _reserveTabs?.Invoke()
 
             RaiseEvent Changed(Me, EventArgs.Empty)
 
