@@ -123,8 +123,11 @@ Public Class SubmissionDetailsLayoutTests
     ' rows, each caption has its width on one line, and the portal row,
     ' the address with its button, is whole in the dialog. In the
     ' manuscript page the portal is a button in the detail's header and no
-    ' address is shown; the button is whole there too (a guard there: it
-    ' was whole before).
+    ' address is shown. That presentation sits in the main window, which
+    ' scales by hand, where a simulated display tells nothing, so it is
+    ' checked at the main window's own minimum size at this computer's
+    ' display, which any screen holds, a 1024x768 build runner's included:
+    ' the button is whole there (a guard: it was whole before).
     <TestMethod>
     <DataRow(144, 1920, 1008)>
     <DataRow(120, 1366, 708)>
@@ -182,13 +185,17 @@ Public Class SubmissionDetailsLayoutTests
                 {(hosted.Name, hosted.Build)},
                 Sub(name, host)
 
+                    ' At the main window's minimum size, the narrowest a
+                    ' researcher can make it.
+                    host.Size = host.MinimumSize
+                    host.PerformLayout()
+                    Application.DoEvents()
+
                     ' The page's Submissions section in front, on the submission.
                     Dim submission As JournalSubmission =
                         DirectCast(GetType(SubmissionDetailsForm).GetField("_submission", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Descendants(host).OfType(Of SubmissionDetailsForm)().Single()), JournalSubmission)
                     Descendants(host).OfType(Of EditManuscriptForm)().Single().ShowSubmission(submission.Id, showResponses:=False)
                     Application.DoEvents()
-
-                    ScalingMeasurementTests.Simulate(host, dpi, ScalingMeasurementTests.ScalingOf(GetType(Form1)).ScalesWithWinForms)
 
                     Dim detail As SubmissionDetailsForm = Descendants(host).OfType(Of SubmissionDetailsForm)().Single()
                     Dim portal As Button = Descendants(detail).OfType(Of Button)().Single(Function(button) button.AccessibleName = "Open the publisher portal")
