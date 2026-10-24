@@ -117,6 +117,11 @@ Namespace Forms
                 .Padding = New Padding(14)
             }
 
+            ' One column as wide as the window. Sized to its widest control,
+            ' it kept the tabs' scaled width when the window was narrowed,
+            ' and Save and Cancel ran off the right edge (#93).
+            shell.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
+
             shell.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
             shell.RowStyles.Add(New RowStyle(SizeType.AutoSize))
 

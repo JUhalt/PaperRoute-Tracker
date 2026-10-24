@@ -22,10 +22,15 @@ Public Class JournalEditScalingTests
     ' 96-DPI sizes there; it holds the window to the shorter screen now
     ' that its sizes grow with the display. A screen larger than this
     ' computer's can hold is measured at the largest it can: a smaller
-    ' screen leaves the rows less room, never more.
+    ' screen leaves the rows less room, never more. The third row is the
+    ' window narrowed to its scaled minimum width at 125%, which a
+    ' 1024x768 build runner holds too. At that width Save and Cancel ran
+    ' off the right edge while the window's one column kept the tabs'
+    ' scaled width.
     <TestMethod>
     <DataRow(144, 1920, 1008)>
     <DataRow(120, 1366, 708)>
+    <DataRow(120, 875, 708)>
     Public Sub EveryRowIsReachedAndSaveAndCancelAreInView(dpi As Integer, width As Integer, height As Integer)
 
         Dim view As Type = GetType(JournalEditForm)
