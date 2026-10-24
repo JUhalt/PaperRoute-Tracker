@@ -1291,7 +1291,8 @@ Public Class KeyboardAccessTests
     ' it left lost it and was validated, and how often the control it
     ' landed on was entered, are the same however a page is built, shown
     ' or painted. Pinned on the window before pages were prepared while it
-    ' idled or switched without painting.
+    ' idled or switched without painting, and changed by #213 only where
+    ' a page opened from the Board left the keyboard on the hidden Board.
     <TestMethod>
     Public Sub EnteringAPageByKeyboardKeepsFocusWhereItLandsToday()
 
@@ -1450,31 +1451,36 @@ Public Class KeyboardAccessTests
     End Sub
 
 
-    ' Where focus landed entering each page on f5c6947, before pages were
-    ' prepared while the window idled or switched without painting.
-    ' A title opened from the Board or the Board's search box left by Ctrl+N
-    ' keeps the keyboard where it was, on the hidden Board, until focus is
-    ' moved; a rail button or a shelf tab reached with an arrow key is
-    ' entered once, the one left loses focus once and is validated once.
+    ' Where focus lands entering each page (#213). A title opened from the
+    ' Board, or the Board's search box left by Ctrl+N, puts the keyboard on
+    ' the opened page's first stop: the manuscript page's Overview tab, a
+    ' rail page's own first control, entered once, the control left losing
+    ' focus once; and Alt+Left back puts it on the control that opened the
+    ' page. (On f5c6947, before pages were prepared while the window idled
+    ' or switched without painting, and until #213, these rows left the
+    ' keyboard where it was, on the hidden Board, entered, left and
+    ' validated 0 times.) A rail button or a shelf tab reached with an
+    ' arrow key is entered once, the one left loses focus once and is
+    ' validated once, as on f5c6947.
     Private Shared ReadOnly EnteringAPageExpected As New List(Of String) From {
-        "Pipeline title, Enter: page Manuscript, active LinkLabel 0 of card 0 on its shelf, entered 0, left 0, validated 0, origin entered 0",
-        "Pipeline title, Enter, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 0, left 0, validated 0, origin entered 0",
-        "Pipeline title, Space: page Manuscript, active LinkLabel 0 of card 0 on its shelf, entered 0, left 0, validated 0, origin entered 0",
-        "Pipeline title, Space, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 0, left 0, validated 0, origin entered 0",
-        "Published title, Enter: page Manuscript, active LinkLabel 0 of card 0 on its shelf, entered 0, left 0, validated 0, origin entered 0",
-        "Published title, Enter, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 0, left 0, validated 0, origin entered 0",
-        "Published title, Space: page Manuscript, active LinkLabel 0 of card 0 on its shelf, entered 0, left 0, validated 0, origin entered 0",
-        "Published title, Space, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 0, left 0, validated 0, origin entered 0",
-        "Ctrl+2 from the search box: page Library, active TextBox 'Search the board (Ctrl+F)', entered 0, left 0, validated 0, origin entered 0",
-        "Ctrl+2, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 0, left 0, validated 0, origin entered 0",
-        "Ctrl+3 from the search box: page Journals, active TextBox 'Search the board (Ctrl+F)', entered 0, left 0, validated 0, origin entered 0",
-        "Ctrl+3, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 0, left 0, validated 0, origin entered 0",
-        "Ctrl+4 from the search box: page Deadlines, active TextBox 'Search the board (Ctrl+F)', entered 0, left 0, validated 0, origin entered 0",
-        "Ctrl+4, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 0, left 0, validated 0, origin entered 0",
-        "Ctrl+5 from the search box: page Insights, active TextBox 'Search the board (Ctrl+F)', entered 0, left 0, validated 0, origin entered 0",
-        "Ctrl+5, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 0, left 0, validated 0, origin entered 0",
-        "Ctrl+6 from the search box: page ImportExport, active TextBox 'Search the board (Ctrl+F)', entered 0, left 0, validated 0, origin entered 0",
-        "Ctrl+6, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 0, left 0, validated 0, origin entered 0",
+        "Pipeline title, Enter: page Manuscript, active ShelfTabButton 'Overview', entered 1, left 1, validated 1, origin entered 0",
+        "Pipeline title, Enter, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 1, left 1, validated 1, origin entered 0",
+        "Pipeline title, Space: page Manuscript, active ShelfTabButton 'Overview', entered 1, left 1, validated 1, origin entered 0",
+        "Pipeline title, Space, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 1, left 1, validated 1, origin entered 0",
+        "Published title, Enter: page Manuscript, active ShelfTabButton 'Overview', entered 1, left 1, validated 1, origin entered 0",
+        "Published title, Enter, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 1, left 1, validated 1, origin entered 0",
+        "Published title, Space: page Manuscript, active ShelfTabButton 'Overview', entered 1, left 1, validated 1, origin entered 0",
+        "Published title, Space, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 1, left 1, validated 1, origin entered 0",
+        "Ctrl+2 from the search box: page Library, active TextBox 'Filter the Library', entered new, left 1, validated 1, origin entered 0",
+        "Ctrl+2, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 1, left 1, validated 1, origin entered 0",
+        "Ctrl+3 from the search box: page Journals, active ListBox 'Journals', entered 1, left 1, validated 1, origin entered 0",
+        "Ctrl+3, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 1, left 1, validated 1, origin entered 0",
+        "Ctrl+4 from the search box: page Deadlines, active TextBox 'Filter deadlines', entered new, left 1, validated 1, origin entered 0",
+        "Ctrl+4, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 1, left 1, validated 1, origin entered 0",
+        "Ctrl+5 from the search box: page Insights, active ActionButton 'Pipeline Report...', entered 1, left 1, validated 1, origin entered 0",
+        "Ctrl+5, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 1, left 1, validated 1, origin entered 0",
+        "Ctrl+6 from the search box: page ImportExport, active ActionButton 'Import Spreadsheet...', entered new, left 1, validated 1, origin entered 0",
+        "Ctrl+6, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 1, left 1, validated 1, origin entered 0",
         "Down on the rail from RailButton 'Board': page Library, active RailButton 'Library', entered 1, left 1, validated 1, origin entered 0",
         "Down on the rail from RailButton 'Library': page Journals, active RailButton 'Journals', entered 1, left 1, validated 1, origin entered 0",
         "Down on the rail from RailButton 'Journals': page Deadlines, active RailButton 'Deadlines', entered 1, left 1, validated 1, origin entered 0",
@@ -1493,18 +1499,19 @@ Public Class KeyboardAccessTests
 
 
     ' A card's title opened with Enter while the window really has the
-    ' keyboard (#133). The pins above run in a window that never had it,
-    ' so the Board never holds focus as it hides there, and the move of
-    ' focus off it that HideBoardPage makes first, the move WinForms makes
-    ' as a control holding focus is hidden (SelectNextIfFocused), is never
-    ' taken. Here it is, and focus lands where it landed with the Board
-    ' hidden as f5c6947 hid it, leaving that move to WinForms (run on
-    ' 2026-10-23 with HideBoardPage put back that way): WinForms' move
-    ' from the Board goes into the Board, to its first stop, the search
-    ' box, and the keyboard stays there, behind the page, until it is
-    ' moved, as the pins above record for a window without the keyboard.
+    ' keyboard (#133, #213). The pins above run in a window that never had
+    ' it, so the Board never holds focus as it hides there. Here it does:
+    ' the keyboard goes to the manuscript page's first stop, its Overview
+    ' tab, and Alt+Left puts it back on the title. Until #213 (this test
+    ' was OpeningACardHoldingTheKeyboardLandsFocusAsBefore), the move off
+    ' the Board as it hid went into the Board, to its first stop, the
+    ' search box, and the keyboard stayed there behind the page, as it did
+    ' with the Board hidden as f5c6947 hid it: "Enter: page Manuscript,
+    ' active TextBox 'Search the board (Ctrl+F)', focus TextBox 'Search the
+    ' board (Ctrl+F)', the Board holds focus True", and the same on the
+    ' Board after Alt+Left.
     <TestMethod>
-    Public Sub OpeningACardHoldingTheKeyboardLandsFocusAsBefore()
+    Public Sub OpeningACardHoldingTheKeyboardLandsFocusOnThePage()
 
         Dim root As String = CreateTemporaryRoot()
         Dim report As New List(Of String)()
@@ -1567,8 +1574,162 @@ Public Class KeyboardAccessTests
         CollectionAssert.AreEqual(
             New List(Of String) From {
                 "Before: page Board, active LinkLabel 0 of card 0 on its shelf, focus LinkLabel 0 of card 0 on its shelf, the Board holds focus True",
-                "Enter: page Manuscript, active TextBox 'Search the board (Ctrl+F)', focus TextBox 'Search the board (Ctrl+F)', the Board holds focus True",
-                "Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', focus TextBox 'Search the board (Ctrl+F)', the Board holds focus True"
+                "Enter: page Manuscript, active ShelfTabButton 'Overview', focus ShelfTabButton 'Overview', the Board holds focus False",
+                "Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, focus LinkLabel 0 of card 0 on its shelf, the Board holds focus True"
+            },
+            report,
+            Environment.NewLine & String.Join(Environment.NewLine, report))
+
+    End Sub
+
+
+    ' Each page opened from the Board by keyboard (#213), from a card's
+    ' title and from the Board's search box: the rail pages by their
+    ' command keys, the manuscript page by Enter on the title. The keyboard
+    ' lands on the opened page's first stop, a control shown to the user
+    ' and to Windows, inside the page and not in the Board hidden behind
+    ' it; Alt+Left puts it back on the control the page was opened from. A
+    ' manuscript the library no longer holds shows a page with no stop, and
+    ' the keyboard goes to the window's first stop, outside the hidden
+    ' Board. Where the window has the keyboard, Windows' focus is held to
+    ' the same; without it, as on a locked desktop, the window's own record
+    ' of the focused control is.
+    <TestMethod>
+    Public Sub OpeningEachPageFromTheBoardByKeyboardLandsInsideIt()
+
+        Dim root As String = CreateTemporaryRoot()
+        Dim report As New List(Of String)()
+        Dim windowsFocusChecked As Integer = 0
+
+        StorageEnvironment.RootOverride = Path.Combine(root, "storage")
+
+        Try
+
+            StaRunner.Run(
+                Sub()
+
+                    Dim library As LargeLibraryFixture.SyntheticLibrary =
+                        LargeLibraryFixture.Create(Path.Combine(root, "library"), 60)
+
+                    Using board As New LibraryBoard(library, Path.Combine(root, "settings"))
+
+                        board.Start()
+                        board.WaitForIdleWork()
+
+                        ' Every open below is an open of the kept page, as most are.
+                        board.Open(board.Library.First(Function(item) item.Location = ManuscriptLocation.Pipeline))
+                        Application.DoEvents()
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        board.WaitForIdleWork()
+
+                        Dim search As TextBox = ViewCatalog.Descendants(board).OfType(Of TextBox)().Single(Function(box) box.AccessibleName = "Search the board (Ctrl+F)")
+                        Dim title As Func(Of Control) =
+                            Function() board.Shelf("pipelinePanel").Controls.OfType(Of RoundedPanel)().First().Controls.OfType(Of LinkLabel)().First()
+
+                        ' Where a control is, as the user and Windows see it.
+                        Dim placeOf As Func(Of Control, String) =
+                            Function(control)
+                                If control Is Nothing Then Return "nowhere"
+                                Dim shown As Boolean = control.Visible AndAlso control.IsHandleCreated AndAlso IsWindowVisible(control.Handle)
+                                Dim place As String =
+                                    If(board.PageView IsNot Nothing AndAlso board.PageView.Contains(control), "in the page",
+                                       If(board.BoardPage.Contains(control), If(board.BoardPage.Visible, "in the Board", "in the hidden Board"), "outside the page area"))
+                                Return If(shown, "shown", "not shown") & ", " & place
+                            End Function
+
+                        Dim opens As (Name As String, FromTitle As Boolean, FromSearch As Boolean, Open As Action)() = {
+                            ("Ctrl+2", True, True, Sub() board.PressCommandKey(Keys.Control Or Keys.D2)),
+                            ("Ctrl+3", True, True, Sub() board.PressCommandKey(Keys.Control Or Keys.D3)),
+                            ("Ctrl+4", True, True, Sub() board.PressCommandKey(Keys.Control Or Keys.D4)),
+                            ("Ctrl+5", True, True, Sub() board.PressCommandKey(Keys.Control Or Keys.D5)),
+                            ("Ctrl+6", True, True, Sub() board.PressCommandKey(Keys.Control Or Keys.D6)),
+                            ("Enter", True, False, Sub() Press(board, Keys.Enter)),
+                            ("a manuscript no longer in the library", False, True, Sub() board.Open(New Manuscript With {.Title = "Not in the library"}))
+                        }
+
+                        Dim origins As (Name As String, Find As Func(Of Control), IsTitle As Boolean)() = {
+                            ("the first card's title", title, True),
+                            ("the search box", Function() search, False)
+                        }
+
+                        For Each origin In origins
+
+                            For Each open In opens.Where(Function(item) If(origin.IsTitle, item.FromTitle, item.FromSearch))
+
+                                ' The keyboard, where Windows gives the window it.
+                                Dim from As Control = origin.Find()
+                                If Not from.Focus() Then board.ActiveControl = from
+                                Application.DoEvents()
+                                Dim focusHeld As Boolean = from.Focused
+
+                                open.Open()
+                                Application.DoEvents()
+                                board.WaitForIdleWork()
+                                If board.PageName = Form1.WorkspacePage.Insights.ToString() Then board.WaitForInsights()
+
+                                Dim landed As Control = DeepestActiveControl(board)
+                                report.Add(origin.Name & ", " & open.Name & ": page " & board.PageName & ", active " & DescribeOnBoard(landed) & ", " & placeOf(landed))
+
+                                ' Windows' focus, where the window has the keyboard.
+                                If focusHeld Then
+                                    windowsFocusChecked += 1
+                                    Dim focused As Control = Control.FromChildHandle(GetFocus())
+                                    Assert.AreSame(landed, focused, origin.Name & ", " & open.Name & ": Windows' focus is on " & DescribeOnBoard(focused))
+                                End If
+
+                                board.PressCommandKey(Keys.Alt Or Keys.Left)
+                                Application.DoEvents()
+                                board.WaitForIdleWork()
+
+                                Dim back As Control = DeepestActiveControl(board)
+                                report.Add("  then Alt+Left: page " & board.PageName & ", active " & DescribeOnBoard(back) & ", " & placeOf(back) &
+                                           If(back Is origin.Find(), ", where the page was opened from", String.Empty))
+
+                            Next
+                        Next
+
+                        board.Close()
+
+                    End Using
+
+                End Sub,
+                TimeSpan.FromMinutes(5))
+
+        Finally
+            StorageEnvironment.RootOverride = Nothing
+            DeleteTemporaryRoot(root)
+        End Try
+
+        Console.WriteLine("Windows' focus was checked on " & windowsFocusChecked.ToString() & " of 12 opens (0 where the window is given no keyboard).")
+
+        Dim backWhereOpened As String = ", shown, in the Board, where the page was opened from"
+
+        CollectionAssert.AreEqual(
+            New List(Of String) From {
+                "the first card's title, Ctrl+2: page Library, active TextBox 'Filter the Library', shown, in the page",
+                "  then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf" & backWhereOpened,
+                "the first card's title, Ctrl+3: page Journals, active ListBox 'Journals', shown, in the page",
+                "  then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf" & backWhereOpened,
+                "the first card's title, Ctrl+4: page Deadlines, active TextBox 'Filter deadlines', shown, in the page",
+                "  then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf" & backWhereOpened,
+                "the first card's title, Ctrl+5: page Insights, active ActionButton 'Pipeline Report...', shown, in the page",
+                "  then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf" & backWhereOpened,
+                "the first card's title, Ctrl+6: page ImportExport, active ActionButton 'Import Spreadsheet...', shown, in the page",
+                "  then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf" & backWhereOpened,
+                "the first card's title, Enter: page Manuscript, active ShelfTabButton 'Overview', shown, in the page",
+                "  then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf" & backWhereOpened,
+                "the search box, Ctrl+2: page Library, active TextBox 'Filter the Library', shown, in the page",
+                "  then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)'" & backWhereOpened,
+                "the search box, Ctrl+3: page Journals, active ListBox 'Journals', shown, in the page",
+                "  then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)'" & backWhereOpened,
+                "the search box, Ctrl+4: page Deadlines, active TextBox 'Filter deadlines', shown, in the page",
+                "  then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)'" & backWhereOpened,
+                "the search box, Ctrl+5: page Insights, active ActionButton 'Pipeline Report...', shown, in the page",
+                "  then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)'" & backWhereOpened,
+                "the search box, Ctrl+6: page ImportExport, active ActionButton 'Import Spreadsheet...', shown, in the page",
+                "  then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)'" & backWhereOpened,
+                "the search box, a manuscript no longer in the library: page Manuscript, active RailCommandButton 'Collapse navigation', shown, outside the page area",
+                "  then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)'" & backWhereOpened
             },
             report,
             Environment.NewLine & String.Join(Environment.NewLine, report))
@@ -1944,6 +2105,10 @@ Public Class KeyboardAccessTests
 
     <DllImport("user32.dll")>
     Private Shared Function GetFocus() As IntPtr
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function IsWindowVisible(handle As IntPtr) As Boolean
     End Function
 
     <DllImport("user32.dll")>

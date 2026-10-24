@@ -721,6 +721,20 @@ Public Class PageSwitchTests
                         watchSwitch("the shelf " & tab, shelves, Sub() board.ShelfTab(tab).Checked = True)
                     Next
 
+                    ' With the keyboard on a card's title (#213): the page opened
+                    ' takes it, and on the way back the title takes it again, which
+                    ' shows the row after its card (RevealPastCard); neither draws
+                    ' while the switch runs.
+                    For Each page As Form1.WorkspacePage In pages
+                        Dim title As LinkLabel = board.Shelf("pipelinePanel").Controls.OfType(Of Controls.RoundedPanel)().First().Controls.OfType(Of LinkLabel)().First()
+                        If Not title.Focus() Then board.ActiveControl = title
+                        Application.DoEvents()
+                        watchSwitch("Board to " & page.ToString() & " from a card's title", board.ContentHost, Sub() go(page))
+                        watchSwitch(page.ToString() & " back to the card's title", board.ContentHost, Sub() board.NavigateTo(Form1.WorkspacePage.Board))
+                        Dim back As Control = DeepestActiveControl(board)
+                        If back IsNot title Then report.Add(page.ToString() & " back to the Board: the keyboard is on " & If(back?.GetType().Name, "nothing") & ", not the card's title")
+                    Next
+
                     board.SetPrompt(Function(title) DialogResult.No)
                     board.Close()
                 End Using
