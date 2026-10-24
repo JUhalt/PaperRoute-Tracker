@@ -177,12 +177,19 @@ Public Class SubmissionDetailsLayoutTests
 
         Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
 
-        Dim hosted As ViewCatalog.NamedView =
-            ViewCatalog.Hosted.Single(Function(entry) entry.Name = "SubmissionDetailsForm inside the manuscript page")
+        ' On the page's first open and on the kept page opened again (#133),
+        ' whose details are built after the page has painted.
+        Dim hosted As List(Of (Name As String, Build As Func(Of String, Form))) =
+            ViewCatalog.Hosted.
+                Where(Function(entry) entry.Name = "SubmissionDetailsForm inside the manuscript page" OrElse
+                                      entry.Name = "The manuscript page opened a second time").
+                Select(Function(entry) (entry.Name, entry.Build)).
+                ToList()
+        Assert.AreEqual(2, hosted.Count, "Both views are in the catalog.")
 
         failures =
             ViewCatalog.ShowEach(
-                {(hosted.Name, hosted.Build)},
+                hosted,
                 Sub(name, host)
 
                     ' At the main window's minimum size, the narrowest a
