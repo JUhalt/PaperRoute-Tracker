@@ -259,8 +259,9 @@ Partial Public Class Form1
     ' message loop would next, and nothing else: no input, no posted
     ' message, no timer. It works from any message loop, the window's or a
     ' dialog's, and from a test's Application.DoEvents. A paint that
-    ' invalidates again cannot hold it (the cap).
-    Private Shared Sub PumpPaints()
+    ' invalidates again cannot hold it (the cap). The budget test times
+    ' the paint after a switch with it (LibraryBoard.PaintNow).
+    Friend Shared Sub PumpPaints()
 
         Dim message As NativeMessage
         Dim remaining As Integer = 1000

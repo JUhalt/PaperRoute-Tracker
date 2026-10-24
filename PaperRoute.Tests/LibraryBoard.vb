@@ -188,35 +188,8 @@ Friend NotInheritable Class LibraryBoard
     ' loop would paint it next: a page switch paints nothing until it has
     ' returned (#133), so a row timed after one can leave that paint out.
     Public Sub PaintNow()
-        Dim message As PaintMessage
-        Dim remaining As Integer = 1000
-        While remaining > 0 AndAlso PeekMessage(message, IntPtr.Zero, WM_PAINT, WM_PAINT, PM_REMOVE)
-            DispatchMessage(message)
-            remaining -= 1
-        End While
+        PumpPaints()
     End Sub
-
-    Private Const WM_PAINT As UInteger = &HF
-    Private Const PM_REMOVE As UInteger = &H1
-
-    <Runtime.InteropServices.StructLayout(Runtime.InteropServices.LayoutKind.Sequential)>
-    Private Structure PaintMessage
-        Public Handle As IntPtr
-        Public Message As UInteger
-        Public WParam As IntPtr
-        Public LParam As IntPtr
-        Public Time As UInteger
-        Public X As Integer
-        Public Y As Integer
-    End Structure
-
-    <Runtime.InteropServices.DllImport("user32.dll")>
-    Private Shared Function PeekMessage(ByRef message As PaintMessage, handle As IntPtr, filterMin As UInteger, filterMax As UInteger, remove As UInteger) As Boolean
-    End Function
-
-    <Runtime.InteropServices.DllImport("user32.dll")>
-    Private Shared Function DispatchMessage(ByRef message As PaintMessage) As IntPtr
-    End Function
 
 
     Public ReadOnly Property PaintObserved As Boolean

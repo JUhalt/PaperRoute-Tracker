@@ -211,14 +211,6 @@ Namespace Controls
         End Sub
 
 
-        ' True while drawing is held.
-        Public ReadOnly Property IsHolding As Boolean
-            Get
-                Return _handle <> IntPtr.Zero
-            End Get
-        End Property
-
-
         Public Sub Dispose() Implements IDisposable.Dispose
 
             If _handle = IntPtr.Zero Then

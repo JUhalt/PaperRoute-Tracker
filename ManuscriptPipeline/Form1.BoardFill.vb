@@ -510,7 +510,7 @@ Partial Public Class Form1
                 Continue While
             End If
 
-            shelfCardInProgress =If(InPlace.MakeWindows(waiting, CInt(IdleWorkSlice)), Nothing, waiting)
+            shelfCardInProgress = If(InPlace.MakeWindows(waiting, CInt(IdleWorkSlice)), Nothing, waiting)
             Return
 
         End While
