@@ -163,6 +163,10 @@ Namespace Forms
                 .Margin = New Padding(0)
             }
 
+            ' The abstract and the text not placed share what the authors'
+            ' grid leaves: at 150% the captions and one-line boxes take more
+            ' of the dialog's height, and with 22 parts in a hundred the box
+            ' for the text not placed showed under two lines (#93).
             For Each style As RowStyle In {
                 New RowStyle(SizeType.AutoSize),
                 New RowStyle(SizeType.AutoSize),
@@ -170,11 +174,11 @@ Namespace Forms
                 New RowStyle(SizeType.AutoSize),
                 New RowStyle(SizeType.Percent, 44),
                 New RowStyle(SizeType.AutoSize),
-                New RowStyle(SizeType.Percent, 34),
+                New RowStyle(SizeType.Percent, 28),
                 New RowStyle(SizeType.AutoSize),
                 New RowStyle(SizeType.AutoSize),
                 New RowStyle(SizeType.AutoSize),
-                New RowStyle(SizeType.Percent, 22)
+                New RowStyle(SizeType.Percent, 28)
             }
                 panel.RowStyles.Add(style)
             Next

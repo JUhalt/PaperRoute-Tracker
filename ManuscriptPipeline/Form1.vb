@@ -233,7 +233,7 @@ Public Class Form1
     ' The main window's start and minimum sizes for a screen (#93): 1280x840
     ' with a 960x680 minimum at 96 DPI, scaled for the display, the start
     ' size capped to the working area as the dialogs' are, and the minimum
-    ' lowered to the area when even it would not fit (1920x1003 at 150%).
+    ' lowered to the area when even it would not fit (1920x1008 at 150%).
     ' The start size is never below the minimum, as Windows Forms would hold
     ' it there anyway.
     Friend Shared Function StartSizes(

@@ -13,11 +13,13 @@ Imports ManuscriptPipeline.Forms
 Imports ManuscriptPipeline.Services
 
 ' Every top-level window of the catalog, measured at 96, 120 and 144 DPI
-' after fitting to a 1920x1003 and then to a 1366x728 working area (#93,
-' step 2): whether the accept and cancel buttons are inside the client
-' area, and whether any button, check box, single-line label or tab
-' caption is cut. The per-window table goes to the test output, as GitHub
-' markdown, for #93.
+' after fitting to the working area of a 1920x1080 and then of a 1366x768
+' screen at that DPI (ScreensAt) (#93, step 2, and the working areas of
+' step 4): whether the accept and cancel buttons are inside the client
+' area, whether any button, check box, single-line label or tab caption
+' is cut, and whether any list, list view, grid, tree view or multi-line
+' text box shows less than two rows (step 4). The per-window table goes
+' to the test output, as GitHub markdown, for #93.
 '
 ' The host runs at 96 DPI, so a display is simulated. Every font grows by
 ' the DPI's factor, as text does on a real display, and then a window
@@ -31,10 +33,12 @@ Imports ManuscriptPipeline.Services
 ' double scaling, and the same holds for what a shared control scales by
 ' hand in any window (the underline tabs' padding, a card's title gap).
 ' A size a window computes from a font while it is built is computed
-' here before the text grows, and a window's frame keeps its 96-DPI
-' size. These are proven only at a real display, against which this
-' table is calibrated (#93: step 2, and step 4 after the first real
-' 150% and 125% sessions).
+' here before the text grows. These are proven only at a real display,
+' against which this table is calibrated (#93: step 2, and step 4 after
+' the first real 150% and 125% sessions). The frame a real display draws
+' around a window, larger than the host's, is taken from its client
+' area (Measure), since a real 150% display showed what keeping the
+' host's frame hid.
 '
 ' Report-only for the windows not yet converted: the table is the proof.
 ' Enforcing for the windows in Converted, which must pass at 120 and 144
@@ -56,24 +60,51 @@ Public Class ScalingMeasurementTests
         ("short", New Rectangle(-30000, -30000, 1000, 400))
     }
 
-    ' The larger screen first: fitting shrinks only, so one window serves
-    ' both. Off screen, so a window the fit centers stays off screen too.
-    Private Shared ReadOnly Screens As (Name As String, Area As Rectangle)() = {
-        ("1920x1003", New Rectangle(-30000, -30000, 1920, 1003)),
-        ("1366x728", New Rectangle(-30000, -30000, 1366, 728))
-    }
+    ' The screens 1.0 certifies (#93's plan amendment A), 1920x1080 and
+    ' 1366x768, with Windows 11's taskbar, 48 pixels tall at 100% and grown
+    ' with the scale: working areas of 1920x1032 and 1366x720 at 96 DPI,
+    ' 1920x1020 and 1366x708 at 120, and 1920x1008 and 1366x696 at 144, as
+    ' the certification VM measured at 150% and 125%. The tightest that 1.0
+    ' certifies is 1366x708 at 125%. The larger screen first: fitting
+    ' shrinks only, so one window serves both. Off screen, so a window the
+    ' fit centers stays off screen too.
+    Friend Shared Function ScreensAt(dpi As Integer) As (Name As String, Area As Rectangle)()
+
+        Dim taskbar As Integer = 48 * dpi \ 96
+
+        Return {WorkingArea(1920, 1080 - taskbar), WorkingArea(1366, 768 - taskbar)}
+
+    End Function
+
+
+    Private Shared Function WorkingArea(width As Integer, height As Integer) As (Name As String, Area As Rectangle)
+        Return (width & "x" & height, New Rectangle(-30000, -30000, width, height))
+    End Function
+
+
+    ' One screen, for a test that measures a window at a display's size. A
+    ' screen larger than this computer's can hold is measured at the
+    ' largest it can hold, which leaves the window less room, not more.
+    Friend Shared Function HeldScreen(width As Integer, height As Integer) As (Name As String, Area As Rectangle)()
+
+        Dim track As Size = SystemInformation.MaxWindowTrackSize
+
+        Return {WorkingArea(Math.Min(width, track.Width - 1), Math.Min(height, track.Height - 1))}
+
+    End Function
 
     ' The windows converted to the one scaling rule, DialogScaling (#93,
     ' step 3); each conversion adds its window. Batch one: the four that
     ' had the base dimensions but not the rest of the rule. Batch two: the
     ' top-level windows the first table showed cut or with a button
     ' outside the client area. Step 4: Edit Journal, scaled by hand until
-    ' a real 150% capture showed it failing.
+    ' a real 150% capture showed it failing; then the Crossref window,
+    ' whose preview box a real 150% display left one line.
     Friend Shared ReadOnly Converted As Type() = {
         GetType(AboutForm), GetType(JournalCandidateForm), GetType(UpdateProgressForm), GetType(UpdatePromptForm),
         GetType(DeadlineDateForm), GetType(DiagnosticsForm), GetType(ExcelMappingForm), GetType(JournalChecklistItemEditForm),
         GetType(ManuscriptLinksForm), GetType(ManuscriptVersionEditForm), GetType(PublicationCheckForm), GetType(StartupFailureForm),
-        GetType(SubmissionPacketEditForm), GetType(UnexpectedErrorForm), GetType(JournalEditForm)
+        GetType(SubmissionPacketEditForm), GetType(UnexpectedErrorForm), GetType(JournalEditForm), GetType(CrossrefLookupForm)
     }
 
 
@@ -190,6 +221,40 @@ Public Class ScalingMeasurementTests
     End Sub
 
 
+    ' The sweep's screens are the two 1.0 certifies as Windows 11 lays them
+    ' out at each DPI (#93, step 4): 1920x1080 and 1366x768, less a taskbar
+    ' 48 pixels tall at 100% that grows with the scale. The certification
+    ' VM measured 1920x1008 at 150% and 1366x708 at 125%, where the sweep
+    ' had 1920x1003 and 1366x728 at every DPI.
+    <TestMethod>
+    Public Sub TheScreensAreWindows11sWorkingAreasAtEachDpi()
+
+        Dim expected As New Dictionary(Of Integer, String()) From {
+            {96, {"1920x1032", "1366x720"}},
+            {120, {"1920x1020", "1366x708"}},
+            {144, {"1920x1008", "1366x696"}}
+        }
+
+        For Each dpi As Integer In Dpis
+
+            Dim at As Integer = dpi
+            Dim names As List(Of String) = Nothing
+
+            ViewCatalog.ShowAndClose(
+                "The probe",
+                Function() Probe(),
+                Sub(name, shown)
+                    names = Measure(shown, at, False).Select(Function(cell) cell.Screen).ToList()
+                End Sub
+            )
+
+            CollectionAssert.AreEqual(expected(at), names, $"At {at} DPI the screens are {String.Join(", ", expected(at))}: {String.Join(", ", names)}")
+
+        Next
+
+    End Sub
+
+
     ' A window larger than this computer's screen can hold is held at the
     ' screen's largest tracking size, so a cell whose area is larger still
     ' says it was not measured here instead of reporting the cuts the hold
@@ -252,14 +317,18 @@ Public Class ScalingMeasurementTests
     ' overran their row at 125% and 150% and Close PaperRoute lay over Open
     ' Log Folder, which the measure before, scaling the window before it
     ' grew the text, reported whole. The same row of buttons that only
-    ' grow is reported cut at 144 DPI; buttons that also shrink go back to
-    ' their scaled minimums and fit; at 96 DPI both fit.
+    ' grow, in a window that sets the base dimensions itself, is reported
+    ' cut at 144 DPI. Built with the one scaling rule, DialogScaling, they
+    ' are scaled once and fit, as buttons that also shrink do; at 96 DPI
+    ' all fit.
     <TestMethod>
     Public Sub AButtonSizedToItsCaptionIsScaledAgain()
 
-        For Each mode As AutoSizeMode In {AutoSizeMode.GrowOnly, AutoSizeMode.GrowAndShrink}
+        For Each probe As (Mode As AutoSizeMode, Ruled As Boolean) In {
+            (AutoSizeMode.GrowOnly, False), (AutoSizeMode.GrowOnly, True), (AutoSizeMode.GrowAndShrink, True)
+        }
 
-            Dim current As AutoSizeMode = mode
+            Dim current As (Mode As AutoSizeMode, Ruled As Boolean) = probe
 
             For Each dpi As Integer In {96, 144}
 
@@ -268,18 +337,20 @@ Public Class ScalingMeasurementTests
 
                 ViewCatalog.ShowAndClose(
                     "The button row probe",
-                    Function() ButtonRowProbe(current),
+                    Function() ButtonRowProbe(current.Mode, current.Ruled),
                     Sub(name, shown)
                         result = Measure(shown, at, True, ProbeScreens).Single(Function(cell) cell.Screen = "roomy").Result
                     End Sub
                 )
 
+                Dim built As String = current.Mode.ToString() & If(current.Ruled, " with DialogScaling", " with base dimensions alone")
+
                 Assert.IsNull(result.NotMeasuredHere, "The probe is measured on this computer: " & result.Describe())
 
-                If current = AutoSizeMode.GrowOnly AndAlso at = 144 Then
+                If current.Mode = AutoSizeMode.GrowOnly AndAlso Not current.Ruled AndAlso at = 144 Then
                     Assert.IsTrue(result.Cut.Any(Function(cut) cut.StartsWith("button 'Open Log Folder'", StringComparison.Ordinal)), "Grown to their captions and then scaled, the buttons overrun their row: " & result.Describe())
                 Else
-                    Assert.IsTrue(result.Passes, $"{current} at {at} DPI, the row holds its buttons: " & result.Describe())
+                    Assert.IsTrue(result.Passes, $"{built} at {at} DPI, the row holds its buttons: " & result.Describe())
                 End If
 
             Next
@@ -288,16 +359,33 @@ Public Class ScalingMeasurementTests
 
     End Sub
 
+    ' The error dialog's last row: each button's caption, the minimum it is
+    ' given at 96 DPI, and whether it is on the left.
+    Private Shared ReadOnly RowButtons As (Text As String, Minimum As Size, OnLeft As Boolean)() = {
+        ("Copy Details", New Size(120, 36), True), ("Open Log Folder", New Size(140, 36), True),
+        ("Keep Working", New Size(130, 36), False), ("Close PaperRoute", New Size(150, 36), False)
+    }
+
     ' The error dialog's last row as it was: a 640-pixel window built with
-    ' DialogScaling, two buttons on the left and two on the right, each
-    ' sizing itself to its caption over a minimum width, 572 pixels of
-    ' buttons in a 592-pixel row at 96 DPI.
-    Private Shared Function ButtonRowProbe(mode As AutoSizeMode) As Form
+    ' DialogScaling, or with the base dimensions and nothing else of the
+    ' rule, two buttons on the left and two on the right, each sizing
+    ' itself to its caption over a minimum width, 572 pixels of buttons in
+    ' a 592-pixel row at 96 DPI. Its text is 10 points unless another size
+    ' is asked for, set before the buttons are added.
+    Private Shared Function ButtonRowProbe(mode As AutoSizeMode, ruled As Boolean, Optional points As Single = 10.0F) As Form
 
         Dim form As New Form()
-        DialogScaling.Begin(form)
+
+        If ruled Then
+            DialogScaling.Begin(form)
+        Else
+            form.SuspendLayout()
+            form.AutoScaleDimensions = New SizeF(96.0F, 96.0F)
+            form.AutoScaleMode = AutoScaleMode.Dpi
+        End If
+
         form.ClientSize = New Size(640, 120)
-        form.Font = New Font("Segoe UI", 10.0F)
+        form.Font = New Font("Segoe UI", points)
 
         Dim row As New TableLayoutPanel With {.Dock = DockStyle.Bottom, .AutoSize = True, .ColumnCount = 2, .RowCount = 1, .Padding = New Padding(24)}
         row.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
@@ -306,17 +394,350 @@ Public Class ScalingMeasurementTests
         Dim tools As New FlowLayoutPanel With {.AutoSize = True, .AutoSizeMode = AutoSizeMode.GrowAndShrink, .WrapContents = False, .Anchor = AnchorStyles.Left, .Margin = New Padding(0)}
         Dim decisions As New FlowLayoutPanel With {.AutoSize = True, .AutoSizeMode = AutoSizeMode.GrowAndShrink, .WrapContents = False, .FlowDirection = FlowDirection.RightToLeft, .Anchor = AnchorStyles.Right, .Margin = New Padding(0)}
 
-        For Each spec As (Text As String, Width As Integer, Group As FlowLayoutPanel) In {
-            ("Copy Details", 120, tools), ("Open Log Folder", 140, tools), ("Keep Working", 130, decisions), ("Close PaperRoute", 150, decisions)
-        }
-            spec.Group.Controls.Add(New Button With {.Text = spec.Text, .AutoSize = True, .AutoSizeMode = mode, .MinimumSize = New Size(spec.Width, 36), .Padding = New Padding(8, 0, 8, 0), .Margin = New Padding(0, 0, 8, 0)})
+        For Each spec As (Text As String, Minimum As Size, OnLeft As Boolean) In RowButtons
+            Dim group As FlowLayoutPanel = If(spec.OnLeft, tools, decisions)
+            group.Controls.Add(New Button With {.Text = spec.Text, .AutoSize = True, .AutoSizeMode = mode, .MinimumSize = spec.Minimum, .Padding = New Padding(8, 0, 8, 0), .Margin = New Padding(0, 0, 8, 0)})
         Next
 
         row.Controls.Add(tools, 0, 0)
         row.Controls.Add(decisions, 1, 0)
         form.Controls.Add(row)
 
-        DialogScaling.Finish(form)
+        If ruled Then
+            DialogScaling.Finish(form)
+        Else
+            form.ResumeLayout(False)
+            form.PerformLayout()
+        End If
+
+        Return form
+
+    End Function
+
+
+    ' A text-sized button keeps the size it was given, not the width it
+    ' grew to (#93, step 4). At a real display the window is built with its
+    ' text at the display's size, so when DialogScaling.Finish runs such a
+    ' button has already grown to its caption there; a minimum read from it
+    ' then would be that caption's width, and scaled by 1.5 the button would
+    ' be 1.5 times its caption again. The sweep cannot tell the two apart:
+    ' it builds a window at 96 DPI, where a caption is its 96-DPI width. So
+    ' the error dialog's row is built here as at 150%, its text at 15 points
+    ' before its buttons are added, and then scaled by 1.5 as Windows Forms
+    ' scales it when it opens, with nothing simulated. Each button is the
+    ' larger of its 96-DPI minimum, scaled, and its caption, and not 1.5
+    ' times the width it grew to. Each caption is wider than its minimum at
+    ' 15 points, so the two differ on every button.
+    <TestMethod>
+    Public Sub AButtonBuiltAtTheDisplaysTextSizeIsScaledOnce()
+
+        Dim grown As New Dictionary(Of String, Size)()
+        Dim scaled As New Dictionary(Of String, (Size As Size, Caption As Size))()
+
+        ViewCatalog.ShowAndClose(
+            "The button row probe at 15 points",
+            Function() ButtonRowProbe(AutoSizeMode.GrowOnly, True, 15.0F),
+            Sub(name, shown)
+
+                Dim buttons As List(Of Button) = ViewCatalog.Descendants(shown).OfType(Of Button)().ToList()
+
+                For Each button As Button In buttons
+                    grown(button.Text) = button.Size
+                Next
+
+                shown.Scale(New SizeF(1.5F, 1.5F))
+                LayOutEveryControl(shown)
+                Application.DoEvents()
+
+                For Each button As Button In buttons
+                    scaled(button.Text) = (button.Size, CaptionSize(button))
+                Next
+
+            End Sub
+        )
+
+        Assert.AreEqual(RowButtons.Length, scaled.Count, "Every button of the row was measured.")
+
+        Dim found As New List(Of String)()
+        Dim measured As New List(Of String)()
+
+        For Each spec As (Text As String, Minimum As Size, OnLeft As Boolean) In RowButtons
+
+            Dim before As Size = grown(spec.Text)
+            Dim after As (Size As Size, Caption As Size) = scaled(spec.Text)
+
+            Assert.IsTrue(before.Width > spec.Minimum.Width, $"At 15 points '{spec.Text}' grows past its minimum: {before.Width} of {spec.Minimum.Width} pixels.")
+
+            Dim expected As New Size(
+                Math.Max(CInt(Math.Round(spec.Minimum.Width * 1.5)), after.Caption.Width),
+                Math.Max(CInt(Math.Round(spec.Minimum.Height * 1.5)), after.Caption.Height)
+            )
+            Dim again As Integer = CInt(Math.Round(before.Width * 1.5))
+            Dim line As String =
+                $"'{spec.Text}' scaled by 1.5: {after.Size.Width}x{after.Size.Height}; its minimum {spec.Minimum.Width}x{spec.Minimum.Height} scaled, or its caption {after.Caption.Width}x{after.Caption.Height}, gives {expected.Width}x{expected.Height}, and 1.5 times the {before.Width} it grew to is {again}"
+
+            measured.Add(line)
+
+            If Math.Abs(after.Size.Width - expected.Width) > 1 OrElse Math.Abs(after.Size.Height - expected.Height) > 1 OrElse after.Size.Width >= again - 1 Then
+                found.Add(line)
+            End If
+
+        Next
+
+        TestContext.WriteLine(String.Join(Environment.NewLine, measured))
+
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+
+    End Sub
+
+
+    ' A button that sizes itself to its caption is scaled once in every
+    ' window on DialogScaling (#93, step 4). At a real 150% display such a
+    ' button that only grows took its caption's width at the display's text
+    ' size while its window was built, then kept that width scaled by 1.5:
+    ' ManuscriptLinksForm's "Choose from Library..." was 291 pixels,
+    ' UpdatePromptForm's "Download && Restart" 332, SubmissionPacketEditForm's
+    ' "Save Changes" 214 and AboutForm's "Copy Version Info" 268, about 1.5
+    ' times their captions. At a simulated 144 DPI each such button of every
+    ' converted window is the larger of its least size, scaled, and its
+    ' caption's preferred size, on each side. Its least size is its
+    ' MinimumSize and, for a button that only grows, the size it was given
+    ' too, which Windows Forms gives back when AutoSize is turned off: a
+    ' button given no size is never narrower than its 75-pixel default.
+    ' Buttons whose equal width comes from a shared minimum keep it.
+    <TestMethod>
+    Public Sub EveryTextSizedButtonIsScaledOnce()
+
+        Dim found As New List(Of String)()
+        Dim measured As New List(Of String)()
+
+        found.AddRange(
+            ViewCatalog.ShowEach(
+                Converted.Select(Function(view) (view.Name, ViewCatalog.Dialogs(view))),
+                Sub(name, shown)
+
+                    ' As built at 96 DPI: what each text-sized button is held at.
+                    Dim least As New Dictionary(Of Button, Size)()
+
+                    For Each button As Button In ViewCatalog.Descendants(shown).OfType(Of Button)().Where(Function(candidate) candidate.AutoSize).ToList()
+                        least(button) = LeastSize(button)
+                    Next
+
+                    Simulate(shown, 144, True)
+
+                    CompareTextSizedButtons(shown, name, least, found, measured)
+
+                End Sub
+            )
+        )
+
+        TestContext.WriteLine(String.Join(Environment.NewLine, measured))
+
+        Assert.IsTrue(measured.Count >= 40, "The converted windows' text-sized buttons were measured: " & measured.Count)
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+
+    End Sub
+
+
+    ' Each text-sized button in view, the pages of a tab control in turn.
+    Private Shared Sub CompareTextSizedButtons(parent As Control, window As String, least As Dictionary(Of Button, Size), found As List(Of String), measured As List(Of String))
+
+        Dim tabs As TabControl = TryCast(parent, TabControl)
+
+        If tabs IsNot Nothing Then
+
+            Dim selected As TabPage = tabs.SelectedTab
+
+            For index As Integer = 0 To tabs.TabCount - 1
+                tabs.SelectedIndex = index
+                Application.DoEvents()
+                CompareTextSizedButtons(tabs.TabPages(index), window, least, found, measured)
+            Next
+
+            tabs.SelectedTab = selected
+            Application.DoEvents()
+            Return
+
+        End If
+
+        For Each child As Control In parent.Controls
+
+            Dim button As Button = TryCast(child, Button)
+
+            If button IsNot Nothing AndAlso button.Visible AndAlso least.ContainsKey(button) Then
+
+                Dim held As Size = least(button)
+                Dim caption As Size = CaptionSize(button)
+                Dim expected As New Size(
+                    Math.Max(CInt(Math.Round(held.Width * 1.5)), caption.Width),
+                    Math.Max(CInt(Math.Round(held.Height * 1.5)), caption.Height)
+                )
+                Dim line As String =
+                    $"{window} '{Abbreviate(button.Text)}' at 144 DPI: {button.Width}x{button.Height}; its least size {held.Width}x{held.Height} scaled, or its caption {caption.Width}x{caption.Height}, gives {expected.Width}x{expected.Height}"
+
+                measured.Add(line)
+
+                If Math.Abs(button.Width - expected.Width) > 1 OrElse Math.Abs(button.Height - expected.Height) > 1 Then
+                    found.Add(line)
+                End If
+
+                least.Remove(button)
+
+            End If
+
+            CompareTextSizedButtons(child, window, least, found, measured)
+
+        Next
+
+    End Sub
+
+
+    ' What a text-sized button is held at however short its caption: its
+    ' MinimumSize and, if it only grows, the size it was given, which
+    ' Windows Forms gives back when AutoSize is turned off. Its parent is
+    ' held meanwhile and laid out after, so the button is as it was.
+    Private Shared Function LeastSize(button As Button) As Size
+
+        If button.AutoSizeMode = AutoSizeMode.GrowAndShrink Then
+            Return button.MinimumSize
+        End If
+
+        Dim parent As Control = button.Parent
+        parent.SuspendLayout()
+        button.AutoSize = False
+        Dim given As Size = button.Size
+        button.AutoSize = True
+        parent.ResumeLayout(True)
+
+        Return New Size(Math.Max(given.Width, button.MinimumSize.Width), Math.Max(given.Height, button.MinimumSize.Height))
+
+    End Function
+
+
+    ' The size a button's caption asks for on its own: a button of its kind
+    ' with its text, font, padding and style, that grows and shrinks to its
+    ' caption with no minimum.
+    Private Shared Function CaptionSize(button As Button) As Size
+
+        Using probe As Button = DirectCast(Activator.CreateInstance(button.GetType()), Button)
+
+            probe.Text = button.Text
+            probe.Font = button.Font
+            probe.Padding = button.Padding
+            probe.FlatStyle = button.FlatStyle
+            probe.FlatAppearance.BorderSize = button.FlatAppearance.BorderSize
+            probe.UseMnemonic = button.UseMnemonic
+            probe.Image = button.Image
+            probe.TextImageRelation = button.TextImageRelation
+            probe.AutoSize = True
+            probe.AutoSizeMode = AutoSizeMode.GrowAndShrink
+
+            Return probe.GetPreferredSize(Size.Empty)
+
+        End Using
+
+    End Function
+
+
+    ' The measure judges lists (#93, step 4). At the real 1366x708 working
+    ' area at 125%, Submission Details gave its Correspondence & Files list
+    ' no height at all and its Editorial History list one row, so its
+    ' letters and files could not be seen, and the measure, which judged
+    ' only buttons, check boxes, single-line labels and tab captions, read
+    ' "ok". A probe holds one of each kind it now judges below a tall fixed
+    ' row: a list, a list view, a grid, a tree view, a multi-line text box,
+    ' and a list under a toolbar of its own, as Submission Details' list is.
+    ' On the roomy screen each shows two rows or more and none is reported;
+    ' fitted to the short one each shows less, the last with no height at
+    ' all, and each is: a list with none is judged before the measure skips
+    ' a control with no size.
+    <TestMethod>
+    Public Sub ASqueezedListIsReported()
+
+        Dim results As New Dictionary(Of String, Cell)()
+        Dim filesHeight As Integer = -1
+
+        ViewCatalog.ShowAndClose(
+            "The list probe",
+            Function() ListProbe(),
+            Sub(name, shown)
+
+                For Each cell As (Screen As String, Dpi As Integer, Result As Cell) In Measure(shown, 96, False, ProbeScreens)
+                    results(cell.Screen) = cell.Result
+                Next
+
+                ' As fitted to the short screen, the last.
+                filesHeight = ViewCatalog.Descendants(shown).OfType(Of ListBox)().Single(Function(list) list.AccessibleName = "Files").Height
+
+            End Sub
+        )
+
+        For Each screen As String In {"roomy", "short"}
+            Assert.IsNull(results(screen).NotMeasuredHere, "The probe is measured on this computer: " & results(screen).Describe())
+        Next
+
+        Assert.AreEqual(0, filesHeight, "On the short screen the last list has no height at all.")
+
+        Assert.IsTrue(results("roomy").Passes, "With room, every list shows two rows: " & results("roomy").Describe())
+
+        For Each squeezed As String In {"list 'Letters'", "list view 'Facts'", "grid 'Mappings'", "tree view 'Outline'", "text box 'Notes'", "list 'Files'"}
+            Assert.IsTrue(results("short").Cut.Any(Function(cut) cut.StartsWith(squeezed, StringComparison.Ordinal)), "Squeezed, it is reported, " & squeezed & ": " & String.Join("; ", results("short").Cut))
+        Next
+
+    End Sub
+
+
+    ' A 900x500 window: a 340-pixel row, then one row that takes the rest,
+    ' with a list, a list view in details view, a grid, a tree view and a
+    ' multi-line text box side by side, each with two rows of its own, and
+    ' a list docked to fill a panel below a 60-pixel toolbar docked to its
+    ' top. Fitted to the 400-pixel screen, the window keeps about 20 pixels
+    ' for that row, and the toolbar leaves the last list none.
+    Private Shared Function ListProbe() As Form
+
+        Dim form As New Form With {.ClientSize = New Size(900, 500), .Font = New Font("Segoe UI", 10.0F), .AutoScaleMode = AutoScaleMode.Dpi}
+
+        Dim root As New TableLayoutPanel With {.Dock = DockStyle.Fill, .ColumnCount = 6, .RowCount = 2}
+        root.RowStyles.Add(New RowStyle(SizeType.Absolute, 340))
+        root.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
+
+        For column As Integer = 0 To 5
+            root.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100 / 6.0F))
+        Next
+
+        Dim letters As New ListBox With {.Dock = DockStyle.Fill, .IntegralHeight = False, .AccessibleName = "Letters"}
+        letters.Items.AddRange({"Decision letter", "Reviews", "Revised manuscript"})
+
+        Dim facts As New ListView With {.Dock = DockStyle.Fill, .View = View.Details, .AccessibleName = "Facts"}
+        facts.Columns.Add("Fact", 100)
+        facts.Items.Add("Impact")
+        facts.Items.Add("Turnaround")
+
+        Dim mappings As New DataGridView With {.Dock = DockStyle.Fill, .AccessibleName = "Mappings", .AllowUserToAddRows = False}
+        mappings.Columns.Add("column", "Column")
+        mappings.Rows.Add("Title")
+        mappings.Rows.Add("Journal")
+
+        Dim outline As New TreeView With {.Dock = DockStyle.Fill, .AccessibleName = "Outline"}
+        outline.Nodes.Add("Introduction")
+        outline.Nodes.Add("Methods")
+
+        Dim notes As New TextBox With {.Dock = DockStyle.Fill, .Multiline = True, .AccessibleName = "Notes", .Text = "First line" & Environment.NewLine & "Second line"}
+
+        ' Docked last, the list fills what the toolbar leaves of the panel.
+        Dim files As New Panel With {.Dock = DockStyle.Fill, .Margin = New Padding(0)}
+        files.Controls.Add(New ListBox With {.Dock = DockStyle.Fill, .IntegralHeight = False, .AccessibleName = "Files"})
+        files.Controls.Add(New Panel With {.Dock = DockStyle.Top, .Height = 60})
+
+        root.Controls.Add(New Label With {.Text = "Summary", .AutoSize = True}, 0, 0)
+        root.Controls.Add(letters, 0, 1)
+        root.Controls.Add(facts, 1, 1)
+        root.Controls.Add(mappings, 2, 1)
+        root.Controls.Add(outline, 3, 1)
+        root.Controls.Add(notes, 4, 1)
+        root.Controls.Add(files, 5, 1)
+        form.Controls.Add(root)
+
         Return form
 
     End Function
@@ -339,7 +760,7 @@ Public Class ScalingMeasurementTests
                 "The scrolling probe",
                 Function() ScrollingProbe(docked),
                 Sub(name, shown)
-                    result = Measure(shown, 96, False).Single(Function(cell) cell.Screen = "1366x728").Result
+                    result = Measure(shown, 96, False).Single(Function(cell) cell.Screen = "1366x720").Result
                 End Sub
             )
 
@@ -372,21 +793,200 @@ Public Class ScalingMeasurementTests
     End Function
 
 
+    ' The measure gives a window the frame a real display draws (#93). At
+    ' a real 150% display a window's title bar and borders are 22x56
+    ' pixels, where the host draws them 16x39 at 96 DPI. A window that
+    ' Windows Forms does not scale and that keeps the outer size it was
+    ' given has the difference less client area there: the Crossref
+    ' window, 820x720 on both, had 664 pixels of client height at 150% to
+    ' the sweep's 681, and its preview box, which takes what the rows
+    ' around it leave, showed one line where the sweep counted two. A
+    ' probe built so, whose box has two lines and 8 pixels to spare inside
+    ' the frame drawn at 96 DPI, is reported at 144: the larger frame takes
+    ' more than the 8. The same window given its client size keeps it, as
+    ' Windows Forms keeps it, and is not reported; but on a screen only 4
+    ' pixels taller than the window it is, since the working area holds
+    ' the larger frame too. The measure before reported neither.
+    <TestMethod>
+    Public Sub TheDisplaysFrameIsTakenFromTheClientArea()
+
+        For Each probe As (KeepsClientSize As Boolean, Held As Boolean) In {(False, False), (True, False), (True, True)}
+
+            Dim current As (KeepsClientSize As Boolean, Held As Boolean) = probe
+            Dim result As Cell = Nothing
+
+            ViewCatalog.ShowAndClose(
+                "The frame probe",
+                Function() FrameProbe(8),
+                Sub(name, shown)
+
+                    Dim screen As (Name As String, Area As Rectangle)() =
+                        If(current.Held,
+                           {("held", New Rectangle(-30000, -30000, 1000, shown.Height + 4))},
+                           ProbeScreens.Take(1).ToArray())
+
+                    result = Measure(shown, 144, False, screen, current.KeepsClientSize).Single().Result
+
+                End Sub
+            )
+
+            Dim built As String = If(current.KeepsClientSize, "given its client size", "keeping its outer size") & If(current.Held, ", on a screen 4 pixels taller than it", String.Empty)
+            Dim reported As Boolean = result.Cut.Any(Function(cut) cut.StartsWith("text box 'Preview'", StringComparison.Ordinal))
+
+            Assert.IsNull(result.NotMeasuredHere, "The probe is measured on this computer: " & result.Describe())
+
+            If current.KeepsClientSize AndAlso Not current.Held Then
+                Assert.IsFalse(reported, $"A window {built} keeps two lines of its box at 144 DPI: " & result.Describe())
+            Else
+                Assert.IsTrue(reported, $"A window {built} loses the larger frame from its box at 144 DPI: " & result.Describe())
+            End If
+
+        Next
+
+    End Sub
+
+
+    ' The measure reads a tab page's clip once it has shown the page
+    ' (#93). Showing a page can move the focus and scroll a body around
+    ' the tabs: at a real 125% display Submission Details' body scrolled as
+    ' the measure showed its Correspondence & Files page, and the page's
+    ' first line, its help, sat above where the tabs had been before the
+    ' scroll. The measure had read the tabs' clip before it showed the
+    ' page and reported the help clipped, while the display showed it
+    ' whole. A probe whose second page scrolls its body as it shows has a
+    ' label on that page's first line, in view once the page shows: it is
+    ' not reported. The measure before reported it ("label 'Second page's
+    ' first line' clipped").
+    <TestMethod>
+    Public Sub APageIsMeasuredWhereShowingItScrolled()
+
+        Dim result As Cell = Nothing
+
+        ViewCatalog.ShowAndClose(
+            "The tab probe",
+            Function() TabProbe(),
+            Sub(name, shown)
+                result = Measure(shown, 96, False, ProbeScreens.Take(1).ToArray()).Single().Result
+            End Sub
+        )
+
+        Assert.IsNull(result.NotMeasuredHere, "The probe is measured on this computer: " & result.Describe())
+        Assert.IsTrue(result.Passes, "Each page's first line is in view where showing the page scrolled the body: " & result.Describe())
+
+    End Sub
+
+
+    ' A 600x400 window whose body scrolls, holding a 300-pixel panel with a
+    ' text box and, below it, tabs 400 pixels tall, each page with a label
+    ' on its first line. Showing a page scrolls the body to the tabs, as a
+    ' focus moved into them does. The text box takes the focus as the
+    ' window shows, so the body is unscrolled when the measure begins.
+    Private Shared Function TabProbe() As Form
+
+        Dim form As New Form With {.ClientSize = New Size(600, 400), .Font = New Font("Segoe UI", 10.0F), .AutoScaleMode = AutoScaleMode.Dpi}
+        Dim body As New Panel With {.Dock = DockStyle.Fill, .AutoScroll = True}
+        Dim tabs As New TabControl With {.Location = New Point(0, 300), .Size = New Size(560, 400)}
+
+        For Each caption As String In {"First", "Second"}
+            Dim page As New TabPage With {.Text = caption}
+            page.Controls.Add(New Label With {.Text = caption & " page's first line", .AutoSize = True, .Location = New Point(10, 10)})
+            tabs.TabPages.Add(page)
+        Next
+
+        AddHandler tabs.SelectedIndexChanged,
+            Sub(sender, e)
+                body.AutoScrollPosition = New Point(0, 300)
+            End Sub
+
+        ' Without the box the tabs would take the focus as the window
+        ' shows and scroll the body to them before the measure, and showing
+        ' the second page would move nothing: the stale clip went untested.
+        Dim top As New Panel With {.Location = New Point(0, 0), .Size = New Size(560, 300)}
+        top.Controls.Add(New TextBox With {.Location = New Point(10, 10)})
+
+        body.Controls.Add(top)
+        body.Controls.Add(tabs)
+        form.Controls.Add(body)
+        Return form
+
+    End Function
+
+
+    ' A 600-pixel window of two fixed rows, 120 and 100 pixels, with a
+    ' multi-line box between them that takes the rest: at 144 DPI, its
+    ' text grown, the box has two lines and the given pixels to spare
+    ' inside the frame drawn at 96 DPI.
+    Private Shared Function FrameProbe(spare As Integer) As Form
+
+        Dim line As Integer
+
+        Using grown As New Font("Segoe UI", 15.0F)
+            line = grown.Height
+        End Using
+
+        ' Two lines, the box's border and its margins, and the spare.
+        Dim boxRow As Integer = 2 * line + 4 + 6 + spare
+
+        Dim form As New Form With {.ClientSize = New Size(600, 220 + boxRow), .Font = New Font("Segoe UI", 10.0F), .AutoScaleMode = AutoScaleMode.Dpi}
+        Dim root As New TableLayoutPanel With {.Dock = DockStyle.Fill, .ColumnCount = 1, .RowCount = 3}
+        root.RowStyles.Add(New RowStyle(SizeType.Absolute, 120))
+        root.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
+        root.RowStyles.Add(New RowStyle(SizeType.Absolute, 100))
+        root.Controls.Add(New TextBox With {.Dock = DockStyle.Fill, .Multiline = True, .AccessibleName = "Preview"}, 0, 1)
+        form.Controls.Add(root)
+        Return form
+
+    End Function
+
+
     ' ---------------------------------------------------------------
     ' Simulating the display
     ' ---------------------------------------------------------------
 
     ' Grows the window's text for the DPI, then scales the window as
-    ' Windows Forms would if its source asks for that, then fits it to each
-    ' screen and inspects it.
+    ' Windows Forms would if its source asks for that, gives it the frame
+    ' the DPI draws, then fits it to each screen and inspects it. Whether a
+    ' window keeps the client size it was given, rather than its outer
+    ' size, is read from its source (KeepsItsClientSize) unless a probe
+    ' says.
     Friend Shared Function Measure(
         shown As Form,
         dpi As Integer,
         scalesWithWinForms As Boolean,
-        Optional areas As (Name As String, Area As Rectangle)() = Nothing
+        Optional areas As (Name As String, Area As Rectangle)() = Nothing,
+        Optional keepsClientSize As Boolean? = Nothing
     ) As List(Of (Screen As String, Dpi As Integer, Result As Cell))
 
         Simulate(shown, dpi, scalesWithWinForms)
+
+        ' A real display draws a window's title bar and borders at its DPI,
+        ' larger than the host's at 96 (#93): at 150% a sizable window's
+        ' are 22x56 pixels to 16x39 here. A window Windows Forms does not
+        ' scale keeps the outer size it was given, if that is what it was
+        ' given, so it has the difference less client area; Windows Forms
+        ' scales a window's client area and keeps it. And the working area
+        ' holds the larger frame, so a window it holds has that much less
+        ' client area too. Both come off here: the window's size and least
+        ' size, where it keeps its outer size, and each screen's area. At
+        ' 96 DPI nothing changes.
+        Dim frame As Size =
+            FrameGrowth(shown, dpi)
+
+        If Not frame.IsEmpty AndAlso
+           Not scalesWithWinForms AndAlso
+           Not If(keepsClientSize, KeepsItsClientSize(shown.GetType())) Then
+
+            Dim least As Size = shown.MinimumSize
+
+            shown.MinimumSize =
+                New Size(
+                    If(least.Width > 0, Math.Max(1, least.Width - frame.Width), 0),
+                    If(least.Height > 0, Math.Max(1, least.Height - frame.Height), 0)
+                )
+
+            shown.Size = shown.Size - frame
+
+        End If
 
         Dim results As New List(Of (Screen As String, Dpi As Integer, Result As Cell))()
 
@@ -398,9 +998,13 @@ Public Class ScalingMeasurementTests
         Dim track As Size =
             SystemInformation.MaxWindowTrackSize
 
-        For Each screen As (Name As String, Area As Rectangle) In If(areas, Screens)
+        For Each screen As (Name As String, Area As Rectangle) In If(areas, ScreensAt(dpi))
 
-            ResponsiveDialogSizingService.FitToWorkingArea(shown, screen.Area)
+            ResponsiveDialogSizingService.FitToWorkingArea(
+                shown,
+                New Rectangle(screen.Area.Location, screen.Area.Size - frame)
+            )
+
             shown.PerformLayout()
             Application.DoEvents()
 
@@ -458,15 +1062,7 @@ Public Class ScalingMeasurementTests
             ' a real 150% the error dialog's buttons were 1.5 times their
             ' caption widths; scaling first, as this did before, gave them
             ' their scaled minimums and missed the overlap they made.
-            Dim fonts As New Dictionary(Of Control, Font)()
-
-            For Each control As Control In New Control() {shown}.Concat(ViewCatalog.Descendants(shown))
-                fonts(control) = control.Font
-            Next
-
-            For Each pair As KeyValuePair(Of Control, Font) In fonts
-                pair.Key.Font = New Font(pair.Value.FontFamily, pair.Value.Size * factor, pair.Value.Style, pair.Value.Unit)
-            Next
+            GrowText(shown, dpi)
 
             LayOutEveryControl(shown)
 
@@ -478,6 +1074,27 @@ Public Class ScalingMeasurementTests
             Application.DoEvents()
 
         End If
+
+    End Sub
+
+
+    ' Every font in the window grown for the DPI, as text has the display's
+    ' size at a real display. Each control's font is read before any is
+    ' set, so a font a control takes from its parent grows once. A test
+    ' may grow a window's text while its layouts are held, as a window is
+    ' built at a real display.
+    Friend Shared Sub GrowText(shown As Control, dpi As Integer)
+
+        Dim factor As Single = dpi / 96.0F
+        Dim fonts As New Dictionary(Of Control, Font)()
+
+        For Each control As Control In New Control() {shown}.Concat(ViewCatalog.Descendants(shown))
+            fonts(control) = control.Font
+        Next
+
+        For Each pair As KeyValuePair(Of Control, Font) In fonts
+            pair.Key.Font = New Font(pair.Value.FontFamily, pair.Value.Size * factor, pair.Value.Style, pair.Value.Unit)
+        Next
 
     End Sub
 
@@ -495,6 +1112,57 @@ Public Class ScalingMeasurementTests
         Next
 
     End Sub
+
+
+    ' How much wider and taller the window's title bar and borders are at
+    ' the DPI than at 96, as Windows sizes them for the window's own
+    ' styles: 6x17 pixels at 144 and 2x8 at 120 for a sizable window on
+    ' Windows 11, what the certification VM's windows showed.
+    Private Shared Function FrameGrowth(shown As Form, dpi As Integer) As Size
+
+        If dpi = 96 Then
+            Return Size.Empty
+        End If
+
+        Dim style As UInteger = GetWindowLong(shown.Handle, GwlStyle)
+        Dim extended As UInteger = GetWindowLong(shown.Handle, GwlExStyle)
+
+        Return FrameAt(style, extended, dpi) - FrameAt(style, extended, 96)
+
+    End Function
+
+
+    Private Shared Function FrameAt(style As UInteger, extended As UInteger, dpi As Integer) As Size
+
+        Dim frame As New NativeRect()
+
+        If Not AdjustWindowRectExForDpi(frame, style, False, extended, CUInt(dpi)) Then
+            Throw New InvalidOperationException("Windows did not size a window's frame at " & dpi & " DPI.")
+        End If
+
+        Return New Size(frame.Right - frame.Left, frame.Bottom - frame.Top)
+
+    End Function
+
+
+    Private Const GwlStyle As Integer = -16
+    Private Const GwlExStyle As Integer = -20
+
+    <Runtime.InteropServices.StructLayout(Runtime.InteropServices.LayoutKind.Sequential)>
+    Private Structure NativeRect
+        Public Left As Integer
+        Public Top As Integer
+        Public Right As Integer
+        Public Bottom As Integer
+    End Structure
+
+    <Runtime.InteropServices.DllImport("user32.dll", EntryPoint:="GetWindowLongW")>
+    Private Shared Function GetWindowLong(handle As IntPtr, index As Integer) As UInteger
+    End Function
+
+    <Runtime.InteropServices.DllImport("user32.dll")>
+    Private Shared Function AdjustWindowRectExForDpi(ByRef rect As NativeRect, style As UInteger, menu As Boolean, extendedStyle As UInteger, dpi As UInteger) As Boolean
+    End Function
 
 
     ' ---------------------------------------------------------------
@@ -576,11 +1244,14 @@ Public Class ScalingMeasurementTests
     End Function
 
 
-    ' Every visible child, clipped by its parents down to the window's
-    ' client area, except inside a container that scrolls, whose content
-    ' is reached by scrolling and so is measured against its scroll range:
-    ' what lies past that range cannot be reached. Each page of a tab
-    ' control is shown in turn so its content is measured too.
+    ' Every visible child, lists among them (InspectRows), clipped by its
+    ' parents down to the window's client area, except inside a container
+    ' that scrolls, whose content is reached by scrolling and so is
+    ' measured against its scroll range: what lies past that range cannot
+    ' be reached. Each page of a tab control is shown in turn so its
+    ' content is measured too, against the tabs' clip read again once the
+    ' page shows: showing it can move the focus and scroll a body around
+    ' the tabs (ClipOf).
     Private Shared Sub InspectChildren(parent As Control, clip As Rectangle, cut As List(Of String))
 
         Dim tabs As TabControl = TryCast(parent, TabControl)
@@ -593,7 +1264,7 @@ Public Class ScalingMeasurementTests
                 tabs.SelectedIndex = index
                 Application.DoEvents()
                 Dim page As TabPage = tabs.TabPages(index)
-                InspectChildren(page, Rectangle.Intersect(clip, page.RectangleToScreen(page.ClientRectangle)), cut)
+                InspectChildren(page, Rectangle.Intersect(ClipOf(tabs), page.RectangleToScreen(page.ClientRectangle)), cut)
             Next
 
             tabs.SelectedTab = selected
@@ -604,7 +1275,14 @@ Public Class ScalingMeasurementTests
 
         For Each child As Control In parent.Controls
 
-            If Not child.Visible OrElse child.Width <= 0 OrElse child.Height <= 0 Then
+            If Not child.Visible Then
+                Continue For
+            End If
+
+            ' Before the size: a list squeezed to no height is reported too.
+            InspectRows(child, clip, cut)
+
+            If child.Width <= 0 OrElse child.Height <= 0 Then
                 Continue For
             End If
 
@@ -612,17 +1290,53 @@ Public Class ScalingMeasurementTests
 
             InspectControl(child, bounds, clip, cut)
 
-            Dim scrolls As ScrollableControl = TryCast(child, ScrollableControl)
-            Dim childClip As Rectangle =
-                If(scrolls IsNot Nothing AndAlso scrolls.AutoScroll,
-                   ScrollRange(scrolls),
-                   Rectangle.Intersect(clip, child.RectangleToScreen(child.ClientRectangle)))
-
-            InspectChildren(child, childClip, cut)
+            InspectChildren(child, ChildClip(child, clip), cut)
 
         Next
 
     End Sub
+
+
+    ' A child's clip within its parent's: its scroll range if it scrolls,
+    ' or its client area inside the parent's clip.
+    Private Shared Function ChildClip(child As Control, clip As Rectangle) As Rectangle
+
+        Dim scrolls As ScrollableControl = TryCast(child, ScrollableControl)
+
+        Return If(scrolls IsNot Nothing AndAlso scrolls.AutoScroll,
+                  ScrollRange(scrolls),
+                  Rectangle.Intersect(clip, child.RectangleToScreen(child.ClientRectangle)))
+
+    End Function
+
+
+    ' A control's clip read afresh from its window down, as InspectChildren
+    ' narrows it on the way, a tab page inside its tabs' clip. At a real
+    ' 125% display, showing Submission Details' Correspondence & Files page
+    ' scrolled the body around the tabs after the measure had read their
+    ' clip, and the page's first line was reported clipped (#93).
+    Private Shared Function ClipOf(control As Control) As Rectangle
+
+        Dim chain As New List(Of Control)()
+        Dim current As Control = control
+
+        While current IsNot Nothing
+            chain.Insert(0, current)
+            current = current.Parent
+        End While
+
+        Dim clip As Rectangle = chain(0).RectangleToScreen(chain(0).ClientRectangle)
+
+        For Each inner As Control In chain.Skip(1)
+            clip =
+                If(TypeOf inner Is TabPage,
+                   Rectangle.Intersect(clip, inner.RectangleToScreen(inner.ClientRectangle)),
+                   ChildClip(inner, clip))
+        Next
+
+        Return clip
+
+    End Function
 
 
     ' What a container that scrolls can bring into view, on screen: its
@@ -742,6 +1456,73 @@ Public Class ScalingMeasurementTests
     End Sub
 
 
+    ' A list, list view, grid, tree view or multi-line text box that shows
+    ' less than two of its rows (#93, step 4): what is seen of it is its
+    ' client area inside its parents and the window, or in reach of a
+    ' scroll, and one squeezed to no height shows none. A row is a list
+    ' box's or a tree view's item height; a list view's first item, or a
+    ' line of its font while it has none, below the details view's column
+    ' header (the first item's top, or one row while it has none); a grid's
+    ' first row, or its row template while it has none, below its column
+    ' headers; and a line of a text box's font.
+    Private Shared Sub InspectRows(control As Control, clip As Rectangle, cut As List(Of String))
+
+        Dim kind As String
+        Dim row As Integer
+        Dim above As Integer = 0
+
+        If TypeOf control Is ListBox Then
+
+            kind = "list"
+            row = DirectCast(control, ListBox).ItemHeight
+
+        ElseIf TypeOf control Is ListView Then
+
+            Dim items As ListView = DirectCast(control, ListView)
+            Dim first As Rectangle = If(items.Items.Count > 0, items.GetItemRect(0), Rectangle.Empty)
+
+            kind = "list view"
+            row = If(first.Height > 0, first.Height, TextRenderer.MeasureText("Xg", items.Font, New Size(Integer.MaxValue, Integer.MaxValue), CaptionFlags).Height)
+
+            If items.View = View.Details AndAlso items.HeaderStyle <> ColumnHeaderStyle.None Then
+                above = If(first.Height > 0, Math.Max(0, first.Top), row)
+            End If
+
+        ElseIf TypeOf control Is DataGridView Then
+
+            Dim grid As DataGridView = DirectCast(control, DataGridView)
+
+            kind = "grid"
+            row = If(grid.Rows.Count > 0, grid.Rows(0).Height, grid.RowTemplate.Height)
+            above = If(grid.ColumnHeadersVisible, grid.ColumnHeadersHeight, 0)
+
+        ElseIf TypeOf control Is TreeView Then
+
+            kind = "tree view"
+            row = DirectCast(control, TreeView).ItemHeight
+
+        ElseIf TypeOf control Is TextBoxBase AndAlso DirectCast(control, TextBoxBase).Multiline Then
+
+            kind = "text box"
+            row = control.Font.Height
+
+        Else
+
+            Return
+
+        End If
+
+        Dim seen As Rectangle =
+            Rectangle.Intersect(clip, control.RectangleToScreen(control.ClientRectangle))
+
+        If seen.Height - above < 2 * row Then
+            Dim name As String = If(String.IsNullOrWhiteSpace(control.AccessibleName), control.Name, control.AccessibleName)
+            cut.Add(kind & If(String.IsNullOrWhiteSpace(name), String.Empty, " '" & Abbreviate(name) & "'") & " under two rows")
+        End If
+
+    End Sub
+
+
     ' The text's width on one line, with "&" read as a mnemonic prefix or
     ' shown literally as the control shows it.
     Private Shared Function TextWidth(text As String, font As Font, mnemonic As Boolean) As Integer
@@ -800,6 +1581,34 @@ Public Class ScalingMeasurementTests
     ' evidence tool carries it to a computer without the repository.
     Friend Shared Function ScalingOf(view As Type, app As String) As (Scaling As String, ScalesWithWinForms As Boolean)
 
+        Dim source As String = SourceOf(view, app)
+        Dim winForms As Boolean = source.Contains("AutoScaleDimensions = New SizeF(96.0F, 96.0F)", StringComparison.Ordinal) OrElse source.Contains("DialogScaling.Begin(", StringComparison.Ordinal)
+        Dim hand As Boolean = Regex.IsMatch(source, "DeviceDpi|LogicalToDeviceUnits")
+
+        Return (If(winForms AndAlso hand, "both", If(winForms, "Windows Forms", If(hand, "by hand", "none"))), winForms)
+
+    End Function
+
+
+    ' Whether the window keeps the client size it was given at a real
+    ' display, rather than its outer size: its source sets its ClientSize
+    ' and never its Size or Bounds. Windows Forms keeps whichever a window
+    ' set, with the frame the display draws around it (Measure). A window
+    ' that sets neither keeps the outer size every form starts with, and
+    ' so does a probe built in a test, which has no source here.
+    Friend Shared Function KeepsItsClientSize(view As Type) As Boolean
+
+        Dim source As String = SourceOf(view, Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManuscriptPipeline"))
+
+        Return Regex.IsMatch(source, "^\s*(Me\.)?ClientSize\s*=", RegexOptions.Multiline) AndAlso
+               Not Regex.IsMatch(source, "^\s*(Me\.)?(Size|Bounds)\s*=", RegexOptions.Multiline)
+
+    End Function
+
+
+    ' A window's files and its base forms', without comments.
+    Private Shared Function SourceOf(view As Type, app As String) As String
+
         Dim code As New StringBuilder()
         Dim current As Type = view
 
@@ -815,11 +1624,7 @@ Public Class ScalingMeasurementTests
 
         End While
 
-        Dim source As String = code.ToString()
-        Dim winForms As Boolean = source.Contains("AutoScaleDimensions = New SizeF(96.0F, 96.0F)", StringComparison.Ordinal) OrElse source.Contains("DialogScaling.Begin(", StringComparison.Ordinal)
-        Dim hand As Boolean = Regex.IsMatch(source, "DeviceDpi|LogicalToDeviceUnits")
-
-        Return (If(winForms AndAlso hand, "both", If(winForms, "Windows Forms", If(hand, "by hand", "none"))), winForms)
+        Return code.ToString()
 
     End Function
 
@@ -831,7 +1636,7 @@ Public Class ScalingMeasurementTests
     Private Shared Function TableOf(rows As IEnumerable(Of WindowRow)) As String
 
         Dim columns As List(Of String) =
-            Dpis.SelectMany(Function(dpi) Screens.Reverse().Select(Function(screen) screen.Name & " " & dpi)).ToList()
+            Dpis.SelectMany(Function(dpi) ScreensAt(dpi).Reverse().Select(Function(screen) screen.Name & " " & dpi)).ToList()
 
         Dim text As New StringBuilder()
         text.AppendLine("| Window | Scaling | " & String.Join(" | ", columns.Select(Function(column) column.Replace(" ", " @ "))) & " |")

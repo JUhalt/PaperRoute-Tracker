@@ -94,6 +94,38 @@ Namespace Controls
             Next
         End Sub
 
+        ' The height a list's hint needs to be read whole at the list's
+        ' width: its text, wrapped inside its padding, and the padding, so a
+        ' window can give an empty list that much (#93). None while the list
+        ' has items or no hint, or before it has a width to wrap to.
+        Public Shared Function NeededHeight(target As Control) As Integer
+
+            If target Is Nothing OrElse ItemCount(target) > 0 Then
+                Return 0
+            End If
+
+            For Each entry As Entry In Entries.Where(Function(item) item.Target Is target)
+
+                Dim width As Integer =
+                    target.ClientSize.Width - entry.Hint.Padding.Horizontal
+
+                If width <= 0 Then
+                    Return 0
+                End If
+
+                Return TextRenderer.MeasureText(
+                    entry.Text(),
+                    entry.Hint.Font,
+                    New Size(width, Integer.MaxValue),
+                    TextFormatFlags.WordBreak Or TextFormatFlags.NoPrefix
+                ).Height + entry.Hint.Padding.Vertical
+
+            Next
+
+            Return 0
+
+        End Function
+
         ' Lists change their items without events, so the hints follow them
         ' when the application is idle.
         Private Shared Sub SyncAll(sender As Object, e As EventArgs)
