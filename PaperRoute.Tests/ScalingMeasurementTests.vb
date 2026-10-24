@@ -846,6 +846,72 @@ Public Class ScalingMeasurementTests
     End Sub
 
 
+    ' The measure reads a tab page's clip once it has shown the page
+    ' (#93). Showing a page can move the focus and scroll a body around
+    ' the tabs: at a real 125% display Submission Details' body scrolled as
+    ' the measure showed its Correspondence & Files page, and the page's
+    ' first line, its help, sat above where the tabs had been before the
+    ' scroll. The measure had read the tabs' clip before it showed the
+    ' page and reported the help clipped, while the display showed it
+    ' whole. A probe whose second page scrolls its body as it shows has a
+    ' label on that page's first line, in view once the page shows: it is
+    ' not reported. The measure before reported it ("label 'Second page's
+    ' first line' clipped").
+    <TestMethod>
+    Public Sub APageIsMeasuredWhereShowingItScrolled()
+
+        Dim result As Cell = Nothing
+
+        ViewCatalog.ShowAndClose(
+            "The tab probe",
+            Function() TabProbe(),
+            Sub(name, shown)
+                result = Measure(shown, 96, False, ProbeScreens.Take(1).ToArray()).Single().Result
+            End Sub
+        )
+
+        Assert.IsNull(result.NotMeasuredHere, "The probe is measured on this computer: " & result.Describe())
+        Assert.IsTrue(result.Passes, "Each page's first line is in view where showing the page scrolled the body: " & result.Describe())
+
+    End Sub
+
+
+    ' A 600x400 window whose body scrolls, holding a 300-pixel panel with a
+    ' text box and, below it, tabs 400 pixels tall, each page with a label
+    ' on its first line. Showing a page scrolls the body to the tabs, as a
+    ' focus moved into them does. The text box takes the focus as the
+    ' window shows, so the body is unscrolled when the measure begins.
+    Private Shared Function TabProbe() As Form
+
+        Dim form As New Form With {.ClientSize = New Size(600, 400), .Font = New Font("Segoe UI", 10.0F), .AutoScaleMode = AutoScaleMode.Dpi}
+        Dim body As New Panel With {.Dock = DockStyle.Fill, .AutoScroll = True}
+        Dim tabs As New TabControl With {.Location = New Point(0, 300), .Size = New Size(560, 400)}
+
+        For Each caption As String In {"First", "Second"}
+            Dim page As New TabPage With {.Text = caption}
+            page.Controls.Add(New Label With {.Text = caption & " page's first line", .AutoSize = True, .Location = New Point(10, 10)})
+            tabs.TabPages.Add(page)
+        Next
+
+        AddHandler tabs.SelectedIndexChanged,
+            Sub(sender, e)
+                body.AutoScrollPosition = New Point(0, 300)
+            End Sub
+
+        ' Without the box the tabs would take the focus as the window
+        ' shows and scroll the body to them before the measure, and showing
+        ' the second page would move nothing: the stale clip went untested.
+        Dim top As New Panel With {.Location = New Point(0, 0), .Size = New Size(560, 300)}
+        top.Controls.Add(New TextBox With {.Location = New Point(10, 10)})
+
+        body.Controls.Add(top)
+        body.Controls.Add(tabs)
+        form.Controls.Add(body)
+        Return form
+
+    End Function
+
+
     ' A 600-pixel window of two fixed rows, 120 and 100 pixels, with a
     ' multi-line box between them that takes the rest: at 144 DPI, its
     ' text grown, the box has two lines and the given pixels to spare
@@ -1183,7 +1249,9 @@ Public Class ScalingMeasurementTests
     ' that scrolls, whose content is reached by scrolling and so is
     ' measured against its scroll range: what lies past that range cannot
     ' be reached. Each page of a tab control is shown in turn so its
-    ' content is measured too.
+    ' content is measured too, against the tabs' clip read again once the
+    ' page shows: showing it can move the focus and scroll a body around
+    ' the tabs (ClipOf).
     Private Shared Sub InspectChildren(parent As Control, clip As Rectangle, cut As List(Of String))
 
         Dim tabs As TabControl = TryCast(parent, TabControl)
@@ -1196,7 +1264,7 @@ Public Class ScalingMeasurementTests
                 tabs.SelectedIndex = index
                 Application.DoEvents()
                 Dim page As TabPage = tabs.TabPages(index)
-                InspectChildren(page, Rectangle.Intersect(clip, page.RectangleToScreen(page.ClientRectangle)), cut)
+                InspectChildren(page, Rectangle.Intersect(ClipOf(tabs), page.RectangleToScreen(page.ClientRectangle)), cut)
             Next
 
             tabs.SelectedTab = selected
@@ -1222,17 +1290,53 @@ Public Class ScalingMeasurementTests
 
             InspectControl(child, bounds, clip, cut)
 
-            Dim scrolls As ScrollableControl = TryCast(child, ScrollableControl)
-            Dim childClip As Rectangle =
-                If(scrolls IsNot Nothing AndAlso scrolls.AutoScroll,
-                   ScrollRange(scrolls),
-                   Rectangle.Intersect(clip, child.RectangleToScreen(child.ClientRectangle)))
-
-            InspectChildren(child, childClip, cut)
+            InspectChildren(child, ChildClip(child, clip), cut)
 
         Next
 
     End Sub
+
+
+    ' A child's clip within its parent's: its scroll range if it scrolls,
+    ' or its client area inside the parent's clip.
+    Private Shared Function ChildClip(child As Control, clip As Rectangle) As Rectangle
+
+        Dim scrolls As ScrollableControl = TryCast(child, ScrollableControl)
+
+        Return If(scrolls IsNot Nothing AndAlso scrolls.AutoScroll,
+                  ScrollRange(scrolls),
+                  Rectangle.Intersect(clip, child.RectangleToScreen(child.ClientRectangle)))
+
+    End Function
+
+
+    ' A control's clip read afresh from its window down, as InspectChildren
+    ' narrows it on the way, a tab page inside its tabs' clip. At a real
+    ' 125% display, showing Submission Details' Correspondence & Files page
+    ' scrolled the body around the tabs after the measure had read their
+    ' clip, and the page's first line was reported clipped (#93).
+    Private Shared Function ClipOf(control As Control) As Rectangle
+
+        Dim chain As New List(Of Control)()
+        Dim current As Control = control
+
+        While current IsNot Nothing
+            chain.Insert(0, current)
+            current = current.Parent
+        End While
+
+        Dim clip As Rectangle = chain(0).RectangleToScreen(chain(0).ClientRectangle)
+
+        For Each inner As Control In chain.Skip(1)
+            clip =
+                If(TypeOf inner Is TabPage,
+                   Rectangle.Intersect(clip, inner.RectangleToScreen(inner.ClientRectangle)),
+                   ChildClip(inner, clip))
+        Next
+
+        Return clip
+
+    End Function
 
 
     ' What a container that scrolls can bring into view, on screen: its
