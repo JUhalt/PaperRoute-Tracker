@@ -443,6 +443,77 @@ Public Class MotionFadeTests
     End Sub
 
 
+    ' Leaving the manuscript page after the Unsaved Changes question, saved
+    ' or not, is a cut: the question is centred over the page, and the
+    ' screen can still show it closing as the switch reads the page left.
+    <TestMethod>
+    Public Sub LeavingAfterTheUnsavedChangesQuestionIsACut()
+
+        OnBoard(
+            Sub(board)
+                Dim subject As Manuscript = board.Library.First(Function(item) item.Location = ManuscriptLocation.Pipeline)
+                For Each answer As DialogResult In {DialogResult.No, DialogResult.Yes}
+                    board.Open(subject)
+                    Application.DoEvents()
+                    board.WaitForIdleWork()
+                    Settle(board)
+                    board.Field("Title").Text = subject.Title & " (" & answer.ToString() & ")"
+                    Dim asked As Integer = 0
+                    board.SetPrompt(Function(title)
+                                        asked += 1
+                                        Return answer
+                                    End Function)
+                    board.NavigateTo(Form1.WorkspacePage.Board)
+                    Assert.AreEqual(1, asked, "Leaving asked about the change (" & answer.ToString() & ").")
+                    Assert.AreEqual("Board", board.PageName)
+                    Assert.AreEqual("cut: a question was just answered", board.PageFade.LastOutcome, answer.ToString())
+                    Assert.IsFalse(board.PageFade.Showing)
+                    board.SetPrompt(Nothing)
+                    board.WaitForIdleWork()
+                    Settle(board)
+                Next
+            End Sub)
+
+    End Sub
+
+
+    ' A switch begun while another of the window's thread's windows is over
+    ' the page area, as a tooltip going as the switch begins, is a cut: the
+    ' picture read off the screen would hold that window over the page
+    ' shown. Once it has gone, the next switch fades.
+    <TestMethod>
+    Public Sub AnotherWindowOverThePageAreaMakesTheSwitchACut()
+
+        OnBoard(
+            Sub(board)
+                board.NavigateTo(Form1.WorkspacePage.Library)
+                Settle(board)
+
+                Dim area As Rectangle = board.ContentHost.RectangleToScreen(board.ContentHost.ClientRectangle)
+                Dim cover As New NativeWindow()
+                cover.CreateHandle(New CreateParams With {
+                    .Style = PageFade.WS_POPUP Or WS_VISIBLE,
+                    .ExStyle = PageFade.WS_EX_NOACTIVATE Or PageFade.WS_EX_TOOLWINDOW,
+                    .X = area.X + 40, .Y = area.Y + 40, .Width = 120, .Height = 40,
+                    .Parent = board.Handle
+                })
+                Try
+                    board.NavigateTo(Form1.WorkspacePage.Board)
+                    Assert.AreEqual("cut: another window is over the page area", board.PageFade.LastOutcome)
+                    Assert.IsFalse(board.PageFade.Showing)
+                Finally
+                    cover.DestroyHandle()
+                End Try
+
+                Settle(board)
+                board.NavigateTo(Form1.WorkspacePage.Library)
+                Assert.AreEqual("faded", board.PageFade.LastOutcome)
+                board.PageFade.End()
+            End Sub)
+
+    End Sub
+
+
     ' Whether the worker's read could hold the UI thread (#142, the plan's
     ' 4a): the read can wait on the screen, and the switch's own drawing
     ' (the rail's two buttons, painted as they are checked) might wait
@@ -726,6 +797,7 @@ Public Class MotionFadeTests
 
     Private Const GWL_STYLE As Integer = -16
     Private Const GWL_EXSTYLE As Integer = -20
+    Private Const WS_VISIBLE As Integer = &H10000000
     Private Const GW_OWNER As UInteger = 4
     Private Const WM_KEYDOWN As UInteger = &H100
     Private Const WM_CHAR As UInteger = &H102

@@ -484,6 +484,10 @@ Partial Public Class Form1
             Return True
         End If
 
+        ' Whether leaving asks about unsaved changes: its question has just
+        ' gone from over the page when the switch begins.
+        Dim asked As Boolean = HasUnsavedPageEdits()
+
         If Not ConfirmLeaveManuscript() Then
             SyncRail()
             Return False
@@ -494,7 +498,7 @@ Partial Public Class Form1
         ' if the switch was quicker than the fade. What it costs is part of
         ' the switch.
         Dim switchTime As Stopwatch = Stopwatch.StartNew()
-        CapturePageLeft(request)
+        CapturePageLeft(request, asked)
 
         Dim previous As PageRequest = CurrentRequest
         Dim switched As Boolean = False
@@ -526,7 +530,10 @@ Partial Public Class Form1
     ' page has painted (FinishManuscriptPage), on the UI thread, and the
     ' fade's frames could not run until they were, so the picture of the
     ' page left would sit over the manuscript page that long and then go.
-    Private Sub CapturePageLeft(request As PageRequest)
+    ' A switch after the Unsaved Changes question is a cut too: the
+    ' screen can still show the question closing, centred over the page,
+    ' and the picture would hold it over the page shown.
+    Private Sub CapturePageLeft(request As PageRequest, asked As Boolean)
 
         If pageFade Is Nothing Then
             If Not UiMotion.Enabled Then
@@ -535,7 +542,8 @@ Partial Public Class Form1
             pageFade = New PageFade(Me, contentHost)
         End If
 
-        pageFade.Capture(request.Page <> WorkspacePage.Manuscript, "a manuscript opens as a cut")
+        pageFade.Capture(request.Page <> WorkspacePage.Manuscript AndAlso Not asked,
+                         If(asked, "a question was just answered", "a manuscript opens as a cut"))
 
     End Sub
 

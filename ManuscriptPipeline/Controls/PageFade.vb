@@ -16,7 +16,8 @@ Namespace Controls
     ' window, if the picture is in it, is shown and faded out over
     ' UiMotion.FadeMilliseconds on UiMotion's Windows Forms clock. A
     ' picture not ready, a switch that took the fade's length or longer,
-    ' a switch just after a fade, or motion off, is a cut, as before.
+    ' a switch just after a fade or with another of the thread's windows
+    ' over the page area, or motion off, is a cut, as before.
     '
     ' The window never takes part: disabled, never activated, transparent
     ' to the pointer, and in no view a screen reader reads (its UI
@@ -179,26 +180,48 @@ Namespace Controls
                 Return
             End If
 
+            Dim screen As Rectangle = _area.RectangleToScreen(_area.ClientRectangle)
+
+            ' So may another of the thread's windows over the page area, such
+            ' as a tooltip going as the switch begins.
+            If AnotherWindowOver(screen) Then
+                LastOutcome = "cut: another window is over the page area"
+                Return
+            End If
+
             ' The overlay is made, and placed over the page area, on the
             ' window's thread, hidden: the worker puts the picture in it
             ' without moving or sizing it, which would have Windows ask this
-            ' thread, busy with the switch, about the move.
-            If _overlay Is Nothing OrElse _overlay.Handle = IntPtr.Zero Then
-                _overlay = New Overlay(_owner)
-                OverlaysMade += 1
-            End If
+            ' thread, busy with the switch, about the move. A window Windows
+            ' cannot make (out of window handles) is a cut: the fade never
+            ' stops the switch.
+            Try
 
-            Dim screen As Rectangle = _area.RectangleToScreen(_area.ClientRectangle)
-            Dim picture As New Picture With {.Screen = screen}
-            Dim overlay As IntPtr = _overlay.Handle
+                If _overlay Is Nothing OrElse _overlay.Handle = IntPtr.Zero Then
+                    _overlay = New Overlay(_owner)
+                    OverlaysMade += 1
+                End If
 
-            If WindowBounds(overlay) <> screen Then
-                SetWindowPos(overlay, IntPtr.Zero, screen.X, screen.Y, screen.Width, screen.Height, SWP_NOZORDER Or SWP_NOOWNERZORDER Or SWP_NOACTIVATE Or SWP_DEFERERASE Or SWP_NOREDRAW)
-            End If
+                Dim picture As New Picture With {.Screen = screen}
+                Dim overlay As IntPtr = _overlay.Handle
 
-            _picture = picture
-            Interlocked.Increment(_inFlight)
-            ThreadPool.UnsafeQueueUserWorkItem(Sub(state) Read(picture, screen, overlay), Nothing)
+                If WindowBounds(overlay) <> screen Then
+                    SetWindowPos(overlay, IntPtr.Zero, screen.X, screen.Y, screen.Width, screen.Height, SWP_NOZORDER Or SWP_NOOWNERZORDER Or SWP_NOACTIVATE Or SWP_DEFERERASE Or SWP_NOREDRAW)
+                End If
+
+                Interlocked.Increment(_inFlight)
+                Try
+                    ThreadPool.UnsafeQueueUserWorkItem(Sub(state) Read(picture, screen, overlay), Nothing)
+                Catch
+                    Interlocked.Decrement(_inFlight)
+                    Throw
+                End Try
+                _picture = picture
+
+            Catch ex As Exception When TypeOf ex Is ComponentModel.Win32Exception OrElse TypeOf ex Is OutOfMemoryException
+                _picture = Nothing
+                LastOutcome = "cut: the overlay could not be made"
+            End Try
 
         End Sub
 
@@ -296,6 +319,29 @@ Namespace Controls
         Private Function CanShow() As Boolean
             Return _owner.IsHandleCreated AndAlso _owner.Visible AndAlso _owner.WindowState <> FormWindowState.Minimized AndAlso
                 _area.IsHandleCreated AndAlso _area.Visible AndAlso _area.ClientSize.Width > 0 AndAlso _area.ClientSize.Height > 0
+        End Function
+
+
+        ' Whether a window of this thread's other than the owner and the
+        ' overlay shows over the area: a tooltip, a menu, a window of its own.
+        Private Function AnotherWindowOver(area As Rectangle) As Boolean
+
+            Dim found As Boolean = False
+            Dim owner As IntPtr = _owner.Handle
+            Dim overlay As IntPtr = OverlayHandle
+
+            EnumThreadWindows(GetCurrentThreadId(),
+                Function(window, parameter)
+                    If window <> owner AndAlso window <> overlay AndAlso IsWindowVisible(window) AndAlso WindowBounds(window).IntersectsWith(area) Then
+                        found = True
+                        Return False
+                    End If
+                    Return True
+                End Function,
+                IntPtr.Zero)
+
+            Return found
+
         End Function
 
 
@@ -737,6 +783,16 @@ Namespace Controls
 
         <DllImport("user32.dll")>
         Private Shared Function IsWindowVisible(window As IntPtr) As Boolean
+        End Function
+
+        Private Delegate Function EnumWindowsProc(window As IntPtr, parameter As IntPtr) As Boolean
+
+        <DllImport("user32.dll")>
+        Private Shared Function EnumThreadWindows(threadId As Integer, callback As EnumWindowsProc, parameter As IntPtr) As Boolean
+        End Function
+
+        <DllImport("kernel32.dll")>
+        Private Shared Function GetCurrentThreadId() As Integer
         End Function
 
         <DllImport("UIAutomationCore.dll")>
