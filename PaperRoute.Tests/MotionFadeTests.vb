@@ -248,21 +248,60 @@ Public Class MotionFadeTests
     ' A click while the picture fades ends the fade there and then, and
     ' reaches the control under the pointer on the page shown. The control
     ' is the Library's Authors & Affiliations tab (a click on Import &
-    ' Export's commands would open their dialogs). Windows' own hit test,
-    ' which the posted click does not need, is held on an unlocked desktop
-    ' with the window on the screen only; off the screen the overlay's
-    ' styles, held above, are what passes the pointer through.
+    ' Export's commands would open their dialogs). The overlay answers
+    ' Windows' hit test over the tab as transparent. On the screen (the
+    ' second row, with PAPERROUTE_ON_SCREEN_TESTS=1 on an unlocked desktop,
+    ' the window put above the others and never activated; Inconclusive
+    ' otherwise, or where Windows finds another window over the tab with
+    ' no fade showing), Windows' hit test at the tab finds the tab with
+    ' the overlay showing over it, and the click checks the tab, as a tab
+    ' clicked does once Windows finds it under the pointer. (Off the
+    ' screen the click is posted to the tab, so it reaches the tab whatever
+    ' is over it.)
     <TestMethod>
-    Public Sub AClickDuringTheFadeEndsItAndReachesTheControlUnderThePointer()
+    <DataRow(False)>
+    <DataRow(True)>
+    Public Sub AClickDuringTheFadeEndsItAndReachesTheControlUnderThePointer(onScreen As Boolean)
+
+        If onScreen Then
+            If Not String.Equals(Environment.GetEnvironmentVariable("PAPERROUTE_ON_SCREEN_TESTS"), "1", StringComparison.Ordinal) Then
+                Assert.Inconclusive("Set PAPERROUTE_ON_SCREEN_TESTS=1 on an unlocked desktop to put the test window on the screen.")
+            End If
+            If Not DesktopUnlocked() Then
+                Assert.Inconclusive("The desktop is locked: Windows finds no window under a point of it.")
+            End If
+        End If
 
         OnBoard(
             Sub(board)
                 UiMotion.FadeMilliseconds = 10000
+                If onScreen Then
+                    Dim area As Rectangle = Screen.PrimaryScreen.WorkingArea
+                    board.Location = New Point(area.Left + 20, area.Top + 20)
+                    SetWindowPos(board.Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE Or SWP_NOSIZE Or SWP_NOACTIVATE)
+                    Application.DoEvents()
+                End If
+                Dim findTab As Func(Of RadioButton) =
+                    Function() ViewCatalog.Descendants(board.PageView).OfType(Of RadioButton)().Single(Function(item) item.Text = "Authors & Affiliations")
+
                 board.NavigateTo(Form1.WorkspacePage.Library)
                 Application.DoEvents()
                 board.WaitForIdleWork()
                 board.PageFade.End()
                 Pump(80)
+
+                ' On the screen, with no fade showing, Windows finds the tab at
+                ' its middle; a window over it there, such as the lock screen,
+                ' leaves nothing to hold.
+                If onScreen Then
+                    Dim first As RadioButton = findTab()
+                    Dim middle As Point = first.PointToScreen(New Point(first.Width \ 2, first.Height \ 2))
+                    Dim over As IntPtr = WindowFromPoint(middle)
+                    If over <> first.Handle Then
+                        Assert.Inconclusive("Another window is over the test window on the screen: " & WindowName(over) & ".")
+                    End If
+                End If
+
                 board.NavigateTo(Form1.WorkspacePage.Board)
                 board.WaitForIdleWork()
                 board.PageFade.End()
@@ -272,11 +311,19 @@ Public Class MotionFadeTests
                 Assert.AreEqual("faded", board.PageFade.LastOutcome)
                 Assert.IsTrue(board.PageFade.Showing, "The picture shows over the Library.")
 
-                Dim tab As RadioButton = ViewCatalog.Descendants(board.PageView).OfType(Of RadioButton)().Single(Function(item) item.Text = "Authors & Affiliations")
+                Dim tab As RadioButton = findTab()
                 Dim downs As Integer = 0
                 AddHandler tab.MouseDown, Sub(sender, e) downs += 1
                 Dim inside As New Point(tab.Width \ 2, tab.Height \ 2)
-                Dim onScreen As Boolean = WindowFromPoint(tab.PointToScreen(inside)) = tab.Handle
+                Dim at As Point = tab.PointToScreen(inside)
+                Assert.IsTrue(WindowBounds(board.PageFade.OverlayHandle).Contains(at), "The overlay is over the tab.")
+                Assert.AreEqual(New IntPtr(HTTRANSPARENT), SendMessage(board.PageFade.OverlayHandle, WM_NCHITTEST, IntPtr.Zero, MousePoint(at)),
+                                "The overlay answers Windows' hit test over the tab as transparent.")
+                If onScreen Then
+                    Dim found As IntPtr = WindowFromPoint(at)
+                    Assert.AreEqual(tab.Handle, found, "Windows' hit test at the tab, with the overlay showing over it, finds the tab, not " & WindowName(found) &
+                                    If(found = board.PageFade.OverlayHandle, " (the overlay)", String.Empty))
+                End If
 
                 PostMessage(tab.Handle, WM_LBUTTONDOWN, New IntPtr(MK_LBUTTON), MousePoint(inside))
                 PostMessage(tab.Handle, WM_LBUTTONUP, IntPtr.Zero, MousePoint(inside))
@@ -882,6 +929,16 @@ Public Class MotionFadeTests
     End Function
 
 
+    ' A window by its class, and its process when another's.
+    Private Shared Function WindowName(window As IntPtr) As String
+        Dim name As New Text.StringBuilder(256)
+        GetClassName(window, name, name.Capacity)
+        Dim process As Integer = 0
+        GetWindowThreadProcessId(window, process)
+        Return "a window of class " & name.ToString() & If(process = Environment.ProcessId, String.Empty, " in process " & process.ToString())
+    End Function
+
+
     Private Shared Function MousePoint(at As Point) As IntPtr
         Return New IntPtr((at.Y << 16) Or (at.X And &HFFFF))
     End Function
@@ -895,6 +952,8 @@ Public Class MotionFadeTests
     Private Const WM_CHAR As UInteger = &H102
     Private Const WM_LBUTTONDOWN As UInteger = &H201
     Private Const WM_LBUTTONUP As UInteger = &H202
+    Private Const WM_NCHITTEST As UInteger = &H84
+    Private Const HTTRANSPARENT As Integer = -1
     Private Const MK_LBUTTON As Integer = &H1
     Private Const DESKTOP_SWITCHDESKTOP As UInteger = &H100
     Private Shared ReadOnly HWND_TOPMOST As New IntPtr(-1)
@@ -969,7 +1028,19 @@ Public Class MotionFadeTests
     End Function
 
     <DllImport("user32.dll")>
+    Private Shared Function SendMessage(window As IntPtr, message As UInteger, wParam As IntPtr, lParam As IntPtr) As IntPtr
+    End Function
+
+    <DllImport("user32.dll")>
     Private Shared Function WindowFromPoint(point As Point) As IntPtr
+    End Function
+
+    <DllImport("user32.dll", CharSet:=CharSet.Unicode)>
+    Private Shared Function GetClassName(window As IntPtr, name As Text.StringBuilder, capacity As Integer) As Integer
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function GetWindowThreadProcessId(window As IntPtr, ByRef process As Integer) As Integer
     End Function
 
     <DllImport("user32.dll")>
