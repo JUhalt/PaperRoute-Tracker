@@ -196,6 +196,12 @@ Namespace Forms
                 .Padding = New Padding(20)
             }
 
+            ' One column the window's width, so a wide line in the header or the
+            ' summary wraps or ends in an ellipsis inside it instead of widening
+            ' the column past the window, as the inline header's did at the main
+            ' window's minimum size (#93).
+            root.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
+
             root.RowStyles.Add(New RowStyle(SizeType.Absolute))
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 110))
             root.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
@@ -224,15 +230,32 @@ Namespace Forms
                 )
             Next
 
-            ' Reserve all five fixed rows plus the GroupBox heading and layout
-            ' insets. The former 238px cell clipped the fifth (portal) row.
-            ' Normal DPI autoscaling scales this budget with the row heights;
-            ' long journal names must not determine the summary's height.
-            root.RowStyles(0).Height = summary.RowCount * summaryRowHeight +
-                summaryGroup.Padding.Vertical + summaryGroup.Margin.Vertical +
-                summary.Margin.Vertical + Me.Font.Height + 4
+            ' Reserve all five fixed rows and what the card keeps around
+            ' them: its padding, its margin and its title. The former 238px
+            ' cell clipped the fifth (portal) row. The title's room is read
+            ' from the card whenever its font is set, as when it joins the
+            ' window: a guess from the window's font, taken as the window
+            ' was built, left the portal row 2 pixels short at 150% (#93).
+            ' Long journal names must not determine the summary's height.
+            Dim reserveSummary As Action =
+                Sub()
+                    root.RowStyles(0).Height = summary.RowCount * summaryRowHeight +
+                        summaryGroup.DisplayRectangle.Top + summaryGroup.Padding.Bottom +
+                        summaryGroup.Margin.Vertical
+                End Sub
 
-            summary.ColumnStyles.Add(New ColumnStyle(SizeType.Absolute, 195))
+            reserveSummary()
+
+            AddHandler summaryGroup.FontChanged,
+                Sub(sender, e)
+                    reserveSummary()
+                End Sub
+
+            ' The captions' column fits its widest caption and is never
+            ' narrower than 195 (see CreateFieldLabel): at 150% "Journal
+            ' manuscript ID" wrapped in a fixed 195 and its row cut its
+            ' second line (#93).
+            summary.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
             summary.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
 
             summary.Controls.Add(CreateFieldLabel("Journal"), 0, 0)
@@ -494,37 +517,25 @@ Namespace Forms
 
 
         ' The inline detail pane's header: journal, identifiers and dates, the
-        ' publisher portal, and any notes, in a few lines.
+        ' publisher portal, and any notes, in a few lines. Each line is a row
+        ' of the first column, anchored to both its sides: a table lays such a
+        ' label out at its column's width, so a long journal name or date line
+        ' wraps beside the portal button instead of widening the column past
+        ' the pane and pushing the button out of it, as it did at the main
+        ' window's minimum size (#93).
         Private Function BuildInlineHeader() As Control
 
-            Dim header As New TableLayoutPanel With {
-                .Dock = DockStyle.Fill,
-                .AutoSize = True,
-                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                .ColumnCount = 2,
-                .RowCount = 1,
-                .Margin = New Padding(0, 0, 0, 8)
-            }
+            Dim lines As New List(Of Label)()
 
-            header.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
-            header.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
-            header.RowStyles.Add(New RowStyle(SizeType.AutoSize))
-
-            Dim identity As New FlowLayoutPanel With {
-                .AutoSize = True,
-                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                .FlowDirection = FlowDirection.TopDown,
-                .WrapContents = False,
-                .Margin = New Padding(0)
-            }
-
-            Dim lblJournal As New Label With {
-                .Text = _submission.JournalName,
-                .AutoSize = True,
-                .UseMnemonic = False,
-                .Margin = New Padding(0, 0, 0, 2),
-                .Font = New Font(Me.Font.FontFamily, Me.Font.SizeInPoints * 1.2F, FontStyle.Bold)
-            }
+            lines.Add(
+                New Label With {
+                    .Text = _submission.JournalName,
+                    .AutoSize = True,
+                    .UseMnemonic = False,
+                    .Margin = New Padding(0, 0, 0, 2),
+                    .Font = New Font(Me.Font.FontFamily, Me.Font.SizeInPoints * 1.2F, FontStyle.Bold)
+                }
+            )
 
             Dim meta As New List(Of String)
             If Not String.IsNullOrWhiteSpace(_submission.ManuscriptNumber) Then
@@ -535,33 +546,45 @@ Namespace Forms
                 meta.Add("Follow up " & _submission.FollowUpDate.Value.ToString("MMMM d, yyyy"))
             End If
 
-            Dim lblMeta As New Label With {
-                .Text = String.Join("  " & ChrW(&HB7) & "  ", meta),
-                .AutoSize = True,
-                .UseMnemonic = False,
-                .Margin = New Padding(0),
-                .ForeColor = SystemColors.GrayText
-            }
-
-            identity.Controls.Add(lblJournal)
-            identity.Controls.Add(lblMeta)
-
-            If Not String.IsNullOrWhiteSpace(_submission.Notes) Then
-                Dim lblNotes As New Label With {
-                    .Text = _submission.Notes.Trim(),
+            lines.Add(
+                New Label With {
+                    .Text = String.Join("  " & ChrW(&HB7) & "  ", meta),
                     .AutoSize = True,
                     .UseMnemonic = False,
-                    .Margin = New Padding(0, 6, 0, 0),
-                    .AccessibleName = "Submission notes"
+                    .Margin = New Padding(0),
+                    .ForeColor = SystemColors.GrayText
                 }
-                identity.Controls.Add(lblNotes)
-                AddHandler header.Resize,
-                    Sub(sender, e)
-                        lblNotes.MaximumSize = New Size(Math.Max(200, header.ClientSize.Width - 160), 0)
-                    End Sub
+            )
+
+            If Not String.IsNullOrWhiteSpace(_submission.Notes) Then
+                lines.Add(
+                    New Label With {
+                        .Text = _submission.Notes.Trim(),
+                        .AutoSize = True,
+                        .UseMnemonic = False,
+                        .Margin = New Padding(0, 6, 0, 0),
+                        .AccessibleName = "Submission notes"
+                    }
+                )
             End If
 
-            header.Controls.Add(identity, 0, 0)
+            Dim header As New TableLayoutPanel With {
+                .Dock = DockStyle.Fill,
+                .AutoSize = True,
+                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                .ColumnCount = 2,
+                .RowCount = lines.Count,
+                .Margin = New Padding(0, 0, 0, 8)
+            }
+
+            header.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
+            header.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
+
+            For row As Integer = 0 To lines.Count - 1
+                header.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+                lines(row).Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
+                header.Controls.Add(lines(row), 0, row)
+            Next
 
             If Not String.IsNullOrWhiteSpace(_submission.PortalUrl) Then
                 Dim btnPortal As New Button With {
@@ -572,19 +595,22 @@ Namespace Forms
                 }
                 AddHandler btnPortal.Click, AddressOf OpenPublisherPortal
                 header.Controls.Add(btnPortal, 1, 0)
+                header.SetRowSpan(btnPortal, lines.Count)
             End If
 
             Return header
 
         End Function
 
-
+        ' At least 189 wide, so with its margins the captions' column keeps
+        ' the 195 pixels it always had wherever the captions fit in them.
         Private Function CreateFieldLabel(text As String) As Label
 
             Return New Label With {
                 .UseMnemonic = False,
                 .Text = text,
                 .AutoSize = True,
+                .MinimumSize = New Size(189, 0),
                 .Anchor = AnchorStyles.Left,
                 .Font = New Font(Me.Font, FontStyle.Bold)
             }
