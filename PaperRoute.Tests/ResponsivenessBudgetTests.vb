@@ -54,6 +54,9 @@ Public Class ResponsivenessBudgetTests
     ' The idle queue's slice: the work a window does between messages
     ' while it idles is cut into steps about this long (#133).
     Friend Shared ReadOnly IdleSlice As New Budget("idle slice", 30)
+    ' A page switch with motion on (#142): it may grow by no more than the
+    ' cross-fade's own length.
+    Friend Shared ReadOnly PageSwitchWithFade As New Budget("page switch + fade", PageSwitch.Milliseconds + UiMotion.DefaultFadeMilliseconds)
 
     Private _root As String = String.Empty
     Private ReadOnly _paintObserved As New Dictionary(Of String, Boolean)()
@@ -84,15 +87,23 @@ Public Class ResponsivenessBudgetTests
 
         RunOnStaThread(
             Sub()
-                Dim example = LargeLibraryFixture.WriteExample(Path.Combine(_root, "example"))
-                Dim large = LargeLibraryFixture.Create(Path.Combine(_root, "large"), 500)
-                libraries.Add(example)
-                libraries.Add(large)
-                ' The example library runs first and carries the process's
-                ' first-time costs (JIT, the first text change), so its rows
-                ' stay report-only; the budgets are held on the 500 library.
-                dpi = MeasureLibrary(example, rows, enforce:=False)
-                MeasureLibrary(large, rows, enforce:=True)
+                ' Motion off (#142): the switches are a cut, as before, and
+                ' held to the page-switch budget; the test below holds them
+                ' with motion on.
+                UiMotion.EnabledOverride = False
+                Try
+                    Dim example = LargeLibraryFixture.WriteExample(Path.Combine(_root, "example"))
+                    Dim large = LargeLibraryFixture.Create(Path.Combine(_root, "large"), 500)
+                    libraries.Add(example)
+                    libraries.Add(large)
+                    ' The example library runs first and carries the process's
+                    ' first-time costs (JIT, the first text change), so its rows
+                    ' stay report-only; the budgets are held on the 500 library.
+                    dpi = MeasureLibrary(example, rows, enforce:=False)
+                    MeasureLibrary(large, rows, enforce:=True)
+                Finally
+                    UiMotion.EnabledOverride = Nothing
+                End Try
             End Sub)
 
         Report(libraries, rows, dpi)
@@ -406,6 +417,196 @@ Public Class ResponsivenessBudgetTests
                 facts?.Dispose()
             End Try
 
+            ' With motion off no switch made a cross-fade (#142).
+            Assert.IsNull(board.PageFade, "With motion off no switch fades.")
+
+            Dim dpi As Integer = board.DeviceDpi
+            board.Close()
+            Return dpi
+
+        End Using
+
+    End Function
+
+
+    ' The page switches with motion on (#142), on the 500 library. Each
+    ' switch the test above holds to the page-switch budget is held to it
+    ' plus the cross-fade's own length, 150 ms: reading the page left is
+    ' started as the switch begins and showing its picture is part of the
+    ' switch, both timed in it; the fade's frames follow on the window's
+    ' clock once the switch has returned. Each row says whether its switch
+    ' faded or was a cut, and why, and what showing the picture took. The
+    ' test fails if no switch faded, and if a switch quicker than the fade
+    ' was a cut for any reason but a picture not read in time (the switch
+    ' never waits for it) or a manuscript's open, which is a cut by
+    ' design. The example library runs first, report-only, as above. The
+    ' same switches are run with motion off first, report-only, on a board
+    ' of their own and with the same pauses between them, so the two can
+    ' be told apart switch by switch: a pause lets the processor idle, and
+    ' the switch after it is slower than one run straight after other
+    ' work, as the test above runs them.
+    <TestMethod>
+    Public Sub PageSwitchesWithMotionOnGrowByNoMoreThanTheFade()
+
+        Dim rows As New List(Of Row)()
+        Dim libraries As New List(Of LargeLibraryFixture.SyntheticLibrary)()
+        Dim dpi As Integer = 0
+
+        RunOnStaThread(
+            Sub()
+                Try
+                    Dim example = LargeLibraryFixture.WriteExample(Path.Combine(_root, "example"))
+                    Dim large = LargeLibraryFixture.Create(Path.Combine(_root, "large"), 500)
+                    libraries.Add(example)
+                    libraries.Add(large)
+                    dpi = MeasureSwitchesWithMotion(example, rows, enforce:=False, motion:=True)
+                    MeasureSwitchesWithMotion(large, rows, enforce:=False, motion:=False)
+                    MeasureSwitchesWithMotion(large, rows, enforce:=True, motion:=True)
+                Finally
+                    UiMotion.EnabledOverride = Nothing
+                End Try
+            End Sub)
+
+        Report(libraries, rows, dpi)
+
+        ' Each switch with motion on against itself with motion off.
+        Dim text As New StringBuilder()
+        text.AppendLine("| Switch, 500 library | Motion off ms | Motion on ms | On less off ms | With motion on |")
+        text.AppendLine("|---|---:|---:|---:|---|")
+        For Each row As Row In rows.Where(Function(item) item.Library = "500" AndAlso Not String.IsNullOrEmpty(item.Motion))
+            Dim action As String = row.Action.Replace(" (motion on)", String.Empty)
+            Dim off As Row = rows.FirstOrDefault(Function(item) item.Library = "500" AndAlso item.Action = action & " (motion off, the same pauses)")
+            If off IsNot Nothing Then
+                text.AppendLine("| " & action & " | " & Ms(off.Ui) & " | " & Ms(row.Ui) & " | " & Ms(row.Ui - off.Ui) & " | " & row.Motion & " |")
+            End If
+        Next
+        TestContext.WriteLine(text.ToString())
+        Console.WriteLine(text.ToString())
+
+        Dim multiplier As Double = BudgetMultiplier()
+        Dim failures As List(Of String) =
+            rows.Where(Function(row) row.Enforced AndAlso Not row.Within(multiplier)).
+                 Select(Function(row) row.Library & ": " & row.Action & " took " & Ms(row.Ui) & " ms against " & Ms(row.Budget.Milliseconds * multiplier) & " ms").
+                 ToList()
+
+        Dim switches As List(Of Row) = rows.Where(Function(row) row.Library = "500" AndAlso Not String.IsNullOrEmpty(row.Motion)).ToList()
+        Dim faded As Integer = switches.Where(Function(row) row.Motion.StartsWith("faded", StringComparison.Ordinal)).Count()
+        Dim notReady As Integer = switches.Where(Function(row) row.Motion.Contains("the picture was not ready", StringComparison.Ordinal)).Count()
+
+        If faded = 0 Then failures.Add("No switch on the 500 library faded.")
+
+        For Each row As Row In switches.Where(Function(item) item.Motion.StartsWith("cut", StringComparison.Ordinal) AndAlso item.Ui < UiMotion.DefaultFadeMilliseconds AndAlso
+                                                        Not item.Motion.Contains("the picture was not ready", StringComparison.Ordinal) AndAlso
+                                                        Not item.Motion.Contains("a manuscript opens as a cut", StringComparison.Ordinal))
+            failures.Add("500: " & row.Action & " (" & Ms(row.Ui) & " ms) was a " & row.Motion)
+        Next
+
+        Dim summary As String = "500 library: " & faded.ToString(CultureInfo.InvariantCulture) & " of " & switches.Count.ToString(CultureInfo.InvariantCulture) &
+            " switches faded, " & notReady.ToString(CultureInfo.InvariantCulture) & " were cuts because the picture was not ready."
+        TestContext.WriteLine(summary)
+        Console.WriteLine(summary)
+
+        Assert.AreEqual(0, failures.Count, String.Join(Environment.NewLine, failures))
+
+    End Sub
+
+
+    ' The switches the test above holds, with motion on or off, in the same
+    ' order and each followed by its paint; the rows that time other work
+    ' are left out. Returns the window's DPI.
+    Private Function MeasureSwitchesWithMotion(
+        library As LargeLibraryFixture.SyntheticLibrary,
+        rows As List(Of Row),
+        enforce As Boolean,
+        motion As Boolean
+    ) As Integer
+
+        UiMotion.EnabledOverride = motion
+        Dim label As String = If(motion, " (motion on)", " (motion off, the same pauses)")
+
+        Dim subject As Manuscript =
+            library.Manuscripts.Where(Function(item) item.SubmissionPackets.Count > 0).
+                OrderByDescending(Function(item) item.Submissions.Count).
+                FirstOrDefault()
+
+        If subject Is Nothing Then subject = library.Manuscripts.First()
+
+        Dim another As Manuscript =
+            If(library.Manuscripts.Where(Function(item) item IsNot subject AndAlso item.SubmissionPackets.Count > 0).
+                   OrderByDescending(Function(item) item.Submissions.Count).FirstOrDefault(),
+               library.Manuscripts.First(Function(item) item IsNot subject))
+
+        Using board As New LibraryBoard(library, Path.Combine(_root, library.Name & If(motion, "-motion-on", "-motion-off") & "-settings"))
+
+            board.Start()
+            board.WaitForBoardFill()
+            board.WaitForIdleWork()
+
+            ' Each switch is timed, then what it changed is painted, then the
+            ' same pause follows it with motion off and on: the window
+            ' processes its messages for 260 ms, and at least 80 ms after a
+            ' fade has ended, so the screen has stopped showing it (a switch
+            ' begun within 50 ms of one is a cut, PageFade); a researcher
+            ' does not switch again within a fade.
+            Dim switchTo As Func(Of String, Action, Boolean, Row) =
+                Function(action, work, enforced)
+                    Dim row As Row = Time(library, action & label, If(motion, PageSwitchWithFade, PageSwitch), work, enforced:=enforce AndAlso enforced)
+                    If motion Then
+                        Dim fade As PageFade = board.PageFade
+                        row.Motion = If(fade Is Nothing, "no fade made", fade.LastOutcome & ", Begin " & fade.LastBeginMilliseconds.ToString("0.0", CultureInfo.InvariantCulture) & " ms")
+                    End If
+                    board.PaintNow()
+                    Dim waited As Stopwatch = Stopwatch.StartNew()
+                    Dim ended As Double = 0
+                    While waited.ElapsedMilliseconds < 1000
+                        Dim fading As Boolean = board.PageFade IsNot Nothing AndAlso board.PageFade.Fading
+                        If fading Then ended = waited.Elapsed.TotalMilliseconds
+                        If Not fading AndAlso waited.ElapsedMilliseconds >= 260 AndAlso waited.Elapsed.TotalMilliseconds - ended >= 80 Then Exit While
+                        Application.DoEvents()
+                        Thread.Sleep(1)
+                    End While
+                    Return row
+                End Function
+
+            Dim go As Func(Of Form1.WorkspacePage, Action) = Function(page) Sub() board.NavigateTo(page)
+
+            rows.Add(switchTo("Board to Library", go(Form1.WorkspacePage.Library), False))
+            rows.Add(switchTo("Library to Board", go(Form1.WorkspacePage.Board), True))
+
+            rows.Add(switchTo("Board to Journals (the page prepared while the window idled)", go(Form1.WorkspacePage.Journals), True))
+            rows.Add(switchTo("Journals to Board", go(Form1.WorkspacePage.Board), False))
+            rows.Add(switchTo("Board to Journals (second visit)", go(Form1.WorkspacePage.Journals), True))
+            rows.Add(switchTo("Journals to Board (second visit)", go(Form1.WorkspacePage.Board), False))
+
+            rows.Add(switchTo("Board to Deadlines", go(Form1.WorkspacePage.Deadlines), True))
+            rows.Add(switchTo("Deadlines to Board", go(Form1.WorkspacePage.Board), True))
+            rows.Add(switchTo("Board to Deadlines (second visit)", go(Form1.WorkspacePage.Deadlines), True))
+            rows.Add(switchTo("Deadlines to Board (second visit)", go(Form1.WorkspacePage.Board), True))
+
+            rows.Add(switchTo("Board to Insights (the page prepared while the window idled)", go(Form1.WorkspacePage.Insights), True))
+            board.WaitForInsights()
+            rows.Add(switchTo("Insights to Board", go(Form1.WorkspacePage.Board), True))
+            rows.Add(switchTo("Board to Insights (second visit)", go(Form1.WorkspacePage.Insights), True))
+            board.WaitForInsights()
+            rows.Add(switchTo("Insights to Board (second visit)", go(Form1.WorkspacePage.Board), True))
+
+            rows.Add(switchTo("Board to Import & Export", go(Form1.WorkspacePage.ImportExport), True))
+            rows.Add(switchTo("Import & Export to Board", go(Form1.WorkspacePage.Board), True))
+            rows.Add(switchTo("Board to Import & Export (second visit)", go(Form1.WorkspacePage.ImportExport), True))
+            rows.Add(switchTo("Import & Export to Board (second visit)", go(Form1.WorkspacePage.Board), True))
+
+            ' A manuscript opens as a cut: its versions and details, built on
+            ' the UI thread once the page has painted (the test above times
+            ' them), would hold a fade's frames that long.
+            rows.Add(switchTo("Board to a manuscript page (the first, on the page prepared while the window idled)", Sub() board.Open(subject), False))
+            rows.Add(switchTo("Manuscript page to Board", go(Form1.WorkspacePage.Board), True))
+            board.WaitForIdleWork()
+
+            rows.Add(switchTo("Board to a manuscript page (the kept page, another manuscript)", Sub() board.Open(another), False))
+            Application.DoEvents()
+            rows.Add(switchTo("Kept manuscript page to Board", go(Form1.WorkspacePage.Board), True))
+            board.WaitForIdleWork()
+
             Dim dpi As Integer = board.DeviceDpi
             board.Close()
             Return dpi
@@ -460,6 +661,10 @@ Public Class ResponsivenessBudgetTests
 
         ' Set for an action #133 fixed; a report-only row never fails the test.
         Public Property Enforced As Boolean
+
+        ' With motion on (#142), whether the switch faded or was a cut, and
+        ' what showing the picture took.
+        Public Property Motion As String = String.Empty
 
         Public Function Within(multiplier As Double) As Boolean
             Return Ui <= Budget.Milliseconds * multiplier
@@ -603,7 +808,8 @@ Public Class ResponsivenessBudgetTests
         For Each row In rows
             text.AppendLine("| " & row.Library & " | " & row.Action & " | " & Ms(row.Wall) & " | " & Ms(row.Ui) & " | " &
                             Ms(row.Budget.Milliseconds) & " (" & row.Budget.Name & ") | " &
-                            If(row.Within(multiplier), "within", "OVER") & If(row.Enforced, ", enforced", String.Empty) & " |")
+                            If(row.Within(multiplier), "within", "OVER") & If(row.Enforced, ", enforced", String.Empty) &
+                            If(String.IsNullOrEmpty(row.Motion), String.Empty, "; " & row.Motion) & " |")
         Next
 
         TestContext.WriteLine(text.ToString())

@@ -477,3 +477,106 @@ The targeted Debug filter of the brief ran once on the follow-ups (22:27 to 23:0
 - **The rows time the same window here.** The main window is now capped to the working area (#209). This host's test process sees a 1536x912 working area at 96 DPI, so the window opens at 1280x840 as before (912 less the 72-pixel margin is 840). On a smaller screen, as the 1024x768 build runner's, the window is shorter, and so are the pages prepared in it and the shelves' first screens.
 - **Not measured again in Release.** Master's code now runs on rows this section measured without it: #210's changes to `ManuscriptLifecycleService.ReconcileFromLatestWorkflow`, which each record's load runs; #203's filing check (`CanSuggestFiling`) on each Pipeline card; and #212's header table in each submission's details. The targeted Debug filter ran on each merge, against the budget x 2, with no VM: on `1fe715e` 449 tests, 444 passed, 5 skipped; on `578ed94` 457 tests, 452 passed, 5 skipped (the file-dialog title bar rows each time). Every enforced row held in both. The three reported opens read 159, 650 and 221 ms in the first run, in which rows no merged change touches read higher too (Board to Import & Export 103 ms, against 49 in the second; CPU was not sampled), and 94, 81 and 82 ms in the second. Two report-only rows read over twice their 250 ms UI-thread budget: the example library's longest idle step after the fill, 529 ms on `578ed94` (109 on `1fe715e`), and Find Journals' first paint on the 500 library, 541 on `1fe715e` (239 on `578ed94`); both are Debug readings taken beside other test hosts, read as host load as the 650 is.
 - **Left to the pull request's full run.** SubmissionWorkflowConsistencyTests (9 tests, among them Record Submission...'s start at the target journal), VersionEditorScrollTests (1) and UnderlineTabControlTests (2) fall outside the targeted filter, as do 15 of ManuscriptLifecycleServiceTests' 18; the full Release suite on the pull request runs them, and their results in that run's trx are read before it merges.
+
+## 2026-10-24: the keyboard on the page opened, and micro-motion (#213, #142)
+
+Branch `fix/v092-motion`, stacked on speed part C (`fix/v092-speed-pages` at `aca56a6`, PR #215, not yet on master; that branch's later `039e83b`, a test-only change, is not in this one). It takes #213 (opening a page from the Board by keyboard left the keyboard in the hidden Board) and #142 (micro-motion: hover and press states and a page cross-fade). Both change the page switch part C rewrote, so the switch rows were measured again with motion off and with motion on. The sections above are history and were not changed.
+
+### What changed
+
+- **`7ec79ea`, #213.** A Board that has the keyboard (Windows' focus, or the window's own record of the focused control) gives it to the page shown: the manuscript page's Overview tab, a rail page's own first control, or the window's first stop for a page with none. Going back to the Board puts it on the control it came from, or on the new card's title if a save rebuilt the card. Both moves are made under the page area's `RedrawHold`: made after the hold, focusing the Overview tab painted it synchronously inside the switch (a radio button entered without Tab repaints itself), which `SwitchesPaintNothingSynchronously` caught.
+- **`a934035`, hover and press (#142).** `UiMotion` reads Windows' Animation effects setting once a session, can be forced by tests, and is off under a contrast theme whatever it says. One Windows Forms clock per UI thread eases ActionButton, FilterChip, the rail's items and a Board card's border over about 100 ms, each step repainting only the control eased; a press shows at once, and a card's highlight for the keyboard is immediate. The colors end on the theme's tokens. A toned filter chip eases toward the card surface: the plan's step toward the text, the rail's rule, left a hovered warning chip at 3.79:1 (it is 4.51:1 at rest).
+- **`ede1a48`, the cross-fade (#142).** As a switch begins, a worker reads the page area off the screen and puts the picture, hidden, in an overlay of its own over the page area; once the switch has returned the overlay is shown and faded out over 150 ms on the window's clock. A picture not ready, a switch that took 150 ms or more, a switch within 50 ms of a fade, a manuscript's open, or motion off is a cut, as before. The overlay is an owned, disabled, layered, click-through popup that never activates, is not a control, and is in UI Automation's raw view only; the first key, button, wheel or touch ends the fade and goes on to the page. SyncRail holds the rail's drawing, so a switch draws nothing of the window synchronously. Idle work waits while a fade runs (at most its length), and Insights' figures end a fade still running as they arrive.
+- **This section's commit, the budget test.** `EveryActionIsMeasuredOnBothLibraries` runs with motion forced off and fails if any switch faded. The new `PageSwitchesWithMotionOnGrowByNoMoreThanTheFade` runs the switches that test enforces, on boards of their own, once with motion off (reported) and once with motion on, each followed by its paint and the same pause (260 ms of the window processing its messages, and at least 80 ms after a fade has ended, so the screen has stopped showing it); it holds each switch with motion on to the page-switch budget plus the fade's length, 100 + 150 ms, and fails if nothing faded or if a switch quicker than the fade was a cut for any reason but a picture not read in time or a manuscript's open. Its rows are enforced x 1 in Release, x 2 in Debug and a further x 3 when `GITHUB_ACTIONS` is set, as every other enforced row.
+
+### Motion off: the switch rows, as part C holds them
+
+500 library, Release, `EveryActionIsMeasuredOnBothLibraries` with motion forced off, against the budget x 1; the branch's last commit. Runs A (10:02), B (10:08), C (10:12) and D (10:22) on 2026-10-24; see the host below. UI equals wall for every switch row.
+
+| Action | A / B / C / D | Budget ms | Held |
+|---|---:|---:|---|
+| First switch to Published | 5 / 13 / 6 / 9 | 100 | enforced |
+| Board to Library | 26 / 509 / 59 / 60 | 100 | reported |
+| Library to Board | 8 / 22 / 20 / 17 | 100 | enforced |
+| Board to Journals | 7 / 12 / 12 / 14 | 100 | enforced |
+| Journals to Board | 27 / 38 / 42 / 50 | 100 | reported |
+| Board to Journals (second visit) | 6 / 17 / 13 / 14 | 100 | enforced |
+| Journals to Board (second visit) | 24 / 62 / 44 / 33 | 100 | reported |
+| Board to Deadlines | 18 / 61 / 37 / 34 | 100 | enforced |
+| Deadlines to Board | 10 / 26 / 18 / 12 | 100 | enforced |
+| Board to Deadlines (second visit) | 6 / 23 / 14 / 11 | 100 | enforced |
+| Deadlines to Board (second visit) | 8 / 21 / 10 / 12 | 100 | enforced |
+| Board to Insights | 7 / 20 / 19 / 9 | 100 | enforced |
+| Insights to Board | 15 / 19 / 19 / 17 | 100 | enforced |
+| Board to Insights (second visit) | 11 / 24 / 34 / 15 | 100 | enforced |
+| Insights to Board (second visit) | 8 / 20 / 21 / 16 | 100 | enforced |
+| Board to Import & Export | 28 / 69 / 60 / 47 | 100 | enforced |
+| Import & Export to Board | 7 / 18 / 15 / 18 | 100 | enforced |
+| Board to Import & Export (second visit) | 4 / 7 / 6 / 5 | 100 | enforced |
+| Import & Export to Board (second visit) | 8 / 19 / 16 / 19 | 100 | enforced |
+| Board to a manuscript page, the first | 32 / 124 / 81 / 58 | 100 | reported |
+| Manuscript page: versions and details after its first paint | 34 / 182 / 78 / 55 | 250 | enforced |
+| Manuscript page to Board | 12 / 19 / 18 / 15 | 100 | enforced |
+| Board to a manuscript page, the kept page (another manuscript) | 41 / 80 / 67 / 46 | 100 | reported |
+| Kept manuscript page to Board | 10 / 14 / 16 / 13 | 100 | enforced |
+| Board to a manuscript page, the kept page (a Pipeline manuscript with three shortlisted journals and tags) | 48 / 96 / 91 / 47 | 100 | reported |
+
+Every enforced switch row held in all four runs, within the ranges part C's runs read on 2026-10-23 (the first switch to Published 8 to 15, Library to Board 10 to 37, Board to Journals 12 to 25, Board to Insights 18 to 25 and its second visit 28 to 50; Board to Import & Export's first visit 35 to 98 in this branch's runs before the cross-fade). Run B, beside a sibling worktree's Debug test run, failed three enforced rows no switch is part of: warm startup 1,667 ms, the Board fill's longest idle step 380 and the save of a Pipeline manuscript whose card changes 407; Board to Library, reported, read 509 there. Runs A, C and D held every enforced row. On the same host before the cross-fade (`7ec79ea`, 07:27, and `a934035`, 08:11, motion following Windows' setting, on), the switch rows read in the same ranges.
+
+### Motion on against motion off, switch by switch
+
+500 library, Release, `PageSwitchesWithMotionOnGrowByNoMoreThanTheFade`, three runs at 10:18, 10:19 and 10:21 with no other test host: each switch with motion off and then with motion on, on boards of their own, with the same pauses (in these runs 220 ms; see below). Off and on are runs 1 / 2 / 3; the difference is of the medians.
+
+| Switch | Motion off ms | Motion on ms | On less off | With motion on (Begin, the picture shown) |
+|---|---:|---:|---:|---|
+| Board to Library | 28 / 29 / 24 | 33 / 72 / 48 | +20 | faded 3 of 3 (1.7 to 3.2 ms) |
+| Library to Board | 8 / 17 / 17 | 9 / 18 / 18 | +1 | faded 3 of 3 (1.5 to 2.4) |
+| Board to Journals | 8 / 11 / 11 | 10 / 10 / 12 | -1 | faded 3 of 3 (1.0 to 1.9) |
+| Journals to Board | 21 / 41 / 45 | 41 / 25 / 19 | -16 | faded 3 of 3 (1.1 to 2.0) |
+| Board to Journals (second visit) | 7 / 8 / 9 | 7 / 10 / 7 | -1 | faded 3 of 3 (1.1 to 1.2) |
+| Journals to Board (second visit) | 36 / 23 / 37 | 35 / 39 / 31 | -1 | faded 3 of 3 (1.3 to 1.7) |
+| Board to Deadlines | 21 / 17 / 31 | 19 / 23 / 21 | 0 | faded 3 of 3 (1.1 to 1.4) |
+| Deadlines to Board | 8 / 11 / 13 | 11 / 12 / 8 | 0 | faded 3 of 3 (1.0 to 1.3) |
+| Board to Deadlines (second visit) | 8 / 7 / 7 | 8 / 12 / 8 | +1 | faded 3 of 3 (1.3 to 1.6) |
+| Deadlines to Board (second visit) | 7 / 9 / 13 | 13 / 17 / 9 | +4 | faded 3 of 3 (1.1 to 2.0) |
+| Board to Insights | 8 / 15 / 14 | 14 / 19 / 15 | +1 | faded 3 of 3 (1.6 to 2.3) |
+| Insights to Board | 13 / 9 / 7 | 11 / 10 / 10 | +1 | faded 3 of 3 (1.2 to 1.9) |
+| Board to Insights (second visit) | 12 / 25 / 25 | 15 / 16 / 17 | -9 | faded 3 of 3 (1.4 to 1.6) |
+| Insights to Board (second visit) | 13 / 15 / 10 | 10 / 10 / 9 | -3 | faded 3 of 3 (0.9 to 1.4) |
+| Board to Import & Export | 28 / 28 / 24 | 27 / 25 / 26 | -2 | faded 3 of 3 (1.1 to 1.2) |
+| Import & Export to Board | 10 / 14 / 8 | 16 / 13 / 12 | +3 | faded 3 of 3 (1.1) |
+| Board to Import & Export (second visit) | 3 / 5 / 5 | 6 / 8 / 6 | +1 | faded 3 of 3 (1.2 to 1.8) |
+| Import & Export to Board (second visit) | 9 / 9 / 11 | 12 / 15 / 11 | +3 | faded 3 of 3 (1.1 to 1.2) |
+| Board to a manuscript page, the first | 52 / 34 / 39 | 41 / 36 / 47 | +2 | a cut by design, 3 of 3 |
+| Manuscript page to Board | 10 / 13 / 14 | 10 / 11 / 14 | -2 | faded 3 of 3 (1.0 to 1.5) |
+| Board to a manuscript page, the kept page | 38 / 38 / 43 | 39 / 32 / 31 | -6 | a cut by design, 3 of 3 |
+| Kept manuscript page to Board | 14 / 9 / 14 | 11 / 9 / 10 | -4 | faded 3 of 3 (1.0 to 1.2) |
+
+Every switch that could fade faded in every run (20 of 22; the two opens are cuts), and no picture was late. With motion on, a switch grew by 0.9 to 3.2 ms of showing the picture, and by -16 to +20 ms in all, the median of the three runs, against the fade's 150: well within the page-switch budget plus the fade's length, and within the page-switch budget itself. Board to Library, the first switch of each board, makes the overlay; its +20 is the largest difference and the noisiest row (33 to 72 ms). The pauses let the processor idle, so these rows read higher than the same switches straight after other work in the table above (Library to Board 8 to 17 here, against 8 to 22 there; the opens 31 to 52 against 32 to 124). The interleaved measurement in `MotionFadeTests.AReadInFlightHoldsNoSwitch` (Debug, the two modes taking turns a page at a time, 50 switches each) read a median of 15 ms on against 12 off off the screen, and 23 against 21 on the screen with the display on.
+
+The pause was then made to end at least 80 ms after a fade, since in a Debug run a fade that ended late left the next switch a cut ("the last fade had only just ended", Board to Import & Export). With that pause, three more Release runs (10:34, 10:35 and 10:37) ran beside a sibling worktree's test run (22 of 23, 21 of 28 and 26 of 30 samples): every switch that could fade faded but one, Begin read 1.1 to 4.6 ms, and the medians' differences read -27 to +31 ms, the noise of that host. The first of them failed one enforced row: Import & Export to Board with motion on, 468 ms, a cut because it outlasted the fade; in the same run the motion-off pass read 428 ms for the kept manuscript page to Board, and the third run's motion-off pass 563 for Board to Insights' second visit and 341 for Board to Import & Export: the host's half-second stall, which falls on a switch with motion off as with motion on, as part C's notes say of the main test. The other two passed. Debug, against the budget x 2, at 10:40 beside the same sibling run: passed, 20 of 22 switches faded, every switch with motion on 6 to 86 ms.
+
+### What the fade's proofs found (the plan's 4a, 4b and 4c)
+
+- **4a, the read and the switch.** As planned, the worker first read the window's own device context. Whenever that read waited on the screen, the switch waited with it: every change a switch makes to the window's child windows updates the window's device contexts, and one held by a waiting read held the switch (Debug, 50 switches on the 500 library, off the screen: 5 reads of 50 ms or more, up to 459, held 5 switches, up to 470; 15 in a run on a busier host). Holding the rail's drawing did not help. Read off the screen's device context instead, the reads stopped holding the switch; with the display asleep (no input for half an hour) they waited 256 ms (median) and still held 3 of 50 switches, up to 449 ms, while the rail's two buttons drew themselves synchronously as they were checked. SyncRail now holds the rail's drawing. A run with the display on afterwards read no read of 50 ms or more (17 ms median, 36 longest) and held no switch, so whether the rail's hold alone frees a switch from a read that waits that long is not measured. Showing the picture on the UI thread also waited once (522 ms in 50 switches); the worker puts the picture in the overlay, and the switch only shows it (0.9 to 3.2 ms in Release above). With the read held 400 ms by a test seam, every switch returned in 8 to 28 ms, a cut.
+- **4b, the picture is the page left.** `MotionFadeTests.ThePictureIsThePageLeft` compares what the screen shows under the opaque overlay with what it showed before the switch, on an unlocked desktop with `PAPERROUTE_ON_SCREEN_TESTS=1`. Run at 09:25 and 09:57 it was Inconclusive: the screen read the same before and after a switch, the display asleep. Off the screen, where every other test runs, a read of the screen returns nothing of the window, so the harness times the reads and the overlay but cannot check the picture.
+- **4c, manuscript opens.** The page's versions and details are built on the UI thread once it has painted (the enforced row above: 34 to 182 ms in Release today, 85 and 189 in the step runs), more than a frame, so a fade over an open would hold the picture of the page left over the manuscript page that long and then cut. Opens stay a cut; leaving the manuscript page fades. The maintainer's alternatives: frames off the UI thread (which needs #142's "on a Windows.Forms.Timer" relaxed), or building the deferred parts after the fade, as they already wait for library work.
+- **The overlay's life.** Left alone, the overlay was hidden 148 to 178 ms after the switch returned (Debug); when the new page's paint held the thread longer, it went at the first frame after (254 ms once, the thread held 249), since its frames run on the window's thread. #142's "disposed within 200 ms" is met as hidden and kept, one overlay per window, as the kept pages are; destroying it after each fade would cost about 2.6 ms there and 1.5 ms more at the next switch (the profile's figures).
+- **Paints.** Shown with `ShowWindow`, the overlay had every window of the page just shown sent `WM_NCPAINT` and `WM_ERASEBKGND` inside the switch (5,276 in `SwitchesPaintNothingSynchronously` with motion on); shown and hidden with `SetWindowPos` and `SWP_DEFERERASE`, the test holds at zero with motion off and on.
+
+### Host during these runs
+
+Windows 11 (NT 10.0.26300), 12 logical processors, window DPI 96 (the display at 125%), sampled every 3 s (CPU load, test hosts, builds, VirtualBox processes, seconds since the last input). No VirtualBox VM ran. The lock screen's process ran through most of the morning, though the desktop was in use at times.
+
+- **Run A, 10:02 to 10:05:** no input for 27 minutes or more; a sibling worktree's test host for 5 of 52 samples; CPU 0 to 91%, mean 16.
+- **Run B, 10:08 to 10:11:** the desktop in use at the end; a sibling worktree's test host for 35 of 47 samples; CPU 0 to 100%, mean 34. The busy run.
+- **Run C, 10:12 to 10:15:** no input for 1.5 minutes or more; a sibling's test host for 7 of 39 samples; CPU 0 to 97%, mean 20.
+- **Run D, 10:22 to 10:24:** no input for 12 minutes or more; a sibling's test host for 1 of 31 samples; CPU 0 to 53%, mean 21.
+- **Motion runs 1 to 3, 10:18 to 10:22:** no other test host; no input for 7 minutes or more; CPU means 11, 17 and 26.
+- **Motion runs with the longer pause, 10:34 to 10:40:** a sibling worktree's test host for most of each (22 of 23, 21 of 28, 26 of 30 samples); no input for 23 minutes or more; CPU 0 to 76%, means 26, 20 and 19.
+
+### What remains, and what stays over budget
+
+- **Still over budget, reported as before, and not changed here:** the three manuscript-page opens (the first 32 to 124 ms, the kept page 41 to 80, the Pipeline manuscript 47 to 96 in runs A to D), whose cost is the editor's one layout pass (see 2026-10-23), and Board to Library in the busy run B (509 ms; 26 to 60 in the others), which builds its page and its 500-row grid at each visit. The paint rows and the idle slice stay reported as in part C.
+- **Left to the release certification:** the Acceptance's captures (a mid-fade frame, and a card and a button at rest, hover and press, at 125% in Light and Dark), which need the harness on an unlocked desktop with the display on and the overlay captured from the screen, which the harness's `PrintWindow` does not reach; the on-screen check that the picture is the page left; and the Narrator pass on the certification VM for #213 (the page is announced, not the search box) and #142 (nothing new is announced).
+- **For the maintainer:** opens as a cut (4c above); the overlay kept hidden rather than destroyed; the setting read once a session, as #142 asks, so a change in Windows' setting takes effect at the next start (a contrast theme stops motion at once).
