@@ -344,12 +344,20 @@ Public Class ScalingMeasurementTests
 
     End Sub
 
+    ' The error dialog's last row: each button's caption, the minimum it is
+    ' given at 96 DPI, and whether it is on the left.
+    Private Shared ReadOnly RowButtons As (Text As String, Minimum As Size, OnLeft As Boolean)() = {
+        ("Copy Details", New Size(120, 36), True), ("Open Log Folder", New Size(140, 36), True),
+        ("Keep Working", New Size(130, 36), False), ("Close PaperRoute", New Size(150, 36), False)
+    }
+
     ' The error dialog's last row as it was: a 640-pixel window built with
     ' DialogScaling, or with the base dimensions and nothing else of the
     ' rule, two buttons on the left and two on the right, each sizing
     ' itself to its caption over a minimum width, 572 pixels of buttons in
-    ' a 592-pixel row at 96 DPI.
-    Private Shared Function ButtonRowProbe(mode As AutoSizeMode, ruled As Boolean) As Form
+    ' a 592-pixel row at 96 DPI. Its text is 10 points unless another size
+    ' is asked for, set before the buttons are added.
+    Private Shared Function ButtonRowProbe(mode As AutoSizeMode, ruled As Boolean, Optional points As Single = 10.0F) As Form
 
         Dim form As New Form()
 
@@ -362,7 +370,7 @@ Public Class ScalingMeasurementTests
         End If
 
         form.ClientSize = New Size(640, 120)
-        form.Font = New Font("Segoe UI", 10.0F)
+        form.Font = New Font("Segoe UI", points)
 
         Dim row As New TableLayoutPanel With {.Dock = DockStyle.Bottom, .AutoSize = True, .ColumnCount = 2, .RowCount = 1, .Padding = New Padding(24)}
         row.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
@@ -371,10 +379,9 @@ Public Class ScalingMeasurementTests
         Dim tools As New FlowLayoutPanel With {.AutoSize = True, .AutoSizeMode = AutoSizeMode.GrowAndShrink, .WrapContents = False, .Anchor = AnchorStyles.Left, .Margin = New Padding(0)}
         Dim decisions As New FlowLayoutPanel With {.AutoSize = True, .AutoSizeMode = AutoSizeMode.GrowAndShrink, .WrapContents = False, .FlowDirection = FlowDirection.RightToLeft, .Anchor = AnchorStyles.Right, .Margin = New Padding(0)}
 
-        For Each spec As (Text As String, Width As Integer, Group As FlowLayoutPanel) In {
-            ("Copy Details", 120, tools), ("Open Log Folder", 140, tools), ("Keep Working", 130, decisions), ("Close PaperRoute", 150, decisions)
-        }
-            spec.Group.Controls.Add(New Button With {.Text = spec.Text, .AutoSize = True, .AutoSizeMode = mode, .MinimumSize = New Size(spec.Width, 36), .Padding = New Padding(8, 0, 8, 0), .Margin = New Padding(0, 0, 8, 0)})
+        For Each spec As (Text As String, Minimum As Size, OnLeft As Boolean) In RowButtons
+            Dim group As FlowLayoutPanel = If(spec.OnLeft, tools, decisions)
+            group.Controls.Add(New Button With {.Text = spec.Text, .AutoSize = True, .AutoSizeMode = mode, .MinimumSize = spec.Minimum, .Padding = New Padding(8, 0, 8, 0), .Margin = New Padding(0, 0, 8, 0)})
         Next
 
         row.Controls.Add(tools, 0, 0)
@@ -391,6 +398,82 @@ Public Class ScalingMeasurementTests
         Return form
 
     End Function
+
+
+    ' A text-sized button keeps the size it was given, not the width it
+    ' grew to (#93, step 4). At a real display the window is built with its
+    ' text at the display's size, so when DialogScaling.Finish runs such a
+    ' button has already grown to its caption there; a minimum read from it
+    ' then would be that caption's width, and scaled by 1.5 the button would
+    ' be 1.5 times its caption again. The sweep cannot tell the two apart:
+    ' it builds a window at 96 DPI, where a caption is its 96-DPI width. So
+    ' the error dialog's row is built here as at 150%, its text at 15 points
+    ' before its buttons are added, and then scaled by 1.5 as Windows Forms
+    ' scales it when it opens, with nothing simulated. Each button is the
+    ' larger of its 96-DPI minimum, scaled, and its caption, and not 1.5
+    ' times the width it grew to. Each caption is wider than its minimum at
+    ' 15 points, so the two differ on every button.
+    <TestMethod>
+    Public Sub AButtonBuiltAtTheDisplaysTextSizeIsScaledOnce()
+
+        Dim grown As New Dictionary(Of String, Size)()
+        Dim scaled As New Dictionary(Of String, (Size As Size, Caption As Size))()
+
+        ViewCatalog.ShowAndClose(
+            "The button row probe at 15 points",
+            Function() ButtonRowProbe(AutoSizeMode.GrowOnly, True, 15.0F),
+            Sub(name, shown)
+
+                Dim buttons As List(Of Button) = ViewCatalog.Descendants(shown).OfType(Of Button)().ToList()
+
+                For Each button As Button In buttons
+                    grown(button.Text) = button.Size
+                Next
+
+                shown.Scale(New SizeF(1.5F, 1.5F))
+                LayOutEveryControl(shown)
+                Application.DoEvents()
+
+                For Each button As Button In buttons
+                    scaled(button.Text) = (button.Size, CaptionSize(button))
+                Next
+
+            End Sub
+        )
+
+        Assert.AreEqual(RowButtons.Length, scaled.Count, "Every button of the row was measured.")
+
+        Dim found As New List(Of String)()
+        Dim measured As New List(Of String)()
+
+        For Each spec As (Text As String, Minimum As Size, OnLeft As Boolean) In RowButtons
+
+            Dim before As Size = grown(spec.Text)
+            Dim after As (Size As Size, Caption As Size) = scaled(spec.Text)
+
+            Assert.IsTrue(before.Width > spec.Minimum.Width, $"At 15 points '{spec.Text}' grows past its minimum: {before.Width} of {spec.Minimum.Width} pixels.")
+
+            Dim expected As New Size(
+                Math.Max(CInt(Math.Round(spec.Minimum.Width * 1.5)), after.Caption.Width),
+                Math.Max(CInt(Math.Round(spec.Minimum.Height * 1.5)), after.Caption.Height)
+            )
+            Dim again As Integer = CInt(Math.Round(before.Width * 1.5))
+            Dim line As String =
+                $"'{spec.Text}' scaled by 1.5: {after.Size.Width}x{after.Size.Height}; its minimum {spec.Minimum.Width}x{spec.Minimum.Height} scaled, or its caption {after.Caption.Width}x{after.Caption.Height}, gives {expected.Width}x{expected.Height}, and 1.5 times the {before.Width} it grew to is {again}"
+
+            measured.Add(line)
+
+            If Math.Abs(after.Size.Width - expected.Width) > 1 OrElse Math.Abs(after.Size.Height - expected.Height) > 1 OrElse after.Size.Width >= again - 1 Then
+                found.Add(line)
+            End If
+
+        Next
+
+        TestContext.WriteLine(String.Join(Environment.NewLine, measured))
+
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+
+    End Sub
 
 
     ' A button that sizes itself to its caption is scaled once in every
