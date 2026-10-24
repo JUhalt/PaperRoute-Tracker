@@ -271,10 +271,8 @@ Public Class SubmissionDetailsLayoutTests
     ' finds nothing cut. A screen smaller than the one asked for (a 1024x768
     ' build runner holds about 1043x787) can cut what the asked screen holds
     ' whole, so there only the hint, the lists and Close are judged.
-    ' Not proved here, and not met: hosted at the main window's minimum
-    ' size (960x680) the empty list is 94x101 and its hint has 99 of the
-    ' 317 pixels it needs at 92 wide. The hosted detail has no body to
-    ' scroll and is unchanged; that is left to the maintainer.
+    ' Hosted, the detail has no body to scroll; its Correspondence & Files
+    ' page is HostedTheCorrespondenceToolbarAndHintAreWhole's (#217).
     <TestMethod>
     <DataRow(96, 1366, 720)>
     <DataRow(120, 1366, 708)>
@@ -402,6 +400,245 @@ Public Class SubmissionDetailsLayoutTests
             )
 
         Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+
+    End Sub
+
+    ' Hosted in the manuscript page at the main window's minimum size
+    ' (960x680), the detail's Correspondence & Files page was 310x223: the
+    ' toolbar's help ran past its row, "+ Add Item" wrapped below the other
+    ' buttons and its row cut it by 16 pixels, and the empty list, 94x101,
+    ' had 99 of the 317 pixels its hint needs at that width (#217). On the
+    ' page's first open and on the kept page opened again, at the main
+    ' window's minimum and default sizes, on a submission with no letters
+    ' or files, every control of the toolbar is inside its row and the
+    ' empty list's hint is whole, in view or in reach of a scroll. With an
+    ' item that has a file and a source selected, which shows all seven
+    ' buttons, every control of the toolbar is inside its row too, there
+    ' and once the window is made narrow again, where the list lies above
+    ' its box as on a page opened narrow. The main window scales by hand,
+    ' so this is at this computer's display. On the code before the change
+    ' both sizes failed: the empty list at the default size alone passed,
+    ' and the selected item there had "+ Add Item" cut by 16 pixels.
+    <TestMethod>
+    <DataRow("minimum")>
+    <DataRow("default")>
+    Public Sub HostedTheCorrespondenceToolbarAndHintAreWhole(sizeName As String)
+
+        Dim hosted As List(Of (Name As String, Build As Func(Of String, Form))) =
+            ViewCatalog.Hosted.
+                Where(Function(entry) entry.Name = "SubmissionDetailsForm inside the manuscript page" OrElse
+                                      entry.Name = "The manuscript page opened a second time").
+                Select(Function(entry) (entry.Name, entry.Build)).
+                ToList()
+        Assert.AreEqual(2, hosted.Count, "Both views are in the catalog.")
+
+        Dim failures As List(Of String) =
+            ViewCatalog.ShowEach(
+                hosted,
+                Sub(name, host)
+
+                    ' The main window's minimum size, or the size it opens
+                    ' at on a screen with room for it.
+                    host.Size = If(sizeName = "minimum", host.MinimumSize, Form1.StartSizes(New Rectangle(0, 0, 3840, 2160), host.DeviceDpi).Start)
+                    host.PerformLayout()
+                    Application.DoEvents()
+
+                    ' The page's Submissions section in front, on the submission.
+                    Dim submission As JournalSubmission =
+                        DirectCast(GetType(SubmissionDetailsForm).GetField("_submission", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Descendants(host).OfType(Of SubmissionDetailsForm)().Single()), JournalSubmission)
+                    Descendants(host).OfType(Of EditManuscriptForm)().Single().ShowSubmission(submission.Id, showResponses:=False)
+                    Application.DoEvents()
+
+                    Dim detail As SubmissionDetailsForm = Descendants(host).OfType(Of SubmissionDetailsForm)().Single()
+                    Dim list As ListBox = ShowCorrespondence(detail)
+                    Dim at As String = $"At the main window's {sizeName} size {host.Size}"
+                    Dim problems As New List(Of String)()
+
+                    Dim buttons As Control = Descendants(detail).OfType(Of Button)().Single(Function(button) button.Text = "+ Add Item").Parent
+
+                    CheckToolbar(buttons, at, problems)
+
+                    Dim hint As Label = list.Controls.OfType(Of Label)().Single()
+                    Assert.IsTrue(hint.Visible, "The empty list shows its hint.")
+
+                    Try
+                        AssertWholeHint(hint, at)
+                    Catch ex As AssertFailedException
+                        problems.Add(ex.Message)
+                    End Try
+
+                    CheckInReach(list, detail, at, problems)
+
+                    ' An item with a file and a source, selected, shows all
+                    ' seven buttons, which wrap at both sizes. Its file is
+                    ' under the view's temporary root and is never made, and
+                    ' nothing opens it or the source. It is taken out again,
+                    ' so the editor closes with nothing changed.
+                    Dim shownSubmission As JournalSubmission =
+                        DirectCast(GetType(SubmissionDetailsForm).GetField("_submission", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(detail), JournalSubmission)
+                    Dim refresh As MethodInfo = GetType(SubmissionDetailsForm).GetMethod("RefreshCorrespondenceList", BindingFlags.Instance Or BindingFlags.NonPublic)
+                    Dim letter As New CorrespondenceItem With {
+                        .Type = CorrespondenceType.DecisionLetter,
+                        .Title = "Decision letter",
+                        .LocalFilePath = IO.Path.Combine(Services.StorageEnvironment.RootOverride, "Never made", "Decision letter.pdf"),
+                        .SourceUrl = "https://example.invalid/letter"
+                    }
+
+                    shownSubmission.Correspondence.Add(letter)
+
+                    Try
+
+                        refresh.Invoke(detail, Nothing)
+                        WaitForTheSaveBar(host)
+
+                        list.SelectedIndex = 0
+                        Application.DoEvents()
+
+                        Dim selected As String = " with an item that has a file and a source selected,"
+                        Assert.AreEqual(7, buttons.Controls.Cast(Of Control)().Count(Function(item) item.Visible), "The selected item shows all seven buttons.")
+                        CheckToolbar(buttons, at & selected, problems)
+
+                        ' With it selected, made wide from the minimum size and
+                        ' narrow again, or narrow from the default size, the
+                        ' toolbar stays whole and the page lays the list above
+                        ' its box, as a page opened narrow does.
+                        If sizeName = "minimum" Then
+
+                            host.Size = Form1.StartSizes(New Rectangle(0, 0, 3840, 2160), host.DeviceDpi).Start
+                            host.PerformLayout()
+                            Application.DoEvents()
+
+                            CheckToolbar(buttons, $"Made wide again, at the main window's default size {host.Size}{selected}", problems)
+
+                        End If
+
+                        host.Size = host.MinimumSize
+                        host.PerformLayout()
+                        Application.DoEvents()
+
+                        Dim narrowed As String = $"Made narrow again, at the main window's minimum size {host.Size}{selected}"
+                        Dim split As SplitContainer = DirectCast(list.Parent.Parent, SplitContainer)
+
+                        If split.Orientation <> Orientation.Horizontal Then
+                            problems.Add($"{narrowed} the list {list.Size} lies beside its box in the split {split.Size}, not above it")
+                        End If
+
+                        CheckToolbar(buttons, narrowed, problems)
+                        CheckInReach(list, detail, narrowed, problems)
+
+                    Finally
+
+                        shownSubmission.Correspondence.Remove(letter)
+                        refresh.Invoke(detail, Nothing)
+                        Application.DoEvents()
+
+                    End Try
+
+                    Assert.AreEqual(0, problems.Count, Environment.NewLine & String.Join(Environment.NewLine, problems))
+
+                End Sub
+            )
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+
+    End Sub
+
+    ' The Unsaved changes bar, which the main window shows on its next look
+    ' once the record differs from its saved copy, as it does after a
+    ' researcher adds an item; it takes height from the page, so the page
+    ' is measured with it shown, not as the timer happens to fall.
+    Private Shared Sub WaitForTheSaveBar(host As Form)
+
+        Dim bar As Control = DirectCast(GetType(Form1).GetField("manuscriptSaveBar", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(host), Control)
+        Dim waited As Diagnostics.Stopwatch = Diagnostics.Stopwatch.StartNew()
+
+        While Not bar.Visible AndAlso waited.ElapsedMilliseconds < 10000
+            Application.DoEvents()
+            Thread.Sleep(10)
+        End While
+
+        Assert.IsTrue(bar.Visible, "The added item shows the Unsaved changes bar.")
+        Application.DoEvents()
+
+    End Sub
+
+    ' The Correspondence & Files toolbar: its help in its first row, its
+    ' buttons' row in its second, the toolbar in the page's first, and
+    ' every button shown inside the buttons' row.
+    Private Shared Sub CheckToolbar(buttons As Control, at As String, problems As List(Of String))
+
+        Dim toolbar As TableLayoutPanel = DirectCast(buttons.Parent, TableLayoutPanel)
+
+        CheckInsideRow(toolbar.GetControlFromPosition(0, 0), at, problems)
+        CheckInsideRow(buttons, at, problems)
+        CheckInsideRow(toolbar, at, problems)
+
+        For Each button As Control In buttons.Controls.Cast(Of Control)().Where(Function(item) item.Visible)
+            If Not buttons.ClientRectangle.Contains(button.Bounds) Then
+                problems.Add($"{at} the button '{button.Text}' {button.Bounds} is outside its row {buttons.ClientRectangle}")
+            End If
+        Next
+
+    End Sub
+
+    ' A control is inside its cell of the table that holds it, and the cell
+    ' inside the table's client area, or in reach of its scroll in a table
+    ' that scrolls: at the main window's minimum size, with the Unsaved
+    ' changes bar shown and seven buttons, the page is shorter than its
+    ' toolbar and scrolls to it.
+    Private Shared Sub CheckInsideRow(control As Control, at As String, problems As List(Of String))
+
+        Dim table As TableLayoutPanel = DirectCast(control.Parent, TableLayoutPanel)
+        Dim position As TableLayoutPanelCellPosition = table.GetPositionFromControl(control)
+        Dim widths As Integer() = table.GetColumnWidths()
+        Dim heights As Integer() = table.GetRowHeights()
+
+        ' A table's display area is inside its padding.
+        Dim cell As New Rectangle(
+            table.DisplayRectangle.X + widths.Take(position.Column).Sum(),
+            table.DisplayRectangle.Y + heights.Take(position.Row).Sum(),
+            widths(position.Column),
+            heights(position.Row))
+
+        ' The scroll range is the display area and its padding.
+        Dim area As Rectangle =
+            If(table.AutoScroll,
+               New Rectangle(
+                   table.DisplayRectangle.X - table.Padding.Left,
+                   table.DisplayRectangle.Y - table.Padding.Top,
+                   table.DisplayRectangle.Width + table.Padding.Horizontal,
+                   table.DisplayRectangle.Height + table.Padding.Vertical),
+               table.ClientRectangle)
+
+        Dim inside As Rectangle = Rectangle.Intersect(cell, area)
+
+        If Not inside.Contains(control.Bounds) Then
+            problems.Add($"{at} the {control.GetType().Name} '{control.Text}' {control.Bounds} is outside its row {inside} (row {position.Row}, the table's {If(table.AutoScroll, "scroll range", "client area")} {area})")
+        End If
+
+    End Sub
+
+    ' A control is whole inside each container up to the given one, or in
+    ' reach of a container's scroll; above a container that scrolls, that
+    ' container is.
+    Private Shared Sub CheckInReach(control As Control, upTo As Control, at As String, problems As List(Of String))
+
+        Dim shown As Control = control
+
+        While shown IsNot upTo
+
+            Dim ancestor As Control = shown.Parent
+            Dim scrolls As Boolean = TypeOf ancestor Is ScrollableControl AndAlso DirectCast(ancestor, ScrollableControl).AutoScroll
+            Dim area As Rectangle = If(scrolls, ancestor.DisplayRectangle, ancestor.ClientRectangle)
+
+            If Not area.Contains(shown.Bounds) Then
+                problems.Add($"{at} the {shown.GetType().Name} '{shown.AccessibleName}' {shown.Bounds} is outside the {ancestor.GetType().Name}'s {If(scrolls, "scroll range", "client area")} {area}")
+                Return
+            End If
+
+            shown = ancestor
+
+        End While
 
     End Sub
 
