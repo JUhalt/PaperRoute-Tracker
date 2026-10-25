@@ -258,12 +258,44 @@ Public Class BackupRestoreUiTests
     End Sub
 
 
+    ' Restore Backup... shows the library it would replace under the
+    ' backup's counts (#226), and how many fewer manuscripts the backup
+    ' holds, so last month's backup over a grown library looks different
+    ' from yesterday's while the researcher can still back out. The backup
+    ' holds 3.
+    <TestMethod>
+    Public Sub TheRestorePreviewShowsTheLibraryItWouldReplace()
+
+        Dim preview As String = RestorePreview(_backupPath, 1)
+
+        StringAssert.Contains(preview, "Your library now: 1 manuscript.")
+        Assert.IsFalse(preview.Contains("fewer"), "A backup with more manuscripts says nothing of fewer: " & preview)
+        Assert.IsTrue(preview.IndexOf("Your library now:", StringComparison.Ordinal) > preview.IndexOf("Expanded size:", StringComparison.Ordinal) AndAlso
+                      preview.IndexOf("Your library now:", StringComparison.Ordinal) < preview.IndexOf("IMPORTANT:", StringComparison.Ordinal),
+                      "The library now is under the backup's counts, before the warning: " & preview)
+
+        preview = RestorePreview(_backupPath, 5)
+
+        StringAssert.Contains(preview, "Your library now: 5 manuscripts.")
+        StringAssert.Contains(preview, "This backup has 2 fewer manuscripts than your library now.")
+
+        StringAssert.Contains(RestorePreview(_backupPath, 4), "This backup has 1 fewer manuscript than your library now.")
+        Assert.IsFalse(RestorePreview(_backupPath, 3).Contains("fewer"), "A backup the library's size says nothing of fewer.")
+
+        For Each count As Integer In {0, 1, 3, 4, 5, 48}
+            Assert.IsFalse(RestorePreview(_backupPath, count).Contains("(s)"), "No ""(s)"" with " & count.ToString() & " manuscripts now.")
+        Next
+
+    End Sub
+
+
     ' The question Restore Backup... asks about the archive, as the main
-    ' window builds it after its check.
-    Private Function RestorePreview(backupZipPath As String) As String
+    ' window builds it after its check, over a library of this many
+    ' manuscripts: by default the one Initialize saved.
+    Private Function RestorePreview(backupZipPath As String, Optional currentManuscriptCount As Integer = 1) As String
         Dim build As MethodInfo = GetType(Form1).GetMethod("RestorePreview", BindingFlags.NonPublic Or BindingFlags.Static)
         Assert.IsNotNull(build, "The main window builds its restore question in RestorePreview.")
-        Return CStr(build.Invoke(Nothing, {New PortableRestoreService(_managedDirectory).InspectBackup(backupZipPath)}))
+        Return CStr(build.Invoke(Nothing, New Object() {New PortableRestoreService(_managedDirectory).InspectBackup(backupZipPath), currentManuscriptCount}))
     End Function
 
 

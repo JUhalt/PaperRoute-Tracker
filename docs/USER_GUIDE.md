@@ -145,7 +145,7 @@ The main board supports search, stage filtering, and sorting. Press **Ctrl+F** t
 
 ## The manuscript page
 
-Click a card on the board, or a row in the Library, to open the manuscript as a page in the main window. **← Board** (or **Alt+Left**) returns to where you opened it. The header shows the title, stage, target journal, and route so far, with **Copy Citation**, **View Route**, and **Delete Manuscript...** in the **⋯** menu.
+Click a card on the board, or a row in the Library, to open the manuscript as a page in the main window. **← Board** (or **Alt+Left**) returns to where you opened it. The header shows the title, stage, target journal, and route so far, with **Copy Citation** and **View Route** beside it; its **⋯** menu has **Route Report...**, **Check for Publication...**, and **Delete Manuscript...**.
 
 The page's tabs are **Overview** (title, target journal, stage, revision deadline, metadata, links, File Drawer details, and the linked journal's notes from the Journal Library), **Authors**, **Versions**, **Submissions**, and **Readiness & Packets**. Together they cover:
 
@@ -285,7 +285,7 @@ An author record can contain:
 - ORCID iD;
 - notes;
 - reusable affiliations; and
-- the **Me** designation for your own author record.
+- the **Me** mark (check **This is me** when you edit the author).
 
 A manuscript stores its own author order. Reordering authors on one manuscript does not reorder them everywhere else.
 

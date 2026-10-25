@@ -509,7 +509,12 @@ Partial Public Class Form1
             Return
         End If
 
-        Using dialog As New ReminderEditForm(manuscripts)
+        ' The row the keyboard is on chooses the manuscript (#229), as Edit
+        ' does; with no row chosen the window starts on its first.
+        Dim focusedRow As DeadlineRow = deadlinesList?.FocusedRow
+        Dim chosen As Manuscript = If(focusedRow Is Nothing, Nothing, FindManuscript(focusedRow.Item.ManuscriptId))
+
+        Using dialog As New ReminderEditForm(manuscripts, chosen)
             If dialog.ShowDialog(Me) <> DialogResult.OK OrElse dialog.Result Is Nothing Then Return
 
             Dim manuscript As Manuscript = FindManuscript(dialog.SelectedManuscriptId)
