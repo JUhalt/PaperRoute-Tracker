@@ -400,6 +400,11 @@ Public Class Form1
         Dim searchField As RoundedPanel =
             CreateSearchField(txtBoardSearch)
 
+        ' The shortcut a screen reader hears in the name, shown to the
+        ' mouse too, as the rail shows its own; the magnifier area as well.
+        cardToolTip.SetToolTip(txtBoardSearch, txtBoardSearch.AccessibleName)
+        cardToolTip.SetToolTip(searchField, txtBoardSearch.AccessibleName)
+
         Dim btnAdd As New ActionButton With {
             .Text = "+ Add Manuscript",
             .Role = ActionButtonRole.Primary,
@@ -478,6 +483,7 @@ Public Class Form1
             .AccessibleDescription = "Opens the Deadlines page (Ctrl+4)."
         }
         AddHandler lnkDeadlines.LinkClicked, Sub(sender, e) NavigateTo(WorkspacePage.Deadlines)
+        cardToolTip.SetToolTip(lnkDeadlines, "Open Deadlines (Ctrl+4)")
         attentionBar.Controls.Add(lnkDeadlines)
 
         body.Controls.Add(attentionBar, 0, 1)

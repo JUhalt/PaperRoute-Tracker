@@ -1593,6 +1593,120 @@ Public Class KeyboardAccessTests
     End Sub
 
 
+    ' A shortcut a control's name or description gives a screen reader is
+    ' shown in its tooltip too, as the rail shows "Board (Ctrl+1)", so a
+    ' mouse user sees it. On the kept manuscript page (#133) the back
+    ' link's tip follows the page it was opened from, as its name does:
+    ' the first walk pins the tips set as the page is built, the second the
+    ' one set as it is shown again.
+    <TestMethod>
+    Public Sub EveryShortcutAControlAnnouncesItsTooltipShows()
+
+        Dim root As String = CreateTemporaryRoot()
+
+        StorageEnvironment.RootOverride = Path.Combine(root, "storage")
+
+        Try
+
+            StaRunner.Run(
+                Sub()
+
+                    Dim library As LargeLibraryFixture.SyntheticLibrary =
+                        LargeLibraryFixture.Create(Path.Combine(root, "library"), 60)
+
+                    Using board As New LibraryBoard(library, Path.Combine(root, "settings"))
+
+                        board.Start()
+                        board.WaitForIdleWork()
+
+                        Dim prepared As Control = board.KeptPage
+                        Assert.IsNotNull(prepared, "The manuscript page is prepared while the window idles.")
+
+                        Dim shortcut As New Regex("\((?:Ctrl|Alt|Shift)\+[^)]+\)|\(F\d{1,2}\)")
+
+                        Dim walk As Func(Of List(Of String)) =
+                            Function()
+                                Dim found As New List(Of String)()
+                                For Each item As Control In ViewCatalog.Descendants(board)
+                                    Dim named As Match = shortcut.Match(If(item.AccessibleName, String.Empty))
+                                    If Not named.Success Then
+                                        named = shortcut.Match(If(item.AccessibleDescription, String.Empty))
+                                    End If
+                                    If Not named.Success Then
+                                        Continue For
+                                    End If
+                                    Dim tip As String = board.ToolTipOf(item)
+                                    StringAssert.Contains(
+                                        tip,
+                                        named.Value,
+                                        item.GetType().Name & " '" & item.AccessibleName & "' shows its shortcut in its tooltip.")
+                                    found.Add(item.GetType().Name & " '" & item.AccessibleName & "' -> " & tip)
+                                Next
+                                found.Sort(StringComparer.Ordinal)
+                                Return found
+                            End Function
+
+                        Dim beforeOpen As List(Of String) = walk()
+                        CollectionAssert.AreEqual(
+                            New List(Of String) From {
+                                "ActionButton 'Save manuscript (Ctrl+S)' -> Save manuscript (Ctrl+S)",
+                                "LinkLabel 'Back to Board (Alt+Left)' -> Back to Board (Alt+Left)",
+                                "LinkLabel 'View in Deadlines' -> Open Deadlines (Ctrl+4)",
+                                "TextBox 'Search the board (Ctrl+F)' -> Search the board (Ctrl+F)"
+                            },
+                            beforeOpen,
+                            "Before any manuscript is opened:" & Environment.NewLine & String.Join(Environment.NewLine, beforeOpen))
+
+                        Dim manuscript As Manuscript =
+                            board.Library.First(Function(record) record.Location = ManuscriptLocation.Pipeline)
+
+                        board.Open(manuscript)
+                        Application.DoEvents()
+                        board.WaitForIdleWork()
+
+                        board.NavigateTo(Form1.WorkspacePage.Library)
+                        Application.DoEvents()
+                        board.WaitForIdleWork()
+
+                        board.Open(manuscript)
+                        Application.DoEvents()
+                        board.WaitForIdleWork()
+
+                        Assert.AreSame(prepared, board.KeptPage, "The page prepared before is shown again.")
+
+                        Dim openedAgain As List(Of String) = walk()
+                        CollectionAssert.AreEqual(
+                            New List(Of String) From {
+                                "ActionButton 'Save manuscript (Ctrl+S)' -> Save manuscript (Ctrl+S)",
+                                "LinkLabel 'Back to Library (Alt+Left)' -> Back to Library (Alt+Left)",
+                                "LinkLabel 'View in Deadlines' -> Open Deadlines (Ctrl+4)",
+                                "TextBox 'Search the board (Ctrl+F)' -> Search the board (Ctrl+F)"
+                            },
+                            openedAgain,
+                            "Opened again from the Library:" & Environment.NewLine & String.Join(Environment.NewLine, openedAgain))
+
+                        ' The magnifier beside the box shows the same tip.
+                        Dim search As Control =
+                            ViewCatalog.Descendants(board).OfType(Of TextBox)().
+                                Single(Function(box) box.AccessibleName = "Search the board (Ctrl+F)")
+                        Assert.IsInstanceOfType(search.Parent, GetType(RoundedPanel))
+                        Assert.AreEqual("Search the board (Ctrl+F)", board.ToolTipOf(search.Parent))
+
+                        board.Close()
+
+                    End Using
+
+                End Sub,
+                TimeSpan.FromMinutes(3))
+
+        Finally
+            StorageEnvironment.RootOverride = Nothing
+            DeleteTemporaryRoot(root)
+        End Try
+
+    End Sub
+
+
     ' Each page opened from the Board by keyboard (#213), from a card's
     ' title and from the Board's search box: the rail pages by their
     ' command keys, the manuscript page by Enter on the title. The keyboard
