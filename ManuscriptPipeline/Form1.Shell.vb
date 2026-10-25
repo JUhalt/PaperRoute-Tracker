@@ -1,5 +1,6 @@
 Imports System
 Imports System.Collections.Generic
+Imports System.Diagnostics
 Imports System.Drawing
 Imports System.Linq
 Imports System.Windows.Forms
@@ -75,6 +76,17 @@ Partial Public Class Form1
     ' Set when the system colors change while a kept page shows: that page
     ' is let go as it is left, not kept in the old colors.
     Private leaveDisposesKeptPage As Boolean = False
+
+    ' The Board's control that had the keyboard when a page opened from the
+    ' Board took it (#213), the manuscript of the card it is on, and where
+    ' the keyboard went: going back to the Board puts it there again.
+    Private boardFocusToReturn As Control = Nothing
+    Private boardFocusCardId As Guid = Guid.Empty
+    Private boardFocusLanded As Control = Nothing
+
+    ' A page switch's cross-fade (#142), made on the first switch with
+    ' motion on.
+    Private pageFade As PageFade = Nothing
 
 
     ' =====================================================
@@ -381,13 +393,20 @@ Partial Public Class Form1
 
         syncingRail = True
 
-        Try
-            For Each pair In railButtons
-                pair.Value.Checked = pair.Key = highlighted
-            Next
-        Finally
-            syncingRail = False
-        End Try
+        ' A rail button checked or unchecked draws itself there and then;
+        ' held, the rail draws once the switch has returned (#142). Drawing
+        ' while a switch's cross-fade reads the screen waited as long as the
+        ' read waited on it: 3 of 50 switches held up to 449 ms by reads of
+        ' 250 ms and more, with the display asleep.
+        Using New RedrawHold(railButtons.Values.FirstOrDefault()?.Parent)
+            Try
+                For Each pair In railButtons
+                    pair.Value.Checked = pair.Key = highlighted
+                Next
+            Finally
+                syncingRail = False
+            End Try
+        End Using
 
     End Sub
 
@@ -453,10 +472,12 @@ Partial Public Class Form1
 
 
     ' Returns False when the user chose to stay on a manuscript with unsaved
-    ' changes.
+    ' changes. A caller that has just had a question answered over the page,
+    ' as Delete Manuscript has, says so (questionAnswered).
     Private Function NavigateToRequest(
         request As PageRequest,
-        recordHistory As Boolean
+        recordHistory As Boolean,
+        Optional questionAnswered As Boolean = False
     ) As Boolean
 
         If request.Page = currentPage AndAlso
@@ -465,24 +486,86 @@ Partial Public Class Form1
             Return True
         End If
 
+        ' Whether leaving asks about unsaved changes: its question has just
+        ' gone from over the page when the switch begins.
+        Dim asked As Boolean = questionAnswered OrElse HasUnsavedPageEdits()
+
         If Not ConfirmLeaveManuscript() Then
             SyncRail()
             Return False
         End If
 
+        ' The cross-fade (#142): the page left is read as the switch begins
+        ' and, once the switch has returned, faded out over the page shown,
+        ' if the switch was quicker than the fade. What it costs is part of
+        ' the switch.
+        Dim switchTime As Stopwatch = Stopwatch.StartNew()
+        CapturePageLeft(request, asked)
+
         Dim previous As PageRequest = CurrentRequest
+        Dim switched As Boolean = False
 
-        SwitchPage(request)
+        Try
 
-        If recordHistory Then
-            backHistory.Push(previous)
-            forwardHistory.Clear()
-        End If
+            SwitchPage(request)
 
-        SyncRail()
+            If recordHistory Then
+                backHistory.Push(previous)
+                forwardHistory.Clear()
+            End If
+
+            SyncRail()
+            switched = True
+
+        Finally
+            pageFade?.Begin(switchTime.Elapsed.TotalMilliseconds, switched)
+        End Try
+
         Return True
 
     End Function
+
+
+    ' The page left, as the screen shows it, for the switch's cross-fade
+    ' (#142), unless motion is off. A manuscript opens as a cut: its
+    ' versions and the selected submission's details are built once the
+    ' page has painted (FinishManuscriptPage), on the UI thread, and the
+    ' fade's frames could not run until they were, so the picture of the
+    ' page left would sit over the manuscript page that long and then go.
+    ' A switch after the Unsaved Changes question, or the Delete
+    ' Manuscript one, is a cut too: the screen can still show the
+    ' question closing, centred over the page, and the picture would hold
+    ' it over the page shown.
+    Private Sub CapturePageLeft(request As PageRequest, asked As Boolean)
+
+        If pageFade Is Nothing Then
+            If Not UiMotion.Enabled Then
+                Return
+            End If
+            pageFade = New PageFade(Me, contentHost)
+        End If
+
+        pageFade.Capture(request.Page <> WorkspacePage.Manuscript AndAlso Not asked,
+                         If(asked, "a question was just answered", "a manuscript opens as a cut"))
+
+    End Sub
+
+
+    ' Windows says a setting changed, Animation effects among them: motion
+    ' asks Windows again on its next step (#142), so Animation effects
+    ' turned off while PaperRoute runs stops a fade or an ease on its next
+    ' frame, as a contrast theme does, and turned on starts motion again.
+    Protected Overrides Sub WndProc(ByRef m As Message)
+
+        If m.Msg = WM_SETTINGCHANGE Then
+            UiMotion.SettingChanged()
+        End If
+
+        MyBase.WndProc(m)
+
+    End Sub
+
+    Private Const WM_SETTINGCHANGE As Integer = &H1A
 
 
     ' One page switch (#133), once any question about the page left has
@@ -491,10 +574,14 @@ Partial Public Class Form1
     ' editor saved read back. Then, with the page area's drawing held, it
     ' is put away and the next page shown, so nothing under the page area
     ' is painted until the switch has returned; one paint of it is posted
-    ' as the hold is released. The Board is hidden last (HideBoardPage).
+    ' as the hold is released. The Board is hidden last (HideBoardPage);
+    ' shown again, it takes back the keyboard a page opened from it took
+    ' (ReturnFocusToBoard, #213), while the page area is held: a control
+    ' given the keyboard can draw itself there and then (a radio button
+    ' does), and under the hold it draws once the hold is released.
     Private Sub SwitchPage(request As PageRequest)
 
-        LeaveCurrentPage()
+        Dim pageHeldFocus As Boolean = LeaveCurrentPage()
 
         ' Hosted editors save as they go. The board's copies are refreshed
         ' from what they saved, as the board did after their dialogs
@@ -525,6 +612,10 @@ Partial Public Class Form1
             currentPage = request.Page
             ShowPage(request)
 
+            If request.Page = WorkspacePage.Board Then
+                ReturnFocusToBoard(pageHeldFocus)
+            End If
+
         End Using
 
         If request.Page <> WorkspacePage.Board Then
@@ -536,24 +627,95 @@ Partial Public Class Form1
 
     ' Hides the Board behind the page shown. Hiding it has Windows erase
     ' and frame the page now exposed over it there and then, so the hide
-    ' is held too. WinForms moves focus on from a Board that holds it as
-    ' the Board is hidden (SelectNextControl from the Board, as below); a
-    ' control under a held window cannot take focus, so that same move is
-    ' made first, while the page area still draws, and focus lands where
-    ' it always did (KeyboardAccessTests pins it).
+    ' is held too. A Board that has the keyboard gives it to the page shown
+    ' first (#213): to the page's first stop, or the window's for a page
+    ' with none. Hidden with the keyboard, the Board handed it on to its
+    ' own first stop, the search box behind the page, as WinForms moves
+    ' focus on from a control hidden holding it. A window without the
+    ' keyboard still records the control focused in it, so that counts as
+    ' the Board having it too. The move is made under the hold, as the
+    ' Board's return is (SwitchPage): the window's record of the focused
+    ' control and Windows' focus move all the same, and a control that
+    ' draws itself as it takes the keyboard draws once the hold is
+    ' released.
     Private Sub HideBoardPage()
 
         If Not boardPage.Visible Then
             Return
         End If
 
-        If boardPage.ContainsFocus Then
-            SelectNextControl(boardPage, True, True, True, True)
-        End If
+        Dim active As Control = ActiveControl
+        Dim boardHasKeyboard As Boolean = boardPage.ContainsFocus OrElse (active IsNot Nothing AndAlso boardPage.Contains(active))
 
         Using New RedrawHold(contentHost)
+
+            If boardHasKeyboard Then
+                boardFocusToReturn = active
+                boardFocusCardId = If(TryCast(TryCast(active?.Parent, CardPanel)?.Tag, CardRecord)?.Manuscript?.Id, Guid.Empty)
+                If Not FocusFirstStop(currentPageView) Then
+                    SelectNextControl(Nothing, True, True, True, True)
+                End If
+                boardFocusLanded = ActiveControl
+            End If
+
             boardPage.Visible = False
+
         End Using
+
+    End Sub
+
+
+    ' A page's first stop (#213): the manuscript page's is its editor's,
+    ' the Overview tab, where an action on the shortlist leaves the
+    ' keyboard too; any other page's is its own first control. Returns
+    ' False for a page with none.
+    Private Function FocusFirstStop(page As Control) As Boolean
+
+        If page Is Nothing OrElse page.IsDisposed OrElse Not page.Visible Then
+            Return False
+        End If
+
+        Dim first As Control =
+            If(page Is manuscriptPage AndAlso manuscriptPageEditor IsNot Nothing AndAlso Not manuscriptPageEditor.IsDisposed, manuscriptPageEditor, page)
+
+        Return first.SelectNextControl(Nothing, True, True, True, False)
+
+    End Function
+
+
+    ' Back on the Board (#213), the control that had the keyboard when a
+    ' page was opened from it takes it again, if the page left had it, or
+    ' it is still where the opening put it; a card a save rebuilt meanwhile
+    ' gives it to the new card's title. A card whose manuscript is gone,
+    ' or one not shown, takes nothing, and the keyboard stays where leaving
+    ' the page put it (LeaveCurrentPage). Each opening's control comes
+    ' back once, never later.
+    Private Sub ReturnFocusToBoard(pageHeldFocus As Boolean)
+
+        Dim target As Control = boardFocusToReturn
+        Dim cardId As Guid = boardFocusCardId
+        Dim landed As Control = boardFocusLanded
+        boardFocusToReturn = Nothing
+        boardFocusCardId = Guid.Empty
+        boardFocusLanded = Nothing
+
+        If target Is Nothing OrElse Not (pageHeldFocus OrElse (landed IsNot Nothing AndAlso ActiveControl Is landed)) Then
+            Return
+        End If
+
+        If cardId <> Guid.Empty Then
+            If FindManuscript(cardId) Is Nothing Then
+                Return
+            End If
+            Dim card As RoundedPanel = Nothing
+            If (target.IsDisposed OrElse Not boardPage.Contains(target)) AndAlso manuscriptCards.TryGetValue((cardId, 0), card) Then
+                target = card.Controls.OfType(Of LinkLabel)().FirstOrDefault()
+            End If
+        End If
+
+        If target IsNot Nothing AndAlso Not target.IsDisposed AndAlso boardPage.Contains(target) AndAlso target.CanSelect Then
+            target.Select()
+        End If
 
     End Sub
 
@@ -612,8 +774,9 @@ Partial Public Class Form1
 
     ' What leaving a page does before the page area's drawing is held
     ' (SwitchPage): its draft and its timers, and focus out of it, since a
-    ' control under a held window cannot take focus.
-    Private Sub LeaveCurrentPage()
+    ' control under a held window cannot take focus. Returns whether the
+    ' page had the keyboard.
+    Private Function LeaveCurrentPage() As Boolean
 
         ' A manuscript page is left only once its edits were saved or let go
         ' (#123), so a draft an error wrote of them earlier is stale.
@@ -629,11 +792,9 @@ Partial Public Class Form1
 
         ' Focus in the page moves out of it first, as removing the page
         ' moved it.
-        If currentPageView IsNot Nothing Then
-            MoveFocusOutOf(currentPageView)
-        End If
+        Return currentPageView IsNot Nothing AndAlso MoveFocusOutOf(currentPageView)
 
-    End Sub
+    End Function
 
 
     ' Puts the page left away, with the page area's drawing held.
@@ -684,16 +845,19 @@ Partial Public Class Form1
     ' Focus in a page being put away moves where removing the page from
     ' the window moved it: to the window's first stop, the rail's collapse
     ' button. Disposed or hidden with focus inside, a page would otherwise
-    ' leave it on the page area itself.
-    Private Sub MoveFocusOutOf(page As Control)
+    ' leave it on the page area itself. Returns whether focus was inside.
+    Private Function MoveFocusOutOf(page As Control) As Boolean
 
         Dim active As Control = ActiveControl
 
         If active IsNot Nothing AndAlso (active Is page OrElse page.Contains(active)) Then
             SelectNextControl(Nothing, True, True, True, True)
+            Return True
         End If
 
-    End Sub
+        Return False
+
+    End Function
 
 
     ' The pages built once and kept while the window lives (#133): the

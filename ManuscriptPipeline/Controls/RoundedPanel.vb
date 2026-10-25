@@ -55,6 +55,12 @@ Namespace Controls
 
             Set(value As Color)
 
+                ' Set to the color it has, as a card's parts each set it as
+                ' the pointer crosses them, it repaints nothing (#142).
+                If _borderColor = value Then
+                    Return
+                End If
+
                 _borderColor = value
                 Invalidate()
 
