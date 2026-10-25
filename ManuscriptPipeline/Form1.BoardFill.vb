@@ -125,8 +125,12 @@ Partial Public Class Form1
         idleWorkTimer.Interval = IdleWorkInterval
 
         ' Library work reads the records the work would read (#132); the
-        ' timer keeps going and the work waits for it to end.
-        If libraryWorkInProgress OrElse Not startupComplete OrElse Not IsHandleCreated OrElse IsDisposed Then
+        ' timer keeps going and the work waits for it to end. It waits for
+        ' a page's cross-fade too (#142), at most the fade's length: a step
+        ' of it would hold the fade's frames, and the picture of the page
+        ' left would sit over the page shown until the step was done.
+        If libraryWorkInProgress OrElse Not startupComplete OrElse Not IsHandleCreated OrElse IsDisposed OrElse
+           (pageFade IsNot Nothing AndAlso pageFade.Fading) Then
             Return
         End If
 
