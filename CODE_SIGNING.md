@@ -7,7 +7,7 @@ When signing begins, this section will read: "Free code signing provided by [Sig
 ## What is signed
 
 - Only files built from this repository's source code by the release workflow: PaperRoute's own program files (`PaperRouteTracker.exe` and `PaperRouteTracker.dll`) and, if SignPath's terms allow it, the Setup program that installs them.
-- Third-party libraries and the bundled .NET runtime are shipped as their publishers released them and are never signed with PaperRoute's certificate. Their names, versions and licences are in [`THIRD-PARTY-NOTICES.txt`](THIRD-PARTY-NOTICES.txt).
+- Third-party libraries and the bundled .NET runtime are shipped as their publishers released them and are never signed with PaperRoute's certificate. Their names, versions and licenses are in [`THIRD-PARTY-NOTICES.txt`](THIRD-PARTY-NOTICES.txt).
 - Every signed file carries the product name "PaperRoute Tracker" and the version of the release it belongs to.
 
 ## How a release is built and signed
