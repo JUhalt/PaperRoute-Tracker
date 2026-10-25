@@ -481,13 +481,16 @@ Namespace Controls
 
 
     ' Every route side by side from day 0 on one scale (#82). Up and Down
-    ' choose a route; Enter or a click opens it.
+    ' choose a route; Enter or a click opens it. A screen reader sees a list
+    ' with an item for each route, and hears each route the keyboard lands
+    ' on (#193).
     Friend Class RouteMapChart
         Inherits Control
 
         Private _routes As New List(Of RouteMapEntry)()
         Private _selected As Integer = -1
         Private _hot As Integer = -1
+        Private _children As AccessibleObject() = {}
 
         Public Event RouteOpened As EventHandler(Of RouteMapEntry)
 
@@ -505,8 +508,9 @@ Namespace Controls
             Set(value As List(Of RouteMapEntry))
                 _routes = If(value, New List(Of RouteMapEntry)())
                 _selected = If(_routes.Count > 0, 0, -1)
+                _children = New AccessibleObject(_routes.Count - 1) {}
                 AccessibleName = "Routes side by side, " & _routes.Count.ToString(CultureInfo.CurrentCulture) & If(_routes.Count = 1, " route", " routes") & ". Press Enter to open the selected route."
-                DescribeSelection()
+                NotifyFocus()
                 FitHeight()
                 Invalidate()
             End Set
@@ -518,8 +522,11 @@ Namespace Controls
                 Return _selected
             End Get
             Set(value As Integer)
-                _selected = Math.Max(-1, Math.Min(_routes.Count - 1, value))
-                DescribeSelection()
+                Dim selected As Integer = Math.Max(-1, Math.Min(_routes.Count - 1, value))
+                If selected <> _selected Then
+                    _selected = selected
+                    NotifyFocus()
+                End If
                 Invalidate()
             End Set
         End Property
@@ -722,25 +729,166 @@ Namespace Controls
             e.Handled = True
         End Sub
 
-        Private Sub DescribeSelection()
-            If _selected < 0 OrElse _selected >= _routes.Count Then
-                AccessibleDescription = Nothing
-                Return
-            End If
-            Dim entry As RouteMapEntry = _routes(_selected)
-            AccessibleDescription = ReminderService.SafeManuscriptTitle(entry.Manuscript) & ". " & RouteMapService.Brief(entry.Map) & ". " & RouteMapStyle.Summary(entry.Map)
-            If Focused Then AccessibilityNotifyClients(AccessibleEvents.DescriptionChange, -1)
+        ' A screen reader hears the route the keyboard is on, as it hears the
+        ' Deadlines list's rows: the chart raises the focus event for that
+        ' route's item itself. The description it once changed was never
+        ' heard, since AccessibilityNotifyClients raises nothing on .NET 10.0.
+        Private Sub NotifyFocus()
+            If _selected < 0 OrElse Not IsHandleCreated OrElse Not Focused Then Return
+            DeadlineList.RaiseAccessibleEvent(Me, AccessibleEvents.Focus, _selected)
         End Sub
 
         Protected Overrides Sub OnGotFocus(e As EventArgs)
             MyBase.OnGotFocus(e)
             Invalidate()
+            NotifyFocus()
         End Sub
 
         Protected Overrides Sub OnLostFocus(e As EventArgs)
             MyBase.OnLostFocus(e)
             Invalidate()
         End Sub
+
+        Private Function RowBounds(index As Integer) As Rectangle
+            Return New Rectangle(0, HeaderHeight + index * RowHeight, Width, RowHeight)
+        End Function
+
+        Protected Overrides Function CreateAccessibilityInstance() As AccessibleObject
+            Return New ChartAccessibleObject(Me)
+        End Function
+
+        Private Function RouteChild(index As Integer) As AccessibleObject
+            If index < 0 OrElse index >= _children.Length Then Return Nothing
+            If _children(index) Is Nothing Then _children(index) = New RouteAccessibleObject(Me, index)
+            Return _children(index)
+        End Function
+
+        ' The chart: a list named for its routes, with an item for each,
+        ' since a screen reader asks the list itself for each by its number.
+        Private NotInheritable Class ChartAccessibleObject
+            Inherits ControlAccessibleObject
+
+            Private ReadOnly _chart As RouteMapChart
+
+            Public Sub New(owner As RouteMapChart)
+                MyBase.New(owner)
+                _chart = owner
+            End Sub
+
+            Public Overrides Function GetChildCount() As Integer
+                Return _chart._children.Length
+            End Function
+
+            Public Overrides Function GetChild(index As Integer) As AccessibleObject
+                Return _chart.RouteChild(index)
+            End Function
+
+            Public Overrides Function GetFocused() As AccessibleObject
+                If Not _chart.Focused Then Return Nothing
+                Return If(_chart.RouteChild(_chart._selected), Me)
+            End Function
+
+            Public Overrides Function GetSelected() As AccessibleObject
+                Return _chart.RouteChild(_chart._selected)
+            End Function
+
+            ' The route under the point, or the chart itself above them.
+            Public Overrides Function HitTest(x As Integer, y As Integer) As AccessibleObject
+                If Not _chart.IsHandleCreated Then Return Nothing
+                Dim client As Point = _chart.PointToClient(New Point(x, y))
+                If Not _chart.ClientRectangle.Contains(client) Then Return Nothing
+                Return If(_chart.RouteChild(_chart.RowAt(client.Y)), Me)
+            End Function
+
+        End Class
+
+        ' A route, read as its title, its brief and its summary. One kept from
+        ' before the routes were replaced answers with what it was, and does
+        ' nothing.
+        Private NotInheritable Class RouteAccessibleObject
+            Inherits AccessibleObject
+
+            Private ReadOnly _chart As RouteMapChart
+            Private ReadOnly _index As Integer
+            Private ReadOnly _entry As RouteMapEntry
+
+            Public Sub New(chart As RouteMapChart, index As Integer)
+                _chart = chart
+                _index = index
+                _entry = chart._routes(index)
+            End Sub
+
+            Private ReadOnly Property IsCurrent As Boolean
+                Get
+                    Return Not _chart.IsDisposed AndAlso _index < _chart._routes.Count AndAlso _chart._routes(_index) Is _entry
+                End Get
+            End Property
+
+            Public Overrides Property Name As String
+                Get
+                    Return ReminderService.SafeManuscriptTitle(_entry.Manuscript) & ". " & RouteMapService.Brief(_entry.Map) & ". " & RouteMapStyle.Summary(_entry.Map)
+                End Get
+                Set(value As String)
+                    ' Named by the route.
+                End Set
+            End Property
+
+            Public Overrides ReadOnly Property Role As AccessibleRole
+                Get
+                    Return AccessibleRole.ListItem
+                End Get
+            End Property
+
+            Public Overrides ReadOnly Property State As AccessibleStates
+                Get
+                    If Not IsCurrent Then Return AccessibleStates.Unavailable
+                    Dim states As AccessibleStates = AccessibleStates.Focusable Or AccessibleStates.Selectable
+                    If _chart._selected = _index Then
+                        states = states Or AccessibleStates.Selected
+                        If _chart.Focused Then states = states Or AccessibleStates.Focused
+                    End If
+                    If Not _chart.Enabled Then states = states Or AccessibleStates.Unavailable
+                    Return states
+                End Get
+            End Property
+
+            Public Overrides ReadOnly Property Bounds As Rectangle
+                Get
+                    If Not IsCurrent OrElse Not _chart.IsHandleCreated Then Return Rectangle.Empty
+                    Return _chart.RectangleToScreen(_chart.RowBounds(_index))
+                End Get
+            End Property
+
+            Public Overrides ReadOnly Property Parent As AccessibleObject
+                Get
+                    Return _chart.AccessibilityObject
+                End Get
+            End Property
+
+            Public Overrides Function GetChildCount() As Integer
+                Return 0
+            End Function
+
+            Public Overrides Function Navigate(navdir As AccessibleNavigation) As AccessibleObject
+                If Not IsCurrent Then Return Nothing
+                Select Case navdir
+                    Case AccessibleNavigation.Next, AccessibleNavigation.Down
+                        Return _chart.RouteChild(_index + 1)
+                    Case AccessibleNavigation.Previous, AccessibleNavigation.Up
+                        Return _chart.RouteChild(_index - 1)
+                End Select
+                Return Nothing
+            End Function
+
+            ' Choosing a route from a screen reader selects it, as Up and Down
+            ' do, and can put the keyboard on it.
+            Public Overrides Sub [Select](flags As AccessibleSelection)
+                If Not IsCurrent Then Return
+                If (flags And (AccessibleSelection.TakeSelection Or AccessibleSelection.TakeFocus)) <> 0 Then _chart.SelectedIndex = _index
+                If (flags And AccessibleSelection.TakeFocus) <> 0 Then _chart.Focus()
+            End Sub
+
+        End Class
 
     End Class
 
