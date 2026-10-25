@@ -98,6 +98,44 @@ Public Class SubmissionWorkflowConsistencyTests
         End Try
     End Sub
 
+    ' Delete Journal Submission says what goes with the submission, in
+    ' plain words (#222): only the kinds it holds, with real plurals, the
+    ' day it was submitted, that the stage may move, and that Discard
+    ' leaves the saved library as it was.
+    <TestMethod>
+    <DataRow(0, 0, 0, "")>
+    <DataRow(1, 1, 1, "This also removes 1 editorial decision, 1 item from Correspondence & Files, and 1 reviewer comment with its drafted response.")>
+    <DataRow(3, 3, 3, "This also removes 3 editorial decisions, 3 items from Correspondence & Files, and 3 reviewer comments with their drafted responses.")>
+    <DataRow(2, 0, 1, "This also removes 2 editorial decisions and 1 reviewer comment with its drafted response.")>
+    Public Sub DeleteSubmissionQuestionSaysWhatGoesWithIt(decisions As Integer, correspondence As Integer, comments As Integer, removes As String)
+        Dim submission As New JournalSubmission With {
+            .JournalName = "Fictional Open Psychology",
+            .SubmittedDate = New DateTime(2026, 3, 1)
+        }
+        For i As Integer = 1 To decisions
+            submission.Decisions.Add(New EditorialDecisionEvent())
+        Next
+        For i As Integer = 1 To correspondence
+            submission.Correspondence.Add(New CorrespondenceItem())
+        Next
+        For i As Integer = 1 To comments
+            submission.ReviewerResponses.Add(New ReviewerResponseItem())
+        Next
+
+        Dim question As String = EditManuscriptForm.DeleteSubmissionQuestion(submission)
+
+        StringAssert.StartsWith(question, "Delete the submission to 'Fictional Open Psychology' (submitted " & New DateTime(2026, 3, 1).ToString("MMM d, yyyy") & ")?", "The question names the journal and the day it was submitted.")
+        StringAssert.Contains(question, "The manuscript's stage may change to match the submissions left.")
+        StringAssert.Contains(question, "Discarding the manuscript's unsaved changes leaves the saved library unchanged.")
+        Assert.IsFalse(question.Contains("(s)", StringComparison.Ordinal), "Real plurals, never (s): " & question)
+
+        If removes.Length = 0 Then
+            Assert.IsFalse(question.Contains("This also removes", StringComparison.Ordinal), "Nothing else goes, so nothing else is listed: " & question)
+        Else
+            StringAssert.Contains(question, removes, "Only the kinds the submission holds are listed.")
+        End If
+    End Sub
+
     <TestMethod>
     <DataRow(1000)>
     <DataRow(Integer.MaxValue)>

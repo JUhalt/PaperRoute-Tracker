@@ -3658,29 +3658,16 @@ Namespace Forms
 
             End If
 
-            Dim warning As String =
-                "Delete the submission to '" &
-                selected.JournalName &
-                "'?" &
-                Environment.NewLine &
-                Environment.NewLine &
-                "This will also remove:" &
-                Environment.NewLine &
-                "- " &
-                selected.Decisions.Count.ToString() &
-                " editorial decision(s)" &
-                Environment.NewLine &
-                "- " &
-                selected.Correspondence.Count.ToString() &
-                " correspondence/file record(s)"
-
             Dim result As DialogResult =
                 MessageBox.Show(
                     Me,
-                    warning,
+                    DeleteSubmissionQuestion(
+                        selected
+                    ),
                     "Delete Journal Submission",
                     MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Warning
+                    MessageBoxIcon.Warning,
+                    MessageBoxDefaultButton.Button2
                 )
 
             If result <>
@@ -3704,6 +3691,71 @@ Namespace Forms
             RefreshSubmissionList()
 
         End Sub
+
+
+        ' The Delete Journal Submission question (#222): what goes with the
+        ' submission, only the kinds it holds and with real plurals, and
+        ' that the stage may move with it. It says nothing about files.
+        Friend Shared Function DeleteSubmissionQuestion(
+            submission As JournalSubmission
+        ) As String
+
+            Dim parts As New List(Of String)()
+
+            Dim decisions As Integer =
+                If(submission.Decisions?.Count, 0)
+
+            If decisions > 0 Then
+                parts.Add(decisions.ToString() & If(decisions = 1, " editorial decision", " editorial decisions"))
+            End If
+
+            Dim correspondence As Integer =
+                If(submission.Correspondence?.Count, 0)
+
+            If correspondence > 0 Then
+                parts.Add(correspondence.ToString() & If(correspondence = 1, " item", " items") & " from Correspondence & Files")
+            End If
+
+            Dim comments As Integer =
+                If(submission.ReviewerResponses?.Count, 0)
+
+            If comments > 0 Then
+                parts.Add(comments.ToString() & If(comments = 1, " reviewer comment with its drafted response", " reviewer comments with their drafted responses"))
+            End If
+
+            Dim question As String =
+                "Delete the submission to '" &
+                submission.JournalName &
+                "' (submitted " &
+                submission.SubmittedDate.ToString("MMM d, yyyy") &
+                ")?"
+
+            If parts.Count = 1 Then
+
+                question &=
+                    Environment.NewLine &
+                    Environment.NewLine &
+                    "This also removes " & parts(0) & "."
+
+            ElseIf parts.Count > 1 Then
+
+                question &=
+                    Environment.NewLine &
+                    Environment.NewLine &
+                    "This also removes " &
+                    String.Join(", ", parts.Take(parts.Count - 1)) &
+                    If(parts.Count > 2, ",", String.Empty) &
+                    " and " & parts(parts.Count - 1) & "."
+
+            End If
+
+            Return question &
+                Environment.NewLine &
+                Environment.NewLine &
+                "The manuscript's stage may change to match the submissions left. " &
+                "Discarding the manuscript's unsaved changes leaves the saved library unchanged."
+
+        End Function
 
 
         ' =====================================================
