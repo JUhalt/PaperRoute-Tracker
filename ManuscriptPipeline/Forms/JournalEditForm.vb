@@ -973,7 +973,8 @@ Namespace Forms
                     "Existing manuscript readiness profiles keep their saved snapshot of this requirement.",
                     "Remove Readiness Requirement",
                     MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Question
+                    MessageBoxIcon.Question,
+                    MessageBoxDefaultButton.Button2
                 )
 
             If result <>

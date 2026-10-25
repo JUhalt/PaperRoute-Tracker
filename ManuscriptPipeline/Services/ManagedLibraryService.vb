@@ -893,6 +893,13 @@ Namespace Services
         End Sub
 
 
+        ' What a delete or remove question says of a managed file it takes
+        ' out, after naming the file (#223): MoveToRemoved below moves it on
+        ' save and never deletes it.
+        Friend Const MovesToRemovedOnSave As String =
+            "moves to the removed folder in your PaperRoute Library when you save the manuscript; it is not deleted."
+
+
         ' The one place a managed folder leaves the library. It is moved,
         ' never deleted, to removed\<yyyy-MM-dd>\... under the root, keeping
         ' its path there, so a mistake in a sweep is recoverable. Nothing
