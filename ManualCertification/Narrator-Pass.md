@@ -8,7 +8,7 @@ The scripted screen-reader check for a release (#139), run once during certifica
 - [ ] Windows' **Animation effects** on (**Settings > Accessibility > Visual effects**), so page switches fade (#142).
 - [ ] Narrator on (**Ctrl+Win+Enter**), with its default voice and verbosity. The Narrator key is **Caps Lock** or **Insert**.
 - [ ] Note the date, the PaperRoute version, the Windows build, and the Narrator version (Narrator settings).
-- [ ] Run this after the collector's last report: the status-line items below add, move and delete a manuscript of their own, named `ZZZ-CERT-v0.9.2-Narrator`, and the collector rejects a library with any other title.
+- [ ] Run this after the certification's last collector report (for v0.9.2, E2.7 of the checklist): the status-line items below add, move and delete a manuscript of their own, `ZZZ-CERT-v0.9.2-Narrator`. Its `ZZZ-CERT-` name keeps the collector from rejecting the library, but the collector would report it as a fifth fixture manuscript, so a report taken after it would not compare with one taken before.
 
 ## For every page and window below
 
@@ -25,7 +25,7 @@ The scripted screen-reader check for a release (#139), run once during certifica
 - [ ] **Library** (**Ctrl+2**): the table and its filter box are named; **Enter** on a row opens it. On Authors & Affiliations, both lists are named.
 - [ ] **Journals** (**Ctrl+3**): the journal list is read as "Journals", not as its count.
 - [ ] **Deadlines** (**Ctrl+4**), a drawn list (PR #195): each heading and each item is read in order; **Up** and **Down** move between items and each is read; a filter chip is pressed with **Narrator+Enter**; **Narrator+Enter** on a row's button and on the **Done** line's **Show** presses it.
-- [ ] **Insights** (**Ctrl+5**): each table is named. In the route chart (#193, PR #238), **Tab** onto it, then **Up** and **Down**: each route is read once, by its title, as the selection lands on it, and nothing is read past either end; **Enter** opens the selected route, and a click on a route is read once, as that route. The chart raises focus events only: record whether Narrator also wants it to say the route is selected. A route has no default action, so Narrator's own "do default action" on it does nothing: record whether that is a problem.
+- [ ] **Insights** (**Ctrl+5**): each table is named. In the route chart (#193, PR #238), **Tab** onto it, then **Up** and **Down**: each route is read once, by its title, brief and summary, as the selection lands on it, and nothing is read past either end; **Enter** opens the selected route, and a click on a route is read once, as that route. The chart raises focus events only: record whether Narrator also wants it to say the route is selected. A route has no default action, so Narrator's own "do default action" on it does nothing: record whether that is a problem.
 - [ ] **Import & Export** (**Ctrl+6**), drawn around its buttons (PR #195): every button is read by what it does, and Narrator's scan mode reads each heading, then each button and its description, in order.
 
 ## The manuscript page
@@ -45,6 +45,8 @@ The scripted screen-reader check for a release (#139), run once during certifica
 - [ ] On a manuscript page, change a field and press **Ctrl+S**: Narrator reads "Saved locally" from the status line without moving focus (#139).
 - [ ] **What just happened** (#225, PR #236), each read from the status line without moving focus: add a manuscript named `ZZZ-CERT-v0.9.2-Narrator` ('Added "ZZZ-CERT-v0.9.2-Narrator".'); move it to the File Drawer ('Moved "…" to the File Drawer.'); restore it ('Restored "…" to the Pipeline.'); delete it, typing DELETE ('Deleted "…".').
 - [ ] In **Check for Publications**, check one fixture manuscript (this sends its title to Crossref): the progress line is read as it changes; **Esc** stops the check and the window stays open.
+
+<!-- pending: the second wave of small touches, #239 to #245: add here what each leaves to the Narrator pass. -->
 
 ## Record
 
