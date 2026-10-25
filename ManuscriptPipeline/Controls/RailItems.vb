@@ -35,6 +35,8 @@ Namespace Controls
     End Enum
 
     ' Paints one left-rail item: an icon, its label, and an optional count.
+    ' Its hover is how far it is from rest (0) to hovered (1), as it eases
+    ' (#142); a selected page shows as selected whatever its hover.
     Friend NotInheritable Class RailPainter
 
         Private Sub New()
@@ -46,13 +48,14 @@ Namespace Controls
             glyph As RailGlyph,
             text As String,
             selected As Boolean,
-            hover As Boolean,
+            hover As Single,
             focusCue As Boolean,
             badge As Integer,
             Optional tone As RailTone = RailTone.Normal)
 
             Dim dpi As Integer = control.DeviceDpi
-            g.Clear(If(control.Parent IsNot Nothing, control.Parent.BackColor, UiTheme.HeaderBackground()))
+            Dim behind As Color = If(control.Parent IsNot Nothing, control.Parent.BackColor, UiTheme.HeaderBackground())
+            g.Clear(behind)
             g.SmoothingMode = SmoothingMode.AntiAlias
 
             Dim bounds As New RectangleF(0.5F, 0.5F, control.Width - 1.0F, control.Height - 1.0F)
@@ -61,11 +64,11 @@ Namespace Controls
             ' Working offline sits on a blue tint, a mode the user chose. Online
             ' is green ink only, so it never reads as the selected page.
             Dim tint As Color = If(tone = RailTone.Info, UiTheme.InfoMutedBackground(), Color.Empty)
-            If Not tint.IsEmpty AndAlso hover Then tint = UiTheme.Blend(tint, UiTheme.PrimaryText(), 0.08F)
+            If Not tint.IsEmpty AndAlso hover > 0.0F Then tint = Toward(tint, UiTheme.Blend(tint, UiTheme.PrimaryText(), 0.08F), hover)
 
-            If selected OrElse hover OrElse Not tint.IsEmpty Then
+            If selected OrElse hover > 0.0F OrElse Not tint.IsEmpty Then
                 Using path As GraphicsPath = RoundedShapes.Create(bounds, radius)
-                    Using fill As New SolidBrush(If(Not tint.IsEmpty, tint, If(selected, UiTheme.AccentMutedBackground(), UiTheme.HoverBackground())))
+                    Using fill As New SolidBrush(If(Not tint.IsEmpty, tint, If(selected, UiTheme.AccentMutedBackground(), Toward(behind, UiTheme.HoverBackground(), hover))))
                         g.FillPath(fill, path)
                     End Using
                 End Using
@@ -131,6 +134,11 @@ Namespace Controls
             End Using
 
         End Sub
+
+        ' A color part way to another, and that other exactly once there.
+        Private Shared Function Toward(baseColor As Color, target As Color, amount As Single) As Color
+            Return If(amount >= 1.0F, target, UiTheme.Blend(baseColor, target, amount))
+        End Function
 
         ' Simple line icons on a 16-unit grid, after the Workspace mockup.
         Friend Shared Sub DrawGlyph(g As Graphics, glyph As RailGlyph, box As RectangleF, ink As Color, stroke As Single)
@@ -225,7 +233,7 @@ Namespace Controls
     Friend Class RailButton
         Inherits RadioButton
 
-        Private _hover As Boolean
+        Private _hover As HoverTween = Nothing
         Private _badge As Integer
 
         Public Sub New(glyph As RailGlyph, text As String)
@@ -267,18 +275,17 @@ Namespace Controls
 
         Protected Overrides Sub OnMouseEnter(e As EventArgs)
             MyBase.OnMouseEnter(e)
-            _hover = True
-            Invalidate()
+            If _hover Is Nothing Then _hover = New HoverTween(Me)
+            _hover.MoveTo(True)
         End Sub
 
         Protected Overrides Sub OnMouseLeave(e As EventArgs)
             MyBase.OnMouseLeave(e)
-            _hover = False
-            Invalidate()
+            _hover?.MoveTo(False)
         End Sub
 
         Protected Overrides Sub OnPaint(e As PaintEventArgs)
-            RailPainter.Paint(Me, e.Graphics, Glyph, Text, Checked, _hover, Focused AndAlso ShowFocusCues, _badge)
+            RailPainter.Paint(Me, e.Graphics, Glyph, Text, Checked, If(_hover Is Nothing, 0.0F, _hover.Amount), Focused AndAlso ShowFocusCues, _badge)
         End Sub
 
     End Class
@@ -287,7 +294,7 @@ Namespace Controls
     Friend Class RailCommandButton
         Inherits Button
 
-        Private _hover As Boolean
+        Private _hover As HoverTween = Nothing
 
         Public Sub New(glyph As RailGlyph, text As String)
             Me.Glyph = glyph
@@ -311,14 +318,13 @@ Namespace Controls
 
         Protected Overrides Sub OnMouseEnter(e As EventArgs)
             MyBase.OnMouseEnter(e)
-            _hover = True
-            Invalidate()
+            If _hover Is Nothing Then _hover = New HoverTween(Me)
+            _hover.MoveTo(True)
         End Sub
 
         Protected Overrides Sub OnMouseLeave(e As EventArgs)
             MyBase.OnMouseLeave(e)
-            _hover = False
-            Invalidate()
+            _hover?.MoveTo(False)
         End Sub
 
         Protected Overrides Sub OnGotFocus(e As EventArgs)
@@ -332,7 +338,7 @@ Namespace Controls
         End Sub
 
         Protected Overrides Sub OnPaint(e As PaintEventArgs)
-            RailPainter.Paint(Me, e.Graphics, Glyph, Text, False, _hover, Focused AndAlso ShowFocusCues, 0, Tone)
+            RailPainter.Paint(Me, e.Graphics, Glyph, Text, False, If(_hover Is Nothing, 0.0F, _hover.Amount), Focused AndAlso ShowFocusCues, 0, Tone)
         End Sub
 
     End Class

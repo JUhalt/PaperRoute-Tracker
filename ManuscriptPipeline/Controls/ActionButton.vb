@@ -19,12 +19,13 @@ Namespace Controls
 
     ' A rounded button painted from the theme tokens. It keeps Button's
     ' behavior (click, keyboard, mnemonics, accessibility) and only replaces
-    ' the painting, so keyboard cues and focus remain visible.
+    ' the painting, so keyboard cues and focus remain visible. Its fill
+    ' eases into and out of the hover color (#142); a press shows at once.
     Friend Class ActionButton
         Inherits Button
 
         Private _role As ActionButtonRole = ActionButtonRole.Secondary
-        Private _hover As Boolean
+        Private _hover As HoverTween = Nothing
         Private _pressed As Boolean
 
         Public Sub New()
@@ -53,23 +54,34 @@ Namespace Controls
             End Set
         End Property
 
+        ' Made on the first hover.
+        Private ReadOnly Property Hover As HoverTween
+            Get
+                If _hover Is Nothing Then _hover = New HoverTween(Me)
+                Return _hover
+            End Get
+        End Property
+
         Protected Overrides Sub OnMouseEnter(e As EventArgs)
             MyBase.OnMouseEnter(e)
-            _hover = True
-            Invalidate()
+            Hover.MoveTo(True)
         End Sub
 
         Protected Overrides Sub OnMouseLeave(e As EventArgs)
             MyBase.OnMouseLeave(e)
-            _hover = False
-            _pressed = False
-            Invalidate()
+            If _pressed Then
+                _pressed = False
+                Invalidate()
+            End If
+            Hover.MoveTo(False)
         End Sub
 
+        ' A press shows at once, and lets go to the full hover color.
         Protected Overrides Sub OnMouseDown(e As MouseEventArgs)
             MyBase.OnMouseDown(e)
             If e.Button = MouseButtons.Left Then
                 _pressed = True
+                Hover.SnapTo(True)
                 Invalidate()
             End If
         End Sub
@@ -108,9 +120,11 @@ Namespace Controls
         Protected Overrides Sub OnPaint(e As PaintEventArgs)
 
             Dim g As Graphics = e.Graphics
-            g.Clear(If(Parent IsNot Nothing, Parent.BackColor, UiTheme.BoardBackground()))
-            PaintFace(g, New Rectangle(0, 0, Width, Height), _role, Text, Font, TextFlags(), _hover, _pressed,
-                      Focused AndAlso ShowFocusCues, Enabled, DeviceDpi)
+            Dim behind As Color = If(Parent IsNot Nothing, Parent.BackColor, UiTheme.BoardBackground())
+            g.Clear(behind)
+            PaintFace(g, New Rectangle(0, 0, Width, Height), _role, Text, Font, TextFlags(),
+                      FaceColorsAt(_role, If(_hover Is Nothing, 0.0F, _hover.Amount), _pressed, Enabled, behind),
+                      Focused AndAlso ShowFocusCues, DeviceDpi)
 
         End Sub
 
@@ -130,9 +144,24 @@ Namespace Controls
             dpi As Integer
         )
 
+            PaintFace(g, bounds, role, text, font, flags, FaceColors(role, hover, pressed, enabled), focusRing, dpi)
+
+        End Sub
+
+        Private Shared Sub PaintFace(
+            g As Graphics,
+            bounds As Rectangle,
+            role As ActionButtonRole,
+            text As String,
+            font As Font,
+            flags As TextFormatFlags,
+            face As (Fill As Color, Border As Color, Ink As Color),
+            focusRing As Boolean,
+            dpi As Integer
+        )
+
             g.SmoothingMode = SmoothingMode.AntiAlias
 
-            Dim face As (Fill As Color, Border As Color, Ink As Color) = FaceColors(role, hover, pressed, enabled)
             Dim fill As Color = face.Fill
             Dim border As Color = face.Border
             Dim ink As Color = face.Ink
@@ -212,6 +241,35 @@ Namespace Controls
             End If
 
             Return (fill, border, ink)
+
+        End Function
+
+        ' The face part way from rest (0) to hover (1), as a hover eases in
+        ' or out (#142): only the fill moves, since the outline and the text
+        ' are the same at rest and hovered in every role and state. At 0 and
+        ' 1 it is FaceColors exactly; a press is FaceColors' pressed face at
+        ' once. A quiet face, which has no fill at rest, eases in from what
+        ' is behind it.
+        Friend Shared Function FaceColorsAt(
+            role As ActionButtonRole,
+            hover As Single,
+            pressed As Boolean,
+            enabled As Boolean,
+            behind As Color
+        ) As (Fill As Color, Border As Color, Ink As Color)
+
+            If pressed OrElse Not enabled OrElse hover <= 0.0F Then
+                Return FaceColors(role, False, pressed, enabled)
+            End If
+
+            Dim hovered As (Fill As Color, Border As Color, Ink As Color) = FaceColors(role, True, False, enabled)
+
+            If hover >= 1.0F Then
+                Return hovered
+            End If
+
+            Dim rest As Color = FaceColors(role, False, False, enabled).Fill
+            Return (UiTheme.Blend(If(rest.IsEmpty, behind, rest), hovered.Fill, hover), hovered.Border, hovered.Ink)
 
         End Function
 

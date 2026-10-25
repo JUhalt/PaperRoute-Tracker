@@ -407,6 +407,15 @@ Friend NotInheritable Class LibraryBoard
     End Property
 
 
+    ' The page switches' cross-fade (#142), or Nothing until a switch made
+    ' with motion on.
+    Public ReadOnly Property PageFade As ManuscriptPipeline.Controls.PageFade
+        Get
+            Return DirectCast(GetField("pageFade"), ManuscriptPipeline.Controls.PageFade)
+        End Get
+    End Property
+
+
     ' As Windows does when a contrast theme is turned on or off.
     Public Sub ChangeSystemColors()
         OnSystemColorsChanged(EventArgs.Empty)
