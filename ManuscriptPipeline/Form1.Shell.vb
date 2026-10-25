@@ -548,6 +548,23 @@ Partial Public Class Form1
     End Sub
 
 
+    ' Windows says a setting changed, Animation effects among them: motion
+    ' asks Windows again on its next step (#142), so Animation effects
+    ' turned off while PaperRoute runs stops a fade or an ease on its next
+    ' frame, as a contrast theme does, and turned on starts motion again.
+    Protected Overrides Sub WndProc(ByRef m As Message)
+
+        If m.Msg = WM_SETTINGCHANGE Then
+            UiMotion.SettingChanged()
+        End If
+
+        MyBase.WndProc(m)
+
+    End Sub
+
+    Private Const WM_SETTINGCHANGE As Integer = &H1A
+
+
     ' One page switch (#133), once any question about the page left has
     ' been answered. The page left is prepared first, outside the hold: its
     ' draft and its timers, focus out of it, and the author library its

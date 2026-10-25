@@ -9,8 +9,9 @@ Namespace Services
 
     ' Micro-motion (#142): whether anything moves, and the one clock it
     ' moves by. Windows' "Animation effects" setting (Settings >
-    ' Accessibility > Visual effects) is read once a session; with it off,
-    ' or under a Windows contrast theme, every state changes at once and a
+    ' Accessibility > Visual effects) is read once, and again after Windows
+    ' says a setting changed (Form1's WM_SETTINGCHANGE); with it off, or
+    ' under a Windows contrast theme, every state changes at once and a
     ' page switch is a cut, as before.
     Friend NotInheritable Class UiMotion
 
@@ -29,27 +30,53 @@ Namespace Services
         Friend Shared FadeMilliseconds As Integer = DefaultFadeMilliseconds
         Friend Shared HoverMilliseconds As Integer = DefaultHoverMilliseconds
 
-        ' Windows' setting, read the first time it is asked for.
-        Private Shared ReadOnly _setting As New Lazy(Of Boolean)(AddressOf ReadSetting, LazyThreadSafetyMode.ExecutionAndPublication)
+        ' Windows' setting as last read: unknown until it is asked for, and
+        ' again once Windows says a setting changed.
+        Private Const SettingUnknown As Integer = 0
+        Private Const SettingOn As Integer = 1
+        Private Const SettingOff As Integer = 2
+        Private Shared _setting As Integer = SettingUnknown
         Private Shared _settingReads As Integer = 0
 
 
         ' Whether anything moves now. A contrast theme always wins, so a
-        ' theme turned on while PaperRoute runs stops the motion at once.
+        ' theme turned on while PaperRoute runs stops the motion at once;
+        ' Animation effects turned off does too, once Windows has said so.
         Public Shared ReadOnly Property Enabled As Boolean
             Get
-                Return Not UiTheme.IsHighContrast() AndAlso If(EnabledOverride, _setting.Value)
+                Return Not UiTheme.IsHighContrast() AndAlso If(EnabledOverride, Setting())
             End Get
         End Property
 
 
+        ' Windows says a setting changed: the next step asks it again, so a
+        ' fade or an ease under way stops on its next frame.
+        Friend Shared Sub SettingChanged()
+            Volatile.Write(_setting, SettingUnknown)
+        End Sub
+
+
         ' How many times Windows' setting has been read this session: for
-        ' the test that it is read once.
+        ' the test that it is read once until Windows says it changed.
         Friend Shared ReadOnly Property SettingReads As Integer
             Get
                 Return Volatile.Read(_settingReads)
             End Get
         End Property
+
+
+        Private Shared Function Setting() As Boolean
+
+            Dim known As Integer = Volatile.Read(_setting)
+
+            If known = SettingUnknown Then
+                known = If(ReadSetting(), SettingOn, SettingOff)
+                Volatile.Write(_setting, known)
+            End If
+
+            Return known = SettingOn
+
+        End Function
 
 
         Private Shared Function ReadSetting() As Boolean

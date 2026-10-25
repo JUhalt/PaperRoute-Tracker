@@ -14,10 +14,11 @@ Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
 
-' Micro-motion (#142): Windows' Animation effects setting read once a
-' session, hover eased on one clock and pressed at once, colors that end on
-' the theme's tokens, and nothing moving with motion off or under a
-' contrast theme. Each test sets the seams it needs and puts them back.
+' Micro-motion (#142): Windows' Animation effects setting read once until
+' Windows says it changed, hover eased on one clock and pressed at once,
+' colors that end on the theme's tokens, and nothing moving with motion
+' off or under a contrast theme. Each test sets the seams it needs and
+' puts them back.
 <TestClass>
 <DoNotParallelize>
 Public Class MotionTests
@@ -52,38 +53,68 @@ Public Class MotionTests
     ' The setting
     ' ---------------------------------------------------------------
 
-    ' Windows' setting is read once however often it is asked for, and is
-    ' what SPI_GETCLIENTAREAANIMATION says; a contrast theme turns motion
-    ' off whatever the setting or the seam says.
+    ' Windows' setting is read once however often it is asked for, until
+    ' Windows tells the window a setting changed (WM_SETTINGCHANGE), as it
+    ' does when Animation effects is turned on or off: then it is read
+    ' again, once, so the change counts in the session it is made in. It
+    ' is what SPI_GETCLIENTAREAANIMATION says; a contrast theme turns
+    ' motion off whatever the setting or the seam says.
     <TestMethod>
-    Public Sub TheSettingIsReadOncePerSessionAndContrastWins()
+    Public Sub TheSettingIsReadOnceUntilWindowsSaysItChangedAndContrastWins()
 
-        Try
-            UiTheme.HighContrastOverride = False
-            UiMotion.EnabledOverride = Nothing
+        Dim report As New List(Of String)()
 
-            Dim answers As New HashSet(Of Boolean)()
-            For index As Integer = 1 To 1000
-                answers.Add(UiMotion.Enabled)
-            Next
+        StaRunner.Run(
+            Sub()
+                Try
+                    UiTheme.HighContrastOverride = False
+                    UiMotion.EnabledOverride = Nothing
 
-            Assert.AreEqual(1, UiMotion.SettingReads, "Windows' setting is read once a session.")
-            CollectionAssert.AreEqual({SystemAnimates()}, answers.ToArray(), "Motion follows Windows' Animation effects setting.")
+                    Dim ask As Func(Of Boolean()) =
+                        Function()
+                            Dim answers As New HashSet(Of Boolean)()
+                            For index As Integer = 1 To 1000
+                                answers.Add(UiMotion.Enabled)
+                            Next
+                            Return answers.ToArray()
+                        End Function
 
-            UiMotion.EnabledOverride = True
-            Assert.IsTrue(UiMotion.Enabled, "The seam turns motion on.")
-            UiMotion.EnabledOverride = False
-            Assert.IsFalse(UiMotion.Enabled, "The seam turns motion off.")
+                    ' Asked once first, so the setting has been read.
+                    Dim asked As Boolean = UiMotion.Enabled
+                    Dim reads As Integer = UiMotion.SettingReads
+                    Dim first As Boolean() = ask()
+                    If UiMotion.SettingReads <> reads Then report.Add("Windows' setting was read " & (UiMotion.SettingReads - reads).ToString() & " more times in 1000 asks.")
+                    If Not first.SequenceEqual({SystemAnimates()}) Then report.Add("Motion is " & String.Join(", ", first) & ", not Windows' Animation effects setting.")
 
-            UiTheme.HighContrastOverride = True
-            UiMotion.EnabledOverride = True
-            Assert.IsFalse(UiMotion.Enabled, "Under a contrast theme nothing moves.")
-            UiMotion.EnabledOverride = Nothing
-            Assert.IsFalse(UiMotion.Enabled, "Under a contrast theme nothing moves, whatever Windows' setting.")
-            Assert.AreEqual(1, UiMotion.SettingReads, "Still read once.")
-        Finally
-            ResetSeams()
-        End Try
+                    Using board As New LibraryBoard(LargeLibraryFixture.Create(Path.Combine(_root, "library"), 10), Path.Combine(_root, "settings"))
+                        board.Start()
+                        board.WaitForIdleWork()
+                        reads = UiMotion.SettingReads
+                        SendMessage(board.Handle, WM_SETTINGCHANGE, New IntPtr(SPI_SETCLIENTAREAANIMATION), IntPtr.Zero)
+                        Dim again As Boolean() = ask()
+                        If UiMotion.SettingReads <> reads + 1 Then report.Add("Once Windows said Animation effects changed, the setting was read " & (UiMotion.SettingReads - reads).ToString() & " times in 1000 asks, not once.")
+                        If Not again.SequenceEqual({SystemAnimates()}) Then report.Add("Read again, motion is " & String.Join(", ", again) & ", not Windows' Animation effects setting.")
+                        board.Close()
+                    End Using
+
+                    UiMotion.EnabledOverride = True
+                    If Not UiMotion.Enabled Then report.Add("The seam does not turn motion on.")
+                    UiMotion.EnabledOverride = False
+                    If UiMotion.Enabled Then report.Add("The seam does not turn motion off.")
+
+                    reads = UiMotion.SettingReads
+                    UiTheme.HighContrastOverride = True
+                    UiMotion.EnabledOverride = True
+                    If UiMotion.Enabled Then report.Add("Under a contrast theme something moves.")
+                    UiMotion.EnabledOverride = Nothing
+                    If UiMotion.Enabled Then report.Add("Under a contrast theme something moves, with Windows' setting asked.")
+                    If UiMotion.SettingReads <> reads Then report.Add("Under a contrast theme Windows' setting was read.")
+                Finally
+                    ResetSeams()
+                End Try
+            End Sub)
+
+        Assert.AreEqual(0, report.Count, String.Join(Environment.NewLine, report))
 
     End Sub
 
@@ -730,6 +761,13 @@ Public Class MotionTests
 
     <DllImport("user32.dll")>
     Private Shared Function SystemParametersInfo(action As UInteger, param As UInteger, ByRef value As Integer, winIni As UInteger) As Boolean
+    End Function
+
+    Private Const WM_SETTINGCHANGE As UInteger = &H1A
+    Private Const SPI_SETCLIENTAREAANIMATION As Integer = &H1043
+
+    <DllImport("user32.dll")>
+    Private Shared Function SendMessage(window As IntPtr, message As UInteger, wParam As IntPtr, lParam As IntPtr) As IntPtr
     End Function
 
 End Class
