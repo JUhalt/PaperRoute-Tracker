@@ -486,6 +486,67 @@ Public Class PageSwitchTests
     End Sub
 
 
+    ' Leaving Journals renders the Board from the library as it is now
+    ' (#133): a stage count that changed meanwhile is in the stage filter,
+    ' and an attention count that rose from none shows its chip, counted;
+    ' one that fell to none hides it.
+    <TestMethod>
+    Public Sub LeavingJournalsShowsWhatChangedOnTheBoard()
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary =
+                    LargeLibraryFixture.Create(Path.Combine(_root, "library"), 60)
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+
+                    Dim stages As ComboBox = board.Part(Of ComboBox)("cboStageFilter")
+                    Dim chip As Controls.FilterChip = board.Part(Of Controls.FilterChip)("lblMissingJournal")
+                    Dim stageItem As Func(Of String, String) =
+                        Function(stage) stages.Items.Cast(Of Object)().Select(Function(item) item.ToString()).Single(Function(text) text.StartsWith(stage & " (", StringComparison.Ordinal))
+                    Dim visitJournals As Action =
+                        Sub()
+                            board.NavigateTo(Form1.WorkspacePage.Journals)
+                            Application.DoEvents()
+                            board.NavigateTo(Form1.WorkspacePage.Board)
+                            Application.DoEvents()
+                        End Sub
+
+                    ' No manuscript lacks a target journal: the chip goes.
+                    For Each manuscript As Models.Manuscript In board.Library.Where(Function(item) String.IsNullOrWhiteSpace(item.TargetJournal))
+                        manuscript.TargetJournal = "Fictional Journal 01"
+                    Next
+                    visitJournals()
+                    Assert.AreEqual(0, CInt(chip.Tag), "No manuscript lacks a target journal.")
+                    Assert.IsFalse(chip.Visible, "The chip of a count of none is hidden.")
+
+                    ' One manuscript is a draft again, with no target journal.
+                    Dim moved As Models.Manuscript = board.Library.First(Function(item) item.Location = Models.ManuscriptLocation.Pipeline AndAlso item.CurrentStage = Models.PaperStage.Submitted)
+                    Dim drafts As Integer = board.Library.Where(Function(item) item.CurrentStage = Models.PaperStage.Draft).Count()
+                    Dim submitted As Integer = board.Library.Where(Function(item) item.CurrentStage = Models.PaperStage.Submitted).Count()
+                    Assert.AreEqual("Draft (" & drafts.ToString() & ")", stageItem("Draft"))
+                    moved.CurrentStage = Models.PaperStage.Draft
+                    moved.TargetJournal = String.Empty
+                    moved.TargetJournalId = Nothing
+                    visitJournals()
+
+                    Assert.AreEqual("Draft (" & (drafts + 1).ToString() & ")", stageItem("Draft"), "The stage filter counts the draft.")
+                    Assert.AreEqual("Submitted (" & (submitted - 1).ToString() & ")", stageItem("Submitted"))
+                    Assert.AreEqual(1, CInt(chip.Tag), "One manuscript lacks a target journal.")
+                    Assert.IsTrue(chip.Visible, "Its chip shows.")
+                    StringAssert.StartsWith(chip.Text, "1 ", "The chip counts it.")
+
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(3))
+
+    End Sub
+
+
     ' Each visit to Insights begins as a new page did (#133): on Your
     ' Journals, no journal chosen, and the figures worked out anew from the
     ' records as they are, though the page is kept and was left on a
@@ -694,6 +755,11 @@ Public Class PageSwitchTests
 
                 Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
 
+                    ' What the switches draw, and nothing of the tests' own
+                    ' check that an open left nothing to lay out: laying a
+                    ' page out again once its hold is released has Windows
+                    ' frame and erase what it touches there and then.
+                    board.VerifySettled = False
                     board.Start()
                     board.WaitForIdleWork()
                     Dim subject As Models.Manuscript = board.Library.First(Function(item) item.Location = Models.ManuscriptLocation.Pipeline)

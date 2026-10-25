@@ -141,6 +141,10 @@ Public Class ResponsivenessBudgetTests
 
         Using board As New LibraryBoard(library, Path.Combine(_root, library.Name & "-settings"))
 
+            ' The opens are timed as a researcher makes them, with nothing
+            ' of the tests' own checks inside them (LibraryBoard.Open).
+            board.VerifySettled = False
+
             rows.Add(Time(library, "Warm startup to an interactive Board (Show, queue drained)", Startup, Sub() board.Start(), enforced:=enforce))
             _paintObserved(library.Name) = board.PaintObserved
 
@@ -561,6 +565,7 @@ Public Class ResponsivenessBudgetTests
 
         Using board As New LibraryBoard(library, Path.Combine(_root, library.Name & If(motion, "-motion-on", "-motion-off") & "-settings"))
 
+            board.VerifySettled = False
             board.Start()
             board.WaitForBoardFill()
             board.WaitForIdleWork()

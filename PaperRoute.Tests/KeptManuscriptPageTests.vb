@@ -462,6 +462,102 @@ Public Class KeptManuscriptPageTests
     End Sub
 
 
+    ' Whatever the record before it, an open leaves the page with nothing
+    ' to lay out (#133): laying out each container shown again moves and
+    ' scrolls nothing, as it opens and once the window has processed its
+    ' messages, and so does each section once shown. The records differ
+    ' in every way the page's shape follows: a Published manuscript with
+    ' no shortlist, a Pipeline one with its shortlisted journals and tags,
+    ' a filed one with its reason, one with no target journal (no notes
+    ' card) and one whose journal has notes, a three-line title after a
+    ' one-line one and back, a revision with its deadline, a page left on
+    ' Submissions, and the window made as small as it goes on the Board
+    ' between leaving and the next open. Each is opened straight from the
+    ' page shown, and again from the Board once the page left has let go
+    ' of its record.
+    <TestMethod>
+    Public Sub AnOpenLeavesNothingToLayOut()
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary = Library60()
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+
+                    Dim records As List(Of Manuscript) = board.Library
+                    Dim published As Manuscript = records.First(Function(item) item.Location = ManuscriptLocation.Published AndAlso item.JournalShortlist.Count = 0 AndAlso item.TargetJournalId.HasValue)
+                    Dim choosing As Manuscript = records.Where(Function(item) item.Location = ManuscriptLocation.Pipeline AndAlso item.Tags.Count >= 2).OrderByDescending(Function(item) item.JournalShortlist.Count).First()
+                    Dim filed As Manuscript = records.First(Function(item) item.Location = ManuscriptLocation.FileDrawer)
+                    filed.FileDrawerReason = "Set aside until the second study is in." & Environment.NewLine & "The reviewers asked for it."
+                    Dim untargeted As Manuscript = records.First(Function(item) item IsNot published AndAlso item IsNot choosing AndAlso item IsNot filed)
+                    untargeted.TargetJournal = String.Empty
+                    untargeted.TargetJournalId = Nothing
+                    Dim titled As Manuscript = records.First(Function(item) item IsNot published AndAlso item IsNot choosing AndAlso item IsNot filed AndAlso item IsNot untargeted AndAlso item.Location = ManuscriptLocation.Published)
+                    titled.Title = String.Join(" ", Enumerable.Repeat("A title long enough to wrap onto a third line beside the page's actions,", 4))
+                    Dim revision As Manuscript = records.First(Function(item) item.Location = ManuscriptLocation.Pipeline AndAlso item.CurrentStage = PaperStage.Revision)
+                    Assert.IsTrue(choosing.JournalShortlist.Count >= 2, "A Pipeline manuscript with shortlisted journals and tags.")
+
+                    Dim sequence As (Record As Manuscript, LeaveOn As String, Shrink As Boolean)() = {
+                        (published, "Overview", False),
+                        (choosing, "Overview", False),
+                        (filed, "Overview", False),
+                        (untargeted, "Overview", False),
+                        (choosing, "Overview", False),
+                        (titled, "Overview", False),
+                        (published, "Overview", False),
+                        (titled, "Overview", False),
+                        (revision, "Submissions", False),
+                        (choosing, "Overview", True),
+                        (filed, "Overview", False)
+                    }
+
+                    For Each throughTheBoard As Boolean In {False, True}
+                        For Each visit In sequence
+
+                            If throughTheBoard Then
+                                board.NavigateTo(Form1.WorkspacePage.Board)
+                                board.WaitForIdleWork()
+                                If visit.Shrink Then
+                                    board.Size = board.MinimumSize
+                                    Application.DoEvents()
+                                End If
+                            End If
+
+                            Dim context As String = "Opening """ & visit.Record.Title.Substring(0, Math.Min(40, visit.Record.Title.Length)) & """" & If(throughTheBoard, " from the Board", " from the page shown")
+                            Try
+                                board.Open(visit.Record)
+                                Application.DoEvents()
+                                board.AssertSettled()
+
+                                For Each section As String In {"Authors", "Versions", "Submissions", "Readiness & Packets", visit.LeaveOn}
+                                    ShowSection(board.Editor, section)
+                                    board.AssertSettled()
+                                Next
+                            Catch ex As AssertFailedException
+                                Throw New AssertFailedException(context & ": " & ex.Message, ex)
+                            End Try
+
+                        Next
+                    Next
+
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(10))
+
+    End Sub
+
+
+    Private Shared Sub ShowSection(editor As EditManuscriptForm, name As String)
+        Dim tabs As List(Of ShelfTabButton) = DirectCast(GetType(EditManuscriptForm).GetField("_sectionTabs", Reflection.BindingFlags.Instance Or Reflection.BindingFlags.NonPublic).GetValue(editor), List(Of ShelfTabButton))
+        tabs.Single(Function(tab) tab.Text = name).Checked = True
+        Application.DoEvents()
+    End Sub
+
+
     Private Function Library60() As LargeLibraryFixture.SyntheticLibrary
         Return LargeLibraryFixture.Create(Path.Combine(_root, "library"), 60)
     End Function

@@ -325,7 +325,39 @@ Partial Public Class Form1
             containers(index).ResumeLayout(True)
         Next
 
+        ' A scrolling host sets its range as its own layout ends. A card in
+        ' it that grows as it takes a new width during that layout (a label
+        ' in it wraps to the width the card was given) asks for the host's
+        ' layout again while it runs, and WinForms lets that request go:
+        ' opened after the window was resized on the Board, the Overview's
+        ' range ended 57 pixels short of its last card. A host whose range
+        ' does not end where its contents do lays out once more, which with
+        ' its contents settled only sets the range.
+        For Each host As ScrollableControl In containers.OfType(Of ScrollableControl)()
+            If host.AutoScroll AndAlso host.Visible AndAlso Not ScrollRangeFits(host) Then
+                host.PerformLayout()
+            End If
+        Next
+
     End Sub
+
+
+    ' Whether a scrolling host's range ends where its contents do: as tall
+    ' as the lowest of them, or as its own client area if that is taller.
+    Private Shared Function ScrollRangeFits(host As ScrollableControl) As Boolean
+
+        Dim display As Rectangle = host.DisplayRectangle
+        Dim bottom As Integer = host.ClientSize.Height
+
+        For Each child As Control In host.Controls
+            If child.Visible Then
+                bottom = Math.Max(bottom, child.Bounds.Bottom - display.Y + host.Padding.Bottom)
+            End If
+        Next
+
+        Return display.Height = bottom
+
+    End Function
 
 
     ' The kept page, built and put in the page area, hidden, if it is not

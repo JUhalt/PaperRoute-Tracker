@@ -206,6 +206,13 @@ Friend NotInheritable Class LibraryBoard
     End Property
 
 
+    ' One of the window's own parts by its field name, such as a Board
+    ' filter or one of its attention chips.
+    Public Function Part(Of T)(name As String) As T
+        Return DirectCast(GetField(name), T)
+    End Function
+
+
     Public ReadOnly Property StatusText As String
         Get
             Return DirectCast(GetField("lblStatus"), Label).Text
@@ -271,8 +278,31 @@ Friend NotInheritable Class LibraryBoard
     End Function
 
 
+    ' Opens a manuscript as a click on its card does. The page shown is
+    ' then held to having nothing left to lay out (AssertSettled), so every
+    ' test that opens a manuscript, in every theme, size and DPI it runs
+    ' at, checks that the open's one layout pass left the page as a full
+    ' layout would. The budget tests turn this off, since it would take
+    ' its own time inside their timed opens.
+    Public VerifySettled As Boolean = True
+
     Public Sub Open(manuscript As Manuscript)
         CallPrivate("OpenManuscript", manuscript, Nothing)
+        If VerifySettled Then AssertSettled()
+    End Sub
+
+
+    ' The manuscript page, while it shows, holds no container's layout and
+    ' has nothing left to lay out: laying out each container it shows
+    ' again, inner ones first, moves and resizes nothing and scrolls
+    ' nothing (#133). A section, card or bar hidden is checked once shown.
+    Public Sub AssertSettled()
+        Dim page As Control = KeptPage
+        If page Is Nothing OrElse page.IsDisposed OrElse Not page.Visible Then Return
+        Dim problems As List(Of String) = LayoutProbe.Unsettled(page)
+        If problems.Count > 0 Then
+            Assert.Fail("The manuscript page was left with layout to do:" & Environment.NewLine & String.Join(Environment.NewLine, problems))
+        End If
     End Sub
 
 
@@ -473,6 +503,178 @@ Friend NotInheritable Class LibraryBoard
     Private Sub SetField(name As String, value As Object)
         GetType(Form1).GetField(name, BindingFlags.Instance Or BindingFlags.NonPublic).SetValue(Me, value)
     End Sub
+
+
+    Private Shared Iterator Function Descendants(parent As Control) As IEnumerable(Of Control)
+        For Each child As Control In parent.Controls
+            Yield child
+            For Each descendant As Control In Descendants(child)
+                Yield descendant
+            Next
+        Next
+    End Function
+
+End Class
+
+
+' What laying out a page does, recorded while it is alive (#133): each
+' Layout event a control under a root raises, by the property that caused
+' it, and each move or resize of a control that was under the root when the
+' probe began. Controls added later (a record's tag chips, its versions)
+' are not watched. Also: whether a page is settled (Unsettled).
+Friend NotInheritable Class LayoutProbe
+    Implements IDisposable
+
+    Private ReadOnly _root As Control
+    Private ReadOnly _watched As List(Of Control)
+    Private ReadOnly _layout As LayoutEventHandler
+    Private ReadOnly _moved As EventHandler
+    Private ReadOnly _bounds As New Dictionary(Of Control, Rectangle)()
+
+    Public ReadOnly Layouts As New List(Of (Control As Control, Affected As String))()
+    Public ReadOnly Moves As New List(Of (Control As Control, Before As Rectangle, After As Rectangle))()
+
+    ' Both, one line each, in the order they came.
+    Public ReadOnly Sequence As New List(Of String)()
+
+
+    Public Sub New(root As Control)
+        _root = root
+        _watched = {root}.Concat(Descendants(root)).ToList()
+        _layout =
+            Sub(sender, e)
+                Dim control As Control = DirectCast(sender, Control)
+                Layouts.Add((control, If(e.AffectedProperty, String.Empty)))
+                Sequence.Add("laid out " & PathOf(control, _root) & " (" & e.AffectedProperty & If(e.AffectedControl Is Nothing OrElse e.AffectedControl Is control, String.Empty, " of " & PathOf(e.AffectedControl, _root)) & ")")
+            End Sub
+        _moved =
+            Sub(sender, e)
+                Dim control As Control = DirectCast(sender, Control)
+                Dim before As Rectangle = Rectangle.Empty
+                _bounds.TryGetValue(control, before)
+                If before <> control.Bounds Then
+                    Moves.Add((control, before, control.Bounds))
+                    Sequence.Add("moved " & PathOf(control, _root) & " from " & before.ToString() & " to " & control.Bounds.ToString())
+                End If
+                _bounds(control) = control.Bounds
+            End Sub
+        For Each control As Control In _watched
+            _bounds(control) = control.Bounds
+            AddHandler control.Layout, _layout
+            AddHandler control.SizeChanged, _moved
+            AddHandler control.LocationChanged, _moved
+        Next
+    End Sub
+
+
+    ' The Layout events of containers (controls with controls in them).
+    Public Function ContainerLayouts() As List(Of (Control As Control, Affected As String))
+        Return Layouts.Where(Function(entry) entry.Control.HasChildren).ToList()
+    End Function
+
+
+    ' The moves and resizes of containers.
+    Public Function ContainerMoves() As List(Of (Control As Control, Before As Rectangle, After As Rectangle))
+        Return Moves.Where(Function(entry) entry.Control.HasChildren).ToList()
+    End Function
+
+
+    ' Each layout and move, one line each, for a failure's message.
+    Public Function Described(Optional containersOnly As Boolean = False) As List(Of String)
+        Dim lines As New List(Of String)()
+        For Each entry In Layouts.Where(Function(item) Not containersOnly OrElse item.Control.HasChildren)
+            lines.Add("laid out " & PathOf(entry.Control, _root) & " (" & entry.Affected & ")")
+        Next
+        For Each entry In Moves.Where(Function(item) Not containersOnly OrElse item.Control.HasChildren)
+            lines.Add("moved " & PathOf(entry.Control, _root) & " from " & entry.Before.ToString() & " to " & entry.After.ToString())
+        Next
+        Return lines
+    End Function
+
+
+    Public Sub Dispose() Implements IDisposable.Dispose
+        For Each control As Control In _watched
+            RemoveHandler control.Layout, _layout
+            RemoveHandler control.SizeChanged, _moved
+            RemoveHandler control.LocationChanged, _moved
+        Next
+    End Sub
+
+
+    ' What is left to lay out on a page shown, one line per thing found:
+    ' a container still holding its layout, and anything that laying out
+    ' each container shown again, inner ones first, moves, resizes or
+    ' scrolls. Nothing for a page that has none. A hidden part is passed
+    ' over; it is laid out as it shows.
+    Public Shared Function Unsettled(root As Control) As List(Of String)
+
+        Dim problems As New List(Of String)()
+        Dim all As List(Of Control) = {root}.Concat(Descendants(root)).ToList()
+
+        For Each control As Control In all.Where(Function(item) item.HasChildren)
+            Dim held As Integer = CInt(SuspendCount.GetValue(control))
+            If held > 0 Then problems.Add(PathOf(control, root) & " still holds its layout (" & held.ToString(Globalization.CultureInfo.InvariantCulture) & ")")
+        Next
+
+        If problems.Count > 0 OrElse Not root.Visible Then
+            Return problems
+        End If
+
+        Dim containers As List(Of Control) = all.Where(Function(item) item.HasChildren AndAlso item.Visible).Reverse().ToList()
+        Dim before As Dictionary(Of Control, String) = Shape(all)
+
+        For Each container As Control In containers
+            container.PerformLayout()
+            Dim after As Dictionary(Of Control, String) = Shape(all)
+            For Each control As Control In all
+                If before(control) <> after(control) Then
+                    problems.Add("laying out " & PathOf(container, root) & " again changed " & PathOf(control, root) & ": " & before(control) & " to " & after(control))
+                End If
+            Next
+            before = after
+            If problems.Count >= 24 Then Exit For
+        Next
+
+        Return problems
+
+    End Function
+
+
+    ' Where a control is and, for one that scrolls, what it scrolls over
+    ' and how far.
+    Private Shared Function Shape(controls As List(Of Control)) As Dictionary(Of Control, String)
+        Dim shapes As New Dictionary(Of Control, String)()
+        For Each control As Control In controls
+            Dim text As String = control.Bounds.ToString()
+            Dim scrollable As ScrollableControl = TryCast(control, ScrollableControl)
+            If scrollable IsNot Nothing AndAlso scrollable.AutoScroll Then
+                text &= " over " & scrollable.DisplayRectangle.ToString() & " at " & scrollable.AutoScrollPosition.ToString()
+            End If
+            shapes(control) = text
+        Next
+        Return shapes
+    End Function
+
+
+    ' A control by its place under the root and its type, with its name
+    ' or text when it has one.
+    Public Shared Function PathOf(control As Control, root As Control) As String
+        Dim steps As New List(Of String)()
+        Dim current As Control = control
+        While current IsNot Nothing AndAlso current IsNot root
+            steps.Insert(0, If(current.Parent Is Nothing, "?", current.Parent.Controls.GetChildIndex(current).ToString(Globalization.CultureInfo.InvariantCulture)))
+            current = current.Parent
+        End While
+        Dim label As String = If(Not String.IsNullOrEmpty(control.AccessibleName), control.AccessibleName, If(control.Text, String.Empty))
+        If label.Length > 30 Then label = label.Substring(0, 30) & "..."
+        Return "/" & String.Join("/", steps) & " " & control.GetType().Name & If(label.Length > 0, " '" & label & "'", String.Empty)
+    End Function
+
+
+    ' How many times a control's layout is held (SuspendLayout), which
+    ' WinForms keeps to itself.
+    Private Shared ReadOnly SuspendCount As Reflection.PropertyInfo =
+        GetType(Control).GetProperty("LayoutSuspendCount", Reflection.BindingFlags.Instance Or Reflection.BindingFlags.NonPublic)
 
 
     Private Shared Iterator Function Descendants(parent As Control) As IEnumerable(Of Control)
