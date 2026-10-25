@@ -4,50 +4,32 @@ Imports ManuscriptPipeline.Services
 <TestClass>
 Public Class OrcidIdentifierTests
 
+    ' An orcid.org URL and an "ORCID iD:" prefix, one row each.
     <TestMethod>
-    Public Sub Normalize_OrcidUrl_ReturnsCanonicalId()
+    <DataRow("https://orcid.org/0000-0002-1825-0097", "0000-0002-1825-0097")>
+    <DataRow("ORCID iD: 0000-0001-5109-3700", "0000-0001-5109-3700")>
+    Public Sub Normalize_ReturnsCanonicalId(value As String, expected As String)
 
         Assert.AreEqual(
-            "0000-0002-1825-0097",
+            expected,
             OrcidIdentifierService.Normalize(
-                "https://orcid.org/0000-0002-1825-0097"
+                value
             )
         )
 
     End Sub
 
 
+    ' A correct check digit passes, and the same iD with a wrong one fails.
     <TestMethod>
-    Public Sub Normalize_OrcidPrefix_ReturnsCanonicalId()
+    <DataRow("0000-0002-1825-0097", True)>
+    <DataRow("0000-0002-1825-0098", False)>
+    Public Sub IsValid_ChecksTheCheckDigit(value As String, expected As Boolean)
 
         Assert.AreEqual(
-            "0000-0001-5109-3700",
-            OrcidIdentifierService.Normalize(
-                "ORCID iD: 0000-0001-5109-3700"
-            )
-        )
-
-    End Sub
-
-
-    <TestMethod>
-    Public Sub IsValid_KnownValidId_PassesChecksum()
-
-        Assert.IsTrue(
+            expected,
             OrcidIdentifierService.IsValid(
-                "0000-0002-1825-0097"
-            )
-        )
-
-    End Sub
-
-
-    <TestMethod>
-    Public Sub IsValid_WrongChecksum_IsRejected()
-
-        Assert.IsFalse(
-            OrcidIdentifierService.IsValid(
-                "0000-0002-1825-0098"
+                value
             )
         )
 
