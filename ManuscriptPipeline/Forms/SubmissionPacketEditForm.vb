@@ -461,7 +461,7 @@ Namespace Forms
                             submission.JournalName
                         ) &
                         " — " &
-                        submission.SubmittedDate.ToShortDateString()
+                        submission.SubmittedDate.ToString("MMM d, yyyy")
 
                     cmbSubmission.Items.Add(
                         New NullableGuidOption(
@@ -854,7 +854,7 @@ Namespace Forms
                     )
 
                 _display =
-                    version.CreatedDate.ToShortDateString() &
+                    version.CreatedDate.ToString("MMM d, yyyy") &
                     " — " &
                     label
 

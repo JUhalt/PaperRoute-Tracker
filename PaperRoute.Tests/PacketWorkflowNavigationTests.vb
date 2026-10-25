@@ -101,7 +101,12 @@ Public Class PacketWorkflowNavigationTests
                     Assert.IsTrue(detail.Contains("Readiness: Same Journal"))
                     Assert.IsFalse(detail.Contains(packet.ManuscriptVersionId.ToString()))
                     Assert.IsTrue(detail.Contains("MS-EXACT-1"))
-                    Assert.IsTrue(detail.Contains(New DateTime(2026, 8, 10).ToShortDateString()))
+                    ' Dates are written as Version History writes them.
+                    Dim submitted As String = New DateTime(2026, 8, 10).ToString("MMM d, yyyy")
+                    Assert.IsTrue(detail.Contains(submitted))
+                    StringAssert.Contains(detail, "Version: " & New DateTime(2026, 8, 1).ToString("MMM d, yyyy") & " — Exact packet version")
+                    StringAssert.Contains(detail, "Actual submission: Same Journal — " & submitted)
+                    StringAssert.Contains(detail, " — profile created " & manuscript.ReadinessProfiles(0).CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy"))
                     Assert.IsTrue(detail.Contains("Revision round: 2"))
                     Assert.IsTrue(ControlsIn(dialog).OfType(Of Label)().Single(
                         Function(item) item.AccessibleName = "Packet workflow scope").Text.Contains("this exact version"))
@@ -376,6 +381,112 @@ Public Class PacketWorkflowNavigationTests
                 Assert.AreEqual(expectedSubmission, packet.SubmissionId)
                 Assert.AreEqual("Updated notes only", packet.Notes)
             End Sub)
+
+    End Sub
+
+    ' The Version and Submission drop-downs write their dates as Version
+    ' History writes the same records, not in the culture's short form.
+    <TestMethod>
+    Public Sub PacketEditor_ListsVersionsAndSubmissionsWithVersionHistoryDates()
+
+        RunOnStaThread(
+            Sub()
+                Dim manuscript As Manuscript = CreateManuscript()
+
+                Using dialog As New NonactivatingEditor(manuscript, manuscript.SubmissionPackets(0), Nothing)
+                    ShowOffscreen(dialog)
+                    Dim items As List(Of String) = ControlsIn(dialog).OfType(Of ComboBox)().
+                        SelectMany(Function(box) box.Items.Cast(Of Object)()).
+                        Select(Function(item) item.ToString()).
+                        ToList()
+                    Dim shown As String = String.Join(Environment.NewLine, items)
+
+                    CollectionAssert.Contains(items, New DateTime(2026, 8, 1).ToString("MMM d, yyyy") & " — Exact packet version", shown)
+                    CollectionAssert.Contains(items, "Same Journal — " & New DateTime(2026, 8, 10).ToString("MMM d, yyyy"), shown)
+                    Assert.IsFalse(
+                        items.Any(Function(item) item.Contains(New DateTime(2026, 8, 10).ToShortDateString())),
+                        shown)
+                    dialog.CancelButton.PerformClick()
+                    dialog.Close()
+                End Using
+            End Sub)
+
+    End Sub
+
+    ' An existing packet file keeps its storage and file (the editor turns
+    ' both off), and the intro says so and what to do instead, as Edit
+    ' Version says its snapshot is immutable; Add Packet File keeps today's
+    ' intro. The new sentence takes no more room than the old.
+    <TestMethod>
+    Public Sub EditPacketFile_SaysWhyStorageAndBrowseAreLocked()
+
+        Const editIntro As String =
+            "A packet file keeps the storage and local file it was added with. You can edit its role, label, and notes; choose Add File... to use a different file or storage."
+        Const addIntro As String =
+            "Choose whether PaperRoute should keep only metadata, link to an external file, or copy a snapshot into the PaperRoute Library. External linked files are never deleted by PaperRoute."
+
+        StaRunner.Run(
+            Sub()
+                Dim packet As New SubmissionPacket()
+                ' Added directly: AddFile checks that the file exists.
+                Dim existing As New SubmissionPacketFile With {
+                    .StorageMode = SubmissionPacketFileStorageMode.LinkedExternal,
+                    .LocalFilePath = Path.Combine(Path.GetTempPath(), "PaperRoute-NoSuchFile-" & Guid.NewGuid().ToString("N") & ".docx"),
+                    .Label = "Cover letter"
+                }
+                packet.Files.Add(existing)
+
+                Using editing As New SubmissionPacketFileEditForm(packet, existing),
+                      adding As New SubmissionPacketFileEditForm(packet, Nothing)
+
+                    Dim editLabel As Label = ControlsIn(editing).OfType(Of Label)().Single(Function(label) label.Text = editIntro)
+                    Assert.IsFalse(
+                        ControlsIn(editing).OfType(Of Label)().Any(Function(label) label.Text.StartsWith("Choose whether PaperRoute", StringComparison.Ordinal)),
+                        "Edit mode no longer asks to choose storage.")
+
+                    ' Characterization: the lock itself is unchanged.
+                    Dim storage As ComboBox = ControlsIn(editing).OfType(Of ComboBox)().Single(
+                        Function(box) box.Items.Cast(Of Object)().Any(Function(item) item.ToString() = "Metadata only"))
+                    Assert.IsFalse(storage.Enabled, "Storage is locked for an existing file.")
+                    Assert.IsFalse(
+                        ControlsIn(editing).OfType(Of Button)().Single(Function(button) button.Text = "Browse...").Enabled,
+                        "Browse is locked for an existing file.")
+
+                    Dim addLabel As Label = ControlsIn(adding).OfType(Of Label)().Single(Function(label) label.Text = addIntro)
+
+                    editing.PerformLayout()
+                    adding.PerformLayout()
+                    Assert.IsTrue(
+                        editLabel.Height <= addLabel.Height,
+                        "The edit-mode intro (" & editLabel.Height.ToString() & " px) fits where the Add intro (" & addLabel.Height.ToString() & " px) does.")
+
+                End Using
+            End Sub)
+
+    End Sub
+
+    ' Packet windows write dates as Version History does ("MMM d, yyyy",
+    ' with "h:mm tt" for times), never in the culture's short forms.
+    <TestMethod>
+    Public Sub PacketWindows_WriteNoShortOrGeneralDates()
+
+        Dim folder As String = Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManuscriptPipeline", "Forms")
+        Dim found As New List(Of String)()
+
+        For Each filePath As String In Directory.GetFiles(folder, "SubmissionPacket*.vb")
+            Dim lines As String() = File.ReadAllLines(filePath)
+            For index As Integer = 0 To lines.Length - 1
+                Dim line As String = lines(index)
+                If line.TrimStart().StartsWith("'"c) Then
+                    Continue For
+                End If
+                If line.Contains("ToShortDateString(") OrElse line.Contains(".ToString(""g"")") Then
+                    found.Add(Path.GetFileName(filePath) & ":" & (index + 1).ToString() & ": " & line.Trim())
+                End If
+            Next
+        Next
+
+        Assert.AreEqual(0, found.Count, String.Join(Environment.NewLine, found))
 
     End Sub
 

@@ -109,11 +109,17 @@ Namespace Forms
             root.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
 
+            ' An existing file's storage and file are locked (LoadExistingFile),
+            ' so its intro says why and what to do instead.
             Dim intro As New Label With {
                 .AutoSize = True,
                 .MaximumSize = New Size(660, 0),
                 .Text =
-                    "Choose whether PaperRoute should keep only metadata, link to an external file, or copy a snapshot into the PaperRoute Library. External linked files are never deleted by PaperRoute.",
+                    If(
+                        _existingFile Is Nothing,
+                        "Choose whether PaperRoute should keep only metadata, link to an external file, or copy a snapshot into the PaperRoute Library. External linked files are never deleted by PaperRoute.",
+                        "A packet file keeps the storage and local file it was added with. You can edit its role, label, and notes; choose Add File... to use a different file or storage."
+                    ),
                 .Margin = New Padding(0, 0, 0, 12)
             }
 

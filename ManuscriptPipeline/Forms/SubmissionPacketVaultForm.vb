@@ -1491,12 +1491,12 @@ Namespace Forms
             Dim result As PacketFileIntegrityResult = GetIntegrityResult(packetFile)
             Dim detail As String = "Status: " & IntegrityStatusText(result.Status) & Environment.NewLine & result.Message
             If result.CheckedAtUtc.HasValue Then
-                detail &= Environment.NewLine & "Last checked: " & result.CheckedAtUtc.Value.ToLocalTime().ToString("g")
+                detail &= Environment.NewLine & "Last checked: " & result.CheckedAtUtc.Value.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
             End If
             If Not String.IsNullOrWhiteSpace(packetFile.Sha256) Then
                 detail &= Environment.NewLine & "Saved SHA-256: " & packetFile.Sha256
                 If packetFile.HashComputedAtUtc.HasValue Then
-                    detail &= Environment.NewLine & "Fingerprint recorded: " & packetFile.HashComputedAtUtc.Value.ToLocalTime().ToString("g")
+                    detail &= Environment.NewLine & "Fingerprint recorded: " & packetFile.HashComputedAtUtc.Value.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
                 End If
             End If
             If result.Status = PacketFileIntegrityStatus.Changed AndAlso Not String.IsNullOrWhiteSpace(result.Sha256) Then

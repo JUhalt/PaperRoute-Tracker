@@ -235,7 +235,7 @@ Namespace Forms
                 _workingManuscript.Versions.FirstOrDefault(Function(item) item IsNot Nothing AndAlso
                     item.Id = packet.ManuscriptVersionId))
             details.Add("Version: " & If(version Is Nothing, "(Missing version)",
-                version.CreatedDate.ToShortDateString() & " — " & WorkflowText(version.Label, "(Unlabeled version)")))
+                version.CreatedDate.ToString("MMM d, yyyy") & " — " & WorkflowText(version.Label, "(Unlabeled version)")))
             details.Add("Journal: " & WorkflowText(packet.JournalName, "(Not recorded)"))
 
             If packet.ReadinessProfileId.HasValue Then
@@ -244,7 +244,7 @@ Namespace Forms
                         item.Id = packet.ReadinessProfileId.Value))
                 details.Add("Readiness: " & If(profile Is Nothing, "(Missing profile)",
                     WorkflowText(profile.JournalName, "(Unnamed readiness profile)") &
-                    " — profile created " & profile.CreatedAtUtc.ToLocalTime().ToShortDateString()))
+                    " — profile created " & profile.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")))
             Else
                 details.Add("Readiness: no linked profile")
             End If
@@ -257,7 +257,7 @@ Namespace Forms
                     details.Add("Actual submission: (Missing record)")
                 Else
                     details.Add("Actual submission: " & WorkflowText(submission.JournalName, "(Unnamed journal)") &
-                        " — " & submission.SubmittedDate.ToShortDateString())
+                        " — " & submission.SubmittedDate.ToString("MMM d, yyyy"))
                     details.Add("Manuscript number: " & WorkflowText(submission.ManuscriptNumber, "(Not recorded)"))
                 End If
             Else
