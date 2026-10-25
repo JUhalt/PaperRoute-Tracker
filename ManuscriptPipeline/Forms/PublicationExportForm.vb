@@ -742,7 +742,7 @@ Namespace Forms
                         "PaperRoute could not save the publication export." &
                         Environment.NewLine &
                         Environment.NewLine &
-                        ex.Message,
+                        StorageFile.WriteFailureText(picker.FileName, ex),
                         "Export Error",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Error

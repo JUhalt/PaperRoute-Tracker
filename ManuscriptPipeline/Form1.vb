@@ -3841,7 +3841,7 @@ Public Class Form1
                 "PaperRoute could not create the Excel template." &
                 Environment.NewLine &
                 Environment.NewLine &
-                ex.Message,
+                StorageFile.WriteFailureText(dialog.FileName, ex),
                 "Template Error",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error
@@ -3938,7 +3938,7 @@ Public Class Form1
                 "PaperRoute could not export the library." &
                 Environment.NewLine &
                 Environment.NewLine &
-                ex.Message,
+                StorageFile.WriteFailureText(dialog.FileName, ex),
                 "Export Error",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error

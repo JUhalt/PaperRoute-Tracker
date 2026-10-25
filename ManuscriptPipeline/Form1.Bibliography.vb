@@ -336,7 +336,7 @@ Partial Public Class Form1
                         "PaperRoute could not export the bibliography." &
                         Environment.NewLine &
                         Environment.NewLine &
-                        ex.Message,
+                        StorageFile.WriteFailureText(picker.FileName, ex),
                         "Bibliography Export Error",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Error
