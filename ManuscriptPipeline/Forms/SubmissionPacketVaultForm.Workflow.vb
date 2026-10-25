@@ -266,7 +266,8 @@ Namespace Forms
 
             details.Add("Revision round: " & If(packet.RevisionRoundNumber.HasValue,
                 packet.RevisionRoundNumber.GetValueOrDefault().ToString(), "(Not linked to a round)"))
-            details.Add(If(packet.Files Is Nothing, 0, packet.Files.Count).ToString() & " file record(s)")
+            Dim fileCount As Integer = If(packet.Files Is Nothing, 0, packet.Files.Count)
+            details.Add(fileCount.ToString() & If(fileCount = 1, " file record", " file records"))
             If Not String.IsNullOrWhiteSpace(packet.Notes) Then
                 details.Add(String.Empty)
                 details.Add("Notes: " & packet.Notes)

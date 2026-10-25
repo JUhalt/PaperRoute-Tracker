@@ -112,7 +112,7 @@ Public Class DeleteQuestionTests
     End Function
 
 
-    Private Shared Function SourceFiles() As List(Of String)
+    Friend Shared Function SourceFiles() As List(Of String)
 
         Dim app As String =
             Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManuscriptPipeline")
@@ -164,7 +164,7 @@ Public Class DeleteQuestionTests
     ' The arguments from just after a call's opening parenthesis to its
     ' closing one, split at the commas outside parentheses, braces and
     ' string literals.
-    Private Shared Function TopLevelArguments(code As String, start As Integer) As List(Of String)
+    Friend Shared Function TopLevelArguments(code As String, start As Integer) As List(Of String)
 
         Dim arguments As New List(Of String)()
         Dim current As New StringBuilder()
@@ -230,7 +230,7 @@ Public Class DeleteQuestionTests
     End Function
 
 
-    Private Shared Function StringLiterals(code As String) As List(Of String)
+    Friend Shared Function StringLiterals(code As String) As List(Of String)
 
         Return Regex.Matches(WithoutComments(code), """(?:[^""]|"""")*""").
             Select(Function(literal) literal.Value.Substring(1, literal.Length - 2).Replace("""""", """")).
@@ -241,7 +241,7 @@ Public Class DeleteQuestionTests
 
     ' The source with every comment blanked, so what a comment says is
     ' never read as code; string literals stay as they are.
-    Private Shared Function WithoutComments(code As String) As String
+    Friend Shared Function WithoutComments(code As String) As String
 
         Dim result As New StringBuilder(code)
         Dim inString As Boolean = False

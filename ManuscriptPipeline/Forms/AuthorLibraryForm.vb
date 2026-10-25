@@ -861,7 +861,8 @@ Namespace Forms
                     selected.DisplayName &
                     "' is used by " &
                     usageCount.ToString() &
-                    " manuscript(s). Remove the author from those manuscripts before deleting the reusable author record.",
+                    If(usageCount = 1, " manuscript. Remove the author from that manuscript", " manuscripts. Remove the author from those manuscripts") &
+                    " before deleting the reusable author record.",
                     "Author Is In Use",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information
@@ -1008,7 +1009,8 @@ Namespace Forms
                     selected.DisplayName &
                     "' is used by " &
                     usageCount.ToString() &
-                    " manuscript author(s). Remove that affiliation assignment before deleting it.",
+                    If(usageCount = 1, " manuscript author. Remove that affiliation assignment", " manuscript authors. Remove those affiliation assignments") &
+                    " before deleting it.",
                     "Affiliation Is In Use",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information

@@ -908,9 +908,13 @@ Public Class Form1
 
         lblRecentRejections.Text =
         recentRejectionCount.ToString() &
-        " rejected in last " &
-        appSettings.RecentRejectionThresholdDays.ToString() &
-        " days"
+        If(
+            appSettings.RecentRejectionThresholdDays = 1,
+            " rejected in last 1 day",
+            " rejected in last " &
+            appSettings.RecentRejectionThresholdDays.ToString() &
+            " days"
+        )
 
 
         StyleAttentionLabel(
@@ -1064,9 +1068,13 @@ Public Class Form1
             insightColor =
                 UiTheme.WarningColor()
 
-            Return "Waiting " &
+            Return If(
+                snapshot.WaitingDays.Value = 1,
+                "Waiting 1 day",
+                "Waiting " &
                 snapshot.WaitingDays.Value.ToString() &
                 " days"
+            )
 
         End If
 
@@ -1127,7 +1135,7 @@ Public Class Form1
             UiTheme.WarningColor()
 
             Return snapshot.RejectionCount.ToString() &
-            " rejections; consider filing"
+            If(snapshot.RejectionCount = 1, " rejection; consider filing", " rejections; consider filing")
 
         End If
 
@@ -1272,7 +1280,7 @@ Public Class Form1
                 Environment.NewLine &
                 Environment.NewLine &
                 manuscripts.Count.ToString() &
-                " manuscript(s) were loaded from the previous save."
+                If(manuscripts.Count = 1, " manuscript was loaded from the previous save.", " manuscripts were loaded from the previous save.")
 
                 If Not String.IsNullOrWhiteSpace(
                 repository.LastRecoveryPreservedFilePath
@@ -3919,7 +3927,7 @@ Public Class Form1
                 Environment.NewLine &
                 Environment.NewLine &
                 manuscripts.Count.ToString() &
-                " manuscript(s)" &
+                If(manuscripts.Count = 1, " manuscript", " manuscripts") &
                 Environment.NewLine &
                 Environment.NewLine &
                 dialog.FileName &
@@ -4354,7 +4362,8 @@ Public Class Form1
         Dim notice As String =
             "Restored " &
             restoreResult.ManuscriptCount.ToString() &
-            " manuscript(s). PaperRoute will now restart to open the restored library."
+            If(restoreResult.ManuscriptCount = 1, " manuscript.", " manuscripts.") &
+            " PaperRoute will now restart to open the restored library."
 
         If Not String.IsNullOrWhiteSpace(
             restoreResult.EmergencyBackupPath
@@ -4578,7 +4587,7 @@ Public Class Form1
                 Environment.NewLine &
                 Environment.NewLine &
                 duplicateCount.ToString() &
-                " manuscript(s) matched titles already in PaperRoute.",
+                If(duplicateCount = 1, " manuscript matched a title already in PaperRoute.", " manuscripts matched titles already in PaperRoute."),
                 "Nothing to Import",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information
@@ -4753,7 +4762,7 @@ Public Class Form1
 
             Dim completeMessage As String =
             manuscriptsToAdd.Count.ToString() &
-            " manuscript(s) were imported successfully." &
+            If(manuscriptsToAdd.Count = 1, " manuscript was imported successfully.", " manuscripts were imported successfully.") &
             Environment.NewLine &
             Environment.NewLine &
             "Format: " &

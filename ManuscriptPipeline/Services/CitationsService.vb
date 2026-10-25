@@ -107,7 +107,7 @@ Namespace Services
             Dim batches As List(Of List(Of String)) = CitationsService.DoiBatches(dois)
             For index As Integer = 0 To batches.Count - 1
                 cancellationToken.ThrowIfCancellationRequested()
-                progress?.Report("Looking up " & dois.Count.ToString("N0", CultureInfo.CurrentCulture) & " DOIs in OpenAlex (" &
+                progress?.Report("Looking up " & dois.Count.ToString("N0", CultureInfo.CurrentCulture) & If(dois.Count = 1, " DOI in OpenAlex (", " DOIs in OpenAlex (") &
                                  (index + 1).ToString(CultureInfo.CurrentCulture) & " of " & batches.Count.ToString(CultureInfo.CurrentCulture) & ")...")
                 For Each work As CitedWork In CitationsService.ParseWorks(Await GetAsync(CitationsService.BatchUrl(batches(index)), cancellationToken).ConfigureAwait(False))
                     If work.Doi.Length > 0 AndAlso Not found.ContainsKey(work.Doi) Then found(work.Doi) = work

@@ -751,7 +751,7 @@ Namespace Forms
 
                 lblChecklistInfo.Text =
                     _workingChecklist.Count.ToString() &
-                    " reusable requirement(s)."
+                    If(_workingChecklist.Count = 1, " reusable requirement.", " reusable requirements.")
 
                 Return
 

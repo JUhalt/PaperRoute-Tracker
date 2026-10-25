@@ -325,7 +325,7 @@ Partial Public Class Form1
                         Environment.NewLine &
                         Environment.NewLine &
                         selection.SelectedManuscripts.Count.ToString() &
-                        " manuscript(s) exported.",
+                        If(selection.SelectedManuscripts.Count = 1, " manuscript exported.", " manuscripts exported."),
                         "Export Complete",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Information
