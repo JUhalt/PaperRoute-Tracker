@@ -25,6 +25,21 @@ PaperRoute upgrades are designed not to overwrite the manuscript database, setti
 
 Use **Settings → Backup Library...** to create a portable backup. In v0.5 and earlier, it is **Data → Backup Library...**.
 
+## Moving from v0.9.1 to v0.9.2
+
+<!-- pending: at release, add "**v0.9.2 is the current Stable release.**" after this section's first sentence, and take that sentence out of the v0.9.1 section below. -->
+
+PaperRoute v0.9.2 is the hardening release before 1.0: safer handling of your files, recovery when something goes wrong, faster pages on a large library, and keyboard, screen-reader, display-scaling and contrast-theme work across the app. It uses the same **Schema 9** library as v0.9.0 and v0.9.1 and migrates no data, and v0.9.1 can still open a library that v0.9.2 has used. The next library upgrade, Schema 10, waits until after 1.0.
+
+After upgrading:
+
+- When you delete a manuscript, a version or a packet file and save, PaperRoute moves its managed copies into a dated `removed` folder inside `Documents\PaperRoute Library` instead of deleting them. Nothing empties that folder; delete what you no longer want yourself. The User Guide's **Removed files** section says more.
+- **Restore Backup...** restarts PaperRoute into the restored library instead of reloading the window.
+- Backups now include `backup.json`, which records the PaperRoute version, date and storage schema, and Restore refuses a backup from a newer PaperRoute. Backups made by v0.9.1 and earlier restore as before. Restore a backup made by v0.9.2 with v0.9.2 or later.
+- An unexpected error is written to a text report in the `logs` folder of `%LocalAppData%\PaperRoute\`. Nothing is sent anywhere.
+- On a Windows set to another language, the few texts Windows Forms supplies itself are now in English, like the rest of PaperRoute.
+- Releases no longer include a Portable.zip. Install with Setup, as the User Guide's **Installing** section describes.
+
 ## Moving from v0.9.0 to v0.9.1
 
 PaperRoute v0.9.1 fixes one defect: saving could delete the packet snapshots of manuscripts the open library did not contain. **v0.9.1 is the current Stable release.** It uses the same **Schema 9** library as v0.9.0 and migrates no data, and v0.9.0 can still open a library that v0.9.1 has used.
