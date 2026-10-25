@@ -30,6 +30,9 @@ Public Class FileDrawerTests
 
     Private Const ConsiderFiling As String = "consider filing"
 
+    ' What the main window's status line says once a save has failed.
+    Private Const SaveFailedWarning As String = "Warning: latest changes were not saved."
+
     ' The main window's fields resolve the storage roots as it is built;
     ' the override keeps them off the user's profile.
     <TestInitialize>
@@ -382,6 +385,205 @@ Public Class FileDrawerTests
             End Sub)
     End Sub
 
+    ' The status line, which Narrator reads as it changes, says what Move,
+    ' Restore and Delete did to the card (#225), as Done and Mark Published
+    ' already did. Before the change it said only "Saved locally".
+    <TestMethod>
+    Public Sub TheStatusLineSaysWhatMoveRestoreAndDeleteDid()
+        StaRunner.Run(
+            Sub()
+                Using board As New FileDrawerBoard()
+                    Dim manuscript As Manuscript = RejectedThreeTimes()
+                    board.Prepare(manuscript)
+
+                    Using answer As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of MoveToFileDrawerForm)(
+                        Sub(dialog) DirectCast(dialog.AcceptButton, Button).PerformClick())
+                        MenuItem(board.Card(manuscript.Title), "Move to File Drawer...").PerformClick()
+                    End Using
+                    Application.DoEvents()
+
+                    Assert.AreEqual(ManuscriptLocation.FileDrawer, manuscript.Location)
+                    Assert.AreEqual("Moved ""Rejected three times"" to the File Drawer.", board.Status)
+
+                    MenuItem(board.Card(manuscript.Title), "Restore to Pipeline").PerformClick()
+                    Application.DoEvents()
+
+                    Assert.AreEqual(ManuscriptLocation.Pipeline, manuscript.Location)
+                    Assert.AreEqual("Restored ""Rejected three times"" to the Pipeline.", board.Status)
+
+                    Using answer As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of DeleteManuscriptForm)(AddressOf ConfirmDeletion)
+                        MenuItem(board.Card(manuscript.Title), "Delete...").PerformClick()
+                    End Using
+                    Application.DoEvents()
+
+                    Assert.AreEqual(0, board.Library.Count, "Deleted.")
+                    Assert.AreEqual("Deleted ""Rejected three times"".", board.Status)
+                    Assert.AreEqual(3, board.SaveCount)
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    ' Add Manuscript says what it added (#225), and names the shelf when
+    ' the card lands anywhere but the Pipeline. The window adds only to
+    ' the Pipeline today, so the second record is moved to Published as
+    ' the window hands it over, to stand for one that does not.
+    <TestMethod>
+    Public Sub TheStatusLineSaysWhatAddManuscriptAdded()
+        StaRunner.Run(
+            Sub()
+                Using board As New FileDrawerBoard()
+                    board.Prepare()
+
+                    Using answer As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of AddManuscriptForm)(
+                        Sub(dialog)
+                            TitleBox(dialog).Text = "A new study"
+                            DirectCast(dialog.AcceptButton, Button).PerformClick()
+                        End Sub)
+                        board.Add()
+                    End Using
+
+                    Assert.AreEqual("A new study", board.Library.Single().Title)
+                    Assert.AreEqual("Added ""A new study"".", board.Status)
+
+                    Using answer As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of AddManuscriptForm)(
+                        Sub(dialog)
+                            TitleBox(dialog).Text = "A published study"
+                            DirectCast(dialog.AcceptButton, Button).PerformClick()
+                            dialog.CreatedManuscript.Location = ManuscriptLocation.Published
+                        End Sub)
+                        board.Add()
+                    End Using
+
+                    Assert.AreEqual(2, board.Library.Count)
+                    Assert.AreEqual("Added ""A published study"" to Published.", board.Status)
+                    Assert.AreEqual(2, board.SaveCount)
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    ' A save that fails says so on the status line, and the action that
+    ' asked for it leaves that warning there (#225). A guard: before the
+    ' change no action wrote the status line after its save, so this
+    ' passed then too.
+    <TestMethod>
+    Public Sub AnActionWhoseSaveFailsLeavesTheSaveWarning()
+        StaRunner.Run(
+            Sub()
+                Using board As New FileDrawerBoard()
+                    Dim active As Manuscript = RejectedThreeTimes()
+                    Dim filed As Manuscript = FiledByImport(Reason)
+                    Dim deleted As Manuscript = RejectedThreeTimes()
+                    deleted.Title = "Deleted after a failed save"
+                    board.Prepare(active, filed, deleted)
+                    board.SaveFails = True
+
+                    board.SetStatus("Before the action.")
+                    Using answer As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of MoveToFileDrawerForm)(
+                        Sub(dialog) DirectCast(dialog.AcceptButton, Button).PerformClick())
+                        MenuItem(board.Card(active.Title), "Move to File Drawer...").PerformClick()
+                    End Using
+                    Application.DoEvents()
+                    Assert.AreEqual(SaveFailedWarning, board.Status, "Move to File Drawer.")
+
+                    board.SetStatus("Before the action.")
+                    MenuItem(board.Card(filed.Title), "Restore to Pipeline").PerformClick()
+                    Application.DoEvents()
+                    Assert.AreEqual(SaveFailedWarning, board.Status, "Restore to Pipeline.")
+
+                    board.SetStatus("Before the action.")
+                    Using answer As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of DeleteManuscriptForm)(AddressOf ConfirmDeletion)
+                        MenuItem(board.Card(deleted.Title), "Delete...").PerformClick()
+                    End Using
+                    Application.DoEvents()
+                    Assert.AreEqual(SaveFailedWarning, board.Status, "Delete.")
+
+                    board.SetStatus("Before the action.")
+                    Using answer As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of AddManuscriptForm)(
+                        Sub(dialog)
+                            TitleBox(dialog).Text = "Added before a failed save"
+                            DirectCast(dialog.AcceptButton, Button).PerformClick()
+                        End Sub)
+                        board.Add()
+                    End Using
+                    Assert.AreEqual(SaveFailedWarning, board.Status, "Add Manuscript.")
+
+                    Assert.AreEqual(4, board.SaveCount)
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    ' An empty shelf says what belongs on it (#228), where it said only
+    ' that it was empty, and a search that hides every card still says
+    ' that nothing matches. Each line fits its label, shown on its shelf,
+    ' at this display's scaling; that part is a guard, which the old lines
+    ' passed too.
+    <TestMethod>
+    Public Sub AnEmptyShelfSaysWhatBelongsOnIt()
+        StaRunner.Run(
+            Sub()
+                Using board As New FileDrawerBoard()
+                    board.Prepare(RejectedThreeTimes())
+                    Assert.IsNull(board.EmptyLabel("Pipeline"), "The Pipeline shows its card.")
+                    AssertEmptyLine(board, "Published", "Manuscripts move here when their stage is Published.")
+                    AssertEmptyLine(board, "File Drawer", "Work you set aside waits here until you restore it.")
+                    board.Close()
+                End Using
+
+                Using board As New FileDrawerBoard()
+                    board.Prepare(PublishedStudy())
+                    AssertEmptyLine(board, "Pipeline", "Nothing in progress. Choose + Add Manuscript to start one.")
+                    board.Close()
+                End Using
+
+                Using board As New FileDrawerBoard()
+                    board.Prepare(RejectedThreeTimes(), PublishedStudy(), FiledByImport(Reason))
+                    board.Search("zzqx")
+                    AssertEmptyLine(board, "Pipeline", "No Pipeline manuscripts match the current search or filter.")
+                    AssertEmptyLine(board, "Published", "No Published manuscripts match the current search or filter.")
+                    AssertEmptyLine(board, "File Drawer", "No File Drawer manuscripts match the current search or filter.")
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    ' The shelf shows this line, and none of it is cut off.
+    Private Shared Sub AssertEmptyLine(board As FileDrawerBoard, shelf As String, expected As String)
+        Dim label As Label = board.EmptyLabel(shelf)
+        Assert.IsNotNull(label, shelf & " shows an empty line.")
+        Assert.AreEqual(expected, label.Text, shelf)
+
+        Dim measured As Integer = TextRenderer.MeasureText(label.Text, label.Font).Width
+        Dim room As Integer = label.ClientSize.Width - label.Padding.Horizontal
+        Assert.IsTrue(measured <= room, shelf & ": """ & label.Text & """ measures " & measured.ToString() & " px in " & room.ToString() & " px.")
+    End Sub
+
+    ' The status line a start leaves counts the library in plain words
+    ' (#225), not "manuscript(s)".
+    <TestMethod>
+    Public Sub TheStartupLineCountsTheLibraryInPlainWords()
+        StaRunner.Run(
+            Sub()
+                For Each count As Integer In {1, 2}
+                    Call New ManuscriptRepository().Save(
+                        Enumerable.Range(1, count).Select(Function(index) New Manuscript With {.Title = "Study " & index.ToString()}).ToList())
+
+                    Using board As New FileDrawerBoard()
+                        Assert.AreEqual(
+                            If(count = 1,
+                               "Loaded 1 manuscript from local storage.",
+                               "Loaded 2 manuscripts from local storage."),
+                            board.LoadLibrary())
+                    End Using
+                Next
+            End Sub)
+    End Sub
+
     ' Out of the File Drawer by a new submission (#207): on the Pipeline as
     ' Submitted, the filed date and reason cleared and kept in one note,
     ' dated with the submission in the stage the manuscript was filed in,
@@ -450,6 +652,17 @@ Public Class FileDrawerTests
         Return manuscript
     End Function
 
+    ' On the Published shelf, as Mark Published leaves a manuscript.
+    Private Shared Function PublishedStudy() As Manuscript
+        Return New Manuscript With {
+            .Title = "Published study",
+            .Location = ManuscriptLocation.Published,
+            .CurrentStage = PaperStage.Published,
+            .StageEnteredDate = New DateTime(2026, 6, 1),
+            .TargetJournal = "A fictional journal"
+        }
+    End Function
+
     ' On the Pipeline in Draft after three rejections, the last of them long
     ' enough ago that the card's "Rejected N days ago" line has gone, with a
     ' target journal so the card has no other line to show.
@@ -484,6 +697,16 @@ Public Class FileDrawerTests
         Return ViewCatalog.Descendants(dialog).OfType(Of TextBox)().Single(Function(box) box.AccessibleName = "File Drawer reason")
     End Function
 
+    Private Shared Function TitleBox(dialog As AddManuscriptForm) As TextBox
+        Return DirectCast(GetType(AddManuscriptForm).GetField("txtTitle", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(dialog), TextBox)
+    End Function
+
+    ' DELETE typed, then Delete Manuscript, as the window asks.
+    Private Shared Sub ConfirmDeletion(dialog As DeleteManuscriptForm)
+        ViewCatalog.Descendants(dialog).OfType(Of TextBox)().Single().Text = "DELETE"
+        ViewCatalog.Descendants(dialog).OfType(Of Button)().Single(Function(button) button.Text = "Delete Manuscript").PerformClick()
+    End Sub
+
     Private Shared Function Snapshot(manuscript As Manuscript) As String
         Return JsonSerializer.Serialize(manuscript, CreateJsonOptions())
     End Function
@@ -509,9 +732,53 @@ Public Class FileDrawerTests
             End Get
         End Property
 
+        ' A save that fails writes the status line's warning, as the real
+        ' one's failure does (#225). The flag that would then hold the
+        ' warning there (#113) stays unset, so the line keeps it only while
+        ' nothing after the save writes over it.
+        Public SaveFails As Boolean
+
         Protected Overrides Function SaveManuscripts() As Boolean
             SaveCount += 1
+            If SaveFails Then
+                StatusLabel().Text = SaveFailedWarning
+                Return False
+            End If
             Return True
+        End Function
+
+        Public ReadOnly Property Status As String
+            Get
+                Return StatusLabel().Text
+            End Get
+        End Property
+
+        Public Sub SetStatus(text As String)
+            StatusLabel().Text = text
+        End Sub
+
+        Public ReadOnly Property Library As List(Of Manuscript)
+            Get
+                Return DirectCast(GetType(Form1).GetField("manuscripts", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me), List(Of Manuscript))
+            End Get
+        End Property
+
+        ' + Add Manuscript, answered by the test's ModalAnswer.
+        Public Sub Add()
+            CallPrivate("AddManuscript", Nothing, EventArgs.Empty)
+            Application.DoEvents()
+        End Sub
+
+        ' A start's read of the library under the test's root, without the
+        ' rest of Load; the status line it leaves.
+        Public Function LoadLibrary() As String
+            CallPrivate("BuildInterface")
+            Assert.IsTrue(CBool(GetType(Form1).GetMethod("LoadManuscripts", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(Me, Nothing)), "The library loads.")
+            Return Status
+        End Function
+
+        Private Function StatusLabel() As Label
+            Return DirectCast(GetType(Form1).GetField("lblStatus", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me), Label)
         End Function
 
         Public Sub Prepare(ParamArray records As Manuscript())
@@ -527,6 +794,29 @@ Public Class FileDrawerTests
 
         Public Sub Render()
             CallPrivate("RenderManuscripts")
+            Application.DoEvents()
+        End Sub
+
+        ' Each shelf's panel and tab, by the shelf's name.
+        Private Shared ReadOnly Shelves As New Dictionary(Of String, (Panel As String, Tab As String)) From {
+            {"Pipeline", ("pipelinePanel", "tabPipeline")},
+            {"Published", ("publishedPanel", "tabPublished")},
+            {"File Drawer", ("fileDrawerPanel", "tabFileDrawer")}
+        }
+
+        ' The shelf's empty line, or Nothing while it shows cards. The shelf
+        ' is shown first: a shelf lays its line out across its own width,
+        ' and a hidden one keeps whatever width it last had.
+        Public Function EmptyLabel(shelf As String) As Label
+            DirectCast(GetType(Form1).GetField(Shelves(shelf).Tab, BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me), ShelfTabButton).Checked = True
+            Application.DoEvents()
+            Return DirectCast(GetType(Form1).GetField(Shelves(shelf).Panel, BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me), Control).Controls.OfType(Of Label)().SingleOrDefault()
+        End Function
+
+        ' Typing in the Board's search, then the pause its timer waits for.
+        Public Sub Search(text As String)
+            DirectCast(GetType(Form1).GetField("txtBoardSearch", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me), TextBox).Text = text
+            CallPrivate("BoardSearchDebounceElapsed", Nothing, EventArgs.Empty)
             Application.DoEvents()
         End Sub
 

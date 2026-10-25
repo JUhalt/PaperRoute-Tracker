@@ -710,6 +710,29 @@ Public Class ManuscriptPageTests
             End Sub)
     End Sub
 
+    ' The status line says which manuscript the page deleted (#225), once
+    ' the window is back where the page was opened from.
+    <TestMethod>
+    Public Sub DeletingFromThePageSaysWhatWasDeleted()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard()
+                    Dim keep As Manuscript = Sample("Keep")
+                    Dim remove As Manuscript = Sample("Remove")
+                    board.Prepare(keep, remove)
+                    board.Open(remove)
+
+                    board.ConfirmDelete()
+                    Application.DoEvents()
+
+                    Assert.AreEqual("Board", board.PageName)
+                    Assert.AreEqual("Deleted ""Remove"".", board.StatusText)
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
     <TestMethod>
     Public Sub OverviewShowsTheLinkedJournalsNotesAndChecklist()
         RunOnStaThread(

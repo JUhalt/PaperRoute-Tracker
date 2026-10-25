@@ -1317,7 +1317,8 @@ Public Class Form1
                 lblStatus.Text =
                 "Loaded " &
                 manuscripts.Count.ToString() &
-                " manuscript(s) from local storage."
+                If(manuscripts.Count = 1, " manuscript", " manuscripts") &
+                " from local storage."
 
             End If
 
@@ -2648,7 +2649,7 @@ Public Class Form1
             If pipelineTotal = 0 Then
 
                 pipelineMessage =
-                "No active manuscripts. Click Add Manuscript."
+                "Nothing in progress. Choose + Add Manuscript to start one."
 
             Else
 
@@ -2673,7 +2674,7 @@ Public Class Form1
             If publishedTotal = 0 Then
 
                 publishedMessage =
-                "No published manuscripts yet."
+                "Manuscripts move here when their stage is Published."
 
             Else
 
@@ -2698,7 +2699,7 @@ Public Class Form1
             If drawerTotal = 0 Then
 
                 drawerMessage =
-                "The File Drawer is empty."
+                "Work you set aside waits here until you restore it."
 
             Else
 
@@ -3512,7 +3513,29 @@ Public Class Form1
                     dialog.CreatedManuscript
                 )
 
-                SaveManuscripts()
+                If SaveManuscripts() Then
+
+                    ' The shelf is named only when it is not the Pipeline,
+                    ' where a new manuscript goes.
+                    Dim added As String =
+                        "Added """ &
+                        ReminderService.SafeManuscriptTitle(dialog.CreatedManuscript) &
+                        """"
+
+                    If dialog.CreatedManuscript.Location <> ManuscriptLocation.Pipeline Then
+
+                        added &=
+                            " to " &
+                            FormatShelf(dialog.CreatedManuscript.Location)
+
+                    End If
+
+                    ReportSavedAction(
+                        added & "."
+                    )
+
+                End If
+
                 RenderManuscripts()
 
             End If
@@ -3579,7 +3602,16 @@ Public Class Form1
             manuscript
         )
 
-        SaveManuscripts()
+        If SaveManuscripts() Then
+
+            ReportSavedAction(
+                "Deleted """ &
+                ReminderService.SafeManuscriptTitle(manuscript) &
+                """."
+            )
+
+        End If
+
         RenderManuscripts()
 
     End Sub
@@ -3653,7 +3685,16 @@ Public Class Form1
             fileDrawerHistory
         )
 
-        SaveManuscripts()
+        If SaveManuscripts() Then
+
+            ReportSavedAction(
+                "Moved """ &
+                ReminderService.SafeManuscriptTitle(manuscript) &
+                """ to the File Drawer."
+            )
+
+        End If
+
         RenderManuscripts()
 
     End Sub
@@ -3697,8 +3738,41 @@ Public Class Form1
             restoreHistory
         )
 
-        SaveManuscripts()
+        If SaveManuscripts() Then
+
+            ReportSavedAction(
+                "Restored """ &
+                ReminderService.SafeManuscriptTitle(manuscript) &
+                """ to the Pipeline."
+            )
+
+        End If
+
         RenderManuscripts()
+
+    End Sub
+
+
+    ' Says on the status line, which Narrator reads as it changes, what a
+    ' saved action did (#225), as Done and Mark Published do, with the
+    ' save's warning when a file in use kept a folder in place. A failed
+    ' save's own warning is left as it is: the caller asks only on success.
+    Private Sub ReportSavedAction(
+        message As String
+    )
+
+        If Not String.IsNullOrWhiteSpace(
+            repository.LastSaveWarning
+        ) Then
+
+            message &=
+                " " &
+                repository.LastSaveWarning
+
+        End If
+
+        lblStatus.Text =
+            message
 
     End Sub
 
@@ -4071,7 +4145,8 @@ Public Class Form1
 
             Dim preview As String =
             RestorePreview(
-                inspection
+                inspection,
+                manuscripts.Count
             )
 
             Dim confirmation As DialogResult =
@@ -4123,13 +4198,36 @@ Public Class Form1
 
 
     ' What Restore Backup... asks once the archive has passed its check:
-    ' the backup's date and version (#115) and what it holds. Tests read it.
+    ' the backup's date and version (#115), what it holds, and the library
+    ' it would replace (#226). Tests read it.
     Private Shared Function RestorePreview(
-        inspection As BackupInspection
+        inspection As BackupInspection,
+        currentManuscriptCount As Integer
     ) As String
 
         Dim sizeInMb As Double =
             inspection.UncompressedBytes / 1024.0 / 1024.0
+
+        ' An old backup over a grown library shows while the researcher can
+        ' still back out, before RESTORE is typed.
+        Dim currentLibrary As String =
+            "Your library now: " &
+            currentManuscriptCount.ToString() &
+            If(currentManuscriptCount = 1, " manuscript.", " manuscripts.")
+
+        Dim fewer As Integer =
+            currentManuscriptCount - inspection.ManuscriptCount
+
+        If fewer > 0 Then
+
+            currentLibrary &=
+                Environment.NewLine &
+                "This backup has " &
+                fewer.ToString() &
+                If(fewer = 1, " fewer manuscript", " fewer manuscripts") &
+                " than your library now."
+
+        End If
 
         Return "Restore this PaperRoute backup?" &
             Environment.NewLine &
@@ -4157,6 +4255,9 @@ Public Class Form1
             "Expanded size: " &
             sizeInMb.ToString("N1") &
             " MB" &
+            Environment.NewLine &
+            Environment.NewLine &
+            currentLibrary &
             Environment.NewLine &
             Environment.NewLine &
             "IMPORTANT: This will REPLACE the library currently loaded in PaperRoute." &

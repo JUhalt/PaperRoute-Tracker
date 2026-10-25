@@ -561,6 +561,94 @@ Public Class UserGuideServiceTests
     End Sub
 
 
+    ' #230: F1 opens this guide, and its manuscript-page paragraph names
+    ' what the page's ⋯ menu holds. The captions are read from the
+    ' pageMenu.Items.Add literals in Form1.ManuscriptPage.vb, so a change to
+    ' the menu fails here until the guide follows. Copy Citation and View
+    ' Route are buttons beside the menu, and its sentence leaves them out.
+    <TestMethod>
+    Public Sub TheManuscriptPageParagraphNamesTheMoreMenu()
+
+        Dim source As String =
+            File.ReadAllText(
+                Path.Combine(
+                    AssistantCoreTests.RepositoryRoot(),
+                    "ManuscriptPipeline",
+                    "Form1.ManuscriptPage.vb"
+                )
+            )
+
+        Dim captions As List(Of String) =
+            Regex.Matches(
+                source,
+                "pageMenu\.Items\.Add\(\s*""([^""]+)"""
+            ).Select(
+                Function(found) found.Groups(1).Value
+            ).ToList()
+
+        ' The search has teeth: it finds the menu's items, not none.
+        Assert.IsTrue(
+            captions.Count >= 3,
+            "The menu's captions are read: " & String.Join(", ", captions)
+        )
+
+        Dim more As String =
+            ChrW(&H22EF)
+
+        Dim paragraph As String =
+            SectionText(
+                File.ReadAllText(
+                    UserGuideService.GuideFilePath()
+                ).Replace(
+                    vbCrLf,
+                    vbLf
+                ),
+                "The manuscript page"
+            ).Split(
+                ChrW(10)
+            ).Single(
+                Function(line) line.Contains("**" & more & "**", StringComparison.Ordinal)
+            )
+
+        ' The sentence or semicolon clause that names the menu.
+        Dim menuClause As String =
+            Regex.Split(
+                paragraph,
+                "(?<=[.;])\s+"
+            ).Single(
+                Function(clause) clause.Contains(more, StringComparison.Ordinal)
+            )
+
+        Dim afterMenu As String =
+            menuClause.Substring(
+                menuClause.IndexOf(more, StringComparison.Ordinal)
+            )
+
+        For Each caption As String In captions
+
+            StringAssert.Contains(
+                afterMenu,
+                "**" & caption & "**",
+                "The guide names " & caption & " after the menu: " & menuClause
+            )
+
+        Next
+
+        For Each button As String In {
+            "Copy Citation",
+            "View Route"
+        }
+
+            Assert.IsFalse(
+                menuClause.Contains(button, StringComparison.Ordinal),
+                button & " is beside the menu, not in it: " & menuClause
+            )
+
+        Next
+
+    End Sub
+
+
     ' #139: the guide's Accessibility section lists every keyboard
     ' shortcut PaperRoute handles. Its table of window-wide shortcuts is
     ' exactly the keys Form1.ProcessCmdKey acts on, and every key any other
