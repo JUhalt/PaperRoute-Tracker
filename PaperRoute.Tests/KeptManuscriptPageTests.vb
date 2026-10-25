@@ -462,6 +462,115 @@ Public Class KeptManuscriptPageTests
     End Sub
 
 
+    ' Letting go of the record once the page is left (#133) lays out none
+    ' of the page's containers and moves none: emptied, the page keeps the
+    ' shape of the record it showed until the next open, which lays out
+    ' only what that record changes. (The record's own parts, its version
+    ' history and its submission's details, go with it.) Before, the page
+    ' emptied laid itself out as a page with no manuscript, its hidden
+    ' sections included, and the next open grew it all back.
+    <TestMethod>
+    Public Sub TheRecordLetGoOfLaysNothingOut()
+
+        Dim laidOut As New List(Of String)()
+        Dim moved As New List(Of String)()
+        Dim emptied As Boolean = False
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary = Library60()
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+                    Dim subject As Manuscript = board.Library.First(Function(item) item.Location = ManuscriptLocation.Pipeline AndAlso item.Submissions.Count > 0 AndAlso item.JournalShortlist.Count > 0 AndAlso item.Tags.Count > 0)
+
+                    board.Open(subject)
+                    Application.DoEvents()
+                    For Each section As String In {"Authors", "Versions", "Submissions", "Readiness & Packets", "Overview"}
+                        ShowSection(board.Editor, section)
+                    Next
+                    ' Watched from the moment the page is left: the record is
+                    ' let go of as the window next idles.
+                    board.NavigateTo(Form1.WorkspacePage.Board)
+                    Dim page As Control = board.KeptPage
+                    Dim containers As List(Of Control) = LastingContainers(page)
+                    Using probe As New LayoutProbe(page)
+                        board.WaitForIdleWork()
+                        laidOut.AddRange(probe.Layouts.Where(Function(entry) containers.Contains(entry.Control)).
+                                             Select(Function(entry) LayoutProbe.PathOf(entry.Control, page) & " (" & entry.Affected & ")"))
+                        moved.AddRange(probe.Moves.Where(Function(entry) containers.Contains(entry.Control)).
+                                           Select(Function(entry) LayoutProbe.PathOf(entry.Control, page) & " " & entry.Before.ToString() & " to " & entry.After.ToString()))
+                    End Using
+                    emptied = ViewCatalog.Descendants(page).OfType(Of TextBox)().All(Function(box) box.TextLength = 0)
+
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(5))
+
+        Assert.IsTrue(emptied, "The page left let go of its record.")
+        Assert.AreEqual(0, laidOut.Count, "Containers laid out as the record was let go of:" & Environment.NewLine & String.Join(Environment.NewLine, laidOut))
+        Assert.AreEqual(0, moved.Count, "Containers moved as the record was let go of:" & Environment.NewLine & String.Join(Environment.NewLine, moved))
+
+    End Sub
+
+
+    ' The same manuscript opened again once the page has let go of it
+    ' moves none of the page's containers (#133): the page kept its shape,
+    ' and the record gives it the same again.
+    <TestMethod>
+    Public Sub TheSameManuscriptOpenedAgainMovesNothing()
+
+        Dim moved As New List(Of String)()
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary = Library60()
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+                    Dim subject As Manuscript = board.Library.First(Function(item) item.Location = ManuscriptLocation.Pipeline AndAlso item.Submissions.Count > 0 AndAlso item.JournalShortlist.Count > 0 AndAlso item.Tags.Count > 0)
+
+                    board.Open(subject)
+                    Application.DoEvents()
+                    board.NavigateTo(Form1.WorkspacePage.Board)
+                    board.WaitForIdleWork()
+
+                    Dim page As Control = board.KeptPage
+                    Dim containers As List(Of Control) = LastingContainers(page)
+                    Using probe As New LayoutProbe(page)
+                        board.Open(subject)
+                        moved.AddRange(probe.Moves.Where(Function(entry) containers.Contains(entry.Control)).
+                                           Select(Function(entry) LayoutProbe.PathOf(entry.Control, page) & " " & entry.Before.ToString() & " to " & entry.After.ToString()))
+                    End Using
+                    Assert.AreEqual(subject.Title, board.Field("Title").Text)
+
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(5))
+
+        Assert.AreEqual(0, moved.Count, "Containers moved as the same manuscript opened again:" & Environment.NewLine & String.Join(Environment.NewLine, moved))
+
+    End Sub
+
+
+    ' The page's containers that outlive a record: every control with
+    ' controls in it, but for the parts built for one record (its version
+    ' history and its submission's details) and what is in them.
+    Private Shared Function LastingContainers(page As Control) As List(Of Control)
+        Dim recordParts As List(Of Control) =
+            ViewCatalog.Descendants(page).Where(Function(control) TypeOf control Is ManuscriptVersionHistoryControl OrElse TypeOf control Is SubmissionDetailsForm).ToList()
+        Return {page}.Concat(ViewCatalog.Descendants(page)).
+            Where(Function(control) control.HasChildren AndAlso Not recordParts.Any(Function(part) part Is control OrElse part.Contains(control))).
+            ToList()
+    End Function
+
+
     ' Whatever the record before it, an open leaves the page with nothing
     ' to lay out (#133): laying out each container shown again moves and
     ' scrolls nothing, as it opens and once the window has processed its

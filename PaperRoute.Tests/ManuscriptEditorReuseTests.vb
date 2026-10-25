@@ -49,9 +49,15 @@ Public Class ManuscriptEditorReuseTests
     ' Edits to a filed manuscript, let go with No, then a Pipeline
     ' manuscript, opened from the page left; and the other way round, by
     ' the usual way: back to the Board, where the page left lets go of the
-    ' record while the window idles, then the next card.
+    ' record while the window idles, then the next card. The page left
+    ' holds its layout from letting go until the next open (#133), so that
+    ' open lays out from the last record's shape: each in Light, Dark and
+    ' a contrast theme.
     <TestMethod>
-    Public Sub NothingOfTheManuscriptLeftReachesTheNextOne()
+    <DataRow(SystemColorMode.Classic, False)>
+    <DataRow(SystemColorMode.Dark, False)>
+    <DataRow(SystemColorMode.Classic, True)>
+    Public Sub NothingOfTheManuscriptLeftReachesTheNextOne(mode As SystemColorMode, contrastTheme As Boolean)
 
         Dim library As LargeLibraryFixture.SyntheticLibrary = Library40()
         Dim filed As Manuscript = FiledManuscript(library)
@@ -65,6 +71,12 @@ Public Class ManuscriptEditorReuseTests
 
             StaRunner.Run(
                 Sub()
+                    If mode = SystemColorMode.Dark AndAlso (SystemInformation.HighContrast OrElse Not OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000)) Then
+                        Assert.Inconclusive("Native WinForms dark mode requires Windows 11 or later, outside a Windows contrast theme.")
+                    End If
+
+                    UiTheme.HighContrastOverride = contrastTheme
+                    Try
                     Using reused As New LibraryBoard(library, Path.Combine(_root, "settings-reused")),
                           fresh As New LibraryBoard(library, Path.Combine(_root, "settings-fresh"))
 
@@ -106,7 +118,10 @@ Public Class ManuscriptEditorReuseTests
                         reused.Close()
                         fresh.Close()
                     End Using
-                End Sub, TimeSpan.FromMinutes(5))
+                    Finally
+                        UiTheme.HighContrastOverride = Nothing
+                    End Try
+                End Sub, TimeSpan.FromMinutes(5), mode)
 
         Next
 

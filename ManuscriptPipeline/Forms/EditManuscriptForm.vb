@@ -330,6 +330,17 @@ Namespace Forms
         End Sub
 
 
+        ' The panels that hold the parts built for each record, its version
+        ' history and its submission's details: empty while the form is
+        ' built, so a page holding the layout of every container that has
+        ' controls in it holds these by name (#133).
+        Friend ReadOnly Property RecordPartHosts As Control()
+            Get
+                Return {_versionsHost, _submissionDetailHost}
+            End Get
+        End Property
+
+
         ' =====================================================
         ' One record after another (#133)
         ' =====================================================

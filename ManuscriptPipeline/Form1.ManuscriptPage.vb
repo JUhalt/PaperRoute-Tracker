@@ -47,6 +47,11 @@ Partial Public Class Form1
     ' each then lays out once (ShowPageInOnePass).
     Private manuscriptPageContainers As List(Of Control) = Nothing
 
+    ' Whether the kept page's containers hold their layout, each once: from
+    ' the moment the page left lets go of its record, or an open begins,
+    ' until that open has shown the page (HoldManuscriptPage).
+    Private manuscriptPageHeld As Boolean = False
+
     Private Const SaveBarHint As String =
         "Save keeps them. Discard returns to the last saved version."
 
@@ -156,10 +161,11 @@ Partial Public Class Form1
     ' while the page is hidden, the page shows in one layout pass, and the
     ' Versions tab, the selected submission's details and any waypoint
     ' asked for follow once it has painted (#133). Every container of the
-    ' page holds its layout from before the record loads until the page
-    ' shows: loading a record changes the text, the parts shown and the
-    ' rows of a hidden page, and each change laid out its containers
-    ' again, up to the page, though nothing of it was shown.
+    ' page holds its layout until the page shows, from before the record
+    ' loads or, on a page left, from when it let go of its record: loading
+    ' a record changes the text, the parts shown and the rows of a hidden
+    ' page, and each change laid out its containers again, up to the page,
+    ' though nothing of it was shown.
     Private Sub ShowManuscriptPage(
         manuscript As Manuscript
     )
@@ -168,9 +174,7 @@ Partial Public Class Form1
         Dim editor As EditManuscriptForm = manuscriptPageEditor
         Dim containers As List(Of Control) = manuscriptPageContainers
 
-        For Each container As Control In containers
-            container.SuspendLayout()
-        Next
+        HoldManuscriptPage()
 
         Try
 
@@ -187,6 +191,7 @@ Partial Public Class Form1
             For index As Integer = containers.Count - 1 To 0 Step -1
                 containers(index).ResumeLayout(True)
             Next
+            manuscriptPageHeld = False
             Throw
         End Try
 
@@ -201,6 +206,7 @@ Partial Public Class Form1
         fitManuscriptTitle()
 
         ShowPageInOnePass(page, containers)
+        manuscriptPageHeld = False
         currentPageView = page
         manuscriptDirtyTimer.Start()
 
@@ -419,6 +425,7 @@ Partial Public Class Form1
         manuscriptBackLink = Nothing
         fitManuscriptTitle = Nothing
         manuscriptPageContainers = Nothing
+        manuscriptPageHeld = False
 
         QueueManuscriptPagePreparation()
 
@@ -519,10 +526,34 @@ Partial Public Class Form1
             Sub()
                 If editor Is manuscriptPageEditor AndAlso Not editor.IsDisposed AndAlso
                    editor.RecordToken Is token AndAlso currentPageView IsNot manuscriptPage Then
+                    HoldManuscriptPage()
                     editor.UnloadRecord()
                     ClearManuscriptHeader()
                 End If
             End Sub)
+
+    End Sub
+
+
+    ' Holds the layout of each of the kept page's containers, once, until
+    ' the next open shows the page in one pass (#133). The page left holds
+    ' it from the moment it lets go of its record: emptied, its header and
+    ' its hidden sections took the shape of a page with no manuscript and
+    ' laid themselves out in it, and the next open grew them back and laid
+    ' the page out again around them (35 moves for the same manuscript
+    ' opened again). Held, the page keeps the last record's shape, and the
+    ' next open lays out only what its record changes.
+    Private Sub HoldManuscriptPage()
+
+        If manuscriptPageHeld OrElse manuscriptPageContainers Is Nothing Then
+            Return
+        End If
+
+        For Each container As Control In manuscriptPageContainers
+            container.SuspendLayout()
+        Next
+
+        manuscriptPageHeld = True
 
     End Sub
 
@@ -773,7 +804,9 @@ Partial Public Class Form1
         fitManuscriptTitle = fitTitle
         manuscriptPagePalette = ManuscriptPageStamp()
         manuscriptPageContainers =
-            {CType(page, Control)}.Concat(DescendantControls(page)).Where(Function(control) control.HasChildren).ToList()
+            {CType(page, Control)}.Concat(DescendantControls(page)).Where(Function(control) control.HasChildren).
+                Concat(editor.RecordPartHosts).Distinct().ToList()
+        manuscriptPageHeld = False
 
     End Sub
 
