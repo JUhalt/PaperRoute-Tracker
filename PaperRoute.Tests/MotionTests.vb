@@ -165,7 +165,11 @@ Public Class MotionTests
     ' With motion on, the fill eases: the first paint that differs from
     ' rest lies between rest and hover, and the hover color is reached in
     ' about the tween's length. A press shows the pressed face at once,
-    ' mid-ease too.
+    ' mid-ease too. The ease is made 1 s long here: at its own 100 ms, a
+    ' host busy enough to hold the window's thread 65 ms or so, as another
+    ' test run alongside made it (11 of 32 runs), painted the hover color
+    ' first (the Primary button's two fills are a few steps apart, and its
+    ' fill rounds to the hover color at about two thirds of the ease).
     <TestMethod>
     Public Sub WithMotionOnHoverEasesAndPressIsImmediate()
 
@@ -176,6 +180,8 @@ Public Class MotionTests
                 Try
                     UiMotion.EnabledOverride = True
                     UiTheme.HighContrastOverride = False
+                    UiMotion.HoverMilliseconds = 1000
+                    Dim length As Integer = UiMotion.HoverMilliseconds
 
                     Using host As Form = NewHost(AllHovered())
                         For Each item In ItemsOf(host)
@@ -185,20 +191,20 @@ Public Class MotionTests
                             Raise(item.Control, "OnMouseEnter", EventArgs.Empty)
                             Dim watch As Stopwatch = Stopwatch.StartNew()
 
-                            Dim first As Color = PumpUntil(item, Function(painted) painted.ToArgb() <> rest.ToArgb(), 500)
+                            Dim first As Color = PumpUntil(item, Function(painted) painted.ToArgb() <> rest.ToArgb(), length)
                             If Not Between(first, rest, hover) Then
                                 report.Add(item.Name & ": the first paint after the pointer entered, " & first.ToString() & ", is not between " & rest.ToString() & " and " & hover.ToString())
                             End If
 
-                            Dim reached As Color = PumpUntil(item, Function(painted) painted.ToArgb() = hover.ToArgb(), 1000)
+                            Dim reached As Color = PumpUntil(item, Function(painted) painted.ToArgb() = hover.ToArgb(), length * 2)
                             Dim took As Double = watch.Elapsed.TotalMilliseconds
-                            Console.WriteLine(item.Name & ": the hover color reached in " & took.ToString("0") & " ms")
-                            If reached.ToArgb() <> hover.ToArgb() OrElse took > 200 Then
-                                report.Add(item.Name & ": the hover color " & hover.ToString() & " was not reached by 200 ms (" & reached.ToString() & " at " & took.ToString("0") & " ms)")
+                            Console.WriteLine(item.Name & ": the hover color reached in " & took.ToString("0") & " ms of an ease of " & length.ToString() & " ms")
+                            If reached.ToArgb() <> hover.ToArgb() OrElse took > length * 2 Then
+                                report.Add(item.Name & ": the hover color " & hover.ToString() & " was not reached by " & (length * 2).ToString() & " ms (" & reached.ToString() & " at " & took.ToString("0") & " ms)")
                             End If
 
                             Raise(item.Control, "OnMouseLeave", EventArgs.Empty)
-                            PumpUntil(item, Function(painted) painted.ToArgb() = rest.ToArgb(), 1000)
+                            PumpUntil(item, Function(painted) painted.ToArgb() = rest.ToArgb(), length * 2)
 
                         Next
 
@@ -228,7 +234,13 @@ Public Class MotionTests
 
 
     ' A hover's steps repaint the control eased and nothing else: not its
-    ' parent, not its neighbours.
+    ' parent, not its neighbours. Each ease is let finish, with the paint
+    ' its last step asked for, before the next is counted: on a host busy
+    ' enough to hold the window's thread, as another test run alongside
+    ' made it (1 of 19 runs), the button before a chip was still easing
+    ' out as the chip's paints were counted. The ease is made 500 ms long
+    ' here, so a hold of a few hundred milliseconds still leaves it steps
+    ' to paint on its way.
     <TestMethod>
     Public Sub AHoverStepRepaintsOnlyTheControlItAnimates()
 
@@ -239,13 +251,14 @@ Public Class MotionTests
                 Try
                     UiMotion.EnabledOverride = True
                     UiTheme.HighContrastOverride = False
+                    UiMotion.HoverMilliseconds = 500
 
                     Using host As Form = NewHost(AllHovered())
                         Dim flow As Control = host.Controls(0)
                         For Each item In ItemsOf(host)
                             Dim counts As Dictionary(Of Control, Integer) = CountPaints({host, flow}.Concat(flow.Controls.Cast(Of Control)()))
                             Raise(item.Control, "OnMouseEnter", EventArgs.Empty)
-                            Pump(250)
+                            PumpUntilStill()
                             Dim own As Integer = counts(item.Control)
                             If own < 2 Then report.Add(item.Name & " painted " & own.ToString() & " times as it eased in")
                             For Each other In counts.Where(Function(pair) pair.Key IsNot item.Control AndAlso pair.Value > 0)
@@ -253,7 +266,7 @@ Public Class MotionTests
                             Next
                             StopCounting(counts)
                             Raise(item.Control, "OnMouseLeave", EventArgs.Empty)
-                            Pump(250)
+                            PumpUntilStill()
                         Next
                         host.Close()
                     End Using
@@ -384,9 +397,13 @@ Public Class MotionTests
                             Dim rest As Color = PumpUntil(item, Function(painted) painted.ToArgb() = item.Rest().ToArgb(), 1000)
                             If rest.ToArgb() <> item.Rest().ToArgb() Then report.Add(mode.ToString() & ", " & item.Name & " left: " & rest.ToString() & ", not " & item.Rest().ToString())
                             ' The last steps can round to the rest color before the
-                            ' ease's time is up; the clock stops once it is.
+                            ' ease's time is up; the clock stops once it is. It is
+                            ' given 2 s: a clock left running still runs then, and
+                            ' on a host busy enough to hold the window's thread, as
+                            ' another test run alongside made it (2 of 26 runs),
+                            ' twice the ease was not enough for its last tick.
                             Dim settling As Stopwatch = Stopwatch.StartNew()
-                            While UiMotion.Animating AndAlso settling.ElapsedMilliseconds < UiMotion.HoverMilliseconds * 2
+                            While UiMotion.Animating AndAlso settling.ElapsedMilliseconds < 2000
                                 Application.DoEvents()
                                 Thread.Sleep(1)
                             End While
@@ -643,6 +660,18 @@ Public Class MotionTests
             Application.DoEvents()
             Thread.Sleep(1)
         Loop While watch.ElapsedMilliseconds < milliseconds
+    End Sub
+
+
+    ' Processes messages until no ease runs (at most 5 s), then 50 ms more
+    ' for the paint its last step asked for.
+    Private Shared Sub PumpUntilStill()
+        Dim watch As Stopwatch = Stopwatch.StartNew()
+        While UiMotion.Animating AndAlso watch.ElapsedMilliseconds < 5000
+            Application.DoEvents()
+            Thread.Sleep(1)
+        End While
+        Pump(50)
     End Sub
 
 

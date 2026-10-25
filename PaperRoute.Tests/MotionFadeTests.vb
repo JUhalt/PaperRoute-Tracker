@@ -363,19 +363,25 @@ Public Class MotionFadeTests
                 If Not rail.Focus() Then board.ActiveControl = rail
                 Application.DoEvents()
 
-                ' A first switch makes the overlay. UI Automation is asked
-                ' about it once then, hidden, as a screen reader has asked
-                ' about the window long before any fade: the process's first
-                ' question also sets UI Automation up, here and on the
-                ' window's thread, and on a busy host that has made the
-                ' overlay's first answer later than the 5 s or so UI
-                ' Automation waits for one, after which it describes the
-                ' window from its styles, through its MSAA proxy, as a
-                ' focusable pane. The third switch is the one held.
+                ' A first switch makes the overlay. UI Automation is then
+                ' asked about the window alone, as a screen reader has asked
+                ' about it long before any fade: the process's first question
+                ' sets UI Automation up, here and on the window's thread, and
+                ' on a busy host that has made the next answer later than the
+                ' 5 s or so UI Automation waits for one, after which it
+                ' describes a window from its styles, through its MSAA proxy,
+                ' as a focusable pane. The overlay, hidden, is in no view and
+                ' is not asked, so the answer checked below is its first, as
+                ' a screen reader's first question to it comes while it
+                ' shows. That first question checks nothing and is let take
+                ' 90 s: alongside two other test runs it once took more
+                ' than 20 s. The third switch is the one held.
                 board.NavigateTo(Form1.WorkspacePage.Journals)
                 board.PageFade.End()
                 Pump(80)
-                AskUiAutomation(board.Handle, board.PageFade.OverlayHandle)
+                Dim setup As Stopwatch = Stopwatch.StartNew()
+                AskUiAutomation(board.Handle, IntPtr.Zero, 90000)
+                Console.WriteLine("UI Automation's first question took " & setup.ElapsedMilliseconds.ToString() & " ms.")
                 board.NavigateTo(Form1.WorkspacePage.Board)
                 board.PageFade.End()
                 Pump(80)
@@ -402,8 +408,10 @@ Public Class MotionFadeTests
                 ' UI Automation, asked through Windows as a screen reader asks
                 ' it: the overlay's element is neither a control nor content
                 ' and takes no focus, so the control view, the one a screen
-                ' reader reads, passes over it.
-                Dim showing As UiaReading = AskUiAutomation(board.Handle, fade.OverlayHandle)
+                ' reader reads, passes over it. (A question asked while
+                ' Windows did not show the window itself is asked again:
+                ' AskUiAutomationOfShownWindow.)
+                Dim showing As UiaReading = AskUiAutomationOfShownWindow(board, fade.OverlayHandle)
                 Console.WriteLine("With the overlay showing: " & showing.ToString())
                 Assert.AreEqual(Of Object)(False, showing.IsControlElement, "Not a control element.")
                 Assert.AreEqual(Of Object)(False, showing.IsContentElement, "Not a content element.")
@@ -421,7 +429,7 @@ Public Class MotionFadeTests
                 Assert.IsTrue(fade.Showing, "The fade still shows: nothing it took ended it.")
                 fade.End()
                 Application.DoEvents()
-                Dim gone As UiaReading = AskUiAutomation(board.Handle, IntPtr.Zero)
+                Dim gone As UiaReading = AskUiAutomationOfShownWindow(board, IntPtr.Zero)
                 CollectionAssert.AreEqual(controls, ViewCatalog.Descendants(board).ToList(), "The window's controls are the same.")
                 CollectionAssert.AreEqual(gone.ControlChildren, showing.ControlChildren,
                                           "The window's children in the control view are the same. Showing: " & String.Join("; ", showing.ControlChildren) & ". Gone: " & String.Join("; ", gone.ControlChildren))
@@ -685,14 +693,18 @@ Public Class MotionFadeTests
     ' A switch begun while another of the window's thread's windows is over
     ' the page area, as a tooltip going as the switch begins, is a cut: the
     ' picture read off the screen would hold that window over the page
-    ' shown. Once it has gone, the next switch fades.
+    ' shown. Once it has gone, the next switch fades. The fade is made
+    ' longer than any switch here: at its own 150 ms, a switch on a busy
+    ' host outlasted it and was a cut for that reason instead.
     <TestMethod>
     Public Sub AnotherWindowOverThePageAreaMakesTheSwitchACut()
 
         OnBoard(
             Sub(board)
+                UiMotion.FadeMilliseconds = 10000
                 board.NavigateTo(Form1.WorkspacePage.Library)
-                Settle(board)
+                board.PageFade.End()
+                Pump(80)
 
                 Dim area As Rectangle = board.ContentHost.RectangleToScreen(board.ContentHost.ClientRectangle)
                 Dim cover As New NativeWindow()
@@ -991,14 +1003,76 @@ Public Class MotionFadeTests
         ' Who described the overlay's element: its own provider, or, for a
         ' window that did not answer in time, Windows' MSAA proxy.
         Public Provider As String = String.Empty
+        ' The questions before this one that found the window not shown.
+        Public Missed As New List(Of String)()
 
         Public Overrides Function ToString() As String
             Return $"control element {IsControlElement}, content element {IsContentElement}, keyboard focusable {IsKeyboardFocusable}; " &
                    $"the control view gives {ControlViewHandle:X}, its raw parent {RawParentHandle:X}; " &
                    $"control children {String.Join(", ", ControlChildren)}; raw children {String.Join(", ", RawChildren)}; " &
-                   $"described by {Provider}"
+                   $"described by {Provider}" &
+                   If(Missed.Count = 0, String.Empty, $"; asked again after: {String.Join(" | ", Missed)}")
         End Function
     End Class
+
+
+    ' Asks UI Automation as AskUiAutomation does, about a window Windows
+    ' shows. A window Windows does not show at that moment, cloaked by the
+    ' compositor (as the shell cloaks a window on another of its desktops)
+    ' or without WS_VISIBLE, is in none of UI Automation's views, nor are
+    ' its own child windows, and a window it owns is then the desktop's.
+    ' Once in 22 runs on a busy host the overlay's raw parent was the
+    ' desktop and the window's raw children held neither its own child
+    ' window nor the overlay, as the window cloaked or without WS_VISIBLE
+    ' on purpose reads every time (PaperRoute does neither to it: its
+    ' RedrawHold holds parts of it, never the form). So a question that
+    ' finds the window's own child windows missing from its raw view is
+    ' asked again once Windows shows the window, three questions at most,
+    ' each one missed kept with the reading; a window Windows does not
+    ' show again within 30 s leaves the test Inconclusive.
+    Private Shared Function AskUiAutomationOfShownWindow(window As Control, overlay As IntPtr) As UiaReading
+
+        ' The child windows shown with the window (WS_VISIBLE their own,
+        ' whatever the window's).
+        Dim own As List(Of String) = window.Controls.Cast(Of Control)().
+            Where(Function(child) child.IsHandleCreated AndAlso (GetWindowLong(child.Handle, GWL_STYLE) And WS_VISIBLE) <> 0).
+            Select(Function(child) child.Handle.ToString("X") & " ").ToList()
+        Dim missed As New List(Of String)()
+        Dim reading As UiaReading = Nothing
+
+        For question As Integer = 1 To 3
+            reading = AskUiAutomation(window.Handle, overlay)
+            If own.All(Function(key) reading.RawChildren.Any(Function(child) child.StartsWith(key, StringComparison.Ordinal))) Then
+                Exit For
+            End If
+            missed.Add($"question {question} did not find the window's own child windows ({reading}); Windows then said visible {IsWindowVisible(window.Handle)}, cloaked {Cloaked(window.Handle)}")
+            Dim waited As Stopwatch = Stopwatch.StartNew()
+            While Not Shown(window.Handle) AndAlso waited.ElapsedMilliseconds < 30000
+                Application.DoEvents()
+                Thread.Sleep(10)
+            End While
+            If Not Shown(window.Handle) Then
+                Assert.Inconclusive("Windows did not show the test window again within 30 s: " & String.Join(" | ", missed))
+            End If
+        Next
+
+        reading.Missed = missed
+        Return reading
+
+    End Function
+
+
+    Private Shared Function Shown(window As IntPtr) As Boolean
+        Return IsWindowVisible(window) AndAlso Cloaked(window) = 0
+    End Function
+
+
+    ' How the compositor cloaks a window: 0 not at all.
+    Private Shared Function Cloaked(window As IntPtr) As Integer
+        Dim value As Integer = 0
+        If DwmGetWindowAttribute(window, DWMWA_CLOAKED, value, Marshal.SizeOf(Of Integer)()) <> 0 Then Return 0
+        Return value
+    End Function
 
 
     ' Asks UI Automation, as a screen reader does from its own process,
@@ -1006,7 +1080,7 @@ Public Class MotionFadeTests
     ' goes on processing its messages, since UI Automation asks the
     ' window's own thread (WM_GETOBJECT, and the overlay's provider and the
     ' window's are called there).
-    Private Shared Function AskUiAutomation(window As IntPtr, overlay As IntPtr) As UiaReading
+    Private Shared Function AskUiAutomation(window As IntPtr, overlay As IntPtr, Optional limit As Integer = 20000) As UiaReading
 
         Dim reading As New UiaReading()
         Dim failure As Exception = Nothing
@@ -1037,12 +1111,12 @@ Public Class MotionFadeTests
             End Sub)
 
         Dim waited As Stopwatch = Stopwatch.StartNew()
-        While Not worker.IsCompleted AndAlso waited.ElapsedMilliseconds < 20000
+        While Not worker.IsCompleted AndAlso waited.ElapsedMilliseconds < limit
             Application.DoEvents()
             Thread.Sleep(1)
         End While
 
-        Assert.IsTrue(worker.IsCompleted, "UI Automation answered within 20 s.")
+        Assert.IsTrue(worker.IsCompleted, $"UI Automation answered within {limit \ 1000} s.")
         If failure IsNot Nothing Then Assert.Fail("UI Automation: " & failure.ToString())
         Return reading
 
@@ -1207,6 +1281,16 @@ Public Class MotionFadeTests
 
     <DllImport("user32.dll")>
     Private Shared Function IsWindowEnabled(window As IntPtr) As Boolean
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function IsWindowVisible(window As IntPtr) As Boolean
+    End Function
+
+    Private Const DWMWA_CLOAKED As Integer = 14
+
+    <DllImport("dwmapi.dll")>
+    Private Shared Function DwmGetWindowAttribute(window As IntPtr, attribute As Integer, ByRef value As Integer, size As Integer) As Integer
     End Function
 
     <DllImport("user32.dll")>
