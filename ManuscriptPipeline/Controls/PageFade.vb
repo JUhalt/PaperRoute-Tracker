@@ -539,6 +539,17 @@ Namespace Controls
                         m.Result = New IntPtr(MA_NOACTIVATE)
                         Return
 
+                    ' Windows hides an owned popup showing as the window is
+                    ' minimized, and shows it again as the window is restored,
+                    ' after the window's own Move and Resize have ended the
+                    ' fade: the picture would come back over the page, with no
+                    ' clock and no filter left to hide it. Only the fade shows
+                    ' the overlay (SetWindowPos), so that show is not made.
+                    Case WM_SHOWWINDOW
+                        If m.WParam <> IntPtr.Zero AndAlso m.LParam = New IntPtr(SW_PARENTOPENING) Then
+                            Return
+                        End If
+
                     ' UI Automation's own element for the window, in the raw
                     ' view only.
                     Case WM_GETOBJECT
@@ -631,6 +642,8 @@ Namespace Controls
         Friend Const WS_EX_TOOLWINDOW As Integer = &H80
 
         Private Const WM_DESTROY As Integer = &H2
+        Private Const WM_SHOWWINDOW As Integer = &H18
+        Private Const SW_PARENTOPENING As Integer = 3
         Private Const WM_NCHITTEST As Integer = &H84
         Private Const WM_MOUSEACTIVATE As Integer = &H21
         Private Const WM_GETOBJECT As Integer = &H3D

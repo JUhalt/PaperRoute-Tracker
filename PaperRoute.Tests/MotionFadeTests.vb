@@ -539,6 +539,44 @@ Public Class MotionFadeTests
     End Sub
 
 
+    ' A fade showing as the window is minimized is gone once the window is
+    ' restored. Windows hides the overlay with the window, and would show
+    ' it again as the window came back, after the window's Move and Resize
+    ' had ended the fade: the picture of the page left would stay over the
+    ' page shown, with no clock and no input filter left to hide it. The
+    ' next switch fades as before.
+    <TestMethod>
+    Public Sub AFadeMinimizedWithTheWindowIsGoneOnceTheWindowIsRestored()
+
+        OnBoard(
+            Sub(board)
+                UiMotion.FadeMilliseconds = 10000
+                board.NavigateTo(Form1.WorkspacePage.Library)
+                Assert.AreEqual("faded", board.PageFade.LastOutcome)
+                Assert.IsTrue(board.PageFade.Showing, "The picture shows over the Library.")
+
+                ShowWindow(board.Handle, SW_SHOWMINNOACTIVE)
+                Application.DoEvents()
+                Assert.AreEqual(FormWindowState.Minimized, board.WindowState, "The window is minimized.")
+                Assert.IsFalse(board.PageFade.Showing, "Minimized, the picture is hidden.")
+                Assert.IsFalse(board.PageFade.Fading, "Minimizing ended the fade.")
+
+                ShowWindow(board.Handle, SW_SHOWNOACTIVATE)
+                Application.DoEvents()
+                Assert.AreEqual(FormWindowState.Normal, board.WindowState, "The window is restored.")
+                Assert.IsFalse(board.PageFade.Showing, "Restored, the picture of the page left is not over the Library.")
+                Assert.IsFalse(board.PageFade.Filtering, "Nothing listens for input.")
+
+                Settle(board)
+                board.NavigateTo(Form1.WorkspacePage.Board)
+                Assert.AreEqual("faded", board.PageFade.LastOutcome, "The next switch fades.")
+                Assert.IsTrue(board.PageFade.Showing, "The next switch's picture shows.")
+                board.PageFade.End()
+            End Sub)
+
+    End Sub
+
+
     ' A switch begun while another of the window's thread's windows is over
     ' the page area, as a tooltip going as the switch begins, is a cut: the
     ' picture read off the screen would hold that window over the page
@@ -964,6 +1002,13 @@ Public Class MotionFadeTests
 
     <DllImport("user32.dll")>
     Private Shared Function SetWindowPos(window As IntPtr, after As IntPtr, x As Integer, y As Integer, width As Integer, height As Integer, flags As UInteger) As Boolean
+    End Function
+
+    Private Const SW_SHOWNOACTIVATE As Integer = 4
+    Private Const SW_SHOWMINNOACTIVE As Integer = 7
+
+    <DllImport("user32.dll")>
+    Private Shared Function ShowWindow(window As IntPtr, command As Integer) As Boolean
     End Function
 
     Private Const SRCCOPY As Integer = &HCC0020
