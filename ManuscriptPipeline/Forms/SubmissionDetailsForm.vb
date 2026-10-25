@@ -27,7 +27,8 @@ Namespace Forms
         ' Reserves the tabs' least height in the dialog's scrolling body
         ' (BuildInterface), read again when a list gains its first item or
         ' loses its last, which changes it (PageMinimumHeight). Inline there
-        ' is no body.
+        ' is no body, and it fits the Correspondence & Files page, which
+        ' scrolls itself, while it shows (FitCorrespondencePage).
         Private _reserveTabs As Action = Nothing
 
         ' Raised after a decision, correspondence, or reviewer-response change.
@@ -558,6 +559,29 @@ Namespace Forms
                 summaryGroup.Dispose()
                 notesGroup.Dispose()
 
+                ' The Correspondence & Files page is fitted while it shows:
+                ' when it is shown, when it is laid out, and when its list
+                ' or its buttons change. A page not shown keeps the size it
+                ' last had.
+                Dim fitCorrespondence As Action =
+                    Sub()
+                        If tabs.SelectedTab Is correspondenceTab Then
+                            FitCorrespondencePage()
+                        End If
+                    End Sub
+
+                AddHandler correspondenceTab.Layout,
+                    Sub(sender, e)
+                        fitCorrespondence()
+                    End Sub
+
+                AddHandler tabs.SelectedIndexChanged,
+                    Sub(sender, e)
+                        fitCorrespondence()
+                    End Sub
+
+                _reserveTabs = fitCorrespondence
+
             Else
 
                 root.Controls.Add(summaryGroup, 0, 0)
@@ -773,27 +797,117 @@ Namespace Forms
         ' (#93): the panel's padding, the toolbar's row, the split's margins,
         ' and the taller of the two, or of its empty list's whole hint while
         ' the page shows. The list sits in a split's panel in the tab's panel.
+        ' Where the split lays the list above the box, or is too narrow not
+        ' to (stacked), both (#217).
         Private Shared Function PageMinimumHeight(
             list As ListBox,
             details As TextBox,
-            shown As Boolean
+            shown As Boolean,
+            Optional stacked As Boolean = False
         ) As Integer
 
-            Dim split As Control =
-                list.Parent.Parent
+            Dim split As SplitContainer =
+                DirectCast(list.Parent.Parent, SplitContainer)
 
             Dim panel As TableLayoutPanel =
                 DirectCast(split.Parent, TableLayoutPanel)
 
+            Dim listTall As Integer =
+                Math.Max(TwoLinesTall(list, list.BorderStyle), If(shown, HintTall(list), 0))
+
+            Dim detailsTall As Integer =
+                TwoLinesTall(details, details.BorderStyle)
+
             Return panel.Padding.Vertical +
                 CInt(panel.RowStyles(0).Height) +
                 split.Margin.Vertical +
-                Math.Max(
-                    Math.Max(TwoLinesTall(list, list.BorderStyle), If(shown, HintTall(list), 0)),
-                    TwoLinesTall(details, details.BorderStyle)
+                If(
+                    stacked OrElse split.Orientation = Orientation.Horizontal,
+                    listTall + split.SplitterWidth + detailsTall,
+                    Math.Max(listTall, detailsTall)
                 )
 
         End Function
+
+
+        ' Inline the details have no body to scroll, and at the main
+        ' window's minimum size (960x680) the Correspondence & Files page was
+        ' 310x223: the toolbar's help ran past its row, "+ Add Item" wrapped
+        ' below its row's foot and was cut, and the empty list, 94x101 beside
+        ' its details box, had a third of the height its hint needs (#217).
+        ' The help wraps at the page's width and each of the toolbar's rows
+        ' takes what its content then needs, never less than the 32 and 64
+        ' pixels BuildCorrespondencePanel gives them; the split lays the list
+        ' above the box where the two do not fit side by side; and the page
+        ' scrolls as far as their least height (PageMinimumHeight). Where all
+        ' of it fits, as at the main window's default size while the buttons
+        ' fit one row, nothing moves and nothing scrolls; where they wrap, as
+        ' for an item with a file and a source, their row grows to hold them.
+        Private Sub FitCorrespondencePage()
+
+            Dim toolbar As TableLayoutPanel =
+                DirectCast(lblCorrespondenceHelp.Parent, TableLayoutPanel)
+
+            Dim panel As TableLayoutPanel =
+                DirectCast(toolbar.Parent, TableLayoutPanel)
+
+            Dim buttons As Control =
+                toolbar.GetControlFromPosition(0, 1)
+
+            Dim split As SplitContainer =
+                DirectCast(lstCorrespondence.Parent.Parent, SplitContainer)
+
+            If panel.Parent Is Nothing Then
+                Return
+            End If
+
+            ' Turned on once the page shows, so a page opened on another tab
+            ' is built and laid out as before: a panel that scrolls lays out
+            ' twice.
+            panel.AutoScroll = True
+
+            ' Docked to fill its tab, it takes the tab's size before the tab
+            ' lays it out, so its rows are read at the width it will have.
+            panel.Size = panel.Parent.ClientSize
+
+            ' A scroll bar that appears narrows the page, and the hint and the
+            ' toolbar wrap to the narrower width, so they are read again.
+            For pass As Integer = 1 To 3
+
+                Dim width As Integer =
+                    panel.ClientSize.Width - panel.Padding.Horizontal
+
+                lblCorrespondenceHelp.MaximumSize =
+                    New Size(Math.Max(1, width - lblCorrespondenceHelp.Margin.Horizontal), 0)
+
+                Dim helpRow As Integer =
+                    Math.Max(32, lblCorrespondenceHelp.GetPreferredSize(Size.Empty).Height + lblCorrespondenceHelp.Margin.Vertical)
+
+                Dim buttonsRow As Integer =
+                    Math.Max(64, buttons.GetPreferredSize(New Size(width, 0)).Height)
+
+                toolbar.RowStyles(0).Height = helpRow
+                panel.RowStyles(0).Height = helpRow + buttonsRow
+
+                ' A split too narrow for the two side by side gets the height
+                ' to lay the list above the box, though it is side by side
+                ' still: made narrow while short, it could not turn.
+                Dim narrow As Boolean =
+                    split.Width - split.SplitterWidth <=
+                    CorrespondenceMinimumLeft + CorrespondenceMinimumRight
+
+                Dim least As Integer =
+                    PageMinimumHeight(lstCorrespondence, txtCorrespondenceDetails, shown:=True, stacked:=narrow)
+
+                If panel.AutoScrollMinSize.Height = least Then
+                    Exit For
+                End If
+
+                panel.AutoScrollMinSize = New Size(0, least)
+
+            Next
+
+        End Sub
 
 
         ' An empty list's whole hint at the list's width, inside its border,
@@ -1378,6 +1492,12 @@ Namespace Forms
         ' Correspondence UI
         ' =====================================================
 
+        ' The least widths of the Correspondence & Files list and its details
+        ' box side by side; inline, a split narrower than both lays the list
+        ' above the box (#217).
+        Private Const CorrespondenceMinimumLeft As Integer = 240
+        Private Const CorrespondenceMinimumRight As Integer = 300
+
         Private Function BuildCorrespondencePanel() As Control
 
             Dim root As New TableLayoutPanel With {
@@ -1570,19 +1690,30 @@ Namespace Forms
             AddHandler split.SizeChanged,
                 Sub(sender, e)
 
-                    Const minimumLeft As Integer = 240
-                    Const minimumRight As Integer = 300
-
                     Dim availableWidth As Integer =
                         split.Width -
                         split.SplitterWidth
 
                     If availableWidth <=
-                       minimumLeft + minimumRight Then
+                       CorrespondenceMinimumLeft + CorrespondenceMinimumRight Then
+
+                        ' Inline, too narrow for the two side by side, as
+                        ' the manuscript page's Submissions section is at
+                        ' the main window's minimum size, the list lies
+                        ' above its details box, as wide as the split:
+                        ' beside it the empty list was 94 pixels wide and
+                        ' its hint needed 317 of height (#217).
+                        If _inline Then
+                            StackCorrespondence(split)
+                        End If
 
                         Return
 
                     End If
+
+                    ' Wide enough again, side by side.
+                    split.Orientation =
+                        Orientation.Vertical
 
                     Dim desired As Integer =
                         CInt(
@@ -1593,9 +1724,9 @@ Namespace Forms
 
                     split.SplitterDistance =
                         Math.Min(
-                            availableWidth - minimumRight,
+                            availableWidth - CorrespondenceMinimumRight,
                             Math.Max(
-                                minimumLeft,
+                                CorrespondenceMinimumLeft,
                                 desired
                             )
                         )
@@ -1625,6 +1756,57 @@ Namespace Forms
             Return root
 
         End Function
+
+
+        ' The Correspondence & Files list above its details box (#217): the
+        ' list as tall as its whole hint or two rows, or 43% of the height
+        ' where there is more, and the box the rest, at least two lines. A
+        ' split too short for its panels' least sizes, as it is while the page
+        ' is built or just made narrow, cannot turn (Windows Forms throws); it
+        ' turns once it has that height, which the page reserves wherever the
+        ' split is this narrow (FitCorrespondencePage).
+        Private Sub StackCorrespondence(
+            split As SplitContainer
+        )
+
+            Dim availableHeight As Integer =
+                split.Height -
+                split.SplitterWidth
+
+            If availableHeight <
+               split.Panel1MinSize + split.Panel2MinSize Then
+
+                Return
+
+            End If
+
+            split.Orientation =
+                Orientation.Horizontal
+
+            Dim listTall As Integer =
+                Math.Max(
+                    TwoLinesTall(lstCorrespondence, lstCorrespondence.BorderStyle),
+                    HintTall(lstCorrespondence)
+                )
+
+            Dim distance As Integer =
+                Math.Min(
+                    availableHeight - TwoLinesTall(txtCorrespondenceDetails, txtCorrespondenceDetails.BorderStyle),
+                    Math.Max(
+                        listTall,
+                        CInt(Math.Round(availableHeight * 0.43))
+                    )
+                )
+
+            If distance >= split.Panel1MinSize AndAlso
+               distance <= availableHeight - split.Panel2MinSize Then
+
+                split.SplitterDistance =
+                    distance
+
+            End If
+
+        End Sub
 
 
         Private Sub RefreshCorrespondenceList()
@@ -1763,6 +1945,11 @@ Namespace Forms
         Private Sub CorrespondenceSelectionChanged(sender As Object, e As EventArgs)
 
             UpdateCorrespondenceButtons()
+
+            ' Inline, the buttons shown set the toolbar's rows.
+            If _inline Then
+                _reserveTabs?.Invoke()
+            End If
 
             Dim item As CorrespondenceItem = GetSelectedCorrespondence()
 
