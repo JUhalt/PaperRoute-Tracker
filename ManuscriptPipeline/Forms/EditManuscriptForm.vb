@@ -3503,9 +3503,19 @@ Namespace Forms
         )
 
             ' Starts at the target journal, as recording one from a stage
-            ' change does (#204).
-            Using dialog As New AddSubmissionForm(
+            ' change does (#204), with its Journal Library link (#224).
+            Dim journalName As String =
                 txtTargetJournal.Text.Trim()
+
+            Dim target As (JournalId As Guid?, PortalUrl As String) =
+                TargetJournalLink(
+                    journalName
+                )
+
+            Using dialog As New AddSubmissionForm(
+                journalName,
+                target.JournalId,
+                target.PortalUrl
             )
 
                 If dialog.ShowDialog(Me) =
@@ -3532,6 +3542,38 @@ Namespace Forms
             End Using
 
         End Sub
+
+
+        ' The Journal Library link a new submission to the target journal
+        ' starts with (#224), as the packet path and Use Library... give it:
+        ' the linked record's id while the name is still its own, and that
+        ' record's portal. An unlinked target gives neither, as before, and
+        ' the dialog drops the id if the name is edited there.
+        Private Function TargetJournalLink(
+            journalName As String
+        ) As (JournalId As Guid?, PortalUrl As String)
+
+            Dim journalId As Guid? =
+                TargetJournalIdFor(
+                    _workingManuscript,
+                    journalName
+                )
+
+            Dim journal As JournalRecord = Nothing
+
+            If journalId.HasValue AndAlso
+               _authorLibrary IsNot Nothing AndAlso
+               _authorLibrary.Journals IsNot Nothing Then
+
+                journal =
+                    _authorLibrary.Journals.FirstOrDefault(
+                        Function(item) item IsNot Nothing AndAlso item.Id = journalId.Value)
+
+            End If
+
+            Return (journalId, If(journal?.SubmissionPortalUrl, String.Empty))
+
+        End Function
 
 
         ' =====================================================
@@ -3836,8 +3878,18 @@ Namespace Forms
 
         Private Function RecordRequiredSubmission() As Boolean
 
-            Using dialog As New AddSubmissionForm(
+            Dim journalName As String =
                 txtTargetJournal.Text.Trim()
+
+            Dim target As (JournalId As Guid?, PortalUrl As String) =
+                TargetJournalLink(
+                    journalName
+                )
+
+            Using dialog As New AddSubmissionForm(
+                journalName,
+                target.JournalId,
+                target.PortalUrl
             )
 
                 If dialog.ShowDialog(Me) <>

@@ -98,6 +98,174 @@ Public Class SubmissionWorkflowConsistencyTests
         End Try
     End Sub
 
+    ' Record Submission... keeps the target journal's Journal Library link
+    ' and portal (#224), from the Submissions tab and from a stage change
+    ' (RecordRequiredSubmission), as Use Library... does: the dialog opens
+    ' with the record's portal, the new submission carries the record's id
+    ' and portal, and so the target stays linked and its notes stay on the
+    ' Overview, also when the page reads them again as a load does.
+    <TestMethod>
+    <DataRow("AddSubmission")>
+    <DataRow("RecordRequiredSubmission")>
+    Public Sub RecordSubmissionKeepsTheTargetJournalsLinkAndPortal(record As String)
+        Dim root As String = CreateTemporaryRoot()
+        Try
+            RunOnStaThread(
+                Sub()
+                    StorageEnvironment.RootOverride = root
+                    Try
+                        Dim journal As JournalRecord = SeedTargetJournal(LibraryPortal)
+                        Dim manuscript As Manuscript = TargetingManuscript(journal)
+                        Dim portals As New List(Of String)()
+                        Using editor As New EditManuscriptForm(manuscript, {manuscript}, New AuthorLibraryRepository(), pageMode:=True),
+                              dialogs As New ModalAnswer(Of AddSubmissionForm)(
+                                  Sub(dialog)
+                                      portals.Add(PortalBox(dialog).Text)
+                                      dialog.AcceptButton.PerformClick()
+                                  End Sub)
+                            ViewCatalog.ShowOffscreen(editor)
+                            Assert.IsTrue(NotesCard(editor).Visible, "The linked target's notes show before.")
+
+                            RecordThrough(editor, record)
+
+                            Assert.AreEqual(1, portals.Count, "The dialog opens once.")
+                            Assert.AreEqual(LibraryPortal, portals.Single(), "The dialog opens with the record's portal.")
+                            Dim working As Manuscript = WorkingCopy(editor)
+                            Dim recorded As JournalSubmission = working.Submissions.Single()
+                            Assert.AreEqual(CType(journal.Id, Guid?), recorded.JournalId, "The new submission keeps the Journal Library link.")
+                            Assert.AreEqual(LibraryPortal, recorded.PortalUrl, "The new submission keeps the record's portal.")
+                            Assert.AreEqual(CType(journal.Id, Guid?), working.TargetJournalId, "The target journal stays linked.")
+                            ' Nothing reads the notes again right after a record, so
+                            ' this first look passed before the change too (a guard);
+                            ' read again, as the next load reads them, they had gone
+                            ' with the link.
+                            Assert.IsTrue(NotesCard(editor).Visible, "The target journal's notes still show.")
+                            CallNoArguments(editor, "RefreshJournalNotes")
+                            Assert.IsTrue(NotesCard(editor).Visible, "Read again, the target journal's notes still show.")
+                            editor.Close()
+                        End Using
+                    Finally
+                        StorageEnvironment.RootOverride = Nothing
+                    End Try
+                End Sub)
+        Finally
+            DeleteTemporaryRoot(root)
+        End Try
+    End Sub
+
+    ' The edges of #224: an unlinked target opens with only its name, as
+    ' before (a guard: that passed before the change too); a record with
+    ' no portal leaves the portal blank; a journal name edited in the
+    ' dialog is another journal, so the new submission has no link.
+    <TestMethod>
+    <DataRow("AddSubmission")>
+    <DataRow("RecordRequiredSubmission")>
+    Public Sub RecordSubmissionLinksOnlyTheTargetJournalAsNamed(record As String)
+        Dim root As String = CreateTemporaryRoot()
+        Try
+            RunOnStaThread(
+                Sub()
+                    StorageEnvironment.RootOverride = root
+                    Try
+                        For Each edge As String In {"unlinked", "no portal", "edited name"}
+                            Dim journal As JournalRecord = SeedTargetJournal(If(edge = "no portal", String.Empty, LibraryPortal))
+                            Dim manuscript As Manuscript = TargetingManuscript(journal)
+                            If edge = "unlinked" Then manuscript.TargetJournalId = Nothing
+                            Dim opened As New List(Of (Journal As String, Portal As String))()
+                            Using editor As New EditManuscriptForm(manuscript, {manuscript}, New AuthorLibraryRepository(), pageMode:=True),
+                                  dialogs As New ModalAnswer(Of AddSubmissionForm)(
+                                      Sub(dialog)
+                                          opened.Add((JournalBox(dialog).Text, PortalBox(dialog).Text))
+                                          If edge = "edited name" Then JournalBox(dialog).Text = "Fictional Open Psychology Letters"
+                                          dialog.AcceptButton.PerformClick()
+                                      End Sub)
+                                ViewCatalog.ShowOffscreen(editor)
+
+                                RecordThrough(editor, record)
+
+                                Dim recorded As JournalSubmission = WorkingCopy(editor).Submissions.Single()
+                                Select Case edge
+                                    Case "unlinked"
+                                        Assert.AreEqual((journal.Name, String.Empty), opened.Single(), "Unlinked: only the name, as before.")
+                                        Assert.IsFalse(recorded.JournalId.HasValue, "Unlinked: no link.")
+                                    Case "no portal"
+                                        Assert.AreEqual((journal.Name, String.Empty), opened.Single(), "No portal: the portal stays blank.")
+                                        Assert.AreEqual(CType(journal.Id, Guid?), recorded.JournalId, "No portal: the link is kept.")
+                                        Assert.AreEqual(String.Empty, recorded.PortalUrl)
+                                    Case Else
+                                        Assert.AreEqual((journal.Name, LibraryPortal), opened.Single(), "Edited name: it opened at the linked record.")
+                                        Assert.IsFalse(recorded.JournalId.HasValue, "Edited name: another journal, so no link.")
+                                        Assert.AreEqual("Fictional Open Psychology Letters", recorded.JournalName)
+                                End Select
+                                editor.Close()
+                            End Using
+                        Next
+                    Finally
+                        StorageEnvironment.RootOverride = Nothing
+                    End Try
+                End Sub)
+        Finally
+            DeleteTemporaryRoot(root)
+        End Try
+    End Sub
+
+    Private Const LibraryPortal As String = "https://journal.example.invalid/submissions"
+
+    ' A Journal Library record with notes, saved as the temp root's whole
+    ' author library, where both the editor and the dialog read it.
+    Private Shared Function SeedTargetJournal(portal As String) As JournalRecord
+        Assert.IsNotNull(StorageEnvironment.RootOverride, "The author library is the test's own.")
+        Dim journal As New JournalRecord With {
+            .Name = "Fictional Open Psychology",
+            .Notes = "Report exact p values.",
+            .SubmissionPortalUrl = portal
+        }
+        Dim library As New AuthorLibraryData()
+        library.Journals.Add(journal)
+        Dim repository As New AuthorLibraryRepository()
+        repository.Save(library)
+        Return journal
+    End Function
+
+    Private Shared Function TargetingManuscript(journal As JournalRecord) As Manuscript
+        Return New Manuscript With {
+            .Title = "Targets a Journal Library record",
+            .CurrentStage = PaperStage.Draft,
+            .Location = ManuscriptLocation.Pipeline,
+            .TargetJournal = journal.Name,
+            .TargetJournalId = journal.Id
+        }
+    End Function
+
+    ' Record Submission... on the Submissions tab, or the record a stage
+    ' change asks for.
+    Private Shared Sub RecordThrough(editor As EditManuscriptForm, record As String)
+        If record = "AddSubmission" Then
+            CallPrivate(editor, record)
+        Else
+            Assert.IsTrue(CBool(CallNoArguments(editor, record)), "The submission was recorded.")
+        End If
+    End Sub
+
+    Private Shared Function CallNoArguments(target As Object, name As String) As Object
+        Return target.GetType().GetMethod(name, BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(target, Nothing)
+    End Function
+
+    Private Shared Function WorkingCopy(editor As EditManuscriptForm) As Manuscript
+        Return DirectCast(GetType(EditManuscriptForm).GetProperty("_workingManuscript", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(editor), Manuscript)
+    End Function
+
+    Private Shared Function NotesCard(editor As EditManuscriptForm) As Control
+        Return DirectCast(GetType(EditManuscriptForm).GetField("journalNotesGroup", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(editor), Control)
+    End Function
+
+    ' The portal box of a submission dialog: the field beside its label.
+    Private Shared Function PortalBox(dialog As Form) As TextBox
+        Dim label As Label = Descendants(dialog).OfType(Of Label)().Single(Function(item) item.Text = "Publisher portal URL")
+        Dim grid As TableLayoutPanel = DirectCast(label.Parent, TableLayoutPanel)
+        Return DirectCast(grid.GetControlFromPosition(1, grid.GetRow(label)), TextBox)
+    End Function
+
     ' Delete Journal Submission says what goes with the submission, in
     ' plain words (#222): only the kinds it holds, with real plurals, the
     ' day it was submitted, that the stage may move, and that Discard
