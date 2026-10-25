@@ -226,6 +226,11 @@ Public Class KeptManuscriptPageTests
                     board.Open(first)
                     Application.DoEvents()
                     board.Field("Title").Text = title & " (discarded)"
+                    ' The Unsaved changes bar, left hidden by the open, shows
+                    ' laid out (#133).
+                    board.Tick()
+                    Assert.IsTrue(board.SaveBarVisible, "The edit shows the Unsaved changes bar.")
+                    board.AssertSettled()
                     board.Discard()
                     Assert.AreEqual(title, board.Field("Title").Text, "Discard shows the saved version again.")
                     Assert.IsFalse(board.Editor.HasUnsavedChanges())
@@ -555,6 +560,66 @@ Public Class KeptManuscriptPageTests
             TimeSpan.FromMinutes(5))
 
         Assert.AreEqual(0, moved.Count, "Containers moved as the same manuscript opened again:" & Environment.NewLine & String.Join(Environment.NewLine, moved))
+
+    End Sub
+
+
+    ' An open lays out nothing it leaves hidden (#133): no panel or table
+    ' of a section not shown, of the reroute offer when there is none, of
+    ' the File Drawer card of a manuscript not filed, or of the Unsaved
+    ' changes bar. Each lays itself out as it shows, as a section shown,
+    ' an offer made or the first edit shows it. Before, the open's pass
+    ' laid out each whose contents the record had changed.
+    <TestMethod>
+    Public Sub AnOpenLaysOutNoHiddenSection()
+
+        Dim laidOut As New List(Of String)()
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary = Library60()
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+                    Dim choosing As List(Of Manuscript) =
+                        board.Library.Where(Function(item) item.Location = ManuscriptLocation.Pipeline AndAlso item.Submissions.Count > 0 AndAlso item.JournalShortlist.Count > 0 AndAlso item.Tags.Count > 0).Take(2).ToList()
+                    Dim published As Manuscript = board.Library.First(Function(item) item.Location = ManuscriptLocation.Published)
+
+                    For Each visit As (Left As Manuscript, Opened As Manuscript, ThroughTheBoard As Boolean) In
+                        {(choosing(0), choosing(1), True), (choosing(1), published, False), (published, choosing(0), True)}
+
+                        board.Open(visit.Left)
+                        Application.DoEvents()
+                        If visit.ThroughTheBoard Then
+                            board.NavigateTo(Form1.WorkspacePage.Board)
+                            board.WaitForIdleWork()
+                        End If
+
+                        Dim page As Control = board.KeptPage
+                        Using probe As New LayoutProbe(page)
+                            board.Open(visit.Opened)
+                            laidOut.AddRange(probe.Layouts.Where(Function(entry) TypeOf entry.Control Is ScrollableControl AndAlso entry.Control.HasChildren AndAlso Not entry.Control.Visible).
+                                                 Select(Function(entry) visit.Opened.Title.Substring(0, 12) & ": " & LayoutProbe.PathOf(entry.Control, page) & " (" & entry.Affected & ")"))
+                        End Using
+                        Application.DoEvents()
+
+                        ' Each part left hidden shows laid out.
+                        For Each section As String In {"Authors", "Versions", "Submissions", "Readiness & Packets", "Overview"}
+                            ShowSection(board.Editor, section)
+                            board.AssertSettled()
+                        Next
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        board.WaitForIdleWork()
+                    Next
+
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(5))
+
+        Assert.AreEqual(0, laidOut.Count, "Hidden parts laid out during an open:" & Environment.NewLine & String.Join(Environment.NewLine, laidOut))
 
     End Sub
 

@@ -922,6 +922,25 @@ Friend NotInheritable Class ViewCatalog
     End Function
 
 
+    ' The kept page opened again, as above, after the window was made as
+    ' small as it goes on the Board between leaving the page and the next
+    ' open (#133): hidden, holding its layout from letting go of its
+    ' record, the page takes the smaller size as it shows. Not in the
+    ' catalog's lists; the layout tests ask for it.
+    Friend Shared Function ManuscriptPageAgainAfterShrinking() As Form
+        Dim library As List(Of Manuscript) = CreateRepresentativeLibrary()
+        Dim board As CatalogBoard = BoardOn(library)
+        board.CompleteStartup()
+        board.Open(library(1))
+        board.NavigateTo(Form1.WorkspacePage.Board)
+        board.WaitForIdleWork()
+        board.Size = board.MinimumSize
+        Application.DoEvents()
+        board.Open(library(0))
+        Return Hosting(Of SubmissionDetailsForm)(board)
+    End Function
+
+
     ' The host, once the hosted view is found inside it.
     Private Shared Function Hosting(Of T As Form)(host As Form) As Form
         If Not Descendants(host).OfType(Of T)().Any() Then

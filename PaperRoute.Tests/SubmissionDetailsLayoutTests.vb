@@ -432,6 +432,11 @@ Public Class SubmissionDetailsLayoutTests
                 ToList()
         Assert.AreEqual(2, hosted.Count, "Both views are in the catalog.")
 
+        ' And the kept page opened again after the window was made as small
+        ' as it goes on the Board while the page, hidden, held its layout
+        ' (#133): it lays out at the smaller size from the last record's.
+        hosted.Add(("The manuscript page opened again after the window was made small on the Board", Function(root As String) ViewCatalog.ManuscriptPageAgainAfterShrinking()))
+
         Dim failures As List(Of String) =
             ViewCatalog.ShowEach(
                 hosted,

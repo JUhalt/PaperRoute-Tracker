@@ -327,8 +327,14 @@ Partial Public Class Form1
         ' loaded, the header, a part shown or hidden for the record. One in
         ' which nothing changed is not laid out again; laying out every
         ' container whatever changed took twice as long on this machine.
+        ' A panel or table left hidden (a section not shown, the reroute
+        ' offer, the File Drawer card's table, the Unsaved changes bar)
+        ' keeps what it has to lay out until it shows: WinForms lays out a
+        ' panel as it becomes visible. A card (a GroupBox) does not, so a
+        ' hidden card lays out with the rest.
         For index As Integer = containers.Count - 1 To 0 Step -1
-            containers(index).ResumeLayout(True)
+            Dim container As Control = containers(index)
+            container.ResumeLayout(container.Visible OrElse Not TypeOf container Is ScrollableControl)
         Next
 
         ' A scrolling host sets its range as its own layout ends. A card in
