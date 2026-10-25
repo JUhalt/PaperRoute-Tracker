@@ -420,8 +420,8 @@ Public Class PublicationExportTests
     ' (#232). Every ItemCheck queued a full export of the whole selection,
     ' so a scope change, Select None or Select All queued one for each
     ' manuscript and froze the dialog on a large record. Each now rebuilds
-    ' the preview at most twice, once directly and once from the refresh it
-    ' queued, and the preview is still the export of what is checked.
+    ' the preview once, and the preview is still the export of what is
+    ' checked.
     <TestMethod>
     Public Sub Preview_IsRebuiltOncePerChangeNotOncePerCheckedItem()
 
@@ -521,7 +521,7 @@ Public Class PublicationExportTests
 
                     Application.DoEvents()
 
-                    AssertRebuiltAtMostTwice(
+                    AssertRebuiltOnce(
                         dialog,
                         "Switching the scope to All manuscripts",
                         Sub()
@@ -540,7 +540,7 @@ Public Class PublicationExportTests
                         preview.Text
                     )
 
-                    AssertRebuiltAtMostTwice(
+                    AssertRebuiltOnce(
                         dialog,
                         "Select None",
                         Sub() ExportButton(dialog, "Select None").PerformClick()
@@ -556,7 +556,7 @@ Public Class PublicationExportTests
                         preview.Text
                     )
 
-                    AssertRebuiltAtMostTwice(
+                    AssertRebuiltOnce(
                         dialog,
                         "Select All",
                         Sub() ExportButton(dialog, "Select All").PerformClick()
@@ -610,8 +610,8 @@ Public Class PublicationExportTests
 
 
     ' Runs one action and the messages it queued, and fails with the count
-    ' if the preview was rebuilt more than twice.
-    Private Shared Sub AssertRebuiltAtMostTwice(
+    ' unless the preview was rebuilt exactly once.
+    Private Shared Sub AssertRebuiltOnce(
         dialog As PublicationExportForm,
         actionName As String,
         perform As Action
@@ -627,8 +627,9 @@ Public Class PublicationExportTests
         Dim rebuilt As Integer =
             dialog.PreviewCount - before
 
-        Assert.IsTrue(
-            rebuilt <= 2,
+        Assert.AreEqual(
+            1,
+            rebuilt,
             actionName & " rebuilt the preview " & rebuilt & " times."
         )
 
@@ -659,7 +660,7 @@ Public Class PublicationExportTests
         text As String
     ) As Button
 
-        Return Descendants(dialog).
+        Return ViewCatalog.Descendants(dialog).
             OfType(Of Button)().
             Single(
                 Function(button) button.Text = text
@@ -667,21 +668,5 @@ Public Class PublicationExportTests
 
     End Function
 
-
-    Private Shared Iterator Function Descendants(
-        parent As Control
-    ) As IEnumerable(Of Control)
-
-        For Each child As Control In parent.Controls
-
-            Yield child
-
-            For Each descendant As Control In Descendants(child)
-                Yield descendant
-            Next
-
-        Next
-
-    End Function
 
 End Class

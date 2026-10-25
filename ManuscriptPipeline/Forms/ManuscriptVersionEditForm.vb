@@ -1451,9 +1451,8 @@ Namespace Forms
             txtFilePath.Text =
                 filePath
 
-            ' A blank label takes the file's name without its extension, as
-            ' the packet and correspondence editors fill theirs from the
-            ' file; a label already typed stays.
+            ' A blank label takes the file's name, without its extension, so
+            ' the version reads as a name; a label already typed stays.
             If String.IsNullOrWhiteSpace(
                 txtLabel.Text
             ) Then
