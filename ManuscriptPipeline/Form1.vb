@@ -3211,20 +3211,41 @@ Public Class Form1
                 WithLiveManuscript(record, Sub(live) OpenRouteView(live))
             End Sub
 
-        ' Hovering anywhere on the card, or focusing its title, highlights it.
-        Dim setHot As Action(Of Boolean) =
-            Sub(hot)
-                card.BorderColor = If(hot, UiTheme.AccentColor(), UiTheme.CardBorder())
+        ' Hovering anywhere on the card, or focusing its title, highlights it:
+        ' the pointer eases its border to the accent and back (#142), the
+        ' keyboard at once. The ease is made on the card's first hover.
+        Dim hot As HoverTween = Nothing
+
+        Dim setHot As Action(Of Boolean, Boolean) =
+            Sub(highlighted, now)
+                If hot Is Nothing Then
+                    hot = New HoverTween(
+                        card,
+                        Sub()
+                            Dim amount As Single = hot.Amount
+                            card.BorderColor =
+                                If(amount <= 0.0F, UiTheme.CardBorder(),
+                                   If(amount >= 1.0F, UiTheme.AccentColor(), UiTheme.Blend(UiTheme.CardBorder(), UiTheme.AccentColor(), amount)))
+                        End Sub)
+                End If
+                If now Then
+                    hot.SnapTo(highlighted)
+                Else
+                    hot.MoveTo(highlighted)
+                End If
             End Sub
 
-        Dim refreshHover As EventHandler =
-            Sub(sender, e)
+        Dim refreshHot As Action(Of Boolean) =
+            Sub(now)
                 If card.IsDisposed Then Return
-                setHot(lblTitle.Focused OrElse card.ClientRectangle.Contains(card.PointToClient(Control.MousePosition)))
+                setHot(lblTitle.Focused OrElse card.ClientRectangle.Contains(card.PointToClient(Control.MousePosition)), now)
             End Sub
 
-        AddHandler lblTitle.GotFocus, refreshHover
-        AddHandler lblTitle.LostFocus, refreshHover
+        Dim refreshHover As EventHandler = Sub(sender, e) refreshHot(False)
+        Dim refreshFocus As EventHandler = Sub(sender, e) refreshHot(True)
+
+        AddHandler lblTitle.GotFocus, refreshFocus
+        AddHandler lblTitle.LostFocus, refreshFocus
 
         card.Controls.Add(lblTitle)
         card.Controls.Add(btnMore)

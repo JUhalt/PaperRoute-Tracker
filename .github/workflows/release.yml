@@ -125,11 +125,13 @@ jobs:
         shell: pwsh
         # The runner is disposable, so the file-dialog tests, which leave
         # Explorer's view state under HKCU, run here too and the gate below
-        # still finds none skipped (#196).
+        # still finds none skipped (#196). The OnScreen tests need an
+        # unlocked desktop in use, so certification runs them by hand.
         env:
           PAPERROUTE_FILE_DIALOG_TESTS: "1"
         run: |
           dotnet test PaperRoute.Tests/PaperRoute.Tests.vbproj --configuration Release --no-build --no-restore `
+              --filter 'TestCategory!=OnScreen' `
               --logger 'trx;LogFileName=PaperRoute.Tests.trx' --results-directory "$env:GITHUB_WORKSPACE/TestResults"
           if ($LASTEXITCODE -ne 0) { throw 'The automated test run failed.' }
           $trx = [xml]::new()

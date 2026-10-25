@@ -18,6 +18,7 @@ The scripted screen-reader check for a release (#139), run once during certifica
 ## The six pages
 
 - [ ] **Board** (**Ctrl+1**): **Tab** reaches each card in turn: its title, read by name, then its **⋯** button, then **View route**. **Enter** or **Space** on a title opens that manuscript. A Needs Attention chip is read as a button, and **Narrator+Enter** applies it. Then press **Ctrl+F**: Narrator lands on the search box by name.
+- [ ] **Opening a page from the Board** (#213): **Enter** on a card's title opens the manuscript, and Narrator reads the page's **Overview** tab, not the Board's search box. **Alt+Left** returns to the Board and Narrator reads that card's title. From the search box, **Ctrl+2** reads the Library's filter box, and **Alt+Left** reads the search box again. On each way back, Narrator says nothing of **Collapse navigation**: focus passes through that button for a moment as the page is left (`KeyboardAccessTests` pins the two focus changes). If Narrator announces it, record its words on #213.
 - [ ] **Library** (**Ctrl+2**): the table and its filter box are named; **Enter** on a row opens it. On Authors & Affiliations, both lists are named.
 - [ ] **Journals** (**Ctrl+3**): the journal list is read as "Journals", not as its count.
 - [ ] **Deadlines** (**Ctrl+4**): **Up** and **Down** move between items and each is read; a filter chip is pressed with **Narrator+Enter**; **Narrator+Enter** on a row's button and on the **Done** line's **Show** presses it.
