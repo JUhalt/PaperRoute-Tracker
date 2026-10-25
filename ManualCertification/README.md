@@ -5,6 +5,8 @@ This directory contains disposable import fixtures used for repeatable F5/manual
 ## Release certification
 
 - [How releases are certified](Release-Certification.md): the standing procedure every release certification issue follows, from v0.9.2 on
+- [The v0.9.2 checklist](v0.9.2-Certification-Checklist.md): every v0.9.2 gate in one ordered list, grouped by what has to be set up, with a place for each result
+- [The Narrator pass](Narrator-Pass.md): the screen-reader script the certification runs once
 - [Capture-HarnessWindow.ps1](Capture-HarnessWindow.ps1): captures a harness window once it reports itself painted, with evidence JSON
 - [The standing certification fixture](#standing-certification-fixture) and [the fixture collector](#fixture-collector) that reports on it
 - [Display evidence](#display-evidence): how every window opens at a real display, for the 150% sessions of #93
