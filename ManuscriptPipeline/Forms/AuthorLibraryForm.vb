@@ -368,7 +368,24 @@ Namespace Forms
         End Function
 
 
-        Private Sub RefreshLists()
+        ' The record just added or edited stays chosen, so Edit, ORCID... and Delete act on it.
+        Private Sub RefreshLists(
+            Optional authorId As Guid? = Nothing,
+            Optional affiliationId As Guid? = Nothing
+        )
+
+            Dim selectedAuthor As AuthorRecord =
+                TryCast(
+                    lstAuthors.SelectedItem,
+                    AuthorRecord
+                )
+
+            If Not authorId.HasValue AndAlso
+               selectedAuthor IsNot Nothing Then
+
+                authorId = selectedAuthor.Id
+
+            End If
 
             lstAuthors.Items.Clear()
 
@@ -387,6 +404,43 @@ Namespace Forms
 
             Next
 
+            If authorId.HasValue Then
+
+                For index As Integer = 0 To lstAuthors.Items.Count - 1
+
+                    Dim item As AuthorRecord =
+                        TryCast(
+                            lstAuthors.Items(index),
+                            AuthorRecord
+                        )
+
+                    If item IsNot Nothing AndAlso
+                       item.Id = authorId.Value Then
+
+                        lstAuthors.SelectedIndex =
+                            index
+
+                        Exit For
+
+                    End If
+
+                Next
+
+            End If
+
+            Dim selectedAffiliation As AffiliationRecord =
+                TryCast(
+                    lstAffiliations.SelectedItem,
+                    AffiliationRecord
+                )
+
+            If Not affiliationId.HasValue AndAlso
+               selectedAffiliation IsNot Nothing Then
+
+                affiliationId = selectedAffiliation.Id
+
+            End If
+
             lstAffiliations.Items.Clear()
 
             For Each affiliation As AffiliationRecord In
@@ -403,6 +457,30 @@ Namespace Forms
                 )
 
             Next
+
+            If affiliationId.HasValue Then
+
+                For index As Integer = 0 To lstAffiliations.Items.Count - 1
+
+                    Dim item As AffiliationRecord =
+                        TryCast(
+                            lstAffiliations.Items(index),
+                            AffiliationRecord
+                        )
+
+                    If item IsNot Nothing AndAlso
+                       item.Id = affiliationId.Value Then
+
+                        lstAffiliations.SelectedIndex =
+                            index
+
+                        Exit For
+
+                    End If
+
+                Next
+
+            End If
 
         End Sub
 
@@ -441,7 +519,9 @@ Namespace Forms
                 )
 
                 SaveLibrary()
-                RefreshLists()
+                RefreshLists(
+                    authorId:=dialog.Result.Id
+                )
 
             End Using
 
@@ -733,7 +813,9 @@ Namespace Forms
                 )
 
                 SaveLibrary()
-                RefreshLists()
+                RefreshLists(
+                    affiliationId:=dialog.Result.Id
+                )
 
             End Using
 
