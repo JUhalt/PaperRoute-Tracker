@@ -1433,17 +1433,43 @@ Namespace Forms
 
                 End If
 
-                txtFilePath.Text =
+                UseChosenFile(
                     dialog.FileName
-
-                If rbMetadataOnly.Checked Then
-                    rbManagedCopy.Checked =
-                        True
-                End If
-
-                UpdateFileEditingState()
+                )
 
             End Using
+
+        End Sub
+
+
+        ' What Browse... does with the file chosen; Friend so a test can
+        ' choose one without the file dialog (#231).
+        Friend Sub UseChosenFile(
+            filePath As String
+        )
+
+            txtFilePath.Text =
+                filePath
+
+            ' A blank label takes the file's name, without its extension, so
+            ' the version reads as a name; a label already typed stays.
+            If String.IsNullOrWhiteSpace(
+                txtLabel.Text
+            ) Then
+
+                txtLabel.Text =
+                    Path.GetFileNameWithoutExtension(
+                        filePath
+                    )
+
+            End If
+
+            If rbMetadataOnly.Checked Then
+                rbManagedCopy.Checked =
+                    True
+            End If
+
+            UpdateFileEditingState()
 
         End Sub
 

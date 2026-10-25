@@ -842,4 +842,199 @@ Public Class ManuscriptVersionUiFoundationTests
 
     End Sub
 
+
+    ' Browse... names a new version after the file chosen (#231), as the
+    ' packet and correspondence editors name theirs: the label is the file
+    ' name without its extension. UseChosenFile is what Browse... does once
+    ' its dialog closes, so no file dialog opens and no file is read.
+    <TestMethod>
+    Public Sub UseChosenFile_NamesANewVersionAfterTheFile()
+
+        RunWithVersionEditor(
+            New Manuscript With {
+                .Title = "Anchoring Study"
+            },
+            Nothing,
+            Sub(editor)
+
+                Assert.IsTrue(
+                    VersionEditorField(Of System.Windows.Forms.RadioButton)(
+                        editor,
+                        "rbMetadataOnly"
+                    ).Checked,
+                    "A new version starts metadata-only."
+                )
+
+                editor.UseChosenFile(
+                    "C:\x\Draft v2.docx"
+                )
+
+                Assert.AreEqual(
+                    "Draft v2",
+                    editor.VersionLabel
+                )
+
+                Assert.AreEqual(
+                    "C:\x\Draft v2.docx",
+                    editor.VersionFilePath
+                )
+
+                Assert.IsTrue(
+                    editor.IsManagedCopy,
+                    "Choosing a file moves metadata-only storage to the managed copy, as before."
+                )
+
+            End Sub
+        )
+
+    End Sub
+
+
+    ' A guard (#231) that could not fail before the change, when Browse...
+    ' set only the path: a label already typed is never overwritten.
+    <TestMethod>
+    Public Sub UseChosenFile_KeepsATypedLabel()
+
+        RunWithVersionEditor(
+            New Manuscript(),
+            Nothing,
+            Sub(editor)
+
+                VersionEditorField(Of System.Windows.Forms.TextBox)(
+                    editor,
+                    "txtLabel"
+                ).Text =
+                    "Resubmission"
+
+                editor.UseChosenFile(
+                    "C:\x\Draft v2.docx"
+                )
+
+                Assert.AreEqual(
+                    "Resubmission",
+                    editor.VersionLabel
+                )
+
+                Assert.AreEqual(
+                    "C:\x\Draft v2.docx",
+                    editor.VersionFilePath
+                )
+
+            End Sub
+        )
+
+    End Sub
+
+
+    ' A guard (#231) that could not fail before the change either: editing
+    ' an existing version keeps its label when a file is chosen.
+    <TestMethod>
+    Public Sub UseChosenFile_KeepsAnExistingVersionsLabel()
+
+        Dim manuscript As New Manuscript()
+
+        Dim version As ManuscriptVersion =
+            ManuscriptVersionService.CreateVersion(
+                manuscript,
+                "Accepted manuscript",
+                String.Empty,
+                String.Empty,
+                False,
+                createdDate:=New DateTime(2026, 8, 1)
+            )
+
+        RunWithVersionEditor(
+            manuscript,
+            version,
+            Sub(editor)
+
+                editor.UseChosenFile(
+                    "C:\x\Draft v2.docx"
+                )
+
+                Assert.AreEqual(
+                    "Accepted manuscript",
+                    editor.VersionLabel
+                )
+
+                Assert.AreEqual(
+                    "C:\x\Draft v2.docx",
+                    editor.VersionFilePath
+                )
+
+            End Sub
+        )
+
+    End Sub
+
+
+    ' Builds the version editor on the shared runner, on a temporary root
+    ' of its own, hands it to inspect and disposes it unshown.
+    Private Shared Sub RunWithVersionEditor(
+        manuscript As Manuscript,
+        version As ManuscriptVersion,
+        inspect As Action(Of ManuscriptPipeline.Forms.ManuscriptVersionEditForm)
+    )
+
+        Dim root As String =
+            CreateTemporaryRoot()
+
+        Try
+
+            StaRunner.Run(
+                Sub()
+
+                    StorageEnvironment.RootOverride =
+                        root
+
+                    Try
+
+                        Using editor As New ManuscriptPipeline.Forms.ManuscriptVersionEditForm(
+                            manuscript,
+                            version
+                        )
+
+                            inspect(editor)
+
+                        End Using
+
+                    Finally
+
+                        StorageEnvironment.RootOverride =
+                            Nothing
+
+                    End Try
+
+                End Sub
+            )
+
+        Finally
+
+            DeleteTemporaryRoot(
+                root
+            )
+
+        End Try
+
+    End Sub
+
+
+    Private Shared Function VersionEditorField(Of T)(
+        editor As ManuscriptPipeline.Forms.ManuscriptVersionEditForm,
+        name As String
+    ) As T
+
+        Return DirectCast(
+            GetType(ManuscriptPipeline.Forms.ManuscriptVersionEditForm).
+                GetField(
+                    name,
+                    System.Reflection.BindingFlags.Instance Or
+                    System.Reflection.BindingFlags.NonPublic
+                ).
+                GetValue(editor),
+            T
+        )
+
+    End Function
+
 End Class
