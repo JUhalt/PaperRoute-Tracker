@@ -628,67 +628,132 @@ Namespace Forms
 
                 End If
 
-                Try
+                ApplyOrcidChanges(
+                    selected,
+                    dialog.Suggestion,
+                    dialog.Options
+                )
 
-                    Dim selectedWorkCount As Integer =
-                        dialog.Options.SelectedWorkPutCodes.Count
+            End Using
 
-                    Dim preImportCopies As String =
-                        String.Empty
+        End Sub
 
-                    If selectedWorkCount > 0 Then
 
-                        preImportCopies =
-                            _manuscriptRepository.CreatePreImportBackup()
+        ' Applies what the researcher chose from an ORCID profile to the
+        ' selected author, and saves. ORCID... reads the profile; tests
+        ' pass their own.
+        Friend Sub ApplyOrcidChanges(
+            selected As AuthorRecord,
+            suggestion As OrcidProfileSuggestion,
+            options As OrcidApplyOptions
+        )
 
-                    End If
+            Dim existingManuscriptIds As New HashSet(Of Guid)()
 
-                    Dim result As OrcidApplyResult =
-                        OrcidApplyService.Apply(
-                            selected,
-                            _library,
-                            _manuscripts,
-                            dialog.Suggestion,
-                            dialog.Options
-                        )
+            For Each existingManuscript As Manuscript In _manuscripts
 
-                    If result.ManuscriptsImported > 0 Then
+                If existingManuscript IsNot Nothing Then
 
-                        _manuscriptRepository.Save(
-                            _manuscripts
-                        )
-
-                    End If
-
-                    _repository.SaveKeepingJournals(
-                        _library
+                    existingManuscriptIds.Add(
+                        existingManuscript.Id
                     )
 
-                    RefreshLists()
+                End If
 
-                    Dim message As String =
-                        "ORCID changes applied." &
+            Next
+
+            Dim preImportCopies As String =
+                String.Empty
+
+            Dim result As OrcidApplyResult =
+                Nothing
+
+            ' Works on disk once the manuscripts save went through.
+            Dim worksSaved As Integer =
+                0
+
+            Try
+
+                Dim selectedWorkCount As Integer =
+                    options.SelectedWorkPutCodes.Count
+
+                If selectedWorkCount > 0 Then
+
+                    preImportCopies =
+                        _manuscriptRepository.CreatePreImportBackup()
+
+                End If
+
+                result =
+                    OrcidApplyService.Apply(
+                        selected,
+                        _library,
+                        _manuscripts,
+                        suggestion,
+                        options
+                    )
+
+                If result.ManuscriptsImported > 0 Then
+
+                    _manuscriptRepository.Save(
+                        _manuscripts
+                    )
+
+                    worksSaved =
+                        result.ManuscriptsImported
+
+                End If
+
+                _repository.SaveKeepingJournals(
+                    _library
+                )
+
+            Catch ex As Exception
+
+                ' Memory goes back to what is on disk, so a later save never
+                ' writes what the researcher was told was not saved: works
+                ' not saved come back out, and the author library (the iD,
+                ' names and affiliations) is read back.
+                If worksSaved = 0 Then
+
+                    _manuscripts.RemoveAll(
+                        Function(item) item IsNot Nothing AndAlso
+                                       Not existingManuscriptIds.Contains(item.Id)
+                    )
+
+                End If
+
+                Try
+
+                    _library =
+                        _repository.Load()
+
+                Catch reloadFailure As Exception When TypeOf reloadFailure Is IO.IOException OrElse
+                                                      TypeOf reloadFailure Is UnauthorizedAccessException OrElse
+                                                      TypeOf reloadFailure Is IO.InvalidDataException
+                    ' Keep what is on screen; the next save tries again.
+                End Try
+
+                RefreshLists()
+
+                If worksSaved > 0 Then
+
+                    Dim incomplete As String =
+                        "PaperRoute imported the selected works but could not save the other ORCID changes." &
                         Environment.NewLine &
-                        Environment.NewLine &
-                        "Affiliations added: " &
-                        result.AffiliationsAdded.ToString() &
                         Environment.NewLine &
                         "Works imported as Idea manuscripts: " &
-                        result.ManuscriptsImported.ToString()
+                        worksSaved.ToString() &
+                        Environment.NewLine &
+                        Environment.NewLine &
+                        ex.Message &
+                        Environment.NewLine &
+                        Environment.NewLine &
+                        "Choose ORCID... again to save them. Works already imported are skipped as duplicates."
 
-                    If result.DuplicateWorksSkipped > 0 Then
-
-                        message &=
-                            Environment.NewLine &
-                            "Duplicate works skipped: " &
-                            result.DuplicateWorksSkipped.ToString()
-
-                    End If
-
-                    ' Where to find the library as it was (#122).
                     If preImportCopies.Length > 0 Then
 
-                        message &=
+                        incomplete &=
                             Environment.NewLine &
                             Environment.NewLine &
                             "A copy of your library from before this import is in:" &
@@ -699,13 +764,13 @@ Namespace Forms
 
                     MessageBox.Show(
                         Me,
-                        message,
-                        "ORCID Import Complete",
+                        incomplete,
+                        "ORCID Import Incomplete",
                         MessageBoxButtons.OK,
-                        MessageBoxIcon.Information
+                        MessageBoxIcon.Warning
                     )
 
-                Catch ex As Exception
+                Else
 
                     MessageBox.Show(
                         Me,
@@ -718,9 +783,52 @@ Namespace Forms
                         MessageBoxIcon.Error
                     )
 
-                End Try
+                End If
 
-            End Using
+                Return
+
+            End Try
+
+            RefreshLists()
+
+            Dim message As String =
+                "ORCID changes applied." &
+                Environment.NewLine &
+                Environment.NewLine &
+                "Affiliations added: " &
+                result.AffiliationsAdded.ToString() &
+                Environment.NewLine &
+                "Works imported as Idea manuscripts: " &
+                result.ManuscriptsImported.ToString()
+
+            If result.DuplicateWorksSkipped > 0 Then
+
+                message &=
+                    Environment.NewLine &
+                    "Duplicate works skipped: " &
+                    result.DuplicateWorksSkipped.ToString()
+
+            End If
+
+            ' Where to find the library as it was (#122).
+            If preImportCopies.Length > 0 Then
+
+                message &=
+                    Environment.NewLine &
+                    Environment.NewLine &
+                    "A copy of your library from before this import is in:" &
+                    Environment.NewLine &
+                    preImportCopies
+
+            End If
+
+            MessageBox.Show(
+                Me,
+                message,
+                "ORCID Import Complete",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information
+            )
 
         End Sub
 
