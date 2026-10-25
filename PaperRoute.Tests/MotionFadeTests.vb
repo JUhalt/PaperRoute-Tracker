@@ -349,20 +349,33 @@ Public Class MotionFadeTests
     ' another thread as a screen reader asks it, says it is neither a
     ' control nor content and takes no focus, so it is in the raw view
     ' only and the window's children in the control view are the same.
+    ' The fade is held while UI Automation is asked, which on a busy host
+    ' takes longer than a fade of 10 s (the questions took 11 to 16 s, and
+    ' the fade ended on its own part way through them): its length is one
+    ' no test outlasts, so only what the overlay took could end it.
     <TestMethod>
     Public Sub TheOverlayTakesNoFocusInputOrPlaceInTheTree()
 
         OnBoard(
             Sub(board)
-                UiMotion.FadeMilliseconds = 10000
+                UiMotion.FadeMilliseconds = Integer.MaxValue
                 Dim rail As Control = ViewCatalog.Descendants(board).OfType(Of RailButton)().First()
                 If Not rail.Focus() Then board.ActiveControl = rail
                 Application.DoEvents()
 
-                ' A first switch makes the overlay; the second is the one held.
+                ' A first switch makes the overlay. UI Automation is asked
+                ' about it once then, hidden, as a screen reader has asked
+                ' about the window long before any fade: the process's first
+                ' question also sets UI Automation up, here and on the
+                ' window's thread, and on a busy host that has made the
+                ' overlay's first answer later than the 5 s or so UI
+                ' Automation waits for one, after which it describes the
+                ' window from its styles, through its MSAA proxy, as a
+                ' focusable pane. The third switch is the one held.
                 board.NavigateTo(Form1.WorkspacePage.Journals)
                 board.PageFade.End()
                 Pump(80)
+                AskUiAutomation(board.Handle, board.PageFade.OverlayHandle)
                 board.NavigateTo(Form1.WorkspacePage.Board)
                 board.PageFade.End()
                 Pump(80)
@@ -975,11 +988,15 @@ Public Class MotionFadeTests
         ' The window's children in each view, by window and name.
         Public ControlChildren As New List(Of String)()
         Public RawChildren As New List(Of String)()
+        ' Who described the overlay's element: its own provider, or, for a
+        ' window that did not answer in time, Windows' MSAA proxy.
+        Public Provider As String = String.Empty
 
         Public Overrides Function ToString() As String
             Return $"control element {IsControlElement}, content element {IsContentElement}, keyboard focusable {IsKeyboardFocusable}; " &
                    $"the control view gives {ControlViewHandle:X}, its raw parent {RawParentHandle:X}; " &
-                   $"control children {String.Join(", ", ControlChildren)}; raw children {String.Join(", ", RawChildren)}"
+                   $"control children {String.Join(", ", ControlChildren)}; raw children {String.Join(", ", RawChildren)}; " &
+                   $"described by {Provider}"
         End Function
     End Class
 
@@ -1006,6 +1023,7 @@ Public Class MotionFadeTests
                         reading.IsControlElement = element.GetCurrentPropertyValue(PageFade.UIA_IsControlElementPropertyId)
                         reading.IsContentElement = element.GetCurrentPropertyValue(PageFade.UIA_IsContentElementPropertyId)
                         reading.IsKeyboardFocusable = element.GetCurrentPropertyValue(PageFade.UIA_IsKeyboardFocusablePropertyId)
+                        reading.Provider = TryCast(element.GetCurrentPropertyValue(UIA_ProviderDescriptionPropertyId), String)
                         reading.ControlViewHandle = HandleOf(controlView.NormalizeElement(element))
                         reading.RawParentHandle = HandleOf(rawView.GetParentElement(element))
                     End If
@@ -1051,6 +1069,7 @@ Public Class MotionFadeTests
 
     Private Const UIA_NamePropertyId As Integer = 30005
     Private Const UIA_NativeWindowHandlePropertyId As Integer = 30020
+    Private Const UIA_ProviderDescriptionPropertyId As Integer = 30107
 
 
     ' The thread's top-level windows made as the fade's overlay is: layered,
