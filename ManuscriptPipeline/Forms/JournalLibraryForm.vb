@@ -752,8 +752,7 @@ Namespace Forms
 
 
         ' On failure the library is read back from disk, so nothing unsaved
-        ' stays on screen as if it were kept. A journal named by selectId is
-        ' selected when the list holds it.
+        ' stays on screen as if it were kept.
         Private Sub SaveAndRefresh(
             Optional selectId As Guid? = Nothing
         )
