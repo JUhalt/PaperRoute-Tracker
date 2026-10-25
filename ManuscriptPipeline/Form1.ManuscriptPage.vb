@@ -1040,7 +1040,10 @@ Partial Public Class Form1
         End If
 
         manuscripts.Remove(manuscript)
-        SaveManuscripts()
+
+        If SaveManuscripts() Then
+            ReportSavedAction("Deleted """ & ReminderService.SafeManuscriptTitle(manuscript) & """.")
+        End If
 
         ' The manuscript is gone, so there is nothing left to ask about.
         manuscriptEditor = Nothing

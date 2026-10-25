@@ -1317,7 +1317,8 @@ Public Class Form1
                 lblStatus.Text =
                 "Loaded " &
                 manuscripts.Count.ToString() &
-                " manuscript(s) from local storage."
+                If(manuscripts.Count = 1, " manuscript", " manuscripts") &
+                " from local storage."
 
             End If
 
@@ -3491,7 +3492,29 @@ Public Class Form1
                     dialog.CreatedManuscript
                 )
 
-                SaveManuscripts()
+                If SaveManuscripts() Then
+
+                    ' The shelf is named only when it is not the Pipeline,
+                    ' where a new manuscript goes.
+                    Dim added As String =
+                        "Added """ &
+                        ReminderService.SafeManuscriptTitle(dialog.CreatedManuscript) &
+                        """"
+
+                    If dialog.CreatedManuscript.Location <> ManuscriptLocation.Pipeline Then
+
+                        added &=
+                            " to " &
+                            FormatShelf(dialog.CreatedManuscript.Location)
+
+                    End If
+
+                    ReportSavedAction(
+                        added & "."
+                    )
+
+                End If
+
                 RenderManuscripts()
 
             End If
@@ -3558,7 +3581,16 @@ Public Class Form1
             manuscript
         )
 
-        SaveManuscripts()
+        If SaveManuscripts() Then
+
+            ReportSavedAction(
+                "Deleted """ &
+                ReminderService.SafeManuscriptTitle(manuscript) &
+                """."
+            )
+
+        End If
+
         RenderManuscripts()
 
     End Sub
@@ -3632,7 +3664,16 @@ Public Class Form1
             fileDrawerHistory
         )
 
-        SaveManuscripts()
+        If SaveManuscripts() Then
+
+            ReportSavedAction(
+                "Moved """ &
+                ReminderService.SafeManuscriptTitle(manuscript) &
+                """ to the File Drawer."
+            )
+
+        End If
+
         RenderManuscripts()
 
     End Sub
@@ -3676,8 +3717,41 @@ Public Class Form1
             restoreHistory
         )
 
-        SaveManuscripts()
+        If SaveManuscripts() Then
+
+            ReportSavedAction(
+                "Restored """ &
+                ReminderService.SafeManuscriptTitle(manuscript) &
+                """ to the Pipeline."
+            )
+
+        End If
+
         RenderManuscripts()
+
+    End Sub
+
+
+    ' Says on the status line, which Narrator reads as it changes, what a
+    ' saved action did (#225), as Done and Mark Published do, with the
+    ' save's warning when a file in use kept a folder in place. A failed
+    ' save's own warning is left as it is: the caller asks only on success.
+    Private Sub ReportSavedAction(
+        message As String
+    )
+
+        If Not String.IsNullOrWhiteSpace(
+            repository.LastSaveWarning
+        ) Then
+
+            message &=
+                " " &
+                repository.LastSaveWarning
+
+        End If
+
+        lblStatus.Text =
+            message
 
     End Sub
 
