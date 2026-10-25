@@ -17,7 +17,8 @@ Namespace Controls
     ' UiMotion.FadeMilliseconds on UiMotion's Windows Forms clock. A
     ' picture not ready, a switch that took the fade's length or longer,
     ' a switch just after a fade or with another of the thread's windows
-    ' over the page area, or motion off, is a cut, as before.
+    ' over the page area, a window Windows scales for its screen, or motion
+    ' off, is a cut, as before.
     '
     ' The window never takes part: disabled, never activated, transparent
     ' to the pointer, and in no view a screen reader reads (its UI
@@ -49,6 +50,13 @@ Namespace Controls
         ' never does).
         Friend Shared CaptureDelayMilliseconds As Integer = 0
         Friend Shared AwaitPicture As Boolean = False
+
+        ' Test seam: whether Windows scales the window, in place of what
+        ' Windows says (Nothing takes Windows' answer; it is asked either
+        ' way, so a timed switch pays for asking). The tests' host is
+        ' DPI-unaware, so on a screen above 100% Windows scales every window
+        ' a test makes; a test of what a fade does says it does not.
+        Friend Shared ScaledOverride As Boolean? = Nothing
 
 
         Public Sub New(owner As Form, area As Control)
@@ -172,6 +180,18 @@ Namespace Controls
             ' as a tooltip going as the switch begins.
             If AnotherWindowOver(screen) Then
                 LastOutcome = "cut: another window is over the page area"
+                Return
+            End If
+
+            ' A window Windows scales for a screen of another DPI than the one
+            ' it was made for (a scale changed since sign-in, a second
+            ' monitor) is placed in scaled coordinates, while the screen is
+            ' read in its own: the picture would be of another area, at
+            ' another size. Windows is asked even when a test answers.
+            Dim scaled As Boolean = ScaledByWindows(screen)
+
+            If If(ScaledOverride, scaled) Then
+                LastOutcome = "cut: Windows is scaling the window"
                 Return
             End If
 
@@ -303,6 +323,26 @@ Namespace Controls
         Private Function CanShow() As Boolean
             Return _owner.IsHandleCreated AndAlso _owner.Visible AndAlso _owner.WindowState <> FormWindowState.Minimized AndAlso
                 _area.IsHandleCreated AndAlso _area.Visible AndAlso _area.ClientSize.Width > 0 AndAlso _area.ClientSize.Height > 0
+        End Function
+
+
+        ' Whether the area's corners, in the window's coordinates, are other
+        ' points on the screen: Windows scales the window. Asked of Windows
+        ' whatever this thread's DPI awareness; a point it cannot convert
+        ' counts as scaled.
+        Private Function ScaledByWindows(area As Rectangle) As Boolean
+
+            Dim owner As IntPtr = _owner.Handle
+
+            For Each corner As Point In {area.Location, New Point(area.Right - 1, area.Bottom - 1)}
+                Dim converted As New NativePoint With {.X = corner.X, .Y = corner.Y}
+                If Not LogicalToPhysicalPointForPerMonitorDPI(owner, converted) OrElse converted.X <> corner.X OrElse converted.Y <> corner.Y Then
+                    Return True
+                End If
+            Next
+
+            Return False
+
         End Function
 
 
@@ -776,6 +816,10 @@ Namespace Controls
 
         <DllImport("user32.dll")>
         Private Shared Function IsWindowVisible(window As IntPtr) As Boolean
+        End Function
+
+        <DllImport("user32.dll")>
+        Private Shared Function LogicalToPhysicalPointForPerMonitorDPI(window As IntPtr, ByRef point As NativePoint) As Boolean
         End Function
 
         Private Delegate Function EnumWindowsProc(window As IntPtr, parameter As IntPtr) As Boolean

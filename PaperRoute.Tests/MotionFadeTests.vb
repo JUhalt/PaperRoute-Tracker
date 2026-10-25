@@ -51,10 +51,14 @@ Public Class MotionFadeTests
         UiTheme.HighContrastOverride = Nothing
         PageFade.CaptureDelayMilliseconds = 0
         PageFade.AwaitPicture = False
+        PageFade.ScaledOverride = Nothing
     End Sub
 
 
     ' Runs the work on a started board, the seams set as asked and put back.
+    ' The test host is DPI-unaware, so above 100% Windows scales the board,
+    ' and a switch there is a cut (AWindowWindowsScalesSwitchesAsACut): the
+    ' fade is told the board is not scaled.
     Private Sub OnBoard(work As Action(Of LibraryBoard), Optional manuscripts As Integer = 60, Optional motion As Boolean = True, Optional awaitPicture As Boolean = True)
 
         StaRunner.Run(
@@ -63,6 +67,7 @@ Public Class MotionFadeTests
                     UiMotion.EnabledOverride = motion
                     UiTheme.HighContrastOverride = False
                     PageFade.AwaitPicture = awaitPicture
+                    PageFade.ScaledOverride = False
                     Using board As New LibraryBoard(LargeLibraryFixture.Create(Path.Combine(_root, "library"), manuscripts), Path.Combine(_root, "settings"))
                         board.Start()
                         board.WaitForIdleWork()
@@ -577,6 +582,62 @@ Public Class MotionFadeTests
     End Sub
 
 
+    ' A window Windows scales for its screen switches as a cut. PaperRoute
+    ' runs SystemAware, so on a monitor at another scale than the one at
+    ' sign-in, or after the scale is changed, Windows stretches the window
+    ' and gives it scaled coordinates, while the screen is read in its
+    ' own: the picture would be of another area, at another size. The
+    ' window is made in each DPI awareness: DPI-unaware, which Windows
+    ' scales on any screen above 100% (at 100% it scales none, and that
+    ' row is Inconclusive), and PaperRoute's own, which it scales on such
+    ' a screen only. A window it does not scale fades.
+    <TestMethod>
+    <DataRow("Unaware")>
+    <DataRow("SystemAware")>
+    Public Sub AWindowWindowsScalesSwitchesAsACut(awareness As String)
+
+        Dim line As String = String.Empty
+        Dim scaled As Boolean = False
+
+        StaRunner.Run(
+            Sub()
+                Dim previous As IntPtr = SetThreadDpiAwarenessContext(If(awareness = "Unaware", DPI_AWARENESS_CONTEXT_UNAWARE, DPI_AWARENESS_CONTEXT_SYSTEM_AWARE))
+                Try
+                    UiMotion.EnabledOverride = True
+                    UiTheme.HighContrastOverride = False
+                    PageFade.AwaitPicture = True
+                    UiMotion.FadeMilliseconds = 10000
+                    Using board As New LibraryBoard(LargeLibraryFixture.Create(Path.Combine(_root, "library"), 60), Path.Combine(_root, "settings"))
+                        board.Start()
+                        board.WaitForIdleWork()
+                        Dim windowDpi As Integer = GetDpiForWindow(board.Handle)
+                        Dim screenDpi As Integer = MonitorDpi(board.Handle)
+                        scaled = screenDpi <> 0 AndAlso windowDpi <> screenDpi
+                        board.NavigateTo(Form1.WorkspacePage.Library)
+                        line = $"{awareness}: the window at {windowDpi} DPI (DeviceDpi {board.DeviceDpi}), its screen at {screenDpi}; {board.PageFade.LastOutcome}"
+                        Console.WriteLine(line)
+                        If scaled Then
+                            Assert.AreEqual("cut: Windows is scaling the window", board.PageFade.LastOutcome, line)
+                            Assert.IsFalse(board.PageFade.Showing, line)
+                        Else
+                            Assert.AreEqual("faded", board.PageFade.LastOutcome, line)
+                            board.PageFade.End()
+                        End If
+                        board.Close()
+                    End Using
+                Finally
+                    ResetSeams()
+                    SetThreadDpiAwarenessContext(previous)
+                End Try
+            End Sub)
+
+        If awareness = "Unaware" AndAlso Not scaled Then
+            Assert.Inconclusive("At 100% Windows scales no window: " & line)
+        End If
+
+    End Sub
+
+
     ' A switch begun while another of the window's thread's windows is over
     ' the page area, as a tooltip going as the switch begins, is a cut: the
     ' picture read off the screen would hold that window over the page
@@ -640,6 +701,7 @@ Public Class MotionFadeTests
             Sub()
                 Try
                     UiTheme.HighContrastOverride = False
+                    PageFade.ScaledOverride = False
                     Using board As New LibraryBoard(LargeLibraryFixture.Create(Path.Combine(_root, "large"), 500), Path.Combine(_root, "settings"))
                         board.Start()
                         If onScreen Then
@@ -843,6 +905,21 @@ Public Class MotionFadeTests
     End Function
 
 
+    ' The DPI of the screen a window is on, as Windows has it, asked in
+    ' the per-monitor awareness that is told it; 0 if Windows does not say.
+    Private Shared Function MonitorDpi(window As IntPtr) As Integer
+        Dim previous As IntPtr = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
+        Try
+            Dim x As UInteger = 0
+            Dim y As UInteger = 0
+            If GetDpiForMonitor(MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST), MDT_EFFECTIVE_DPI, x, y) <> 0 Then Return 0
+            Return CInt(x)
+        Finally
+            SetThreadDpiAwarenessContext(previous)
+        End Try
+    End Function
+
+
     Private Shared Function DesktopUnlocked() As Boolean
         Dim desktop As IntPtr = OpenInputDesktop(0, False, DESKTOP_SWITCHDESKTOP)
         If desktop = IntPtr.Zero Then Return False
@@ -1009,6 +1086,28 @@ Public Class MotionFadeTests
 
     <DllImport("user32.dll")>
     Private Shared Function ShowWindow(window As IntPtr, command As Integer) As Boolean
+    End Function
+
+    Private Shared ReadOnly DPI_AWARENESS_CONTEXT_UNAWARE As New IntPtr(-1)
+    Private Shared ReadOnly DPI_AWARENESS_CONTEXT_SYSTEM_AWARE As New IntPtr(-2)
+    Private Shared ReadOnly DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 As New IntPtr(-4)
+    Private Const MONITOR_DEFAULTTONEAREST As UInteger = 2
+    Private Const MDT_EFFECTIVE_DPI As Integer = 0
+
+    <DllImport("user32.dll")>
+    Private Shared Function SetThreadDpiAwarenessContext(context As IntPtr) As IntPtr
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function GetDpiForWindow(window As IntPtr) As Integer
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function MonitorFromWindow(window As IntPtr, flags As UInteger) As IntPtr
+    End Function
+
+    <DllImport("shcore.dll")>
+    Private Shared Function GetDpiForMonitor(monitor As IntPtr, kind As Integer, ByRef x As UInteger, ByRef y As UInteger) As Integer
     End Function
 
     Private Const SRCCOPY As Integer = &HCC0020

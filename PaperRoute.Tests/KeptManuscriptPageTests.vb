@@ -149,6 +149,9 @@ Public Class KeptManuscriptPageTests
 
         UiMotion.EnabledOverride = True
         UiTheme.HighContrastOverride = False
+        ' The test host is DPI-unaware: above 100% Windows scales the board,
+        ' where a switch is a cut.
+        PageFade.ScaledOverride = False
         Try
         StaRunner.Run(
             Sub()
@@ -194,6 +197,7 @@ Public Class KeptManuscriptPageTests
         Finally
             UiMotion.EnabledOverride = Nothing
             UiTheme.HighContrastOverride = Nothing
+            PageFade.ScaledOverride = Nothing
         End Try
 
         Assert.AreEqual(0, report.Count, "Windows the open made besides its tag chips:" & Environment.NewLine & String.Join(Environment.NewLine, report))

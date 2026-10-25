@@ -420,6 +420,9 @@ Public Class BoardFillTests
 
         UiMotion.EnabledOverride = True
         UiTheme.HighContrastOverride = False
+        ' The test host is DPI-unaware: above 100% Windows scales the board,
+        ' where a switch is a cut.
+        PageFade.ScaledOverride = False
         Try
         StaRunner.Run(
             Sub()
@@ -487,6 +490,7 @@ Public Class BoardFillTests
         Finally
             UiMotion.EnabledOverride = Nothing
             UiTheme.HighContrastOverride = Nothing
+            PageFade.ScaledOverride = Nothing
         End Try
 
         Assert.AreEqual(0, report.Count, "Windows made on the parking window:" & Environment.NewLine & String.Join(Environment.NewLine, report))

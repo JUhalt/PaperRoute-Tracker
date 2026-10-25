@@ -457,8 +457,10 @@ Public Class ResponsivenessBudgetTests
         RunOnStaThread(
             Sub()
                 ' Motion on is on whatever the host's theme: a contrast theme
-                ' stops it.
+                ' stops it. The test host is DPI-unaware: above 100% Windows
+                ' scales the board, where a switch is a cut.
                 UiTheme.HighContrastOverride = False
+                PageFade.ScaledOverride = False
                 Try
                     Dim example = LargeLibraryFixture.WriteExample(Path.Combine(_root, "example"))
                     Dim large = LargeLibraryFixture.Create(Path.Combine(_root, "large"), 500)
@@ -470,6 +472,7 @@ Public Class ResponsivenessBudgetTests
                 Finally
                     UiMotion.EnabledOverride = Nothing
                     UiTheme.HighContrastOverride = Nothing
+                    PageFade.ScaledOverride = Nothing
                 End Try
             End Sub)
 

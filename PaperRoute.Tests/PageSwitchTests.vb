@@ -85,6 +85,9 @@ Public Class PageSwitchTests
 
         UiMotion.EnabledOverride = True
         UiTheme.HighContrastOverride = False
+        ' The test host is DPI-unaware: above 100% Windows scales the board,
+        ' where a switch is a cut.
+        Controls.PageFade.ScaledOverride = False
         Try
         StaRunner.Run(
             Sub()
@@ -137,6 +140,7 @@ Public Class PageSwitchTests
         Finally
             UiMotion.EnabledOverride = Nothing
             UiTheme.HighContrastOverride = Nothing
+            Controls.PageFade.ScaledOverride = Nothing
         End Try
 
         Assert.AreEqual(0, report.Count, "Windows made on the parking window:" & Environment.NewLine & String.Join(Environment.NewLine, report))
@@ -681,6 +685,9 @@ Public Class PageSwitchTests
                 Controls.PageFade.AwaitPicture = motion
                 ' Motion on is on whatever the host's theme: a contrast theme stops it.
                 If motion Then UiTheme.HighContrastOverride = False
+                ' The test host is DPI-unaware: above 100% Windows scales the
+                ' board, where a switch is a cut.
+                If motion Then Controls.PageFade.ScaledOverride = False
                 Try
                 Dim library As LargeLibraryFixture.SyntheticLibrary =
                     LargeLibraryFixture.Create(Path.Combine(_root, "library"), 60)
@@ -785,6 +792,7 @@ Public Class PageSwitchTests
                     UiMotion.EnabledOverride = Nothing
                     Controls.PageFade.AwaitPicture = False
                     UiTheme.HighContrastOverride = Nothing
+                    Controls.PageFade.ScaledOverride = Nothing
                 End Try
             End Sub,
             TimeSpan.FromMinutes(10))
