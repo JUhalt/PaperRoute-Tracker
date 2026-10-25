@@ -690,7 +690,8 @@ Namespace Forms
                 "'?",
                 "Delete Author",
                 MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2
             ) <> DialogResult.Yes Then
 
                 Return
@@ -834,7 +835,8 @@ Namespace Forms
                 "'?",
                 "Delete Affiliation",
                 MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2
             ) <> DialogResult.Yes Then
 
                 Return

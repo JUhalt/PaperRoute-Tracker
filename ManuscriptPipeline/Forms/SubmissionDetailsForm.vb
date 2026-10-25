@@ -1463,7 +1463,8 @@ Namespace Forms
                     "This may change the manuscript's rejection count.",
                     "Delete Editorial Decision",
                     MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Warning
+                    MessageBoxIcon.Warning,
+                    MessageBoxDefaultButton.Button2
                 )
 
             If result <> DialogResult.Yes Then
@@ -2383,7 +2384,8 @@ Namespace Forms
                     "The correspondence record will be removed. The original file will not be deleted.",
                     "Remove Correspondence",
                     MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Warning
+                    MessageBoxIcon.Warning,
+                    MessageBoxDefaultButton.Button2
                 )
 
             If result <> DialogResult.Yes Then

@@ -1020,7 +1020,8 @@ Namespace Forms
                     "This removes the manuscript-specific checklist snapshot. It does not change the manuscript stage or delete the reusable journal template.",
                     "Delete Readiness Profile",
                     MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Warning
+                    MessageBoxIcon.Warning,
+                    MessageBoxDefaultButton.Button2
                 )
 
             If result <>

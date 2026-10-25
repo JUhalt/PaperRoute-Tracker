@@ -1137,7 +1137,8 @@ Namespace Forms
                ) Then
 
                 message &=
-                    "Its PaperRoute Library snapshot will be removed only when you save the manuscript."
+                    "Its snapshot " &
+                    ManagedLibraryService.MovesToRemovedOnSave
 
             ElseIf Not String.IsNullOrWhiteSpace(
                 selected.LocalFilePath

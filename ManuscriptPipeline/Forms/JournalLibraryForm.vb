@@ -564,7 +564,8 @@ Namespace Forms
                 "'?",
                 "Delete Journal",
                 MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2
             ) <> DialogResult.Yes Then
 
                 Return

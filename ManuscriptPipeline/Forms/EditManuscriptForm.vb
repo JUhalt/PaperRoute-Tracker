@@ -3503,9 +3503,19 @@ Namespace Forms
         )
 
             ' Starts at the target journal, as recording one from a stage
-            ' change does (#204).
-            Using dialog As New AddSubmissionForm(
+            ' change does (#204), with its Journal Library link (#224).
+            Dim journalName As String =
                 txtTargetJournal.Text.Trim()
+
+            Dim target As (JournalId As Guid?, PortalUrl As String) =
+                TargetJournalLink(
+                    journalName
+                )
+
+            Using dialog As New AddSubmissionForm(
+                journalName,
+                target.JournalId,
+                target.PortalUrl
             )
 
                 If dialog.ShowDialog(Me) =
@@ -3532,6 +3542,38 @@ Namespace Forms
             End Using
 
         End Sub
+
+
+        ' The Journal Library link a new submission to the target journal
+        ' starts with (#224), as the packet path and Use Library... give it:
+        ' the linked record's id while the name is still its own, and that
+        ' record's portal. An unlinked target gives neither, as before, and
+        ' the dialog drops the id if the name is edited there.
+        Private Function TargetJournalLink(
+            journalName As String
+        ) As (JournalId As Guid?, PortalUrl As String)
+
+            Dim journalId As Guid? =
+                TargetJournalIdFor(
+                    _workingManuscript,
+                    journalName
+                )
+
+            Dim journal As JournalRecord = Nothing
+
+            If journalId.HasValue AndAlso
+               _authorLibrary IsNot Nothing AndAlso
+               _authorLibrary.Journals IsNot Nothing Then
+
+                journal =
+                    _authorLibrary.Journals.FirstOrDefault(
+                        Function(item) item IsNot Nothing AndAlso item.Id = journalId.Value)
+
+            End If
+
+            Return (journalId, If(journal?.SubmissionPortalUrl, String.Empty))
+
+        End Function
 
 
         ' =====================================================
@@ -3658,29 +3700,16 @@ Namespace Forms
 
             End If
 
-            Dim warning As String =
-                "Delete the submission to '" &
-                selected.JournalName &
-                "'?" &
-                Environment.NewLine &
-                Environment.NewLine &
-                "This will also remove:" &
-                Environment.NewLine &
-                "- " &
-                selected.Decisions.Count.ToString() &
-                " editorial decision(s)" &
-                Environment.NewLine &
-                "- " &
-                selected.Correspondence.Count.ToString() &
-                " correspondence/file record(s)"
-
             Dim result As DialogResult =
                 MessageBox.Show(
                     Me,
-                    warning,
+                    DeleteSubmissionQuestion(
+                        selected
+                    ),
                     "Delete Journal Submission",
                     MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Warning
+                    MessageBoxIcon.Warning,
+                    MessageBoxDefaultButton.Button2
                 )
 
             If result <>
@@ -3706,6 +3735,71 @@ Namespace Forms
         End Sub
 
 
+        ' The Delete Journal Submission question (#222): what goes with the
+        ' submission, only the kinds it holds and with real plurals, and
+        ' that the stage may move with it. It says nothing about files.
+        Friend Shared Function DeleteSubmissionQuestion(
+            submission As JournalSubmission
+        ) As String
+
+            Dim parts As New List(Of String)()
+
+            Dim decisions As Integer =
+                If(submission.Decisions?.Count, 0)
+
+            If decisions > 0 Then
+                parts.Add(decisions.ToString() & If(decisions = 1, " editorial decision", " editorial decisions"))
+            End If
+
+            Dim correspondence As Integer =
+                If(submission.Correspondence?.Count, 0)
+
+            If correspondence > 0 Then
+                parts.Add(correspondence.ToString() & If(correspondence = 1, " item", " items") & " from Correspondence & Files")
+            End If
+
+            Dim comments As Integer =
+                If(submission.ReviewerResponses?.Count, 0)
+
+            If comments > 0 Then
+                parts.Add(comments.ToString() & If(comments = 1, " reviewer comment with its drafted response", " reviewer comments with their drafted responses"))
+            End If
+
+            Dim question As String =
+                "Delete the submission to '" &
+                submission.JournalName &
+                "' (submitted " &
+                submission.SubmittedDate.ToString("MMM d, yyyy") &
+                ")?"
+
+            If parts.Count = 1 Then
+
+                question &=
+                    Environment.NewLine &
+                    Environment.NewLine &
+                    "This also removes " & parts(0) & "."
+
+            ElseIf parts.Count > 1 Then
+
+                question &=
+                    Environment.NewLine &
+                    Environment.NewLine &
+                    "This also removes " &
+                    String.Join(", ", parts.Take(parts.Count - 1)) &
+                    If(parts.Count > 2, ",", String.Empty) &
+                    " and " & parts(parts.Count - 1) & "."
+
+            End If
+
+            Return question &
+                Environment.NewLine &
+                Environment.NewLine &
+                "The manuscript's stage may change to match the submissions left. " &
+                "Discarding the manuscript's unsaved changes leaves the saved library unchanged."
+
+        End Function
+
+
         ' =====================================================
         ' Delete manuscript
         ' =====================================================
@@ -3715,26 +3809,20 @@ Namespace Forms
             e As EventArgs
         )
 
-            Dim result As DialogResult =
-                MessageBox.Show(
-                    Me,
-                    "Delete '" &
-                    _workingManuscript.Title &
-                    "' from PaperRoute?" &
-                    Environment.NewLine &
-                    Environment.NewLine &
-                    "The complete manuscript record will be removed.",
-                    "Delete Manuscript",
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Warning
-                )
+            ' The same typed-DELETE window as the card's Delete (#221):
+            ' Enter must never delete a whole manuscript.
+            Using dialog As New DeleteManuscriptForm(
+                _workingManuscript.Title
+            )
 
-            If result <>
-                DialogResult.Yes Then
+                If dialog.ShowDialog(Me) <>
+                    DialogResult.OK Then
 
-                Return
+                    Return
 
-            End If
+                End If
+
+            End Using
 
             _deleteRequested =
                 True
@@ -3790,8 +3878,18 @@ Namespace Forms
 
         Private Function RecordRequiredSubmission() As Boolean
 
-            Using dialog As New AddSubmissionForm(
+            Dim journalName As String =
                 txtTargetJournal.Text.Trim()
+
+            Dim target As (JournalId As Guid?, PortalUrl As String) =
+                TargetJournalLink(
+                    journalName
+                )
+
+            Using dialog As New AddSubmissionForm(
+                journalName,
+                target.JournalId,
+                target.PortalUrl
             )
 
                 If dialog.ShowDialog(Me) <>
