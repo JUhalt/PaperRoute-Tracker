@@ -321,6 +321,11 @@ Partial Public Class Form1
         If request = insightsRequest Then insightsPending = False
         If request <> insightsRequest OrElse content.IsDisposed OrElse insightsContent IsNot content Then Return
 
+        ' Showing the figures holds the UI thread, and a cross-fade still
+        ' running would hold the page left's picture over them until it was
+        ' done (#142): the fade ends, and the figures show.
+        pageFade?.End()
+
         insightsStatus.Visible = False
         ShowInsights(calculation.GetAwaiter().GetResult())
 

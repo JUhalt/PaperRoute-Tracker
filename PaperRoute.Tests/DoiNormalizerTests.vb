@@ -4,39 +4,18 @@ Imports ManuscriptPipeline.Services
 <TestClass>
 Public Class DoiNormalizerTests
 
+    ' A "doi:" prefix, a doi.org URL and trailing citation punctuation each
+    ' come off, one row each.
     <TestMethod>
-    Public Sub Normalize_AcceptsDoiPrefix()
+    <DataRow("doi: 10.1234/example.1", "10.1234/example.1")>
+    <DataRow("https://doi.org/10.1234/example.2", "10.1234/example.2")>
+    <DataRow("10.1234/example.3.", "10.1234/example.3")>
+    Public Sub Normalize_ReturnsTheBareDoi(value As String, expected As String)
 
         Assert.AreEqual(
-            "10.1234/example.1",
+            expected,
             DoiNormalizer.Normalize(
-                "doi: 10.1234/example.1"
-            )
-        )
-
-    End Sub
-
-
-    <TestMethod>
-    Public Sub Normalize_AcceptsDoiOrgUrl()
-
-        Assert.AreEqual(
-            "10.1234/example.2",
-            DoiNormalizer.Normalize(
-                "https://doi.org/10.1234/example.2"
-            )
-        )
-
-    End Sub
-
-
-    <TestMethod>
-    Public Sub Normalize_RemovesTrailingCitationPunctuation()
-
-        Assert.AreEqual(
-            "10.1234/example.3",
-            DoiNormalizer.Normalize(
-                "10.1234/example.3."
+                value
             )
         )
 

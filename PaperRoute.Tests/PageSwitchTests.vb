@@ -76,12 +76,19 @@ Public Class PageSwitchTests
     ' a kept page shown again is held too) make as they open is made
     ' inside the main window, where it stays: none is made on WinForms'
     ' parking window and moved in afterwards, which costs every window
-    ' twice on a slow machine (#133).
+    ' twice on a slow machine (#133). With motion on (#142), so a switch's
+    ' cross-fade, whose overlay is a window of its own, makes none either.
     <TestMethod>
     Public Sub PageWindowsAreCreatedOnceInPlace()
 
         Dim report As New List(Of String)()
 
+        UiMotion.EnabledOverride = True
+        UiTheme.HighContrastOverride = False
+        ' The test host is DPI-unaware: above 100% Windows scales the board,
+        ' where a switch is a cut.
+        Controls.PageFade.ScaledOverride = False
+        Try
         StaRunner.Run(
             Sub()
                 Dim library As LargeLibraryFixture.SyntheticLibrary =
@@ -130,6 +137,11 @@ Public Class PageSwitchTests
                 End Using
             End Sub,
             TimeSpan.FromMinutes(3))
+        Finally
+            UiMotion.EnabledOverride = Nothing
+            UiTheme.HighContrastOverride = Nothing
+            Controls.PageFade.ScaledOverride = Nothing
+        End Try
 
         Assert.AreEqual(0, report.Count, "Windows made on the parking window:" & Environment.NewLine & String.Join(Environment.NewLine, report))
 
@@ -648,14 +660,35 @@ Public Class PageSwitchTests
     ' "WM_PAINT to ComboBox 'Sort the board'", sent as the Board came back
     ' and the boxes were resized, with erases of the Board's panels; and a
     ' shelf switch had drawn everything before it returned, so nothing was
-    ' left to draw once the window processed its messages.
+    ' left to draw once the window processed its messages. Nor is the rail
+    ' drawn while any switch runs: the two page buttons a switch checks
+    ' and unchecks drew themselves there and then until SyncRail held the
+    ' rail's pages (#142), and its collapse button takes the keyboard for a
+    ' moment on the way back to the Board (#213). With motion on (#142),
+    ' each switch but a manuscript's open also reads the page left and
+    ' shows its picture over the page area as it returns (the picture
+    ' waited for here, so every switch that can fade does): that draws
+    ' nothing either. Each fade is let end before the next switch, as the
+    ' key or click that starts a switch ends a fade still showing before
+    ' the switch begins.
     <TestMethod>
-    Public Sub SwitchesPaintNothingSynchronously()
+    <DataRow(False)>
+    <DataRow(True)>
+    Public Sub SwitchesPaintNothingSynchronously(motion As Boolean)
 
         Dim report As New List(Of String)()
+        Dim faded As Integer = 0
 
         StaRunner.Run(
             Sub()
+                UiMotion.EnabledOverride = motion
+                Controls.PageFade.AwaitPicture = motion
+                ' Motion on is on whatever the host's theme: a contrast theme stops it.
+                If motion Then UiTheme.HighContrastOverride = False
+                ' The test host is DPI-unaware: above 100% Windows scales the
+                ' board, where a switch is a cut.
+                If motion Then Controls.PageFade.ScaledOverride = False
+                Try
                 Dim library As LargeLibraryFixture.SyntheticLibrary =
                     LargeLibraryFixture.Create(Path.Combine(_root, "library"), 60)
 
@@ -685,12 +718,19 @@ Public Class PageSwitchTests
                             End If
                         End Sub
 
+                    ' The rail is watched through every switch too: the two page
+                    ' buttons a switch checks and unchecks (SyncRail), and the
+                    ' collapse button, which the keyboard passes through on the
+                    ' way back to the Board from a page that had it (#213).
+                    Dim rail As Control = ViewCatalog.Descendants(board).OfType(Of Controls.RailButton)().First().Parent.Parent
+
                     Dim watchSwitch As Action(Of String, Control, Action) =
                         Sub(name, within, switch)
                             Dim painted As Boolean = False
-                            Using watch As New PaintWatch(within)
+                            Using watch As New PaintWatch(within), railWatch As New PaintWatch(rail)
                                 switch()
                                 report.AddRange(watch.Sent().Select(Function(message) name & ": " & message))
+                                report.AddRange(railWatch.Sent().Select(Function(message) name & ", the rail: " & message))
                             End Using
                             Dim shown As Control = If(board.PageView, board.BoardPage)
                             Dim handler As PaintEventHandler = Sub(sender, e) painted = True
@@ -705,6 +745,15 @@ Public Class PageSwitchTests
                             If Not painted Then report.Add(name & ": nothing was drawn once the window processed its messages")
                             If board.PageName = Form1.WorkspacePage.Insights.ToString() Then board.WaitForInsights()
                             board.WaitForIdleWork()
+                            ' A switch begun while the screen may still show a fade is
+                            ' a cut, so each is given the time a fade takes to go.
+                            If motion Then
+                                While board.PageFade IsNot Nothing AndAlso board.PageFade.Fading
+                                    Application.DoEvents()
+                                    Threading.Thread.Sleep(1)
+                                End While
+                                Threading.Thread.Sleep(60)
+                            End If
                         End Sub
 
                     For Each first As Form1.WorkspacePage In pages
@@ -721,13 +770,43 @@ Public Class PageSwitchTests
                         watchSwitch("the shelf " & tab, shelves, Sub() board.ShelfTab(tab).Checked = True)
                     Next
 
+                    ' With the keyboard on a card's title (#213): the page opened
+                    ' takes it, and on the way back the title takes it again, which
+                    ' shows the row after its card (RevealPastCard); neither draws
+                    ' while the switch runs.
+                    For Each page As Form1.WorkspacePage In pages
+                        Dim title As LinkLabel = board.Shelf("pipelinePanel").Controls.OfType(Of Controls.RoundedPanel)().First().Controls.OfType(Of LinkLabel)().First()
+                        If Not title.Focus() Then board.ActiveControl = title
+                        Application.DoEvents()
+                        watchSwitch("Board to " & page.ToString() & " from a card's title", board.ContentHost, Sub() go(page))
+                        watchSwitch(page.ToString() & " back to the card's title", board.ContentHost, Sub() board.NavigateTo(Form1.WorkspacePage.Board))
+                        Dim back As Control = DeepestActiveControl(board)
+                        If back IsNot title Then report.Add(page.ToString() & " back to the Board: the keyboard is on " & If(back?.GetType().Name, "nothing") & ", not the card's title")
+                    Next
+
+                    faded = If(board.PageFade?.FadesShown, 0)
                     board.SetPrompt(Function(title) DialogResult.No)
                     board.Close()
                 End Using
+                Finally
+                    UiMotion.EnabledOverride = Nothing
+                    Controls.PageFade.AwaitPicture = False
+                    UiTheme.HighContrastOverride = Nothing
+                    Controls.PageFade.ScaledOverride = Nothing
+                End Try
             End Sub,
             TimeSpan.FromMinutes(10))
 
         Assert.AreEqual(0, report.Count, "Drawn while a switch ran:" & Environment.NewLine & String.Join(Environment.NewLine, report.Take(40)))
+
+        ' With motion on, the switches did fade: 42 between pages, 12 to and
+        ' from the Board with the keyboard on a title, less the opens of the
+        ' manuscript, which are cuts.
+        If motion Then
+            Assert.IsTrue(faded >= 40, "Switches faded: " & faded.ToString())
+        Else
+            Assert.AreEqual(0, faded, "With motion off nothing fades.")
+        End If
 
     End Sub
 

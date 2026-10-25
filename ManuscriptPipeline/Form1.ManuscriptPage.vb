@@ -1050,11 +1050,12 @@ Partial Public Class Form1
 
         Dim origin As WorkspacePage = manuscriptOrigin
 
-        ' Leave after the editor's click handler has returned.
+        ' Leave after the editor's click handler has returned. Its question
+        ' has only just closed over the page, so the switch is a cut (#142).
         BeginInvoke(
             New Action(
                 Sub()
-                    NavigateToRequest(New PageRequest(origin), recordHistory:=False)
+                    NavigateToRequest(New PageRequest(origin), recordHistory:=False, questionAnswered:=True)
                     RenderManuscripts()
                 End Sub))
 
