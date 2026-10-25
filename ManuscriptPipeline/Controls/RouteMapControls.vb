@@ -707,8 +707,10 @@ Namespace Controls
             MyBase.OnMouseClick(e)
             Dim index As Integer = RowAt(e.Y)
             If index < 0 Then Return
-            Focus()
+            ' Selected first, so taking the keyboard announces the route
+            ' clicked, not the one selected before.
             SelectedIndex = index
+            Focus()
             RaiseEvent RouteOpened(Me, _routes(index))
         End Sub
 

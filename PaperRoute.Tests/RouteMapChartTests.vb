@@ -1,11 +1,9 @@
 Imports System
 Imports System.Collections.Generic
 Imports System.Drawing
-Imports System.Linq
 Imports System.Reflection
 Imports System.Runtime.InteropServices
 Imports System.Windows.Forms
-Imports ManuscriptPipeline
 Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
@@ -138,6 +136,26 @@ Public Class RouteMapChartTests
                     Assert.AreEqual(RouteNames(2), ChildName(root, root.accHitTest(left + width \ 2, top + height \ 2)), "The route under the pointer.")
                     root.accSelect(SELFLAG_TAKESELECTION, 3)
                     Assert.AreEqual(2, chart.SelectedIndex, "A reader's choice selects the route.")
+
+                    ' A click on a route while the keyboard is elsewhere is
+                    ' heard once, as the route clicked, and opens it. WinForms
+                    ' raises a click only where Windows finds the window under
+                    ' the pointer, which it never does off the screen, so the
+                    ' chart's click is called as that click would call it.
+                    Assert.IsTrue(before.Focus(), "The field takes the keyboard back.")
+                    Application.DoEvents()
+                    heard.Clear()
+                    opened.Clear()
+                    root.accLocation(left, top, width, height, 1)
+                    Dim clickedAt As Point = chart.PointToClient(New Point(left + width \ 2, top + height \ 2))
+                    Using hook As New DeadlineListTests.FocusHook(chart.Handle, heard)
+                        GetType(RouteMapChart).
+                            GetMethod("OnMouseClick", BindingFlags.Instance Or BindingFlags.NonPublic).
+                            Invoke(chart, {New MouseEventArgs(MouseButtons.Left, 1, clickedAt.X, clickedAt.Y, 0)})
+                        Application.DoEvents()
+                    End Using
+                    CollectionAssert.AreEqual({RouteNames(0)}, heard, "Heard on the click: " & If(heard.Count = 0, "(nothing)", String.Join(" | ", heard)))
+                    CollectionAssert.AreEqual({"Still in review"}, opened, "A click opens the route clicked.")
 
                     host.Close()
 
