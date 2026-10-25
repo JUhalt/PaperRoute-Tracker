@@ -3715,26 +3715,20 @@ Namespace Forms
             e As EventArgs
         )
 
-            Dim result As DialogResult =
-                MessageBox.Show(
-                    Me,
-                    "Delete '" &
-                    _workingManuscript.Title &
-                    "' from PaperRoute?" &
-                    Environment.NewLine &
-                    Environment.NewLine &
-                    "The complete manuscript record will be removed.",
-                    "Delete Manuscript",
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Warning
-                )
+            ' The same typed-DELETE window as the card's Delete (#221):
+            ' Enter must never delete a whole manuscript.
+            Using dialog As New DeleteManuscriptForm(
+                _workingManuscript.Title
+            )
 
-            If result <>
-                DialogResult.Yes Then
+                If dialog.ShowDialog(Me) <>
+                    DialogResult.OK Then
 
-                Return
+                    Return
 
-            End If
+                End If
+
+            End Using
 
             _deleteRequested =
                 True

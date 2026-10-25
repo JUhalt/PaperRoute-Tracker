@@ -710,6 +710,139 @@ Public Class ManuscriptPageTests
             End Sub)
     End Sub
 
+    ' Delete Manuscript... on the page asks for DELETE, as the card's Delete
+    ' does (#221). Cancel and Escape leave the manuscript, the page and the
+    ' saved library as they were. The watcher answers Yes to the Yes/No box
+    ' the page asked with before, as one Enter did, so that code fails here
+    ' instead of waiting on the box.
+    <TestMethod>
+    Public Sub DeleteFromThePageAsksForDeleteAndCancelKeepsTheManuscript()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard(), dialogs As New DialogWatcher(answerYes:="Delete Manuscript")
+                    Dim manuscript As Manuscript = Sample("Kept")
+                    board.Prepare(manuscript)
+                    board.Open(manuscript)
+
+                    Dim answers As New List(Of (Name As String, Answer As Action(Of DeleteManuscriptForm))) From {
+                        ("Cancel", Sub(dialog) DirectCast(dialog.CancelButton, Button).PerformClick()),
+                        ("Escape", Sub(dialog) PressKey(ConfirmBox(dialog), Keys.Escape))
+                    }
+
+                    For Each choice In answers
+                        Dim asked As Integer = 0
+                        Using answer As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of DeleteManuscriptForm)(
+                            Sub(dialog)
+                                asked += 1
+                                choice.Answer(dialog)
+                            End Sub)
+                            board.Editor.ConfirmDeleteFromPage()
+                        End Using
+                        Application.DoEvents()
+
+                        Assert.AreEqual(1, asked, choice.Name & ": the page asks for DELETE.")
+                        CollectionAssert.AreEqual(Array.Empty(Of String)(), dialogs.Closed, choice.Name & ": no Yes/No box asks instead.")
+                        CollectionAssert.AreEqual({"Kept"}, board.Library.Select(Function(item) item.Title).ToList(), choice.Name & ": the manuscript stays in the library.")
+                        Assert.AreEqual("Manuscript", board.PageName, choice.Name & ": the page stays open.")
+                        Assert.IsNotNull(board.Editor, choice.Name & ": the page keeps its manuscript.")
+                        Assert.AreEqual(0, board.SaveCount, choice.Name & ": nothing is saved.")
+                    Next
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    ' Enter, and the Delete Manuscript button before DELETE is typed, remove
+    ' nothing (#221): the window has no default button, and its Delete
+    ' button waits for the word. Cancel then closes it.
+    <TestMethod>
+    Public Sub DeleteFromThePageIgnoresEnterAndTheButtonUntilDeleteIsTyped()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard(), dialogs As New DialogWatcher(answerYes:="Delete Manuscript")
+                    Dim manuscript As Manuscript = Sample("Kept")
+                    board.Prepare(manuscript)
+                    board.Open(manuscript)
+
+                    Dim asked As Integer = 0
+                    Dim stillAsking As Boolean = False
+                    Using answer As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of DeleteManuscriptForm)(
+                        Sub(dialog)
+                            asked += 1
+                            PressKey(ConfirmBox(dialog), Keys.Enter)
+                            DeleteButton(dialog).PerformClick()
+                            stillAsking = dialog.Visible AndAlso dialog.DialogResult = DialogResult.None AndAlso Not DeleteButton(dialog).Enabled
+                            DirectCast(dialog.CancelButton, Button).PerformClick()
+                        End Sub)
+                        board.Editor.ConfirmDeleteFromPage()
+                    End Using
+                    Application.DoEvents()
+
+                    Assert.AreEqual(1, asked, "The page asks for DELETE.")
+                    CollectionAssert.AreEqual(Array.Empty(Of String)(), dialogs.Closed, "No Yes/No box asks instead.")
+                    Assert.IsTrue(stillAsking, "Enter and the Delete button leave the window waiting for DELETE.")
+                    CollectionAssert.AreEqual({"Kept"}, board.Library.Select(Function(item) item.Title).ToList(), "Nothing is removed.")
+                    Assert.AreEqual("Manuscript", board.PageName, "The page stays open.")
+                    Assert.AreEqual(0, board.SaveCount, "Nothing is saved.")
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    ' DELETE typed and Delete Manuscript clicked remove the manuscript, save
+    ' the library once, and return to the page it was opened from (#221).
+    <TestMethod>
+    Public Sub DeleteFromThePageRemovesTheManuscriptOnceDeleteIsTyped()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard(), dialogs As New DialogWatcher(answerYes:="Delete Manuscript")
+                    Dim keep As Manuscript = Sample("Keep")
+                    Dim remove As Manuscript = Sample("Remove")
+                    board.Prepare(keep, remove)
+                    board.PressCommandKey(Keys.Control Or Keys.D2)
+                    board.Open(remove)
+                    Assert.AreEqual("Manuscript", board.PageName)
+
+                    Dim asked As Integer = 0
+                    Using answer As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of DeleteManuscriptForm)(
+                        Sub(dialog)
+                            asked += 1
+                            ConfirmBox(dialog).Text = "DELETE"
+                            DeleteButton(dialog).PerformClick()
+                        End Sub)
+                        board.Editor.ConfirmDeleteFromPage()
+                    End Using
+                    Application.DoEvents()
+
+                    Assert.AreEqual(1, asked, "The page asks for DELETE.")
+                    CollectionAssert.AreEqual(Array.Empty(Of String)(), dialogs.Closed, "No Yes/No box asks instead.")
+                    CollectionAssert.AreEqual({"Keep"}, board.Library.Select(Function(item) item.Title).ToList(), "The manuscript is removed.")
+                    Assert.AreEqual(1, board.SaveCount, "The library is saved once.")
+                    Assert.AreEqual("Library", board.PageName, "The window returns to the page the manuscript was opened from.")
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    ' The Delete Manuscript window's DELETE box and Delete button.
+    Private Shared Function ConfirmBox(dialog As DeleteManuscriptForm) As TextBox
+        Return Descendants(dialog).OfType(Of TextBox)().Single()
+    End Function
+
+    Private Shared Function DeleteButton(dialog As DeleteManuscriptForm) As Button
+        Return Descendants(dialog).OfType(Of Button)().Single(Function(button) button.Text = "Delete Manuscript")
+    End Function
+
+    ' A key pressed in a control as the message loop hands it on, so the
+    ' control and the window around it see it as they see a real press.
+    Private Shared Sub PressKey(target As Control, key As Keys)
+        Dim press As Message = Message.Create(target.Handle, &H100, New IntPtr(CInt(key)), IntPtr.Zero)
+        target.PreProcessMessage(press)
+    End Sub
+
     <TestMethod>
     Public Sub OverviewShowsTheLinkedJournalsNotesAndChecklist()
         RunOnStaThread(
