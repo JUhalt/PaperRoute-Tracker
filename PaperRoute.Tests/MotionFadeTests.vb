@@ -544,6 +544,37 @@ Public Class MotionFadeTests
     End Sub
 
 
+    ' Leaving the manuscript page once Delete Manuscript's question has been
+    ' answered Yes is a cut too: the manuscript is gone, so nothing asks
+    ' about unsaved changes, but the question was centred over the page and
+    ' the screen can still show it closing as the switch reads the page.
+    <TestMethod>
+    Public Sub LeavingAfterTheDeleteQuestionIsACut()
+
+        OnBoard(
+            Sub(board)
+                UiMotion.FadeMilliseconds = 10000
+                Dim subject As Manuscript = board.Library.First(Function(item) item.Location = ManuscriptLocation.Pipeline)
+                board.Open(subject)
+                Application.DoEvents()
+                board.WaitForIdleWork()
+                Settle(board)
+                board.SetPrompt(Function(title)
+                                    Assert.Fail("Nothing is unsaved, so nothing is asked.")
+                                    Return DialogResult.Cancel
+                                End Function)
+                board.ConfirmDelete()
+                Application.DoEvents()
+                Assert.AreEqual("Board", board.PageName)
+                Assert.IsFalse(board.Library.Contains(subject), "The manuscript is deleted.")
+                Assert.AreEqual("cut: a question was just answered", board.PageFade.LastOutcome)
+                Assert.IsFalse(board.PageFade.Showing)
+                board.SetPrompt(Nothing)
+            End Sub)
+
+    End Sub
+
+
     ' A fade showing as the window is minimized is gone once the window is
     ' restored. Windows hides the overlay with the window, and would show
     ' it again as the window came back, after the window's Move and Resize

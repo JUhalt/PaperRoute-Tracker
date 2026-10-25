@@ -472,10 +472,12 @@ Partial Public Class Form1
 
 
     ' Returns False when the user chose to stay on a manuscript with unsaved
-    ' changes.
+    ' changes. A caller that has just had a question answered over the page,
+    ' as Delete Manuscript has, says so (questionAnswered).
     Private Function NavigateToRequest(
         request As PageRequest,
-        recordHistory As Boolean
+        recordHistory As Boolean,
+        Optional questionAnswered As Boolean = False
     ) As Boolean
 
         If request.Page = currentPage AndAlso
@@ -486,7 +488,7 @@ Partial Public Class Form1
 
         ' Whether leaving asks about unsaved changes: its question has just
         ' gone from over the page when the switch begins.
-        Dim asked As Boolean = HasUnsavedPageEdits()
+        Dim asked As Boolean = questionAnswered OrElse HasUnsavedPageEdits()
 
         If Not ConfirmLeaveManuscript() Then
             SyncRail()
@@ -530,9 +532,10 @@ Partial Public Class Form1
     ' page has painted (FinishManuscriptPage), on the UI thread, and the
     ' fade's frames could not run until they were, so the picture of the
     ' page left would sit over the manuscript page that long and then go.
-    ' A switch after the Unsaved Changes question is a cut too: the
-    ' screen can still show the question closing, centred over the page,
-    ' and the picture would hold it over the page shown.
+    ' A switch after the Unsaved Changes question, or the Delete
+    ' Manuscript one, is a cut too: the screen can still show the
+    ' question closing, centred over the page, and the picture would hold
+    ' it over the page shown.
     Private Sub CapturePageLeft(request As PageRequest, asked As Boolean)
 
         If pageFade Is Nothing Then
