@@ -518,6 +518,51 @@ Public Class FileDrawerTests
             End Sub)
     End Sub
 
+    ' An empty shelf says what belongs on it (#228), where it said only
+    ' that it was empty, and a search that hides every card still says
+    ' that nothing matches. Each line fits its label, shown on its shelf,
+    ' at this display's scaling; that part is a guard, which the old lines
+    ' passed too.
+    <TestMethod>
+    Public Sub AnEmptyShelfSaysWhatBelongsOnIt()
+        StaRunner.Run(
+            Sub()
+                Using board As New FileDrawerBoard()
+                    board.Prepare(RejectedThreeTimes())
+                    Assert.IsNull(board.EmptyLabel("Pipeline"), "The Pipeline shows its card.")
+                    AssertEmptyLine(board, "Published", "Manuscripts move here when their stage is Published.")
+                    AssertEmptyLine(board, "File Drawer", "Work you set aside waits here until you restore it.")
+                    board.Close()
+                End Using
+
+                Using board As New FileDrawerBoard()
+                    board.Prepare(PublishedStudy())
+                    AssertEmptyLine(board, "Pipeline", "Nothing in progress. Choose + Add Manuscript to start one.")
+                    board.Close()
+                End Using
+
+                Using board As New FileDrawerBoard()
+                    board.Prepare(RejectedThreeTimes(), PublishedStudy(), FiledByImport(Reason))
+                    board.Search("zzqx")
+                    AssertEmptyLine(board, "Pipeline", "No Pipeline manuscripts match the current search or filter.")
+                    AssertEmptyLine(board, "Published", "No Published manuscripts match the current search or filter.")
+                    AssertEmptyLine(board, "File Drawer", "No File Drawer manuscripts match the current search or filter.")
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    ' The shelf shows this line, and none of it is cut off.
+    Private Shared Sub AssertEmptyLine(board As FileDrawerBoard, shelf As String, expected As String)
+        Dim label As Label = board.EmptyLabel(shelf)
+        Assert.IsNotNull(label, shelf & " shows an empty line.")
+        Assert.AreEqual(expected, label.Text, shelf)
+
+        Dim measured As Integer = TextRenderer.MeasureText(label.Text, label.Font).Width
+        Dim room As Integer = label.ClientSize.Width - label.Padding.Horizontal
+        Assert.IsTrue(measured <= room, shelf & ": """ & label.Text & """ measures " & measured.ToString() & " px in " & room.ToString() & " px.")
+    End Sub
+
     ' The status line a start leaves counts the library in plain words
     ' (#225), not "manuscript(s)".
     <TestMethod>
@@ -605,6 +650,17 @@ Public Class FileDrawerTests
         }
         manuscript.History.Add(New HistoryEvent With {.Stage = PaperStage.Draft, .EventDate = manuscript.StageEnteredDate, .Note = "Imported from a spreadsheet."})
         Return manuscript
+    End Function
+
+    ' On the Published shelf, as Mark Published leaves a manuscript.
+    Private Shared Function PublishedStudy() As Manuscript
+        Return New Manuscript With {
+            .Title = "Published study",
+            .Location = ManuscriptLocation.Published,
+            .CurrentStage = PaperStage.Published,
+            .StageEnteredDate = New DateTime(2026, 6, 1),
+            .TargetJournal = "A fictional journal"
+        }
     End Function
 
     ' On the Pipeline in Draft after three rejections, the last of them long
@@ -738,6 +794,29 @@ Public Class FileDrawerTests
 
         Public Sub Render()
             CallPrivate("RenderManuscripts")
+            Application.DoEvents()
+        End Sub
+
+        ' Each shelf's panel and tab, by the shelf's name.
+        Private Shared ReadOnly Shelves As New Dictionary(Of String, (Panel As String, Tab As String)) From {
+            {"Pipeline", ("pipelinePanel", "tabPipeline")},
+            {"Published", ("publishedPanel", "tabPublished")},
+            {"File Drawer", ("fileDrawerPanel", "tabFileDrawer")}
+        }
+
+        ' The shelf's empty line, or Nothing while it shows cards. The shelf
+        ' is shown first: a shelf lays its line out across its own width,
+        ' and a hidden one keeps whatever width it last had.
+        Public Function EmptyLabel(shelf As String) As Label
+            DirectCast(GetType(Form1).GetField(Shelves(shelf).Tab, BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me), ShelfTabButton).Checked = True
+            Application.DoEvents()
+            Return DirectCast(GetType(Form1).GetField(Shelves(shelf).Panel, BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me), Control).Controls.OfType(Of Label)().SingleOrDefault()
+        End Function
+
+        ' Typing in the Board's search, then the pause its timer waits for.
+        Public Sub Search(text As String)
+            DirectCast(GetType(Form1).GetField("txtBoardSearch", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me), TextBox).Text = text
+            CallPrivate("BoardSearchDebounceElapsed", Nothing, EventArgs.Empty)
             Application.DoEvents()
         End Sub
 

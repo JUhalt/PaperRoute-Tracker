@@ -2649,7 +2649,7 @@ Public Class Form1
             If pipelineTotal = 0 Then
 
                 pipelineMessage =
-                "No active manuscripts. Click Add Manuscript."
+                "Nothing in progress. Choose + Add Manuscript to start one."
 
             Else
 
@@ -2674,7 +2674,7 @@ Public Class Form1
             If publishedTotal = 0 Then
 
                 publishedMessage =
-                "No published manuscripts yet."
+                "Manuscripts move here when their stage is Published."
 
             Else
 
@@ -2699,7 +2699,7 @@ Public Class Form1
             If drawerTotal = 0 Then
 
                 drawerMessage =
-                "The File Drawer is empty."
+                "Work you set aside waits here until you restore it."
 
             Else
 
