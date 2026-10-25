@@ -1,6 +1,10 @@
 Imports System
 Imports System.Collections.Generic
+Imports System.Linq
+Imports System.Reflection
+Imports System.Windows.Forms
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
+Imports ManuscriptPipeline.Forms
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
@@ -410,5 +414,274 @@ Public Class PublicationExportTests
         )
 
     End Sub
+
+
+    ' The preview is rebuilt once per change, not once per checked item
+    ' (#232). Every ItemCheck queued a full export of the whole selection,
+    ' so a scope change, Select None or Select All queued one for each
+    ' manuscript and froze the dialog on a large record. Each now rebuilds
+    ' the preview at most twice, once directly and once from the refresh it
+    ' queued, and the preview is still the export of what is checked.
+    <TestMethod>
+    Public Sub Preview_IsRebuiltOncePerChangeNotOncePerCheckedItem()
+
+        Dim manuscripts As New List(Of Manuscript)()
+
+        For number As Integer = 1 To 40
+
+            Dim published As New Manuscript With {
+                .Title = "Published Study " & number,
+                .CurrentStage = PaperStage.Published,
+                .Location = ManuscriptLocation.Published
+            }
+
+            published.Metadata.PublishedDate =
+                New DateTime(
+                    1980 + number,
+                    1,
+                    1
+                )
+
+            published.Metadata.PublicationJournal =
+                "Journal of Examples"
+
+            manuscripts.Add(
+                published
+            )
+
+        Next
+
+        For number As Integer = 1 To 5
+
+            manuscripts.Add(
+                New Manuscript With {
+                    .Title = "Study in Progress " & number,
+                    .CurrentStage = PaperStage.UnderReview
+                }
+            )
+
+        Next
+
+        Dim authors As New AuthorLibraryData()
+
+        Dim everything As List(Of Manuscript) =
+            PublicationExportService.SelectByScope(
+                manuscripts,
+                PublicationExportScope.AllManuscripts
+            )
+
+        ' Not the defaults, so the preview is read in the format, style and
+        ' grouping chosen.
+        Dim expected As Func(Of List(Of Manuscript), String) =
+            Function(selected)
+                Return PublicationExportService.Export(
+                    selected,
+                    authors,
+                    PublicationExportFormat.Markdown,
+                    PublicationExportStyle.PublicationList,
+                    True
+                )
+            End Function
+
+        StaRunner.Run(
+            Sub()
+
+                Using dialog As New PublicationExportForm(
+                    manuscripts,
+                    authors
+                )
+
+                    ViewCatalog.ShowOffscreen(
+                        dialog
+                    )
+
+                    Dim scope As ComboBox =
+                        ExportField(Of ComboBox)(dialog, "cmbScope")
+
+                    Dim style As ComboBox =
+                        ExportField(Of ComboBox)(dialog, "cmbStyle")
+
+                    Dim format As ComboBox =
+                        ExportField(Of ComboBox)(dialog, "cmbFormat")
+
+                    Dim items As CheckedListBox =
+                        ExportField(Of CheckedListBox)(dialog, "lstItems")
+
+                    Dim preview As TextBox =
+                        ExportField(Of TextBox)(dialog, "txtPreview")
+
+                    format.SelectedIndex =
+                        format.FindStringExact("Markdown")
+
+                    style.SelectedIndex =
+                        style.FindStringExact("Publication list")
+
+                    ExportField(Of CheckBox)(dialog, "chkGroupByType").Checked =
+                        True
+
+                    Application.DoEvents()
+
+                    AssertRebuiltAtMostTwice(
+                        dialog,
+                        "Switching the scope to All manuscripts",
+                        Sub()
+                            scope.SelectedIndex =
+                                scope.FindStringExact("All manuscripts")
+                        End Sub
+                    )
+
+                    Assert.AreEqual(
+                        everything.Count,
+                        items.CheckedItems.Count
+                    )
+
+                    Assert.AreEqual(
+                        expected(everything),
+                        preview.Text
+                    )
+
+                    AssertRebuiltAtMostTwice(
+                        dialog,
+                        "Select None",
+                        Sub() ExportButton(dialog, "Select None").PerformClick()
+                    )
+
+                    Assert.AreEqual(
+                        0,
+                        items.CheckedItems.Count
+                    )
+
+                    Assert.AreEqual(
+                        expected(New List(Of Manuscript)()),
+                        preview.Text
+                    )
+
+                    AssertRebuiltAtMostTwice(
+                        dialog,
+                        "Select All",
+                        Sub() ExportButton(dialog, "Select All").PerformClick()
+                    )
+
+                    Assert.AreEqual(
+                        everything.Count,
+                        items.CheckedItems.Count
+                    )
+
+                    Assert.AreEqual(
+                        expected(everything),
+                        preview.Text
+                    )
+
+                    ' A guard that could not fail before the change: one
+                    ' checkbox, checked as a click checks it, still updates
+                    ' the preview once its queued refresh runs.
+                    Dim before As Integer =
+                        dialog.PreviewCount
+
+                    items.SetItemChecked(
+                        3,
+                        False
+                    )
+
+                    Application.DoEvents()
+
+                    Assert.AreEqual(
+                        1,
+                        dialog.PreviewCount - before
+                    )
+
+                    Assert.AreEqual(
+                        expected(
+                            everything.Where(
+                                Function(item, index) index <> 3
+                            ).ToList()
+                        ),
+                        preview.Text
+                    )
+
+                    dialog.Close()
+
+                End Using
+
+            End Sub
+        )
+
+    End Sub
+
+
+    ' Runs one action and the messages it queued, and fails with the count
+    ' if the preview was rebuilt more than twice.
+    Private Shared Sub AssertRebuiltAtMostTwice(
+        dialog As PublicationExportForm,
+        actionName As String,
+        perform As Action
+    )
+
+        Dim before As Integer =
+            dialog.PreviewCount
+
+        perform()
+
+        Application.DoEvents()
+
+        Dim rebuilt As Integer =
+            dialog.PreviewCount - before
+
+        Assert.IsTrue(
+            rebuilt <= 2,
+            actionName & " rebuilt the preview " & rebuilt & " times."
+        )
+
+    End Sub
+
+
+    Private Shared Function ExportField(Of T)(
+        dialog As PublicationExportForm,
+        name As String
+    ) As T
+
+        Return DirectCast(
+            GetType(PublicationExportForm).
+                GetField(
+                    name,
+                    BindingFlags.Instance Or
+                    BindingFlags.NonPublic
+                ).
+                GetValue(dialog),
+            T
+        )
+
+    End Function
+
+
+    Private Shared Function ExportButton(
+        dialog As PublicationExportForm,
+        text As String
+    ) As Button
+
+        Return Descendants(dialog).
+            OfType(Of Button)().
+            Single(
+                Function(button) button.Text = text
+            )
+
+    End Function
+
+
+    Private Shared Iterator Function Descendants(
+        parent As Control
+    ) As IEnumerable(Of Control)
+
+        For Each child As Control In parent.Controls
+
+            Yield child
+
+            For Each descendant As Control In Descendants(child)
+                Yield descendant
+            Next
+
+        Next
+
+    End Function
 
 End Class

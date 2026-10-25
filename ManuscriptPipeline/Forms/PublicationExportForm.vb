@@ -24,6 +24,12 @@ Namespace Forms
 
         Private _displayed As New List(Of Manuscript)()
 
+        ' Whether a preview refresh is queued from ItemCheck (#232).
+        Private _previewQueued As Boolean = False
+
+        ' For tests (#232): how many times the preview was rebuilt.
+        Friend PreviewCount As Integer = 0
+
 
         Public Sub New(
             manuscripts As IEnumerable(Of Manuscript),
@@ -284,14 +290,29 @@ Namespace Forms
                     RefreshPreview()
                 End Sub
 
+            ' ItemCheck comes before the check changes, so the refresh is
+            ' queued. One queued refresh serves every check made before it
+            ' runs: Select All on a large record exported the whole
+            ' selection once for each item it checked (#232).
             AddHandler lstItems.ItemCheck,
                 Sub(sender, e)
 
-                    If Me.IsHandleCreated Then
+                    If Me.IsHandleCreated AndAlso
+                       Not _previewQueued Then
+
+                        _previewQueued =
+                            True
 
                         BeginInvoke(
                             New Action(
-                                AddressOf RefreshPreview
+                                Sub()
+
+                                    _previewQueued =
+                                        False
+
+                                    RefreshPreview()
+
+                                End Sub
                             )
                         )
 
@@ -548,6 +569,8 @@ Namespace Forms
 
 
         Private Sub RefreshPreview()
+
+            PreviewCount += 1
 
             txtPreview.Text =
                 CurrentExport()
