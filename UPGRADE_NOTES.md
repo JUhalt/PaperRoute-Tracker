@@ -31,6 +31,8 @@ Use **Settings → Backup Library...** to create a portable backup. In v0.5 and 
 
 PaperRoute v0.9.2 is the hardening release before 1.0: safer handling of your files, recovery when something goes wrong, faster pages on a large library, and keyboard, screen-reader, display-scaling and contrast-theme work across the app. It uses the same **Schema 9** library as v0.9.0 and v0.9.1 and migrates no data, and v0.9.1 can still open a library that v0.9.2 has used. The next library upgrade, Schema 10, waits until after 1.0.
 
+Save any open manuscript page before you choose **Download & Restart**: v0.9.1 does not ask about unsaved edits before it updates, so they would be lost. From v0.9.2 on, updating asks first.
+
 After upgrading:
 
 - When you delete a manuscript, a version or a packet file and save, PaperRoute moves its managed copies into a dated `removed` folder inside `Documents\PaperRoute Library` instead of deleting them. Nothing empties that folder; delete what you no longer want yourself. The User Guide's **Removed files** section says more.
