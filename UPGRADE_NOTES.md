@@ -35,7 +35,7 @@ After upgrading:
 
 - When you delete a manuscript, a version or a packet file and save, PaperRoute moves its managed copies into a dated `removed` folder inside `Documents\PaperRoute Library` instead of deleting them. Nothing empties that folder; delete what you no longer want yourself. The User Guide's **Removed files** section says more.
 - **Restore Backup...** restarts PaperRoute into the restored library instead of reloading the window.
-- Backups now include `backup.json`, which records the PaperRoute version, date and storage schema, and Restore refuses a backup from a newer PaperRoute. Backups made by v0.9.1 and earlier restore as before. Restore a backup made by v0.9.2 with v0.9.2 or later.
+- Backups now include `backup.json`, which records the PaperRoute version, date and storage schema, and Restore refuses a backup from a newer storage schema or backup format. Backups made by v0.9.1 and earlier restore as before. Restore a backup made by v0.9.2 with v0.9.2 or later.
 - An unexpected error is written to a text report in the `logs` folder of `%LocalAppData%\PaperRoute\`. Nothing is sent anywhere.
 - On a Windows set to another language, the few texts Windows Forms supplies itself are now in English, like the rest of PaperRoute.
 - Releases no longer include a Portable.zip. Install with Setup, as the User Guide's **Installing** section describes.
