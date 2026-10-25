@@ -378,6 +378,49 @@ Public Class DeadlineListTests
     End Sub
 
 
+    ' + Add Reminder starts on the manuscript of the row the keyboard is on
+    ' (#229), as Edit does, so a reminder does not land on another paper
+    ' unnoticed. With no row chosen, as each visit starts, it starts on the
+    ' alphabetically first manuscript, as before. Cancel saves nothing.
+    ' Before the change it always started on the first.
+    <TestMethod>
+    Public Sub AddReminderStartsOnTheChosenRowsManuscript()
+
+        RunOnStaThread(
+            Sub()
+                Using board As New DeadlineBoard(_root)
+                    Dim alpha As Manuscript = Draft("Alpha study")
+                    alpha.Reminders.Add(New ManuscriptReminder With {.Title = "Send draft to coauthors", .DueDate = DateTime.Today.AddDays(2)})
+                    Dim beta As Manuscript = Draft("Beta study")
+                    beta.Reminders.Add(New ManuscriptReminder With {.Title = "Book the room", .DueDate = DateTime.Today.AddDays(5)})
+                    board.Prepare(New List(Of Manuscript) From {alpha, beta})
+                    board.OpenDeadlines()
+                    Dim list As DeadlineList = board.List()
+
+                    FocusRow(board, list, "Book the room")
+                    Assert.AreEqual(1, list.Rows.ToList().IndexOf(list.FocusedRow), "The keyboard is on the second row.")
+                    Dim opened As (Chosen As String, Enabled As Boolean) = board.AddReminderAndCancel()
+                    Assert.AreEqual("Beta study", opened.Chosen, "The chosen row's manuscript.")
+                    Assert.IsTrue(opened.Enabled, "Another manuscript can still be chosen.")
+
+                    board.NavigateTo(Form1.WorkspacePage.Board)
+                    board.OpenDeadlines()
+                    Assert.IsNull(list.FocusedRow, "A new visit chooses no row.")
+                    opened = board.AddReminderAndCancel()
+                    Assert.AreEqual("Alpha study", opened.Chosen, "The alphabetically first manuscript.")
+                    Assert.IsTrue(opened.Enabled)
+
+                    Assert.AreEqual(0, board.SaveCount, "Cancel saves nothing.")
+                    Assert.AreEqual(1, beta.Reminders.Count)
+                    Assert.AreEqual(1, alpha.Reminders.Count)
+
+                    board.Close()
+                End Using
+            End Sub)
+
+    End Sub
+
+
     ' Moving the keyboard deep into a long list scrolls the row into view.
     <TestMethod>
     Public Sub DeadlinesFocusDeepInTheListScrollsIntoView()
@@ -1528,6 +1571,22 @@ Public Class DeadlineListTests
             deadlineDatePrompt = datePrompt
             deadlineConfirmPrompt = confirmPrompt
         End Sub
+
+        ' + Add Reminder, answered as it opens: the manuscript its list has
+        ' chosen and whether the list can be changed, then Cancel.
+        Public Function AddReminderAndCancel() As (Chosen As String, Enabled As Boolean)
+            Dim seen As (Chosen As String, Enabled As Boolean) = (Nothing, False)
+            Using answer As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of ReminderEditForm)(
+                Sub(dialog)
+                    Dim choice As ComboBox = DirectCast(GetType(ReminderEditForm).GetField("cboManuscript", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(dialog), ComboBox)
+                    seen = (Convert.ToString(choice.SelectedItem), choice.Enabled)
+                    DirectCast(dialog.CancelButton, Button).PerformClick()
+                End Sub)
+                ViewCatalog.Descendants(Me).OfType(Of ActionButton)().Single(Function(button) button.AccessibleName = "Add Reminder").PerformClick()
+            End Using
+            Application.DoEvents()
+            Return seen
+        End Function
 
         Public Function CreateRow(item As DeadlineItem, today As DateTime) As DeadlineRow
             Return DirectCast(CallPrivate("CreateDeadlineRow", item, today), DeadlineRow)
