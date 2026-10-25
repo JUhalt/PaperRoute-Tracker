@@ -77,11 +77,29 @@ jobs:
         continue-on-error: true
         run: ./.github/scripts/Set-RunnerDisplay.ps1
       - name: Run automated tests
+        shell: pwsh
         # The runner is disposable, so the file-dialog tests, which leave
-        # Explorer's view state under HKCU, run here too (#196).
+        # Explorer's view state under HKCU, run here too (#196). The
+        # OnScreen tests need an unlocked desktop in use, so certification
+        # runs them by hand. Every other test must pass, none skipped or
+        # inconclusive, as the release workflow requires: a skipped test
+        # fails here, on its pull request, not at release time.
         env:
           PAPERROUTE_FILE_DIALOG_TESTS: "1"
-        run: dotnet test PaperRoute.Tests/PaperRoute.Tests.vbproj --configuration Release --no-build --logger "trx;LogFileName=PaperRoute.Tests.trx" --results-directory "${{ github.workspace }}/TestResults"
+        run: |
+          dotnet test PaperRoute.Tests/PaperRoute.Tests.vbproj --configuration Release --no-build `
+              --filter 'TestCategory!=OnScreen' `
+              --logger 'trx;LogFileName=PaperRoute.Tests.trx' --results-directory "$env:GITHUB_WORKSPACE/TestResults"
+          if ($LASTEXITCODE -ne 0) { throw 'The automated test run failed.' }
+          $trx = [xml]::new()
+          $trx.XmlResolver = $null
+          $trx.Load((Join-Path $env:GITHUB_WORKSPACE 'TestResults/PaperRoute.Tests.trx'))
+          $counters = $trx.SelectSingleNode('//*[local-name()="ResultSummary"]/*[local-name()="Counters"]')
+          if ($null -eq $counters -or [int] $counters.GetAttribute('total') -lt 1 -or
+              [int] $counters.GetAttribute('passed') -ne [int] $counters.GetAttribute('total')) {
+              throw 'Tests must all pass, with none skipped or inconclusive.'
+          }
+          "Tests: $($counters.GetAttribute('passed')) passed; none skipped." >> $env:GITHUB_STEP_SUMMARY
 
       - name: Upload test results
         if: always()
