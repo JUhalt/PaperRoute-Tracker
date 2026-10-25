@@ -4124,7 +4124,8 @@ Public Class Form1
 
             Dim preview As String =
             RestorePreview(
-                inspection
+                inspection,
+                manuscripts.Count
             )
 
             Dim confirmation As DialogResult =
@@ -4176,13 +4177,36 @@ Public Class Form1
 
 
     ' What Restore Backup... asks once the archive has passed its check:
-    ' the backup's date and version (#115) and what it holds. Tests read it.
+    ' the backup's date and version (#115), what it holds, and the library
+    ' it would replace (#226). Tests read it.
     Private Shared Function RestorePreview(
-        inspection As BackupInspection
+        inspection As BackupInspection,
+        currentManuscriptCount As Integer
     ) As String
 
         Dim sizeInMb As Double =
             inspection.UncompressedBytes / 1024.0 / 1024.0
+
+        ' An old backup over a grown library shows while the researcher can
+        ' still back out, before RESTORE is typed.
+        Dim currentLibrary As String =
+            "Your library now: " &
+            currentManuscriptCount.ToString() &
+            If(currentManuscriptCount = 1, " manuscript.", " manuscripts.")
+
+        Dim fewer As Integer =
+            currentManuscriptCount - inspection.ManuscriptCount
+
+        If fewer > 0 Then
+
+            currentLibrary &=
+                Environment.NewLine &
+                "This backup has " &
+                fewer.ToString() &
+                If(fewer = 1, " fewer manuscript", " fewer manuscripts") &
+                " than your library now."
+
+        End If
 
         Return "Restore this PaperRoute backup?" &
             Environment.NewLine &
@@ -4210,6 +4234,9 @@ Public Class Form1
             "Expanded size: " &
             sizeInMb.ToString("N1") &
             " MB" &
+            Environment.NewLine &
+            Environment.NewLine &
+            currentLibrary &
             Environment.NewLine &
             Environment.NewLine &
             "IMPORTANT: This will REPLACE the library currently loaded in PaperRoute." &
