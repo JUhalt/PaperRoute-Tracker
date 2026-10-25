@@ -114,6 +114,13 @@ jobs:
           -p:Version="${{ steps.meta.outputs.version }}"
           -p:ContinuousIntegrationBuild=true
 
+      - name: Give the runner a 1920x1080 display
+        # The tests size windows for the certified screens (#93), and the
+        # runner's session starts at 1024x768. The script logs the size it
+        # got; a display that cannot take it changes nothing.
+        shell: pwsh
+        continue-on-error: true
+        run: ./.github/scripts/Set-RunnerDisplay.ps1
       - name: Run automated tests
         shell: pwsh
         # The runner is disposable, so the file-dialog tests, which leave

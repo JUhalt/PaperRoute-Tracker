@@ -673,9 +673,23 @@ Public Class SubmissionDetailsLayoutTests
 
     End Sub
 
+    ' Whole where a researcher can see it: a control inside a body that
+    ' scrolls (the dialog's since #214) is judged once it is scrolled into
+    ' view, as the measure judges what a scroll reaches. On a short screen
+    ' the body can open scrolled, so a caption at its top starts above the
+    ' visible area without being cut.
     Private Shared Sub AssertInsideAncestors(control As Control)
         Assert.IsTrue(control.Visible)
         Assert.IsTrue(control.Width > 0 AndAlso control.Height > 0)
+        Dim scroller As Control = control.Parent
+        While scroller IsNot Nothing
+            Dim scrollable As ScrollableControl = TryCast(scroller, ScrollableControl)
+            If scrollable IsNot Nothing AndAlso scrollable.AutoScroll Then
+                scrollable.ScrollControlIntoView(control)
+                Application.DoEvents()
+            End If
+            scroller = scroller.Parent
+        End While
         Dim screenBounds As Rectangle = control.Parent.RectangleToScreen(control.Bounds)
         Dim ancestor As Control = control.Parent
         While ancestor IsNot Nothing
