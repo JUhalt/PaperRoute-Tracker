@@ -156,7 +156,9 @@ Public Class SubmissionWorkflowConsistencyTests
     ' The edges of #224: an unlinked target opens with only its name, as
     ' before (a guard: that passed before the change too); a record with
     ' no portal leaves the portal blank; a journal name edited in the
-    ' dialog is another journal, so the new submission has no link.
+    ' dialog is another journal, so the new submission has neither its
+    ' link nor its portal; a name edited and then put back keeps both;
+    ' and a portal typed in the dialog stays whatever the name.
     <TestMethod>
     <DataRow("AddSubmission")>
     <DataRow("RecordRequiredSubmission")>
@@ -167,7 +169,7 @@ Public Class SubmissionWorkflowConsistencyTests
                 Sub()
                     StorageEnvironment.RootOverride = root
                     Try
-                        For Each edge As String In {"unlinked", "no portal", "edited name"}
+                        For Each edge As String In {"unlinked", "no portal", "edited name", "name put back", "typed portal"}
                             Dim journal As JournalRecord = SeedTargetJournal(If(edge = "no portal", String.Empty, LibraryPortal))
                             Dim manuscript As Manuscript = TargetingManuscript(journal)
                             If edge = "unlinked" Then manuscript.TargetJournalId = Nothing
@@ -176,7 +178,16 @@ Public Class SubmissionWorkflowConsistencyTests
                                   dialogs As New ModalAnswer(Of AddSubmissionForm)(
                                       Sub(dialog)
                                           opened.Add((JournalBox(dialog).Text, PortalBox(dialog).Text))
-                                          If edge = "edited name" Then JournalBox(dialog).Text = "Fictional Open Psychology Letters"
+                                          Select Case edge
+                                              Case "edited name"
+                                                  JournalBox(dialog).Text = "Fictional Open Psychology Letters"
+                                              Case "name put back"
+                                                  JournalBox(dialog).Text = "Fictional Open Psychology Letters"
+                                                  JournalBox(dialog).Text = journal.Name
+                                              Case "typed portal"
+                                                  PortalBox(dialog).Text = TypedPortal
+                                                  JournalBox(dialog).Text = "Fictional Open Psychology Letters"
+                                          End Select
                                           dialog.AcceptButton.PerformClick()
                                       End Sub)
                                 ViewCatalog.ShowOffscreen(editor)
@@ -192,10 +203,17 @@ Public Class SubmissionWorkflowConsistencyTests
                                         Assert.AreEqual((journal.Name, String.Empty), opened.Single(), "No portal: the portal stays blank.")
                                         Assert.AreEqual(CType(journal.Id, Guid?), recorded.JournalId, "No portal: the link is kept.")
                                         Assert.AreEqual(String.Empty, recorded.PortalUrl)
-                                    Case Else
+                                    Case "edited name"
                                         Assert.AreEqual((journal.Name, LibraryPortal), opened.Single(), "Edited name: it opened at the linked record.")
                                         Assert.IsFalse(recorded.JournalId.HasValue, "Edited name: another journal, so no link.")
                                         Assert.AreEqual("Fictional Open Psychology Letters", recorded.JournalName)
+                                        Assert.AreEqual(String.Empty, recorded.PortalUrl, "Edited name: the target's portal went with its name.")
+                                    Case "name put back"
+                                        Assert.AreEqual(CType(journal.Id, Guid?), recorded.JournalId, "Name put back: the link is kept.")
+                                        Assert.AreEqual(LibraryPortal, recorded.PortalUrl, "Name put back: the target's portal came back.")
+                                    Case Else
+                                        Assert.IsFalse(recorded.JournalId.HasValue, "Typed portal: another journal, so no link.")
+                                        Assert.AreEqual(TypedPortal, recorded.PortalUrl, "Typed portal: a portal typed in the dialog stays.")
                                 End Select
                                 editor.Close()
                             End Using
@@ -210,6 +228,7 @@ Public Class SubmissionWorkflowConsistencyTests
     End Sub
 
     Private Const LibraryPortal As String = "https://journal.example.invalid/submissions"
+    Private Const TypedPortal As String = "https://letters.example.invalid/submit"
 
     ' A Journal Library record with notes, saved as the temp root's whole
     ' author library, where both the editor and the dialog read it.
