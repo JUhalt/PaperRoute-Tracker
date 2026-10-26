@@ -9,7 +9,9 @@ Imports Microsoft.VisualStudio.TestTools.UnitTesting
 ' package at its version. A dependency update (Dependabot, #144) that moves a
 ' version without the notices would ship notices for a package the app no
 ' longer contains, so the restored graph and the notices are compared here.
-' This guard cannot fail before #149: the file it reads did not exist.
+' This guard cannot fail before #149: the file it reads did not exist. The
+' graph is read where the build restored it: the app's obj folder, or the
+' artifacts folder of a build with --artifacts-path (#252).
 <TestClass>
 Public Class ThirdPartyNoticesTests
 
@@ -24,12 +26,16 @@ Public Class ThirdPartyNoticesTests
                 Path.Combine(root, "THIRD-PARTY-NOTICES.txt")
             )
 
-        Dim assetsPath As String =
+        Dim projectAssets As String =
             Path.Combine(root, "ManuscriptPipeline", "obj", "project.assets.json")
 
-        Assert.IsTrue(
-            File.Exists(assetsPath),
-            "The app project has been restored: " & assetsPath
+        Dim assetsPath As String =
+            If(ArtifactsAssets(root), If(File.Exists(projectAssets), projectAssets, Nothing))
+
+        Assert.IsNotNull(
+            assetsPath,
+            "The app project has been restored: neither " & projectAssets &
+            " nor obj\ManuscriptPipeline\project.assets.json in an artifacts folder above " & AppContext.BaseDirectory & " exists."
         )
 
         Dim packages As New List(Of KeyValuePair(Of String, String))
@@ -76,5 +82,35 @@ Public Class ThirdPartyNoticesTests
         Next
 
     End Sub
+
+
+    ' A build with --artifacts-path, as the release candidate's, restores
+    ' the app into obj\ManuscriptPipeline under the artifacts folder, and
+    ' puts the test assembly under its bin: the folders from the test
+    ' assembly up to the repository are looked in. Nothing if none has it.
+    Private Shared Function ArtifactsAssets(root As String) As String
+
+        Dim top As String = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root))
+        Dim folder As DirectoryInfo = New DirectoryInfo(AppContext.BaseDirectory)
+
+        While folder IsNot Nothing
+
+            Dim candidate As String = Path.Combine(folder.FullName, "obj", "ManuscriptPipeline", "project.assets.json")
+
+            If File.Exists(candidate) Then
+                Return candidate
+            End If
+
+            If String.Equals(Path.TrimEndingDirectorySeparator(folder.FullName), top, StringComparison.OrdinalIgnoreCase) Then
+                Exit While
+            End If
+
+            folder = folder.Parent
+
+        End While
+
+        Return Nothing
+
+    End Function
 
 End Class
