@@ -624,6 +624,56 @@ Public Class KeptManuscriptPageTests
     End Sub
 
 
+    ' The page prepared while the window idles holds what a page left
+    ' holds once it has let go of its record (#133), control by control:
+    ' its editor shows no record in the same way, so the first manuscript
+    ' opened finds the page as every later one does.
+    <TestMethod>
+    Public Sub APreparedPageMatchesOneLetGoOf()
+
+        Dim prepared As List(Of String) = Nothing
+        Dim letGo As List(Of String) = Nothing
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary = Library60()
+
+                Using fresh As New LibraryBoard(library, Path.Combine(_root, "settings-prepared")),
+                      used As New LibraryBoard(library, Path.Combine(_root, "settings-used"))
+
+                    fresh.Start()
+                    fresh.WaitForIdleWork()
+                    used.Start()
+                    used.WaitForIdleWork()
+
+                    Dim subject As Manuscript = used.Library.First(Function(item) item.Location = ManuscriptLocation.Pipeline AndAlso item.Submissions.Count > 0 AndAlso item.JournalShortlist.Count > 0 AndAlso item.Tags.Count > 0)
+                    used.Open(subject)
+                    Application.DoEvents()
+                    used.NavigateTo(Form1.WorkspacePage.Board)
+                    used.WaitForIdleWork()
+
+                    prepared = ManuscriptEditorReuseTests.Describe(ViewCatalog.Descendants(fresh.KeptPage).OfType(Of EditManuscriptForm)().Single())
+                    letGo = ManuscriptEditorReuseTests.Describe(ViewCatalog.Descendants(used.KeptPage).OfType(Of EditManuscriptForm)().Single())
+
+                    fresh.Close()
+                    used.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(5))
+
+        Dim differences As New List(Of String)()
+        For index As Integer = 0 To Math.Max(prepared.Count, letGo.Count) - 1
+            Dim wanted As String = If(index < letGo.Count, letGo(index), "(nothing)")
+            Dim found As String = If(index < prepared.Count, prepared(index), "(nothing)")
+            If wanted <> found Then differences.Add("let go of: " & wanted & Environment.NewLine & "  prepared: " & found)
+            If differences.Count = 8 Then Exit For
+        Next
+
+        Assert.AreEqual(0, differences.Count, "The prepared page differs from one that let go of a record (" & letGo.Count & " against " & prepared.Count & " controls):" & Environment.NewLine & String.Join(Environment.NewLine, differences))
+
+    End Sub
+
+
     ' The page's containers that outlive a record: every control with
     ' controls in it, but for the parts built for one record (its version
     ' history and its submission's details) and what is in them.

@@ -465,6 +465,25 @@ Partial Public Class Form1
         manuscriptPageEditor.SuggestTags(manuscripts)
 
         Dim page As Control = manuscriptPage
+        Dim token As Object = manuscriptPageEditor.RecordToken
+        QueueIdleWork(Sub() ShowNoRecordOnPreparedPage(page, token))
+
+    End Sub
+
+
+    ' The prepared page shows no record as a page left shows none (#133),
+    ' before its parts are laid out, so they are laid out in that shape;
+    ' not once a manuscript has been opened on it.
+    Private Sub ShowNoRecordOnPreparedPage(page As Control, token As Object)
+
+        If Not StillPreparing(page) Then
+            Return
+        End If
+
+        If manuscriptPageEditor.RecordToken Is token Then
+            manuscriptPageEditor.ShowNoRecord(manuscripts)
+        End If
+
         QueueIdleWork(Sub() LayOutPreparedManuscriptPage(page))
 
     End Sub
@@ -690,6 +709,18 @@ Partial Public Class Form1
         meta.Controls.Add(manuscriptMetaLabel)
         identity.Controls.Add(manuscriptTitleLabel)
         identity.Controls.Add(meta)
+
+        ' Showing no manuscript, as the page prepared while the window idles
+        ' does (#133), the header is as tall as it is with one: a label with
+        ' no text is a pixel shorter than a line of text, and the pill takes
+        ' a size only once a stage shows, so the first open grew the header
+        ' and laid out the editor and every container under it again.
+        For Each label As Label In {manuscriptTitleLabel, manuscriptMetaLabel, manuscriptShelfLabel}
+            Using line As New Label With {.AutoSize = True, .UseMnemonic = False, .Text = "A", .Font = If(label Is manuscriptTitleLabel, label.Font, Me.Font)}
+                label.MinimumSize = New Size(0, line.PreferredSize.Height)
+            End Using
+        Next
+        manuscriptStagePill.Size = StagePillSize(FormatStage(PaperStage.Idea).ToUpperInvariant())
 
         Dim actions As New FlowLayoutPanel With {
             .AutoSize = True,
@@ -954,9 +985,8 @@ Partial Public Class Form1
         manuscriptShelfLabel.Text = "/  " & FormatShelf(manuscript.Location)
 
         Dim stageText As String = FormatStage(manuscript.CurrentStage).ToUpperInvariant()
-        Dim stageSize As Size = TextRenderer.MeasureText(stageText, manuscriptStagePill.Font)
         manuscriptStagePill.Text = stageText
-        manuscriptStagePill.Size = New Size(stageSize.Width + UiTheme.Px(16, DeviceDpi), stageSize.Height + UiTheme.Px(6, DeviceDpi))
+        manuscriptStagePill.Size = StagePillSize(stageText)
         manuscriptStagePill.BackColor = UiTheme.StageBackground(manuscript.CurrentStage)
         manuscriptStagePill.ForeColor = UiTheme.StageForeground(manuscript.CurrentStage)
 
@@ -967,6 +997,15 @@ Partial Public Class Form1
                  RouteSummaryService.Describe(manuscript).Text})
 
     End Sub
+
+
+    ' The stage pill's size for a stage's text: the text and a margin.
+    Private Function StagePillSize(stageText As String) As Size
+
+        Dim stageSize As Size = TextRenderer.MeasureText(stageText, manuscriptStagePill.Font)
+        Return New Size(stageSize.Width + UiTheme.Px(16, DeviceDpi), stageSize.Height + UiTheme.Px(6, DeviceDpi))
+
+    End Function
 
 
     ' The kept page's header once it is left, as its editor is (#133): it

@@ -330,6 +330,26 @@ Namespace Forms
         End Sub
 
 
+        ' A page prepared while the window idles shows no record as a page
+        ' that let go of its record shows none (#133): bound to a working
+        ' copy of nothing over the library's records, whose tags it goes on
+        ' offering, so the first manuscript opened finds the form as every
+        ' later one does. Its first snapshot of a working copy, which warms
+        ' the serializer, is made here, while the window idles.
+        Friend Sub ShowNoRecord(allManuscripts As IEnumerable(Of Manuscript))
+
+            Bind(
+                New RecordState With {
+                    .Working = New Manuscript(),
+                    .All = If(allManuscripts, Enumerable.Empty(Of Manuscript)()).ToList(),
+                    .AuthorLibrary = _record.AuthorLibrary,
+                    .PartsDeferred = True
+                },
+                recovered:=False)
+
+        End Sub
+
+
         ' The panels that hold the parts built for each record, its version
         ' history and its submission's details: empty while the form is
         ' built, so a page holding the layout of every container that has
