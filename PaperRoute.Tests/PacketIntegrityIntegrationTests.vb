@@ -2,6 +2,7 @@ Imports System
 Imports System.Collections.Generic
 Imports System.Diagnostics
 Imports System.Drawing
+Imports System.Globalization
 Imports System.IO
 Imports System.Linq
 Imports System.Runtime.ExceptionServices
@@ -65,6 +66,40 @@ Public Class PacketIntegrityIntegrationTests
 
             CollectionAssert.AreEqual(originalBytes, File.ReadAllBytes(fixture.SourcePath))
             Assert.AreEqual(originalWriteTime, File.GetLastWriteTimeUtc(fixture.SourcePath))
+        End Using
+
+    End Sub
+
+    ' The file details write their times as Version History writes audit
+    ' times ("MMM d, yyyy h:mm tt"), not in the culture's general form.
+    <TestMethod>
+    Public Sub VaultFileDetails_WriteTimesAsVersionHistoryDoes()
+
+        Using fixture As New IntegrityFixture()
+            Dim manuscript As Manuscript = fixture.CreateManuscript()
+
+            RunOnStaThread(
+                Sub()
+                    Using dialog As New NonactivatingPacketVaultForm(manuscript)
+                        ShowOffscreen(dialog)
+                        PumpUntilComplete(dialog.RecordSelectedFingerprintAsync(False))
+
+                        Dim lines As String() = FileDetail(dialog).Text.Split({Environment.NewLine}, StringSplitOptions.None)
+                        For Each lead As String In {"Last checked: ", "Fingerprint recorded: "}
+                            Dim line As String = lines.SingleOrDefault(Function(item) item.StartsWith(lead, StringComparison.Ordinal))
+                            Assert.IsNotNull(line, lead & "is shown." & Environment.NewLine & String.Join(Environment.NewLine, lines))
+                            Dim value As String = line.Substring(lead.Length)
+                            Dim parsed As DateTime
+                            Assert.IsTrue(
+                                DateTime.TryParseExact(value, "MMM d, yyyy h:mm tt", CultureInfo.CurrentCulture, DateTimeStyles.None, parsed),
+                                lead & "reads '" & value & "'.")
+                        Next
+
+                        dialog.CancelButton.PerformClick()
+                        dialog.Close()
+                    End Using
+                End Sub
+            )
         End Using
 
     End Sub

@@ -115,7 +115,7 @@ Namespace Controls
         Public Shared Function Summary(map As RouteMap) As String
             If map.IsEmpty Then Return "No submissions are recorded yet, so there is no route to draw."
             Dim ending As String = If(map.Ongoing, "today", If(map.Markers.Any(Function(item) item.Kind = RouteMarkerKind.Published), "publication", "the last decision"))
-            Return map.TotalDays.ToString(CultureInfo.CurrentCulture) & " days from first submission to " & ending & ": " &
+            Return map.TotalDays.ToString(CultureInfo.CurrentCulture) & If(map.TotalDays = 1, " day from first submission to ", " days from first submission to ") & ending & ": " &
                    String.Join(", ", DayTotals(map).Select(Function(item) item.Text)) & "."
         End Function
 

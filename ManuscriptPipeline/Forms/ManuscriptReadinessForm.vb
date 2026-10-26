@@ -986,7 +986,8 @@ Namespace Forms
                 MessageBox.Show(
                     Me,
                     added.ToString() &
-                    " new requirement(s) were added from the journal template. Existing readiness items were not rewritten.",
+                    If(added = 1, " new requirement was added", " new requirements were added") &
+                    " from the journal template. Existing readiness items were not rewritten.",
                     "New Requirements Added",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information
@@ -1020,7 +1021,8 @@ Namespace Forms
                     "This removes the manuscript-specific checklist snapshot. It does not change the manuscript stage or delete the reusable journal template.",
                     "Delete Readiness Profile",
                     MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Warning
+                    MessageBoxIcon.Warning,
+                    MessageBoxDefaultButton.Button2
                 )
 
             If result <>

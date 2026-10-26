@@ -293,7 +293,7 @@ Namespace Forms
             Dim summary As CitationSummary = CitationMetricsService.Summarize(chosen, _lookup.RetrievedUtc.Year)
             Dim culture As CultureInfo = CultureInfo.CurrentCulture
             lblSummary.Text = "Checked: " & summary.Works.ToString("N0", culture) & If(summary.Works = 1, " work", " works") &
-                " · " & summary.Citations.ToString("N0", culture) & " citations · h-index " & summary.HIndex.ToString(culture) &
+                " · " & summary.Citations.ToString("N0", culture) & If(summary.Citations = 1, " citation · h-index ", " citations · h-index ") & summary.HIndex.ToString(culture) &
                 " · i10-index " & summary.I10Index.ToString(culture) & " · g-index " & summary.GIndex.ToString(culture)
             btnPrimary.Enabled = _stage = Stage.Confirm
         End Sub

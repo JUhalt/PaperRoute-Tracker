@@ -396,7 +396,8 @@ Namespace Forms
 
                 lblInfo.Text =
                     _displayedVersions.Count.ToString() &
-                    " version(s), oldest to newest. Library copies are immutable once the manuscript is saved."
+                    If(_displayedVersions.Count = 1, " version.", " versions, oldest to newest.") &
+                    " Library copies are immutable once the manuscript is saved."
 
                 Dim selectedIndex As Integer =
                     FindDisplayedVersionIndex(
@@ -1137,7 +1138,8 @@ Namespace Forms
                ) Then
 
                 message &=
-                    "Its PaperRoute Library snapshot will be removed only when you save the manuscript."
+                    "Its snapshot " &
+                    ManagedLibraryService.MovesToRemovedOnSave
 
             ElseIf Not String.IsNullOrWhiteSpace(
                 selected.LocalFilePath

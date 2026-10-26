@@ -358,7 +358,7 @@ Namespace Services
                 add(JournalFactCatalog.Review, String.Join("; ", doaj.ReviewProcess), doaj.ReviewUrl, d, reviewed)
 
                 If doaj.PublicationTimeWeeks.HasValue AndAlso doaj.PublicationTimeWeeks.Value > 0 Then
-                    add(JournalFactCatalog.Weeks, "About " & doaj.PublicationTimeWeeks.Value.ToString(CultureInfo.InvariantCulture) & " weeks from submission to publication", String.Empty, d, reviewed)
+                    add(JournalFactCatalog.Weeks, "About " & doaj.PublicationTimeWeeks.Value.ToString(CultureInfo.InvariantCulture) & If(doaj.PublicationTimeWeeks.Value = 1, " week from submission to publication", " weeks from submission to publication"), String.Empty, d, reviewed)
                 End If
 
                 If doaj.PlagiarismDetection.HasValue Then

@@ -84,7 +84,7 @@ Public Class BackgroundLibraryWorkTests
                     End Using
 
                     Assert.AreEqual(1, board.RestoreNotices.Count, "One restore went through: a second cannot start before the first ends.")
-                    StringAssert.StartsWith(board.RestoreNotices(0), "Restored 500 manuscript(s).")
+                    StringAssert.StartsWith(board.RestoreNotices(0), "Restored 500 manuscripts.")
                     Assert.IsFalse(secondBackup, "Nor can a backup.")
                     Assert.IsFalse(board.IsLibraryWorkInProgress)
                     Assert.IsTrue(IsWindowEnabled(board.Handle), "The window is enabled again.")

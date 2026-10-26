@@ -591,7 +591,7 @@ Namespace Forms
 
             lblSummary.Text =
                 fileName & "  •  " &
-                mappedCount.ToString() & " column(s) mapped" &
+                mappedCount.ToString() & If(mappedCount = 1, " column mapped", " columns mapped") &
                 If(titleMapped, "  •  Ready to import", "  •  Title still needs to be mapped")
 
             btnImport.Enabled = titleMapped

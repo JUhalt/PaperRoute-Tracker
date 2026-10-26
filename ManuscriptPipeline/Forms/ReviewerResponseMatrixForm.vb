@@ -232,7 +232,7 @@ Namespace Forms
             Next
             If lstResponses.SelectedIndex < 0 AndAlso lstResponses.Items.Count > 0 Then lstResponses.SelectedIndex = 0
             lstResponses.EndUpdate()
-            lblCount.Text = lstResponses.Items.Count.ToString() & " shown / " & _working.ReviewerResponses.Count.ToString() & " comments"
+            lblCount.Text = lstResponses.Items.Count.ToString() & " shown / " & _working.ReviewerResponses.Count.ToString() & If(_working.ReviewerResponses.Count = 1, " comment", " comments")
             RefreshSelection()
         End Sub
 

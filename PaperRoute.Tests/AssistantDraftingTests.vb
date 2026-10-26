@@ -427,6 +427,36 @@ Public Class AssistantDraftingTests
             End Sub)
     End Sub
 
+    ' Saved over a file another program has open, the letter's status line
+    ' names the file and says to close it there, instead of .NET's "The
+    ' process cannot access the file ... because it is being used by
+    ' another process." The file is left as it was.
+    <TestMethod>
+    Public Sub ACoverLetterSavedOverAFileOpenElsewhereSaysCloseItThere()
+        RunOnSta(
+            Sub()
+                _provider.Answer = "Dear [Editor's name]," & vbLf & vbLf & "Please consider our manuscript." & vbLf & vbLf & "[Your name]"
+                Using cover As New CoverLetterForm("Example: open materials", "Fictional Open Psychology", "Journal article", {"open science"}, "A first abstract.")
+                    ShowOffscreen(cover)
+                    cover.DraftAsync().GetAwaiter().GetResult()
+                    Application.DoEvents()
+
+                    Dim target As String = Path.Combine(_directory, "Cover letter.txt")
+                    File.WriteAllText(target, "old")
+                    cover.SavePathPrompt = Function() target
+
+                    Using New FileStream(target, FileMode.Open, FileAccess.ReadWrite, FileShare.None)
+                        cover.SaveAction.PerformClick()
+                    End Using
+
+                    Assert.AreEqual(
+                        "The letter couldn't be saved. Cover letter.txt is open in another program. Close it there, then try again.",
+                        cover.StatusText)
+                    Assert.AreEqual("old", File.ReadAllText(target), "The file is left as it was.")
+                End Using
+            End Sub)
+    End Sub
+
     <TestMethod>
     Public Sub ACoverLetterThatCantBeDraftedSaysWhyAndSendsNothing()
         RunOnSta(

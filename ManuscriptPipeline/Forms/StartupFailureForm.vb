@@ -656,7 +656,8 @@ Namespace Forms
             FinishRecovery(
                 "PaperRoute restored " &
                 result.ManuscriptCount.ToString() &
-                " manuscript(s) from the backup" &
+                If(result.ManuscriptCount = 1, " manuscript", " manuscripts") &
+                " from the backup" &
                 If(String.IsNullOrWhiteSpace(result.EmergencyBackupPath),
                    ".",
                    " and kept your library files from before the restore at " & result.EmergencyBackupPath & ".")

@@ -96,9 +96,18 @@ Namespace Services
             ex As Exception
         ) As Boolean
 
-            If TypeOf ex Is UnauthorizedAccessException Then
-                Return True
-            End If
+            Return TypeOf ex Is UnauthorizedAccessException OrElse
+                   IsSharingViolation(ex)
+
+        End Function
+
+
+        ' True for a sharing or lock violation: another program has the
+        ' file open. Access denied is not one: that is also a read-only file
+        ' or a protected folder.
+        Friend Shared Function IsSharingViolation(
+            ex As Exception
+        ) As Boolean
 
             If TypeOf ex Is FileNotFoundException OrElse
                TypeOf ex Is DirectoryNotFoundException OrElse
@@ -113,6 +122,26 @@ Namespace Services
 
             Return code = SharingViolation OrElse
                    code = LockViolation
+
+        End Function
+
+
+        ' What an export's message says after writing filePath failed: when
+        ' another program has the file open, its name and what to do;
+        ' otherwise the error's own words.
+        Friend Shared Function WriteFailureText(
+            filePath As String,
+            ex As Exception
+        ) As String
+
+            If IsSharingViolation(ex) Then
+
+                Return Path.GetFileName(filePath) &
+                       " is open in another program. Close it there, then try again."
+
+            End If
+
+            Return ex.Message
 
         End Function
 

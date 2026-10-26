@@ -751,7 +751,7 @@ Namespace Forms
 
                 lblChecklistInfo.Text =
                     _workingChecklist.Count.ToString() &
-                    " reusable requirement(s)."
+                    If(_workingChecklist.Count = 1, " reusable requirement.", " reusable requirements.")
 
                 Return
 
@@ -973,7 +973,8 @@ Namespace Forms
                     "Existing manuscript readiness profiles keep their saved snapshot of this requirement.",
                     "Remove Readiness Requirement",
                     MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Question
+                    MessageBoxIcon.Question,
+                    MessageBoxDefaultButton.Button2
                 )
 
             If result <>

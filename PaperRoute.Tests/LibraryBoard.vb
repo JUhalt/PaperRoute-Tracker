@@ -422,6 +422,12 @@ Friend NotInheritable Class LibraryBoard
     End Property
 
 
+    ' The tip the window's tooltip shows over a control, or "" for none.
+    Public Function ToolTipOf(control As Control) As String
+        Return DirectCast(GetField("cardToolTip"), ToolTip).GetToolTip(control)
+    End Function
+
+
     ' The Journals and Insights pages kept between visits (#133), or
     ' Nothing.
     Public ReadOnly Property JournalsPage As Control

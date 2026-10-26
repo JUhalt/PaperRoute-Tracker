@@ -1172,8 +1172,13 @@ Namespace Forms
                 message &=
                     Environment.NewLine &
                     Environment.NewLine &
-                    managedCount.ToString() &
-                    " managed file(s) will be staged for physical deletion only when the manuscript is also saved. Discarding the manuscript's changes leaves the stored files intact."
+                    If(
+                        managedCount = 1,
+                        "Its managed file ",
+                        "Each of its " & managedCount.ToString() & " managed files "
+                    ) &
+                    ManagedLibraryService.MovesToRemovedOnSave &
+                    " Discarding the manuscript's changes leaves the stored files intact."
 
             End If
 
@@ -1183,7 +1188,8 @@ Namespace Forms
                     message,
                     "Delete Submission Packet",
                     MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Warning
+                    MessageBoxIcon.Warning,
+                    MessageBoxDefaultButton.Button2
                 )
 
             If result <>
@@ -1346,7 +1352,9 @@ Namespace Forms
                 message &=
                     Environment.NewLine &
                     Environment.NewLine &
-                    "Its PaperRoute Library snapshot will be staged for deletion only when the manuscript is also saved. The original source file, if one still exists elsewhere, is never deleted."
+                    "Its snapshot " &
+                    ManagedLibraryService.MovesToRemovedOnSave &
+                    " The original source file, if one still exists elsewhere, is never deleted."
 
             ElseIf packetFile.StorageMode =
                    SubmissionPacketFileStorageMode.LinkedExternal Then
@@ -1364,7 +1372,8 @@ Namespace Forms
                     message,
                     "Remove Packet File",
                     MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Warning
+                    MessageBoxIcon.Warning,
+                    MessageBoxDefaultButton.Button2
                 )
 
             If result <>
@@ -1482,12 +1491,12 @@ Namespace Forms
             Dim result As PacketFileIntegrityResult = GetIntegrityResult(packetFile)
             Dim detail As String = "Status: " & IntegrityStatusText(result.Status) & Environment.NewLine & result.Message
             If result.CheckedAtUtc.HasValue Then
-                detail &= Environment.NewLine & "Last checked: " & result.CheckedAtUtc.Value.ToLocalTime().ToString("g")
+                detail &= Environment.NewLine & "Last checked: " & result.CheckedAtUtc.Value.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
             End If
             If Not String.IsNullOrWhiteSpace(packetFile.Sha256) Then
                 detail &= Environment.NewLine & "Saved SHA-256: " & packetFile.Sha256
                 If packetFile.HashComputedAtUtc.HasValue Then
-                    detail &= Environment.NewLine & "Fingerprint recorded: " & packetFile.HashComputedAtUtc.Value.ToLocalTime().ToString("g")
+                    detail &= Environment.NewLine & "Fingerprint recorded: " & packetFile.HashComputedAtUtc.Value.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
                 End If
             End If
             If result.Status = PacketFileIntegrityStatus.Changed AndAlso Not String.IsNullOrWhiteSpace(result.Sha256) Then

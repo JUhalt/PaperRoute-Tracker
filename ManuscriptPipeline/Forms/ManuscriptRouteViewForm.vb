@@ -538,7 +538,7 @@ Namespace Forms
                 .AutoSize = True,
                 .Text =
                     map.TotalDays.ToString(Globalization.CultureInfo.CurrentCulture) &
-                    " days from first submission to " &
+                    If(map.TotalDays = 1, " day from first submission to ", " days from first submission to ") &
                     If(
                         map.Ongoing,
                         "today, and counting",

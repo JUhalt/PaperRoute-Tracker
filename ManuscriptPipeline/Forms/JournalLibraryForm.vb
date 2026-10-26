@@ -280,10 +280,14 @@ Namespace Forms
         End Sub
 
 
-        Private Sub RefreshList()
+        ' A journal just added is chosen by its Id; otherwise the current
+        ' selection is kept.
+        Private Sub RefreshList(
+            Optional selectId As Guid? = Nothing
+        )
 
             Dim selectedId As Guid? =
-                Nothing
+                selectId
 
             Dim selected As JournalRecord =
                 TryCast(
@@ -291,8 +295,11 @@ Namespace Forms
                     JournalRecord
                 )
 
-            If selected IsNot Nothing Then
+            If Not selectedId.HasValue AndAlso
+               selected IsNot Nothing Then
+
                 selectedId = selected.Id
+
             End If
 
             lstJournals.BeginUpdate()
@@ -445,7 +452,9 @@ Namespace Forms
                     dialog.Result
                 )
 
-                SaveAndRefresh()
+                SaveAndRefresh(
+                    dialog.Result.Id
+                )
 
             End Using
 
@@ -564,7 +573,8 @@ Namespace Forms
                 "'?",
                 "Delete Journal",
                 MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2
             ) <> DialogResult.Yes Then
 
                 Return
@@ -743,7 +753,9 @@ Namespace Forms
 
         ' On failure the library is read back from disk, so nothing unsaved
         ' stays on screen as if it were kept.
-        Private Sub SaveAndRefresh()
+        Private Sub SaveAndRefresh(
+            Optional selectId As Guid? = Nothing
+        )
 
             Try
 
@@ -779,7 +791,9 @@ Namespace Forms
                 ' Keep what is on screen; the next save tries again.
             End Try
 
-            RefreshList()
+            RefreshList(
+                selectId
+            )
 
         End Sub
 

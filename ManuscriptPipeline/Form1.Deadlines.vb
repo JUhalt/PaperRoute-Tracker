@@ -583,7 +583,7 @@ Partial Public Class Form1
                 lblStatus.Text = "Exported " & dated.Count.ToString(CultureInfo.CurrentCulture) &
                                  If(dated.Count = 1, " dated item", " dated items") & " to " & Path.GetFileName(picker.FileName) & "."
             Catch ex As Exception
-                MessageBox.Show(Me, "PaperRoute could not create the calendar file." & Environment.NewLine & Environment.NewLine & ex.Message,
+                MessageBox.Show(Me, "PaperRoute could not create the calendar file." & Environment.NewLine & Environment.NewLine & StorageFile.WriteFailureText(picker.FileName, ex),
                                 "Calendar Export Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
             End Try
         End Using

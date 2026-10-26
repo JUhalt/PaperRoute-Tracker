@@ -368,7 +368,24 @@ Namespace Forms
         End Function
 
 
-        Private Sub RefreshLists()
+        ' The record just added or edited stays chosen, so Edit, ORCID... and Delete act on it.
+        Private Sub RefreshLists(
+            Optional authorId As Guid? = Nothing,
+            Optional affiliationId As Guid? = Nothing
+        )
+
+            Dim selectedAuthor As AuthorRecord =
+                TryCast(
+                    lstAuthors.SelectedItem,
+                    AuthorRecord
+                )
+
+            If Not authorId.HasValue AndAlso
+               selectedAuthor IsNot Nothing Then
+
+                authorId = selectedAuthor.Id
+
+            End If
 
             lstAuthors.Items.Clear()
 
@@ -387,6 +404,43 @@ Namespace Forms
 
             Next
 
+            If authorId.HasValue Then
+
+                For index As Integer = 0 To lstAuthors.Items.Count - 1
+
+                    Dim item As AuthorRecord =
+                        TryCast(
+                            lstAuthors.Items(index),
+                            AuthorRecord
+                        )
+
+                    If item IsNot Nothing AndAlso
+                       item.Id = authorId.Value Then
+
+                        lstAuthors.SelectedIndex =
+                            index
+
+                        Exit For
+
+                    End If
+
+                Next
+
+            End If
+
+            Dim selectedAffiliation As AffiliationRecord =
+                TryCast(
+                    lstAffiliations.SelectedItem,
+                    AffiliationRecord
+                )
+
+            If Not affiliationId.HasValue AndAlso
+               selectedAffiliation IsNot Nothing Then
+
+                affiliationId = selectedAffiliation.Id
+
+            End If
+
             lstAffiliations.Items.Clear()
 
             For Each affiliation As AffiliationRecord In
@@ -403,6 +457,30 @@ Namespace Forms
                 )
 
             Next
+
+            If affiliationId.HasValue Then
+
+                For index As Integer = 0 To lstAffiliations.Items.Count - 1
+
+                    Dim item As AffiliationRecord =
+                        TryCast(
+                            lstAffiliations.Items(index),
+                            AffiliationRecord
+                        )
+
+                    If item IsNot Nothing AndAlso
+                       item.Id = affiliationId.Value Then
+
+                        lstAffiliations.SelectedIndex =
+                            index
+
+                        Exit For
+
+                    End If
+
+                Next
+
+            End If
 
         End Sub
 
@@ -441,7 +519,9 @@ Namespace Forms
                 )
 
                 SaveLibrary()
-                RefreshLists()
+                RefreshLists(
+                    authorId:=dialog.Result.Id
+                )
 
             End Using
 
@@ -548,67 +628,132 @@ Namespace Forms
 
                 End If
 
-                Try
+                ApplyOrcidChanges(
+                    selected,
+                    dialog.Suggestion,
+                    dialog.Options
+                )
 
-                    Dim selectedWorkCount As Integer =
-                        dialog.Options.SelectedWorkPutCodes.Count
+            End Using
 
-                    Dim preImportCopies As String =
-                        String.Empty
+        End Sub
 
-                    If selectedWorkCount > 0 Then
 
-                        preImportCopies =
-                            _manuscriptRepository.CreatePreImportBackup()
+        ' Applies what the researcher chose from an ORCID profile to the
+        ' selected author, and saves. ORCID... reads the profile; tests
+        ' pass their own.
+        Friend Sub ApplyOrcidChanges(
+            selected As AuthorRecord,
+            suggestion As OrcidProfileSuggestion,
+            options As OrcidApplyOptions
+        )
 
-                    End If
+            Dim existingManuscriptIds As New HashSet(Of Guid)()
 
-                    Dim result As OrcidApplyResult =
-                        OrcidApplyService.Apply(
-                            selected,
-                            _library,
-                            _manuscripts,
-                            dialog.Suggestion,
-                            dialog.Options
-                        )
+            For Each existingManuscript As Manuscript In _manuscripts
 
-                    If result.ManuscriptsImported > 0 Then
+                If existingManuscript IsNot Nothing Then
 
-                        _manuscriptRepository.Save(
-                            _manuscripts
-                        )
-
-                    End If
-
-                    _repository.SaveKeepingJournals(
-                        _library
+                    existingManuscriptIds.Add(
+                        existingManuscript.Id
                     )
 
-                    RefreshLists()
+                End If
 
-                    Dim message As String =
-                        "ORCID changes applied." &
+            Next
+
+            Dim preImportCopies As String =
+                String.Empty
+
+            Dim result As OrcidApplyResult =
+                Nothing
+
+            ' Works on disk once the manuscripts save went through.
+            Dim worksSaved As Integer =
+                0
+
+            Try
+
+                Dim selectedWorkCount As Integer =
+                    options.SelectedWorkPutCodes.Count
+
+                If selectedWorkCount > 0 Then
+
+                    preImportCopies =
+                        _manuscriptRepository.CreatePreImportBackup()
+
+                End If
+
+                result =
+                    OrcidApplyService.Apply(
+                        selected,
+                        _library,
+                        _manuscripts,
+                        suggestion,
+                        options
+                    )
+
+                If result.ManuscriptsImported > 0 Then
+
+                    _manuscriptRepository.Save(
+                        _manuscripts
+                    )
+
+                    worksSaved =
+                        result.ManuscriptsImported
+
+                End If
+
+                _repository.SaveKeepingJournals(
+                    _library
+                )
+
+            Catch ex As Exception
+
+                ' Memory goes back to what is on disk, so a later save never
+                ' writes what the researcher was told was not saved: works
+                ' not saved come back out, and the author library (the iD,
+                ' names and affiliations) is read back.
+                If worksSaved = 0 Then
+
+                    _manuscripts.RemoveAll(
+                        Function(item) item IsNot Nothing AndAlso
+                                       Not existingManuscriptIds.Contains(item.Id)
+                    )
+
+                End If
+
+                Try
+
+                    _library =
+                        _repository.Load()
+
+                Catch reloadFailure As Exception When TypeOf reloadFailure Is IO.IOException OrElse
+                                                      TypeOf reloadFailure Is UnauthorizedAccessException OrElse
+                                                      TypeOf reloadFailure Is IO.InvalidDataException
+                    ' Keep what is on screen; the next save tries again.
+                End Try
+
+                RefreshLists()
+
+                If worksSaved > 0 Then
+
+                    Dim incomplete As String =
+                        "PaperRoute imported the selected works but could not save the other ORCID changes." &
                         Environment.NewLine &
-                        Environment.NewLine &
-                        "Affiliations added: " &
-                        result.AffiliationsAdded.ToString() &
                         Environment.NewLine &
                         "Works imported as Idea manuscripts: " &
-                        result.ManuscriptsImported.ToString()
+                        worksSaved.ToString() &
+                        Environment.NewLine &
+                        Environment.NewLine &
+                        ex.Message &
+                        Environment.NewLine &
+                        Environment.NewLine &
+                        "Choose ORCID... again to save them. Works already imported are skipped as duplicates."
 
-                    If result.DuplicateWorksSkipped > 0 Then
-
-                        message &=
-                            Environment.NewLine &
-                            "Duplicate works skipped: " &
-                            result.DuplicateWorksSkipped.ToString()
-
-                    End If
-
-                    ' Where to find the library as it was (#122).
                     If preImportCopies.Length > 0 Then
 
-                        message &=
+                        incomplete &=
                             Environment.NewLine &
                             Environment.NewLine &
                             "A copy of your library from before this import is in:" &
@@ -619,13 +764,13 @@ Namespace Forms
 
                     MessageBox.Show(
                         Me,
-                        message,
-                        "ORCID Import Complete",
+                        incomplete,
+                        "ORCID Import Incomplete",
                         MessageBoxButtons.OK,
-                        MessageBoxIcon.Information
+                        MessageBoxIcon.Warning
                     )
 
-                Catch ex As Exception
+                Else
 
                     MessageBox.Show(
                         Me,
@@ -638,9 +783,52 @@ Namespace Forms
                         MessageBoxIcon.Error
                     )
 
-                End Try
+                End If
 
-            End Using
+                Return
+
+            End Try
+
+            RefreshLists()
+
+            Dim message As String =
+                "ORCID changes applied." &
+                Environment.NewLine &
+                Environment.NewLine &
+                "Affiliations added: " &
+                result.AffiliationsAdded.ToString() &
+                Environment.NewLine &
+                "Works imported as Idea manuscripts: " &
+                result.ManuscriptsImported.ToString()
+
+            If result.DuplicateWorksSkipped > 0 Then
+
+                message &=
+                    Environment.NewLine &
+                    "Duplicate works skipped: " &
+                    result.DuplicateWorksSkipped.ToString()
+
+            End If
+
+            ' Where to find the library as it was (#122).
+            If preImportCopies.Length > 0 Then
+
+                message &=
+                    Environment.NewLine &
+                    Environment.NewLine &
+                    "A copy of your library from before this import is in:" &
+                    Environment.NewLine &
+                    preImportCopies
+
+            End If
+
+            MessageBox.Show(
+                Me,
+                message,
+                "ORCID Import Complete",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information
+            )
 
         End Sub
 
@@ -673,7 +861,8 @@ Namespace Forms
                     selected.DisplayName &
                     "' is used by " &
                     usageCount.ToString() &
-                    " manuscript(s). Remove the author from those manuscripts before deleting the reusable author record.",
+                    If(usageCount = 1, " manuscript. Remove the author from that manuscript", " manuscripts. Remove the author from those manuscripts") &
+                    " before deleting the reusable author record.",
                     "Author Is In Use",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information
@@ -690,7 +879,8 @@ Namespace Forms
                 "'?",
                 "Delete Author",
                 MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2
             ) <> DialogResult.Yes Then
 
                 Return
@@ -732,7 +922,9 @@ Namespace Forms
                 )
 
                 SaveLibrary()
-                RefreshLists()
+                RefreshLists(
+                    affiliationId:=dialog.Result.Id
+                )
 
             End Using
 
@@ -817,7 +1009,8 @@ Namespace Forms
                     selected.DisplayName &
                     "' is used by " &
                     usageCount.ToString() &
-                    " manuscript author(s). Remove that affiliation assignment before deleting it.",
+                    If(usageCount = 1, " manuscript author. Remove that affiliation assignment", " manuscript authors. Remove those affiliation assignments") &
+                    " before deleting it.",
                     "Affiliation Is In Use",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information
@@ -834,7 +1027,8 @@ Namespace Forms
                 "'?",
                 "Delete Affiliation",
                 MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2
             ) <> DialogResult.Yes Then
 
                 Return

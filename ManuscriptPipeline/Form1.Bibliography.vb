@@ -87,43 +87,91 @@ Partial Public Class Form1
 
                 Next
 
+                Dim existingAuthorIds As New System.Collections.Generic.HashSet(Of Guid)()
+
+                If authorLibrary.Authors IsNot Nothing Then
+
+                    For Each existingAuthor As AuthorRecord In authorLibrary.Authors
+
+                        If existingAuthor IsNot Nothing Then
+
+                            existingAuthorIds.Add(
+                                existingAuthor.Id
+                            )
+
+                        End If
+
+                    Next
+
+                End If
+
                 Dim result As BibliographyImportResult =
-                    BibliographyExchangeService.Apply(
-                        dialog.SelectedRecords,
-                        manuscripts,
-                        authorLibrary,
-                        New BibliographyImportOptions With {
-                            .ImportPublishedRecordsAsPublished =
-                                dialog.ImportPublishedRecordsAsPublished
-                        }
+                    Nothing
+
+                ' Nothing of the import is saved until the author library
+                ' is, so if any step up to that save fails, none of it
+                ' stays: a later save never writes an import the
+                ' researcher was told failed. Apply only adds records.
+                Try
+
+                    result =
+                        BibliographyExchangeService.Apply(
+                            dialog.SelectedRecords,
+                            manuscripts,
+                            authorLibrary,
+                            New BibliographyImportOptions With {
+                                .ImportPublishedRecordsAsPublished =
+                                    dialog.ImportPublishedRecordsAsPublished
+                            }
+                        )
+
+                    Dim importedAtUtc As DateTime =
+                        DateTime.UtcNow
+
+                    For Each importedManuscript As Manuscript In manuscripts
+
+                        If importedManuscript Is Nothing OrElse
+                           existingManuscriptIds.Contains(
+                               importedManuscript.Id
+                           ) Then
+
+                            Continue For
+
+                        End If
+
+                        ChronologyProvenanceService.StampImportedManuscript(
+                            importedManuscript,
+                            importedAtUtc
+                        )
+
+                    Next
+
+                    ' Save reusable people first. If the manuscript save then
+                    ' fails, the worst case is an unused reusable author record;
+                    ' PaperRoute never persists a manuscript that references an
+                    ' author record that failed to save.
+                    authorRepository.SaveKeepingJournals(authorLibrary)
+
+                Catch ex As Exception
+
+                    manuscripts.RemoveAll(
+                        Function(item) item IsNot Nothing AndAlso
+                                       Not existingManuscriptIds.Contains(item.Id)
                     )
 
-                Dim importedAtUtc As DateTime =
-                    DateTime.UtcNow
+                    If authorLibrary.Authors IsNot Nothing Then
 
-                For Each importedManuscript As Manuscript In manuscripts
-
-                    If importedManuscript Is Nothing OrElse
-                       existingManuscriptIds.Contains(
-                           importedManuscript.Id
-                       ) Then
-
-                        Continue For
+                        authorLibrary.Authors.RemoveAll(
+                            Function(item) item IsNot Nothing AndAlso
+                                           Not existingAuthorIds.Contains(item.Id)
+                        )
 
                     End If
 
-                    ChronologyProvenanceService.StampImportedManuscript(
-                        importedManuscript,
-                        importedAtUtc
-                    )
+                    RenderManuscripts()
+                    Throw
 
-                Next
-
-                ' Save reusable people first. If the manuscript save then
-                ' fails, the worst case is an unused reusable author record;
-                ' PaperRoute never persists a manuscript that references an
-                ' author record that failed to save.
-                authorRepository.SaveKeepingJournals(authorLibrary)
+                End Try
 
                 ' The window's save, as every other save is (#227): its
                 ' sweep runs behind the disabled window. A save that does
@@ -277,7 +325,7 @@ Partial Public Class Form1
                         Environment.NewLine &
                         Environment.NewLine &
                         selection.SelectedManuscripts.Count.ToString() &
-                        " manuscript(s) exported.",
+                        If(selection.SelectedManuscripts.Count = 1, " manuscript exported.", " manuscripts exported."),
                         "Export Complete",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Information
@@ -288,7 +336,7 @@ Partial Public Class Form1
                         "PaperRoute could not export the bibliography." &
                         Environment.NewLine &
                         Environment.NewLine &
-                        ex.Message,
+                        StorageFile.WriteFailureText(picker.FileName, ex),
                         "Bibliography Export Error",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Error

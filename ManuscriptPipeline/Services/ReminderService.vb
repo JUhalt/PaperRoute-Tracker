@@ -172,14 +172,17 @@ Namespace Services
 
             If upcoming > 0 Then
 
-                parts.Add(
-                    upcoming.ToString() &
-                    " upcoming within " &
+                Dim daysWindow As Integer =
                     Math.Max(
                         0,
                         daysAhead
-                    ).ToString() &
-                    " day(s)"
+                    )
+
+                parts.Add(
+                    upcoming.ToString() &
+                    " upcoming within " &
+                    daysWindow.ToString() &
+                    If(daysWindow = 1, " day", " days")
                 )
 
             End If

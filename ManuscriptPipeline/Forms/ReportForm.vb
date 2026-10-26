@@ -198,7 +198,7 @@ Namespace Forms
             Try
                 File.WriteAllText(path, CurrentHtml(), New UTF8Encoding(False))
             Catch ex As Exception When TypeOf ex Is IOException OrElse TypeOf ex Is UnauthorizedAccessException
-                MessageBox.Show(Me, "PaperRoute could not save the report." & Environment.NewLine & Environment.NewLine & ex.Message,
+                MessageBox.Show(Me, "PaperRoute could not save the report." & Environment.NewLine & Environment.NewLine & StorageFile.WriteFailureText(path, ex),
                                 Text, MessageBoxButtons.OK, MessageBoxIcon.Error)
                 Return
             End Try

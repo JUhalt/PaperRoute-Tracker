@@ -66,7 +66,7 @@ Namespace Forms
                 Try
                     File.WriteAllText(picker.FileName, txtMarkdown.Text, New UTF8Encoding(False))
                 Catch ex As Exception When TypeOf ex Is IOException OrElse TypeOf ex Is UnauthorizedAccessException
-                    MessageBox.Show(Me, "The Markdown file could not be saved." & Environment.NewLine & ex.Message,
+                    MessageBox.Show(Me, "The Markdown file could not be saved." & Environment.NewLine & StorageFile.WriteFailureText(picker.FileName, ex),
                                     "Export Reviewer Responses", MessageBoxButtons.OK, MessageBoxIcon.Error)
                     Return
                 End Try

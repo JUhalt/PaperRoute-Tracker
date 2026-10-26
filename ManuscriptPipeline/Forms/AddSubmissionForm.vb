@@ -25,6 +25,7 @@ Namespace Forms
 
         Private _selectedJournalId As Guid?
         Private _initialJournalName As String = String.Empty
+        Private _initialPortalUrl As String = String.Empty
         Private _createdSubmission As JournalSubmission
 
 
@@ -62,6 +63,51 @@ Namespace Forms
             _selectedJournalId = initialJournalId
             _initialJournalName = txtJournal.Text
             txtPortalUrl.Text = If(initialPortalUrl, String.Empty)
+            _initialPortalUrl = txtPortalUrl.Text
+
+            AddHandler txtJournal.TextChanged,
+                AddressOf KeepThePortalWithItsJournal
+
+        End Sub
+
+
+        ' A portal filled in from the journal the dialog opened with belongs
+        ' to that journal: it goes when the name is changed to another one,
+        ' and comes back if the name is changed back (#224). A portal typed
+        ' or chosen since then stays.
+        Private Sub KeepThePortalWithItsJournal(
+            sender As Object,
+            e As EventArgs
+        )
+
+            If String.IsNullOrWhiteSpace(_initialPortalUrl) Then
+                Return
+            End If
+
+            Dim namesItsJournal As Boolean =
+                String.Equals(
+                    _initialJournalName,
+                    txtJournal.Text.Trim(),
+                    StringComparison.CurrentCultureIgnoreCase
+                )
+
+            If Not namesItsJournal AndAlso
+               String.Equals(
+                   txtPortalUrl.Text.Trim(),
+                   _initialPortalUrl.Trim(),
+                   StringComparison.OrdinalIgnoreCase
+               ) Then
+
+                txtPortalUrl.Text =
+                    String.Empty
+
+            ElseIf namesItsJournal AndAlso
+                   String.IsNullOrWhiteSpace(txtPortalUrl.Text) Then
+
+                txtPortalUrl.Text =
+                    _initialPortalUrl
+
+            End If
 
         End Sub
 

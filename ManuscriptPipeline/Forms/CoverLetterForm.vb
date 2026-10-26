@@ -489,7 +489,7 @@ Namespace Forms
                 SetStatus("Saved as " & Path.GetFileName(target) & ".", False)
             Catch ex As Exception When TypeOf ex Is IOException OrElse TypeOf ex Is UnauthorizedAccessException OrElse
                                        TypeOf ex Is Security.SecurityException OrElse TypeOf ex Is ArgumentException OrElse TypeOf ex Is NotSupportedException
-                SetStatus("The letter couldn't be saved. " & ex.Message, True)
+                SetStatus("The letter couldn't be saved. " & StorageFile.WriteFailureText(target, ex), True)
             End Try
         End Sub
 
