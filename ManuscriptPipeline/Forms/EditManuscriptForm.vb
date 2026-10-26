@@ -330,26 +330,6 @@ Namespace Forms
         End Sub
 
 
-        ' A page prepared while the window idles shows no record as a page
-        ' that let go of its record shows none (#133): bound to a working
-        ' copy of nothing over the library's records, whose tags it goes on
-        ' offering, so the first manuscript opened finds the form as every
-        ' later one does. Its first snapshot of a working copy, which warms
-        ' the serializer, is made here, while the window idles.
-        Friend Sub ShowNoRecord(allManuscripts As IEnumerable(Of Manuscript))
-
-            Bind(
-                New RecordState With {
-                    .Working = New Manuscript(),
-                    .All = If(allManuscripts, Enumerable.Empty(Of Manuscript)()).ToList(),
-                    .AuthorLibrary = _record.AuthorLibrary,
-                    .PartsDeferred = True
-                },
-                recovered:=False)
-
-        End Sub
-
-
         ' The panels that hold the parts built for each record, its version
         ' history and its submission's details: empty while the form is
         ' built, so a page holding the layout of every container that has
@@ -395,13 +375,18 @@ Namespace Forms
 
         ' Lets go of the record: the form holds and shows nothing of it until
         ' the next LoadRecord. The library's tags stay suggested, so the next
-        ' load need not set them again.
-        Friend Sub UnloadRecord()
+        ' load need not set them again. A page prepared while the window
+        ' idles shows no record in the same way before its first (#133),
+        ' bound over the library's records given, whose tags it goes on
+        ' offering, so the first manuscript opened finds the form as every
+        ' later one does; its first snapshot of a working copy, which warms
+        ' the serializer, is made then, while the window idles.
+        Friend Sub UnloadRecord(Optional allManuscripts As IEnumerable(Of Manuscript) = Nothing)
 
             Bind(
                 New RecordState With {
                     .Working = New Manuscript(),
-                    .All = _record.All,
+                    .All = If(allManuscripts?.ToList(), _record.All),
                     .AuthorLibrary = _record.AuthorLibrary,
                     .PartsDeferred = True
                 },

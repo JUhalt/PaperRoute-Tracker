@@ -534,7 +534,7 @@ Partial Public Class Form1
         End If
 
         If manuscriptPageEditor.RecordToken Is token Then
-            manuscriptPageEditor.ShowNoRecord(manuscripts)
+            manuscriptPageEditor.UnloadRecord(manuscripts)
         End If
 
         QueueIdleWork(Sub() LayOutPreparedManuscriptPage(page))
