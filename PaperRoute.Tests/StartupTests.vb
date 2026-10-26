@@ -613,7 +613,7 @@ Public Class StartupTests
 
         StringAssert.Contains(
             messages.Single(),
-            "restored 3 manuscript(s)"
+            "restored 3 manuscripts"
         )
 
         StringAssert.Contains(

@@ -850,6 +850,48 @@ Public Class ManuscriptPageTests
             End Sub)
     End Sub
 
+    ' A delete whose save leaves a folder in place, because a file in it
+    ' is open, keeps the save's warning after what it did (#225), one space
+    ' after the sentence. The other status tests save through a stand-in
+    ' that never warns; this save is real.
+    <TestMethod>
+    Public Sub DeletingFromThePageKeepsTheSaveWarning()
+        RunOnStaThread(
+            Sub()
+                Dim root As String = CreateTemporaryRoot()
+                Try
+                    Using board As New PageBoard(), dialogs As New DialogWatcher()
+                        board.UseRepository(root)
+                        Dim keep As Manuscript = Sample("Keep")
+                        Dim remove As Manuscript = Sample("Remove")
+                        Dim working As String = Path.Combine(root, "revision.txt")
+                        File.WriteAllText(working, "A revision.")
+                        Dim version As ManuscriptVersion =
+                            ManuscriptVersionService.CreateVersion(remove, "Revision 1", String.Empty, working, True)
+                        board.Prepare(keep, remove)
+                        Assert.IsTrue(board.SaveNow(), "The snapshot is copied into the library.")
+                        Dim folder As String = Path.GetDirectoryName(version.LocalFilePath)
+                        board.Open(remove)
+
+                        ' The snapshot is open in another program, so its folder cannot move.
+                        Using File.Open(version.LocalFilePath, FileMode.Open, FileAccess.Read, FileShare.None)
+                            board.ConfirmDelete()
+                        End Using
+                        Application.DoEvents()
+
+                        Assert.IsTrue(File.Exists(version.LocalFilePath), "The folder in use stayed in place.")
+                        Assert.AreEqual(
+                            "Deleted ""Remove"". A folder stayed in place because a file in it is in use: " & folder,
+                            board.StatusText)
+
+                        board.Close()
+                    End Using
+                Finally
+                    DeleteTemporaryRoot(root)
+                End Try
+            End Sub)
+    End Sub
+
     ' The Delete Manuscript window's DELETE box and Delete button.
     Private Shared Function ConfirmBox(dialog As DeleteManuscriptForm) As TextBox
         Return Descendants(dialog).OfType(Of TextBox)().Single()

@@ -2114,7 +2114,7 @@ Namespace Forms
             If added > 0 Then
                 RaiseEvent StatusMessage(Me,
                     If(added = 1, "Added 1 journal", "Added " & added.ToString(Globalization.CultureInfo.CurrentCulture) & " journals") &
-                    " to the shortlist as Considering. Save the manuscript page to keep them.")
+                    " to the shortlist as Considering. Save the manuscript page to keep " & If(added = 1, "it.", "them."))
             End If
 
         End Sub
@@ -2590,7 +2590,8 @@ Namespace Forms
 
                 lblAuthorInfo.Text =
                     _workingManuscript.Authors.Count.ToString() &
-                    " structured author(s). Order is manuscript-specific."
+                    If(_workingManuscript.Authors.Count = 1, " structured author.", " structured authors.") &
+                    " Order is manuscript-specific."
 
             End If
 
@@ -3210,7 +3211,7 @@ Namespace Forms
                 result &=
                     " - " &
                     submission.Decisions.Count.ToString() &
-                    " decision(s)"
+                    If(submission.Decisions.Count = 1, " decision", " decisions")
 
             End If
 
@@ -3219,7 +3220,7 @@ Namespace Forms
                 result &=
                     " - " &
                     submission.Correspondence.Count.ToString() &
-                    " file(s)"
+                    If(submission.Correspondence.Count = 1, " file", " files")
 
             End If
 

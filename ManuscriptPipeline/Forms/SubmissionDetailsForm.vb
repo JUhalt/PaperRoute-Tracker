@@ -2165,12 +2165,12 @@ Namespace Forms
             Dim choice As DialogResult =
         MessageBox.Show(
             Me,
-            "How should PaperRoute handle the dropped file(s)?" &
+            "How should PaperRoute handle the dropped " & If(paths.Length = 1, "file?", "files?") &
             Environment.NewLine &
             Environment.NewLine &
             "YES  — Copy into the PaperRoute Library when you Save & Close" &
             Environment.NewLine &
-            "NO   — Link to the files in their current location" &
+            If(paths.Length = 1, "NO   — Link to the file in its current location", "NO   — Link to the files in their current location") &
             Environment.NewLine &
             "CANCEL — Do nothing",
             "Add Files",
@@ -2258,9 +2258,9 @@ Namespace Forms
                 MessageBox.Show(
             Me,
             addedCount.ToString() &
-            " file(s) added. " &
+            If(addedCount = 1, " file added. ", " files added. ") &
             skippedCount.ToString() &
-            " file(s) were skipped.",
+            If(skippedCount = 1, " file was skipped.", " files were skipped."),
             "Files Added",
             MessageBoxButtons.OK,
             MessageBoxIcon.Information

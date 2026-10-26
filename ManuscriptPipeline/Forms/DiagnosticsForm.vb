@@ -359,7 +359,7 @@ Namespace Forms
                         Me,
                         "PaperRoute could not save the diagnostic report." &
                         Environment.NewLine & Environment.NewLine &
-                        ex.Message,
+                        StorageFile.WriteFailureText(dialog.FileName, ex),
                         "Diagnostics Error",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Error

@@ -230,7 +230,7 @@ Namespace Controls
 
         Private Function ProgressText() As String
             If Item.Kind = DeadlineKind.Preparation Then
-                Return Item.ProgressDone.ToString() & " of " & Item.ProgressTotal.ToString() & " required checklist items resolved"
+                Return Item.ProgressDone.ToString() & " of " & Item.ProgressTotal.ToString() & If(Item.ProgressTotal = 1, " required checklist item resolved", " required checklist items resolved")
             End If
             Dim text As String = Item.ProgressDone.ToString() & " of " & Item.ProgressTotal.ToString() &
                                  If(Item.ProgressTotal = 1, " comment addressed", " comments addressed")

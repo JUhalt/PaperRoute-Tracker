@@ -413,7 +413,8 @@ Namespace Services
                 If outcome.Item1 > 0 Then parts.Add(outcome.Item1.ToString(Globalization.CultureInfo.CurrentCulture) & " " & outcome.Item2)
             Next
             If history.MedianDaysToFirstDecision.HasValue Then
-                parts.Add("median " & history.MedianDaysToFirstDecision.Value.Value.ToString("0.#", Globalization.CultureInfo.CurrentCulture) & " days to a first decision")
+                Dim medianDays As Double = history.MedianDaysToFirstDecision.Value.Value
+                parts.Add("median " & medianDays.ToString("0.#", Globalization.CultureInfo.CurrentCulture) & If(medianDays = 1, " day to a first decision", " days to a first decision"))
             End If
             parts.Add("last submitted " & history.LastSubmitted.ToString("MMM d, yyyy", Globalization.CultureInfo.CurrentCulture) & ".")
             Return String.Join(" · ", parts)

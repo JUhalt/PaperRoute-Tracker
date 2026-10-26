@@ -986,7 +986,8 @@ Namespace Forms
                 MessageBox.Show(
                     Me,
                     added.ToString() &
-                    " new requirement(s) were added from the journal template. Existing readiness items were not rewritten.",
+                    If(added = 1, " new requirement was added", " new requirements were added") &
+                    " from the journal template. Existing readiness items were not rewritten.",
                     "New Requirements Added",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information

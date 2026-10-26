@@ -176,6 +176,7 @@ Partial Public Class Form1
 
             manuscriptBackLink.Text = ChrW(&H2190) & " " & PageTitle(manuscriptOrigin)
             manuscriptBackLink.AccessibleName = "Back to " & PageTitle(manuscriptOrigin) & " (Alt+Left)"
+            cardToolTip.SetToolTip(manuscriptBackLink, manuscriptBackLink.AccessibleName)
             manuscriptPageSaveHint.Text = SaveBarHint
             manuscriptPageSaveBar.Visible = False
 
@@ -549,6 +550,10 @@ Partial Public Class Form1
             .AccessibleName = "Back to " & PageTitle(manuscriptOrigin) & " (Alt+Left)"
         }
 
+        ' Its shortcut shown to the mouse as well; ShowManuscriptPage keeps
+        ' the tip on the page it names.
+        cardToolTip.SetToolTip(lnkBack, lnkBack.AccessibleName)
+
         AddHandler lnkBack.LinkClicked,
             Sub(sender, e)
                 GoBack()
@@ -827,6 +832,8 @@ Partial Public Class Form1
             .Margin = New Padding(0),
             .AccessibleName = "Save manuscript (Ctrl+S)"
         }
+
+        cardToolTip.SetToolTip(btnSave, btnSave.AccessibleName)
 
         AddHandler btnDiscard.Click,
             Sub(sender, e)

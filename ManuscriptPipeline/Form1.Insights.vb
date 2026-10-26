@@ -679,7 +679,7 @@ Partial Public Class Form1
         card.Controls.Add(New Label With {
             .AutoSize = True,
             .UseMnemonic = False,
-            .Text = "Percentages are shares of all " & library.TotalDays.ToString("N0", CultureInfo.CurrentCulture) & " days drawn. " &
+            .Text = "Percentages are shares of " & If(library.TotalDays = 1, "the 1 day drawn. ", "all " & library.TotalDays.ToString("N0", CultureInfo.CurrentCulture) & " days drawn. ") &
                     "Click a route, or select it and press Enter, to open its route map." &
                     If(insightsMapAll, " A dotted end and + mark a route still under way today.", String.Empty),
             .ForeColor = UiTheme.SecondaryText(),

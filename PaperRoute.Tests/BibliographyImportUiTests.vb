@@ -109,6 +109,50 @@ Public Class BibliographyImportUiTests
             End Sub)
     End Sub
 
+    ' An import whose reusable-author save fails saves nothing, so none of
+    ' it stays in memory either: neither the new manuscripts nor the new
+    ' authors, which a later save of anything would otherwise write. The
+    ' author save is made to fail by a folder where its temporary file
+    ' goes. Before the change the library held 3 manuscripts and the
+    ' author library 2 new authors after the failure.
+    <TestMethod>
+    Public Sub AnImportWhoseAuthorSaveFailsTakesItsRecordsBackOut()
+        StaRunner.Run(
+            Sub()
+                Using board As New ImportBoard(), dialogs As New ManuscriptPageTests.DialogWatcher()
+                    Dim existing As New Manuscript With {.Title = ExistingTitle}
+                    board.Prepare(existing)
+
+                    Dim blocker As String = New AuthorLibraryRepository().DataFilePath & ".tmp"
+                    Directory.CreateDirectory(blocker)
+
+                    board.Import(WriteTwoRecords())
+
+                    CollectionAssert.AreEqual({"Bibliography Import Error"}, dialogs.Closed)
+                    Assert.AreEqual(0, board.SaveCount, "The library is not saved.")
+                    Assert.AreEqual(1, board.Library.Count, "The library is back to the manuscript it had.")
+                    Assert.AreSame(existing, board.Library.Single())
+                    Dim authors As AuthorLibraryData = board.AuthorLibrary
+                    Assert.AreEqual(0, authors.Authors.Count, "No new author stays in memory.")
+
+                    Directory.Delete(blocker)
+                    Assert.IsTrue(board.SaveNow(), "A later save goes through.")
+                    CollectionAssert.AreEqual(
+                        {ExistingTitle},
+                        New ManuscriptRepository().Load().Select(Function(manuscript) manuscript.Title).ToList(),
+                        "The later save writes none of the imported records.")
+
+                    Dim authorRepository As New AuthorLibraryRepository()
+                    authorRepository.SaveKeepingJournals(authors)
+                    Assert.IsFalse(
+                        authorRepository.Load().Authors.Any(Function(author) author.FamilyName = "Whitfield" OrElse author.FamilyName = "Okafor"),
+                        "A later author save writes none of the import's authors.")
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
     ' Two records, neither a duplicate of the library's manuscript, under
     ' the test's root.
     Private Function WriteTwoRecords() As String
@@ -170,6 +214,13 @@ Public Class BibliographyImportUiTests
         Public ReadOnly Property Library As List(Of Manuscript)
             Get
                 Return DirectCast(GetType(Form1).GetField("manuscripts", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me), List(Of Manuscript))
+            End Get
+        End Property
+
+        ' The window's reusable author library in memory.
+        Public ReadOnly Property AuthorLibrary As AuthorLibraryData
+            Get
+                Return DirectCast(GetType(Form1).GetField("authorLibrary", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me), AuthorLibraryData)
             End Get
         End Property
 

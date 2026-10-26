@@ -332,7 +332,16 @@ Public Class ReminderServiceTests
 
         StringAssert.Contains(summary, "1 overdue")
         StringAssert.Contains(summary, "1 due today")
-        StringAssert.Contains(summary, "1 upcoming within 3 day(s)")
+        StringAssert.Contains(summary, "1 upcoming within 3 days")
+
+        ' A one-day window is one day, not "1 day(s)" (#245).
+        StringAssert.Contains(
+            ReminderService.CreateNotificationSummary(
+                items,
+                1
+            ),
+            "1 upcoming within 1 day."
+        )
 
     End Sub
 
