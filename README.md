@@ -16,12 +16,12 @@ PaperRoute Tracker helps researchers manage manuscripts from idea through submis
 
 ## Current status
 
-- **Stable:** [v0.9.1 — Journal Choice & Guidance](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v0.9.1) helps you decide where a manuscript should go: a journal shortlist for each manuscript, a guide to choosing a journal, journal facts and metrics from open indexes, journals that publish work like yours, your own citations, a teaching example library, packet export with RO-Crate metadata, and optional AI help, all under one local-first rule with a **Work offline** switch. See the [v0.9.1 patch notes](docs/releases/0.9.1.md), the [v0.9 release notes](docs/releases/0.9.0.md), and the [user guide](docs/USER_GUIDE.md).
-- **Next:** [v0.9.2 — 1.0 Hardening](https://github.com/JUhalt/PaperRoute-Tracker/milestone/11): onboarding, accessibility, recovery, and certification across the whole workflow before 1.0.
+- **Stable:** [v0.9.2 — 1.0 Hardening](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v0.9.2) readies PaperRoute for 1.0: your files and your library are harder to lose and easier to recover, the window no longer stalls on a large library, and PaperRoute can be worked from the keyboard and with a screen reader throughout. It builds on v0.9, which helps you decide where a manuscript should go: a journal shortlist for each manuscript, a guide to choosing a journal, journal facts and metrics from open indexes, journals that publish work like yours, your own citations, a teaching example library, packet export with RO-Crate metadata, and optional AI help, all under one local-first rule with a **Work offline** switch. See the [v0.9.2 release notes](docs/releases/0.9.2.md), the [v0.9 release notes](docs/releases/0.9.0.md), and the [user guide](docs/USER_GUIDE.md).
+- **Next:** [v1.0 — Trusted Research Workflow](https://github.com/JUhalt/PaperRoute-Tracker/milestone/12): a release you can trust with your real publication pipeline.
 
 v0.9 moves the library to Schema 9, which v0.8 cannot open, so keep a backup made with v0.8 before upgrading. The [upgrade notes](UPGRADE_NOTES.md) explain the save and compatibility boundaries.
 
-**New to PaperRoute?** Start with the [PaperRoute User Guide](https://github.com/JUhalt/PaperRoute-Tracker/blob/v0.9.1/docs/USER_GUIDE.md) for a Quick Start, feature tour, and task-oriented "How do I...?" reference.
+**New to PaperRoute?** Start with the [PaperRoute User Guide](https://github.com/JUhalt/PaperRoute-Tracker/blob/v0.9.2/docs/USER_GUIDE.md) for a Quick Start, feature tour, and task-oriented "How do I...?" reference.
 
 <p align="center">
   <img src="docs/images/board.png" width="860" alt="The PaperRoute board: pipeline cards with stage, what needs attention, target journal, and each manuscript's route so far (fictional sample data)">
@@ -223,8 +223,8 @@ PaperRoute is an independent, open-source project. Its implementation, local-fir
 | **Released** | v0.7 — Deadline Center | Everything that needs action, and when; the publication check |
 | **Released** | v0.8 — Route Analytics & Reports | Route maps, your own turnaround data, reports, types and tags |
 | **Released** | v0.9 — Journal Choice & Guidance | Choosing a journal, journal facts, packet export, a teaching example, optional AI help |
-| **Now** | [v0.9.2 — 1.0 Hardening](https://github.com/JUhalt/PaperRoute-Tracker/milestone/11) | Onboarding, accessibility, recovery, certification |
-| **Goal** | [v1.0 — Trusted Research Workflow](https://github.com/JUhalt/PaperRoute-Tracker/milestone/12) | "I trust this application with my research workflow." |
+| **Released** | v0.9.2 — 1.0 Hardening | Recovery, speed, accessibility, display scaling, certification |
+| **Now** | [v1.0 — Trusted Research Workflow](https://github.com/JUhalt/PaperRoute-Tracker/milestone/12) | "I trust this application with my research workflow." |
 
 See [`ROADMAP.md`](ROADMAP.md) for the reasoning behind each release. GitHub milestones and issues are the live source of truth for active release work.
 

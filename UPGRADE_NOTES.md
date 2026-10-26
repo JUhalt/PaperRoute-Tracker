@@ -27,9 +27,7 @@ Use **Settings → Backup Library...** to create a portable backup. In v0.5 and 
 
 ## Moving from v0.9.1 to v0.9.2
 
-<!-- pending: at release, add "**v0.9.2 is the current Stable release.**" after this section's first sentence, and take that sentence out of the v0.9.1 section below. -->
-
-PaperRoute v0.9.2 is the hardening release before 1.0: safer handling of your files, recovery when something goes wrong, faster pages on a large library, and keyboard, screen-reader, display-scaling and contrast-theme work across the app. It uses the same **Schema 9** library as v0.9.0 and v0.9.1 and migrates no data, and v0.9.1 can still open a library that v0.9.2 has used. The next library upgrade, Schema 10, waits until after 1.0.
+PaperRoute v0.9.2 is the hardening release before 1.0: safer handling of your files, recovery when something goes wrong, faster pages on a large library, and keyboard, screen-reader, display-scaling and contrast-theme work across the app. **v0.9.2 is the current Stable release.** It uses the same **Schema 9** library as v0.9.0 and v0.9.1 and migrates no data, and v0.9.1 can still open a library that v0.9.2 has used. The next library upgrade, Schema 10, waits until after 1.0.
 
 Save any open manuscript page before you choose **Download & Restart**: v0.9.1 does not ask about unsaved edits before it updates, so they would be lost. From v0.9.2 on, updating asks first.
 
@@ -44,7 +42,7 @@ After upgrading:
 
 ## Moving from v0.9.0 to v0.9.1
 
-PaperRoute v0.9.1 fixes one defect: saving could delete the packet snapshots of manuscripts the open library did not contain. **v0.9.1 is the current Stable release.** It uses the same **Schema 9** library as v0.9.0 and migrates no data, and v0.9.0 can still open a library that v0.9.1 has used.
+PaperRoute v0.9.1 fixes one defect: saving could delete the packet snapshots of manuscripts the open library did not contain. It uses the same **Schema 9** library as v0.9.0 and migrates no data, and v0.9.0 can still open a library that v0.9.1 has used.
 
 If PaperRoute runs on more than one computer that shares a Documents folder, update every one of them before saving on any of them: a computer still on v0.9.0 deletes, on its first save, the packet snapshots of manuscripts its own library does not contain, and a synced folder carries the deletion to the others. Until every computer is updated, keep a portable backup (**Settings > Backup Library...**) made on the computer whose library is complete.
 
