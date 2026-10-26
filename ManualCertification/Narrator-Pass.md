@@ -45,8 +45,8 @@ The scripted screen-reader check for a release (#139), run once during certifica
 - [ ] On a manuscript page, change a field and press **Ctrl+S**: Narrator reads "Saved locally" from the status line without moving focus (#139).
 - [ ] **What just happened** (#225, PR #236), each read from the status line without moving focus: add a manuscript named `ZZZ-CERT-v0.9.2-Narrator` ('Added "ZZZ-CERT-v0.9.2-Narrator".'); move it to the File Drawer ('Moved "…" to the File Drawer.'); restore it ('Restored "…" to the Pipeline.'); delete it, typing DELETE ('Deleted "…".').
 - [ ] In **Check for Publications**, check one fixture manuscript (this sends its title to Crossref): the progress line is read as it changes; **Esc** stops the check and the window stays open.
-
-<!-- pending: the second wave of small touches, #239 to #245: add here what each leaves to the Narrator pass. -->
+- [ ] **Shortcuts in tips** (#240, PR #247): point at **Save** on a manuscript page with unsaved changes, and reach the Board's search box with **Tab** and with **Alt+Left** (from the Library, as above). Narrator reads the shortcut in the name, "Save manuscript (Ctrl+S)" and "Search the board (Ctrl+F)", and once more when the tip opens, as it does for the rail's "Board (Ctrl+1)". Record its words.
+- [ ] **The author just added** (#242, PR #247), optional: in the Library's **Authors & Affiliations**, add an author. Focus does not move when the dialog closes, so nothing new is announced then; press **Shift+Tab** to the list, and Narrator reads the new author's name with it.
 
 ## Record
 
