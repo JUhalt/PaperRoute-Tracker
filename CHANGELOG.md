@@ -4,7 +4,7 @@ All notable changes to PaperRoute Tracker will be documented here.
 
 ## [0.9.2] - 2026-10-26
 
-PaperRoute v0.9.2 — **1.0 Hardening** — was released on October 26, 2026 from [PR #PR_NUMBER_PENDING](https://github.com/JUhalt/PaperRoute-Tracker/pull/PR_NUMBER_PENDING), a Stable patch for v0.9.1 and the hardening pass before 1.0: your files and your library are harder to lose and easier to recover, the window no longer stalls on a large library, and the app can be worked from the keyboard and with a screen reader throughout. Certification is recorded in [#147](https://github.com/JUhalt/PaperRoute-Tracker/issues/147). v0.9.2 keeps the Schema 9 library of v0.9.0; there is no library upgrade.
+PaperRoute v0.9.2 — **1.0 Hardening** — was released on October 26, 2026 from [PR #251](https://github.com/JUhalt/PaperRoute-Tracker/pull/251), a Stable patch for v0.9.1 and the hardening pass before 1.0: your files and your library are harder to lose and easier to recover, the window no longer stalls on a large library, and the app can be worked from the keyboard and with a screen reader throughout. Certification is recorded in [#147](https://github.com/JUhalt/PaperRoute-Tracker/issues/147). v0.9.2 keeps the Schema 9 library of v0.9.0; there is no library upgrade.
 
 ### Added
 
