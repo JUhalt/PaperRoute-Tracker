@@ -796,6 +796,57 @@ Public Class KeptManuscriptPageTests
     End Sub
 
 
+    ' The shortlist's rows take their height once as a manuscript with
+    ' shortlisted journals opens after one with none (#133). Hidden while
+    ' no journal was shortlisted, the list had not been given a width, so
+    ' it measured its rows at the narrowest a row can be, grew tall, was
+    ' laid out so, and took its height again once it had its width.
+    <TestMethod>
+    Public Sub TheShortlistTakesItsHeightOnce()
+
+        Dim heights As New List(Of Integer)()
+        Dim final As Integer = -1
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary = Library60()
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+                    Dim none As Manuscript = board.Library.First(Function(item) item.Location = ManuscriptLocation.Published AndAlso item.JournalShortlist.Count = 0)
+                    Dim choosing As Manuscript = board.Library.Where(Function(item) item.Location = ManuscriptLocation.Pipeline).OrderByDescending(Function(item) item.JournalShortlist.Count).First()
+
+                    board.Open(none)
+                    Application.DoEvents()
+                    board.NavigateTo(Form1.WorkspacePage.Board)
+                    board.WaitForIdleWork()
+
+                    Dim rows As JournalShortlistList = ViewCatalog.Descendants(board.KeptPage).OfType(Of JournalShortlistList)().Single()
+                    Dim height As Integer = rows.Height
+                    Dim resized As EventHandler =
+                        Sub(sender, e)
+                            If rows.Height <> height Then
+                                height = rows.Height
+                                heights.Add(height)
+                            End If
+                        End Sub
+                    AddHandler rows.SizeChanged, resized
+                    board.Open(choosing)
+                    RemoveHandler rows.SizeChanged, resized
+                    final = rows.Height
+
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(5))
+
+        CollectionAssert.AreEqual({final}, heights, "The heights the rows took: " & String.Join(", ", heights))
+
+    End Sub
+
+
     ' The page's containers that outlive a record: every control with
     ' controls in it, but for the parts built for one record (its version
     ' history and its submission's details) and what is in them.

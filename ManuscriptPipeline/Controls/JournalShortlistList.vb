@@ -256,7 +256,14 @@ Namespace Controls
         ' as its rows.
         Private Sub Arrange()
 
+            ' A list not laid out yet, hidden while no journal was
+            ' shortlisted, has no width of its own: it is arranged at the
+            ' width its parent's column gives it, so it takes its height once
+            ' rather than first at the narrowest a row can be (#133).
             Dim width As Integer = ClientSize.Width
+            If width <= 0 AndAlso Parent IsNot Nothing Then
+                width = Math.Max(0, Parent.DisplayRectangle.Width - Margin.Horizontal)
+            End If
             _arrangedWidth = width
 
             Dim count As Integer = _entries.Count
