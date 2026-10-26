@@ -1925,12 +1925,15 @@ Public Class ManuscriptPageTests
                     Assert.IsTrue(strip.Width > 0, "The card shows the tag on its journal line.")
 
                     Dim search As TextBox = DirectCast(GetType(Form1).GetField("txtBoardSearch", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(board), TextBox)
-                    Dim matches = GetType(Form1).GetMethod("ManuscriptMatchesBoardFilters", BindingFlags.Instance Or BindingFlags.NonPublic)
+                    ' What the Board shows for the search typed (#133: the search
+                    ' is read once a render, not once a manuscript).
+                    Dim visible = GetType(Form1).GetMethod("GetVisibleManuscripts", BindingFlags.Instance Or BindingFlags.NonPublic)
+                    Dim shown As Func(Of List(Of Manuscript)) = Function() DirectCast(visible.Invoke(board, Nothing), List(Of Manuscript))
                     search.Text = "#teaching"
-                    Assert.IsTrue(CBool(matches.Invoke(board, New Object() {manuscript})))
-                    Assert.IsFalse(CBool(matches.Invoke(board, New Object() {other})))
+                    Assert.IsTrue(shown().Contains(manuscript))
+                    Assert.IsFalse(shown().Contains(other))
                     search.Text = "poster"
-                    Assert.IsTrue(CBool(matches.Invoke(board, New Object() {manuscript})), "The type is searchable too.")
+                    Assert.IsTrue(shown().Contains(manuscript), "The type is searchable too.")
                     search.Text = String.Empty
 
                     board.Close()

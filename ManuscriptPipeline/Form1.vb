@@ -96,6 +96,11 @@ Public Class Form1
     Private ReadOnly manuscriptCards As New Dictionary(Of (Id As Guid, Occurrence As Integer), RoundedPanel)()
 
 
+    ' The font and DPI the stage filter was last filled and sized in
+    ' (RefreshStageFilterItems).
+    Private stageFilterStamp As String = String.Empty
+
+
     Private NotInheritable Class StageFilterOption
 
         Public ReadOnly Property Stage As PaperStage?
@@ -974,8 +979,12 @@ Public Class Form1
             count > 0 OrElse
             activeAttentionFilter = filter)
 
-        chip.Cursor =
+        Dim cursor As Cursor =
             If(count > 0 OrElse activeAttentionFilter = filter, Cursors.Hand, Cursors.Default)
+
+        If chip.Cursor IsNot cursor Then
+            chip.Cursor = cursor
+        End If
 
         chip.Tone =
             If(activeAttentionFilter = filter, FilterChipTone.Active, tone)
@@ -1690,68 +1699,45 @@ Public Class Form1
                 manuscripts
             )
 
+        Dim options As StageFilterOption() = {
+            New StageFilterOption(
+                Nothing,
+                "All stages",
+                manuscripts.Count
+            ),
+            StageOption(PaperStage.Idea, "Idea", counts),
+            StageOption(PaperStage.Draft, "Draft", counts),
+            StageOption(PaperStage.Submitted, "Submitted", counts),
+            StageOption(PaperStage.UnderReview, "Under Review", counts),
+            StageOption(PaperStage.Revision, "Revision", counts),
+            StageOption(PaperStage.Accepted, "Accepted", counts),
+            StageOption(PaperStage.InPress, "In Press", counts),
+            StageOption(PaperStage.Published, "Published", counts)
+        }
+
+        ' The box keeps the options it shows, and its choice, when they are
+        ' the same ones and it was sized in this font at this DPI (#133):
+        ' filling it again emptied it, added and measured each option and
+        ' resized it and its list, at every render, as each leave of
+        ' Journals renders the Board.
+        Dim stamp As String =
+            Me.Font.ToString() & "," & DeviceDpi.ToString(Globalization.CultureInfo.InvariantCulture)
+
+        If stamp = stageFilterStamp AndAlso
+           cboStageFilter.Items.Count = options.Length AndAlso
+           options.Select(Function(item, index) SameStageOption(item, TryCast(cboStageFilter.Items(index), StageFilterOption))).All(Function(same) same) Then
+            Return
+        End If
+
+        stageFilterStamp = stamp
+
         suppressBoardFilterEvents = True
 
         Try
 
             cboStageFilter.BeginUpdate()
             cboStageFilter.Items.Clear()
-
-            cboStageFilter.Items.Add(
-                New StageFilterOption(
-                    Nothing,
-                    "All stages",
-                    manuscripts.Count
-                )
-            )
-
-            AddStageFilterOption(
-                PaperStage.Idea,
-                "Idea",
-                counts
-            )
-
-            AddStageFilterOption(
-                PaperStage.Draft,
-                "Draft",
-                counts
-            )
-
-            AddStageFilterOption(
-                PaperStage.Submitted,
-                "Submitted",
-                counts
-            )
-
-            AddStageFilterOption(
-                PaperStage.UnderReview,
-                "Under Review",
-                counts
-            )
-
-            AddStageFilterOption(
-                PaperStage.Revision,
-                "Revision",
-                counts
-            )
-
-            AddStageFilterOption(
-                PaperStage.Accepted,
-                "Accepted",
-                counts
-            )
-
-            AddStageFilterOption(
-                PaperStage.InPress,
-                "In Press",
-                counts
-            )
-
-            AddStageFilterOption(
-                PaperStage.Published,
-                "Published",
-                counts
-            )
+            cboStageFilter.Items.AddRange(options)
 
             Dim selectedIndex As Integer = 0
 
@@ -1821,11 +1807,11 @@ Public Class Form1
     End Sub
 
 
-    Private Sub AddStageFilterOption(
+    Private Shared Function StageOption(
         stage As PaperStage,
         displayName As String,
         counts As Dictionary(Of PaperStage, Integer)
-    )
+    ) As StageFilterOption
 
         Dim count As Integer = 0
 
@@ -1833,15 +1819,26 @@ Public Class Form1
             count = counts(stage)
         End If
 
-        cboStageFilter.Items.Add(
-            New StageFilterOption(
-                stage,
-                displayName,
-                count
-            )
+        Return New StageFilterOption(
+            stage,
+            displayName,
+            count
         )
 
-    End Sub
+    End Function
+
+
+    Private Shared Function SameStageOption(
+        wanted As StageFilterOption,
+        shown As StageFilterOption
+    ) As Boolean
+
+        Return shown IsNot Nothing AndAlso
+            Nullable.Equals(wanted.Stage, shown.Stage) AndAlso
+            wanted.DisplayName = shown.DisplayName AndAlso
+            wanted.Count = shown.Count
+
+    End Function
 
 
     Private Sub BoardSearchTextChanged(
@@ -1992,11 +1989,10 @@ Public Class Form1
 
 
     Private Function ManuscriptMatchesBoardFilters(
-    manuscript As Manuscript
+    manuscript As Manuscript,
+    query As String,
+    selectedStageOption As StageFilterOption
 ) As Boolean
-
-        Dim query As String =
-        txtBoardSearch.Text.Trim()
 
         Dim snapshot As ManuscriptAttentionSnapshot =
             GetAttentionSnapshot(
@@ -2032,12 +2028,6 @@ Public Class Form1
 
         End If
 
-
-        Dim selectedStageOption As StageFilterOption =
-            TryCast(
-                cboStageFilter.SelectedItem,
-                StageFilterOption
-            )
 
         If selectedStageOption IsNot Nothing AndAlso
            selectedStageOption.Stage.HasValue AndAlso
@@ -2105,10 +2095,23 @@ Public Class Form1
 
         Dim result As New List(Of Manuscript)()
 
+        ' The search and the stage chosen, read once a render rather than
+        ' from their windows once a manuscript (#133).
+        Dim query As String =
+            txtBoardSearch.Text.Trim()
+
+        Dim selectedStageOption As StageFilterOption =
+            TryCast(
+                cboStageFilter.SelectedItem,
+                StageFilterOption
+            )
+
         For Each manuscript As Manuscript In manuscripts
 
             If ManuscriptMatchesBoardFilters(
-                manuscript
+                manuscript,
+                query,
+                selectedStageOption
             ) Then
 
                 result.Add(

@@ -609,6 +609,112 @@ Public Class PageSwitchTests
     End Sub
 
     Private Const WM_WINDOWPOSCHANGING As Integer = &H46
+    Private Const WM_GETTEXTLENGTH As Integer = &HE
+    Private Const CB_RESETCONTENT As Integer = &H14B
+
+
+    ' An attention chip keeps its text and its bold weight rather than
+    ' reading the text from its window and making the font at each measure
+    ' (#133); it measures as it did, in every tone, as its text, its tone
+    ' and its font change.
+    <TestMethod>
+    Public Sub AFilterChipMeasuresAsBefore()
+
+        StaRunner.Run(
+            Sub()
+                Using host As New Form With {.StartPosition = FormStartPosition.Manual, .Location = New Drawing.Point(-20000, -20000), .ShowInTaskbar = False}
+                    Dim chip As New Controls.FilterChip With {.Text = "3 overdue revisions"}
+                    host.Controls.Add(chip)
+                    host.Show()
+                    Application.DoEvents()
+
+                    Dim expected As Func(Of Drawing.Size) =
+                        Function()
+                            Using bold As New Drawing.Font(chip.Font, Drawing.FontStyle.Bold)
+                                Dim font As Drawing.Font = If(chip.Tone = Controls.FilterChipTone.Neutral, chip.Font, bold)
+                                Dim text As Drawing.Size = TextRenderer.MeasureText(chip.Text, font, Drawing.Size.Empty, TextFormatFlags.NoPrefix Or TextFormatFlags.SingleLine)
+                                Return New Drawing.Size(text.Width + chip.Padding.Horizontal, text.Height + chip.Padding.Vertical)
+                            End Using
+                        End Function
+
+                    For Each font As Drawing.Font In {host.Font, New Drawing.Font("Segoe UI", 14.0F), New Drawing.Font("Segoe UI", 9.0F, Drawing.FontStyle.Italic)}
+                        host.Font = font
+                        For Each tone As Controls.FilterChipTone In [Enum].GetValues(GetType(Controls.FilterChipTone))
+                            chip.Tone = tone
+                            For Each text As String In {"3 overdue revisions", "12 waiting 90+ days"}
+                                chip.Text = text
+                                Assert.AreEqual(expected(), chip.GetPreferredSize(Drawing.Size.Empty), tone.ToString() & ", " & font.ToString() & ", """ & text & """")
+                                Assert.AreEqual(text, chip.Text)
+                            Next
+                        Next
+                    Next
+
+                    host.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(1))
+
+    End Sub
+
+
+    ' Leaving Journals with nothing changed renders the Board without
+    ' filling the stage filter again or reading the search box once per
+    ' manuscript (#133): the stage filter refilled the same nine options
+    ' (emptying the box, adding each, measuring each and resizing the box
+    ' and its list), and each manuscript read the search text from its
+    ' window, 60 reads here and 500 on the 500 library.
+    <TestMethod>
+    Public Sub LeavingJournalsWithNothingChangedRefillsNoFilter()
+
+        Dim refills As Integer = -1
+        Dim reads As Integer = -1
+        Dim resized As Boolean = False
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary =
+                    LargeLibraryFixture.Create(Path.Combine(_root, "library"), 60)
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+                    Dim stages As ComboBox = board.Part(Of ComboBox)("cboStageFilter")
+                    Dim search As TextBox = board.Part(Of TextBox)("txtBoardSearch")
+                    Dim before As String() = stages.Items.Cast(Of Object)().Select(Function(item) item.ToString()).ToArray()
+
+                    board.NavigateTo(Form1.WorkspacePage.Journals)
+                    Application.DoEvents()
+                    Using watch As New SentMessageWatch()
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        refills = watch.Count(stages, CB_RESETCONTENT)
+                        reads = watch.Count(search, WM_GETTEXTLENGTH)
+                    End Using
+                    Application.DoEvents()
+
+                    CollectionAssert.AreEqual(before, stages.Items.Cast(Of Object)().Select(Function(item) item.ToString()).ToArray(), "The stage filter holds the same options.")
+
+                    ' In another font, the same options are filled and sized
+                    ' again, as the box was sized for its widest one.
+                    board.Font = New Drawing.Font(board.Font.FontFamily, board.Font.SizeInPoints * 1.5F)
+                    board.Render()
+                    Dim widest As Integer = stages.Items.Cast(Of Object)().Max(Function(item) TextRenderer.MeasureText(item.ToString(), board.Font).Width)
+                    resized = stages.Width = Math.Max(150, widest + 46)
+
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(3))
+
+        Dim problems As New List(Of String)()
+        If refills <> 0 Then problems.Add("The stage filter was emptied and filled again " & refills.ToString() & " times.")
+        If Not resized Then problems.Add("A render in a larger font left the stage filter at its width before.")
+        ' Once for the filter, and once each for the three shelves' headings
+        ' and the Clear filters button.
+        If reads > 5 Then problems.Add("The search box was read " & reads.ToString() & " times in one render.")
+        Assert.AreEqual(0, problems.Count, String.Join(Environment.NewLine, problems))
+
+    End Sub
 
 
     ' Each visit to Insights begins as a new page did (#133): on Your

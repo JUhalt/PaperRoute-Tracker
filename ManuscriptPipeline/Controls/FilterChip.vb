@@ -30,13 +30,21 @@ Namespace Controls
         ' Made on the first hover.
         Private _hover As HoverTween = Nothing
 
+        ' The bold weight an emphasized chip is measured and drawn in, made
+        ' once for its font rather than at each measure (#133).
+        Private _boldFont As Font = Nothing
+
+        ' The text is kept by the chip rather than read from its window at
+        ' each measure: a Board shown measures each chip some thirty times
+        ' (#133).
         Public Sub New()
             SetStyle(
                 ControlStyles.Selectable Or
                 ControlStyles.UserPaint Or
                 ControlStyles.AllPaintingInWmPaint Or
                 ControlStyles.OptimizedDoubleBuffer Or
-                ControlStyles.ResizeRedraw,
+                ControlStyles.ResizeRedraw Or
+                ControlStyles.CacheText,
                 True)
             TabStop = True
             AutoSize = True
@@ -65,17 +73,28 @@ Namespace Controls
         End Property
 
         Private Function ChipFont() As Font
-            Return If(_tone = FilterChipTone.Neutral, Font, New Font(Font, FontStyle.Bold))
+            If _tone = FilterChipTone.Neutral Then Return Font
+            If _boldFont Is Nothing Then _boldFont = New Font(Font, FontStyle.Bold)
+            Return _boldFont
         End Function
 
+        Protected Overrides Sub OnFontChanged(e As EventArgs)
+            _boldFont?.Dispose()
+            _boldFont = Nothing
+            MyBase.OnFontChanged(e)
+        End Sub
+
+        Protected Overrides Sub Dispose(disposing As Boolean)
+            If disposing Then
+                _boldFont?.Dispose()
+                _boldFont = Nothing
+            End If
+            MyBase.Dispose(disposing)
+        End Sub
+
         Public Overrides Function GetPreferredSize(proposedSize As Size) As Size
-            Dim font As Font = ChipFont()
-            Try
-                Dim text As Size = TextRenderer.MeasureText(Me.Text, font, Size.Empty, TextFormatFlags.NoPrefix Or TextFormatFlags.SingleLine)
-                Return New Size(text.Width + Padding.Horizontal, text.Height + Padding.Vertical)
-            Finally
-                If font IsNot Me.Font Then font.Dispose()
-            End Try
+            Dim text As Size = TextRenderer.MeasureText(Me.Text, ChipFont(), Size.Empty, TextFormatFlags.NoPrefix Or TextFormatFlags.SingleLine)
+            Return New Size(text.Width + Padding.Horizontal, text.Height + Padding.Vertical)
         End Function
 
         Protected Overrides Sub OnKeyDown(e As KeyEventArgs)
@@ -215,13 +234,8 @@ Namespace Controls
             End If
 
             g.SmoothingMode = SmoothingMode.None
-            Dim font As Font = ChipFont()
-            Try
-                TextRenderer.DrawText(g, Text, font, New Rectangle(0, 0, Width, Height), ink,
-                    TextFormatFlags.HorizontalCenter Or TextFormatFlags.VerticalCenter Or TextFormatFlags.SingleLine Or TextFormatFlags.NoPrefix)
-            Finally
-                If font IsNot Me.Font Then font.Dispose()
-            End Try
+            TextRenderer.DrawText(g, Text, ChipFont(), New Rectangle(0, 0, Width, Height), ink,
+                TextFormatFlags.HorizontalCenter Or TextFormatFlags.VerticalCenter Or TextFormatFlags.SingleLine Or TextFormatFlags.NoPrefix)
 
         End Sub
 
