@@ -1089,16 +1089,90 @@ Public Class PageSwitchTests
     End Sub
 
 
+    ' A Library whose Authors & Affiliations view failed to open (#133):
+    ' that view's editor reads the author library as it is made, which
+    ' throws for one damaged or locked, and once the error's Keep working
+    ' is chosen the page is left with neither its grid nor the editor.
+    ' Left so, it is let go as a Library left on that view is, and each
+    ' visit after begins as a new page did, listing every manuscript: the
+    ' next, on a page built for it or one prepared again once the window
+    ' idled, and the one after, on the page kept since. Until the page
+    ' left without its grid was let go it was kept, and every later visit
+    ' threw (a NullReferenceException in BeginLibraryVisit, the Board still
+    ' showing) until the colors changed or PaperRoute started again.
+    <TestMethod>
+    Public Sub TheLibraryComesBackAfterItsAuthorsViewFailedToOpen()
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary =
+                    LargeLibraryFixture.Create(Path.Combine(_root, "library"), 20)
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+                    Dim search As TextBox = board.Part(Of TextBox)("txtBoardSearch")
+
+                    Dim visit As Func(Of List(Of String)) =
+                        Function()
+                            board.ActiveControl = search
+                            board.PressCommandKey(Keys.Control Or Keys.D2)
+                            Application.DoEvents()
+                            board.WaitForIdleWork()
+                            Return DescribeLibraryVisit(board)
+                        End Function
+
+                    Dim fresh As List(Of String) = visit()
+                    Assert.AreEqual("view: Manuscripts (20)", fresh(0), "The first visit shows the Manuscripts view.")
+
+                    Dim visitAgain As Action(Of String) =
+                        Sub(shown)
+                            Dim again As List(Of String) = visit()
+                            Dim context As String = "After the Authors & Affiliations view failed to open, the Library shown on " & shown
+                            Assert.AreEqual(Form1.WorkspacePage.Library.ToString(), board.PageName, context & ": the window is on the Library.")
+                            Assert.IsFalse(board.BoardPage.Visible, context & ": the Board is hidden.")
+                            CollectionAssert.AreEqual(fresh, again, context & ":" & Environment.NewLine & String.Join(Environment.NewLine, again))
+                            CollectionAssert.AreEqual(ExpectedRows(board.Library), RowTexts(ViewCatalog.Descendants(board.PageView).OfType(Of DataGridView)().Single()), context & ": every manuscript, in the library's order.")
+                        End Sub
+
+                    For Each prepared As Boolean In {False, True}
+                        Dim authors As RadioButton = ViewCatalog.Descendants(board.PageView).OfType(Of RadioButton)().Single(Function(tab) tab.Text = "Authors & Affiliations")
+                        board.AuthorEditorFails = True
+                        Assert.ThrowsExactly(Of InvalidDataException)(Sub() authors.Checked = True)
+                        board.AuthorEditorFails = False
+                        Application.DoEvents()
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        If prepared Then board.WaitForIdleWork()
+                        visitAgain(If(prepared, "a page prepared again", "a page built for the visit"))
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        Application.DoEvents()
+                        visitAgain("the page kept since")
+                    Next
+
+                    board.NavigateTo(Form1.WorkspacePage.Board)
+                    Application.DoEvents()
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(3))
+
+    End Sub
+
+
     ' Each visit to the Library shows the library as it is now (#133),
     ' though the page is kept: what a page built for the visit would list,
-    ' in the library's order, each row the library's own record, after an
-    ' edit saved on the manuscript page, a manuscript added, one deleted
-    ' from its page opened from the Library (back on the Library), an
-    ' import, a move to the File Drawer and one back, a restore's records
-    ' (equal, but not the same objects), and a change no render followed,
-    ' as the Journals and Insights tests make. A guard: before the Library
-    ' was kept every visit built a new page from the records, and this held
-    ' there too.
+    ' in the library's order, each row the library's own record, its short
+    ' columns as wide as their widest text, after an edit saved on the
+    ' manuscript page, a manuscript added, one deleted from its page opened
+    ' from the Library (back on the Library), an import, a move to the File
+    ' Drawer and one back, a restore's records (equal, but not the same
+    ' objects), a change no render followed, as the Journals and Insights
+    ' tests make, and every type cleared with no render either, which
+    ' leaves the Type column as narrow as a new page's only if the columns
+    ' are fitted again once cells are set (without that it kept its width).
+    ' A guard: before the Library was kept every visit built a new page
+    ' from the records, and this held there too.
     <TestMethod>
     Public Sub TheLibraryShownAgainShowsTheLibraryAsItIsNow()
 
@@ -1125,6 +1199,7 @@ Public Class PageSwitchTests
                             CollectionAssert.AreEqual(ExpectedRows(board.Library), RowTexts(grid), "After " & change & ", the Library lists the library as it is now.")
                             Assert.IsTrue(Enumerable.Range(0, grid.Rows.Count).All(Function(index) grid.Rows(index).Tag Is board.Library(index)),
                                           "After " & change & ", each row is the library's own record.")
+                            AssertColumnsFitAllCells(grid, "after " & change)
                             board.NavigateTo(Form1.WorkspacePage.Board)
                             Application.DoEvents()
                             board.WaitForIdleWork()
@@ -1222,6 +1297,9 @@ Public Class PageSwitchTests
                             moved.CurrentStage = Models.PaperStage.Published
                             moved.Tags = New List(Of String) From {"changed", "unrendered"}
                         End Sub)
+
+                    visitAfter("every type cleared",
+                        Sub() board.Library.ForEach(Sub(item) item.WorkType = Models.WorkType.Unspecified))
 
                     board.Close()
                 End Using
@@ -1389,7 +1467,9 @@ Public Class PageSwitchTests
     ' window was made as small as it goes, at each text size (#133): it
     ' fills the page area, nothing in it is left to lay out (laying each
     ' container out again moves nothing), and its short columns fit their
-    ' widest text; and so again once the window is as large as it was.
+    ' widest text; left scrolled sideways there, as that window lets its
+    ' grid be, it shows again from its left edge, as a new page did; and
+    ' it fits again once the window is as large as it was.
     <TestMethod>
     <DataRow(1.0F)>
     <DataRow(1.25F)>
@@ -1419,7 +1499,21 @@ Public Class PageSwitchTests
                         Assert.AreEqual(board.ContentHost.DisplayRectangle, prepared.Bounds, context & ": it fills the page area.")
                         Dim problems As List(Of String) = LayoutProbe.Unsettled(prepared)
                         Assert.AreEqual(0, problems.Count, context & ", left with layout to do:" & Environment.NewLine & String.Join(Environment.NewLine, problems))
-                        AssertColumnsFitAllCells(ViewCatalog.Descendants(prepared).OfType(Of DataGridView)().Single(), context)
+                        Dim grid As DataGridView = ViewCatalog.Descendants(prepared).OfType(Of DataGridView)().Single()
+                        AssertColumnsFitAllCells(grid, context)
+
+                        ' The smallest window scrolls the grid sideways; left so,
+                        ' it shows again from its left edge.
+                        If windowSize = board.MinimumSize Then
+                            grid.HorizontalScrollingOffset = 60
+                            Assert.IsTrue(grid.HorizontalScrollingOffset > 0, context & ": the grid scrolls sideways.")
+                            board.NavigateTo(Form1.WorkspacePage.Board)
+                            Application.DoEvents()
+                            board.NavigateTo(Form1.WorkspacePage.Library)
+                            Application.DoEvents()
+                            Assert.AreEqual(0, grid.HorizontalScrollingOffset, context & ": left scrolled sideways, the grid shows again from its left edge.")
+                        End If
+
                         board.NavigateTo(Form1.WorkspacePage.Board)
                         Application.DoEvents()
                     Next

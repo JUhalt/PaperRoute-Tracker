@@ -170,7 +170,7 @@ Partial Public Class Form1
         QueueBoardFill()
 
         ' Beside the fill, a step at a time: the manuscript page, then
-        ' Journals and Insights.
+        ' Journals, Insights and the Library.
         QueueManuscriptPagePreparation()
         QueueKeptPagesPreparation()
 

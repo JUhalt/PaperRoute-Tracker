@@ -52,8 +52,12 @@ Friend NotInheritable Class LibraryBoard
 
 
     ' The Authors view is not measured; the real editor would read the
-    ' user's author library.
+    ' user's author library. AuthorEditorFails makes it throw as the real
+    ' one does on an author library damaged or locked (#133).
+    Public AuthorEditorFails As Boolean
+
     Protected Overrides Function CreateAuthorLibraryEditor() As Form
+        If AuthorEditorFails Then Throw New IO.InvalidDataException("The author library could not be read.")
         Return New Form()
     End Function
 

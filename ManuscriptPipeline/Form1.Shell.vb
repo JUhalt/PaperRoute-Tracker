@@ -814,9 +814,10 @@ Partial Public Class Form1
         ' much as showing it. The manuscript page's editor lets go of the
         ' record left once the window idles. One built before the system
         ' colors changed goes, as every other page does, and so does the
-        ' Library left on its Authors & Affiliations view, whose editor read
-        ' the author library as it was made; it is prepared again, as
-        ' Journals and Insights are.
+        ' Library left without its grid: on its Authors & Affiliations view,
+        ' whose editor read the author library as it was made, or after that
+        ' view failed to open; it is prepared again, as Journals and Insights
+        ' are.
         ' A page that goes is disposed where it is: removed first, each of
         ' its windows would move to WinForms' parking window only to be
         ' destroyed there, a few milliseconds a window on a slow machine
@@ -824,7 +825,7 @@ Partial Public Class Form1
         ' are gone.
         Dim keep As Boolean =
             IsKeptPage(currentPageView) AndAlso Not leaveDisposesKeptPage AndAlso
-            Not (currentPageView Is libraryPage AndAlso libraryAuthorsForm IsNot Nothing)
+            Not (currentPageView Is libraryPage AndAlso libraryGrid Is Nothing)
 
         If keep Then
             currentPageView.Visible = False
@@ -1352,9 +1353,7 @@ Partial Public Class Form1
             grid.Sort(New LibraryOrder(manuscripts))
         End If
 
-        Dim filtered As Boolean = libraryFilter.TextLength > 0
-
-        If filtered Then
+        If libraryFilter.TextLength > 0 Then
             libraryFilter.Text = String.Empty
         End If
 
@@ -1409,11 +1408,6 @@ Partial Public Class Form1
 
         If grid.HorizontalScrollingOffset > 0 Then
             grid.HorizontalScrollingOffset = 0
-        End If
-
-        ' The hint of an empty list names the filter no longer typed.
-        If filtered Then
-            EmptyHint.Refresh(grid)
         End If
 
     End Sub
