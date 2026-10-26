@@ -607,6 +607,12 @@ Partial Public Class Form1
                     HoldManuscriptPage()
                     editor.UnloadRecord()
                     ClearManuscriptHeader()
+                    ' The record's own parts went with it; what they showed
+                    ' when the page was held is no longer asked, and kept
+                    ' would keep them, and the record, alive.
+                    If manuscriptPageShownWhenHeld IsNot Nothing Then
+                        manuscriptPageShownWhenHeld = manuscriptPageShownWhenHeld.Where(Function(pair) Not pair.Key.IsDisposed).ToDictionary(Function(pair) pair.Key, Function(pair) pair.Value)
+                    End If
                 End If
             End Sub)
 

@@ -127,6 +127,12 @@ Public Class KeptManuscriptPageTests
                     Assert.IsFalse(all.OfType(Of ManuscriptVersionHistoryControl)().Any(), "No version history.")
                     Assert.IsFalse(all.Any(Function(control) control.AccessibleRole = AccessibleRole.ListItem), "No shortlisted journal.")
                     Assert.IsTrue(all.OfType(Of JournalShortlistList)().All(Function(list) list.AccessibilityObject.GetChildCount() = 0 AndAlso list.Entries.Count = 0), "No shortlisted journal drawn.")
+                    ' Nor does the window keep the parts let go of, through what
+                    ' the page held showed when its layout was held.
+                    Dim held As Dictionary(Of Control, Boolean) = board.Part(Of Dictionary(Of Control, Boolean))("manuscriptPageShownWhenHeld")
+                    If LayoutRequests.Available Then Assert.IsNotNull(held, "The page left holds its layout.")
+                    Dim kept As List(Of String) = If(held Is Nothing, New List(Of String)(), held.Keys.Where(Function(control) control.IsDisposed).Select(Function(control) control.GetType().Name).ToList())
+                    Assert.AreEqual(0, kept.Count, "The window keeps parts the page let go of: " & String.Join(", ", kept.Distinct()))
 
                     board.Close()
                 End Using
