@@ -319,7 +319,9 @@ Namespace Controls
 
         Protected Overrides Sub OnClientSizeChanged(e As EventArgs)
             MyBase.OnClientSizeChanged(e)
-            If ClientSize.Width <> _arrangedWidth AndAlso _entries.Count > 0 Then
+            ' No width yet is no new width: the rows were arranged at the
+            ' width the list will have, and only their height was set.
+            If ClientSize.Width > 0 AndAlso ClientSize.Width <> _arrangedWidth AndAlso _entries.Count > 0 Then
                 Arrange()
                 Invalidate()
             End If
