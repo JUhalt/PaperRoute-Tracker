@@ -52,6 +52,11 @@ Partial Public Class Form1
     ' until that open has shown the page (HoldManuscriptPage).
     Private manuscriptPageHeld As Boolean = False
 
+    ' Whether each control of the kept page was set shown when its layout
+    ' was held, so the open can tell a container whose part was hidden
+    ' meanwhile (ShowPageInOnePass).
+    Private manuscriptPageShownWhenHeld As Dictionary(Of Control, Boolean) = Nothing
+
     Private Const SaveBarHint As String =
         "Save keeps them. Discard returns to the last saved version."
 
@@ -192,6 +197,7 @@ Partial Public Class Form1
                 containers(index).ResumeLayout(True)
             Next
             manuscriptPageHeld = False
+            manuscriptPageShownWhenHeld = Nothing
             Throw
         End Try
 
@@ -319,8 +325,38 @@ Partial Public Class Form1
         containers As List(Of Control)
     )
 
+        ' Showing the page asks every panel and table shown in it to lay out
+        ' again (WinForms lays a panel out as it becomes visible), a request
+        ' held with the rest. A container nothing asked to lay out before
+        ' the page shows has nothing to lay out: it was laid out with the
+        ' last record shown, and nothing in it has changed since. So for
+        ' each of them that one request is let go (LayoutRequests); what a
+        ' container inside asks of it as it lays out, and the page's own new
+        ' size after the window was resized, still lay it out. Laying out
+        ' each of them again took half the pass and more (#133). One with a
+        ' part hidden since the page's layout was held keeps its request:
+        ' hidden under a hidden page, a part asks nothing of its container,
+        ' which lays out as it shows (the Unsaved changes bar, hidden at
+        ' each open). Where WinForms does not keep what is read here, every
+        ' container lays out, as before.
+        Dim shownWhenHeld As Dictionary(Of Control, Boolean) = manuscriptPageShownWhenHeld
+        manuscriptPageShownWhenHeld = Nothing
+        Dim untouched As List(Of Control) =
+            If(LayoutRequests.Available AndAlso shownWhenHeld IsNot Nothing,
+               containers.Where(Function(container) Not LayoutRequests.Pending(container) AndAlso Not PartShownOrHiddenSince(container, shownWhenHeld)).ToList(),
+               Nothing)
+        Dim before As Rectangle = page.Bounds
+
         page.Visible = True
         page.BringToFront()
+
+        If untouched IsNot Nothing Then
+            For Each container As Control In untouched
+                If container IsNot page OrElse page.Bounds = before Then
+                    LayoutRequests.Forget(container)
+                End If
+            Next
+        End If
 
         ' Each container lets go of its layout, inner ones first, and lays
         ' out once if anything in it changed since it was held: the record
@@ -352,6 +388,22 @@ Partial Public Class Form1
         Next
 
     End Sub
+
+
+    ' Whether a part directly in a container was shown or hidden, or is new,
+    ' since the page's layout was held.
+    Private Shared Function PartShownOrHiddenSince(container As Control, shownWhenHeld As Dictionary(Of Control, Boolean)) As Boolean
+
+        For Each part As Control In container.Controls
+            Dim wasShown As Boolean
+            If Not shownWhenHeld.TryGetValue(part, wasShown) OrElse wasShown <> LayoutRequests.IsSetShown(part) Then
+                Return True
+            End If
+        Next
+
+        Return False
+
+    End Function
 
 
     ' Whether a scrolling host's range ends where its contents do: as tall
@@ -432,6 +484,7 @@ Partial Public Class Form1
         fitManuscriptTitle = Nothing
         manuscriptPageContainers = Nothing
         manuscriptPageHeld = False
+        manuscriptPageShownWhenHeld = Nothing
 
         QueueManuscriptPagePreparation()
 
@@ -579,6 +632,10 @@ Partial Public Class Form1
         Next
 
         manuscriptPageHeld = True
+
+        If LayoutRequests.Available Then
+            manuscriptPageShownWhenHeld = DescendantControls(manuscriptPage).ToDictionary(Function(control) control, Function(control) LayoutRequests.IsSetShown(control))
+        End If
 
     End Sub
 
@@ -844,6 +901,7 @@ Partial Public Class Form1
             {CType(page, Control)}.Concat(DescendantControls(page)).Where(Function(control) control.HasChildren).
                 Concat(editor.RecordPartHosts).Distinct().ToList()
         manuscriptPageHeld = False
+        manuscriptPageShownWhenHeld = Nothing
 
     End Sub
 

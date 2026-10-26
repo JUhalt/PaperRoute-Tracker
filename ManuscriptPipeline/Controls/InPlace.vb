@@ -1,4 +1,5 @@
 Imports System
+Imports System.Reflection
 Imports System.Runtime.InteropServices
 Imports System.Windows.Forms
 
@@ -187,6 +188,71 @@ Namespace Controls
             control.Dispose()
 
         End Sub
+
+    End Class
+
+
+    ' Whether anything has asked a container whose layout is held to lay
+    ' out since it was held (#133), as WinForms itself keeps it: the
+    ' container's LayoutDeferred state, which ResumeLayout(True) reads to
+    ' decide whether to lay out. WinForms keeps it to itself, so it is read
+    ' and cleared by reflection; where it is not found (another WinForms),
+    ' Available is False and a caller lays out as it did without it.
+    Friend NotInheritable Class LayoutRequests
+
+        Private Sub New()
+        End Sub
+
+        Private Shared ReadOnly GetStateMethod As MethodInfo = Nothing
+        Private Shared ReadOnly SetStateMethod As MethodInfo = Nothing
+        Private Shared ReadOnly Deferred As Object = Nothing
+        Private Shared ReadOnly Shown As Object = Nothing
+
+        Shared Sub New()
+            Try
+                Dim states As Type = GetType(Control).GetNestedType("States", BindingFlags.NonPublic)
+                If states Is Nothing OrElse Not [Enum].IsDefined(states, "LayoutDeferred") OrElse Not [Enum].IsDefined(states, "Visible") Then
+                    Return
+                End If
+                Dim flags As BindingFlags = BindingFlags.Instance Or BindingFlags.NonPublic
+                GetStateMethod = GetType(Control).GetMethod("GetState", flags, Nothing, {states}, Nothing)
+                SetStateMethod = GetType(Control).GetMethod("SetState", flags, Nothing, {states, GetType(Boolean)}, Nothing)
+                Deferred = [Enum].Parse(states, "LayoutDeferred")
+                Shown = [Enum].Parse(states, "Visible")
+            Catch ex As Exception When TypeOf ex Is ArgumentException OrElse TypeOf ex Is AmbiguousMatchException OrElse TypeOf ex Is MemberAccessException
+                GetStateMethod = Nothing
+                SetStateMethod = Nothing
+            End Try
+        End Sub
+
+
+        Public Shared ReadOnly Property Available As Boolean
+            Get
+                Return GetStateMethod IsNot Nothing AndAlso SetStateMethod IsNot Nothing AndAlso Deferred IsNot Nothing AndAlso
+                       GetStateMethod.ReturnType Is GetType(Boolean)
+            End Get
+        End Property
+
+
+        ' Whether something asked the held container to lay out.
+        Public Shared Function Pending(container As Control) As Boolean
+            Return CBool(GetStateMethod.Invoke(container, New Object() {Deferred}))
+        End Function
+
+
+        ' Lets go of what was asked of the held container, so letting go of
+        ' its layout lays out nothing.
+        Public Shared Sub Forget(container As Control)
+            SetStateMethod.Invoke(container, New Object() {Deferred, False})
+        End Sub
+
+
+        ' Whether a control is set shown, whatever its parents are. Hidden
+        ' under a hidden parent, a control asks its parent for no layout
+        ' (nothing on the screen changed); the parent lays out once it shows.
+        Public Shared Function IsSetShown(control As Control) As Boolean
+            Return CBool(GetStateMethod.Invoke(control, New Object() {Shown}))
+        End Function
 
     End Class
 

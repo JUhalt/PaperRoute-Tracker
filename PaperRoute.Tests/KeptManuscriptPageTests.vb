@@ -733,6 +733,69 @@ Public Class KeptManuscriptPageTests
     End Sub
 
 
+    ' A container nothing in changed is not laid out by an open (#133):
+    ' showing the page asks every panel and table in it to lay out again,
+    ' and one that nothing else asked, such as the section tabs or the
+    ' page's own actions, which no record changes, lets that request go.
+    ' The page is still left with nothing to lay out (the guard, in every
+    ' test that opens a manuscript).
+    <TestMethod>
+    Public Sub AContainerNothingChangedInIsNotLaidOut()
+
+        Dim laidOut As New List(Of String)()
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary = Library60()
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+                    Dim records As List(Of Manuscript) = board.Library.Where(Function(item) item.Location = ManuscriptLocation.Published).Take(3).ToList()
+
+                    For Each visit As (Left As Manuscript, Opened As Manuscript, ThroughTheBoard As Boolean) In
+                        {(records(0), records(1), True), (records(1), records(2), False), (records(2), records(0), True)}
+
+                        board.Open(visit.Left)
+                        Application.DoEvents()
+                        If visit.ThroughTheBoard Then
+                            board.NavigateTo(Form1.WorkspacePage.Board)
+                            board.WaitForIdleWork()
+                        End If
+
+                        Dim page As Control = board.KeptPage
+                        Dim unchanged As List(Of Control) =
+                            ViewCatalog.Descendants(page).OfType(Of FlowLayoutPanel)().
+                                Where(Function(flow) flow.AccessibleName = "Manuscript sections" OrElse flow.Controls.OfType(Of Control)().Any(Function(button) button.Text = "View Route")).
+                                Cast(Of Control)().ToList()
+                        Assert.AreEqual(2, unchanged.Count, "The section tabs and the page's actions.")
+
+                        ' The open's own layouts; the check that it left nothing
+                        ' to lay out, which lays out every container, follows.
+                        board.VerifySettled = False
+                        Using probe As New LayoutProbe(page)
+                            board.Open(visit.Opened)
+                            laidOut.AddRange(probe.Layouts.Where(Function(entry) unchanged.Contains(entry.Control)).
+                                                 Select(Function(entry) LayoutProbe.PathOf(entry.Control, page) & " (" & entry.Affected & ")" & If(visit.ThroughTheBoard, " from the Board", " from the page")))
+                        End Using
+                        board.VerifySettled = True
+                        board.AssertSettled()
+                        Application.DoEvents()
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        board.WaitForIdleWork()
+                    Next
+
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(5))
+
+        Assert.AreEqual(0, laidOut.Count, "Laid out by an open though nothing in them changed:" & Environment.NewLine & String.Join(Environment.NewLine, laidOut))
+
+    End Sub
+
+
     ' The page's containers that outlive a record: every control with
     ' controls in it, but for the parts built for one record (its version
     ' history and its submission's details) and what is in them.
