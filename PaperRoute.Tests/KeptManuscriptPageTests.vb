@@ -494,7 +494,7 @@ Public Class KeptManuscriptPageTests
                     board.Open(subject)
                     Application.DoEvents()
                     For Each section As String In {"Authors", "Versions", "Submissions", "Readiness & Packets", "Overview"}
-                        ShowSection(board.Editor, section)
+                        ManuscriptEditorReuseTests.ShowSection(board.Editor, section)
                     Next
                     ' Watched from the moment the page is left: the record is
                     ' let go of as the window next idles.
@@ -607,7 +607,7 @@ Public Class KeptManuscriptPageTests
 
                         ' Each part left hidden shows laid out.
                         For Each section As String In {"Authors", "Versions", "Submissions", "Readiness & Packets", "Overview"}
-                            ShowSection(board.Editor, section)
+                            ManuscriptEditorReuseTests.ShowSection(board.Editor, section)
                             board.AssertSettled()
                         Next
                         board.NavigateTo(Form1.WorkspacePage.Board)

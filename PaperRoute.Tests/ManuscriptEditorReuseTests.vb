@@ -77,47 +77,47 @@ Public Class ManuscriptEditorReuseTests
 
                     UiTheme.HighContrastOverride = contrastTheme
                     Try
-                    Using reused As New LibraryBoard(library, Path.Combine(_root, "settings-reused")),
-                          fresh As New LibraryBoard(library, Path.Combine(_root, "settings-fresh"))
+                        Using reused As New LibraryBoard(library, Path.Combine(_root, "settings-reused")),
+                              fresh As New LibraryBoard(library, Path.Combine(_root, "settings-fresh"))
 
-                        reused.Start()
-                        fresh.Start()
+                            reused.Start()
+                            fresh.Start()
 
-                        Dim savedLeft As String = Json(Record(reused, left.Id))
-                        Dim savedOpened As String = Json(Record(reused, opened.Id))
+                            Dim savedLeft As String = Json(Record(reused, left.Id))
+                            Dim savedOpened As String = Json(Record(reused, opened.Id))
 
-                        Open(reused, Record(reused, left.Id))
-                        EditEverything(reused)
-                        Assert.IsTrue(reused.Editor.HasUnsavedChanges(), "The edits are unsaved changes.")
+                            Open(reused, Record(reused, left.Id))
+                            EditEverything(reused)
+                            Assert.IsTrue(reused.Editor.HasUnsavedChanges(), "The edits are unsaved changes.")
 
-                        Dim asked As New List(Of String)()
-                        reused.SetPrompt(Function(title)
-                                             asked.Add(title)
-                                             Return DialogResult.No
-                                         End Function)
+                            Dim asked As New List(Of String)()
+                            reused.SetPrompt(Function(title)
+                                                 asked.Add(title)
+                                                 Return DialogResult.No
+                                             End Function)
 
-                        If throughTheBoard Then
-                            reused.NavigateTo(Form1.WorkspacePage.Board)
-                            reused.WaitForIdleWork()
-                            Assert.IsTrue(ViewCatalog.Descendants(reused.KeptPage).OfType(Of TextBox)().All(Function(box) box.TextLength = 0), "The page left let go of the record.")
-                        End If
+                            If throughTheBoard Then
+                                reused.NavigateTo(Form1.WorkspacePage.Board)
+                                reused.WaitForIdleWork()
+                                Assert.IsTrue(ViewCatalog.Descendants(reused.KeptPage).OfType(Of TextBox)().All(Function(box) box.TextLength = 0), "The page left let go of the record.")
+                            End If
 
-                        Open(reused, Record(reused, opened.Id))
+                            Open(reused, Record(reused, opened.Id))
 
-                        CollectionAssert.AreEqual({left.Title}, asked, "The question names the manuscript being left, once.")
-                        Assert.AreEqual(opened.Id, reused.OpenManuscriptId)
-                        Assert.IsFalse(reused.Editor.HasUnsavedChanges(), "The manuscript opened has no unsaved changes.")
-                        Assert.AreEqual(savedLeft, Json(Record(reused, left.Id)), "No left the edited manuscript as it was saved.")
-                        Assert.AreEqual(savedOpened, Json(Record(reused, opened.Id)), "Opening changes nothing.")
-                        Assert.AreEqual(0, reused.SaveCount, "Nothing was saved.")
+                            CollectionAssert.AreEqual({left.Title}, asked, "The question names the manuscript being left, once.")
+                            Assert.AreEqual(opened.Id, reused.OpenManuscriptId)
+                            Assert.IsFalse(reused.Editor.HasUnsavedChanges(), "The manuscript opened has no unsaved changes.")
+                            Assert.AreEqual(savedLeft, Json(Record(reused, left.Id)), "No left the edited manuscript as it was saved.")
+                            Assert.AreEqual(savedOpened, Json(Record(reused, opened.Id)), "Opening changes nothing.")
+                            Assert.AreEqual(0, reused.SaveCount, "Nothing was saved.")
 
-                        Open(fresh, Record(fresh, opened.Id))
-                        AssertSamePage(fresh, reused, opened.Title)
+                            Open(fresh, Record(fresh, opened.Id))
+                            AssertSamePage(fresh, reused, opened.Title)
 
-                        reused.SetPrompt(Function(title) DialogResult.No)
-                        reused.Close()
-                        fresh.Close()
-                    End Using
+                            reused.SetPrompt(Function(title) DialogResult.No)
+                            reused.Close()
+                            fresh.Close()
+                        End Using
                     Finally
                         UiTheme.HighContrastOverride = Nothing
                     End Try
@@ -685,7 +685,7 @@ Public Class ManuscriptEditorReuseTests
     End Function
 
 
-    Private Shared Sub ShowSection(editor As EditManuscriptForm, name As String)
+    Friend Shared Sub ShowSection(editor As EditManuscriptForm, name As String)
         Sections(editor).Single(Function(tab) tab.Text = name).Checked = True
         Application.DoEvents()
     End Sub

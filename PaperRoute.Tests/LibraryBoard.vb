@@ -525,7 +525,6 @@ End Class
 Friend NotInheritable Class LayoutProbe
     Implements IDisposable
 
-    Private ReadOnly _root As Control
     Private ReadOnly _watched As List(Of Control)
     Private ReadOnly _layout As LayoutEventHandler
     Private ReadOnly _moved As EventHandler
@@ -534,18 +533,12 @@ Friend NotInheritable Class LayoutProbe
     Public ReadOnly Layouts As New List(Of (Control As Control, Affected As String))()
     Public ReadOnly Moves As New List(Of (Control As Control, Before As Rectangle, After As Rectangle))()
 
-    ' Both, one line each, in the order they came.
-    Public ReadOnly Sequence As New List(Of String)()
-
 
     Public Sub New(root As Control)
-        _root = root
-        _watched = {root}.Concat(Descendants(root)).ToList()
+        _watched = {root}.Concat(ViewCatalog.Descendants(root)).ToList()
         _layout =
             Sub(sender, e)
-                Dim control As Control = DirectCast(sender, Control)
-                Layouts.Add((control, If(e.AffectedProperty, String.Empty)))
-                Sequence.Add("laid out " & PathOf(control, _root) & " (" & e.AffectedProperty & If(e.AffectedControl Is Nothing OrElse e.AffectedControl Is control, String.Empty, " of " & PathOf(e.AffectedControl, _root)) & ")")
+                Layouts.Add((DirectCast(sender, Control), If(e.AffectedProperty, String.Empty)))
             End Sub
         _moved =
             Sub(sender, e)
@@ -554,7 +547,6 @@ Friend NotInheritable Class LayoutProbe
                 _bounds.TryGetValue(control, before)
                 If before <> control.Bounds Then
                     Moves.Add((control, before, control.Bounds))
-                    Sequence.Add("moved " & PathOf(control, _root) & " from " & before.ToString() & " to " & control.Bounds.ToString())
                 End If
                 _bounds(control) = control.Bounds
             End Sub
@@ -565,31 +557,6 @@ Friend NotInheritable Class LayoutProbe
             AddHandler control.LocationChanged, _moved
         Next
     End Sub
-
-
-    ' The Layout events of containers (controls with controls in them).
-    Public Function ContainerLayouts() As List(Of (Control As Control, Affected As String))
-        Return Layouts.Where(Function(entry) entry.Control.HasChildren).ToList()
-    End Function
-
-
-    ' The moves and resizes of containers.
-    Public Function ContainerMoves() As List(Of (Control As Control, Before As Rectangle, After As Rectangle))
-        Return Moves.Where(Function(entry) entry.Control.HasChildren).ToList()
-    End Function
-
-
-    ' Each layout and move, one line each, for a failure's message.
-    Public Function Described(Optional containersOnly As Boolean = False) As List(Of String)
-        Dim lines As New List(Of String)()
-        For Each entry In Layouts.Where(Function(item) Not containersOnly OrElse item.Control.HasChildren)
-            lines.Add("laid out " & PathOf(entry.Control, _root) & " (" & entry.Affected & ")")
-        Next
-        For Each entry In Moves.Where(Function(item) Not containersOnly OrElse item.Control.HasChildren)
-            lines.Add("moved " & PathOf(entry.Control, _root) & " from " & entry.Before.ToString() & " to " & entry.After.ToString())
-        Next
-        Return lines
-    End Function
 
 
     Public Sub Dispose() Implements IDisposable.Dispose
@@ -609,7 +576,7 @@ Friend NotInheritable Class LayoutProbe
     Public Shared Function Unsettled(root As Control) As List(Of String)
 
         Dim problems As New List(Of String)()
-        Dim all As List(Of Control) = {root}.Concat(Descendants(root)).ToList()
+        Dim all As List(Of Control) = {root}.Concat(ViewCatalog.Descendants(root)).ToList()
 
         For Each control As Control In all.Where(Function(item) item.HasChildren)
             Dim held As Integer = CInt(SuspendCount.GetValue(control))
@@ -675,15 +642,5 @@ Friend NotInheritable Class LayoutProbe
     ' WinForms keeps to itself.
     Private Shared ReadOnly SuspendCount As Reflection.PropertyInfo =
         GetType(Control).GetProperty("LayoutSuspendCount", Reflection.BindingFlags.Instance Or Reflection.BindingFlags.NonPublic)
-
-
-    Private Shared Iterator Function Descendants(parent As Control) As IEnumerable(Of Control)
-        For Each child As Control In parent.Controls
-            Yield child
-            For Each descendant As Control In Descendants(child)
-                Yield descendant
-            Next
-        Next
-    End Function
 
 End Class
