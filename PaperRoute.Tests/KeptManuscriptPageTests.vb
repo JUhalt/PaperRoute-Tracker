@@ -127,6 +127,12 @@ Public Class KeptManuscriptPageTests
                     Assert.IsFalse(all.OfType(Of ManuscriptVersionHistoryControl)().Any(), "No version history.")
                     Assert.IsFalse(all.Any(Function(control) control.AccessibleRole = AccessibleRole.ListItem), "No shortlisted journal.")
                     Assert.IsTrue(all.OfType(Of JournalShortlistList)().All(Function(list) list.AccessibilityObject.GetChildCount() = 0 AndAlso list.Entries.Count = 0), "No shortlisted journal drawn.")
+                    ' Nor does the window keep the parts let go of, through what
+                    ' the page held showed when its layout was held.
+                    Dim held As Dictionary(Of Control, Boolean) = board.Part(Of Dictionary(Of Control, Boolean))("manuscriptPageShownWhenHeld")
+                    If LayoutRequests.Available Then Assert.IsNotNull(held, "The page left holds its layout.")
+                    Dim kept As List(Of String) = If(held Is Nothing, New List(Of String)(), held.Keys.Where(Function(control) control.IsDisposed).Select(Function(control) control.GetType().Name).ToList())
+                    Assert.AreEqual(0, kept.Count, "The window keeps parts the page let go of: " & String.Join(", ", kept.Distinct()))
 
                     board.Close()
                 End Using
@@ -226,6 +232,11 @@ Public Class KeptManuscriptPageTests
                     board.Open(first)
                     Application.DoEvents()
                     board.Field("Title").Text = title & " (discarded)"
+                    ' The Unsaved changes bar, left hidden by the open, shows
+                    ' laid out (#133).
+                    board.Tick()
+                    Assert.IsTrue(board.SaveBarVisible, "The edit shows the Unsaved changes bar.")
+                    board.AssertSettled()
                     board.Discard()
                     Assert.AreEqual(title, board.Field("Title").Text, "Discard shows the saved version again.")
                     Assert.IsFalse(board.Editor.HasUnsavedChanges())
@@ -458,6 +469,548 @@ Public Class KeptManuscriptPageTests
                 End Using
             End Sub,
             TimeSpan.FromMinutes(5))
+
+    End Sub
+
+
+    ' Letting go of the record once the page is left (#133) lays out none
+    ' of the page's containers and moves none: emptied, the page keeps the
+    ' shape of the record it showed until the next open, which lays out
+    ' only what that record changes. (The record's own parts, its version
+    ' history and its submission's details, go with it.) Before, the page
+    ' emptied laid itself out as a page with no manuscript, its hidden
+    ' sections included, and the next open grew it all back.
+    <TestMethod>
+    Public Sub TheRecordLetGoOfLaysNothingOut()
+
+        Dim laidOut As New List(Of String)()
+        Dim moved As New List(Of String)()
+        Dim emptied As Boolean = False
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary = Library60()
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+                    Dim subject As Manuscript = board.Library.First(Function(item) item.Location = ManuscriptLocation.Pipeline AndAlso item.Submissions.Count > 0 AndAlso item.JournalShortlist.Count > 0 AndAlso item.Tags.Count > 0)
+
+                    board.Open(subject)
+                    Application.DoEvents()
+                    For Each section As String In {"Authors", "Versions", "Submissions", "Readiness & Packets", "Overview"}
+                        ManuscriptEditorReuseTests.ShowSection(board.Editor, section)
+                    Next
+                    ' Watched from the moment the page is left: the record is
+                    ' let go of as the window next idles.
+                    board.NavigateTo(Form1.WorkspacePage.Board)
+                    Dim page As Control = board.KeptPage
+                    Dim containers As List(Of Control) = LastingContainers(page)
+                    Using probe As New LayoutProbe(page)
+                        board.WaitForIdleWork()
+                        laidOut.AddRange(probe.Layouts.Where(Function(entry) containers.Contains(entry.Control)).
+                                             Select(Function(entry) LayoutProbe.PathOf(entry.Control, page) & " (" & entry.Affected & ")"))
+                        moved.AddRange(probe.Moves.Where(Function(entry) containers.Contains(entry.Control)).
+                                           Select(Function(entry) LayoutProbe.PathOf(entry.Control, page) & " " & entry.Before.ToString() & " to " & entry.After.ToString()))
+                    End Using
+                    emptied = ViewCatalog.Descendants(page).OfType(Of TextBox)().All(Function(box) box.TextLength = 0)
+
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(5))
+
+        Assert.IsTrue(emptied, "The page left let go of its record.")
+        Assert.AreEqual(0, laidOut.Count, "Containers laid out as the record was let go of:" & Environment.NewLine & String.Join(Environment.NewLine, laidOut))
+        Assert.AreEqual(0, moved.Count, "Containers moved as the record was let go of:" & Environment.NewLine & String.Join(Environment.NewLine, moved))
+
+    End Sub
+
+
+    ' The same manuscript opened again once the page has let go of it
+    ' moves none of the page's containers (#133): the page kept its shape,
+    ' and the record gives it the same again.
+    <TestMethod>
+    Public Sub TheSameManuscriptOpenedAgainMovesNothing()
+
+        Dim moved As New List(Of String)()
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary = Library60()
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+                    Dim subject As Manuscript = board.Library.First(Function(item) item.Location = ManuscriptLocation.Pipeline AndAlso item.Submissions.Count > 0 AndAlso item.JournalShortlist.Count > 0 AndAlso item.Tags.Count > 0)
+
+                    board.Open(subject)
+                    Application.DoEvents()
+                    board.NavigateTo(Form1.WorkspacePage.Board)
+                    board.WaitForIdleWork()
+
+                    Dim page As Control = board.KeptPage
+                    Dim containers As List(Of Control) = LastingContainers(page)
+                    Using probe As New LayoutProbe(page)
+                        board.Open(subject)
+                        moved.AddRange(probe.Moves.Where(Function(entry) containers.Contains(entry.Control)).
+                                           Select(Function(entry) LayoutProbe.PathOf(entry.Control, page) & " " & entry.Before.ToString() & " to " & entry.After.ToString()))
+                    End Using
+                    Assert.AreEqual(subject.Title, board.Field("Title").Text)
+
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(5))
+
+        Assert.AreEqual(0, moved.Count, "Containers moved as the same manuscript opened again:" & Environment.NewLine & String.Join(Environment.NewLine, moved))
+
+    End Sub
+
+
+    ' An open lays out nothing it leaves hidden (#133): no panel or table
+    ' of a section not shown, of the reroute offer when there is none, of
+    ' the File Drawer card of a manuscript not filed, or of the Unsaved
+    ' changes bar. Each lays itself out as it shows, as a section shown,
+    ' an offer made or the first edit shows it. Before, the open's pass
+    ' laid out each whose contents the record had changed.
+    <TestMethod>
+    Public Sub AnOpenLaysOutNoHiddenSection()
+
+        Dim laidOut As New List(Of String)()
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary = Library60()
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+                    Dim choosing As List(Of Manuscript) =
+                        board.Library.Where(Function(item) item.Location = ManuscriptLocation.Pipeline AndAlso item.Submissions.Count > 0 AndAlso item.JournalShortlist.Count > 0 AndAlso item.Tags.Count > 0).Take(2).ToList()
+                    Dim published As Manuscript = board.Library.First(Function(item) item.Location = ManuscriptLocation.Published)
+
+                    For Each visit As (Left As Manuscript, Opened As Manuscript, ThroughTheBoard As Boolean) In
+                        {(choosing(0), choosing(1), True), (choosing(1), published, False), (published, choosing(0), True)}
+
+                        board.Open(visit.Left)
+                        Application.DoEvents()
+                        If visit.ThroughTheBoard Then
+                            board.NavigateTo(Form1.WorkspacePage.Board)
+                            board.WaitForIdleWork()
+                        End If
+
+                        Dim page As Control = board.KeptPage
+                        Using probe As New LayoutProbe(page)
+                            board.Open(visit.Opened)
+                            laidOut.AddRange(probe.Layouts.Where(Function(entry) TypeOf entry.Control Is ScrollableControl AndAlso entry.Control.HasChildren AndAlso Not entry.Control.Visible).
+                                                 Select(Function(entry) visit.Opened.Title.Substring(0, 12) & ": " & LayoutProbe.PathOf(entry.Control, page) & " (" & entry.Affected & ")"))
+                        End Using
+                        Application.DoEvents()
+
+                        ' Each part left hidden shows laid out.
+                        For Each section As String In {"Authors", "Versions", "Submissions", "Readiness & Packets", "Overview"}
+                            ManuscriptEditorReuseTests.ShowSection(board.Editor, section)
+                            board.AssertSettled()
+                        Next
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        board.WaitForIdleWork()
+                    Next
+
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(5))
+
+        Assert.AreEqual(0, laidOut.Count, "Hidden parts laid out during an open:" & Environment.NewLine & String.Join(Environment.NewLine, laidOut))
+
+    End Sub
+
+
+    ' The page prepared while the window idles holds what a page left
+    ' holds once it has let go of its record (#133), control by control:
+    ' its editor shows no record in the same way, so the first manuscript
+    ' opened finds the page as every later one does.
+    <TestMethod>
+    Public Sub APreparedPageMatchesOneLetGoOf()
+
+        Dim prepared As List(Of String) = Nothing
+        Dim letGo As List(Of String) = Nothing
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary = Library60()
+
+                Using fresh As New LibraryBoard(library, Path.Combine(_root, "settings-prepared")),
+                      used As New LibraryBoard(library, Path.Combine(_root, "settings-used"))
+
+                    fresh.Start()
+                    fresh.WaitForIdleWork()
+                    used.Start()
+                    used.WaitForIdleWork()
+
+                    Dim subject As Manuscript = used.Library.First(Function(item) item.Location = ManuscriptLocation.Pipeline AndAlso item.Submissions.Count > 0 AndAlso item.JournalShortlist.Count > 0 AndAlso item.Tags.Count > 0)
+                    used.Open(subject)
+                    Application.DoEvents()
+                    used.NavigateTo(Form1.WorkspacePage.Board)
+                    used.WaitForIdleWork()
+
+                    prepared = ManuscriptEditorReuseTests.Describe(ViewCatalog.Descendants(fresh.KeptPage).OfType(Of EditManuscriptForm)().Single())
+                    letGo = ManuscriptEditorReuseTests.Describe(ViewCatalog.Descendants(used.KeptPage).OfType(Of EditManuscriptForm)().Single())
+
+                    fresh.Close()
+                    used.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(5))
+
+        Dim differences As New List(Of String)()
+        For index As Integer = 0 To Math.Max(prepared.Count, letGo.Count) - 1
+            Dim wanted As String = If(index < letGo.Count, letGo(index), "(nothing)")
+            Dim found As String = If(index < prepared.Count, prepared(index), "(nothing)")
+            If wanted <> found Then differences.Add("let go of: " & wanted & Environment.NewLine & "  prepared: " & found)
+            If differences.Count = 8 Then Exit For
+        Next
+
+        Assert.AreEqual(0, differences.Count, "The prepared page differs from one that let go of a record (" & letGo.Count & " against " & prepared.Count & " controls):" & Environment.NewLine & String.Join(Environment.NewLine, differences))
+
+    End Sub
+
+
+    ' The first manuscript opened on the page prepared while the window
+    ' idles moves none of the page's shells (#133): the page, its frame,
+    ' its header and the editor under it. Prepared showing no manuscript,
+    ' the header's labels keep one line's height and the stage pill a
+    ' stage's size, so a one-line title grows nothing. Before, the empty
+    ' labels were a pixel shorter than a line, and the first open grew the
+    ' header and moved the editor and every container in it.
+    <TestMethod>
+    Public Sub TheFirstOpenOnThePreparedPageMovesNoShell()
+
+        Dim moved As New List(Of String)()
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary = Library60()
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+                    Dim subject As Manuscript = board.Library.First(Function(item) item.Location = ManuscriptLocation.Pipeline)
+                    subject.Title = "A one-line title"
+
+                    Dim page As Control = board.KeptPage
+                    Dim header As Control = board.Part(Of Label)("manuscriptTitleLabel").Parent.Parent
+                    Dim editor As Control = ViewCatalog.Descendants(page).OfType(Of EditManuscriptForm)().Single()
+                    Dim shells As Control() = {page, header.Parent, header, editor}
+                    Assert.IsInstanceOfType(header, GetType(TableLayoutPanel), "The header holds the title.")
+                    Assert.AreSame(header.Parent, editor.Parent, "The frame holds the header and the editor.")
+
+                    Using probe As New LayoutProbe(page)
+                        board.Open(subject)
+                        moved.AddRange(probe.Moves.Where(Function(entry) shells.Contains(entry.Control)).
+                                           Select(Function(entry) LayoutProbe.PathOf(entry.Control, page) & " " & entry.Before.ToString() & " to " & entry.After.ToString()))
+                    End Using
+                    Assert.AreEqual(subject.Title, board.Field("Title").Text)
+
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(5))
+
+        Assert.AreEqual(0, moved.Count, "Shells moved by the first open on the prepared page:" & Environment.NewLine & String.Join(Environment.NewLine, moved))
+
+    End Sub
+
+
+    ' An open shows nothing again that was showing, while the page is
+    ' still hidden (#133): WinForms treats Visible = True on a control
+    ' already shown, under a hidden parent, as a change, showing its window
+    ' again and raising VisibleChanged in it and everything inside it, as
+    ' showing the Overview from its top did for the whole Overview at each
+    ' open. Once the page shows, everything in it is shown, as it should.
+    <TestMethod>
+    Public Sub AnOpenReshowsNothingOnTheHiddenPage()
+
+        Dim reshown As New List(Of String)()
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary = Library60()
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+                    Dim subjects As List(Of Manuscript) =
+                        board.Library.Where(Function(item) item.Location = ManuscriptLocation.Pipeline AndAlso item.Submissions.Count > 0 AndAlso item.JournalShortlist.Count > 0 AndAlso item.Tags.Count > 0 AndAlso item.TargetJournalId.HasValue).Take(2).ToList()
+                    Assert.AreEqual(2, subjects.Count)
+
+                    board.Open(subjects(0))
+                    Application.DoEvents()
+                    board.NavigateTo(Form1.WorkspacePage.Board)
+                    board.WaitForIdleWork()
+
+                    ' What was set shown before the open: a part the page left
+                    ' hid as it let go of its record shows again, as it should.
+                    Dim page As Control = board.KeptPage
+                    Dim watched As List(Of Control) = ViewCatalog.Descendants(page).ToList()
+                    Dim shownBefore As New HashSet(Of Control)(watched.Where(Function(control) ManuscriptEditorReuseTests.OwnVisible(control)))
+                    Dim changed As EventHandler =
+                        Sub(sender, e)
+                            Dim control As Control = DirectCast(sender, Control)
+                            If Not page.Visible AndAlso shownBefore.Contains(control) AndAlso ManuscriptEditorReuseTests.OwnVisible(control) Then
+                                reshown.Add(LayoutProbe.PathOf(control, page))
+                            End If
+                        End Sub
+                    For Each control As Control In watched
+                        AddHandler control.VisibleChanged, changed
+                    Next
+                    board.Open(subjects(1))
+                    For Each control As Control In watched
+                        RemoveHandler control.VisibleChanged, changed
+                    Next
+                    Application.DoEvents()
+
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(5))
+
+        Assert.AreEqual(0, reshown.Count, "VisibleChanged while the page was hidden, in " & reshown.Count & " controls:" & Environment.NewLine & String.Join(Environment.NewLine, reshown.Take(20)))
+
+    End Sub
+
+
+    ' A container nothing in changed is not laid out by an open (#133):
+    ' showing the page asks every panel and table in it to lay out again,
+    ' and one that nothing else asked, such as the section tabs or the
+    ' page's own actions, which no record changes, lets that request go.
+    ' The page is still left with nothing to lay out (the guard that
+    ' LibraryBoard.Open and the view catalog's opens run).
+    <TestMethod>
+    Public Sub AContainerNothingChangedInIsNotLaidOut()
+
+        Dim laidOut As New List(Of String)()
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary = Library60()
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+                    Dim records As List(Of Manuscript) = board.Library.Where(Function(item) item.Location = ManuscriptLocation.Published).Take(3).ToList()
+
+                    For Each visit As (Left As Manuscript, Opened As Manuscript, ThroughTheBoard As Boolean) In
+                        {(records(0), records(1), True), (records(1), records(2), False), (records(2), records(0), True)}
+
+                        board.Open(visit.Left)
+                        Application.DoEvents()
+                        If visit.ThroughTheBoard Then
+                            board.NavigateTo(Form1.WorkspacePage.Board)
+                            board.WaitForIdleWork()
+                        End If
+
+                        Dim page As Control = board.KeptPage
+                        Dim unchanged As List(Of Control) =
+                            ViewCatalog.Descendants(page).OfType(Of FlowLayoutPanel)().
+                                Where(Function(flow) flow.AccessibleName = "Manuscript sections" OrElse flow.Controls.OfType(Of Control)().Any(Function(button) button.Text = "View Route")).
+                                Cast(Of Control)().ToList()
+                        Assert.AreEqual(2, unchanged.Count, "The section tabs and the page's actions.")
+
+                        ' The open's own layouts; the check that it left nothing
+                        ' to lay out, which lays out every container, follows.
+                        board.VerifySettled = False
+                        Using probe As New LayoutProbe(page)
+                            board.Open(visit.Opened)
+                            laidOut.AddRange(probe.Layouts.Where(Function(entry) unchanged.Contains(entry.Control)).
+                                                 Select(Function(entry) LayoutProbe.PathOf(entry.Control, page) & " (" & entry.Affected & ")" & If(visit.ThroughTheBoard, " from the Board", " from the page")))
+                        End Using
+                        board.VerifySettled = True
+                        board.AssertSettled()
+                        Application.DoEvents()
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        board.WaitForIdleWork()
+                    Next
+
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(5))
+
+        Assert.AreEqual(0, laidOut.Count, "Laid out by an open though nothing in them changed:" & Environment.NewLine & String.Join(Environment.NewLine, laidOut))
+
+    End Sub
+
+
+    ' The shortlist's rows take their height once as a manuscript with
+    ' shortlisted journals opens after one with none (#133). Hidden while
+    ' no journal was shortlisted, the list had not been given a width, so
+    ' it measured its rows at the narrowest a row can be, grew tall, was
+    ' laid out so, and took its height again once it had its width.
+    <TestMethod>
+    Public Sub TheShortlistTakesItsHeightOnce()
+
+        Dim heights As New List(Of Integer)()
+        Dim final As Integer = -1
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary = Library60()
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+                    Dim none As Manuscript = board.Library.First(Function(item) item.Location = ManuscriptLocation.Published AndAlso item.JournalShortlist.Count = 0)
+                    Dim choosing As Manuscript = board.Library.Where(Function(item) item.Location = ManuscriptLocation.Pipeline).OrderByDescending(Function(item) item.JournalShortlist.Count).First()
+
+                    board.Open(none)
+                    Application.DoEvents()
+                    board.NavigateTo(Form1.WorkspacePage.Board)
+                    board.WaitForIdleWork()
+
+                    Dim rows As JournalShortlistList = ViewCatalog.Descendants(board.KeptPage).OfType(Of JournalShortlistList)().Single()
+                    Dim height As Integer = rows.Height
+                    Dim resized As EventHandler =
+                        Sub(sender, e)
+                            If rows.Height <> height Then
+                                height = rows.Height
+                                heights.Add(height)
+                            End If
+                        End Sub
+                    AddHandler rows.SizeChanged, resized
+                    board.Open(choosing)
+                    RemoveHandler rows.SizeChanged, resized
+                    final = rows.Height
+
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(5))
+
+        CollectionAssert.AreEqual({final}, heights, "The heights the rows took: " & String.Join(", ", heights))
+
+    End Sub
+
+
+    ' The page's containers that outlive a record: every control with
+    ' controls in it, but for the parts built for one record (its version
+    ' history and its submission's details) and what is in them.
+    Private Shared Function LastingContainers(page As Control) As List(Of Control)
+        Dim recordParts As List(Of Control) =
+            ViewCatalog.Descendants(page).Where(Function(control) TypeOf control Is ManuscriptVersionHistoryControl OrElse TypeOf control Is SubmissionDetailsForm).ToList()
+        Return {page}.Concat(ViewCatalog.Descendants(page)).
+            Where(Function(control) control.HasChildren AndAlso Not recordParts.Any(Function(part) part Is control OrElse part.Contains(control))).
+            ToList()
+    End Function
+
+
+    ' Whatever the record before it, an open leaves the page with nothing
+    ' to lay out (#133): laying out each container shown again moves and
+    ' scrolls nothing, as it opens and once the window has processed its
+    ' messages, and so does each section once shown. The records differ
+    ' in every way the page's shape follows: a Published manuscript with
+    ' no shortlist, a Pipeline one with its shortlisted journals and tags,
+    ' a filed one with its reason, one with no target journal (no notes
+    ' card) and one whose journal has notes, a three-line title after a
+    ' one-line one and back, a revision with its deadline, a page left on
+    ' Submissions, and the window made as small as it goes on the Board
+    ' between leaving and the next open. Each is opened straight from the
+    ' page shown, and again from the Board once the page left has let go
+    ' of its record. In Light, Dark and a contrast theme, each at its own
+    ' text size (a larger one changes what wraps), standing in for 96, 120
+    ' and 144 DPI.
+    <TestMethod>
+    <DataRow(SystemColorMode.Classic, False, 1.0F)>
+    <DataRow(SystemColorMode.Dark, False, 1.25F)>
+    <DataRow(SystemColorMode.Classic, True, 1.5F)>
+    Public Sub AnOpenLeavesNothingToLayOut(mode As SystemColorMode, contrastTheme As Boolean, fontScale As Single)
+
+        StaRunner.Run(
+            Sub()
+                If mode = SystemColorMode.Dark AndAlso (SystemInformation.HighContrast OrElse Not OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000)) Then
+                    Assert.Inconclusive("Native WinForms dark mode requires Windows 11 or later, outside a Windows contrast theme.")
+                End If
+
+                UiTheme.HighContrastOverride = contrastTheme
+                Try
+                    Dim library As LargeLibraryFixture.SyntheticLibrary = Library60()
+
+                    Using board As New LibraryBoard(library, Path.Combine(_root, "settings"), fontScale)
+
+                        board.Start()
+                        board.WaitForIdleWork()
+
+                        Dim records As List(Of Manuscript) = board.Library
+                        Dim published As Manuscript = records.First(Function(item) item.Location = ManuscriptLocation.Published AndAlso item.JournalShortlist.Count = 0 AndAlso item.TargetJournalId.HasValue)
+                        Dim choosing As Manuscript = records.Where(Function(item) item.Location = ManuscriptLocation.Pipeline AndAlso item.Tags.Count >= 2).OrderByDescending(Function(item) item.JournalShortlist.Count).First()
+                        Dim filed As Manuscript = records.First(Function(item) item.Location = ManuscriptLocation.FileDrawer)
+                        filed.FileDrawerReason = "Set aside until the second study is in." & Environment.NewLine & "The reviewers asked for it."
+                        Dim untargeted As Manuscript = records.First(Function(item) item IsNot published AndAlso item IsNot choosing AndAlso item IsNot filed)
+                        untargeted.TargetJournal = String.Empty
+                        untargeted.TargetJournalId = Nothing
+                        Dim titled As Manuscript = records.First(Function(item) item IsNot published AndAlso item IsNot choosing AndAlso item IsNot filed AndAlso item IsNot untargeted AndAlso item.Location = ManuscriptLocation.Published)
+                        titled.Title = String.Join(" ", Enumerable.Repeat("A title long enough to wrap onto a third line beside the page's actions,", 4))
+                        Dim revision As Manuscript = records.First(Function(item) item.Location = ManuscriptLocation.Pipeline AndAlso item.CurrentStage = PaperStage.Revision)
+                        Assert.IsTrue(choosing.JournalShortlist.Count >= 2, "A Pipeline manuscript with shortlisted journals and tags.")
+
+                        Dim sequence As (Record As Manuscript, LeaveOn As String, Shrink As Boolean)() = {
+                            (published, "Overview", False),
+                            (choosing, "Overview", False),
+                            (filed, "Overview", False),
+                            (untargeted, "Overview", False),
+                            (choosing, "Overview", False),
+                            (titled, "Overview", False),
+                            (published, "Overview", False),
+                            (titled, "Overview", False),
+                            (revision, "Submissions", False),
+                            (choosing, "Overview", True),
+                            (filed, "Overview", False)
+                        }
+
+                        For Each throughTheBoard As Boolean In {False, True}
+                            For Each visit In sequence
+
+                                If throughTheBoard Then
+                                    board.NavigateTo(Form1.WorkspacePage.Board)
+                                    board.WaitForIdleWork()
+                                    If visit.Shrink Then
+                                        board.Size = board.MinimumSize
+                                        Application.DoEvents()
+                                    End If
+                                End If
+
+                                Dim context As String = "Opening """ & visit.Record.Title.Substring(0, Math.Min(40, visit.Record.Title.Length)) & """" & If(throughTheBoard, " from the Board", " from the page shown")
+                                Try
+                                    board.Open(visit.Record)
+                                    Application.DoEvents()
+                                    board.AssertSettled()
+
+                                    For Each section As String In {"Authors", "Versions", "Submissions", "Readiness & Packets", visit.LeaveOn}
+                                        ManuscriptEditorReuseTests.ShowSection(board.Editor, section)
+                                        board.AssertSettled()
+                                    Next
+                                Catch ex As AssertFailedException
+                                    Throw New AssertFailedException(context & ": " & ex.Message, ex)
+                                End Try
+
+                            Next
+                        Next
+
+                        board.Close()
+                    End Using
+                Finally
+                    UiTheme.HighContrastOverride = Nothing
+                End Try
+            End Sub,
+            TimeSpan.FromMinutes(10), mode)
 
     End Sub
 

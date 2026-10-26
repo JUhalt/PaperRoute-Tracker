@@ -330,6 +330,17 @@ Namespace Forms
         End Sub
 
 
+        ' The panels that hold the parts built for each record, its version
+        ' history and its submission's details: empty while the form is
+        ' built, so a page holding the layout of every container that has
+        ' controls in it holds these by name (#133).
+        Friend ReadOnly Property RecordPartHosts As Control()
+            Get
+                Return {_versionsHost, _submissionDetailHost}
+            End Get
+        End Property
+
+
         ' =====================================================
         ' One record after another (#133)
         ' =====================================================
@@ -364,13 +375,18 @@ Namespace Forms
 
         ' Lets go of the record: the form holds and shows nothing of it until
         ' the next LoadRecord. The library's tags stay suggested, so the next
-        ' load need not set them again.
-        Friend Sub UnloadRecord()
+        ' load need not set them again. A page prepared while the window
+        ' idles shows no record in the same way before its first (#133),
+        ' bound over the library's records given, whose tags it goes on
+        ' offering, so the first manuscript opened finds the form as every
+        ' later one does; its first snapshot of a working copy, which warms
+        ' the serializer, is made then, while the window idles.
+        Friend Sub UnloadRecord(Optional allManuscripts As IEnumerable(Of Manuscript) = Nothing)
 
             Bind(
                 New RecordState With {
                     .Working = New Manuscript(),
-                    .All = _record.All,
+                    .All = If(allManuscripts?.ToList(), _record.All),
                     .AuthorLibrary = _record.AuthorLibrary,
                     .PartsDeferred = True
                 },
@@ -592,7 +608,7 @@ Namespace Forms
             ' Hidden, the card keeps no other journal's notes: the page shows
             ' one record after another (#133).
             If journal Is Nothing OrElse (notes.Length = 0 AndAlso checklist = 0) Then
-                journalNotesGroup.Visible = False
+                InPlace.SetShown(journalNotesGroup, False)
                 journalNotesGroup.Text = "Target journal notes"
                 lblJournalNotes.Text = String.Empty
                 Return
@@ -613,7 +629,7 @@ Namespace Forms
 
             journalNotesGroup.Text = "Notes for " & journal.Name.Replace("&", "&&")
             lblJournalNotes.Text = String.Join(Environment.NewLine & Environment.NewLine, lines)
-            journalNotesGroup.Visible = True
+            InPlace.SetShown(journalNotesGroup, True)
 
         End Sub
 
@@ -688,9 +704,11 @@ Namespace Forms
                 EnsureDeferredParts()
             End If
 
+            ' Shown only when it is not: on the hidden page, showing the
+            ' Overview from the top at each open showed it again (#133).
             For Each tab As ShelfTabButton In _sectionTabs
                 Dim panel As Control = DirectCast(tab.Tag, Control)
-                panel.Visible = panel Is section
+                InPlace.SetShown(panel, panel Is section)
                 If panel Is section AndAlso Not tab.Checked Then
                     tab.Checked = True
                 End If
@@ -1854,11 +1872,11 @@ Namespace Forms
             End If
 
             shortlistRows.SetEntries(list.Select(Function(candidate, index) ShortlistEntryFor(candidate, index, list.Count)).ToList())
-            shortlistRows.Visible = list.Count > 0
-            lblShortlistEmpty.Visible = list.Count = 0
+            InPlace.SetShown(shortlistRows, list.Count > 0)
+            InPlace.SetShown(lblShortlistEmpty, list.Count = 0)
 
             Dim offer As RerouteOffer = JournalShortlistService.RerouteOfferFor(_workingManuscript, DateTime.Today)
-            shortlistOffer.Visible = offer IsNot Nothing
+            InPlace.SetShown(shortlistOffer, offer IsNot Nothing)
             If offer IsNot Nothing Then
                 Dim outcome As String
                 Select Case offer.Outcome
@@ -1901,7 +1919,7 @@ Namespace Forms
             btnFindJournals.AccessibleDescription = If(reason.Length = 0, Nothing, reason)
             lblFindJournalsOff.Text = reason
             lblFindJournalsOff.ForeColor = UiTheme.InfoColor()
-            lblFindJournalsOff.Visible = reason.Length > 0
+            InPlace.SetShown(lblFindJournalsOff, reason.Length > 0)
         End Sub
 
 
@@ -2244,9 +2262,11 @@ Namespace Forms
             cmbStage.SelectedItem =
                 _workingManuscript.CurrentStage
 
-            fileDrawerGroup.Visible =
+            InPlace.SetShown(
+                fileDrawerGroup,
                 _workingManuscript.Location =
                 ManuscriptLocation.FileDrawer
+            )
 
             If _workingManuscript.FileDrawerDate.HasValue Then
 

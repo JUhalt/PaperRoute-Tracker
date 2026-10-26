@@ -12,6 +12,7 @@ The same measurements as [the before table](Responsiveness-Before-2026-10-16.md)
 - **2026-10-17, the Deadlines and Import & Export pages (#133, second batch).** Both pages are now drawn by one list each and kept between visits; their rows are enforced. The tables below are from 2026-10-16 and were not changed; the new figures, the host and the reasons are in [their section below](#2026-10-17-the-deadlines-and-import--export-pages).
 - **2026-10-17, startup, the manuscript page and the page switches (#133, second part).** The Board fills in after its first screen, one manuscript page is kept and loads one record after another, and pages are made and disposed where they stay; warm startup, the Board's fill and the switches back to the Board from Insights and the manuscript page are enforced. The tables below were not changed; the new figures, the host, the reasons and the notes on merging the two batches are in [their section below](#2026-10-17-startup-the-manuscript-page-and-the-page-switches-133-second-part).
 - **2026-10-23, the manuscript page, Journals, Insights, the Published shelf and Library to Board (#133, part C).** Switches paint nothing until they return, so their rows no longer hold the screen's half-second wait behind Library to Board's spikes: the wait moved into the paint after a switch, which the researcher still waits on and which is reported in rows of its own (see the review follow-ups at the end of that section); the manuscript page, Journals, Insights and the shelves not shown are prepared while the window idles; the shortlist is drawn in one list. Library to Board, Board to Journals, Board to Insights, the first switch to Published and the manuscript page's versions and details step are enforced; the three manuscript-page opens are still over budget on a busy host and stay reported. The figures, the host and the reasons are in [their section below](#2026-10-23-the-manuscript-page-journals-insights-the-published-shelf-and-library-to-board-133-part-c).
+- **2026-10-26, the three manuscript-page opens and Journals to Board (#133).** The page left keeps its last record's shape until the next open, is prepared in that shape, lays out nothing it leaves hidden or that nothing changed in, and leaving Journals renders less: an open lays out 15 to 21 containers where it laid out 40 to 44. The three opens and both visits' Journals to Board are enforced; Board to Library, the paint rows and the idle slice stay reported. The figures, the host and the reasons are in [their section below](#2026-10-26-the-three-manuscript-page-opens-and-journals-to-board-133).
 
 ## Host during the after runs
 
@@ -625,3 +626,127 @@ The three runs before it fell on a busier host, and none of their failures is on
 - **Run 3 (13:57), the motion test alone.** The desktop was in use and the sibling ran for 11 of 36 samples. The test passed. The differences ranged from -11 to +67 ms and Begin from 1.3 to 8.2.
 
 The window check is not the cause of the higher readings while the desktop was in use: it costs microseconds (measured above).
+
+## 2026-10-26: the three manuscript-page opens and Journals to Board (#133)
+
+Branch `fix/v092-manuscript-open`, from master `dfb353e` (speed parts A to C, #217's hosted Submission Details, #220's cross-fade and #213's focus). It takes the last rows the 2026-10-23 section left over budget and reported: the three manuscript-page opens, then Journals to Board and Board to Library. "Before" is `dfb353e`: three Release runs of the budget test on 2026-10-25 (A 09:24, B 10:02, C 12:07) and two more that evening, on the host of the after runs (22:14 and 22:23, alternated with this branch's code). "After" is three Release runs of the branch's last commit on 2026-10-26 (G1 00:17, G2 00:20, G3 00:23), with the rows enforced. The sections above are history and were not changed.
+
+### Where the time went
+
+A profile of `dfb353e` (a scratch test with stopwatch marks, layout and window probes; not kept) found the opens were one layout pass, 55 to 80% of each, and that about half of that pass came from the page left: as it let go of its record while the window idled, it laid itself out as a page with no manuscript (an empty header two pixels shorter, its hidden sections reflowed around emptied labels), and the next open grew it all back. The same manuscript opened again after that let-go moved 35 controls; opened again without it, none. The rest was a request every panel and table in the page makes as the page is shown (a `ScrollableControl` lays itself out as it becomes visible), 19 to 23 layouts an open of containers nothing had changed in. Leaving Journals rendered the Board while it was hidden, filling the stage filter again with the same options, showing again every attention chip already shown, and reading the search box once per manuscript: 2,954 messages sent a leave.
+
+### What changed
+
+- **`50f50fc`, a guard first.** `LibraryBoard.Open` now checks after every open, in every test that opens through it or (since the review follow-ups below) through the view catalog, in the theme and size each runs at, that no container of the page still holds its layout and that laying each one shown out again moves, resizes and scrolls nothing (`AssertSettled`; the budget tests turn it off). `KeptManuscriptPageTests.AnOpenLeavesNothingToLayOut` opens records that differ in every way the page's shape follows, straight from the page and from the Board. On `dfb353e` it found a defect that was already there: opened after the window was resized on the Board, the Overview's scroll range ended 57 pixels short of its last card (a card that grew as it took its new width asked for its host's layout while that layout ran, and WinForms let the request go). A scrolling host whose range lags its contents now lays out once more after the pass; in the guard's 22 opens that ran once.
+- **`107ad74`, the page left holds its layout from letting go of its record to the next open.** Nothing of the manuscript stays on it, as before; only nothing is laid out until the next record shows, from the last record's shape. Letting go of the record now lays out no container.
+- **`351a540`, nothing hidden is laid out during an open.** A panel or table left hidden (a section not shown, the reroute offer, the File Drawer card's table, the Unsaved changes bar) keeps what it has to lay out until it shows.
+- **`814910b`, the page is prepared in the shape a page left keeps.** Its editor shows no record as one that let go of its record does (`ShowNoRecord`, folded into `UnloadRecord` after the review below, which also makes the first snapshot of a working copy in idle time), and the header's labels keep one line's height with no text, so the first open no longer grows the header and lays out the editor under it again.
+- **`92847f0`, nothing already shown is shown again on a hidden page.** `InPlace.SetShown` sets a control's visibility only when its window is not already so: the Overview at each open, the shortlist's parts, the notes card, the File Drawer card, and the Board's attention chips.
+- **`6b74e99`, leaving Journals renders less.** The stage filter keeps its options when they and its font and DPI are the same; the search and the stage chosen are read once a render; a chip's cursor is set only when it changes; a filter chip keeps its text and its bold font. 2,954 messages sent a leave became 492.
+- **`f05c6dd`, the layout showing the page asks of a container nothing changed in is let go.** Just before the page shows, the open notes which held containers nothing has asked to lay out, as WinForms records it (`LayoutRequests` reads and clears a held control's `LayoutDeferred` state by reflection; where it is not found, every container lays out as before), and lets go of the one request showing the page makes of each of them. A request a container inside makes during the pass, the page's own new size, and a part shown or hidden while the page was held (hidden under a hidden page, a part asks nothing of its container; the guard found this with the Unsaved changes bar) still lay out. This was the plan's reserve, taken after the opens failed the gate below without it.
+- **`a01db42`, the shortlist's rows are arranged at the width they will have.** Hidden while no journal was shortlisted, the drawn list had no width, measured its rows at the narrowest a row can be (293 pixels for three journals), was laid out so, and then took 160.
+- **This section's commit** enforces the three opens and both visits' Journals to Board in `EveryActionIsMeasuredOnBothLibraries`, and the opens and Journals to Board in `PageSwitchesWithMotionOnGrowByNoMoreThanTheFade`, with the existing multipliers (x1 Release, x2 Debug, a further x3 when `GITHUB_ACTIONS` is set). The review follow-ups below leave the Pipeline open reported again.
+
+Nothing here changes when or what the library saves: the save path, `LoadRecord`'s reading of the author library, `Bind` and the baseline are untouched.
+
+### Numbers
+
+500 library, Release, UI ms against the budget x1 (UI equals wall for every switch row). A to C and the 22:14 and 22:23 runs are `dfb353e`; G1 to G3 the branch, the rows enforced.
+
+| Action | A / B / C (10-25 day) | 22:14 / 22:23 (10-25 evening) | G1 / G2 / G3 (10-26) | Budget ms | Held |
+|---|---:|---:|---:|---:|---|
+| Board to a manuscript page, the first (on the page prepared while the window idled) | 50 / 56 / 75 | 120 / 121 | 51 / 69 / 60 | 100 | enforced from 10-26 |
+| Board to a manuscript page, the kept page (another manuscript) | 45 / 45 / 55 | 106 / 60 | 76 / 71 / 54 | 100 | enforced from 10-26 |
+| Board to a manuscript page, the kept page (a Pipeline manuscript with three shortlisted journals and tags) | 58 / 49 / 142 | 119 / 100 | 84 / 85 / 86 | 100 | enforced from 10-26; reported again after the review (below) |
+| Manuscript page: its first paint | 488 / 412 / 19 | 24 / 21 | 25 / 24 / 32 | 250 | reported |
+| Manuscript page: versions and details after its first paint | 40 / 48 / 62 | 107 / 145 | 54 / 121 / 176 | 250 | enforced |
+| Manuscript page: the record let go of while the window idles | 46 / 41 / 55 | 95 / 109 | 10 / 8 / 11 | 250 | enforced |
+| Journals to Board | 39 / 31 / 48 | 63 / 49 | 37 / 33 / 37 | 100 | enforced from 10-26 |
+| Journals to Board (second visit) | 32 / 39 / 40 | 78 / 49 | 55 / 26 / 30 | 100 | enforced from 10-26 |
+| Board to Library | 42 / 26 / 44 | 68 / 43 | 53 / 48 / 73 | 100 | reported |
+| Library to Board | 14 / 11 / 16 | 22 / 19 | 21 / 36 / 28 | 100 | enforced |
+| Manuscript page to Board | 13 / 9 / 20 | 20 / 25 | 25 / 32 / 13 | 100 | enforced |
+| Save from the manuscript page | 52 / 53 / 67 | 69 / 101 | 43 / 79 / 41 | 250 | enforced |
+| Warm startup to an interactive Board | 1154 / 871 / 950 | 1124 / 863 | 923 / 1183 / 1168 | 1500 | enforced |
+
+All three G runs passed every enforced row. The evening's host read the code before this branch about twice as slow as the morning's (the first open 120 and 121 ms against 50 to 75): no other test host and no VM, the desktop idle for one and a half to two and a half hours (the display most likely asleep), the sampler's load readings swinging from 0 to 85% while the processes it could see used about a core and a half, the test's own one of them. So the evening's before and after columns are the comparison; the day's are the record of `dfb353e` on a quieter screen.
+
+With motion on (`PageSwitchesWithMotionOnGrowByNoMoreThanTheFade`, 00:25, the same host): 20 of 22 switches faded, no picture was late; the first open read 44 ms with motion off and 41 on, the kept page 50 and 41 (both cuts by design), Journals to Board 16 and 21 and its second visit 37 and 48; the test passed with the new rows enforced.
+
+What an open does, counted by a scratch probe (Release, 500 library; the counts do not depend on the host), before (`dfb353e` with the scroll-range fix) and after (`a01db42`):
+
+| Open | Containers laid out | Containers moved | Controls moved | Windows made |
+|---|---:|---:|---:|---:|
+| The first, on the prepared page | 44 to 16 | 15 to 6 | 35 to 13 | 2 (its tag chips) |
+| Another manuscript on the kept page | 40 to 15 | 14 to 3 | 27 to 6 | 1 |
+| The Pipeline manuscript, after the other | 42 to 21 | 18 to 9 | 33 to 17 | 2 |
+
+And timed in a scratch loop of twelve rounds on the evening's host (medians of 11, about 2,000 windows in the main window against the budget test's 4,780, alternated with the code before the branch): the first open 111 and 102 ms before, 34 to 40 after; another manuscript 102 and 101, 34 to 40; the Pipeline manuscript 89 and 99, 48 to 54; the layout pass, from the page shown to its last layout, 79 to 88 ms before and 17 to 30 after. Journals to Board in the same loop, sixteen leaves each: medians 100 and 152 ms before, 48 and 50 after.
+
+### What stays reported, and what remains
+
+- **The gate.** The plan held each open to 60 ms on a quiet host and 80 on a busy one, so that 100 would hold with room. In the after runs the first open and another manuscript read 51 to 76 ms and the Pipeline manuscript 84 to 86, all three inside 100 in every run, on a host that read the code before at 60 to 121; no run was taken on the morning's quieter screen, nor beside a sibling test host or a VM. The Pipeline open has the least room. On this host such a run can still pass 100 ms, as the enforced first visits to Deadlines and Import & Export can (see the 2026-10-17 section); a failure of these rows is run again on a quiet host before it is read as a regression.
+- **What is left of an open.** Loading the record and the header, 8 to 19 ms (most of the Pipeline manuscript's in its tag chips' windows, one per tag, which `AnOpenMakesNoWindowButItsTagChips` pins); then the pass, 17 to 30 ms, most of it the Overview's nested self-sizing tables measuring their children again whenever the record changes what they hold: laid out again with nothing moving, the Overview costs 11 to 18 ms on this host, though each of its controls measures itself in under 0.2 ms. Fewer nested self-sizing tables (the drawn Overview of the plan's Design 2) is the lever after 1.0.
+- **Board to Library** (53 to 73 ms here; 26 to 509 across 2026-10-24 and 10-25) stays reported. About half of it is making the page's 14 windows, its 500-row grid's among them, at every visit, which a page built for each visit and disposed as it is left needs (`PageSwitchTests.LeavingAPageDisposesItInPlace` and the "entered new" line of `KeyboardAccessTests.EnteringAPageByKeyboardKeepsFocusWhereItLandsToday` pin that shape); its data, 500 rows, takes 4 to 19 ms. A Library page kept and prepared while the window idles, as Journals is, would take it under 100 with room; it is offered to the maintainer, with its costs: those two pins change, about 15 windows and a 500-row grid stay alive while hidden, its rows go stale if a change skips `RenderManuscripts`, and its preparation can fall inside timed rows.
+- **The paint rows** (the first paint after an open, the Board's after a leave, and the paints after Library to Board, Journals, Insights and the first switch to Published) stay reported, by the maintainer's earlier decision: they hold the wait this machine's screen can take.
+- **The idle steps against the idle queue's 30 ms slice** stay reported (102 to 127 ms in the G runs); each is under the UI thread's 250, which is enforced.
+- **#133's Acceptance** is therefore not met in full: Board to Library, the paint rows and the idle slice stay reported, and after the review below the Pipeline open too.
+
+### Host during these runs
+
+Windows 11 (NT 10.0.26300), 12 logical processors, window DPI 96, sampled every 3 to 4 s. Runs A to C (2026-10-25, morning): A with no input for 12 minutes and no other test host, B with no input for 50 minutes, C beside a sibling worktree's test host for 15 of 48 samples. The evening and night runs (22:14 to 00:27): no other PaperRoute test host and no VirtualBox VM, the desktop idle throughout, Firefox, Thunderbird, OneNote, OneDrive, CrossDeviceService, Malwarebytes, 1Password, PowerToys and several Claude sessions open; this worktree's own builds between runs. The computer slept from 14:59 to 17:20, during this branch's first Debug filter run.
+
+### Debug
+
+The brief's targeted Debug filter, with ScalingMeasurementTests and, from the fifth commit, DashboardShelfLayoutTests, FileDrawerTests, BoardFillTests and RecoveryDraftTests, ran on each commit; each commit's message gives its run. Two runs found something before their commit, which put it right: on `50f50fc`, the paint test's own new check sent messages inside a watched switch (the check is off in that test, which then passed), and on `6b74e99`, a test that called a changed method by reflection (it now asks what the Board shows). On `6b74e99` a keyboard pin's rail row also failed once while the desktop was in use as the test began, and passed alone. On this section's commit (00:41 to 01:05, no other test host): 338 tests, 336 passed, 2 skipped (the on-screen fade rows), the motion budget test among them with its new rows enforced x2.
+
+### Tests that hold this section
+
+`KeptManuscriptPageTests` (`AnOpenLeavesNothingToLayOut`, `TheRecordLetGoOfLaysNothingOut`, `TheSameManuscriptOpenedAgainMovesNothing`, `AnOpenLaysOutNoHiddenSection`, `APreparedPageMatchesOneLetGoOf`, `AnOpenReshowsNothingOnTheHiddenPage`, `AContainerNothingChangedInIsNotLaidOut`, `TheShortlistTakesItsHeightOnce`), `PageSwitchTests` (`LeavingJournalsShowsWhatChangedOnTheBoard`, `LeavingJournalsReshowsNoAttentionChip`, `LeavingJournalsWithNothingChangedRefillsNoFilter`, `AFilterChipMeasuresAsBefore`), `ManuscriptEditorReuseTests.NothingOfTheManuscriptLeftReachesTheNextOne` in Light, Dark and a contrast theme, `SubmissionDetailsLayoutTests.HostedTheCorrespondenceToolbarAndHintAreWhole` and `ManuscriptEditorScalingTests.TheRevisionDeadlineRowHoldsOnTheKeptPageOpenedAgain` on the kept page opened again after the window was made as small as it goes, and the guard in every test that opens a manuscript through `LibraryBoard` or the view catalog. Each new pin was run on the code before its commit and failed there, and each commit's message quotes its failure. `LeavingJournalsShowsWhatChangedOnTheBoard` (which passed on `dfb353e`), `AFilterChipMeasuresAsBefore` and the two held-page rows are guards of behaviour that must not change rather than pins that failed first; the guard failed on `dfb353e` only for the scroll-range defect its own commit fixed. One correction to those messages: `f05c6dd`'s says the guard "failed five tests" without the save bar's case; it failed six rows of four tests (`NothingOfTheManuscriptLeftReachesTheNextOne` in its three themes among them).
+
+### Review follow-ups (2026-10-26, night)
+
+A review of this section's commits found the opens enforced on three night runs alone, the settled-layout guard missing from the view catalog's opens, and smaller things. The commits after `90e7368`:
+
+- **`e59deca`.** `LayoutProbe` loses the members no test used (`Sequence`, which built a path string at every Layout and move event, `ContainerLayouts`, `ContainerMoves`, `Described`) and its own copy of `Descendants`; `KeptManuscriptPageTests` shares `ManuscriptEditorReuseTests.ShowSection`.
+- **`627212e`, the guard on the view catalog's opens.** `CatalogBoard.Open` fails a view whose page an open left with layout to do, so the sweeps check it too: names, keyboard, Dark legibility, scaling, and `SubmissionDetailsLayoutTests` and `ManuscriptEditorScalingTests` on the held page opened after the window was made small. They found nothing. `AnOpenLeavesNothingToLayOut` runs in Light at text size 1.0, in Dark at 1.25 and in a contrast theme at 1.5, where it ran only in Light at 1.0. `PageBoard` (`ManuscriptPageTests`) and `RecoveryDraftTests`' board still open without the guard; the two claims above that said otherwise are corrected.
+- **`ae986db`, a pin for the prepared page's header.** `KeptManuscriptPageTests.TheFirstOpenOnThePreparedPageMovesNoShell`. With `814910b`'s one-line minimum height taken out, the first open grew the header from 61 to 63 pixels and moved the editor 2 down.
+- **`0a8bad2`, nothing of a record let go of is kept.** What the page showed when its layout was held was noted for every control, the record's own parts among them, so the window kept those parts, disposed, and through the version history the last working copy, until the next open. They are dropped as the record is let go of; `ThePageLeftHoldsNothingOfTheManuscript` now checks it and failed without it.
+- **`aea85b1`.** A shortlist arranged at its guessed width no longer arranges its rows a second time as its height is set.
+- **`0bbe971`.** `ShowNoRecord` is folded into `UnloadRecord`, which takes the library's records.
+- **`b6b6d94`, a pin for the attention chips' kept text.** `PageSwitchTests.LeavingJournalsWithNothingChangedRefillsNoFilter` requires that no chip's text is read from its window during the leave; without `ControlStyles.CacheText`, each of the four chips shown was read 32 times. `SentMessageWatch`'s hook catches what it cannot read, and the tests' fonts are disposed.
+- **This commit.** The runs below; the Pipeline open reported again; the test's comments date the enforcement 2026-10-26 and give the readings beside the rows still enforced.
+
+#### Release, 500 library: beside another test host, and on a quiet host
+
+The code is the branch with the follow-ups above (those that change what an open does are `0a8bad2` to `0bbe971`); Q4 also has this commit's change to the test. B1 (02:36) and B2 (02:58) ran beside a Debug test host of this branch, the catalog sweeps and then the kept-page, reuse and page-switch tests (in 42 of 43 samples each; the sampler's load mean 44 and 45%). Q1 to Q3 (02:48 to 02:56) and Q4 (03:29) ran with no other test host (load mean 51 and 54%; as in the night runs above, the reading swings while the processes it can see use about a core and a half). In every run no VirtualBox VM ran and nothing had touched the desktop for more than four and a half hours, so the display was most likely asleep. None is therefore the daytime run on a quiet screen the review asked for: this session ran at night, and that run is still to take. G1 to G3 are `90e7368`, from the table above.
+
+| Action | G1 / G2 / G3 | Q1 / Q2 / Q3 / Q4 | B1 / B2 | Budget ms | Held |
+|---|---:|---:|---:|---:|---|
+| Board to a manuscript page, the first (on the page prepared while the window idled) | 51 / 69 / 60 | 48 / 59 / 69 / 66 | 87 / 63 | 100 | enforced |
+| Board to a manuscript page, the kept page (another manuscript) | 76 / 71 / 54 | 66 / 67 / 82 / 56 | 88 / 93 | 100 | enforced |
+| Board to a manuscript page, the kept page (a Pipeline manuscript with three shortlisted journals and tags) | 84 / 85 / 86 | 75 / 81 / 57 / 74 | 135 / 96 | 100 | reported from this commit |
+| Manuscript page: versions and details after its first paint | 54 / 121 / 176 | 128 / 115 / 131 / 123 | 780 / 206 | 250 | enforced |
+| Manuscript page: the record let go of while the window idles | 10 / 8 / 11 | 12 / 16 / 17 / 8 | 14 / 15 | 250 | enforced |
+| Manuscript page to Board | 25 / 32 / 13 | 27 / 20 / 21 / 16 | 24 / 22 | 100 | enforced |
+| Save from the manuscript page | 43 / 79 / 41 | 46 / 85 / 56 / 33 | 65 / 93 | 250 | enforced |
+| Journals to Board | 37 / 33 / 37 | 37 / 26 / 40 / 29 | 80 / 106 | 100 | enforced |
+| Journals to Board (second visit) | 55 / 26 / 30 | 30 / 26 / 32 / 31 | 78 / 105 | 100 | enforced |
+| Board to Library | 53 / 48 / 73 | 47 / 57 / 61 / 45 | 56 / 104 | 100 | reported |
+| Library to Board | 21 / 36 / 28 | 17 / 23 / 20 / 18 | 18 / 41 | 100 | enforced |
+| Board to Deadlines | | 60 / 42 / 57 / 63 | 83 / 104 | 100 | enforced (2026-10-17) |
+| Board to Import & Export | | 70 / 81 / 77 / 66 | 174 / 108 | 100 | enforced (2026-10-17) |
+| Warm startup to an interactive Board | 923 / 1183 / 1168 | 1094 / 1133 / 1402 / 1138 | 1336 / 1569 | 1500 | enforced |
+
+Q1 to Q4 passed every enforced row. B1 failed four: the Pipeline open (135), Board to Import & Export (174), the versions and details (780) and the restore's inspection of the backup (387). B2 failed five: Journals to Board (106) and its second visit (105), Board to Deadlines (104), Board to Import & Export (108) and the warm startup (1,569).
+
+#### What these runs decide
+
+- **The Pipeline open is reported again.** The brief asked that the three opens hold 100 ms with room on a busy host before they are enforced. The Pipeline open read 135 and 96 beside another test host and 57 to 86 on a quiet one, with no room on either, and the maintainer has not accepted the re-run rule below for it. So it is reported, with its reason in the test, as the review proposed. What is left of it is its tag chips' windows (one per tag) and the Overview's nested self-sizing tables (above).
+- **The first open and another manuscript on the kept page stay enforced**, under the rule the suite already holds the first visits to Deadlines and Import & Export to, now written in the test beside them: a failure is run again on a quiet host before it is read as a regression. They held 100 in both runs beside another test host (87 and 63; 88 and 93), but the kept page's room there is thin, and neither meets the plan's gate (60 quiet, 80 busy). If room on a busy host is to be the line for enforcing, both go back to reported; that is the maintainer's decision.
+- **Journals to Board stays enforced under the same rule**, and that is the maintainer's to confirm too. It read 26 to 55 ms in seven quiet runs and 78 to 106 beside another test host, much as Deadlines' and Import & Export's first visits did in the same runs (83 and 104; 174 and 108).
+- **#133's Acceptance** is still not met in full: Board to Library, the Pipeline open, the paint rows and the idle slice stay reported.
+
+#### Debug
+
+The brief's targeted Debug filter on this commit's code (03:08 to 03:28, no other test host and no VM): 267 tests, 265 passed, 2 skipped (the on-screen fade rows). Before it, beside the busy runs, the catalog sweeps with the guard passed (ManuscriptEditorScaling, SubmissionDetailsLayout, AccessibleName, DarkThemeLegibility, ScalingMeasurement, ViewCatalog and WindowChrome), and so did KeptManuscriptPageTests, ManuscriptEditorReuseTests and PageSwitchTests (47 tests); after it, DashboardShelfLayoutTests, FileDrawerTests, BoardFillTests and RecoveryDraftTests passed too (57 tests).

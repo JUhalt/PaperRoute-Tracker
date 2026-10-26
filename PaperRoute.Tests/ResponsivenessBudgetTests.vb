@@ -141,6 +141,10 @@ Public Class ResponsivenessBudgetTests
 
         Using board As New LibraryBoard(library, Path.Combine(_root, library.Name & "-settings"))
 
+            ' The opens are timed as a researcher makes them, with nothing
+            ' of the tests' own checks inside them (LibraryBoard.Open).
+            board.VerifySettled = False
+
             rows.Add(Time(library, "Warm startup to an interactive Board (Show, queue drained)", Startup, Sub() board.Start(), enforced:=enforce))
             _paintObserved(library.Name) = board.PaintObserved
 
@@ -194,7 +198,14 @@ Public Class ResponsivenessBudgetTests
             ' from Insights and the manuscript page. Board to Library stays
             ' reported: it builds its page's windows and measured 54-163 ms
             ' across this host's quiet and busy runs, with no room under the 100
-            ' ms line. Library to Board, which disposes the
+            ' ms line. Profiled on 2026-10-25, about half of it is making the
+            ' page's 14 windows, its grid's among them, at every visit, which a
+            ' page built for each visit and disposed as it is left needs
+            ' (PageSwitchTests.LeavingAPageDisposesItInPlace and the "entered
+            ' new" line of KeyboardAccessTests pin that shape); its data, 500
+            ' rows, takes 4 to 19 ms. A Library page kept and prepared while the
+            ' window idles, as Journals is, is the maintainer's to decide.
+            ' Library to Board, which disposes the
             ' Library page and its 500-row grid, read 27 to 100 ms in most runs
             ' and 128 to 481 ms in others: the spikes were a wait of about half
             ' a second inside painting Windows did synchronously as the Board
@@ -218,17 +229,24 @@ Public Class ResponsivenessBudgetTests
             ' and Board to Insights 62 to 210; on the prepared pages, 13 to 54
             ' and 10 to 47 ms in six Release runs on 2026-10-23 (second visits
             ' 13 to 32 and 20 to 56), and both are enforced, first and second
-            ' visits. Journals to Board stays reported: leaving reads the
-            ' author library its editor saved and renders the Board again, as
-            ' it did after the Journal Library dialog (49 to 161 ms). Each
-            ' visit's paint is reported in the row after it; Insights' too,
-            ' before its figures, whose row processes messages.
+            ' visits. Leaving Journals reads back the author library its
+            ' editor saved and renders the Board again, as it did after the
+            ' Journal Library dialog (49 to 161 ms through 2026-10-24). Since
+            ' 2026-10-25 that render keeps the stage filter and the attention
+            ' chips it would only fill and show again, and reads the search
+            ' once a render (2,954 messages sent a leave to 492), and from
+            ' 2026-10-26 Journals to Board is enforced, both visits: that day
+            ' it read 26 to 55 ms in seven runs on a quiet host and 78 to 106 in
+            ' two beside another test host, so a failure is run again on a
+            ' quiet host before it is read as a regression, as for Deadlines
+            ' below. Each visit's paint is reported in the row after it;
+            ' Insights' too, before its figures, whose row processes messages.
             rows.Add(Time(library, "Board to Journals (the page prepared while the window idled)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Journals), enforced:=enforce))
             rows.Add(Time(library, "Journals: its paint after the switch", UiThread, Sub() board.PaintNow()))
-            rows.Add(Time(library, "Journals to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
+            rows.Add(Time(library, "Journals to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
             rows.Add(Time(library, "Board to Journals (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Journals), enforced:=enforce))
             rows.Add(Time(library, "Journals: its paint after the switch (second visit)", UiThread, Sub() board.PaintNow()))
-            rows.Add(Time(library, "Journals to Board (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board)))
+            rows.Add(Time(library, "Journals to Board (second visit)", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
 
             ' The Deadlines page draws its rows in one list and is kept (#133).
             ' Outside the timed steps, the list is checked to hold every open
@@ -286,17 +304,22 @@ Public Class ResponsivenessBudgetTests
             ' before the preparation ends builds the page there and then, as
             ' every first open did before 2026-10-23.
             '
-            ' The three opens (the first, another manuscript on the kept page,
-            ' and the Pipeline manuscript with three shortlisted journals
-            ' below) stay reported. From 510 to 1,023 ms for the first and 64
-            ' to 1,321 for the kept page in the profile (2026-10-18), they
-            ' read 36 to 196, 32 to 318 and 42 to 190 ms across this host's
-            ' Release runs on 2026-10-23: within the 100 ms line on a quiet
-            ' host, over it on a busy one. What is left of an open is one
-            ' layout pass over the editor's containers, 90 to 144 ms of it
-            ' timed by a probe with a VM running; the page's frame, the
-            ' Overview's table and its scrolling host, which lays out four
-            ' times an open, take about half of the pass.
+            ' The first open and another manuscript on the kept page are
+            ' enforced from 2026-10-26; the Pipeline manuscript below is
+            ' reported. From 510 to 1,023 ms for the first and 64 to 1,321 for
+            ' the kept page in the profile (2026-10-18), the three read 36 to
+            ' 196, 32 to 318 and 42 to 190 ms across this host's Release runs
+            ' on 2026-10-23, the time one layout pass over the editor's
+            ' containers. Since 2026-10-25 the page left keeps the last
+            ' record's shape until the next open, is prepared in that shape,
+            ' lays out nothing it leaves hidden, and lets go of the layout
+            ' showing it asks of a container nothing in changed: an open lays
+            ' out 15 to 21 containers where it laid out 40 to 44, and moves 3
+            ' to 9 where it moved 14 to 18. On 2026-10-26 the two enforced
+            ' read 48 to 82 ms in seven runs on a quiet host and 63 to 93 in two
+            ' beside another test host, so, as for the first visits to
+            ' Deadlines and Import & Export, a failure of either is run again
+            ' on a quiet host before it is read as a regression.
             '
             ' The step after the first paint is enforced from 2026-10-23: it
             ' no longer forces that paint, which is where this machine waited
@@ -312,7 +335,7 @@ Public Class ResponsivenessBudgetTests
             ' switches themselves used to take. Each paint takes 10 to 50 ms
             ' otherwise.
             Assert.IsNotNull(board.KeptPage, "The manuscript page was prepared while the window idled.")
-            rows.Add(Time(library, "Board to a manuscript page (the first, on the page prepared while the window idled)", PageSwitch, Sub() board.Open(subject)))
+            rows.Add(Time(library, "Board to a manuscript page (the first, on the page prepared while the window idled)", PageSwitch, Sub() board.Open(subject), enforced:=enforce))
             rows.Add(Time(library, "Manuscript page: its first paint (painting what the switch changed)", UiThread, Sub() board.PaintNow()))
             rows.Add(Time(library, "Manuscript page: versions and details after its first paint", UiThread, Sub() Application.DoEvents(), enforced:=enforce))
             rows.Add(TimeMedian(library, "One dirty-timer tick (median of 10)", DirtyTick, 10, Sub() board.Tick()))
@@ -336,7 +359,7 @@ Public Class ResponsivenessBudgetTests
                 If(library.Manuscripts.Where(Function(item) item IsNot subject AndAlso item.SubmissionPackets.Count > 0).
                        OrderByDescending(Function(item) item.Submissions.Count).FirstOrDefault(),
                    library.Manuscripts.First(Function(item) item IsNot subject))
-            rows.Add(Time(library, "Board to a manuscript page (the kept page, another manuscript)", PageSwitch, Sub() board.Open(another)))
+            rows.Add(Time(library, "Board to a manuscript page (the kept page, another manuscript)", PageSwitch, Sub() board.Open(another), enforced:=enforce))
             Application.DoEvents()
             rows.Add(Time(library, "Kept manuscript page to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
             board.WaitForIdleWork()
@@ -346,6 +369,11 @@ Public Class ResponsivenessBudgetTests
             ' and its tags, which the kept page builds rows and chips for. The
             ' manuscript above is a Published one with neither, so this row
             ' is checked to have them, and cannot pass on an easier record.
+            ' It is reported, not enforced: on 2026-10-26 it read 57 to 86 ms
+            ' in seven runs on a quiet host and 96 and 135 in two beside another
+            ' test host, with no room under the 100 ms line. Most of what is
+            ' left is its tag chips' windows, one per tag, and the Overview's
+            ' nested self-sizing tables measuring what the record changed.
             Dim pipelineSubject As Manuscript = library.Manuscripts.First(Function(item) item.Location = ManuscriptLocation.Pipeline)
             Dim choosing As Manuscript =
                 library.Manuscripts.FirstOrDefault(Function(item) item.Location = ManuscriptLocation.Pipeline AndAlso item.JournalShortlist.Count = 3 AndAlso
@@ -561,6 +589,7 @@ Public Class ResponsivenessBudgetTests
 
         Using board As New LibraryBoard(library, Path.Combine(_root, library.Name & If(motion, "-motion-on", "-motion-off") & "-settings"))
 
+            board.VerifySettled = False
             board.Start()
             board.WaitForBoardFill()
             board.WaitForIdleWork()
@@ -597,9 +626,9 @@ Public Class ResponsivenessBudgetTests
             rows.Add(switchTo("Library to Board", go(Form1.WorkspacePage.Board), True))
 
             rows.Add(switchTo("Board to Journals (the page prepared while the window idled)", go(Form1.WorkspacePage.Journals), True))
-            rows.Add(switchTo("Journals to Board", go(Form1.WorkspacePage.Board), False))
+            rows.Add(switchTo("Journals to Board", go(Form1.WorkspacePage.Board), True))
             rows.Add(switchTo("Board to Journals (second visit)", go(Form1.WorkspacePage.Journals), True))
-            rows.Add(switchTo("Journals to Board (second visit)", go(Form1.WorkspacePage.Board), False))
+            rows.Add(switchTo("Journals to Board (second visit)", go(Form1.WorkspacePage.Board), True))
 
             rows.Add(switchTo("Board to Deadlines", go(Form1.WorkspacePage.Deadlines), True))
             rows.Add(switchTo("Deadlines to Board", go(Form1.WorkspacePage.Board), True))
@@ -621,11 +650,11 @@ Public Class ResponsivenessBudgetTests
             ' A manuscript opens as a cut: its versions and details, built on
             ' the UI thread once the page has painted (the test above times
             ' them), would hold a fade's frames that long.
-            rows.Add(switchTo("Board to a manuscript page (the first, on the page prepared while the window idled)", Sub() board.Open(subject), False))
+            rows.Add(switchTo("Board to a manuscript page (the first, on the page prepared while the window idled)", Sub() board.Open(subject), True))
             rows.Add(switchTo("Manuscript page to Board", go(Form1.WorkspacePage.Board), True))
             board.WaitForIdleWork()
 
-            rows.Add(switchTo("Board to a manuscript page (the kept page, another manuscript)", Sub() board.Open(another), False))
+            rows.Add(switchTo("Board to a manuscript page (the kept page, another manuscript)", Sub() board.Open(another), True))
             Application.DoEvents()
             rows.Add(switchTo("Kept manuscript page to Board", go(Form1.WorkspacePage.Board), True))
             board.WaitForIdleWork()

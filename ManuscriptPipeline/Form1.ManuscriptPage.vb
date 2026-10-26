@@ -47,6 +47,16 @@ Partial Public Class Form1
     ' each then lays out once (ShowPageInOnePass).
     Private manuscriptPageContainers As List(Of Control) = Nothing
 
+    ' Whether the kept page's containers hold their layout, each once: from
+    ' the moment the page left lets go of its record, or an open begins,
+    ' until that open has shown the page (HoldManuscriptPage).
+    Private manuscriptPageHeld As Boolean = False
+
+    ' Whether each control of the kept page was set shown when its layout
+    ' was held, so the open can tell a container whose part was hidden
+    ' meanwhile (ShowPageInOnePass).
+    Private manuscriptPageShownWhenHeld As Dictionary(Of Control, Boolean) = Nothing
+
     Private Const SaveBarHint As String =
         "Save keeps them. Discard returns to the last saved version."
 
@@ -156,10 +166,11 @@ Partial Public Class Form1
     ' while the page is hidden, the page shows in one layout pass, and the
     ' Versions tab, the selected submission's details and any waypoint
     ' asked for follow once it has painted (#133). Every container of the
-    ' page holds its layout from before the record loads until the page
-    ' shows: loading a record changes the text, the parts shown and the
-    ' rows of a hidden page, and each change laid out its containers
-    ' again, up to the page, though nothing of it was shown.
+    ' page holds its layout until the page shows, from before the record
+    ' loads or, on a page left, from when it let go of its record: loading
+    ' a record changes the text, the parts shown and the rows of a hidden
+    ' page, and each change laid out its containers again, up to the page,
+    ' though nothing of it was shown.
     Private Sub ShowManuscriptPage(
         manuscript As Manuscript
     )
@@ -168,9 +179,7 @@ Partial Public Class Form1
         Dim editor As EditManuscriptForm = manuscriptPageEditor
         Dim containers As List(Of Control) = manuscriptPageContainers
 
-        For Each container As Control In containers
-            container.SuspendLayout()
-        Next
+        HoldManuscriptPage()
 
         Try
 
@@ -188,6 +197,8 @@ Partial Public Class Form1
             For index As Integer = containers.Count - 1 To 0 Step -1
                 containers(index).ResumeLayout(True)
             Next
+            manuscriptPageHeld = False
+            manuscriptPageShownWhenHeld = Nothing
             Throw
         End Try
 
@@ -202,6 +213,7 @@ Partial Public Class Form1
         fitManuscriptTitle()
 
         ShowPageInOnePass(page, containers)
+        manuscriptPageHeld = False
         currentPageView = page
         manuscriptDirtyTimer.Start()
 
@@ -314,19 +326,103 @@ Partial Public Class Form1
         containers As List(Of Control)
     )
 
+        ' Showing the page asks every panel and table shown in it to lay out
+        ' again (WinForms lays a panel out as it becomes visible), a request
+        ' held with the rest. A container nothing asked to lay out before
+        ' the page shows has nothing to lay out: it was laid out with the
+        ' last record shown, and nothing in it has changed since. So for
+        ' each of them that one request is let go (LayoutRequests); what a
+        ' container inside asks of it as it lays out, and the page's own new
+        ' size after the window was resized, still lay it out. Laying out
+        ' each of them again took half the pass and more (#133). One with a
+        ' part hidden since the page's layout was held keeps its request:
+        ' hidden under a hidden page, a part asks nothing of its container,
+        ' which lays out as it shows (the Unsaved changes bar, hidden at
+        ' each open). Where WinForms does not keep what is read here, every
+        ' container lays out, as before.
+        Dim shownWhenHeld As Dictionary(Of Control, Boolean) = manuscriptPageShownWhenHeld
+        manuscriptPageShownWhenHeld = Nothing
+        Dim untouched As List(Of Control) =
+            If(LayoutRequests.Available AndAlso shownWhenHeld IsNot Nothing,
+               containers.Where(Function(container) Not LayoutRequests.Pending(container) AndAlso Not PartShownOrHiddenSince(container, shownWhenHeld)).ToList(),
+               Nothing)
+        Dim before As Rectangle = page.Bounds
+
         page.Visible = True
         page.BringToFront()
+
+        If untouched IsNot Nothing Then
+            For Each container As Control In untouched
+                If container IsNot page OrElse page.Bounds = before Then
+                    LayoutRequests.Forget(container)
+                End If
+            Next
+        End If
 
         ' Each container lets go of its layout, inner ones first, and lays
         ' out once if anything in it changed since it was held: the record
         ' loaded, the header, a part shown or hidden for the record. One in
         ' which nothing changed is not laid out again; laying out every
         ' container whatever changed took twice as long on this machine.
+        ' A panel or table left hidden (a section not shown, the reroute
+        ' offer, the File Drawer card's table, the Unsaved changes bar)
+        ' keeps what it has to lay out until it shows: WinForms lays out a
+        ' panel as it becomes visible. A card (a GroupBox) does not, so a
+        ' hidden card lays out with the rest.
         For index As Integer = containers.Count - 1 To 0 Step -1
-            containers(index).ResumeLayout(True)
+            Dim container As Control = containers(index)
+            container.ResumeLayout(container.Visible OrElse Not TypeOf container Is ScrollableControl)
+        Next
+
+        ' A scrolling host sets its range as its own layout ends. A card in
+        ' it that grows as it takes a new width during that layout (a label
+        ' in it wraps to the width the card was given) asks for the host's
+        ' layout again while it runs, and WinForms lets that request go:
+        ' opened after the window was resized on the Board, the Overview's
+        ' range ended 57 pixels short of its last card. A host whose range
+        ' does not end where its contents do lays out once more, which with
+        ' its contents settled only sets the range.
+        For Each host As ScrollableControl In containers.OfType(Of ScrollableControl)()
+            If host.AutoScroll AndAlso host.Visible AndAlso Not ScrollRangeFits(host) Then
+                host.PerformLayout()
+            End If
         Next
 
     End Sub
+
+
+    ' Whether a part directly in a container was shown or hidden, or is new,
+    ' since the page's layout was held.
+    Private Shared Function PartShownOrHiddenSince(container As Control, shownWhenHeld As Dictionary(Of Control, Boolean)) As Boolean
+
+        For Each part As Control In container.Controls
+            Dim wasShown As Boolean
+            If Not shownWhenHeld.TryGetValue(part, wasShown) OrElse wasShown <> LayoutRequests.IsSetShown(part) Then
+                Return True
+            End If
+        Next
+
+        Return False
+
+    End Function
+
+
+    ' Whether a scrolling host's range ends where its contents do: as tall
+    ' as the lowest of them, or as its own client area if that is taller.
+    Private Shared Function ScrollRangeFits(host As ScrollableControl) As Boolean
+
+        Dim display As Rectangle = host.DisplayRectangle
+        Dim bottom As Integer = host.ClientSize.Height
+
+        For Each child As Control In host.Controls
+            If child.Visible Then
+                bottom = Math.Max(bottom, child.Bounds.Bottom - display.Y + host.Padding.Bottom)
+            End If
+        Next
+
+        Return display.Height = bottom
+
+    End Function
 
 
     ' The kept page, built and put in the page area, hidden, if it is not
@@ -388,6 +484,8 @@ Partial Public Class Form1
         manuscriptBackLink = Nothing
         fitManuscriptTitle = Nothing
         manuscriptPageContainers = Nothing
+        manuscriptPageHeld = False
+        manuscriptPageShownWhenHeld = Nothing
 
         QueueManuscriptPagePreparation()
 
@@ -421,6 +519,25 @@ Partial Public Class Form1
         manuscriptPageEditor.SuggestTags(manuscripts)
 
         Dim page As Control = manuscriptPage
+        Dim token As Object = manuscriptPageEditor.RecordToken
+        QueueIdleWork(Sub() ShowNoRecordOnPreparedPage(page, token))
+
+    End Sub
+
+
+    ' The prepared page shows no record as a page left shows none (#133),
+    ' before its parts are laid out, so they are laid out in that shape;
+    ' not once a manuscript has been opened on it.
+    Private Sub ShowNoRecordOnPreparedPage(page As Control, token As Object)
+
+        If Not StillPreparing(page) Then
+            Return
+        End If
+
+        If manuscriptPageEditor.RecordToken Is token Then
+            manuscriptPageEditor.UnloadRecord(manuscripts)
+        End If
+
         QueueIdleWork(Sub() LayOutPreparedManuscriptPage(page))
 
     End Sub
@@ -488,10 +605,44 @@ Partial Public Class Form1
             Sub()
                 If editor Is manuscriptPageEditor AndAlso Not editor.IsDisposed AndAlso
                    editor.RecordToken Is token AndAlso currentPageView IsNot manuscriptPage Then
+                    HoldManuscriptPage()
                     editor.UnloadRecord()
                     ClearManuscriptHeader()
+                    ' The record's own parts went with it; what they showed
+                    ' when the page was held is no longer asked, and kept
+                    ' would keep them, and the record, alive.
+                    If manuscriptPageShownWhenHeld IsNot Nothing Then
+                        manuscriptPageShownWhenHeld = manuscriptPageShownWhenHeld.Where(Function(pair) Not pair.Key.IsDisposed).ToDictionary(Function(pair) pair.Key, Function(pair) pair.Value)
+                    End If
                 End If
             End Sub)
+
+    End Sub
+
+
+    ' Holds the layout of each of the kept page's containers, once, until
+    ' the next open shows the page in one pass (#133). The page left holds
+    ' it from the moment it lets go of its record: emptied, its header and
+    ' its hidden sections took the shape of a page with no manuscript and
+    ' laid themselves out in it, and the next open grew them back and laid
+    ' the page out again around them (35 moves for the same manuscript
+    ' opened again). Held, the page keeps the last record's shape, and the
+    ' next open lays out only what its record changes.
+    Private Sub HoldManuscriptPage()
+
+        If manuscriptPageHeld OrElse manuscriptPageContainers Is Nothing Then
+            Return
+        End If
+
+        For Each container As Control In manuscriptPageContainers
+            container.SuspendLayout()
+        Next
+
+        manuscriptPageHeld = True
+
+        If LayoutRequests.Available Then
+            manuscriptPageShownWhenHeld = DescendantControls(manuscriptPage).ToDictionary(Function(control) control, Function(control) LayoutRequests.IsSetShown(control))
+        End If
 
     End Sub
 
@@ -627,6 +778,18 @@ Partial Public Class Form1
         identity.Controls.Add(manuscriptTitleLabel)
         identity.Controls.Add(meta)
 
+        ' Showing no manuscript, as the page prepared while the window idles
+        ' does (#133), the header is as tall as it is with one: a label with
+        ' no text is a pixel shorter than a line of text, and the pill takes
+        ' a size only once a stage shows, so the first open grew the header
+        ' and laid out the editor and every container under it again.
+        For Each label As Label In {manuscriptTitleLabel, manuscriptMetaLabel, manuscriptShelfLabel}
+            Using line As New Label With {.AutoSize = True, .UseMnemonic = False, .Text = "A", .Font = If(label Is manuscriptTitleLabel, label.Font, Me.Font)}
+                label.MinimumSize = New Size(0, line.PreferredSize.Height)
+            End Using
+        Next
+        manuscriptStagePill.Size = StagePillSize(FormatStage(PaperStage.Idea).ToUpperInvariant())
+
         Dim actions As New FlowLayoutPanel With {
             .AutoSize = True,
             .AutoSizeMode = AutoSizeMode.GrowAndShrink,
@@ -746,7 +909,10 @@ Partial Public Class Form1
         fitManuscriptTitle = fitTitle
         manuscriptPagePalette = ManuscriptPageStamp()
         manuscriptPageContainers =
-            {CType(page, Control)}.Concat(DescendantControls(page)).Where(Function(control) control.HasChildren).ToList()
+            {CType(page, Control)}.Concat(DescendantControls(page)).Where(Function(control) control.HasChildren).
+                Concat(editor.RecordPartHosts).Distinct().ToList()
+        manuscriptPageHeld = False
+        manuscriptPageShownWhenHeld = Nothing
 
     End Sub
 
@@ -890,9 +1056,8 @@ Partial Public Class Form1
         manuscriptShelfLabel.Text = "/  " & FormatShelf(manuscript.Location)
 
         Dim stageText As String = FormatStage(manuscript.CurrentStage).ToUpperInvariant()
-        Dim stageSize As Size = TextRenderer.MeasureText(stageText, manuscriptStagePill.Font)
         manuscriptStagePill.Text = stageText
-        manuscriptStagePill.Size = New Size(stageSize.Width + UiTheme.Px(16, DeviceDpi), stageSize.Height + UiTheme.Px(6, DeviceDpi))
+        manuscriptStagePill.Size = StagePillSize(stageText)
         manuscriptStagePill.BackColor = UiTheme.StageBackground(manuscript.CurrentStage)
         manuscriptStagePill.ForeColor = UiTheme.StageForeground(manuscript.CurrentStage)
 
@@ -903,6 +1068,15 @@ Partial Public Class Form1
                  RouteSummaryService.Describe(manuscript).Text})
 
     End Sub
+
+
+    ' The stage pill's size for a stage's text: the text and a margin.
+    Private Function StagePillSize(stageText As String) As Size
+
+        Dim stageSize As Size = TextRenderer.MeasureText(stageText, manuscriptStagePill.Font)
+        Return New Size(stageSize.Width + UiTheme.Px(16, DeviceDpi), stageSize.Height + UiTheme.Px(6, DeviceDpi))
+
+    End Function
 
 
     ' The kept page's header once it is left, as its editor is (#133): it

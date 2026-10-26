@@ -486,6 +486,255 @@ Public Class PageSwitchTests
     End Sub
 
 
+    ' Leaving Journals renders the Board from the library as it is now
+    ' (#133): a stage count that changed meanwhile is in the stage filter,
+    ' and an attention count that rose from none shows its chip, counted;
+    ' one that fell to none hides it.
+    <TestMethod>
+    Public Sub LeavingJournalsShowsWhatChangedOnTheBoard()
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary =
+                    LargeLibraryFixture.Create(Path.Combine(_root, "library"), 60)
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+
+                    Dim stages As ComboBox = board.Part(Of ComboBox)("cboStageFilter")
+                    Dim chip As Controls.FilterChip = board.Part(Of Controls.FilterChip)("lblMissingJournal")
+                    Dim stageItem As Func(Of String, String) =
+                        Function(stage) stages.Items.Cast(Of Object)().Select(Function(item) item.ToString()).Single(Function(text) text.StartsWith(stage & " (", StringComparison.Ordinal))
+                    Dim visitJournals As Action =
+                        Sub()
+                            board.NavigateTo(Form1.WorkspacePage.Journals)
+                            Application.DoEvents()
+                            board.NavigateTo(Form1.WorkspacePage.Board)
+                            Application.DoEvents()
+                        End Sub
+
+                    ' No manuscript lacks a target journal: the chip goes.
+                    For Each manuscript As Models.Manuscript In board.Library.Where(Function(item) String.IsNullOrWhiteSpace(item.TargetJournal))
+                        manuscript.TargetJournal = "Fictional Journal 01"
+                    Next
+                    visitJournals()
+                    Assert.AreEqual(0, CInt(chip.Tag), "No manuscript lacks a target journal.")
+                    Assert.IsFalse(chip.Visible, "The chip of a count of none is hidden.")
+
+                    ' One manuscript is a draft again, with no target journal.
+                    Dim moved As Models.Manuscript = board.Library.First(Function(item) item.Location = Models.ManuscriptLocation.Pipeline AndAlso item.CurrentStage = Models.PaperStage.Submitted)
+                    Dim drafts As Integer = board.Library.Where(Function(item) item.CurrentStage = Models.PaperStage.Draft).Count()
+                    Dim submitted As Integer = board.Library.Where(Function(item) item.CurrentStage = Models.PaperStage.Submitted).Count()
+                    Assert.AreEqual("Draft (" & drafts.ToString() & ")", stageItem("Draft"))
+                    moved.CurrentStage = Models.PaperStage.Draft
+                    moved.TargetJournal = String.Empty
+                    moved.TargetJournalId = Nothing
+                    visitJournals()
+
+                    Assert.AreEqual("Draft (" & (drafts + 1).ToString() & ")", stageItem("Draft"), "The stage filter counts the draft.")
+                    Assert.AreEqual("Submitted (" & (submitted - 1).ToString() & ")", stageItem("Submitted"))
+                    Assert.AreEqual(1, CInt(chip.Tag), "One manuscript lacks a target journal.")
+                    Assert.IsTrue(chip.Visible, "Its chip shows.")
+                    StringAssert.StartsWith(chip.Text, "1 ", "The chip counts it.")
+
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(3))
+
+    End Sub
+
+
+    ' Leaving Journals with nothing changed shows no attention chip again
+    ' (#133). The Board renders before it is shown again, and WinForms
+    ' treats Visible = True on a chip already shown, under a hidden parent,
+    ' as a change: it showed the chip's window again, raised VisibleChanged
+    ' and laid out the chips' bar, chip by chip.
+    <TestMethod>
+    Public Sub LeavingJournalsReshowsNoAttentionChip()
+
+        Dim reshown As New List(Of String)()
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary =
+                    LargeLibraryFixture.Create(Path.Combine(_root, "library"), 60)
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+
+                    Dim chips As List(Of Controls.FilterChip) =
+                        {"lblOverdueRevisions", "lblRevisionDueSoon", "lblLongReviews", "lblMissingJournal", "lblRecentRejections"}.
+                            Select(Function(name) board.Part(Of Controls.FilterChip)(name)).Where(Function(chip) chip.Visible).ToList()
+                    Assert.IsTrue(chips.Count > 0, "The Board shows an attention chip.")
+
+                    board.NavigateTo(Form1.WorkspacePage.Journals)
+                    Application.DoEvents()
+
+                    ' While the Board is hidden; the Board shown again shows its
+                    ' chips, which raises VisibleChanged in each, as it should.
+                    Dim changed As EventHandler =
+                        Sub(sender, e)
+                            If Not board.BoardPage.Visible Then reshown.Add("VisibleChanged on '" & DirectCast(sender, Control).Text & "' under the hidden Board")
+                        End Sub
+                    For Each chip As Controls.FilterChip In chips
+                        AddHandler chip.VisibleChanged, changed
+                    Next
+                    Using watch As New SentMessageWatch()
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        For Each chip As Controls.FilterChip In chips
+                            Dim moved As Integer = watch.Count(chip, WM_WINDOWPOSCHANGING)
+                            If moved > 0 Then reshown.Add(moved.ToString() & " WM_WINDOWPOSCHANGING to '" & chip.Text & "'")
+                        Next
+                    End Using
+                    For Each chip As Controls.FilterChip In chips
+                        RemoveHandler chip.VisibleChanged, changed
+                    Next
+                    Application.DoEvents()
+
+                    ' Shown again in place of the page, the chips show as they did.
+                    reshown.AddRange(chips.Where(Function(chip) Not chip.Visible).Select(Function(chip) "'" & chip.Text & "' is hidden"))
+
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(3))
+
+        Assert.AreEqual(0, reshown.Count, "Leaving Journals with nothing changed:" & Environment.NewLine & String.Join(Environment.NewLine, reshown))
+
+    End Sub
+
+    Private Const WM_WINDOWPOSCHANGING As Integer = &H46
+    Private Const WM_GETTEXT As Integer = &HD
+    Private Const WM_GETTEXTLENGTH As Integer = &HE
+    Private Const CB_RESETCONTENT As Integer = &H14B
+
+
+    ' An attention chip keeps its text and its bold weight rather than
+    ' reading the text from its window and making the font at each measure
+    ' (#133); it measures as it did, in every tone, as its text, its tone
+    ' and its font change.
+    <TestMethod>
+    Public Sub AFilterChipMeasuresAsBefore()
+
+        StaRunner.Run(
+            Sub()
+                ' Disposed once the window that took them has closed.
+                Using larger As New Drawing.Font("Segoe UI", 14.0F),
+                      italic As New Drawing.Font("Segoe UI", 9.0F, Drawing.FontStyle.Italic),
+                      host As New Form With {.StartPosition = FormStartPosition.Manual, .Location = New Drawing.Point(-20000, -20000), .ShowInTaskbar = False}
+                    Dim chip As New Controls.FilterChip With {.Text = "3 overdue revisions"}
+                    host.Controls.Add(chip)
+                    host.Show()
+                    Application.DoEvents()
+
+                    Dim expected As Func(Of Drawing.Size) =
+                        Function()
+                            Using bold As New Drawing.Font(chip.Font, Drawing.FontStyle.Bold)
+                                Dim font As Drawing.Font = If(chip.Tone = Controls.FilterChipTone.Neutral, chip.Font, bold)
+                                Dim text As Drawing.Size = TextRenderer.MeasureText(chip.Text, font, Drawing.Size.Empty, TextFormatFlags.NoPrefix Or TextFormatFlags.SingleLine)
+                                Return New Drawing.Size(text.Width + chip.Padding.Horizontal, text.Height + chip.Padding.Vertical)
+                            End Using
+                        End Function
+
+                    For Each font As Drawing.Font In {host.Font, larger, italic}
+                        host.Font = font
+                        For Each tone As Controls.FilterChipTone In [Enum].GetValues(GetType(Controls.FilterChipTone))
+                            chip.Tone = tone
+                            For Each text As String In {"3 overdue revisions", "12 waiting 90+ days"}
+                                chip.Text = text
+                                Assert.AreEqual(expected(), chip.GetPreferredSize(Drawing.Size.Empty), tone.ToString() & ", " & font.ToString() & ", """ & text & """")
+                                Assert.AreEqual(text, chip.Text)
+                            Next
+                        Next
+                    Next
+
+                    host.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(1))
+
+    End Sub
+
+
+    ' Leaving Journals with nothing changed renders the Board without
+    ' filling the stage filter again or reading the search box once per
+    ' manuscript (#133): the stage filter refilled the same nine options
+    ' (emptying the box, adding each, measuring each and resizing the box
+    ' and its list), and each manuscript read the search text from its
+    ' window, 60 reads here and 500 on the 500 library. An attention chip
+    ' keeps its own text, so nothing reads it from the chip's window: it
+    ' was read at each of its measures and each time its text was set.
+    <TestMethod>
+    Public Sub LeavingJournalsWithNothingChangedRefillsNoFilter()
+
+        Dim refills As Integer = -1
+        Dim reads As Integer = -1
+        Dim chipReads As New List(Of String)()
+        Dim resized As Boolean = False
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary =
+                    LargeLibraryFixture.Create(Path.Combine(_root, "library"), 60)
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+                    Dim stages As ComboBox = board.Part(Of ComboBox)("cboStageFilter")
+                    Dim search As TextBox = board.Part(Of TextBox)("txtBoardSearch")
+                    Dim chips As List(Of Controls.FilterChip) =
+                        {"lblOverdueRevisions", "lblRevisionDueSoon", "lblLongReviews", "lblMissingJournal", "lblRecentRejections"}.
+                            Select(Function(name) board.Part(Of Controls.FilterChip)(name)).Where(Function(chip) chip.Visible AndAlso chip.IsHandleCreated).ToList()
+                    Assert.IsTrue(chips.Count > 0, "The Board shows an attention chip.")
+                    Dim before As String() = stages.Items.Cast(Of Object)().Select(Function(item) item.ToString()).ToArray()
+
+                    board.NavigateTo(Form1.WorkspacePage.Journals)
+                    Application.DoEvents()
+                    Using watch As New SentMessageWatch()
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        refills = watch.Count(stages, CB_RESETCONTENT)
+                        reads = watch.Count(search, WM_GETTEXTLENGTH)
+                        For Each chip As Controls.FilterChip In chips
+                            Dim read As Integer = watch.Count(chip, WM_GETTEXTLENGTH) + watch.Count(chip, WM_GETTEXT)
+                            If read > 0 Then chipReads.Add("'" & chip.Text & "' read " & read.ToString() & " times")
+                        Next
+                    End Using
+                    Application.DoEvents()
+
+                    CollectionAssert.AreEqual(before, stages.Items.Cast(Of Object)().Select(Function(item) item.ToString()).ToArray(), "The stage filter holds the same options.")
+
+                    ' In another font, the same options are filled and sized
+                    ' again, as the box was sized for its widest one.
+                    Dim larger As New Drawing.Font(board.Font.FontFamily, board.Font.SizeInPoints * 1.5F)
+                    board.Font = larger
+                    board.Render()
+                    Dim widest As Integer = stages.Items.Cast(Of Object)().Max(Function(item) TextRenderer.MeasureText(item.ToString(), board.Font).Width)
+                    resized = stages.Width = Math.Max(150, widest + 46)
+
+                    board.Close()
+                    larger.Dispose()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(3))
+
+        Dim problems As New List(Of String)()
+        If refills <> 0 Then problems.Add("The stage filter was emptied and filled again " & refills.ToString() & " times.")
+        If Not resized Then problems.Add("A render in a larger font left the stage filter at its width before.")
+        ' Once for the filter, and once each for the three shelves' headings
+        ' and the Clear filters button.
+        If reads > 5 Then problems.Add("The search box was read " & reads.ToString() & " times in one render.")
+        If chipReads.Count > 0 Then problems.Add("The attention chips' text was read from their windows: " & String.Join("; ", chipReads))
+        Assert.AreEqual(0, problems.Count, String.Join(Environment.NewLine, problems))
+
+    End Sub
+
+
     ' Each visit to Insights begins as a new page did (#133): on Your
     ' Journals, no journal chosen, and the figures worked out anew from the
     ' records as they are, though the page is kept and was left on a
@@ -694,6 +943,11 @@ Public Class PageSwitchTests
 
                 Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
 
+                    ' What the switches draw, and nothing of the tests' own
+                    ' check that an open left nothing to lay out: laying a
+                    ' page out again once its hold is released has Windows
+                    ' frame and erase what it touches there and then.
+                    board.VerifySettled = False
                     board.Start()
                     board.WaitForIdleWork()
                     Dim subject As Models.Manuscript = board.Library.First(Function(item) item.Location = Models.ManuscriptLocation.Pipeline)
@@ -912,6 +1166,87 @@ Friend NotInheritable Class PaintWatch
 
     <DllImport("user32.dll")>
     Private Shared Function IsChild(parent As IntPtr, window As IntPtr) As Boolean
+    End Function
+
+    <DllImport("kernel32.dll")>
+    Private Shared Function GetCurrentThreadId() As Integer
+    End Function
+
+End Class
+
+
+' Counts the messages sent to the test's thread's windows while it is
+' alive, by window and message (a thread-local WH_CALLWNDPROC hook, as
+' PaintWatch's): what a step asks of a window there and then.
+Friend NotInheritable Class SentMessageWatch
+    Implements IDisposable
+
+    Private ReadOnly _callback As HookProc
+    Private ReadOnly _hook As IntPtr
+    Private ReadOnly _counts As New Dictionary(Of (Window As IntPtr, Message As Integer), Integer)()
+    Private _unread As String = Nothing
+
+    Private Delegate Function HookProc(code As Integer, wParam As IntPtr, lParam As IntPtr) As IntPtr
+
+    Private Const WH_CALLWNDPROC As Integer = 4
+
+    <StructLayout(LayoutKind.Sequential)>
+    Private Structure CWPSTRUCT
+        Public lParam As IntPtr
+        Public wParam As IntPtr
+        Public message As Integer
+        Public hwnd As IntPtr
+    End Structure
+
+
+    Public Sub New()
+        _callback = AddressOf Hook
+        _hook = SetWindowsHookEx(WH_CALLWNDPROC, _callback, IntPtr.Zero, GetCurrentThreadId())
+    End Sub
+
+
+    ' How many times a message was sent to a control's window. A message
+    ' the hook could not read fails the count rather than leaving it short.
+    Public Function Count(control As Control, message As Integer) As Integer
+        If _unread IsNot Nothing Then Throw New InvalidOperationException("A message sent was not read: " & _unread)
+        Dim found As Integer = 0
+        If control.IsHandleCreated Then _counts.TryGetValue((control.Handle, message), found)
+        Return found
+    End Function
+
+
+    ' Nothing thrown here crosses into the native callback.
+    Private Function Hook(code As Integer, wParam As IntPtr, lParam As IntPtr) As IntPtr
+        If code >= 0 Then
+            Try
+                Dim sent As CWPSTRUCT = Marshal.PtrToStructure(Of CWPSTRUCT)(lParam)
+                Dim key As (IntPtr, Integer) = (sent.hwnd, sent.message)
+                Dim found As Integer = 0
+                _counts.TryGetValue(key, found)
+                _counts(key) = found + 1
+            Catch ex As Exception
+                If _unread Is Nothing Then _unread = ex.GetType().Name & ": " & ex.Message
+            End Try
+        End If
+        Return CallNextHookEx(_hook, code, wParam, lParam)
+    End Function
+
+
+    Public Sub Dispose() Implements IDisposable.Dispose
+        UnhookWindowsHookEx(_hook)
+    End Sub
+
+
+    <DllImport("user32.dll")>
+    Private Shared Function SetWindowsHookEx(idHook As Integer, lpfn As HookProc, hMod As IntPtr, threadId As Integer) As IntPtr
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function UnhookWindowsHookEx(hook As IntPtr) As Boolean
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function CallNextHookEx(hook As IntPtr, code As Integer, wParam As IntPtr, lParam As IntPtr) As IntPtr
     End Function
 
     <DllImport("kernel32.dll")>

@@ -91,6 +91,42 @@ Public Class ManuscriptEditorScalingTests
     End Sub
 
 
+    ' The row on the kept manuscript page opened again (#133): the page
+    ' left holds its layout from letting go of its record to the next open,
+    ' which lays the row out from the last record's shape, at the main
+    ' window's size and after the window was made as small as it goes on
+    ' the Board. At this computer's display, since the main window scales
+    ' by hand.
+    <TestMethod>
+    Public Sub TheRevisionDeadlineRowHoldsOnTheKeptPageOpenedAgain()
+
+        Dim found As New List(Of String)()
+        Dim measured As New List(Of String)()
+        Dim again As ViewCatalog.NamedView = ViewCatalog.Hosted.Single(Function(entry) entry.Name = "The manuscript page opened a second time")
+
+        Dim failures As List(Of String) =
+            ViewCatalog.ShowEach(
+                {(again.Name, again.Build),
+                 ("The manuscript page opened again after the window was made small on the Board", Function(root As String) ViewCatalog.ManuscriptPageAgainAfterShrinking())},
+                Sub(name, host)
+
+                    Dim editor As EditManuscriptForm = ViewCatalog.Descendants(host).OfType(Of EditManuscriptForm)().Single()
+                    Dim cell As ScalingMeasurementTests.Cell =
+                        ScalingMeasurementTests.Measure(host, 96, False, {("its own size", New Rectangle(New Point(-30000, -30000), host.Size))}).Single().Result
+                    measured.Add(name & " at " & host.Size.ToString() & ": " & CheckRow(editor, cell, found))
+
+                End Sub
+            )
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+
+        TestContext.WriteLine(String.Join(Environment.NewLine, measured))
+
+        Assert.AreEqual(0, found.Count, String.Join(Environment.NewLine, measured) & Environment.NewLine & String.Join(Environment.NewLine, found))
+
+    End Sub
+
+
     ' The editor shown on its own, as the catalog builds it, but with its
     ' text at the DPI's size while its layouts are held: an editor built
     ' for a record later holds them until it is told to let go.
