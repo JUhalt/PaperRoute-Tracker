@@ -444,6 +444,21 @@ Friend NotInheritable Class LibraryBoard
     End Property
 
 
+    ' The Library page kept between visits (#133), or Nothing.
+    Public ReadOnly Property LibraryPage As Control
+        Get
+            Return DirectCast(GetField("libraryPage"), Control)
+        End Get
+    End Property
+
+
+    ' + Add Manuscript, answered by the test's ModalAnswer.
+    Public Sub Add()
+        CallPrivate("AddManuscript", Nothing, EventArgs.Empty)
+        Application.DoEvents()
+    End Sub
+
+
     ' The page switches' cross-fade (#142), or Nothing until a switch made
     ' with motion on.
     Public ReadOnly Property PageFade As ManuscriptPipeline.Controls.PageFade

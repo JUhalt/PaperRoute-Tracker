@@ -11,11 +11,11 @@ Imports ManuscriptPipeline.Services
 
 ' The single-window shell: a left rail of pages, one content area, and
 ' back/forward navigation. The Board is always kept, and so are the
-' manuscript page, Deadlines and Import & Export once built, until the
-' system colors change (#133); other pages are built when opened and
-' disposed when left. Library editors that save as they go (journals,
-' authors, reminders) are hosted as pages until later v0.6 work converts
-' them.
+' manuscript page, the Library, Journals, Deadlines, Insights and Import &
+' Export once built, until the system colors change (#133); other pages
+' are built when opened and disposed when left. Library editors that save
+' as they go (journals, authors, reminders) are hosted as pages until
+' later v0.6 work converts them.
 Partial Public Class Form1
 
     Friend Enum WorkspacePage
@@ -50,7 +50,12 @@ Partial Public Class Form1
     ' Set when the current page hosted an editor that saves as it goes.
     Private pageHostedEditor As Boolean = False
 
-    ' Library page state.
+    ' Library page state. The page is kept once built, and prepared while
+    ' the window idles (#133); each visit begins as a new page did and
+    ' shows the library as it is now (BeginLibraryVisit). It knows the
+    ' colors, DPI and font it was built with.
+    Private libraryPage As Control = Nothing
+    Private libraryPageStamp As String = String.Empty
     Private libraryGrid As DataGridView = Nothing
     Private libraryContent As Panel = Nothing
     Private libraryAuthorsForm As Form = Nothing
@@ -808,13 +813,20 @@ Partial Public Class Form1
         ' visit; taking it out of the window and putting it back costs as
         ' much as showing it. The manuscript page's editor lets go of the
         ' record left once the window idles. One built before the system
-        ' colors changed goes, as every other page does.
+        ' colors changed goes, as every other page does, and so does the
+        ' Library left on its Authors & Affiliations view, whose editor read
+        ' the author library as it was made; it is prepared again, as
+        ' Journals and Insights are.
         ' A page that goes is disposed where it is: removed first, each of
         ' its windows would move to WinForms' parking window only to be
         ' destroyed there, a few milliseconds a window on a slow machine
         ' (#133). Disposing removes it from the page area once its windows
         ' are gone.
-        If IsKeptPage(currentPageView) AndAlso Not leaveDisposesKeptPage Then
+        Dim keep As Boolean =
+            IsKeptPage(currentPageView) AndAlso Not leaveDisposesKeptPage AndAlso
+            Not (currentPageView Is libraryPage AndAlso libraryAuthorsForm IsNot Nothing)
+
+        If keep Then
             currentPageView.Visible = False
             If currentPageView Is manuscriptPage Then
                 QueueManuscriptPageUnload()
@@ -826,6 +838,9 @@ Partial Public Class Form1
         ElseIf currentPageView Is insightsPage Then
             DropInsightsPage()
             QueueKeptPagesPreparation()
+        ElseIf currentPageView Is libraryPage Then
+            DropLibraryPage()
+            QueueKeptPagesPreparation()
         Else
             Dim wasKept As Boolean = currentPageView Is journalsPage
             currentPageView.Dispose()
@@ -834,10 +849,6 @@ Partial Public Class Form1
 
         leaveDisposesKeptPage = False
         currentPageView = Nothing
-        libraryGrid = Nothing
-        libraryContent = Nothing
-        libraryAuthorsForm = Nothing
-        libraryFilter = Nothing
 
     End Sub
 
@@ -861,10 +872,11 @@ Partial Public Class Form1
 
 
     ' The pages built once and kept while the window lives (#133): the
-    ' manuscript page, Journals, Deadlines, Insights and Import & Export.
+    ' manuscript page, the Library, Journals, Deadlines, Insights and
+    ' Import & Export.
     Private Function IsKeptPage(view As Control) As Boolean
         Return view IsNot Nothing AndAlso
-            (view Is manuscriptPage OrElse view Is importExportPage OrElse view Is deadlinesPage OrElse view Is journalsPage OrElse view Is insightsPage)
+            (view Is manuscriptPage OrElse view Is importExportPage OrElse view Is deadlinesPage OrElse view Is journalsPage OrElse view Is insightsPage OrElse view Is libraryPage)
     End Function
 
 
@@ -874,15 +886,14 @@ Partial Public Class Form1
     ' leave it mixing the two. A hidden kept page is let go now, where it
     ' is, and the one showing as it is left; each is built anew on its next
     ' visit, as the pages that are not kept are, and the manuscript page,
-    ' Journals and Insights are prepared again while the window idles.
-    ' (The manuscript page, Journals and Insights are also built anew when
-    ' they find the colors, the DPI or the font they were built with
-    ' changed.)
+    ' Journals, Insights and the Library are prepared again while the
+    ' window idles. (Those four are also built anew when they find the
+    ' colors, the DPI or the font they were built with changed.)
     Protected Overrides Sub OnSystemColorsChanged(e As EventArgs)
 
         MyBase.OnSystemColorsChanged(e)
 
-        For Each page As Control In {manuscriptPage, deadlinesPage, importExportPage, journalsPage, insightsPage}
+        For Each page As Control In {manuscriptPage, deadlinesPage, importExportPage, journalsPage, insightsPage, libraryPage}
             If page Is Nothing OrElse page.IsDisposed Then
                 Continue For
             End If
@@ -893,12 +904,15 @@ Partial Public Class Form1
                 DropManuscriptPage()
             ElseIf page Is insightsPage Then
                 DropInsightsPage()
+            ElseIf page Is libraryPage Then
+                DropLibraryPage()
             Else
                 page.Dispose()
             End If
         Next
 
-        ' Journals and Insights are prepared again in the new colors.
+        ' Journals, Insights and the Library are prepared again in the new
+        ' colors.
         QueueKeptPagesPreparation()
 
     End Sub
@@ -932,7 +946,7 @@ Partial Public Class Form1
             Case WorkspacePage.Manuscript
                 view = BuildMissingManuscriptPage()
             Case WorkspacePage.Library
-                view = BuildLibraryPage()
+                view = OpenLibraryPage()
             Case WorkspacePage.Journals
                 view = OpenJournalsPage()
             Case WorkspacePage.Deadlines
@@ -1021,15 +1035,17 @@ Partial Public Class Form1
     End Function
 
 
-    ' Journals and Insights are prepared while the window idles (#133),
-    ' after the manuscript page, each in steps: built; put in the page area
-    ' hidden and laid out at the size it shows at; its windows made a slice
-    ' at a time. A first visit then costs what a later one does, and a
-    ' visit before a page is ready finishes it there and then (ShowPage).
+    ' Journals, Insights and the Library are prepared while the window
+    ' idles (#133), after the manuscript page, each in steps: built; put in
+    ' the page area hidden and laid out at the size it shows at; its
+    ' windows made a slice at a time. A first visit then costs what a later
+    ' one does, and a visit before a page is ready finishes it there and
+    ' then (ShowPage).
     Private Sub QueueKeptPagesPreparation()
 
         QueueIdleWork(AddressOf PrepareJournalsPage)
         QueueIdleWork(AddressOf PrepareInsightsPage)
+        QueueIdleWork(AddressOf PrepareLibraryPage)
 
     End Sub
 
@@ -1067,6 +1083,21 @@ Partial Public Class Form1
         Dim page As Control = BuildInsightsPage(fill:=False)
         insightsPage = page
         insightsPageStamp = ManuscriptPageStamp()
+        QueueIdleWork(Sub() PlacePreparedPage(page))
+
+    End Sub
+
+
+    ' The Library, built with every manuscript in its grid.
+    Private Sub PrepareLibraryPage()
+
+        If IsDisposed OrElse (libraryPage IsNot Nothing AndAlso Not libraryPage.IsDisposed) Then
+            Return
+        End If
+
+        Dim page As Control = BuildLibraryPage()
+        libraryPage = page
+        libraryPageStamp = ManuscriptPageStamp()
         QueueIdleWork(Sub() PlacePreparedPage(page))
 
     End Sub
@@ -1249,6 +1280,173 @@ Partial Public Class Form1
     ' =====================================================
     ' Library page
     ' =====================================================
+
+    ' The Library page for a visit: built on the first, or after the
+    ' colors, the DPI or the font changed; kept or prepared, it begins as a
+    ' new page did and shows the library as it is now (BeginLibraryVisit).
+    ' One not prepared yet is finished here as the window idling would
+    ' have finished it, put in the page area hidden and given its windows,
+    ' so the visit begins on the page as it will show: a grid given its
+    ' window makes its first row current, and a new page's showed none.
+    Private Function OpenLibraryPage() As Control
+
+        If libraryPage IsNot Nothing AndAlso (libraryPage.IsDisposed OrElse libraryPageStamp <> ManuscriptPageStamp()) Then
+            DropLibraryPage()
+        End If
+
+        If libraryPage Is Nothing Then
+            libraryPage = BuildLibraryPage()
+            libraryPageStamp = ManuscriptPageStamp()
+        End If
+
+        If libraryPage.Parent Is Nothing Then
+            PlaceKeptPageHidden(libraryPage)
+        End If
+
+        InPlace.MakeWindows(libraryPage, Integer.MaxValue)
+        BeginLibraryVisit()
+
+        Return libraryPage
+
+    End Function
+
+
+    ' Lets the kept page go; the next visit builds it, or it is prepared
+    ' again while the window idles.
+    Private Sub DropLibraryPage()
+
+        If libraryPage IsNot Nothing AndAlso Not libraryPage.IsDisposed Then
+            InPlace.Dispose(libraryPage)
+        End If
+
+        libraryPage = Nothing
+        libraryGrid = Nothing
+        libraryContent = Nothing
+        libraryAuthorsForm = Nothing
+        libraryFilter = Nothing
+        tabLibraryManuscripts = Nothing
+        tabLibraryAuthors = Nothing
+
+    End Sub
+
+
+    ' The page a visit shows, kept, prepared or just built, begins as a
+    ' new page did (#133): on its Manuscripts view, which a kept page was
+    ' left on (PutAwayCurrentPage), the filter empty, every manuscript in
+    ' the library's order with no column sorted, no row current or
+    ' selected, the grid at its top, and its columns as wide as they were
+    ' built. Its rows are put right only as far as the library changed
+    ' since they were filled: filled again when the manuscripts listed
+    ' changed (an add, a delete, an import, a restore, a filter left
+    ' typed), a cell set where what a row shows changed (an edit, a File
+    ' Drawer move, another day in a stage), and nothing done when nothing
+    ' did. What a row shows is read from each record, so a change no
+    ' render followed shows too.
+    Private Sub BeginLibraryVisit()
+
+        Dim grid As DataGridView = libraryGrid
+
+        ' Sorted by the library's order, the grid forgets the column it was
+        ' sorted by, and its sort glyph.
+        If grid.SortedColumn IsNot Nothing Then
+            grid.Sort(New LibraryOrder(manuscripts))
+        End If
+
+        Dim filtered As Boolean = libraryFilter.TextLength > 0
+
+        If filtered Then
+            libraryFilter.Text = String.Empty
+        End If
+
+        ' Emptying the filter started its timer; the rows are put right here.
+        libraryFilterDebounceTimer.Stop()
+
+        Dim listed As Boolean =
+            grid.Rows.Count = manuscripts.Count AndAlso
+            Enumerable.Range(0, manuscripts.Count).All(Function(index) grid.Rows(index).Tag Is manuscripts(index))
+
+        If Not listed Then
+            FillLibraryGrid()
+        Else
+            Dim changed As Boolean = False
+
+            For index As Integer = 0 To manuscripts.Count - 1
+                Dim cells As DataGridViewCellCollection = grid.Rows(index).Cells
+                Dim values As Object() = LibraryRowValues(manuscripts(index))
+                For column As Integer = 0 To values.Length - 1
+                    If Not Object.Equals(cells(column).Value, values(column)) Then
+                        cells(column).Value = values(column)
+                        changed = True
+                    End If
+                Next
+            Next
+
+            If changed Then
+                FitLibraryColumns(grid)
+            End If
+        End If
+
+        ' A column a researcher dragged wider takes its share again.
+        For Each share As KeyValuePair(Of String, Single) In LibraryFillWeights
+            If grid.Columns(share.Key).FillWeight <> share.Value Then
+                grid.Columns(share.Key).FillWeight = share.Value
+            End If
+        Next
+
+        ' A grid makes its first row current as it is given its window, or
+        ' filled again once it has one.
+        If grid.CurrentCell IsNot Nothing Then
+            grid.CurrentCell = Nothing
+        End If
+
+        If grid.SelectedRows.Count > 0 Then
+            grid.ClearSelection()
+        End If
+
+        If grid.FirstDisplayedScrollingRowIndex > 0 Then
+            grid.FirstDisplayedScrollingRowIndex = 0
+        End If
+
+        If grid.HorizontalScrollingOffset > 0 Then
+            grid.HorizontalScrollingOffset = 0
+        End If
+
+        ' The hint of an empty list names the filter no longer typed.
+        If filtered Then
+            EmptyHint.Refresh(grid)
+        End If
+
+    End Sub
+
+
+    ' Orders the Library's rows as the library holds their manuscripts; a
+    ' row whose manuscript it no longer holds goes last.
+    Private NotInheritable Class LibraryOrder
+        Implements Collections.IComparer
+
+        Private ReadOnly positions As New Dictionary(Of Manuscript, Integer)()
+
+        Public Sub New(library As List(Of Manuscript))
+            For index As Integer = 0 To library.Count - 1
+                positions.TryAdd(library(index), index)
+            Next
+        End Sub
+
+        Public Function Compare(x As Object, y As Object) As Integer Implements Collections.IComparer.Compare
+            Return PositionOf(x).CompareTo(PositionOf(y))
+        End Function
+
+        Private Function PositionOf(row As Object) As Integer
+            Dim manuscript As Manuscript = TryCast(TryCast(row, DataGridViewRow)?.Tag, Manuscript)
+            Dim position As Integer
+            If manuscript Is Nothing OrElse Not positions.TryGetValue(manuscript, position) Then
+                Return Integer.MaxValue
+            End If
+            Return position
+        End Function
+
+    End Class
+
 
     Private Function BuildLibraryPage() As Control
 
@@ -1441,6 +1639,13 @@ Partial Public Class Form1
     End Function
 
 
+    ' The Library's columns that share the width left over, and the share
+    ' each takes as the page is built.
+    Private Shared ReadOnly LibraryFillWeights As New Dictionary(Of String, Single) From {
+        {"Title", 220}, {"Journal", 55}, {"Route", 70}, {"Tags", 45}
+    }
+
+
     Private Sub ShowLibraryManuscripts()
 
         ClearLibraryContent()
@@ -1450,13 +1655,13 @@ Partial Public Class Form1
         ' Stage, Shelf, Type and Days are as wide as their widest text,
         ' fitted on every fill (FitLibraryColumns), and, as columns sized to
         ' their cells always were, cannot be dragged wider.
-        grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Title", .HeaderText = "Title", .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = 220, .MinimumWidth = UiTheme.Px(220, DeviceDpi)})
+        grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Title", .HeaderText = "Title", .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = LibraryFillWeights("Title"), .MinimumWidth = UiTheme.Px(220, DeviceDpi)})
         grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Stage", .HeaderText = "Stage", .AutoSizeMode = DataGridViewAutoSizeColumnMode.None, .Resizable = DataGridViewTriState.False})
         grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Shelf", .HeaderText = "Shelf", .AutoSizeMode = DataGridViewAutoSizeColumnMode.None, .Resizable = DataGridViewTriState.False})
-        grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Journal", .HeaderText = "Target journal", .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = 55})
-        grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Route", .HeaderText = "Route", .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = 70})
+        grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Journal", .HeaderText = "Target journal", .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = LibraryFillWeights("Journal")})
+        grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Route", .HeaderText = "Route", .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = LibraryFillWeights("Route")})
         grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Type", .HeaderText = "Type", .AutoSizeMode = DataGridViewAutoSizeColumnMode.None, .Resizable = DataGridViewTriState.False})
-        grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Tags", .HeaderText = "Tags", .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = 45})
+        grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Tags", .HeaderText = "Tags", .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = LibraryFillWeights("Tags")})
         grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Days", .HeaderText = "Days in stage", .AutoSizeMode = DataGridViewAutoSizeColumnMode.None, .Resizable = DataGridViewTriState.False, .ValueType = GetType(Integer)})
         grid.Columns("Days").DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight
 
@@ -1530,34 +1735,19 @@ Partial Public Class Form1
         Dim rows As New List(Of DataGridViewRow)()
 
         For Each manuscript As Manuscript In manuscripts
-            Dim route As String = RouteSummaryService.Describe(manuscript).Text
-            Dim type As String = If(manuscript.WorkType = WorkType.Unspecified, String.Empty, WorkTypeService.DisplayName(manuscript.WorkType))
-            Dim tags As String = String.Join(", ", If(manuscript.Tags, New List(Of String)()))
+            Dim values As Object() = LibraryRowValues(manuscript)
 
+            ' The filter looks in every text the row shows.
             If filter.Length > 0 AndAlso
-               Not {manuscript.Title, manuscript.TargetJournal, FormatStage(manuscript.CurrentStage), FormatShelf(manuscript.Location), route, type, tags}.
-                   Any(Function(value) If(value, String.Empty).IndexOf(filter, StringComparison.CurrentCultureIgnoreCase) >= 0) Then
+               Not values.Any(Function(value) If(TryCast(value, String), String.Empty).IndexOf(filter, StringComparison.CurrentCultureIgnoreCase) >= 0) Then
                 Continue For
             End If
-
-            Dim entered As DateTime = manuscript.StageEnteredDate.Date
-            Dim days As Object =
-                If(manuscript.Location = ManuscriptLocation.Pipeline AndAlso entered > DateTime.MinValue.Date AndAlso entered <= DateTime.Today,
-                   CObj((DateTime.Today - entered).Days),
-                   Nothing)
 
             Dim row As New DataGridViewRow()
 
             row.CreateCells(
                 libraryGrid,
-                manuscript.Title,
-                FormatStage(manuscript.CurrentStage),
-                FormatShelf(manuscript.Location),
-                manuscript.TargetJournal,
-                route,
-                type,
-                tags,
-                days)
+                values)
 
             row.Tag = manuscript
             rows.Add(row)
@@ -1583,6 +1773,31 @@ Partial Public Class Form1
         End If
 
     End Sub
+
+
+    ' What a manuscript's row shows, column by column: its title, stage,
+    ' shelf, target journal, route, type and tags, and its days in its
+    ' stage, counted on the Pipeline only.
+    Private Function LibraryRowValues(manuscript As Manuscript) As Object()
+
+        Dim entered As DateTime = manuscript.StageEnteredDate.Date
+        Dim days As Object =
+            If(manuscript.Location = ManuscriptLocation.Pipeline AndAlso entered > DateTime.MinValue.Date AndAlso entered <= DateTime.Today,
+               CObj((DateTime.Today - entered).Days),
+               Nothing)
+
+        Return New Object() {
+            manuscript.Title,
+            FormatStage(manuscript.CurrentStage),
+            FormatShelf(manuscript.Location),
+            manuscript.TargetJournal,
+            RouteSummaryService.Describe(manuscript).Text,
+            If(manuscript.WorkType = WorkType.Unspecified, String.Empty, WorkTypeService.DisplayName(manuscript.WorkType)),
+            String.Join(", ", If(manuscript.Tags, New List(Of String)())),
+            days
+        }
+
+    End Function
 
 
     ' Sizes the Library's short columns to their widest text and their

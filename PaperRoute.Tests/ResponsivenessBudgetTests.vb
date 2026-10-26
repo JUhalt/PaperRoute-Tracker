@@ -153,17 +153,17 @@ Public Class ResponsivenessBudgetTests
             ' together once it has filled, their first screens' windows made
             ' a card at a time (#133).
             '
-            ' Beside the fill, the manuscript page, Journals and Insights are
-            ' prepared while the window idles (#133): each built, laid out, and
-            ' its windows made a slice at a time. The fill's row holds the
-            ' longest step while the fill runs against the UI thread's budget,
-            ' and the next row the longest step of the idle work left after
-            ' it. One pass of the window's messages runs idle steps back to
-            ' back while each outlasts the idle timer's 15 ms, so the steps
-            ' that follow the fill, the other shelves', usually run within
-            ' the fill's row and the next reads nothing. Their twin, reported,
-            ' holds the longer of the two against the idle queue's own slice
-            ' of 30 ms.
+            ' Beside the fill, the manuscript page, Journals, Insights and the
+            ' Library are prepared while the window idles (#133): each built,
+            ' laid out, and its windows made a slice at a time. The fill's row
+            ' holds the longest step while the fill runs against the UI
+            ' thread's budget, and the next row the longest step of the idle
+            ' work left after it. One pass of the window's messages runs idle
+            ' steps back to back while each outlasts the idle timer's 15 ms, so
+            ' the steps that follow the fill, the other shelves', usually run
+            ' within the fill's row and the next reads nothing. Their twin,
+            ' reported, holds the longer of the two against the idle queue's
+            ' own slice of 30 ms.
             Dim fill As Row = Time(library, "Board: the rest of the shown shelf, shown in idle slices", UiThread, Sub() board.WaitForBoardFill(), enforced:=enforce)
             rows.Add(fill)
             Dim prepared As Row = Time(library, "Idle work left after the fill (the other shelves put together), its longest step", UiThread, Sub() board.WaitForIdleWork(), enforced:=enforce)
@@ -171,6 +171,7 @@ Public Class ResponsivenessBudgetTests
             rows.Add(New Row With {.Library = library.Name, .Action = "Idle work from startup: its longest step, against the idle slice", .Wall = fill.Wall + prepared.Wall, .Ui = Math.Max(fill.Ui, prepared.Ui), .Budget = IdleSlice})
             Assert.IsNotNull(board.JournalsPage, "Journals was prepared while the window idled.")
             Assert.IsNotNull(board.InsightsPage, "Insights was prepared while the window idled.")
+            Assert.IsNotNull(board.LibraryPage, "The Library was prepared while the window idled.")
 
             ' The first switch to Published shows the shelf put together while
             ' the window idled, its first screen's windows made. Built at the
@@ -195,18 +196,21 @@ Public Class ResponsivenessBudgetTests
             board.WaitForBoardFill()
 
             ' #133 enforces the Board's startup and the page switches back to it
-            ' from Insights and the manuscript page. Board to Library stays
-            ' reported: it builds its page's windows and measured 54-163 ms
-            ' across this host's quiet and busy runs, with no room under the 100
-            ' ms line. Profiled on 2026-10-25, about half of it is making the
-            ' page's 14 windows, its grid's among them, at every visit, which a
-            ' page built for each visit and disposed as it is left needs
-            ' (PageSwitchTests.LeavingAPageDisposesItInPlace and the "entered
-            ' new" line of KeyboardAccessTests pin that shape); its data, 500
-            ' rows, takes 4 to 19 ms. A Library page kept and prepared while the
-            ' window idles, as Journals is, is the maintainer's to decide.
-            ' Library to Board, which disposes the
-            ' Library page and its 500-row grid, read 27 to 100 ms in most runs
+            ' from Insights and the manuscript page, and from 2026-10-26 Board
+            ' to Library. Built for each visit and disposed as it was left, the
+            ' Library read 26 to 509 ms across 2026-10-24 to 10-26, about half
+            ' of it making the page's 14 windows, its grid's among them; its
+            ' data, 500 rows, took 4 to 19 ms. The page is now kept and prepared
+            ' while the window idles, as Journals is, each visit begins as a
+            ' new page did and puts its rows right only as far as the library
+            ' changed (PageSwitchTests), and the row is checked above to time
+            ' the prepared page. On 2026-10-26 it read 7 to 13 ms in three runs
+            ' with no other test host, where the page built for each visit read
+            ' 27 to 49, and 9 and 12 beside another test host; as for Deadlines
+            ' below, a failure is run again on a quiet host before it is read
+            ' as a regression.
+            ' Library to Board, which disposed the Library page and its 500-row
+            ' grid until the page was kept, read 27 to 100 ms in most runs
             ' and 128 to 481 ms in others: the spikes were a wait of about half
             ' a second inside painting Windows did synchronously as the Board
             ' came forward (PageSwitchTests.SwitchesPaintNothingSynchronously
@@ -215,7 +219,7 @@ Public Class ResponsivenessBudgetTests
             ' a row on a Release build, and it is enforced. The wait did not
             ' end: it moved into the paint after the switch, which the
             ' researcher still waits on and the row after it reports.
-            rows.Add(Time(library, "Board to Library", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Library)))
+            rows.Add(Time(library, "Board to Library", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Library), enforced:=enforce))
             rows.Add(Time(library, "One Library filter keystroke", FilterKeystroke, Sub() board.TypeInLibraryFilter("a"), enforced:=enforce))
             rows.Add(Time(library, "Library filter: refill once typing pauses", UiThread, Sub() board.PauseTyping(), enforced:=enforce))
             rows.Add(Time(library, "Library to Board", PageSwitch, Sub() board.NavigateTo(Form1.WorkspacePage.Board), enforced:=enforce))
@@ -622,7 +626,7 @@ Public Class ResponsivenessBudgetTests
 
             Dim go As Func(Of Form1.WorkspacePage, Action) = Function(page) Sub() board.NavigateTo(page)
 
-            rows.Add(switchTo("Board to Library", go(Form1.WorkspacePage.Library), False))
+            rows.Add(switchTo("Board to Library", go(Form1.WorkspacePage.Library), True))
             rows.Add(switchTo("Library to Board", go(Form1.WorkspacePage.Board), True))
 
             rows.Add(switchTo("Board to Journals (the page prepared while the window idled)", go(Form1.WorkspacePage.Journals), True))
