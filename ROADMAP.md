@@ -56,8 +56,8 @@ Targets are directional rather than promises. Data integrity, migrations, backup
 | **v0.8** | Route Analytics & Reports ✅ | What does this publication journey show me—and how can I communicate it? |
 | **v0.9** | Journal Choice & Guidance ✅ | Where should this manuscript go, what will that journal ask of me, and how does someone new learn the route? |
 | **v0.9.1** | Packet File Safety ✅ | Does a save ever delete a file the library did not ask it to? |
-| **v0.9.2** | **1.0 Hardening — in progress, target November 2, 2026** | Is the entire workflow polished, resilient, and certifiable? |
-| **v1.0** | Trusted Research Workflow — target November 9, 2026 | Would I trust this with my real publication pipeline? |
+| **v0.9.2** | 1.0 Hardening ✅ | Is the entire workflow polished, resilient, and certifiable? |
+| **v1.0** | **Trusted Research Workflow — next, target November 9, 2026** | Would I trust this with my real publication pipeline? |
 | **v1.1** | macOS and Linux | Can PaperRoute be the same calm, trustworthy app on every desktop? |
 
 On September 26, 2026, the train was re-sequenced so the interface can catch up with the depth of the data model: v0.6 became **Workspace UI**, Deadline Center moved to v0.7, Route Analytics & Reports moved to v0.8, and optional AI assistance became a proposal for after 1.0. Deadlines and Analytics arrive as pages in the new workspace rather than as additional dialogs.
@@ -366,15 +366,13 @@ PaperRoute v0.9.1 was released on October 9, 2026 from [PR #163](https://github.
 
 ---
 
-# v0.9.2 1.0 Hardening
+## COMPLETE — v0.9.2 1.0 Hardening
 
-Renumbered from v0.9.1 on October 9, 2026, when v0.9.1 became a Stable patch for #107. The bounded work is in [milestone 11](https://github.com/JUhalt/PaperRoute-Tracker/milestone/11), due November 2, 2026, and tracked by [#43](https://github.com/JUhalt/PaperRoute-Tracker/issues/43). It merges in batches of related issues, often several to a pull request: [PR #236](https://github.com/JUhalt/PaperRoute-Tracker/pull/236) took six.
+Renumbered from v0.9.1 on October 9, 2026, when v0.9.1 became a Stable patch for #107. The bounded work is in [milestone 11](https://github.com/JUhalt/PaperRoute-Tracker/milestone/11), due November 2, 2026, and tracked by [#43](https://github.com/JUhalt/PaperRoute-Tracker/issues/43). It merged in batches of related issues, often several to a pull request: [PR #236](https://github.com/JUhalt/PaperRoute-Tracker/pull/236) took six.
 
 **Scope and evidence tracker:** [#43](https://github.com/JUhalt/PaperRoute-Tracker/issues/43). The bounded work is linked there, and both decisions it asked for are recorded below: sharing ([#155](https://github.com/JUhalt/PaperRoute-Tracker/issues/155)) on October 15, 2026, and signing ([#152](https://github.com/JUhalt/PaperRoute-Tracker/issues/152)) on October 17, with its timing on October 24.
 
-**Status on October 25, 2026.** The bounded work has merged except the second wave of small touches ([#239](https://github.com/JUhalt/PaperRoute-Tracker/issues/239) to [#245](https://github.com/JUhalt/PaperRoute-Tracker/issues/245), filed that day) and the last speed batch of [#133](https://github.com/JUhalt/PaperRoute-Tracker/issues/133) (manuscript-page opens, Board to Library, Journals to Board). The release notes are drafted in the [changelog](CHANGELOG.md) and [docs/releases/0.9.2.md](docs/releases/0.9.2.md). The certification runs from one ordered checklist, [v0.9.2-Certification-Checklist.md](ManualCertification/v0.9.2-Certification-Checklist.md), and is recorded on [#147](https://github.com/JUhalt/PaperRoute-Tracker/issues/147); [#92](https://github.com/JUhalt/PaperRoute-Tracker/issues/92), [#93](https://github.com/JUhalt/PaperRoute-Tracker/issues/93), [#142](https://github.com/JUhalt/PaperRoute-Tracker/issues/142), [#152](https://github.com/JUhalt/PaperRoute-Tracker/issues/152) and [#213](https://github.com/JUhalt/PaperRoute-Tracker/issues/213) stay open for what it measures or hears. v0.9.2 keeps the Schema 9 library.
-
-<!-- pending: at release, mark the release train's v0.9.2 row "1.0 Hardening ✅" with v1.0 next, retitle this section "COMPLETE — v0.9.2 1.0 Hardening" as v0.9.1's is, and close it with one paragraph in v0.9.1's shape: released on <date> from <the release PR>, keeps the Schema 9 library, certification recorded in #147. -->
+PaperRoute v0.9.2 was released on October 26, 2026 from [PR #251](https://github.com/JUhalt/PaperRoute-Tracker/pull/251). It keeps the Schema 9 library of v0.9.0. Certification is recorded in [#147](https://github.com/JUhalt/PaperRoute-Tracker/issues/147), from one ordered checklist, [v0.9.2-Certification-Checklist.md](ManualCertification/v0.9.2-Certification-Checklist.md): the candidate, CI, the budget table and the host's on-screen checks before the tag, then the published-asset audit and the installed-app checks on the published build, with the update gates from v0.9.1 only. [#92](https://github.com/JUhalt/PaperRoute-Tracker/issues/92), [#93](https://github.com/JUhalt/PaperRoute-Tracker/issues/93), [#142](https://github.com/JUhalt/PaperRoute-Tracker/issues/142), [#152](https://github.com/JUhalt/PaperRoute-Tracker/issues/152) and [#213](https://github.com/JUhalt/PaperRoute-Tracker/issues/213) stay open for what it measures or hears.
 
 Systematic burn-down before 1.0:
 
