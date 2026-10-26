@@ -609,6 +609,7 @@ Public Class PageSwitchTests
     End Sub
 
     Private Const WM_WINDOWPOSCHANGING As Integer = &H46
+    Private Const WM_GETTEXT As Integer = &HD
     Private Const WM_GETTEXTLENGTH As Integer = &HE
     Private Const CB_RESETCONTENT As Integer = &H14B
 
@@ -622,7 +623,10 @@ Public Class PageSwitchTests
 
         StaRunner.Run(
             Sub()
-                Using host As New Form With {.StartPosition = FormStartPosition.Manual, .Location = New Drawing.Point(-20000, -20000), .ShowInTaskbar = False}
+                ' Disposed once the window that took them has closed.
+                Using larger As New Drawing.Font("Segoe UI", 14.0F),
+                      italic As New Drawing.Font("Segoe UI", 9.0F, Drawing.FontStyle.Italic),
+                      host As New Form With {.StartPosition = FormStartPosition.Manual, .Location = New Drawing.Point(-20000, -20000), .ShowInTaskbar = False}
                     Dim chip As New Controls.FilterChip With {.Text = "3 overdue revisions"}
                     host.Controls.Add(chip)
                     host.Show()
@@ -637,7 +641,7 @@ Public Class PageSwitchTests
                             End Using
                         End Function
 
-                    For Each font As Drawing.Font In {host.Font, New Drawing.Font("Segoe UI", 14.0F), New Drawing.Font("Segoe UI", 9.0F, Drawing.FontStyle.Italic)}
+                    For Each font As Drawing.Font In {host.Font, larger, italic}
                         host.Font = font
                         For Each tone As Controls.FilterChipTone In [Enum].GetValues(GetType(Controls.FilterChipTone))
                             chip.Tone = tone
@@ -662,12 +666,15 @@ Public Class PageSwitchTests
     ' manuscript (#133): the stage filter refilled the same nine options
     ' (emptying the box, adding each, measuring each and resizing the box
     ' and its list), and each manuscript read the search text from its
-    ' window, 60 reads here and 500 on the 500 library.
+    ' window, 60 reads here and 500 on the 500 library. An attention chip
+    ' keeps its own text, so nothing reads it from the chip's window: it
+    ' was read at each of its measures and each time its text was set.
     <TestMethod>
     Public Sub LeavingJournalsWithNothingChangedRefillsNoFilter()
 
         Dim refills As Integer = -1
         Dim reads As Integer = -1
+        Dim chipReads As New List(Of String)()
         Dim resized As Boolean = False
 
         StaRunner.Run(
@@ -681,6 +688,10 @@ Public Class PageSwitchTests
                     board.WaitForIdleWork()
                     Dim stages As ComboBox = board.Part(Of ComboBox)("cboStageFilter")
                     Dim search As TextBox = board.Part(Of TextBox)("txtBoardSearch")
+                    Dim chips As List(Of Controls.FilterChip) =
+                        {"lblOverdueRevisions", "lblRevisionDueSoon", "lblLongReviews", "lblMissingJournal", "lblRecentRejections"}.
+                            Select(Function(name) board.Part(Of Controls.FilterChip)(name)).Where(Function(chip) chip.Visible AndAlso chip.IsHandleCreated).ToList()
+                    Assert.IsTrue(chips.Count > 0, "The Board shows an attention chip.")
                     Dim before As String() = stages.Items.Cast(Of Object)().Select(Function(item) item.ToString()).ToArray()
 
                     board.NavigateTo(Form1.WorkspacePage.Journals)
@@ -689,6 +700,10 @@ Public Class PageSwitchTests
                         board.NavigateTo(Form1.WorkspacePage.Board)
                         refills = watch.Count(stages, CB_RESETCONTENT)
                         reads = watch.Count(search, WM_GETTEXTLENGTH)
+                        For Each chip As Controls.FilterChip In chips
+                            Dim read As Integer = watch.Count(chip, WM_GETTEXTLENGTH) + watch.Count(chip, WM_GETTEXT)
+                            If read > 0 Then chipReads.Add("'" & chip.Text & "' read " & read.ToString() & " times")
+                        Next
                     End Using
                     Application.DoEvents()
 
@@ -696,12 +711,14 @@ Public Class PageSwitchTests
 
                     ' In another font, the same options are filled and sized
                     ' again, as the box was sized for its widest one.
-                    board.Font = New Drawing.Font(board.Font.FontFamily, board.Font.SizeInPoints * 1.5F)
+                    Dim larger As New Drawing.Font(board.Font.FontFamily, board.Font.SizeInPoints * 1.5F)
+                    board.Font = larger
                     board.Render()
                     Dim widest As Integer = stages.Items.Cast(Of Object)().Max(Function(item) TextRenderer.MeasureText(item.ToString(), board.Font).Width)
                     resized = stages.Width = Math.Max(150, widest + 46)
 
                     board.Close()
+                    larger.Dispose()
                 End Using
             End Sub,
             TimeSpan.FromMinutes(3))
@@ -712,6 +729,7 @@ Public Class PageSwitchTests
         ' Once for the filter, and once each for the three shelves' headings
         ' and the Clear filters button.
         If reads > 5 Then problems.Add("The search box was read " & reads.ToString() & " times in one render.")
+        If chipReads.Count > 0 Then problems.Add("The attention chips' text was read from their windows: " & String.Join("; ", chipReads))
         Assert.AreEqual(0, problems.Count, String.Join(Environment.NewLine, problems))
 
     End Sub
@@ -1166,6 +1184,7 @@ Friend NotInheritable Class SentMessageWatch
     Private ReadOnly _callback As HookProc
     Private ReadOnly _hook As IntPtr
     Private ReadOnly _counts As New Dictionary(Of (Window As IntPtr, Message As Integer), Integer)()
+    Private _unread As String = Nothing
 
     Private Delegate Function HookProc(code As Integer, wParam As IntPtr, lParam As IntPtr) As IntPtr
 
@@ -1186,21 +1205,28 @@ Friend NotInheritable Class SentMessageWatch
     End Sub
 
 
-    ' How many times a message was sent to a control's window.
+    ' How many times a message was sent to a control's window. A message
+    ' the hook could not read fails the count rather than leaving it short.
     Public Function Count(control As Control, message As Integer) As Integer
+        If _unread IsNot Nothing Then Throw New InvalidOperationException("A message sent was not read: " & _unread)
         Dim found As Integer = 0
         If control.IsHandleCreated Then _counts.TryGetValue((control.Handle, message), found)
         Return found
     End Function
 
 
+    ' Nothing thrown here crosses into the native callback.
     Private Function Hook(code As Integer, wParam As IntPtr, lParam As IntPtr) As IntPtr
         If code >= 0 Then
-            Dim sent As CWPSTRUCT = Marshal.PtrToStructure(Of CWPSTRUCT)(lParam)
-            Dim key As (IntPtr, Integer) = (sent.hwnd, sent.message)
-            Dim found As Integer = 0
-            _counts.TryGetValue(key, found)
-            _counts(key) = found + 1
+            Try
+                Dim sent As CWPSTRUCT = Marshal.PtrToStructure(Of CWPSTRUCT)(lParam)
+                Dim key As (IntPtr, Integer) = (sent.hwnd, sent.message)
+                Dim found As Integer = 0
+                _counts.TryGetValue(key, found)
+                _counts(key) = found + 1
+            Catch ex As Exception
+                If _unread Is Nothing Then _unread = ex.GetType().Name & ": " & ex.Message
+            End Try
         End If
         Return CallNextHookEx(_hook, code, wParam, lParam)
     End Function
