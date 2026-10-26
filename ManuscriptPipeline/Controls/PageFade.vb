@@ -326,13 +326,18 @@ Namespace Controls
         End Function
 
 
-        ' Whether the area's corners, in the window's coordinates, are other
-        ' points on the screen: Windows scales the window. Asked of Windows
-        ' whatever this thread's DPI awareness; a point it cannot convert
-        ' counts as scaled.
+        ' Whether Windows scales the window: its DPI is not its screen's, or
+        ' the area's corners, in the window's coordinates, are other points
+        ' on the screen (the corners alone missed a window at 96 DPI on a
+        ' screen at 120, #252). Asked of Windows whatever this thread's DPI
+        ' awareness; a DPI or a point it cannot give counts as scaled.
         Private Function ScaledByWindows(area As Rectangle) As Boolean
 
             Dim owner As IntPtr = _owner.Handle
+
+            If Not DpiIsTheScreens(owner) Then
+                Return True
+            End If
 
             For Each corner As Point In {area.Location, New Point(area.Right - 1, area.Bottom - 1)}
                 Dim converted As New NativePoint With {.X = corner.X, .Y = corner.Y}
@@ -342,6 +347,45 @@ Namespace Controls
             Next
 
             Return False
+
+        End Function
+
+
+        ' Whether the window's DPI is the effective DPI of the screen it is
+        ' on. Windows gives a screen's DPI as the asking thread sees it, so it
+        ' is asked as a per-monitor aware thread; this one would be told its
+        ' own DPI. False if Windows cannot say.
+        Private Shared Function DpiIsTheScreens(window As IntPtr) As Boolean
+
+            Try
+
+                Dim windowDpi As Integer = GetDpiForWindow(window)
+
+                If windowDpi = 0 Then
+                    Return False
+                End If
+
+                Dim previous As IntPtr = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
+
+                If previous = IntPtr.Zero Then
+                    Return False
+                End If
+
+                Dim screenX As UInteger = 0
+                Dim screenY As UInteger = 0
+                Dim result As Integer
+
+                Try
+                    result = GetDpiForMonitor(MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST), MDT_EFFECTIVE_DPI, screenX, screenY)
+                Finally
+                    SetThreadDpiAwarenessContext(previous)
+                End Try
+
+                Return result = 0 AndAlso CLng(screenX) = windowDpi
+
+            Catch ex As Exception When TypeOf ex Is EntryPointNotFoundException OrElse TypeOf ex Is DllNotFoundException
+                Return False
+            End Try
 
         End Function
 
@@ -820,6 +864,26 @@ Namespace Controls
 
         <DllImport("user32.dll")>
         Private Shared Function LogicalToPhysicalPointForPerMonitorDPI(window As IntPtr, ByRef point As NativePoint) As Boolean
+        End Function
+
+        Private Shared ReadOnly DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 As New IntPtr(-4)
+        Private Const MONITOR_DEFAULTTONEAREST As UInteger = 2
+        Private Const MDT_EFFECTIVE_DPI As Integer = 0
+
+        <DllImport("user32.dll")>
+        Private Shared Function GetDpiForWindow(window As IntPtr) As Integer
+        End Function
+
+        <DllImport("user32.dll")>
+        Private Shared Function SetThreadDpiAwarenessContext(context As IntPtr) As IntPtr
+        End Function
+
+        <DllImport("user32.dll")>
+        Private Shared Function MonitorFromWindow(window As IntPtr, flags As UInteger) As IntPtr
+        End Function
+
+        <DllImport("Shcore.dll")>
+        Private Shared Function GetDpiForMonitor(monitor As IntPtr, kind As Integer, ByRef dpiX As UInteger, ByRef dpiY As UInteger) As Integer
         End Function
 
         Private Delegate Function EnumWindowsProc(window As IntPtr, parameter As IntPtr) As Boolean
