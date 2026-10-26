@@ -141,6 +141,27 @@ Namespace Controls
 
         End Function
 
+        ' Shows or hides a control, unless its window already is as asked
+        ' (#133). Under a hidden parent, as on a page or Board prepared or
+        ' put away, WinForms treats Visible = True on a control already
+        ' shown as a change each time: it shows the window again, raises
+        ' VisibleChanged and lays out the parent. Read from the window, as
+        ' MakeWindows reads it; a control without a window is set as asked.
+        ' Not for a window whose drawing a RedrawHold holds, which reads as
+        ' hidden while held.
+        Public Shared Sub SetShown(
+            control As Control,
+            shown As Boolean
+        )
+
+            If control.IsHandleCreated AndAlso ((GetWindowLong(control.Handle, GWL_STYLE) And WS_VISIBLE) <> 0) = shown Then
+                Return
+            End If
+
+            control.Visible = shown
+
+        End Sub
+
         Private Const GWL_STYLE As Integer = -16
         Private Const WS_VISIBLE As Integer = &H10000000
 

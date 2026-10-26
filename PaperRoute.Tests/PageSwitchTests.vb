@@ -547,6 +547,70 @@ Public Class PageSwitchTests
     End Sub
 
 
+    ' Leaving Journals with nothing changed shows no attention chip again
+    ' (#133). The Board renders before it is shown again, and WinForms
+    ' treats Visible = True on a chip already shown, under a hidden parent,
+    ' as a change: it showed the chip's window again, raised VisibleChanged
+    ' and laid out the chips' bar, chip by chip.
+    <TestMethod>
+    Public Sub LeavingJournalsReshowsNoAttentionChip()
+
+        Dim reshown As New List(Of String)()
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary =
+                    LargeLibraryFixture.Create(Path.Combine(_root, "library"), 60)
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+
+                    Dim chips As List(Of Controls.FilterChip) =
+                        {"lblOverdueRevisions", "lblRevisionDueSoon", "lblLongReviews", "lblMissingJournal", "lblRecentRejections"}.
+                            Select(Function(name) board.Part(Of Controls.FilterChip)(name)).Where(Function(chip) chip.Visible).ToList()
+                    Assert.IsTrue(chips.Count > 0, "The Board shows an attention chip.")
+
+                    board.NavigateTo(Form1.WorkspacePage.Journals)
+                    Application.DoEvents()
+
+                    ' While the Board is hidden; the Board shown again shows its
+                    ' chips, which raises VisibleChanged in each, as it should.
+                    Dim changed As EventHandler =
+                        Sub(sender, e)
+                            If Not board.BoardPage.Visible Then reshown.Add("VisibleChanged on '" & DirectCast(sender, Control).Text & "' under the hidden Board")
+                        End Sub
+                    For Each chip As Controls.FilterChip In chips
+                        AddHandler chip.VisibleChanged, changed
+                    Next
+                    Using watch As New SentMessageWatch()
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        For Each chip As Controls.FilterChip In chips
+                            Dim moved As Integer = watch.Count(chip, WM_WINDOWPOSCHANGING)
+                            If moved > 0 Then reshown.Add(moved.ToString() & " WM_WINDOWPOSCHANGING to '" & chip.Text & "'")
+                        Next
+                    End Using
+                    For Each chip As Controls.FilterChip In chips
+                        RemoveHandler chip.VisibleChanged, changed
+                    Next
+                    Application.DoEvents()
+
+                    ' Shown again in place of the page, the chips show as they did.
+                    reshown.AddRange(chips.Where(Function(chip) Not chip.Visible).Select(Function(chip) "'" & chip.Text & "' is hidden"))
+
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(3))
+
+        Assert.AreEqual(0, reshown.Count, "Leaving Journals with nothing changed:" & Environment.NewLine & String.Join(Environment.NewLine, reshown))
+
+    End Sub
+
+    Private Const WM_WINDOWPOSCHANGING As Integer = &H46
+
+
     ' Each visit to Insights begins as a new page did (#133): on Your
     ' Journals, no journal chosen, and the figures worked out anew from the
     ' records as they are, though the page is kept and was left on a
@@ -978,6 +1042,79 @@ Friend NotInheritable Class PaintWatch
 
     <DllImport("user32.dll")>
     Private Shared Function IsChild(parent As IntPtr, window As IntPtr) As Boolean
+    End Function
+
+    <DllImport("kernel32.dll")>
+    Private Shared Function GetCurrentThreadId() As Integer
+    End Function
+
+End Class
+
+
+' Counts the messages sent to the test's thread's windows while it is
+' alive, by window and message (a thread-local WH_CALLWNDPROC hook, as
+' PaintWatch's): what a step asks of a window there and then.
+Friend NotInheritable Class SentMessageWatch
+    Implements IDisposable
+
+    Private ReadOnly _callback As HookProc
+    Private ReadOnly _hook As IntPtr
+    Private ReadOnly _counts As New Dictionary(Of (Window As IntPtr, Message As Integer), Integer)()
+
+    Private Delegate Function HookProc(code As Integer, wParam As IntPtr, lParam As IntPtr) As IntPtr
+
+    Private Const WH_CALLWNDPROC As Integer = 4
+
+    <StructLayout(LayoutKind.Sequential)>
+    Private Structure CWPSTRUCT
+        Public lParam As IntPtr
+        Public wParam As IntPtr
+        Public message As Integer
+        Public hwnd As IntPtr
+    End Structure
+
+
+    Public Sub New()
+        _callback = AddressOf Hook
+        _hook = SetWindowsHookEx(WH_CALLWNDPROC, _callback, IntPtr.Zero, GetCurrentThreadId())
+    End Sub
+
+
+    ' How many times a message was sent to a control's window.
+    Public Function Count(control As Control, message As Integer) As Integer
+        Dim found As Integer = 0
+        If control.IsHandleCreated Then _counts.TryGetValue((control.Handle, message), found)
+        Return found
+    End Function
+
+
+    Private Function Hook(code As Integer, wParam As IntPtr, lParam As IntPtr) As IntPtr
+        If code >= 0 Then
+            Dim sent As CWPSTRUCT = Marshal.PtrToStructure(Of CWPSTRUCT)(lParam)
+            Dim key As (IntPtr, Integer) = (sent.hwnd, sent.message)
+            Dim found As Integer = 0
+            _counts.TryGetValue(key, found)
+            _counts(key) = found + 1
+        End If
+        Return CallNextHookEx(_hook, code, wParam, lParam)
+    End Function
+
+
+    Public Sub Dispose() Implements IDisposable.Dispose
+        UnhookWindowsHookEx(_hook)
+    End Sub
+
+
+    <DllImport("user32.dll")>
+    Private Shared Function SetWindowsHookEx(idHook As Integer, lpfn As HookProc, hMod As IntPtr, threadId As Integer) As IntPtr
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function UnhookWindowsHookEx(hook As IntPtr) As Boolean
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function CallNextHookEx(hook As IntPtr, code As Integer, wParam As IntPtr, lParam As IntPtr) As IntPtr
     End Function
 
     <DllImport("kernel32.dll")>

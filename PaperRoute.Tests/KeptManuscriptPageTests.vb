@@ -674,6 +674,65 @@ Public Class KeptManuscriptPageTests
     End Sub
 
 
+    ' An open shows nothing again that was showing, while the page is
+    ' still hidden (#133): WinForms treats Visible = True on a control
+    ' already shown, under a hidden parent, as a change, showing its window
+    ' again and raising VisibleChanged in it and everything inside it, as
+    ' showing the Overview from its top did for the whole Overview at each
+    ' open. Once the page shows, everything in it is shown, as it should.
+    <TestMethod>
+    Public Sub AnOpenReshowsNothingOnTheHiddenPage()
+
+        Dim reshown As New List(Of String)()
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary = Library60()
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+                    Dim subjects As List(Of Manuscript) =
+                        board.Library.Where(Function(item) item.Location = ManuscriptLocation.Pipeline AndAlso item.Submissions.Count > 0 AndAlso item.JournalShortlist.Count > 0 AndAlso item.Tags.Count > 0 AndAlso item.TargetJournalId.HasValue).Take(2).ToList()
+                    Assert.AreEqual(2, subjects.Count)
+
+                    board.Open(subjects(0))
+                    Application.DoEvents()
+                    board.NavigateTo(Form1.WorkspacePage.Board)
+                    board.WaitForIdleWork()
+
+                    ' What was set shown before the open: a part the page left
+                    ' hid as it let go of its record shows again, as it should.
+                    Dim page As Control = board.KeptPage
+                    Dim watched As List(Of Control) = ViewCatalog.Descendants(page).ToList()
+                    Dim shownBefore As New HashSet(Of Control)(watched.Where(Function(control) ManuscriptEditorReuseTests.OwnVisible(control)))
+                    Dim changed As EventHandler =
+                        Sub(sender, e)
+                            Dim control As Control = DirectCast(sender, Control)
+                            If Not page.Visible AndAlso shownBefore.Contains(control) AndAlso ManuscriptEditorReuseTests.OwnVisible(control) Then
+                                reshown.Add(LayoutProbe.PathOf(control, page))
+                            End If
+                        End Sub
+                    For Each control As Control In watched
+                        AddHandler control.VisibleChanged, changed
+                    Next
+                    board.Open(subjects(1))
+                    For Each control As Control In watched
+                        RemoveHandler control.VisibleChanged, changed
+                    Next
+                    Application.DoEvents()
+
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(5))
+
+        Assert.AreEqual(0, reshown.Count, "VisibleChanged while the page was hidden, in " & reshown.Count & " controls:" & Environment.NewLine & String.Join(Environment.NewLine, reshown.Take(20)))
+
+    End Sub
+
+
     ' The page's containers that outlive a record: every control with
     ' controls in it, but for the parts built for one record (its version
     ' history and its submission's details) and what is in them.

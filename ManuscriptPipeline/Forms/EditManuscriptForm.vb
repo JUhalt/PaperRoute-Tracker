@@ -623,7 +623,7 @@ Namespace Forms
             ' Hidden, the card keeps no other journal's notes: the page shows
             ' one record after another (#133).
             If journal Is Nothing OrElse (notes.Length = 0 AndAlso checklist = 0) Then
-                journalNotesGroup.Visible = False
+                InPlace.SetShown(journalNotesGroup, False)
                 journalNotesGroup.Text = "Target journal notes"
                 lblJournalNotes.Text = String.Empty
                 Return
@@ -644,7 +644,7 @@ Namespace Forms
 
             journalNotesGroup.Text = "Notes for " & journal.Name.Replace("&", "&&")
             lblJournalNotes.Text = String.Join(Environment.NewLine & Environment.NewLine, lines)
-            journalNotesGroup.Visible = True
+            InPlace.SetShown(journalNotesGroup, True)
 
         End Sub
 
@@ -719,9 +719,11 @@ Namespace Forms
                 EnsureDeferredParts()
             End If
 
+            ' Shown only when it is not: on the hidden page, showing the
+            ' Overview from the top at each open showed it again (#133).
             For Each tab As ShelfTabButton In _sectionTabs
                 Dim panel As Control = DirectCast(tab.Tag, Control)
-                panel.Visible = panel Is section
+                InPlace.SetShown(panel, panel Is section)
                 If panel Is section AndAlso Not tab.Checked Then
                     tab.Checked = True
                 End If
@@ -1885,11 +1887,11 @@ Namespace Forms
             End If
 
             shortlistRows.SetEntries(list.Select(Function(candidate, index) ShortlistEntryFor(candidate, index, list.Count)).ToList())
-            shortlistRows.Visible = list.Count > 0
-            lblShortlistEmpty.Visible = list.Count = 0
+            InPlace.SetShown(shortlistRows, list.Count > 0)
+            InPlace.SetShown(lblShortlistEmpty, list.Count = 0)
 
             Dim offer As RerouteOffer = JournalShortlistService.RerouteOfferFor(_workingManuscript, DateTime.Today)
-            shortlistOffer.Visible = offer IsNot Nothing
+            InPlace.SetShown(shortlistOffer, offer IsNot Nothing)
             If offer IsNot Nothing Then
                 Dim outcome As String
                 Select Case offer.Outcome
@@ -1932,7 +1934,7 @@ Namespace Forms
             btnFindJournals.AccessibleDescription = If(reason.Length = 0, Nothing, reason)
             lblFindJournalsOff.Text = reason
             lblFindJournalsOff.ForeColor = UiTheme.InfoColor()
-            lblFindJournalsOff.Visible = reason.Length > 0
+            InPlace.SetShown(lblFindJournalsOff, reason.Length > 0)
         End Sub
 
 
@@ -2275,9 +2277,11 @@ Namespace Forms
             cmbStage.SelectedItem =
                 _workingManuscript.CurrentStage
 
-            fileDrawerGroup.Visible =
+            InPlace.SetShown(
+                fileDrawerGroup,
                 _workingManuscript.Location =
                 ManuscriptLocation.FileDrawer
+            )
 
             If _workingManuscript.FileDrawerDate.HasValue Then
 

@@ -942,9 +942,10 @@ Public Class Form1
         FilterChipTone.Danger
     )
 
-        lblAttentionClear.Visible =
+        InPlace.SetShown(
+            lblAttentionClear,
             overdueCount + dueSoonCount + longReviewCount + missingJournalCount + recentRejectionCount = 0 AndAlso
-            activeAttentionFilter = AttentionFilter.None
+            activeAttentionFilter = AttentionFilter.None)
 
     End Sub
 
@@ -965,10 +966,13 @@ Public Class Form1
         count
 
         ' List only what needs attention. An active filter's chip stays so
-        ' it can be clicked to clear the filter.
-        chip.Visible =
+        ' it can be clicked to clear the filter. Shown only when it is not:
+        ' the Board renders hidden as a page is left, where showing a chip
+        ' already shown showed its window again (#133).
+        InPlace.SetShown(
+            chip,
             count > 0 OrElse
-            activeAttentionFilter = filter
+            activeAttentionFilter = filter)
 
         chip.Cursor =
             If(count > 0 OrElse activeAttentionFilter = filter, Cursors.Hand, Cursors.Default)
