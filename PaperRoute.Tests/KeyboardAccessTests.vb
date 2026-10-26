@@ -1471,7 +1471,11 @@ Public Class KeyboardAccessTests
     ' rows left the keyboard where it was, on the hidden Board, entered,
     ' left and validated 0 times.) A rail button or a shelf tab reached
     ' with an arrow key is entered once, the one left loses focus once and
-    ' is validated once, as on f5c6947.
+    ' is validated once, as on f5c6947. "Entered new" is a control the
+    ' action itself made, on a page built at that visit, as Deadlines and
+    ' Import & Export are at their first: the Library's filter was one
+    ' until the Library was kept and prepared while the window idled
+    ' (#133), and is now entered once, as Journals' list is.
     Private Shared ReadOnly EnteringAPageExpected As New List(Of String) From {
         "Pipeline title, Enter: page Manuscript, active ShelfTabButton 'Overview', entered 1, left 1, validated 1, origin entered 0",
         "Pipeline title, Enter, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 1, left 1, validated 1, origin entered 0, through RailCommandButton 'Collapse navigation' then LinkLabel 0 of card 0 on its shelf",
@@ -1481,7 +1485,7 @@ Public Class KeyboardAccessTests
         "Published title, Enter, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 1, left 1, validated 1, origin entered 0, through RailCommandButton 'Collapse navigation' then LinkLabel 0 of card 0 on its shelf",
         "Published title, Space: page Manuscript, active ShelfTabButton 'Overview', entered 1, left 1, validated 1, origin entered 0",
         "Published title, Space, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 1, left 1, validated 1, origin entered 0, through RailCommandButton 'Collapse navigation' then LinkLabel 0 of card 0 on its shelf",
-        "Ctrl+2 from the search box: page Library, active TextBox 'Filter the Library', entered new, left 1, validated 1, origin entered 0",
+        "Ctrl+2 from the search box: page Library, active TextBox 'Filter the Library', entered 1, left 1, validated 1, origin entered 0",
         "Ctrl+2, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 1, left 1, validated 1, origin entered 0, through RailCommandButton 'Collapse navigation' then TextBox 'Search the board (Ctrl+F)'",
         "Ctrl+3 from the search box: page Journals, active ListBox 'Journals', entered 1, left 1, validated 1, origin entered 0",
         "Ctrl+3, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 1, left 1, validated 1, origin entered 0, through RailCommandButton 'Collapse navigation' then TextBox 'Search the board (Ctrl+F)'",

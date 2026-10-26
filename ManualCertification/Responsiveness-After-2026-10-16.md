@@ -13,6 +13,7 @@ The same measurements as [the before table](Responsiveness-Before-2026-10-16.md)
 - **2026-10-17, startup, the manuscript page and the page switches (#133, second part).** The Board fills in after its first screen, one manuscript page is kept and loads one record after another, and pages are made and disposed where they stay; warm startup, the Board's fill and the switches back to the Board from Insights and the manuscript page are enforced. The tables below were not changed; the new figures, the host, the reasons and the notes on merging the two batches are in [their section below](#2026-10-17-startup-the-manuscript-page-and-the-page-switches-133-second-part).
 - **2026-10-23, the manuscript page, Journals, Insights, the Published shelf and Library to Board (#133, part C).** Switches paint nothing until they return, so their rows no longer hold the screen's half-second wait behind Library to Board's spikes: the wait moved into the paint after a switch, which the researcher still waits on and which is reported in rows of its own (see the review follow-ups at the end of that section); the manuscript page, Journals, Insights and the shelves not shown are prepared while the window idles; the shortlist is drawn in one list. Library to Board, Board to Journals, Board to Insights, the first switch to Published and the manuscript page's versions and details step are enforced; the three manuscript-page opens are still over budget on a busy host and stay reported. The figures, the host and the reasons are in [their section below](#2026-10-23-the-manuscript-page-journals-insights-the-published-shelf-and-library-to-board-133-part-c).
 - **2026-10-26, the three manuscript-page opens and Journals to Board (#133).** The page left keeps its last record's shape until the next open, is prepared in that shape, lays out nothing it leaves hidden or that nothing changed in, and leaving Journals renders less: an open lays out 15 to 21 containers where it laid out 40 to 44. The three opens and both visits' Journals to Board are enforced; Board to Library, the paint rows and the idle slice stay reported. The figures, the host and the reasons are in [their section below](#2026-10-26-the-three-manuscript-page-opens-and-journals-to-board-133).
+- **2026-10-26, the Library kept and prepared while the window idles (#133).** The Library page is built beside the Board's fill and kept; each visit begins as a new page did and puts its rows right only as far as the library changed. Board to Library is enforced. The figures, what the kept page holds, the host and the reasons are in [their section below](#2026-10-26-the-library-kept-and-prepared-while-the-window-idles-133).
 
 ## Host during the after runs
 
@@ -750,3 +751,89 @@ Q1 to Q4 passed every enforced row. B1 failed four: the Pipeline open (135), Boa
 #### Debug
 
 The brief's targeted Debug filter on this commit's code (03:08 to 03:28, no other test host and no VM): 267 tests, 265 passed, 2 skipped (the on-screen fade rows). Before it, beside the busy runs, the catalog sweeps with the guard passed (ManuscriptEditorScaling, SubmissionDetailsLayout, AccessibleName, DarkThemeLegibility, ScalingMeasurement, ViewCatalog and WindowChrome), and so did KeptManuscriptPageTests, ManuscriptEditorReuseTests and PageSwitchTests (47 tests); after it, DashboardShelfLayoutTests, FileDrawerTests, BoardFillTests and RecoveryDraftTests passed too (57 tests).
+
+## 2026-10-26: the Library kept and prepared while the window idles (#133)
+
+Branch `fix/v092-library-page`, stacked on `fix/v092-manuscript-open` at `9a011f9` (PR #248, merged to master as `8f475a2` on 2026-10-26). It takes Board to Library, the last switch row the section above left reported, the way the maintainer decided on 2026-10-26: a Library page kept and prepared while the window idles, as Journals is. "Before" is `9a011f9`: three Release runs of the budget test (A 07:16, B 07:21, C 07:23) and one of the motion test (07:25), with no other test host. "After" is this section's commit: three Release runs of the budget test (A 08:28, B 08:30, C 08:32) and one of the motion test (08:34) with no other test host, and two runs of the budget test (B1 08:37, B2 09:33) and one of the motion test (09:37) beside the Debug test run of this branch below. Runs of a draft of this commit, which differed only in how a visit made before the page is prepared finishes it (07:37 to 07:56), read Board to Library at 6 to 16 ms with no other test host and 10 and 13 beside one. The sections above are history and were not changed.
+
+### Where the time went
+
+As the section above found: about half of Board to Library was making the page's 14 windows, its 500-row grid's among them, at every visit, and the page was disposed as it was left; its data, 500 rows, took 4 to 19 ms.
+
+### What changed
+
+- **The Library is kept, and prepared while the window idles**, as Journals and Insights are (`Form1.Shell.vb`). Startup queues it after the manuscript page, Journals and Insights, beside the Board's fill: it is built with every manuscript in its grid in one idle step, put in the page area hidden and laid out at the size it shows at in another, and given its windows a slice at a time. A visit before it is ready finishes it there and then as the window idling would have, the page put in the page area hidden and given its windows before it shows, so every visit begins on the page as it will show (a grid given its window makes its first row current, and a new page's showed none). Leaving it hides it where it is.
+- **Each visit begins as a new page did** (`BeginLibraryVisit`): the Manuscripts view, the filter empty, every manuscript in the library's order with no column sorted and no sort glyph, no row current or selected, the grid at its top, and its columns at the widths they were built with (a column dragged wider takes its share again). A grid left sorted is put back in the library's order by a sort on that order, which also forgets the column it was sorted by. A grid filled again once it has its window makes its first row current, as the filter's refill always has, so the visit clears that too. Ctrl+2 still lands in the filter.
+- **It shows the library as it is now, put right only as far as the library changed** since its rows were filled. Each row's texts are worked out from its record (`LibraryRowValues`, which the filter's refill now shares, matching as before): when the manuscripts listed changed (an add, a delete, an import, a restore's records, or a filter left typed), the rows are filled again, once; where only what a row shows changed (an edit, a File Drawer move, another day in a stage), those cells are set and the short columns fitted again; when nothing changed, nothing is done. Nothing relies on `RenderManuscripts` having run, so a change no render followed shows too.
+- **The Authors & Affiliations view behaves as before.** Choosing it builds its editor, which reads the author library as it is made, in place of the grid; choosing Manuscripts builds the grid again; leaving reads back what the editor saved. A Library left on that view, or left without its grid after that view failed to open (an author library damaged or locked, once the error's Keep working is chosen), is disposed where it is, as every Library was, and prepared again.
+- **Colors, DPI and font.** A Windows contrast theme turned on or off lets a hidden Library go at once and the one showing as it is left, and the Library is prepared again in the new colors, as Journals and Insights are; one built in other colors, DPI or font is built anew at the visit.
+- **The budget tests** enforce Board to Library in `EveryActionIsMeasuredOnBothLibraries` and in `PageSwitchesWithMotionOnGrowByNoMoreThanTheFade` (and so its growth with motion on against motion off), with the existing multipliers (x1 Release, x2 Debug, a further x3 when `GITHUB_ACTIONS` is set), under the rule written beside Deadlines' and Import & Export's first visits: a failure on a busy host is run again on a quiet one before it is read as a regression. The first test checks the Library was prepared before it times it.
+
+### What the kept page holds
+
+Counted with the window open on the 500 library once startup's idle work is done (a scratch probe, not kept: `GetGuiResources` and the managed heap after full collections):
+
+| Code, build | USER objects | GDI objects | Windows in the main window | Managed heap |
+|---|---:|---:|---:|---:|
+| `9a011f9`, Debug | 2,275 | 85 | 2,235 | 67.9 MB |
+| This commit, Debug | 2,286 | 68 | 2,251 | 64.8 MB |
+| The same window, the kept Library let go | 2,270 | 67 | 2,235 | 62.9 MB |
+| This commit, Release | 2,286 | 68 | 2,251 | 64.9 MB |
+| The same window, the kept Library let go | 2,270 | 67 | 2,235 | 63.1 MB |
+
+Between processes the counts differ by a few objects and the heap by a few megabytes (`9a011f9`'s run read more GDI objects and a larger heap); within one window the kept Library is 16 USER objects, one GDI object and 1.8 MB of managed memory, most of it its 500 rows' cells and texts. Its 16 windows are 0.7% of the main window's 2,251. Two of them a page built at its visit did not make: the grid's horizontal scroll bar and its empty-list hint, both hidden, which `InPlace.MakeWindows` gives a window of its own as it does every hidden part, without going inside it.
+
+### Numbers
+
+500 library, Release, UI ms against the budget x 1 (UI equals wall for every switch row).
+
+| Action | Before: A / B / C | After: A / B / C | After, beside another test host: B1 / B2 | Budget ms | Held |
+|---|---:|---:|---:|---:|---|
+| Board to Library | 49 / 27 / 35 | 7 / 9 / 13 | 9 / 12 | 100 | enforced from 10-26 |
+| One Library filter keystroke | 1 / 1 / 0 | 1 / 0 / 1 | 1 / 2 | 50 | enforced |
+| Library filter: refill once typing pauses | 16 / 18 / 10 | 11 / 15 / 26 | 27 / 39 | 250 | enforced |
+| Library to Board | 15 / 10 / 7 | 12 / 16 / 19 | 19 / 33 | 100 | enforced |
+| Board: its paint after Library to Board | 37 / 444 / 100 | 38 / 25 / 31 | 63 / 106 | 250 | reported |
+| Warm startup to an interactive Board | 792 / 813 / 1284 | 773 / 997 / 607 | 605 / 1865 | 1500 | enforced |
+| Board: the rest of the shown shelf, in idle slices (the longest idle step, the pages' preparation included) | 80 / 82 / 52 | 79 / 72 / 97 | 95 / 126 | 250 | enforced |
+| Idle work left after the fill, its longest step | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 | 250 | enforced |
+| Board to Journals | 9 / 11 / 10 | 11 / 13 / 15 | 25 / 20 | 100 | enforced |
+| Journals to Board | 17 / 15 / 26 | 18 / 20 / 37 | 65 / 91 | 100 | enforced |
+| Board to Deadlines | 30 / 23 / 31 | 23 / 34 / 32 | 62 / 134 | 100 | enforced |
+| Board to Import & Export | 42 / 42 / 31 | 36 / 39 / 35 | 91 / 115 | 100 | enforced |
+| Board to a manuscript page, the first (on the page prepared while the window idled) | 34 / 39 / 31 | 36 / 34 / 38 | 70 / 85 | 100 | enforced |
+| Board to a manuscript page, the kept page (another manuscript) | 34 / 30 / 33 | 27 / 52 / 44 | 117 / 48 | 100 | enforced |
+| Board to a manuscript page, the kept page (a Pipeline manuscript with three shortlisted journals and tags) | 41 / 32 / 53 | 51 / 60 / 51 | 88 / 63 | 100 | reported |
+| Manuscript page to Board | 18 / 11 / 16 | 13 / 16 / 24 | 29 / 19 | 100 | enforced |
+| Save from the manuscript page | 41 / 32 / 40 | 32 / 40 / 55 | 48 / 58 | 250 | enforced |
+
+Every enforced row held in the six runs with no other test host. Beside the Debug run, Board to Library read 9 and 12 ms. Run B1 failed two enforced rows this commit does not change (another manuscript on the kept page, 117 ms, and the versions and details after its first paint, a fraction of a millisecond over 250), and run B2 four (warm startup 1,865 ms, Board to Deadlines 134, Board to Import & Export 115, the versions and details 265), as busy runs have since 2026-10-17; the runs with no other test host held them all. With motion on against motion off (`PageSwitchesWithMotionOnGrowByNoMoreThanTheFade`), Board to Library read 31 off and 32 on before, 9 and 20 after, and 10 and 30 beside the Debug run, fading each time; Library to Board 12 and 17 before, 12 and 17 after, 23 and 39 beside it. All three motion runs passed, 20 of 22 switches fading (the two opens are cuts by design).
+
+### A visit by what changed, and what the kept page costs the rest of the window
+
+A scratch probe (not kept), Release, 500 library, 08:26 to 08:28 with no other test host:
+
+- **Board to Library on the kept page, by what changed since the last visit** (seven visits each; medians and ranges): nothing, 12 ms (8 to 17); a title, so one cell set, 7 (6 to 11); a manuscript added, so the rows filled again, 16 (13 to 20); left filtered, sorted and scrolled, 13 (10 to 19); left sorted and scrolled, 13 (9 to 15). The first visit, to the prepared page, read 12, and twenty visits in a row 8 to 20.
+- **Library to Board, the page hidden as it is now against disposed as it was** (ten each, taking turns in one window): medians 14 and 16 ms.
+- **The manuscript-page opens with the kept Library in the window and with it let go** (eight each, taking turns in one window, the first of each left out): medians 24 and 23 ms, and back to the Board 12 and 10. No cost to an open shows above this host's noise; in the budget runs above, the first open and another manuscript read 27 to 52 ms after and 30 to 39 before, against 48 to 82 in the section above's runs with no other test host.
+
+### Host during these runs
+
+Windows 11 (NT 10.0.26300), 12 logical processors, window DPI 96, sampled every 3 to 4 s (CPU load, test hosts, builds, VirtualBox processes, seconds since the last input, the lock screen). No VirtualBox VM ran in any of these runs (its service did).
+
+- **Before, 07:16 to 07:26:** no other test host; the lock screen up and no input for 22 minutes or more; CPU load means 19 to 24%.
+- **After, 08:28 to 08:35:** no other test host; the desktop unlocked and in use from 08:29 (input within seconds in run A, within 25 s to 4 minutes in the others); CPU load means 20 to 29%. The probe above ran just before, at 08:26.
+- **After, beside the Debug run:** B1 at 08:37, the lock screen up, the Debug run's test host in every sample. The computer then slept from about 08:39 to 09:31, inside B1's report-only restore row, after its switch rows. B2 at 09:33 and the motion run at 09:37, the desktop in use, the Debug run's test host in 43 of 50 and 27 of 27 samples; CPU load means 30 and 39%. The sampler's reading swings while the processes it sees use a core or two, as in the sections above.
+
+### Debug
+
+The brief's targeted Debug filter, with ResponsivenessBudgetTests, ManuscriptEditorReuseTests, JournalShortlistRowsTests, BackgroundLibraryWorkTests and RecoveryDraftTests, on this commit's code (08:36 to 09:58, the computer asleep for about 52 minutes of it, and beside the busy runs above): 317 tests, 315 passed, 2 skipped (the on-screen fade rows), the budget tests among them with Board to Library enforced x 2. The same filter on the draft (07:48 to 08:13, beside the draft's busy runs) passed 314 of 317, 2 skipped, and failed `ALibraryVisitBeginsAsANewPageDid` (see below).
+
+### Tests that hold this section
+
+`PageSwitchTests`: `LeavingAPageDisposesItInPlace` (changed: the Library left on its Manuscripts view is kept, hidden where it is, and the next visit shows the same page; the Library left on its Authors & Affiliations view and the page of a manuscript the library no longer holds are disposed in place), `TheLibraryIsPreparedWhileTheWindowIdles`, `ALibraryVisitBeginsAsANewPageDid`, `TheLibraryComesBackAfterItsAuthorsViewFailedToOpen`, `TheLibraryShownAgainShowsTheLibraryAsItIsNow` (an edit saved on the manuscript page, a manuscript added through Add Manuscript, one deleted from its page opened from the Library, an import, a move to the File Drawer and back through a card's menu, a restore's records, a change no render followed, and every type cleared with no render, the short columns fitted to their widest text after each), `ALibraryVisitPutsRightOnlyWhatChanged`, `TheLibraryIsPreparedAnewAfterTheSystemColorsChange`, and `TheKeptLibraryShowsSettledAtTheSmallestWindow` (text sizes 1, 1.25 and 1.5, and the grid left scrolled sideways at the smallest window shown again from its left edge); and `KeyboardAccessTests.EnteringAPageByKeyboardKeepsFocusWhereItLandsToday`, whose Ctrl+2 line reads "entered 1" where it read "entered new": the filter is the prepared page's, entered once, as Journals' list is. On `9a011f9` the two changed pins and `TheLibraryIsPreparedWhileTheWindowIdles`, `ALibraryVisitPutsRightOnlyWhatChanged`, `TheLibraryIsPreparedAnewAfterTheSystemColorsChange` and the three rows of `TheKeptLibraryShowsSettledAtTheSmallestWindow` failed (the commit's message quotes each failure); `ALibraryVisitBeginsAsANewPageDid` and `TheLibraryShownAgainShowsTheLibraryAsItIsNow` passed there, since every visit built a new page from the records, and they hold the kept page to what that page did. The first found a defect in a draft of this commit, in the Debug run beside the draft's busy runs: a visit made before the page was prepared again, after the Authors view had let it go, showed the grid's first row current. Such a visit now finishes the preparation before the page shows (above), and the test makes one in every run. A review of the commit found a second: a Library whose Authors & Affiliations view failed to open was kept without its grid, and every later visit threw (a `NullReferenceException` in `BeginLibraryVisit`, the Board still showing). The commit after it lets a Library left without its grid go, as one left on that view; `TheLibraryComesBackAfterItsAuthorsViewFailedToOpen` failed on `a49634e` with that exception and passes after it. The same commit pins the columns fitted again after cells are set and the sideways scroll put back, which no test held.
+
+### What stays reported, and what remains
+
+- **Board to Library is enforced.** With it, every page and shelf switch the budget test times is enforced but the Pipeline manuscript's open; that open, the paint rows (the Board's paint after Library to Board read 38, 25 and 31 ms after, and 37, 444 and 100 before: the screen's wait) and the idle slice (the longest idle step 72 to 97 ms against 30, each under the UI thread's 250, which is enforced) stay reported, as the section above left them.
+- **Left to the release certification:** the Library at 125% and 150% display scaling on a real display (the test host is DPI-unaware, so the text sizes 1.25 and 1.5 stand in, in `TheKeptLibraryShowsSettledAtTheSmallestWindow` and the catalog's scaling sweeps), and the Narrator pass on the certification VM (where Ctrl+2 puts the keyboard is pinned in-process).

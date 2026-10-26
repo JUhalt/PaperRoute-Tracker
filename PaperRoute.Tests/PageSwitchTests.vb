@@ -211,9 +211,15 @@ Public Class PageSwitchTests
     End Sub
 
 
-    ' Leaving the Library disposes the page where it is: its windows are
-    ' destroyed while it is still in the page area, and the page area then
-    ' holds the Board alone, with the pages kept (#133) hidden beside it.
+    ' Leaving a page built for its visit disposes it where it is: its
+    ' windows are destroyed while it is still in the page area, and the
+    ' page area then holds the Board alone, with the pages kept (#133)
+    ' hidden beside it. Such pages are now the Library left on its Authors
+    ' & Affiliations view, whose editor read the author library as it was
+    ' made, and the page for a manuscript the library no longer holds. The
+    ' Library left on its Manuscripts view is kept, hidden where it is, and
+    ' the next visit shows that same page (#133); until it was kept, every
+    ' Library left was disposed in place as these are.
     <TestMethod>
     Public Sub LeavingAPageDisposesItInPlace()
 
@@ -229,26 +235,54 @@ Public Class PageSwitchTests
 
                     board.NavigateTo(Form1.WorkspacePage.Library)
                     Application.DoEvents()
-                    Dim view As Control = board.PageView
-                    Dim parentWhenDestroyed As Control = Nothing
-                    Dim destroyed As Boolean = False
-                    AddHandler view.HandleDestroyed,
-                        Sub(sender, e)
-                            destroyed = True
-                            parentWhenDestroyed = view.Parent
-                        End Sub
+                    Dim kept As Control = board.PageView
+                    Dim keptDestroyed As Boolean = False
+                    AddHandler kept.HandleDestroyed, Sub(sender, e) keptDestroyed = True
 
                     board.NavigateTo(Form1.WorkspacePage.Board)
                     Application.DoEvents()
 
-                    Assert.IsTrue(destroyed AndAlso view.IsDisposed, "The Library is disposed.")
-                    Assert.AreSame(host, parentWhenDestroyed, "The Library's windows are destroyed where they are.")
-                    Dim kept As Control() = {board.KeptPage, board.JournalsPage, board.InsightsPage}
-                    CollectionAssert.AreEqual(
-                        {board.BoardPage},
-                        host.Controls.Cast(Of Control)().Where(Function(control) Not kept.Contains(control)).ToArray(),
-                        "The page area holds the Board alone after leaving the Library.")
-                    Assert.IsFalse(host.Controls.Cast(Of Control)().Any(Function(control) control IsNot board.BoardPage AndAlso control.Visible), "The kept pages are hidden.")
+                    Assert.IsFalse(keptDestroyed OrElse kept.IsDisposed, "The Library left on its Manuscripts view is kept.")
+                    Assert.AreSame(host, kept.Parent, "The Library stays in the page area.")
+                    Assert.IsFalse(kept.Visible, "The Library is hidden.")
+
+                    board.NavigateTo(Form1.WorkspacePage.Library)
+                    Application.DoEvents()
+                    Assert.AreSame(kept, board.PageView, "The next visit shows the same Library page.")
+
+                    Dim visits As (Name As String, Open As Action)() = {
+                        ("The Library left on its Authors & Affiliations view",
+                         Sub() ViewCatalog.Descendants(board.PageView).OfType(Of RadioButton)().Single(Function(tab) tab.Text = "Authors & Affiliations").Checked = True),
+                        ("The page of a manuscript the library no longer holds",
+                         Sub() board.Open(New Models.Manuscript With {.Title = "Not in the library"}))
+                    }
+
+                    For Each visit In visits
+
+                        visit.Open()
+                        Application.DoEvents()
+                        Dim view As Control = board.PageView
+                        Dim parentWhenDestroyed As Control = Nothing
+                        Dim destroyed As Boolean = False
+                        AddHandler view.HandleDestroyed,
+                            Sub(sender, e)
+                                destroyed = True
+                                parentWhenDestroyed = view.Parent
+                            End Sub
+
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        Application.DoEvents()
+
+                        Assert.IsTrue(destroyed AndAlso view.IsDisposed, visit.Name & " is disposed.")
+                        Assert.AreSame(host, parentWhenDestroyed, visit.Name & ": its windows are destroyed where they are.")
+                        Dim keptPages As Control() = {board.KeptPage, board.JournalsPage, board.InsightsPage, board.LibraryPage}
+                        CollectionAssert.AreEqual(
+                            {board.BoardPage},
+                            host.Controls.Cast(Of Control)().Where(Function(control) Not keptPages.Contains(control)).ToArray(),
+                            visit.Name & ": the page area holds the Board alone, beside the kept pages.")
+                        Assert.IsFalse(host.Controls.Cast(Of Control)().Any(Function(control) control IsNot board.BoardPage AndAlso control.Visible), "The kept pages are hidden.")
+
+                    Next
 
                     board.Close()
                 End Using
@@ -894,6 +928,604 @@ Public Class PageSwitchTests
     End Sub
 
 
+    ' The Library is prepared while the window idles after startup, as
+    ' Journals and Insights are (#133): built with every manuscript in its
+    ' grid, put in the page area hidden, laid out at the size it shows at,
+    ' and its windows made there a slice at a time, none on WinForms'
+    ' parking window. Tab never reaches it while it waits, and the first
+    ' visit shows that page. Before, every visit built it: 14 windows, its
+    ' grid's among them, made as the page appeared.
+    <TestMethod>
+    Public Sub TheLibraryIsPreparedWhileTheWindowIdles()
+
+        Dim report As New List(Of String)()
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary =
+                    LargeLibraryFixture.Create(Path.Combine(_root, "library"), 60)
+
+                Using watch As New WindowCreationWatch(),
+                      board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+
+                    Dim prepared As Control = LibraryPageIn(board)
+                    Assert.IsNotNull(prepared, "The Library was prepared while the window idled.")
+                    Assert.IsFalse(prepared.Visible, "The prepared Library waits hidden.")
+                    Assert.AreEqual(board.ContentHost.DisplayRectangle.Size, prepared.Size, "The prepared Library is laid out at the size it shows at.")
+                    Assert.IsTrue(prepared.IsHandleCreated, "The prepared Library has its window.")
+                    Dim grid As DataGridView = ViewCatalog.Descendants(prepared).OfType(Of DataGridView)().Single()
+                    Assert.IsTrue(grid.IsHandleCreated, "Its grid has its window.")
+                    CollectionAssert.AreEqual(ExpectedRows(board.Library), RowTexts(grid), "Its grid lists every manuscript.")
+                    Console.WriteLine("The prepared Library holds " & {prepared}.Concat(ViewCatalog.Descendants(prepared)).Where(Function(control) control.IsHandleCreated).Count().ToString() & " windows while it waits hidden.")
+
+                    ' Tab never reaches the prepared page while it waits.
+                    Dim current As Control = board.ActiveControl
+                    For steps As Integer = 1 To 200
+                        board.SelectNextControl(current, True, True, True, True)
+                        current = DeepestActiveControl(board)
+                        Assert.IsFalse(current IsNot Nothing AndAlso prepared.Contains(current),
+                                       "Tab reached " & If(current?.GetType().Name, "nothing") & " in the prepared Library.")
+                    Next
+
+                    board.NavigateTo(Form1.WorkspacePage.Library)
+                    Application.DoEvents()
+                    Assert.AreSame(prepared, board.PageView, "The first visit to the Library shows the prepared page.")
+                    Assert.IsTrue(prepared.Visible)
+                    board.NavigateTo(Form1.WorkspacePage.Board)
+                    Application.DoEvents()
+
+                    report.AddRange(watch.Parked())
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(3))
+
+        Assert.AreEqual(0, report.Count, "Windows made on the parking window:" & Environment.NewLine & String.Join(Environment.NewLine, report))
+
+    End Sub
+
+
+    ' Each visit to the Library begins as a new page did (#133), though the
+    ' page is kept: on its Manuscripts view, the filter empty, every
+    ' manuscript in the library's order with no column sorted, the grid at
+    ' its top with no row current or selected (a new page's grid makes its
+    ' first row current only as it takes the keyboard), its columns as wide
+    ' as they were built, and the keyboard, entering by Ctrl+2, in the
+    ' filter. The first visit, which shows the page as it was built, is
+    ' the measure. Left filtered and sorted with a row current, then
+    ' scrolled with a column made wider and the keyboard in the grid, then
+    ' twice on its Authors & Affiliations view (the visit after it shown
+    ' on a page built for it, then on one prepared again), the next visit
+    ' begins as the first did. A guard: before the Library was kept, every
+    ' visit built a new page, and this held there too.
+    <TestMethod>
+    Public Sub ALibraryVisitBeginsAsANewPageDid()
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary =
+                    LargeLibraryFixture.Create(Path.Combine(_root, "library"), 60)
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+                    Dim search As TextBox = board.Part(Of TextBox)("txtBoardSearch")
+
+                    Dim visit As Func(Of List(Of String)) =
+                        Function()
+                            board.ActiveControl = search
+                            board.PressCommandKey(Keys.Control Or Keys.D2)
+                            Application.DoEvents()
+                            board.WaitForIdleWork()
+                            Return DescribeLibraryVisit(board)
+                        End Function
+
+                    Dim fresh As List(Of String) = visit()
+                    CollectionAssert.AreEqual(
+                        New List(Of String) From {
+                            "view: Manuscripts (60)",
+                            "filter: ''",
+                            "sorted: none None, glyphs: ",
+                            "current: none, selected rows: 0",
+                            "top row: 0, offset: 0",
+                            "keyboard: TextBox 'Filter the Library'"
+                        },
+                        fresh.Where(Function(line) Not line.StartsWith("columns:", StringComparison.Ordinal)).ToList(),
+                        "The first visit shows the page as it was built:" & Environment.NewLine & String.Join(Environment.NewLine, fresh))
+                    Dim grid As DataGridView = ViewCatalog.Descendants(board.PageView).OfType(Of DataGridView)().Single()
+                    CollectionAssert.AreEqual(ExpectedRows(board.Library), RowTexts(grid), "The first visit lists every manuscript in the library's order.")
+
+                    ' Filtered and sorted, a row current.
+                    board.TypeInLibraryFilter("Synthetic 01")
+                    board.PauseTyping()
+                    grid.Sort(grid.Columns("Days"), System.ComponentModel.ListSortDirection.Descending)
+                    grid.CurrentCell = grid.Rows(grid.Rows.Count \ 2).Cells(1)
+                    Assert.IsTrue(grid.Rows.Count < board.Library.Count AndAlso grid.SortedColumn IsNot Nothing AndAlso grid.SelectedRows.Count = 1)
+                    board.NavigateTo(Form1.WorkspacePage.Board)
+                    Application.DoEvents()
+                    Dim again As List(Of String) = visit()
+                    CollectionAssert.AreEqual(fresh, again, "Left filtered and sorted with a row current:" & Environment.NewLine & String.Join(Environment.NewLine, again))
+                    grid = ViewCatalog.Descendants(board.PageView).OfType(Of DataGridView)().Single()
+                    CollectionAssert.AreEqual(ExpectedRows(board.Library), RowTexts(grid), "Left filtered and sorted: every manuscript, in the library's order.")
+
+                    ' Scrolled, a column made wider, the keyboard in the grid.
+                    grid.Columns("Journal").Width += 80
+                    grid.FirstDisplayedScrollingRowIndex = grid.Rows.Count - 1
+                    board.ActiveControl = grid
+                    grid.CurrentCell = grid.Rows(grid.Rows.Count - 1).Cells(0)
+                    Application.DoEvents()
+                    Assert.IsTrue(grid.FirstDisplayedScrollingRowIndex > 0 AndAlso DeepestActiveControl(board) Is grid)
+                    Dim widths As Func(Of List(Of String), String) = Function(lines) lines.Single(Function(line) line.StartsWith("columns:", StringComparison.Ordinal))
+                    Assert.AreNotEqual(widths(fresh), widths(DescribeLibraryVisit(board)), "The Journal column was made wider.")
+                    board.NavigateTo(Form1.WorkspacePage.Board)
+                    Application.DoEvents()
+                    again = visit()
+                    CollectionAssert.AreEqual(fresh, again, "Left scrolled with a column made wider and the keyboard in the grid:" & Environment.NewLine & String.Join(Environment.NewLine, again))
+
+                    ' On its Authors & Affiliations view, which lets the page go:
+                    ' the next visit, made before the window processes a message,
+                    ' shows a page built for it, and the one after that, made once
+                    ' the window has idled, a page prepared again.
+                    For Each prepared As Boolean In {False, True}
+                        ViewCatalog.Descendants(board.PageView).OfType(Of RadioButton)().Single(Function(tab) tab.Text = "Authors & Affiliations").Checked = True
+                        Application.DoEvents()
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        If prepared Then board.WaitForIdleWork()
+                        again = visit()
+                        CollectionAssert.AreEqual(fresh, again, "Left on its Authors & Affiliations view, then shown " & If(prepared, "prepared again", "built for the visit") & ":" & Environment.NewLine & String.Join(Environment.NewLine, again))
+                    Next
+
+                    board.NavigateTo(Form1.WorkspacePage.Board)
+                    Application.DoEvents()
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(3))
+
+    End Sub
+
+
+    ' A Library whose Authors & Affiliations view failed to open (#133):
+    ' that view's editor reads the author library as it is made, which
+    ' throws for one damaged or locked, and once the error's Keep working
+    ' is chosen the page is left with neither its grid nor the editor.
+    ' Left so, it is let go as a Library left on that view is, and each
+    ' visit after begins as a new page did, listing every manuscript: the
+    ' next, on a page built for it or one prepared again once the window
+    ' idled, and the one after, on the page kept since. Until the page
+    ' left without its grid was let go it was kept, and every later visit
+    ' threw (a NullReferenceException in BeginLibraryVisit, the Board still
+    ' showing) until the colors changed or PaperRoute started again.
+    <TestMethod>
+    Public Sub TheLibraryComesBackAfterItsAuthorsViewFailedToOpen()
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary =
+                    LargeLibraryFixture.Create(Path.Combine(_root, "library"), 20)
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+                    Dim search As TextBox = board.Part(Of TextBox)("txtBoardSearch")
+
+                    Dim visit As Func(Of List(Of String)) =
+                        Function()
+                            board.ActiveControl = search
+                            board.PressCommandKey(Keys.Control Or Keys.D2)
+                            Application.DoEvents()
+                            board.WaitForIdleWork()
+                            Return DescribeLibraryVisit(board)
+                        End Function
+
+                    Dim fresh As List(Of String) = visit()
+                    Assert.AreEqual("view: Manuscripts (20)", fresh(0), "The first visit shows the Manuscripts view.")
+
+                    Dim visitAgain As Action(Of String) =
+                        Sub(shown)
+                            Dim again As List(Of String) = visit()
+                            Dim context As String = "After the Authors & Affiliations view failed to open, the Library shown on " & shown
+                            Assert.AreEqual(Form1.WorkspacePage.Library.ToString(), board.PageName, context & ": the window is on the Library.")
+                            Assert.IsFalse(board.BoardPage.Visible, context & ": the Board is hidden.")
+                            CollectionAssert.AreEqual(fresh, again, context & ":" & Environment.NewLine & String.Join(Environment.NewLine, again))
+                            CollectionAssert.AreEqual(ExpectedRows(board.Library), RowTexts(ViewCatalog.Descendants(board.PageView).OfType(Of DataGridView)().Single()), context & ": every manuscript, in the library's order.")
+                        End Sub
+
+                    For Each prepared As Boolean In {False, True}
+                        Dim authors As RadioButton = ViewCatalog.Descendants(board.PageView).OfType(Of RadioButton)().Single(Function(tab) tab.Text = "Authors & Affiliations")
+                        board.AuthorEditorFails = True
+                        Assert.ThrowsExactly(Of InvalidDataException)(Sub() authors.Checked = True)
+                        board.AuthorEditorFails = False
+                        Application.DoEvents()
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        If prepared Then board.WaitForIdleWork()
+                        visitAgain(If(prepared, "a page prepared again", "a page built for the visit"))
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        Application.DoEvents()
+                        visitAgain("the page kept since")
+                    Next
+
+                    board.NavigateTo(Form1.WorkspacePage.Board)
+                    Application.DoEvents()
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(3))
+
+    End Sub
+
+
+    ' Each visit to the Library shows the library as it is now (#133),
+    ' though the page is kept: what a page built for the visit would list,
+    ' in the library's order, each row the library's own record, its short
+    ' columns as wide as their widest text, after an edit saved on the
+    ' manuscript page, a manuscript added, one deleted from its page opened
+    ' from the Library (back on the Library), an import, a move to the File
+    ' Drawer and one back, a restore's records (equal, but not the same
+    ' objects), a change no render followed, as the Journals and Insights
+    ' tests make, and every type cleared with no render either, which
+    ' leaves the Type column as narrow as a new page's only if the columns
+    ' are fitted again once cells are set (without that it kept its width).
+    ' A guard: before the Library was kept every visit built a new page
+    ' from the records, and this held there too.
+    <TestMethod>
+    Public Sub TheLibraryShownAgainShowsTheLibraryAsItIsNow()
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary =
+                    LargeLibraryFixture.Create(Path.Combine(_root, "library"), 60)
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+
+                    Dim visitAfter As Action(Of String, Action) =
+                        Sub(change, act)
+                            act()
+                            Application.DoEvents()
+                            board.WaitForIdleWork()
+                            If board.PageName <> Form1.WorkspacePage.Library.ToString() Then
+                                board.NavigateTo(Form1.WorkspacePage.Library)
+                                Application.DoEvents()
+                            End If
+                            Dim grid As DataGridView = ViewCatalog.Descendants(board.PageView).OfType(Of DataGridView)().Single()
+                            CollectionAssert.AreEqual(ExpectedRows(board.Library), RowTexts(grid), "After " & change & ", the Library lists the library as it is now.")
+                            Assert.IsTrue(Enumerable.Range(0, grid.Rows.Count).All(Function(index) grid.Rows(index).Tag Is board.Library(index)),
+                                          "After " & change & ", each row is the library's own record.")
+                            AssertColumnsFitAllCells(grid, "after " & change)
+                            board.NavigateTo(Form1.WorkspacePage.Board)
+                            Application.DoEvents()
+                            board.WaitForIdleWork()
+                        End Sub
+
+                    Dim pipeline As Func(Of Integer, Models.Manuscript) =
+                        Function(index) board.Library.Where(Function(item) item.Location = Models.ManuscriptLocation.Pipeline).ElementAt(index)
+                    Dim cardOf As Func(Of Models.Manuscript, Control) =
+                        Function(manuscript) {"pipelinePanel", "publishedPanel", "fileDrawerPanel"}.
+                            SelectMany(Function(shelf) board.Shelf(shelf).Controls.OfType(Of Controls.RoundedPanel)()).
+                            Single(Function(card) card.AccessibleName = manuscript.Title)
+                    Dim menuItem As Func(Of Models.Manuscript, String, ToolStripItem) =
+                        Function(manuscript, text) cardOf(manuscript).ContextMenuStrip.Items.Cast(Of ToolStripItem)().Single(Function(item) item.Text = text)
+
+                    visitAfter("nothing changed", Sub() board.NavigateTo(Form1.WorkspacePage.Board))
+
+                    visitAfter("an edit saved on the manuscript page",
+                        Sub()
+                            Dim subject As Models.Manuscript = pipeline(2)
+                            board.Open(subject)
+                            Application.DoEvents()
+                            board.Field("Title").Text = subject.Title & " (edited)"
+                            Assert.IsTrue(board.SaveManuscriptPage(), "The page saved.")
+                            board.NavigateTo(Form1.WorkspacePage.Board)
+                        End Sub)
+
+                    visitAfter("a manuscript added",
+                        Sub()
+                            Using answer As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of Forms.AddManuscriptForm)(
+                                Sub(dialog)
+                                    DirectCast(GetType(Forms.AddManuscriptForm).GetField("txtTitle", Reflection.BindingFlags.Instance Or Reflection.BindingFlags.NonPublic).GetValue(dialog), TextBox).Text = "A study added since"
+                                    DirectCast(dialog.AcceptButton, Button).PerformClick()
+                                End Sub)
+                                board.Add()
+                            End Using
+                            Assert.AreEqual("A study added since", board.Library.Last().Title)
+                        End Sub)
+
+                    visitAfter("a manuscript deleted from its page opened from the Library",
+                        Sub()
+                            Dim deleted As Models.Manuscript = pipeline(4)
+                            board.NavigateTo(Form1.WorkspacePage.Library)
+                            Application.DoEvents()
+                            Dim grid As DataGridView = ViewCatalog.Descendants(board.PageView).OfType(Of DataGridView)().Single()
+                            grid.CurrentCell = grid.Rows.Cast(Of DataGridViewRow)().Single(Function(row) row.Tag Is deleted).Cells(0)
+                            GetType(Control).GetMethod("OnKeyDown", Reflection.BindingFlags.Instance Or Reflection.BindingFlags.NonPublic).
+                                Invoke(grid, New Object() {New KeyEventArgs(Keys.Enter)})
+                            Application.DoEvents()
+                            Assert.AreEqual(deleted.Id, board.OpenManuscriptId, "Enter opens the row's manuscript.")
+                            board.ConfirmDelete()
+                            Application.DoEvents()
+                            Assert.IsFalse(board.Library.Contains(deleted), "The manuscript is deleted.")
+                            Assert.AreEqual(Form1.WorkspacePage.Library.ToString(), board.PageName, "The delete goes back to the Library.")
+                        End Sub)
+
+                    visitAfter("an import",
+                        Sub()
+                            board.Library.Add(New Models.Manuscript With {.Title = "An imported study", .CurrentStage = Models.PaperStage.Published, .Location = Models.ManuscriptLocation.Published, .TargetJournal = "Imported Journal"})
+                            board.Library.Add(New Models.Manuscript With {.Title = "Another imported study", .Tags = New List(Of String) From {"imported"}})
+                            Assert.IsTrue(board.SaveNow(), "The import saved.")
+                            board.Render()
+                        End Sub)
+
+                    Dim filed As Models.Manuscript = pipeline(6)
+                    visitAfter("a move to the File Drawer",
+                        Sub()
+                            Using answer As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of Forms.MoveToFileDrawerForm)(
+                                Sub(dialog) DirectCast(dialog.AcceptButton, Button).PerformClick())
+                                menuItem(filed, "Move to File Drawer...").PerformClick()
+                            End Using
+                            Assert.AreEqual(Models.ManuscriptLocation.FileDrawer, filed.Location)
+                        End Sub)
+
+                    visitAfter("a move back from the File Drawer",
+                        Sub()
+                            board.ShelfTab("tabFileDrawer").Checked = True
+                            Application.DoEvents()
+                            menuItem(filed, "Restore to Pipeline").PerformClick()
+                            board.ShelfTab("tabPipeline").Checked = True
+                            Assert.AreEqual(Models.ManuscriptLocation.Pipeline, filed.Location)
+                        End Sub)
+
+                    visitAfter("a restore's records",
+                        Sub()
+                            For index As Integer = 0 To board.Library.Count - 1
+                                board.Library(index) = ManuscriptCloneService.CloneManuscript(board.Library(index))
+                            Next
+                            board.Render()
+                        End Sub)
+
+                    visitAfter("a change no render followed",
+                        Sub()
+                            Dim moved As Models.Manuscript = pipeline(1)
+                            moved.Location = Models.ManuscriptLocation.Published
+                            moved.CurrentStage = Models.PaperStage.Published
+                            moved.Tags = New List(Of String) From {"changed", "unrendered"}
+                        End Sub)
+
+                    visitAfter("every type cleared",
+                        Sub() board.Library.ForEach(Sub(item) item.WorkType = Models.WorkType.Unspecified))
+
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(5))
+
+    End Sub
+
+
+    ' A visit to the kept Library puts its rows right only as far as the
+    ' library changed since they were filled (#133): with nothing changed
+    ' it sets no cell and adds or removes no row; after a title changed it
+    ' sets that one cell, keeping every row; after a manuscript is added
+    ' it fills the rows again, once. Before the Library was kept every
+    ' visit built a new grid with new rows, so this failed there.
+    <TestMethod>
+    Public Sub ALibraryVisitPutsRightOnlyWhatChanged()
+
+        Dim report As New List(Of String)()
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary =
+                    LargeLibraryFixture.Create(Path.Combine(_root, "library"), 60)
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+
+                    board.NavigateTo(Form1.WorkspacePage.Library)
+                    Application.DoEvents()
+                    Dim grid As DataGridView = ViewCatalog.Descendants(board.PageView).OfType(Of DataGridView)().Single()
+                    board.NavigateTo(Form1.WorkspacePage.Board)
+                    Application.DoEvents()
+
+                    Dim watchVisit As Func(Of String, String) =
+                        Function(change)
+                            Dim before As List(Of DataGridViewRow) = grid.Rows.Cast(Of DataGridViewRow)().ToList()
+                            Dim cells As New List(Of String)()
+                            Dim filled As Integer = 0
+                            Dim removed As Integer = 0
+                            Dim cellSet As DataGridViewCellEventHandler = Sub(sender, e) cells.Add(grid.Columns(e.ColumnIndex).Name & " of row " & e.RowIndex.ToString())
+                            Dim added As DataGridViewRowsAddedEventHandler = Sub(sender, e) filled += 1
+                            Dim gone As DataGridViewRowsRemovedEventHandler = Sub(sender, e) removed += 1
+                            AddHandler grid.CellValueChanged, cellSet
+                            AddHandler grid.RowsAdded, added
+                            AddHandler grid.RowsRemoved, gone
+                            Try
+                                board.NavigateTo(Form1.WorkspacePage.Library)
+                                Application.DoEvents()
+                            Finally
+                                RemoveHandler grid.CellValueChanged, cellSet
+                                RemoveHandler grid.RowsAdded, added
+                                RemoveHandler grid.RowsRemoved, gone
+                            End Try
+                            Dim shown As DataGridView = ViewCatalog.Descendants(board.PageView).OfType(Of DataGridView)().Single()
+                            Dim kept As Integer = shown.Rows.Cast(Of DataGridViewRow)().Where(Function(row) before.Contains(row)).Count()
+                            CollectionAssert.AreEqual(ExpectedRows(board.Library), RowTexts(shown), "After " & change & ", the Library lists the library as it is now.")
+                            Dim seen As String =
+                                change & ": " & If(shown Is grid, "the same grid", "another grid") & ", " & kept.ToString() & " of " & shown.Rows.Count.ToString() & " rows kept, " &
+                                "cells set [" & String.Join(", ", cells) & "], rows added " & filled.ToString() & " times, removed " & removed.ToString() & " times"
+                            board.NavigateTo(Form1.WorkspacePage.Board)
+                            Application.DoEvents()
+                            Return seen
+                        End Function
+
+                    report.Add(watchVisit("nothing changed"))
+
+                    Dim renamed As Models.Manuscript = board.Library(7)
+                    renamed.Title &= " (renamed)"
+                    board.Render()
+                    report.Add(watchVisit("a title changed"))
+
+                    board.Library.Add(New Models.Manuscript With {.Title = "A study added since"})
+                    board.Render()
+                    report.Add(watchVisit("a manuscript added"))
+
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(3))
+
+        CollectionAssert.AreEqual(
+            New List(Of String) From {
+                "nothing changed: the same grid, 60 of 60 rows kept, cells set [], rows added 0 times, removed 0 times",
+                "a title changed: the same grid, 60 of 60 rows kept, cells set [Title of row 7], rows added 0 times, removed 0 times",
+                "a manuscript added: the same grid, 0 of 61 rows kept, cells set [], rows added 1 times, removed 1 times"
+            },
+            report,
+            Environment.NewLine & String.Join(Environment.NewLine, report))
+
+    End Sub
+
+
+    ' A Windows contrast theme turned on while PaperRoute runs, through the
+    ' HighContrastOverride seam (#133): the Library showing as it changes
+    ' stays while it shows and is let go as it is left; one prepared and
+    ' hidden is let go at once. Each time it is prepared again in the new
+    ' colors once the window idles, and that page is the one the next
+    ' visit shows, as for Journals and Insights.
+    <TestMethod>
+    Public Sub TheLibraryIsPreparedAnewAfterTheSystemColorsChange()
+
+        StaRunner.Run(
+            Sub()
+                Try
+                    UiTheme.HighContrastOverride = False
+                    Dim library As LargeLibraryFixture.SyntheticLibrary =
+                        LargeLibraryFixture.Create(Path.Combine(_root, "library"), 60)
+
+                    Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                        board.Start()
+                        board.WaitForIdleWork()
+                        Dim first As Control = LibraryPageIn(board)
+                        Assert.IsNotNull(first, "The Library was prepared while the window idled.")
+                        Assert.AreNotEqual(Drawing.SystemColors.Window.ToArgb(), first.BackColor.ToArgb(), "The first Library is on the board color.")
+
+                        ' Shown as the colors change.
+                        board.NavigateTo(Form1.WorkspacePage.Library)
+                        Application.DoEvents()
+                        Assert.AreSame(first, board.PageView)
+                        UiTheme.HighContrastOverride = True
+                        board.ChangeSystemColors()
+                        Assert.IsFalse(first.IsDisposed, "The Library showing stays while it shows.")
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        Application.DoEvents()
+                        Assert.IsTrue(first.IsDisposed, "The Library that was showing is let go as it is left.")
+
+                        board.WaitForIdleWork()
+                        Dim second As Control = board.LibraryPage
+                        Assert.IsNotNull(second, "The Library is prepared again.")
+                        Assert.IsFalse(second.IsDisposed OrElse second.Visible)
+                        Assert.AreEqual(Drawing.SystemColors.Window.ToArgb(), second.BackColor.ToArgb(), "The Library is prepared on the window color.")
+
+                        ' Hidden as the colors change back.
+                        UiTheme.HighContrastOverride = False
+                        board.ChangeSystemColors()
+                        Assert.IsTrue(second.IsDisposed, "The hidden prepared Library is let go at once.")
+                        board.WaitForIdleWork()
+                        Dim third As Control = board.LibraryPage
+                        Assert.IsNotNull(third, "The Library is prepared again.")
+                        Assert.AreNotEqual(Drawing.SystemColors.Window.ToArgb(), third.BackColor.ToArgb(), "The Library is prepared on the board color again.")
+
+                        board.NavigateTo(Form1.WorkspacePage.Library)
+                        Application.DoEvents()
+                        Assert.AreSame(third, board.PageView, "The next visit shows the page prepared again.")
+                        CollectionAssert.AreEqual(ExpectedRows(board.Library), RowTexts(ViewCatalog.Descendants(third).OfType(Of DataGridView)().Single()))
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        Application.DoEvents()
+
+                        board.Close()
+                    End Using
+                Finally
+                    UiTheme.HighContrastOverride = Nothing
+                End Try
+            End Sub,
+            TimeSpan.FromMinutes(3))
+
+    End Sub
+
+
+    ' The kept Library, prepared at the window's size, is shown after the
+    ' window was made as small as it goes, at each text size (#133): it
+    ' fills the page area, nothing in it is left to lay out (laying each
+    ' container out again moves nothing), and its short columns fit their
+    ' widest text; left scrolled sideways there, as that window lets its
+    ' grid be, it shows again from its left edge, as a new page did; and
+    ' it fits again once the window is as large as it was.
+    <TestMethod>
+    <DataRow(1.0F)>
+    <DataRow(1.25F)>
+    <DataRow(1.5F)>
+    Public Sub TheKeptLibraryShowsSettledAtTheSmallestWindow(textSize As Single)
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary =
+                    LargeLibraryFixture.Create(Path.Combine(_root, "library"), 60)
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"), textSize)
+
+                    board.Start()
+                    board.WaitForIdleWork()
+                    Dim prepared As Control = LibraryPageIn(board)
+                    Assert.IsNotNull(prepared, "The Library was prepared while the window idled.")
+                    Dim size As Drawing.Size = board.Size
+
+                    For Each windowSize As Drawing.Size In {board.MinimumSize, size}
+                        board.Size = windowSize
+                        Application.DoEvents()
+                        board.NavigateTo(Form1.WorkspacePage.Library)
+                        Application.DoEvents()
+                        Dim context As String = "At text size " & textSize.ToString(Globalization.CultureInfo.InvariantCulture) & " in a window of " & board.Size.ToString()
+                        Assert.AreSame(prepared, board.PageView, context & ": the prepared Library shows.")
+                        Assert.AreEqual(board.ContentHost.DisplayRectangle, prepared.Bounds, context & ": it fills the page area.")
+                        Dim problems As List(Of String) = LayoutProbe.Unsettled(prepared)
+                        Assert.AreEqual(0, problems.Count, context & ", left with layout to do:" & Environment.NewLine & String.Join(Environment.NewLine, problems))
+                        Dim grid As DataGridView = ViewCatalog.Descendants(prepared).OfType(Of DataGridView)().Single()
+                        AssertColumnsFitAllCells(grid, context)
+
+                        ' The smallest window scrolls the grid sideways; left so,
+                        ' it shows again from its left edge.
+                        If windowSize = board.MinimumSize Then
+                            grid.HorizontalScrollingOffset = 60
+                            Assert.IsTrue(grid.HorizontalScrollingOffset > 0, context & ": the grid scrolls sideways.")
+                            board.NavigateTo(Form1.WorkspacePage.Board)
+                            Application.DoEvents()
+                            board.NavigateTo(Form1.WorkspacePage.Library)
+                            Application.DoEvents()
+                            Assert.AreEqual(0, grid.HorizontalScrollingOffset, context & ": left scrolled sideways, the grid shows again from its left edge.")
+                        End If
+
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        Application.DoEvents()
+                    Next
+
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(3))
+
+    End Sub
+
+
     ' A page switch draws nothing while it runs (#133): no window in the
     ' page area is painted, its frame drawn or its background erased before
     ' the switch returns, from the Board to each page and from each page to
@@ -1083,6 +1715,80 @@ Public Class PageSwitchTests
         Next
 
     End Sub
+
+
+    ' The Library page in the page area, shown or hidden, or Nothing: the
+    ' page whose filter is the Library's.
+    Private Shared Function LibraryPageIn(board As LibraryBoard) As Control
+        Return board.ContentHost.Controls.Cast(Of Control)().SingleOrDefault(
+            Function(page) ViewCatalog.Descendants(page).OfType(Of TextBox)().Any(Function(box) box.AccessibleName = "Filter the Library"))
+    End Function
+
+
+    ' What each Library row shows, as text: its title, stage, shelf, target
+    ' journal, route, type, tags and days in stage.
+    Private Shared Function RowTexts(grid As DataGridView) As List(Of String)
+        Return grid.Rows.Cast(Of DataGridViewRow)().
+            Select(Function(row) String.Join(" | ", row.Cells.Cast(Of DataGridViewCell)().Select(Function(cell) Convert.ToString(cell.Value, Globalization.CultureInfo.CurrentCulture)))).
+            ToList()
+    End Function
+
+
+    ' What a Library page built now lists, worked out here from the records:
+    ' every manuscript, in the library's order.
+    Private Shared Function ExpectedRows(library As List(Of Models.Manuscript)) As List(Of String)
+        Return library.Select(
+            Function(manuscript)
+                Dim entered As DateTime = manuscript.StageEnteredDate.Date
+                Dim days As String =
+                    If(manuscript.Location = Models.ManuscriptLocation.Pipeline AndAlso entered > DateTime.MinValue.Date AndAlso entered <= DateTime.Today,
+                       (DateTime.Today - entered).Days.ToString(Globalization.CultureInfo.CurrentCulture),
+                       String.Empty)
+                Dim shelf As String =
+                    If(manuscript.Location = Models.ManuscriptLocation.FileDrawer, "File Drawer",
+                       If(manuscript.Location = Models.ManuscriptLocation.Published, "Published", "Pipeline"))
+                Return String.Join(" | ", {
+                    manuscript.Title,
+                    WorkflowPresentationService.FormatStage(manuscript.CurrentStage),
+                    shelf,
+                    manuscript.TargetJournal,
+                    RouteSummaryService.Describe(manuscript).Text,
+                    If(manuscript.WorkType = Models.WorkType.Unspecified, String.Empty, WorkTypeService.DisplayName(manuscript.WorkType)),
+                    String.Join(", ", manuscript.Tags),
+                    days})
+            End Function).ToList()
+    End Function
+
+
+    ' What a visit to the Library shows of what a researcher can change on
+    ' a visit: its view, its filter, its sort, the row current and the rows
+    ' selected, where the grid is scrolled to, its columns' widths and fill
+    ' weights, and where the keyboard is.
+    Private Shared Function DescribeLibraryVisit(board As LibraryBoard) As List(Of String)
+
+        Dim page As Control = board.PageView
+        Dim grid As DataGridView = ViewCatalog.Descendants(page).OfType(Of DataGridView)().Single()
+        Dim filter As TextBox = ViewCatalog.Descendants(page).OfType(Of TextBox)().Single(Function(box) box.AccessibleName = "Filter the Library")
+        Dim views As IEnumerable(Of String) = ViewCatalog.Descendants(page).OfType(Of RadioButton)().Where(Function(tab) tab.Checked).Select(Function(tab) tab.Text)
+        Dim glyphs As IEnumerable(Of String) =
+            grid.Columns.Cast(Of DataGridViewColumn)().Where(Function(column) column.HeaderCell.SortGlyphDirection <> SortOrder.None).
+                Select(Function(column) column.Name & " " & column.HeaderCell.SortGlyphDirection.ToString())
+        Dim columns As IEnumerable(Of String) =
+            grid.Columns.Cast(Of DataGridViewColumn)().
+                Select(Function(column) column.Name & " " & column.Width.ToString() & " (" & column.FillWeight.ToString(Globalization.CultureInfo.InvariantCulture) & ")")
+        Dim keyboard As Control = DeepestActiveControl(board)
+
+        Return New List(Of String) From {
+            "view: " & String.Join(", ", views),
+            "filter: '" & filter.Text & "'",
+            "sorted: " & If(grid.SortedColumn?.Name, "none") & " " & grid.SortOrder.ToString() & ", glyphs: " & String.Join(", ", glyphs),
+            "current: " & If(grid.CurrentCell Is Nothing, "none", "row " & grid.CurrentCell.RowIndex.ToString()) & ", selected rows: " & grid.SelectedRows.Count.ToString(),
+            "top row: " & grid.FirstDisplayedScrollingRowIndex.ToString() & ", offset: " & grid.HorizontalScrollingOffset.ToString(),
+            "columns: " & String.Join(", ", columns),
+            "keyboard: " & If(keyboard Is Nothing, "nowhere", keyboard.GetType().Name & " '" & keyboard.AccessibleName & "'")
+        }
+
+    End Function
 
 End Class
 
