@@ -737,8 +737,8 @@ Public Class KeptManuscriptPageTests
     ' showing the page asks every panel and table in it to lay out again,
     ' and one that nothing else asked, such as the section tabs or the
     ' page's own actions, which no record changes, lets that request go.
-    ' The page is still left with nothing to lay out (the guard, in every
-    ' test that opens a manuscript).
+    ' The page is still left with nothing to lay out (the guard that
+    ' LibraryBoard.Open and the view catalog's opens run).
     <TestMethod>
     Public Sub AContainerNothingChangedInIsNotLaidOut()
 
@@ -871,87 +871,94 @@ Public Class KeptManuscriptPageTests
     ' Submissions, and the window made as small as it goes on the Board
     ' between leaving and the next open. Each is opened straight from the
     ' page shown, and again from the Board once the page left has let go
-    ' of its record.
+    ' of its record. In Light, Dark and a contrast theme, each at its own
+    ' text size (a larger one changes what wraps), standing in for 96, 120
+    ' and 144 DPI.
     <TestMethod>
-    Public Sub AnOpenLeavesNothingToLayOut()
+    <DataRow(SystemColorMode.Classic, False, 1.0F)>
+    <DataRow(SystemColorMode.Dark, False, 1.25F)>
+    <DataRow(SystemColorMode.Classic, True, 1.5F)>
+    Public Sub AnOpenLeavesNothingToLayOut(mode As SystemColorMode, contrastTheme As Boolean, fontScale As Single)
 
         StaRunner.Run(
             Sub()
-                Dim library As LargeLibraryFixture.SyntheticLibrary = Library60()
+                If mode = SystemColorMode.Dark AndAlso (SystemInformation.HighContrast OrElse Not OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000)) Then
+                    Assert.Inconclusive("Native WinForms dark mode requires Windows 11 or later, outside a Windows contrast theme.")
+                End If
 
-                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+                UiTheme.HighContrastOverride = contrastTheme
+                Try
+                    Dim library As LargeLibraryFixture.SyntheticLibrary = Library60()
 
-                    board.Start()
-                    board.WaitForIdleWork()
+                    Using board As New LibraryBoard(library, Path.Combine(_root, "settings"), fontScale)
 
-                    Dim records As List(Of Manuscript) = board.Library
-                    Dim published As Manuscript = records.First(Function(item) item.Location = ManuscriptLocation.Published AndAlso item.JournalShortlist.Count = 0 AndAlso item.TargetJournalId.HasValue)
-                    Dim choosing As Manuscript = records.Where(Function(item) item.Location = ManuscriptLocation.Pipeline AndAlso item.Tags.Count >= 2).OrderByDescending(Function(item) item.JournalShortlist.Count).First()
-                    Dim filed As Manuscript = records.First(Function(item) item.Location = ManuscriptLocation.FileDrawer)
-                    filed.FileDrawerReason = "Set aside until the second study is in." & Environment.NewLine & "The reviewers asked for it."
-                    Dim untargeted As Manuscript = records.First(Function(item) item IsNot published AndAlso item IsNot choosing AndAlso item IsNot filed)
-                    untargeted.TargetJournal = String.Empty
-                    untargeted.TargetJournalId = Nothing
-                    Dim titled As Manuscript = records.First(Function(item) item IsNot published AndAlso item IsNot choosing AndAlso item IsNot filed AndAlso item IsNot untargeted AndAlso item.Location = ManuscriptLocation.Published)
-                    titled.Title = String.Join(" ", Enumerable.Repeat("A title long enough to wrap onto a third line beside the page's actions,", 4))
-                    Dim revision As Manuscript = records.First(Function(item) item.Location = ManuscriptLocation.Pipeline AndAlso item.CurrentStage = PaperStage.Revision)
-                    Assert.IsTrue(choosing.JournalShortlist.Count >= 2, "A Pipeline manuscript with shortlisted journals and tags.")
+                        board.Start()
+                        board.WaitForIdleWork()
 
-                    Dim sequence As (Record As Manuscript, LeaveOn As String, Shrink As Boolean)() = {
-                        (published, "Overview", False),
-                        (choosing, "Overview", False),
-                        (filed, "Overview", False),
-                        (untargeted, "Overview", False),
-                        (choosing, "Overview", False),
-                        (titled, "Overview", False),
-                        (published, "Overview", False),
-                        (titled, "Overview", False),
-                        (revision, "Submissions", False),
-                        (choosing, "Overview", True),
-                        (filed, "Overview", False)
-                    }
+                        Dim records As List(Of Manuscript) = board.Library
+                        Dim published As Manuscript = records.First(Function(item) item.Location = ManuscriptLocation.Published AndAlso item.JournalShortlist.Count = 0 AndAlso item.TargetJournalId.HasValue)
+                        Dim choosing As Manuscript = records.Where(Function(item) item.Location = ManuscriptLocation.Pipeline AndAlso item.Tags.Count >= 2).OrderByDescending(Function(item) item.JournalShortlist.Count).First()
+                        Dim filed As Manuscript = records.First(Function(item) item.Location = ManuscriptLocation.FileDrawer)
+                        filed.FileDrawerReason = "Set aside until the second study is in." & Environment.NewLine & "The reviewers asked for it."
+                        Dim untargeted As Manuscript = records.First(Function(item) item IsNot published AndAlso item IsNot choosing AndAlso item IsNot filed)
+                        untargeted.TargetJournal = String.Empty
+                        untargeted.TargetJournalId = Nothing
+                        Dim titled As Manuscript = records.First(Function(item) item IsNot published AndAlso item IsNot choosing AndAlso item IsNot filed AndAlso item IsNot untargeted AndAlso item.Location = ManuscriptLocation.Published)
+                        titled.Title = String.Join(" ", Enumerable.Repeat("A title long enough to wrap onto a third line beside the page's actions,", 4))
+                        Dim revision As Manuscript = records.First(Function(item) item.Location = ManuscriptLocation.Pipeline AndAlso item.CurrentStage = PaperStage.Revision)
+                        Assert.IsTrue(choosing.JournalShortlist.Count >= 2, "A Pipeline manuscript with shortlisted journals and tags.")
 
-                    For Each throughTheBoard As Boolean In {False, True}
-                        For Each visit In sequence
+                        Dim sequence As (Record As Manuscript, LeaveOn As String, Shrink As Boolean)() = {
+                            (published, "Overview", False),
+                            (choosing, "Overview", False),
+                            (filed, "Overview", False),
+                            (untargeted, "Overview", False),
+                            (choosing, "Overview", False),
+                            (titled, "Overview", False),
+                            (published, "Overview", False),
+                            (titled, "Overview", False),
+                            (revision, "Submissions", False),
+                            (choosing, "Overview", True),
+                            (filed, "Overview", False)
+                        }
 
-                            If throughTheBoard Then
-                                board.NavigateTo(Form1.WorkspacePage.Board)
-                                board.WaitForIdleWork()
-                                If visit.Shrink Then
-                                    board.Size = board.MinimumSize
-                                    Application.DoEvents()
+                        For Each throughTheBoard As Boolean In {False, True}
+                            For Each visit In sequence
+
+                                If throughTheBoard Then
+                                    board.NavigateTo(Form1.WorkspacePage.Board)
+                                    board.WaitForIdleWork()
+                                    If visit.Shrink Then
+                                        board.Size = board.MinimumSize
+                                        Application.DoEvents()
+                                    End If
                                 End If
-                            End If
 
-                            Dim context As String = "Opening """ & visit.Record.Title.Substring(0, Math.Min(40, visit.Record.Title.Length)) & """" & If(throughTheBoard, " from the Board", " from the page shown")
-                            Try
-                                board.Open(visit.Record)
-                                Application.DoEvents()
-                                board.AssertSettled()
-
-                                For Each section As String In {"Authors", "Versions", "Submissions", "Readiness & Packets", visit.LeaveOn}
-                                    ShowSection(board.Editor, section)
+                                Dim context As String = "Opening """ & visit.Record.Title.Substring(0, Math.Min(40, visit.Record.Title.Length)) & """" & If(throughTheBoard, " from the Board", " from the page shown")
+                                Try
+                                    board.Open(visit.Record)
+                                    Application.DoEvents()
                                     board.AssertSettled()
-                                Next
-                            Catch ex As AssertFailedException
-                                Throw New AssertFailedException(context & ": " & ex.Message, ex)
-                            End Try
 
+                                    For Each section As String In {"Authors", "Versions", "Submissions", "Readiness & Packets", visit.LeaveOn}
+                                        ManuscriptEditorReuseTests.ShowSection(board.Editor, section)
+                                        board.AssertSettled()
+                                    Next
+                                Catch ex As AssertFailedException
+                                    Throw New AssertFailedException(context & ": " & ex.Message, ex)
+                                End Try
+
+                            Next
                         Next
-                    Next
 
-                    board.Close()
-                End Using
+                        board.Close()
+                    End Using
+                Finally
+                    UiTheme.HighContrastOverride = Nothing
+                End Try
             End Sub,
-            TimeSpan.FromMinutes(10))
+            TimeSpan.FromMinutes(10), mode)
 
-    End Sub
-
-
-    Private Shared Sub ShowSection(editor As EditManuscriptForm, name As String)
-        Dim tabs As List(Of ShelfTabButton) = DirectCast(GetType(EditManuscriptForm).GetField("_sectionTabs", Reflection.BindingFlags.Instance Or Reflection.BindingFlags.NonPublic).GetValue(editor), List(Of ShelfTabButton))
-        tabs.Single(Function(tab) tab.Text = name).Checked = True
-        Application.DoEvents()
     End Sub
 
 

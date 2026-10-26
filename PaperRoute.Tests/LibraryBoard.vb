@@ -280,8 +280,9 @@ Friend NotInheritable Class LibraryBoard
 
     ' Opens a manuscript as a click on its card does. The page shown is
     ' then held to having nothing left to lay out (AssertSettled), so every
-    ' test that opens a manuscript, in every theme, size and DPI it runs
-    ' at, checks that the open's one layout pass left the page as a full
+    ' test that opens a manuscript through this board or the view catalog
+    ' (ViewCatalog's CatalogBoard.Open), in the theme and size it runs at,
+    ' checks that the open's one layout pass left the page as a full
     ' layout would. The budget tests turn this off, since it would take
     ' its own time inside their timed opens.
     Public VerifySettled As Boolean = True
