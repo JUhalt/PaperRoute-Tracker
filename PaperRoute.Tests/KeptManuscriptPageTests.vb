@@ -674,6 +674,53 @@ Public Class KeptManuscriptPageTests
     End Sub
 
 
+    ' The first manuscript opened on the page prepared while the window
+    ' idles moves none of the page's shells (#133): the page, its frame,
+    ' its header and the editor under it. Prepared showing no manuscript,
+    ' the header's labels keep one line's height and the stage pill a
+    ' stage's size, so a one-line title grows nothing. Before, the empty
+    ' labels were a pixel shorter than a line, and the first open grew the
+    ' header and moved the editor and every container in it.
+    <TestMethod>
+    Public Sub TheFirstOpenOnThePreparedPageMovesNoShell()
+
+        Dim moved As New List(Of String)()
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary = Library60()
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForIdleWork()
+                    Dim subject As Manuscript = board.Library.First(Function(item) item.Location = ManuscriptLocation.Pipeline)
+                    subject.Title = "A one-line title"
+
+                    Dim page As Control = board.KeptPage
+                    Dim header As Control = board.Part(Of Label)("manuscriptTitleLabel").Parent.Parent
+                    Dim editor As Control = ViewCatalog.Descendants(page).OfType(Of EditManuscriptForm)().Single()
+                    Dim shells As Control() = {page, header.Parent, header, editor}
+                    Assert.IsInstanceOfType(header, GetType(TableLayoutPanel), "The header holds the title.")
+                    Assert.AreSame(header.Parent, editor.Parent, "The frame holds the header and the editor.")
+
+                    Using probe As New LayoutProbe(page)
+                        board.Open(subject)
+                        moved.AddRange(probe.Moves.Where(Function(entry) shells.Contains(entry.Control)).
+                                           Select(Function(entry) LayoutProbe.PathOf(entry.Control, page) & " " & entry.Before.ToString() & " to " & entry.After.ToString()))
+                    End Using
+                    Assert.AreEqual(subject.Title, board.Field("Title").Text)
+
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(5))
+
+        Assert.AreEqual(0, moved.Count, "Shells moved by the first open on the prepared page:" & Environment.NewLine & String.Join(Environment.NewLine, moved))
+
+    End Sub
+
+
     ' An open shows nothing again that was showing, while the page is
     ' still hidden (#133): WinForms treats Visible = True on a control
     ' already shown, under a hidden parent, as a change, showing its window
