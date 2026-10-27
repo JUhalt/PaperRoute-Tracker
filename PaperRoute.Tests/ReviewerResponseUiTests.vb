@@ -264,7 +264,9 @@ Public Class ReviewerResponseUiTests
                 Dim submission As New JournalSubmission()
                 Using dialog As New MatrixProbe(Nothing, submission)
                     Assert.IsFalse(Field(Of Button)(dialog, "btnAdd").Enabled)
-                    Assert.IsTrue(Field(Of TextBox)(dialog, "txtDetails").Text.Contains("Record an editorial decision"))
+                    ' The list's hint says it, once (#258); the details box is empty.
+                    StringAssert.Contains(Field(Of ListBox)(dialog, "lstResponses").Controls.OfType(Of Label)().Single().Text, "Record the editorial decision under Editorial History")
+                    Assert.AreEqual(String.Empty, Field(Of TextBox)(dialog, "txtDetails").Text)
                     Assert.AreEqual(0, Field(Of ListBox)(dialog, "lstResponses").Items.Count)
                 End Using
             End Sub)

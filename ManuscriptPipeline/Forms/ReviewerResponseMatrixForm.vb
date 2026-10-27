@@ -53,11 +53,13 @@ Namespace Forms
             Size = New Size(1040, 760)
             MinimumSize = New Size(800, 580)
             BuildInterface()
+            ' The one place that says there is nothing to show (#258); the
+            ' details box beside it said it again in other words.
             EmptyHint.Attach(
                 lstResponses,
                 Function()
                     If Not _working.Decisions.Any(Function(item) item IsNot Nothing) Then
-                        Return "Record the editorial decision first; reviewer comments belong to a decision."
+                        Return "Record the editorial decision under Editorial History first; reviewer comments belong to a decision."
                     End If
                     Return If(_working.ReviewerResponses.Count = 0,
                               "No reviewer comments yet. Choose Add Comment... to record the first request.",
@@ -337,11 +339,9 @@ Namespace Forms
             ' deliberately disables it so hidden comments cannot be crossed unseen.
             btnUp.Enabled = cmbStatus.SelectedIndex = 0 AndAlso index > 0
             btnDown.Enabled = cmbStatus.SelectedIndex = 0 AndAlso index >= 0 AndAlso index < _working.ReviewerResponses.Count - 1
+            ' With no comment chosen the list's hint says why (EmptyHint).
             If item Is Nothing Then
-                txtDetails.Text = If(Not btnAdd.Enabled,
-                    "Record an editorial decision under Editorial History before adding reviewer comments.",
-                    If(_working.ReviewerResponses.Count = 0, "No reviewer comments yet. Choose Add Comment to begin.",
-                       "No comments match this status. Choose All statuses to see the complete matrix."))
+                txtDetails.Text = String.Empty
                 Return
             End If
             Dim decision As EditorialDecisionEvent = _working.Decisions.FirstOrDefault(Function(candidate) candidate.Id = item.DecisionId)

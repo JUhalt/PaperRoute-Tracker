@@ -424,6 +424,11 @@ Namespace Forms
 
             Dim parts As New List(Of String)()
 
+            ' A title alone is something recognized too (#258).
+            If txtTitle.Text.Trim().Length > 0 Then
+                parts.Add("title")
+            End If
+
             If used.Count > 0 Then
                 parts.Add(
                     Plural(used.Count, "author") &

@@ -630,6 +630,117 @@ Public Class DialogPolishTests
 
 
     ' ---------------------------------------------------------------
+    ' Wording (items 10 and 11)
+    ' ---------------------------------------------------------------
+
+    ' The title page's summary names a title it recognized (#258, item 10).
+    ' Pasted text whose only recognized part is a title said "Nothing
+    ' recognized yet. You can still type a title." while Title showed it.
+    ' The summary now begins with the title; with nothing recognized it
+    ' still says so.
+    <TestMethod>
+    Public Sub TitlePageImportSummaryNamesARecognizedTitle()
+
+        StaRunner.Run(
+            Sub()
+
+                Using dialog As New TitlePageImportForm(New AuthorLibraryData(), "A preregistered replication of anchoring effects")
+                    Assert.AreEqual("title", SummaryOf(dialog), "Only a title was recognized.")
+                End Using
+
+                Dim page As String = String.Join(vbLf, {
+                    "A preregistered replication of anchoring effects in clinical risk estimates",
+                    "",
+                    "Dana Whitfield1, Rui Okafor1,2*, and Lena Marsh2",
+                    "",
+                    "1 Department of Psychology, Blue Mountain University",
+                    "2 School of Nursing, Cascade State University"
+                })
+
+                Using dialog As New TitlePageImportForm(New AuthorLibraryData(), page)
+                    StringAssert.StartsWith(SummaryOf(dialog), "title " & ChrW(&HB7) & " 3 authors", "The title comes first.")
+                End Using
+
+                Using dialog As New TitlePageImportForm(New AuthorLibraryData())
+                    Assert.AreEqual("Paste text to see what PaperRoute finds.", SummaryOf(dialog), "Before any text, as before.")
+                End Using
+
+            End Sub)
+
+    End Sub
+
+
+    Private Shared Function SummaryOf(dialog As TitlePageImportForm) As String
+        Return DirectCast(GetType(TitlePageImportForm).GetField("lblSummary", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(dialog), Label).Text
+    End Function
+
+
+    ' The reviewer response matrix says once that it has nothing to show
+    ' (#258, item 11). With no comments, the list's hint said "No reviewer
+    ' comments yet. Choose Add Comment... to record the first request." and
+    ' the details box beside it "No reviewer comments yet. Choose Add
+    ' Comment to begin."; so too with no decision and with a status that
+    ' has no comments. The list's hint is the one sentence, and the details
+    ' box, with no comment selected, is empty.
+    <TestMethod>
+    Public Sub ReviewerResponseMatrixSaysOnceThatItHasNothingToShow()
+
+        Dim found As New List(Of String)()
+
+        Dim noDecision As Func(Of String, Form) =
+            Function(root)
+                Dim manuscript As Manuscript = CreateRepresentativeLibrary()(0)
+                manuscript.Submissions(0).Decisions.Clear()
+                Return New ReviewerResponseMatrixForm(manuscript, manuscript.Submissions(0))
+            End Function
+
+        Dim filtered As Func(Of String, Form) =
+            Function(root)
+                Dim manuscript As Manuscript = CreateRepresentativeLibrary()(0)
+                Dim submission As JournalSubmission = manuscript.Submissions(0)
+                ReviewerResponseService.AddItem(submission, New ReviewerResponseItem With {.DecisionId = submission.Decisions(0).Id, .RevisionRoundNumber = 1, .ReviewerLabel = "Reviewer 1", .CommentText = "Clarify the sample.", .Status = ReviewerResponseStatus.Unresolved})
+                Return New ReviewerResponseMatrixForm(manuscript, submission)
+            End Function
+
+        Dim failures As List(Of String) =
+            ViewCatalog.ShowEach(
+                {
+                    ("With no comments", ViewCatalog.Dialogs(GetType(ReviewerResponseMatrixForm))),
+                    ("With no decision", noDecision),
+                    ("With no comments of the chosen status", filtered)
+                },
+                Sub(name, shown)
+
+                    If name = "With no comments of the chosen status" Then
+                        Dim filter As ComboBox = ViewCatalog.Descendants(shown).OfType(Of ComboBox)().Single(Function(item) item.AccessibleName = "Filter response status")
+                        filter.SelectedIndex = filter.Items.Count - 1
+                    End If
+
+                    Application.DoEvents()
+
+                    Dim list As ListBox = ViewCatalog.Descendants(shown).OfType(Of ListBox)().Single(Function(item) item.AccessibleName = "Reviewer comments")
+                    Dim details As TextBox = ViewCatalog.Descendants(shown).OfType(Of TextBox)().Single(Function(item) item.AccessibleName = "Selected reviewer comment details")
+                    Dim hint As Label = list.Controls.OfType(Of Label)().Single()
+
+                    ' As the hints follow their lists once the app is idle.
+                    ManuscriptPipeline.Controls.EmptyHint.Refresh(list)
+
+                    Assert.AreEqual(0, list.Items.Count, name & ": the list is empty.")
+                    Assert.IsTrue(hint.Visible AndAlso hint.Text.Length > 0, name & ": the list says why.")
+
+                    If details.TextLength > 0 Then
+                        found.Add($"{name}: the list says ""{hint.Text}"" and the details box ""{details.Text}"".")
+                    End If
+
+                End Sub)
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+
+    End Sub
+
+
+    ' ---------------------------------------------------------------
     ' Showing a view at each DPI
     ' ---------------------------------------------------------------
 
