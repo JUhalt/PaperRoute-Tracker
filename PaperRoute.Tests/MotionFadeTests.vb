@@ -52,6 +52,7 @@ Public Class MotionFadeTests
         PageFade.CaptureDelayMilliseconds = 0
         PageFade.AwaitPicture = False
         PageFade.ScaledOverride = Nothing
+        PageFade.ScreenDpiOverride = Nothing
     End Sub
 
 
@@ -785,6 +786,73 @@ Public Class MotionFadeTests
 
         If Not measured Then
             Console.WriteLine("Not measured here: at 100% an unaware window's DPI is its screen's.")
+        End If
+
+    End Sub
+
+
+    ' A window whose DPI is not its screen's switches as a cut, by that
+    ' alone: the fade's scaling check asks the DPI question
+    ' (PageFade.ScaledByWindows calls DpiIsTheScreens). On the first v0.9.2
+    ' candidate's host (#252) PaperRoute's window was at a system DPI of 96
+    ' on a screen at 120, and the corner check alone let it fade. Such a
+    ' host cannot be made on demand, so a window made as PaperRoute makes
+    ' it (SystemAware) is given a screen at another DPI than its own
+    ' (PageFade.ScreenDpiOverride), and its switch is a cut. Where the
+    ' window's DPI is its screen's, as at 100% (CI) and on a host whose
+    ' system DPI is its screen's, the next switch, on the screen's own
+    ' DPI, fades: the cut was the DPI question's, not the corners'.
+    ' Elsewhere that switch is a cut as well, and the line says the cut is
+    ' not shown to be the DPI question's alone.
+    <TestMethod>
+    Public Sub AWindowWhoseDpiIsNotItsScreensSwitchesAsACut()
+
+        Dim measured As Boolean = True
+
+        StaRunner.Run(
+            Sub()
+                Dim previous As IntPtr = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE)
+                Try
+                    UiMotion.EnabledOverride = True
+                    UiTheme.HighContrastOverride = False
+                    PageFade.AwaitPicture = True
+                    UiMotion.FadeMilliseconds = 10000
+                    Using board As New LibraryBoard(LargeLibraryFixture.Create(Path.Combine(_root, "library"), 60), Path.Combine(_root, "settings"))
+                        board.Start()
+                        board.WaitForIdleWork()
+                        Dim windowDpi As Integer = GetDpiForWindow(board.Handle)
+                        Dim screenDpi As Integer = MonitorDpi(board.Handle)
+                        Dim given As Integer = windowDpi + 24
+
+                        PageFade.ScreenDpiOverride = given
+                        board.NavigateTo(Form1.WorkspacePage.Library)
+                        Dim line As String = $"the window at {windowDpi} DPI, its screen given as {given}; {board.PageFade.LastOutcome}"
+                        Console.WriteLine(line)
+                        Assert.AreEqual("cut: Windows is scaling the window", board.PageFade.LastOutcome, line)
+                        Assert.IsFalse(board.PageFade.Showing, line)
+
+                        PageFade.ScreenDpiOverride = Nothing
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        line = $"the window at {windowDpi} DPI, its screen at {screenDpi}; {board.PageFade.LastOutcome}"
+                        Console.WriteLine(line)
+                        Assert.AreNotEqual(0, screenDpi, "Windows gives the screen's DPI. " & line)
+                        measured = windowDpi = screenDpi
+                        If measured Then
+                            Assert.AreEqual("faded", board.PageFade.LastOutcome, line)
+                            board.PageFade.End()
+                        Else
+                            Assert.AreEqual("cut: Windows is scaling the window", board.PageFade.LastOutcome, line)
+                        End If
+                        board.Close()
+                    End Using
+                Finally
+                    ResetSeams()
+                    SetThreadDpiAwarenessContext(previous)
+                End Try
+            End Sub)
+
+        If Not measured Then
+            Console.WriteLine("Not measured here: the window's DPI is not its screen's, so its next switch is a cut as well.")
         End If
 
     End Sub

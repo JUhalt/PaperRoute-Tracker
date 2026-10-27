@@ -58,6 +58,13 @@ Namespace Controls
         ' a test makes; a test of what a fade does says it does not.
         Friend Shared ScaledOverride As Boolean? = Nothing
 
+        ' Test seam: the DPI of the window's screen, in place of what Windows
+        ' says (Nothing takes Windows' answer; it is asked either way). A
+        ' window at the system DPI on a screen at another, as on the first
+        ' v0.9.2 candidate's host (#252), cannot be made on demand, so a
+        ' test gives the window's screen another DPI than the window's.
+        Friend Shared ScreenDpiOverride As Integer? = Nothing
+
 
         Public Sub New(owner As Form, area As Control)
 
@@ -354,7 +361,8 @@ Namespace Controls
         ' Whether the window's DPI is the effective DPI of the screen it is
         ' on. Windows gives a screen's DPI as the asking thread sees it, so it
         ' is asked as a per-monitor aware thread; this one would be told its
-        ' own DPI. False if Windows cannot say. Friend for the test of it.
+        ' own DPI. False if Windows cannot say. Friend for the test of it;
+        ' a test may give the screen's DPI (ScreenDpiOverride).
         Friend Shared Function DpiIsTheScreens(window As IntPtr) As Boolean
 
             Try
@@ -381,7 +389,9 @@ Namespace Controls
                     SetThreadDpiAwarenessContext(previous)
                 End Try
 
-                Return result = 0 AndAlso CLng(screenX) = windowDpi
+                Dim screenDpi As Long = If(ScreenDpiOverride.HasValue, CLng(ScreenDpiOverride.Value), CLng(screenX))
+
+                Return result = 0 AndAlso screenDpi = windowDpi
 
             Catch ex As Exception When TypeOf ex Is EntryPointNotFoundException OrElse TypeOf ex Is DllNotFoundException
                 Return False
