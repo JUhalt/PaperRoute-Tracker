@@ -388,6 +388,143 @@ Public Class DialogPolishTests
 
 
     ' ---------------------------------------------------------------
+    ' The consent text (item 4)
+    ' ---------------------------------------------------------------
+
+    ' Before Sending's heading and footnote wrap at the window's width
+    ' (#258, item 4). They are given a width to wrap at as the window
+    ' resizes, but it was read from the table they sit in before the table
+    ' was laid out to the new size: at 125% the window is scaled with its
+    ' layout held, and they wrapped at about 290 pixels in a 1000-pixel
+    ' window. Resized the same way at each DPI, each wraps at the table's
+    ' width inside its padding.
+    <TestMethod>
+    Public Sub AssistantConsentTextWrapsAtTheWindowsWidth()
+
+        Dim found As New List(Of String)()
+        Dim judged As Integer = 0
+
+        Dim failures As List(Of String) =
+            AtEachDpi(
+                {("AssistantConsentForm", GetType(AssistantConsentForm), Function() ViewCatalog.Dialogs(GetType(AssistantConsentForm))(String.Empty))},
+                Sub(name, shown, dpi)
+
+                    ' As Windows Forms resizes a window it scales: its layout held.
+                    shown.SuspendLayout()
+                    shown.Width += UiTheme.Px(200, dpi)
+                    shown.ResumeLayout(True)
+                    Application.DoEvents()
+
+                    For Each label As Label In ViewCatalog.Descendants(shown).OfType(Of Label)().Where(Function(item) TypeOf item.Parent Is TableLayoutPanel)
+
+                        Dim table As Control = label.Parent
+                        Dim width As Integer = table.ClientSize.Width - table.Padding.Horizontal
+
+                        judged += 1
+
+                        If label.MaximumSize.Width <> width Then
+                            found.Add($"{name} at {dpi} DPI: '{label.Text.Substring(0, 20)}…' wraps at {label.MaximumSize.Width} pixels in a table {width} wide inside its padding.")
+                        End If
+
+                    Next
+
+                End Sub)
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        Assert.AreEqual(2 * Dpis.Length, judged, "The heading and the footnote were judged at each DPI.")
+
+    End Sub
+
+
+    ' ---------------------------------------------------------------
+    ' Read-only boxes (item 5)
+    ' ---------------------------------------------------------------
+
+    ' A read-only box opens with nothing selected (#258, item 5). The
+    ' readiness notes' requirement and the diagnostics report took the
+    ' keyboard as their windows opened, as a window's first box does, and
+    ' a text box given the keyboard for the first time selects all its
+    ' text unless a selection was set. Each, given the keyboard, selects
+    ' nothing. AssistantConsentForm already set one.
+    <TestMethod>
+    Public Sub ReadinessItemNotesAndDiagnosticsOpenWithTheirReadOnlyBoxUnselected()
+
+        Dim found As New List(Of String)()
+        Dim judged As Integer = 0
+
+        Dim failures As List(Of String) =
+            ViewCatalog.ShowEach(
+                {GetType(ReadinessItemNotesForm), GetType(DiagnosticsForm)}.Select(Function(view) (view.Name, ViewCatalog.Dialogs(view))),
+                Sub(name, shown)
+
+                    Dim box As TextBox = ViewCatalog.Descendants(shown).OfType(Of TextBox)().First(Function(item) item.ReadOnly AndAlso item.Visible)
+
+                    Assert.IsTrue(box.Focus(), name & ": the box takes the keyboard.")
+                    Application.DoEvents()
+
+                    judged += 1
+
+                    If box.SelectionLength <> 0 Then
+                        found.Add($"{name}: '{box.AccessibleName}' opens with {box.SelectionLength} of its {box.TextLength} characters selected.")
+                    End If
+
+                End Sub)
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        Assert.AreEqual(2, judged, "Both boxes were judged.")
+
+    End Sub
+
+
+    ' ---------------------------------------------------------------
+    ' Bullets (item 7)
+    ' ---------------------------------------------------------------
+
+    ' Mark as Published's bullets hang their wrapped lines (#258, item 7).
+    ' Each was one label, "•  " and the line, so a wrapped line started
+    ' under the bullet. Each line is a label of its own, to the right of
+    ' its bullet, so every line of it starts there.
+    <TestMethod>
+    Public Sub MarkPublishedBulletsHangTheirWrappedLines()
+
+        Dim manuscript As Manuscript = CreateRepresentativeLibrary()(0)
+        Dim match As New PublicationMatch With {.Doi = "10.5555/example.active", .Title = "Active Study", .Journal = "Journal of Example Studies", .PublishedDate = New DateTime(2026, 9, 1)}
+        Dim today As New DateTime(2026, 10, 27)
+        Dim lines As List(Of String) = PublicationMatchService.DescribeMarkPublished(manuscript, match, today).ToList()
+        Dim found As New List(Of String)()
+
+        Dim failures As List(Of String) =
+            AtEachDpi(
+                {("MarkPublishedForm", GetType(MarkPublishedForm), Function() CType(New MarkPublishedForm(manuscript, match, today), Form))},
+                Sub(name, shown, dpi)
+
+                    Dim labels As List(Of Label) = ViewCatalog.Descendants(shown).OfType(Of Label)().ToList()
+
+                    For Each line As String In lines
+
+                        Dim text As Label = labels.FirstOrDefault(Function(item) item.Text = line)
+                        Dim bullet As Label = If(text Is Nothing, Nothing, labels.FirstOrDefault(Function(item) item.Text = "•" AndAlso item.Parent Is text.Parent AndAlso Math.Abs(item.Top - text.Top) <= item.Height))
+
+                        If text Is Nothing OrElse bullet Is Nothing Then
+                            found.Add($"{name} at {dpi} DPI: '{line}' is not a label of its own beside a bullet.")
+                        ElseIf text.Left < bullet.Right Then
+                            found.Add($"{name} at {dpi} DPI: '{line}' starts at {text.Left}, left of its bullet's edge at {bullet.Right}.")
+                        End If
+
+                    Next
+
+                End Sub)
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        Assert.IsTrue(lines.Count >= 2, "There are lines to judge.")
+
+    End Sub
+
+
+    ' ---------------------------------------------------------------
     ' Showing a view at each DPI
     ' ---------------------------------------------------------------
 
