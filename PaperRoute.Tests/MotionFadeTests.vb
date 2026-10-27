@@ -688,10 +688,11 @@ Public Class MotionFadeTests
                         board.WaitForIdleWork()
                         Dim windowDpi As Integer = GetDpiForWindow(board.Handle)
                         Dim screenDpi As Integer = MonitorDpi(board.Handle)
-                        scaled = screenDpi <> 0 AndAlso windowDpi <> screenDpi
+                        scaled = windowDpi <> screenDpi
                         board.NavigateTo(Form1.WorkspacePage.Library)
                         line = $"{awareness}: the window at {windowDpi} DPI (DeviceDpi {board.DeviceDpi}), its screen at {screenDpi}; {board.PageFade.LastOutcome}"
                         Console.WriteLine(line)
+                        Assert.AreNotEqual(0, screenDpi, "Windows gives the screen's DPI. " & line)
                         If scaled Then
                             Assert.AreEqual("cut: Windows is scaling the window", board.PageFade.LastOutcome, line)
                             Assert.IsFalse(board.PageFade.Showing, line)
