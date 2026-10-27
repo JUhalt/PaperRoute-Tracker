@@ -419,8 +419,17 @@ Namespace Forms
             chkMakeCurrent.AutoSize =
                 True
 
+            ' At the top of its row, its caption on its label's line (#258).
             chkMakeCurrent.Anchor =
-                AnchorStyles.Left
+                AnchorStyles.Top Or AnchorStyles.Left
+
+            chkMakeCurrent.Margin =
+                New Padding(
+                    3,
+                    5,
+                    3,
+                    3
+                )
 
             root.Controls.Add(
                 CreateFieldLabelWithHelp(
@@ -809,6 +818,9 @@ Namespace Forms
         End Sub
 
 
+        ' At the top of its row, its text on the line of the field beside
+        ' it, which sits there too, as a label with help is (#258): centred
+        ' in the row, it sat 11 pixels below.
         Private Function CreateFieldLabel(
             text As String
         ) As Label
@@ -816,7 +828,14 @@ Namespace Forms
             Return New Label With {
                 .Text = text,
                 .AutoSize = True,
-                .Anchor = AnchorStyles.Left,
+                .Anchor = AnchorStyles.Top Or AnchorStyles.Left,
+                .Margin =
+                    New Padding(
+                        3,
+                        6,
+                        3,
+                        0
+                    ),
                 .Font =
                     New Font(
                         Me.Font,
@@ -833,10 +852,22 @@ Namespace Forms
             Optional field As Control = Nothing
         ) As Control
 
-            Return ContextHelpControl.LabelWithHelp(
+            Dim label As Label =
                 CreateFieldLabel(
                     text
-                ),
+                )
+
+            ' Its row's padding puts it and its help on the field's line.
+            label.Margin =
+                New Padding(
+                    3,
+                    0,
+                    3,
+                    0
+                )
+
+            Return ContextHelpControl.LabelWithHelp(
+                label,
                 helpText,
                 6,
                 field

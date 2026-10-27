@@ -197,8 +197,12 @@ Namespace Forms
                 3
             )
 
+            ' As tall as the box and its button, so "Local file" is on the
+            ' box's line (#258): the row took the panel's default height,
+            ' and the label sat about 30 pixels below.
             Dim pathPanel As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
+                .AutoSize = True,
                 .ColumnCount = 2,
                 .RowCount = 1
             }
@@ -216,8 +220,9 @@ Namespace Forms
                 )
             )
 
-            txtPath.Dock =
-                DockStyle.Fill
+            ' Centred beside the button, on the label's line.
+            txtPath.Anchor =
+                AnchorStyles.Left Or AnchorStyles.Right
 
             txtPath.ReadOnly =
                 True

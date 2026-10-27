@@ -539,6 +539,9 @@ Namespace Forms
         End Sub
 
 
+        ' At the top of its row, its text on the line of the field beside
+        ' it, which sits there too, as a label with help is (#258): centred
+        ' in the row, it sat below.
         Private Function CreateFieldLabel(
             text As String
         ) As Label
@@ -547,7 +550,14 @@ Namespace Forms
                 .Text = text,
                 .AutoSize = True,
                 .Anchor =
-                    AnchorStyles.Left,
+                    AnchorStyles.Top Or AnchorStyles.Left,
+                .Margin =
+                    New Padding(
+                        3,
+                        7,
+                        3,
+                        0
+                    ),
                 .Font =
                     New Font(
                         Me.Font,
@@ -564,10 +574,22 @@ Namespace Forms
             field As Control
         ) As Control
 
-            Return ContextHelpControl.LabelWithHelp(
+            Dim label As Label =
                 CreateFieldLabel(
                     text
-                ),
+                )
+
+            ' Its row's padding puts it and its help on the field's line.
+            label.Margin =
+                New Padding(
+                    3,
+                    0,
+                    3,
+                    0
+                )
+
+            Return ContextHelpControl.LabelWithHelp(
+                label,
                 helpText,
                 7,
                 field

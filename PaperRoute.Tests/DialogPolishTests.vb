@@ -253,6 +253,141 @@ Public Class DialogPolishTests
 
 
     ' ---------------------------------------------------------------
+    ' Labels on their field's line (items 3 and 6)
+    ' ---------------------------------------------------------------
+
+    ' A field's label shares the field's centre line (#258, items 3 and 6).
+    ' At 125% the packet file's "Local file" sat about 30 pixels below its
+    ' box, its row as tall as its panel's default height; the version's
+    ' Label, Version file and Current version were 11 or 12 pixels off,
+    ' centred in rows the field sat at the top of, and the correspondence,
+    ' submission and manuscript windows' labels 8 to 10 pixels below their
+    ' fields. The middle of each label's first line of text is within 2
+    ' pixels of its field's middle: the first box, list or date in the
+    ' field's cell, else its first check box, else its first button, each
+    ' of which centres its text. The text is drawn as the app draws it.
+    <TestMethod>
+    Public Sub FieldLabelsShareTheirFieldsCentreLine()
+
+        Dim rows As New Dictionary(Of String, String()) From {
+            {"AddCorrespondenceForm", {"Type", "Date", "Title", "Local file", "Source URL"}},
+            {"AddSubmissionForm", {"Journal", "Journal manuscript ID", "Submitted", "Publisher portal URL", "Follow-up"}},
+            {"AddManuscriptForm", {"Title", "Target journal", "Starting stage", "From a draft", "First deadline"}},
+            {"ManuscriptVersionEditForm", {"Label", "Version file", "Current version"}},
+            {"SubmissionPacketFileEditForm, Edit", {"Local file"}},
+            {"SubmissionPacketFileEditForm, New", {"Local file"}}
+        }
+
+        Dim measured As New List(Of String)()
+        Dim found As New List(Of String)()
+
+        Dim failures As List(Of String) =
+            AtEachDpi(
+                {
+                    ("AddCorrespondenceForm", GetType(AddCorrespondenceForm), Function() CType(New AddCorrespondenceForm(), Form)),
+                    ("AddSubmissionForm", GetType(AddSubmissionForm), Function() CType(New AddSubmissionForm(), Form)),
+                    ("AddManuscriptForm", GetType(AddManuscriptForm), Function() CType(New AddManuscriptForm(), Form)),
+                    ("ManuscriptVersionEditForm", GetType(ManuscriptVersionEditForm), Function() ViewCatalog.Dialogs(GetType(ManuscriptVersionEditForm))(String.Empty)),
+                    ("SubmissionPacketFileEditForm, Edit", GetType(SubmissionPacketFileEditForm), Function() ViewCatalog.Dialogs(GetType(SubmissionPacketFileEditForm))(String.Empty)),
+                    ("SubmissionPacketFileEditForm, New", GetType(SubmissionPacketFileEditForm), Function() CType(New SubmissionPacketFileEditForm(LongNames().SubmissionPackets(0), Nothing), Form))
+                },
+                Sub(name, shown, dpi)
+
+                    ' The app draws text with GDI; a test host starts with GDI+,
+                    ' which sizes a label or a check box a few pixels taller.
+                    For Each control As Control In ViewCatalog.Descendants(shown).Where(Function(item) TypeOf item Is Label OrElse TypeOf item Is ButtonBase)
+                        If TypeOf control Is Label Then
+                            DirectCast(control, Label).UseCompatibleTextRendering = False
+                        Else
+                            DirectCast(control, ButtonBase).UseCompatibleTextRendering = False
+                        End If
+                    Next
+
+                    shown.PerformLayout()
+                    Application.DoEvents()
+
+                    For Each caption As String In rows(name)
+
+                        Dim pair As (Label As Label, Field As Control) = LabelAndField(shown, caption)
+
+                        If pair.Label Is Nothing OrElse pair.Field Is Nothing Then
+                            found.Add($"{name}: no label '{caption}' with a field beside it.")
+                            Continue For
+                        End If
+
+                        Dim labelCentre As Double = FirstLineCentreY(shown, pair.Label)
+                        Dim fieldCentre As Double = CentreY(shown, pair.Field)
+                        Dim line As String = $"{name} at {dpi} DPI: '{caption}' has its text's middle at {labelCentre}, its {pair.Field.GetType().Name} at {fieldCentre}"
+
+                        measured.Add(line)
+
+                        If Math.Abs(labelCentre - fieldCentre) > 2 Then
+                            found.Add(line)
+                        End If
+
+                    Next
+
+                End Sub)
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        Assert.AreEqual(rows.Values.Sum(Function(captions) captions.Length) * Dpis.Length, measured.Count, "Every row was measured at each DPI.")
+
+    End Sub
+
+
+    ' The label with the caption, alone or beside its help, in the first
+    ' column of a table, and the field in the next column of its row.
+    Private Shared Function LabelAndField(shown As Form, caption As String) As (Label As Label, Field As Control)
+
+        For Each label As Label In ViewCatalog.Descendants(shown).OfType(Of Label)().Where(Function(item) item.Visible AndAlso item.Text = caption)
+
+            ' A label with help sits in a row of its own in the table's cell.
+            Dim cell As Control = If(TypeOf label.Parent Is FlowLayoutPanel AndAlso TypeOf label.Parent.Parent Is TableLayoutPanel, label.Parent, label)
+            Dim table As TableLayoutPanel = TryCast(cell.Parent, TableLayoutPanel)
+
+            If table Is Nothing Then
+                Continue For
+            End If
+
+            Dim position As TableLayoutPanelCellPosition = table.GetPositionFromControl(cell)
+            Dim beside As Control = table.GetControlFromPosition(position.Column + 1, position.Row)
+
+            If beside Is Nothing Then
+                Continue For
+            End If
+
+            Dim candidates As List(Of Control) = New Control() {beside}.Concat(ViewCatalog.Descendants(beside)).Where(Function(item) item.Visible).ToList()
+
+            Dim field As Control =
+                If(candidates.FirstOrDefault(Function(item) TypeOf item Is TextBoxBase OrElse TypeOf item Is ComboBox OrElse TypeOf item Is DateTimePicker OrElse TypeOf item Is NumericUpDown),
+                   If(candidates.FirstOrDefault(Function(item) TypeOf item Is CheckBox),
+                      candidates.FirstOrDefault(Function(item) TypeOf item Is Button)))
+
+            Return (label, field)
+
+        Next
+
+        Return (Nothing, Nothing)
+
+    End Function
+
+
+    Private Shared Function CentreY(shown As Form, control As Control) As Double
+        Dim bounds As Rectangle = shown.RectangleToClient(control.Parent.RectangleToScreen(control.Bounds))
+        Return bounds.Top + bounds.Height / 2.0
+    End Function
+
+
+    ' A label draws its text from the top of its box, inside its padding:
+    ' the middle of its first line, a label of more lines included.
+    Private Shared Function FirstLineCentreY(shown As Form, label As Label) As Double
+        Dim bounds As Rectangle = shown.RectangleToClient(label.Parent.RectangleToScreen(label.Bounds))
+        Return bounds.Top + label.Padding.Top + TextRenderer.MeasureText("Ag", label.Font).Height / 2.0
+    End Function
+
+
+    ' ---------------------------------------------------------------
     ' Showing a view at each DPI
     ' ---------------------------------------------------------------
 
