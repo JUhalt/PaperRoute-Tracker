@@ -213,6 +213,8 @@ Namespace Forms
             list.ShowItemToolTips = True
             list.BackColor = UiTheme.CardBackground()
             list.ForeColor = UiTheme.PrimaryText()
+            ' Not sideways for a few pixels once the vertical bar shows (#258).
+            ColumnFit.Attach(list)
         End Sub
 
 

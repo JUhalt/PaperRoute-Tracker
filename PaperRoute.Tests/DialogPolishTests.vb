@@ -151,6 +151,108 @@ Public Class DialogPolishTests
 
 
     ' ---------------------------------------------------------------
+    ' Lists (item 2)
+    ' ---------------------------------------------------------------
+
+    ' A list scrolls sideways only when its columns cannot fit (#258, item
+    ' 2). The lookup's list of what was found had 810 pixels of columns at
+    ' 96 DPI and 803 of list once its vertical bar showed, so a horizontal
+    ' bar covered part of its last row; the journals found ran a few pixels
+    ' past a list made narrower by a smaller screen. Each list, its columns
+    ' sized as LogicalToDeviceUnits sizes them at the display's DPI, the
+    ' lookup's at its least height and the journals' list narrowed until
+    ' its columns run 6 pixels past it, has no horizontal bar while all its
+    ' columns but the last, and the last one's caption, fit beside each
+    ' other.
+    <TestMethod>
+    Public Sub LookupAndJournalListsScrollSidewaysOnlyWhenTheirColumnsCannotFit()
+
+        Dim judged As New List(Of String)()
+        Dim found As New List(Of String)()
+        Dim failures As New List(Of String)()
+
+        Dim suggestions = ViewCatalog.AllViewsAndStages().Single(Function(view) view.Name = "JournalSuggestionsForm, with the journals it found")
+
+        For Each dpi As Integer In Dpis
+
+            Dim at As Integer = dpi
+
+            failures.AddRange(
+                ViewCatalog.ShowEach(
+                    {("JournalFactsForm, with what PLOS ONE's lookup found", CType(Function(root As String) CType(New JournalFactsForm(New JournalRecord With {.Name = "PLOS ONE", .Issns = New List(Of String) From {"1932-6203"}}, New JournalFactsTests.RecordedFacts(JournalFactsTests.PlosLookup())), Form), Func(Of String, Form)))},
+                    Sub(name, shown)
+                        Dim dialog As JournalFactsForm = DirectCast(shown, JournalFactsForm)
+                        dialog.LookUpAsync().GetAwaiter().GetResult()
+                        Application.DoEvents()
+                        Dim list As ListView = dialog.ChangesList
+                        AtTheDisplaysSize(shown, list, at)
+                        shown.Height = shown.MinimumSize.Height
+                        Application.DoEvents()
+                        Assert.IsTrue(HasStyle(list, WS_VSCROLL), "At its least height the list has more rows than it shows.")
+                        JudgeSidewaysBar(name & " at " & at & " DPI", list, judged, found)
+                    End Sub))
+
+            failures.AddRange(
+                ViewCatalog.ShowEach(
+                    {suggestions},
+                    Sub(name, shown)
+                        Dim list As ListView = DirectCast(shown, JournalSuggestionsForm).JournalsList
+                        AtTheDisplaysSize(shown, list, at)
+                        Dim columns As Integer = list.Columns.Cast(Of ColumnHeader)().Sum(Function(column) column.Width)
+                        shown.Width -= list.ClientSize.Width - (columns - 6)
+                        Application.DoEvents()
+                        JudgeSidewaysBar(name & " at " & at & " DPI", list, judged, found)
+                    End Sub))
+
+        Next
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        Assert.AreEqual(2 * Dpis.Length, judged.Count, "Both lists were judged at each DPI: " & String.Join("; ", judged))
+
+    End Sub
+
+
+    ' The list's columns as LogicalToDeviceUnits gives them at the DPI,
+    ' then the window simulated for the display. Windows Forms scales the
+    ' window; it does not scale a list's columns, which the app sizes by
+    ' hand.
+    Private Shared Sub AtTheDisplaysSize(shown As Form, list As ListView, dpi As Integer)
+
+        For Each column As ColumnHeader In list.Columns
+            column.Width = column.Width * dpi \ 96
+        Next
+
+        ScalingMeasurementTests.Simulate(shown, dpi, True)
+
+    End Sub
+
+
+    ' A list whose columns fit, but for what its last one can give up down
+    ' to its caption, has no horizontal bar.
+    Private Shared Sub JudgeSidewaysBar(name As String, list As ListView, judged As List(Of String), found As List(Of String))
+
+        Dim last As ColumnHeader = list.Columns(list.Columns.Count - 1)
+        Dim others As Integer = list.Columns.Cast(Of ColumnHeader)().Where(Function(column) column IsNot last).Sum(Function(column) column.Width)
+        Dim caption As Integer = TextRenderer.MeasureText(last.Text, list.Font).Width
+        Dim line As String = $"{name}: {others} + {last.Width} pixels of columns in a list {list.ClientSize.Width} wide"
+
+        If others + caption > list.ClientSize.Width Then
+            Return
+        End If
+
+        judged.Add(line)
+
+        If HasStyle(list, WS_HSCROLL) Then
+            Dim info As New ScrollInfo With {.Size = Marshal.SizeOf(Of ScrollInfo)(), .Mask = &H17}
+            GetScrollInfo(list.Handle, 0, info)
+            found.Add(line & $" scroll sideways (range {info.Min} to {info.Max}, page {info.Page}, vertical bar {HasStyle(list, WS_VSCROLL)}).")
+        End If
+
+    End Sub
+
+
+    ' ---------------------------------------------------------------
     ' Showing a view at each DPI
     ' ---------------------------------------------------------------
 

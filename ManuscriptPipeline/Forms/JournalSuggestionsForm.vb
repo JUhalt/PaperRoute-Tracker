@@ -316,6 +316,8 @@ Namespace Forms
             lvJournals.Columns.Add("Of all its articles", LogicalToDeviceUnits(150), HorizontalAlignment.Right)
             lvJournals.Columns.Add("Open access and listed fee", LogicalToDeviceUnits(230))
             lvJournals.Columns.Add("Yours", LogicalToDeviceUnits(150))
+            ' Not sideways for a few pixels on a smaller screen (#258).
+            ColumnFit.Attach(lvJournals)
             AddHandler lvJournals.ItemCheck, AddressOf JournalChecking
             AddHandler lvJournals.ItemChecked, Sub(sender, e) RefreshAddButton()
             AddHandler lvJournals.SelectedIndexChanged, Async Sub(sender, e) Await ShowExamplesAsync()
