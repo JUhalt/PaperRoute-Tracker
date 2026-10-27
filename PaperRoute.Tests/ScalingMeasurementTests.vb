@@ -333,6 +333,79 @@ Public Class ScalingMeasurementTests
     End Sub
 
 
+    ' The buttons of a footer share its line (#257). At 125% the default
+    ' button sat 3 to 5 pixels below Cancel in fifteen dialogs: each footer
+    ' gave its other buttons no margin above them, and the default button
+    ' kept Windows Forms' 3 pixels. In every catalog window and step, at
+    ' 96, 120 and 144 DPI as the sweep simulates them, the buttons in the
+    ' row that holds the window's default or Cancel button have one top and
+    ' one height. The main window and its pages have no such row.
+    <TestMethod>
+    Public Sub TheButtonsOfAFooterShareItsTopAndHeightAt96To144Dpi()
+
+        Dim found As New List(Of String)()
+        Dim rows As Integer = 0
+
+        Dim views As List(Of (Name As String, Build As Func(Of String, Form))) =
+            ViewCatalog.Dialogs.Where(Function(entry) entry.Key IsNot GetType(Form1)).Select(Function(entry) (entry.Key.Name, entry.Value)).
+                Concat(ViewCatalog.Stages.Where(Function(entry) Not entry.Name.StartsWith("Insights page", StringComparison.Ordinal) AndAlso entry.Name <> ViewCatalog.ShortlistStage).
+                           Select(Function(entry) (entry.Name, entry.Build))).
+                ToList()
+
+        For Each dpi As Integer In Dpis
+
+            Dim current As Integer = dpi
+
+            found.AddRange(
+                ViewCatalog.ShowEach(
+                    views,
+                    Sub(name, shown)
+
+                        Simulate(shown, current, ScalingOf(shown.GetType()).ScalesWithWinForms)
+
+                        For Each row As FlowLayoutPanel In FooterRows(shown)
+
+                            Dim buttons As List(Of Button) = row.Controls.OfType(Of Button)().Where(Function(button) button.Visible).ToList()
+
+                            If buttons.Count < 2 Then
+                                Continue For
+                            End If
+
+                            rows += 1
+
+                            For Each button As Button In buttons.Skip(1)
+                                If button.Top <> buttons(0).Top OrElse button.Height <> buttons(0).Height Then
+                                    found.Add($"{name} at {current} DPI: '{Abbreviate(buttons(0).Text)}' at {buttons(0).Top}, {buttons(0).Height} tall; '{Abbreviate(button.Text)}' at {button.Top}, {button.Height} tall")
+                                End If
+                            Next
+
+                        Next
+
+                    End Sub
+                )
+            )
+
+        Next
+
+        TestContext.WriteLine("Footer rows measured: " & rows)
+        Assert.IsTrue(rows >= 3 * 40, "The footers were measured: " & rows)
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+
+    End Sub
+
+
+    ' The rows across a window that hold its default or Cancel button.
+    Private Shared Function FooterRows(shown As Form) As List(Of FlowLayoutPanel)
+
+        Return {TryCast(shown.AcceptButton, Control), TryCast(shown.CancelButton, Control)}.
+            Select(Function(button) TryCast(button?.Parent, FlowLayoutPanel)).
+            Where(Function(row) row IsNot Nothing AndAlso (row.FlowDirection = FlowDirection.LeftToRight OrElse row.FlowDirection = FlowDirection.RightToLeft)).
+            Distinct().
+            ToList()
+
+    End Function
+
+
     ' Postpone as the Deadlines page opens it, its date picked as the one
     ' of the twelve months whose caption is widest.
     Private Shared Function WidestPostpone() As Form
