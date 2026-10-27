@@ -28,6 +28,18 @@ internal static class Program
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
 
+        // As the app's Main (#259): message boxes and the Open and Save
+        // dialogs take the theme's title bar, and menus the contrast theme's
+        // colors, for every window this thread shows.
+        using (WindowChrome.HookDialogs())
+        {
+            ManuscriptPipeline.Controls.ThemedMenuRenderer.Install();
+            Run(args);
+        }
+    }
+
+    private static void Run(string[] args)
+    {
         if (args.Contains("--help", StringComparer.OrdinalIgnoreCase))
         {
             MessageBox.Show(Usage, "PaperRoute workflow demo");
