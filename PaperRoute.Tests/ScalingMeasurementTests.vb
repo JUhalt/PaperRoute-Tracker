@@ -11,6 +11,7 @@ Imports Microsoft.VisualStudio.TestTools.UnitTesting
 Imports ManuscriptPipeline
 Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Forms
+Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
 ' Every top-level window of the catalog, measured at 96, 120 and 144 DPI
@@ -265,6 +266,102 @@ Public Class ScalingMeasurementTests
         Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
 
     End Sub
+
+
+    ' The captions C3 found cut at 125% (#256) are whole at 96 to 144 DPI,
+    ' each with the longest text it takes: Postpone's default button with
+    ' the widest date it can name, the publication check's with a count of
+    ' three figures, Your Citations' Update from OpenAlex..., and the name
+    ' of every service Settings can switch. Each window is shown with its
+    ' captions set, the display simulated as the sweep simulates it, and
+    ' the measure judges each caption. All four were cut at 96 DPI too.
+    <TestMethod>
+    <DataRow(96)>
+    <DataRow(120)>
+    <DataRow(144)>
+    Public Sub EachCaptionIsWholeWithTheLongestTextItTakesAt96To144Dpi(dpi As Integer)
+
+        Dim checks As New List(Of Manuscript)()
+
+        For index As Integer = 1 To 120
+            checks.Add(New Manuscript With {.Title = "Submitted study " & index, .CurrentStage = PaperStage.UnderReview})
+        Next
+
+        Dim places As (View As Type, Build As Func(Of String, Form), Captions As String())() = {
+            (GetType(DeadlineDateForm), Function(root) WidestPostpone(), {WidestPostponeCaption()}),
+            (GetType(PublicationCheckForm), Function(root) New PublicationCheckForm(checks, checks.Select(Function(item) item.Id), String.Empty, Nothing, Function() True, DateTime.Today), {"Check 120 Manuscripts"}),
+            (GetType(Form1), ViewCatalog.Stages.Single(Function(stage) stage.Name = "Insights page, Your Citations from a saved update").Build, {"Update from OpenAlex..."}),
+            (GetType(SettingsForm), Function(root) New SettingsForm(New AppSettings()), OnlineServiceCatalog.Services.Where(Function(service) Not service.OffUntilTurnedOn).Select(Function(service) service.Name).ToArray())
+        }
+
+        Dim found As New List(Of String)()
+
+        For Each place As (View As Type, Build As Func(Of String, Form), Captions As String()) In places
+
+            Dim current As (View As Type, Build As Func(Of String, Form), Captions As String()) = place
+
+            found.AddRange(
+                ViewCatalog.ShowEach(
+                    {(current.View.Name, current.Build)},
+                    Sub(name, shown)
+
+                        Simulate(shown, dpi, ScalingOf(current.View).ScalesWithWinForms)
+
+                        Dim cut As List(Of String) = Inspect(shown).Cut
+
+                        For Each caption As String In current.Captions
+
+                            If Not ViewCatalog.Descendants(shown).OfType(Of ButtonBase)().Any(Function(button) button.Visible AndAlso button.Text = caption) Then
+                                found.Add($"{name} at {dpi} DPI shows no '{caption}'")
+                            End If
+
+                            found.AddRange(
+                                cut.Where(Function(entry) entry.Contains("'" & Abbreviate(caption) & "'", StringComparison.Ordinal)).
+                                    Select(Function(entry) $"{name} at {dpi} DPI: {entry}")
+                            )
+
+                        Next
+
+                    End Sub
+                )
+            )
+
+        Next
+
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+
+    End Sub
+
+
+    ' Postpone as the Deadlines page opens it, its date picked as the one
+    ' of the twelve months whose caption is widest.
+    Private Shared Function WidestPostpone() As Form
+
+        Dim dialog As New DeadlineDateForm("Postpone the follow-up", "Follow up  ·  Active Study", "This changes the follow-up date on the journal submission.", "Postpone to", DateTime.Today.AddDays(7), DateTime.Today)
+
+        DirectCast(GetType(DeadlineDateForm).GetField("dtpDate", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(dialog), DateTimePicker).Value = WidestPostponeDay()
+
+        Return dialog
+
+    End Function
+
+
+    Private Shared Function WidestPostponeCaption() As String
+        Return "Postpone to " & WidestPostponeDay().ToString("MMM d", Globalization.CultureInfo.CurrentCulture)
+    End Function
+
+
+    ' The 28th of each month next year, the one whose caption is widest.
+    Private Shared Function WidestPostponeDay() As DateTime
+
+        Using font As New Font("Segoe UI", 9.0F)
+            Return Enumerable.Range(1, 12).
+                Select(Function(month) New DateTime(DateTime.Today.Year + 1, month, 28)).
+                OrderByDescending(Function(day) TextRenderer.MeasureText("Postpone to " & day.ToString("MMM d", Globalization.CultureInfo.CurrentCulture), font).Width).
+                First()
+        End Using
+
+    End Function
 
 
     ' The measure has teeth. A probe window that is not scaled keeps its
@@ -1216,8 +1313,9 @@ Public Class ScalingMeasurementTests
     ' Simulate scaled from a whole 104x104. Windows Forms is told the DPI
     ' for the action, through the one value it keeps it in, and told the
     ' host's again after, with the rest of its scaling state as it was.
-    ' Text keeps the host's size, since GDI measures it at the host's DPI,
-    ' so what this judges is layout, not captions.
+    ' What this judges is layout, not captions: a control still sizes its
+    ' text at the host's DPI, while TextRenderer, asked on its own,
+    ' measures at the DPI told (#256), so the two disagree.
     Friend Shared Sub AtDisplayDpi(dpi As Integer, action As Action)
 
         Dim helper As Type =
@@ -1540,8 +1638,14 @@ Public Class ScalingMeasurementTests
     ' A button, check box or single-line label clipped by a parent or the
     ' window, or whose caption needs more width than it has; a tab whose
     ' caption is wider than its tab or whose tab runs past the control's
-    ' edge. A control Windows Forms sizes for its text (AutoSize) is not
-    ' cut by it; a check box or label tall enough for two lines wraps.
+    ' edge. A check box or label tall enough for two lines wraps. A
+    ' control Windows Forms sizes for its text (AutoSize) is cut when its
+    ' parent holds it narrower than it asks for, or shorter than a line of
+    ' its text (#256): Settings' name column held Your citations (ORCID and
+    ' OpenAlex) to 251 of its 309 pixels at 125%. An ActionButton draws its
+    ' caption across its whole face, so its caption is judged whatever its
+    ' size: one that sized itself asked for too little, and its caption was
+    ' cut where it stood.
     Private Shared Sub InspectControl(control As Control, bounds As Rectangle, clip As Rectangle, cut As List(Of String))
 
         Dim tabs As TabControl = TryCast(control, TabControl)
@@ -1580,7 +1684,9 @@ Public Class ScalingMeasurementTests
 
             If Not clip.Contains(bounds) Then
                 cut.Add(Kind(control) & " '" & Abbreviate(button.Text) & "' clipped")
-            ElseIf Not button.AutoSize AndAlso Not (boxed AndAlso button.Height >= 2 * lineHeight) Then
+            ElseIf button.AutoSize AndAlso Held(button, lineHeight) Then
+                cut.Add(Kind(control) & " '" & Abbreviate(button.Text) & "'")
+            ElseIf (Not button.AutoSize OrElse TypeOf button Is ActionButton) AndAlso Not (boxed AndAlso button.Height >= 2 * lineHeight) Then
 
                 ' The caption, the box and its gap, the button's padding (an
                 ' ActionButton's is room it asks for, not a border it clips
@@ -1611,13 +1717,22 @@ Public Class ScalingMeasurementTests
 
             If Not clip.Contains(bounds) Then
                 cut.Add("label '" & Abbreviate(label.Text) & "' clipped")
-            ElseIf Not label.AutoSize AndAlso TextWidth(label.Text, label.Font, label.UseMnemonic) > label.ClientSize.Width - label.Padding.Horizontal Then
+            ElseIf If(label.AutoSize, Held(label, lineHeight), TextWidth(label.Text, label.Font, label.UseMnemonic) > label.ClientSize.Width - label.Padding.Horizontal) Then
                 cut.Add("label '" & Abbreviate(label.Text) & "'")
             End If
 
         End If
 
     End Sub
+
+
+    ' Whether a control that sizes itself is held narrower than it asks for,
+    ' or shorter than a line of its text. A few pixels less height than it
+    ' asks for cut nothing: the version editor's storage options, 22 of 24
+    ' pixels tall at 96 DPI, show their captions whole.
+    Private Shared Function Held(control As Control, lineHeight As Integer) As Boolean
+        Return control.Width < control.PreferredSize.Width OrElse control.Height < lineHeight
+    End Function
 
 
     ' A list, list view, grid, tree view or multi-line text box that shows
