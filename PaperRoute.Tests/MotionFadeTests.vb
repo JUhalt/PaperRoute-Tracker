@@ -714,6 +714,75 @@ Public Class MotionFadeTests
     End Sub
 
 
+    ' Whether a window's DPI is its screen's, as the fade's scaling check
+    ' asks it (PageFade.DpiIsTheScreens, #252), for a window made in each
+    ' DPI awareness and asked on its own thread in that awareness. An
+    ' unaware window is at 96 DPI on any screen, so on a screen above 100%
+    ' its DPI is not its screen's: Windows stretches it. Windows tells an
+    ' unaware thread 96 for that screen as well, so the answer is right
+    ' only if the screen's DPI is asked as a per-monitor aware thread. A
+    ' per-monitor aware window is at its screen's DPI on any screen.
+    ' PaperRoute's own, SystemAware, is at the system DPI: its screen's
+    ' unless the screen's scale has changed since sign-in, as on the first
+    ' v0.9.2 candidate's host (system 96, screen 120). The test host is
+    ' unaware, so a window at its own awareness is the unaware row's (a new
+    ' thread starts at the process's awareness, and the line names it). At
+    ' 100% an unaware window's DPI is its screen's, so there the unaware
+    ' row proves only that, and says so.
+    <TestMethod>
+    <DataRow("Unaware")>
+    <DataRow("SystemAware")>
+    <DataRow("PerMonitorAwareV2")>
+    Public Sub AWindowsDpiIsTheScreensOnlyWhenWindowsDoesNotScaleIt(awareness As String)
+
+        Dim line As String = String.Empty
+        Dim measured As Boolean = True
+
+        StaRunner.Run(
+            Sub()
+                Dim context As IntPtr =
+                    If(awareness = "Unaware", DPI_AWARENESS_CONTEXT_UNAWARE,
+                    If(awareness = "SystemAware", DPI_AWARENESS_CONTEXT_SYSTEM_AWARE, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2))
+                Dim previous As IntPtr = SetThreadDpiAwarenessContext(context)
+                Assert.AreNotEqual(IntPtr.Zero, previous, "The thread is put in the " & awareness & " awareness.")
+                Try
+                    ' Made after the thread's awareness is set: a NativeWindow
+                    ' makes its window in the awareness it was made in.
+                    Dim window As New NativeWindow()
+                    window.CreateHandle(New CreateParams With {.Style = PageFade.WS_POPUP, .X = 40, .Y = 40, .Width = 200, .Height = 100})
+                    Try
+                        Dim windowDpi As Integer = GetDpiForWindow(window.Handle)
+                        Dim screenDpi As Integer = MonitorDpi(window.Handle)
+                        Dim answer As Boolean = PageFade.DpiIsTheScreens(window.Handle)
+                        line = $"{awareness} (the process {AwarenessName(previous)}): the window at {windowDpi} DPI, its screen at {screenDpi}; DpiIsTheScreens {answer}"
+                        Console.WriteLine(line)
+                        Assert.AreNotEqual(0, screenDpi, "Windows gives the screen's DPI. " & line)
+                        Select Case awareness
+                            Case "Unaware"
+                                Assert.AreEqual(96, windowDpi, "An unaware window is at 96 DPI. " & line)
+                                measured = screenDpi <> windowDpi
+                                Assert.AreEqual(Not measured, answer, line)
+                            Case "PerMonitorAwareV2"
+                                Assert.AreEqual(screenDpi, windowDpi, "A per-monitor aware window is at its screen's DPI. " & line)
+                                Assert.IsTrue(answer, line)
+                            Case Else
+                                Assert.AreEqual(windowDpi = screenDpi, answer, line)
+                        End Select
+                    Finally
+                        window.DestroyHandle()
+                    End Try
+                Finally
+                    SetThreadDpiAwarenessContext(previous)
+                End Try
+            End Sub)
+
+        If Not measured Then
+            Console.WriteLine("Not measured here: at 100% an unaware window's DPI is its screen's.")
+        End If
+
+    End Sub
+
+
     ' A switch begun while another of the window's thread's windows is over
     ' the page area, as a tooltip going as the switch begins, is a cut: the
     ' picture read off the screen would hold that window over the page
@@ -1002,6 +1071,21 @@ Public Class MotionFadeTests
     End Function
 
 
+    ' An awareness context's awareness, by the name the tests give it.
+    Private Shared Function AwarenessName(context As IntPtr) As String
+        Select Case GetAwarenessFromDpiAwarenessContext(context)
+            Case 0
+                Return "Unaware"
+            Case 1
+                Return "SystemAware"
+            Case 2
+                Return "PerMonitorAware"
+            Case Else
+                Return "of an awareness Windows does not name"
+        End Select
+    End Function
+
+
     Private Shared Function DesktopUnlocked() As Boolean
         Dim desktop As IntPtr = OpenInputDesktop(0, False, DESKTOP_SWITCHDESKTOP)
         If desktop = IntPtr.Zero Then Return False
@@ -1250,6 +1334,10 @@ Public Class MotionFadeTests
 
     <DllImport("user32.dll")>
     Private Shared Function GetDpiForWindow(window As IntPtr) As Integer
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function GetAwarenessFromDpiAwarenessContext(context As IntPtr) As Integer
     End Function
 
     <DllImport("user32.dll")>

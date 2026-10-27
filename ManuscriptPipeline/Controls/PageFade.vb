@@ -354,8 +354,8 @@ Namespace Controls
         ' Whether the window's DPI is the effective DPI of the screen it is
         ' on. Windows gives a screen's DPI as the asking thread sees it, so it
         ' is asked as a per-monitor aware thread; this one would be told its
-        ' own DPI. False if Windows cannot say.
-        Private Shared Function DpiIsTheScreens(window As IntPtr) As Boolean
+        ' own DPI. False if Windows cannot say. Friend for the test of it.
+        Friend Shared Function DpiIsTheScreens(window As IntPtr) As Boolean
 
             Try
 
