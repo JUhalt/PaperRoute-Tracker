@@ -728,7 +728,11 @@ Public Class MotionFadeTests
     ' unaware, so a window at its own awareness is the unaware row's (a new
     ' thread starts at the process's awareness, and the line names it). At
     ' 100% an unaware window's DPI is its screen's, so there the unaware
-    ' row proves only that, and says so.
+    ' row proves only that, and says so. Each row also checks, at any
+    ' scale, that the question puts the thread's awareness back: a UI
+    ' thread left per-monitor aware would make every window it makes next
+    ' per-monitor aware (the overlay, a dialog, a menu). The per-monitor
+    ' aware row cannot tell; the other two can.
     <TestMethod>
     <DataRow("Unaware")>
     <DataRow("SystemAware")>
@@ -754,9 +758,11 @@ Public Class MotionFadeTests
                         Dim windowDpi As Integer = GetDpiForWindow(window.Handle)
                         Dim screenDpi As Integer = MonitorDpi(window.Handle)
                         Dim answer As Boolean = PageFade.DpiIsTheScreens(window.Handle)
+                        Dim after As IntPtr = GetThreadDpiAwarenessContext()
                         line = $"{awareness} (the process {AwarenessName(previous)}): the window at {windowDpi} DPI, its screen at {screenDpi}; DpiIsTheScreens {answer}"
                         Console.WriteLine(line)
                         Assert.AreNotEqual(0, screenDpi, "Windows gives the screen's DPI. " & line)
+                        Assert.IsTrue(AreDpiAwarenessContextsEqual(after, context), $"DpiIsTheScreens puts the thread's awareness back (the thread {AwarenessName(after)} after it). " & line)
                         Select Case awareness
                             Case "Unaware"
                                 Assert.AreEqual(96, windowDpi, "An unaware window is at 96 DPI. " & line)
@@ -1338,6 +1344,14 @@ Public Class MotionFadeTests
 
     <DllImport("user32.dll")>
     Private Shared Function GetAwarenessFromDpiAwarenessContext(context As IntPtr) As Integer
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function GetThreadDpiAwarenessContext() As IntPtr
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function AreDpiAwarenessContextsEqual(first As IntPtr, second As IntPtr) As Boolean
     End Function
 
     <DllImport("user32.dll")>
