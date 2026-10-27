@@ -3,6 +3,7 @@ Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.IO
 Imports System.Linq
+Imports System.Reflection
 Imports System.Text
 Imports System.Text.RegularExpressions
 Imports System.Windows.Forms
@@ -18,8 +19,9 @@ Imports ManuscriptPipeline.Services
 ' step 4): whether the accept and cancel buttons are inside the client
 ' area, whether any button, check box, single-line label or tab caption
 ' is cut, and whether any list, list view, grid, tree view or multi-line
-' text box shows less than two rows (step 4). The per-window table goes
-' to the test output, as GitHub markdown, for #93.
+' text box shows less than two rows (step 4), and whether any control is
+' squeezed to a line or to nothing (#255). The per-window table goes to
+' the test output, as GitHub markdown, for #93.
 '
 ' The host runs at 96 DPI, so a display is simulated. Every font grows by
 ' the DPI's factor, as text does on a real display, and then a window
@@ -158,6 +160,109 @@ Public Class ScalingMeasurementTests
                 ToList()
 
         Assert.AreEqual(0, enforced.Count, Environment.NewLine & String.Join(Environment.NewLine, enforced))
+
+    End Sub
+
+
+    ' No control collapses in a window built at 120 or 144 DPI (#255). At
+    ' a real 125% About's logo was 130x1 pixels and the version date had
+    ' no width: the sweep above scales a window after it has opened at 96
+    ' DPI, where both were whole, so it read "ok". Here every window of the
+    ' catalog is built as at each display (AtDisplayDpi) and fails a
+    ' control the measure reports collapsed; at 96 DPI the sweep's own
+    ' windows are built so. Their text keeps the host's size, so nothing
+    ' else the measure reports is judged here.
+    <TestMethod>
+    Public Sub NoControlCollapsesInAWindowBuiltAt120Or144Dpi()
+
+        Dim found As New List(Of String)()
+        Dim measured As Integer = 0
+
+        For Each dpi As Integer In Dpis.Where(Function(value) value <> 96)
+
+            Dim current As Integer = dpi
+
+            AtDisplayDpi(
+                current,
+                Sub()
+                    found.AddRange(
+                        ViewCatalog.ShowEach(
+                            ViewCatalog.Dialogs.Select(Function(entry) (entry.Key.Name, entry.Value)),
+                            Sub(name, shown)
+
+                                measured += 1
+
+                                found.AddRange(
+                                    Inspect(shown).Cut.
+                                        Where(Function(entry) entry.Contains(" collapsed to ", StringComparison.Ordinal)).
+                                        Select(Function(entry) name & " at " & current & " DPI: " & entry)
+                                )
+
+                            End Sub
+                        )
+                    )
+                End Sub
+            )
+
+        Next
+
+        Assert.AreEqual(2 * ViewCatalog.Dialogs.Count, measured, "Every window was built at each DPI.")
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+
+    End Sub
+
+
+    ' Add Metric's Year and the version date keep their widths in a window
+    ' built at 96 to 144 DPI (#255). At a real 125% the Year showed only an
+    ' edge of its box and the version date nothing: each window's grid
+    ' squeezed them as they were added, before it had its size, and
+    ' Windows Forms scaled the squeezed widths as the window finished. Each
+    ' is its 96-DPI width scaled, within 3 pixels: Windows Forms scales
+    ' what is inside a box's border, not the border. At 96 DPI they were
+    ' whole before the fix too.
+    <TestMethod>
+    <DataRow(96)>
+    <DataRow(120)>
+    <DataRow(144)>
+    Public Sub TheYearAndTheVersionDateKeepTheirWidthsAt96To144Dpi(dpi As Integer)
+
+        Dim fields As (View As Type, Field As String, Width As Integer)() = {
+            (GetType(JournalMetricForm), "numYear", 90),
+            (GetType(ManuscriptVersionEditForm), "dtpVersionDate", 190)
+        }
+
+        Dim found As New List(Of String)()
+
+        AtDisplayDpi(
+            dpi,
+            Sub()
+                For Each field As (View As Type, Field As String, Width As Integer) In fields
+
+                    Dim current As (View As Type, Field As String, Width As Integer) = field
+
+                    found.AddRange(
+                        ViewCatalog.ShowEach(
+                            {(current.View.Name, ViewCatalog.Dialogs(current.View))},
+                            Sub(name, shown)
+
+                                Dim control As Control =
+                                    DirectCast(current.View.GetField(current.Field, BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(shown), Control)
+
+                                Dim expected As Integer = CInt(Math.Round(current.Width * dpi / 96.0))
+
+                                If Math.Abs(control.Width - expected) > 3 Then
+                                    found.Add($"{name}'s {current.Field} at {dpi} DPI is {control.Width} pixels wide, not {expected}")
+                                End If
+
+                            End Sub
+                        )
+                    )
+
+                Next
+            End Sub
+        )
+
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
 
     End Sub
 
@@ -1099,6 +1204,62 @@ Public Class ScalingMeasurementTests
     End Sub
 
 
+    ' Runs the action as at a display of the DPI (#255): every window it
+    ' builds is built as that display builds it. Windows Forms reads the
+    ' display's DPI once, as the app starts, and scales a window from it
+    ' when the window's layout resumes at the end of its build
+    ' (DialogScaling.Finish, or a window's own ResumeLayout), before its
+    ' first full layout and before it has a handle; Simulate scales a
+    ' window after it has opened and laid out at 96 DPI. What a window's
+    ' panels did to its controls while it was built is scaled here as at
+    ' the display: at a real 125% About's logo was 130x1 pixels, which
+    ' Simulate scaled from a whole 104x104. Windows Forms is told the DPI
+    ' for the action, through the one value it keeps it in, and told the
+    ' host's again after, with the rest of its scaling state as it was.
+    ' Text keeps the host's size, since GDI measures it at the host's DPI,
+    ' so what this judges is layout, not captions.
+    Friend Shared Sub AtDisplayDpi(dpi As Integer, action As Action)
+
+        Dim helper As Type =
+            Type.GetType("System.Windows.Forms.ScaleHelper, System.Windows.Forms.Primitives", throwOnError:=False)
+
+        Dim display As FieldInfo =
+            helper?.GetField("<InitialSystemDpi>k__BackingField", BindingFlags.Static Or BindingFlags.NonPublic)
+
+        Assert.IsNotNull(display, "Windows Forms keeps the display's DPI where a test can set it; without it no window can be built as at a display.")
+
+        Dim state As List(Of (Field As FieldInfo, Value As Object)) =
+            helper.GetFields(BindingFlags.Static Or BindingFlags.NonPublic Or BindingFlags.Public).
+                Where(Function(field) Not field.IsLiteral AndAlso Not field.IsInitOnly).
+                Select(Function(field) (field, field.GetValue(Nothing))).
+                ToList()
+
+        display.SetValue(Nothing, dpi)
+
+        Try
+
+            ' The measure has teeth only if Windows Forms scales from it.
+            StaRunner.Run(
+                Sub()
+                    Using probe As New Form With {.AutoScaleMode = AutoScaleMode.Dpi}
+                        Assert.AreEqual(New SizeF(dpi, dpi), probe.CurrentAutoScaleDimensions, "Windows Forms scales a window from the display's DPI.")
+                    End Using
+                End Sub
+            )
+
+            action()
+
+        Finally
+
+            For Each kept As (Field As FieldInfo, Value As Object) In state
+                kept.Field.SetValue(Nothing, kept.Value)
+            Next
+
+        End Try
+
+    End Sub
+
+
     ' Grown text and Scale defer the layouts they cause, and Scale drops
     ' them. A window that opens is laid out by the size messages its new
     ' windows get; these windows exist, so each control is laid out by
@@ -1279,8 +1440,11 @@ Public Class ScalingMeasurementTests
                 Continue For
             End If
 
-            ' Before the size: a list squeezed to no height is reported too.
-            InspectRows(child, clip, cut)
+            ' Before the size: a list squeezed to no height is reported too,
+            ' and so is any other control squeezed to a line or to nothing.
+            If Not InspectRows(child, clip, cut) Then
+                InspectSize(child, cut)
+            End If
 
             If child.Width <= 0 OrElse child.Height <= 0 Then
                 Continue For
@@ -1464,8 +1628,9 @@ Public Class ScalingMeasurementTests
     ' line of its font while it has none, below the details view's column
     ' header (the first item's top, or one row while it has none); a grid's
     ' first row, or its row template while it has none, below its column
-    ' headers; and a line of a text box's font.
-    Private Shared Sub InspectRows(control As Control, clip As Rectangle, cut As List(Of String))
+    ' headers; and a line of a text box's font. Whether the control is one
+    ' of these.
+    Private Shared Function InspectRows(control As Control, clip As Rectangle, cut As List(Of String)) As Boolean
 
         Dim kind As String
         Dim row As Integer
@@ -1508,7 +1673,7 @@ Public Class ScalingMeasurementTests
 
         Else
 
-            Return
+            Return False
 
         End If
 
@@ -1516,11 +1681,45 @@ Public Class ScalingMeasurementTests
             Rectangle.Intersect(clip, control.RectangleToScreen(control.ClientRectangle))
 
         If seen.Height - above < 2 * row Then
-            Dim name As String = If(String.IsNullOrWhiteSpace(control.AccessibleName), control.Name, control.AccessibleName)
-            cut.Add(kind & If(String.IsNullOrWhiteSpace(name), String.Empty, " '" & Abbreviate(name) & "'") & " under two rows")
+            cut.Add(kind & Named(control) & " under two rows")
         End If
 
+        Return True
+
+    End Function
+
+
+    ' Every visible control has a few pixels each way (#255). At a real
+    ' 125% About's logo was 130x1 pixels and the version date had no
+    ' width, and the measure, which judged only captions and lists, read
+    ' "ok". What is designed smaller is not reported: a rule or a spacer,
+    ' a panel with nothing in it (the Board card's divider is 1 pixel
+    ' tall), and a label with nothing to say yet, which sizes itself to no
+    ' width.
+    Private Const FewestPixels As Integer = 4
+
+    Private Shared Sub InspectSize(control As Control, cut As List(Of String))
+
+        If control.Width >= FewestPixels AndAlso control.Height >= FewestPixels Then
+            Return
+        End If
+
+        If (control.GetType() Is GetType(Panel) AndAlso control.Controls.Count = 0) OrElse
+           (TypeOf control Is Label AndAlso String.IsNullOrEmpty(control.Text)) Then
+            Return
+        End If
+
+        cut.Add(control.GetType().Name & Named(control) & " collapsed to " & control.Width & "x" & control.Height)
+
     End Sub
+
+
+    ' A control's accessible name, or its name, quoted after a space; empty
+    ' when it has neither.
+    Private Shared Function Named(control As Control) As String
+        Dim name As String = If(String.IsNullOrWhiteSpace(control.AccessibleName), control.Name, control.AccessibleName)
+        Return If(String.IsNullOrWhiteSpace(name), String.Empty, " '" & Abbreviate(name) & "'")
+    End Function
 
 
     ' The text's width on one line, with "&" read as a mnemonic prefix or

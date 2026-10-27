@@ -45,6 +45,33 @@ Public Class AboutFormTests
             End Sub)
     End Sub
 
+    ' The logo at a display's DPI (#255): at a real 125% it was 130x1
+    ' pixels, a line. The window's grid laid it out as it was added, in the
+    ' grid's first 200x100, and Windows Forms scaled that as the window
+    ' finished building. Built as at each display, the logo is square, its
+    ' 104 pixels at 96 DPI scaled, within a pixel. At 96 DPI it was whole
+    ' before the fix too.
+    <TestMethod>
+    <DataRow(96)>
+    <DataRow(120)>
+    <DataRow(144)>
+    Public Sub TheLogoIsSquareAtItsSizeAt96To144Dpi(dpi As Integer)
+        Dim logo As Size = Size.Empty
+        ScalingMeasurementTests.AtDisplayDpi(
+            dpi,
+            Sub()
+                ViewCatalog.ShowAndClose(
+                    "About at " & dpi & " DPI",
+                    Function() New AboutForm(),
+                    Sub(name, shown) logo = Descendants(shown).OfType(Of RailLogo)().Single().ClientSize)
+            End Sub)
+
+        Dim expected As Integer = CInt(Math.Round(104 * dpi / 96.0))
+        Assert.IsTrue(
+            Math.Abs(logo.Width - expected) <= 1 AndAlso Math.Abs(logo.Height - expected) <= 1,
+            $"At {dpi} DPI the logo is {expected}x{expected}: {logo.Width}x{logo.Height}.")
+    End Sub
+
     Private Shared Sub ShowOffscreen(form As Form)
         form.StartPosition = FormStartPosition.Manual
         form.Location = New Point(-20000, -20000)

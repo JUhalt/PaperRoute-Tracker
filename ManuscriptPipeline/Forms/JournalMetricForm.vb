@@ -70,6 +70,11 @@ Namespace Forms
             Me.Font = New Font("Segoe UI", 10.0F)
             Me.AutoScaleMode = AutoScaleMode.Dpi
 
+            ' The table holds its layout until the window is scaled (#255).
+            ' Laid out as the Year was added, in the table's first 200x100,
+            ' the Year was squeezed to a sliver, and at 125% Windows Forms
+            ' scaled the squeezed width, which the Year then kept.
+            root.SuspendLayout()
             root.Dock = DockStyle.Fill
             root.ColumnCount = 2
             root.Padding = New Padding(20, 16, 20, 12)
@@ -156,6 +161,7 @@ Namespace Forms
             Me.CancelButton = btnCancel
             Me.Controls.Add(root)
 
+            root.ResumeLayout(False)
             Me.ResumeLayout(False)
             Me.PerformLayout()
 
