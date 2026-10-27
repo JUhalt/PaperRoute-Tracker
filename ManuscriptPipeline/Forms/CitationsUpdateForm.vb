@@ -237,6 +237,9 @@ Namespace Forms
             chkLinked.Visible = False
             body.Controls.Clear()
             body.Controls.Add(lvWorks)
+            ' Styled as it joins the window (#258): the window was styled
+            ' before, and in Dark the list kept Windows' Light check boxes.
+            UiPolish.ApplyToControls(body)
             lblIntro.Text = "Check the works that are yours. Only checked works count toward your figures; versions of one work on your ORCID record count once."
 
             _allowCheck = True
