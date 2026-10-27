@@ -1017,11 +1017,14 @@ Namespace Forms
                         )
                     )
 
+                    ' As far from the chip after it as a chip is (#258): it
+                    ' touched CURRENT VERSION.
                     host.Controls.Add(
                         New ContextHelpControl(
                             WorkflowHelpCatalog.CurrentState
                         ) With {
-                            .AccessibleName = "Help: Current state"
+                            .AccessibleName = "Help: Current state",
+                            .Margin = New Padding(5, 0, 6, 0)
                         }
                     )
 
@@ -1044,7 +1047,8 @@ Namespace Forms
                     New ContextHelpControl(
                         WorkflowHelpCatalog.CurrentVersion
                     ) With {
-                        .AccessibleName = "Help: Current version"
+                        .AccessibleName = "Help: Current version",
+                        .Margin = New Padding(5, 0, 6, 0)
                     }
                 )
 
@@ -1092,10 +1096,14 @@ Namespace Forms
             color As Color
         ) As Label
 
+            ' The caption in the middle of its box (#258): C3 saw it drawn at
+            ' the top of a box taller than its text, 6 pixels above and 11
+            ' below at 125%.
             Return New Label With {
                 .UseMnemonic = False,
                 .Text = text,
                 .AutoSize = True,
+                .TextAlign = ContentAlignment.MiddleCenter,
                 .Padding = New Padding(7, 2, 7, 2),
                 .Margin = New Padding(0, 0, 6, 2),
                 .BackColor = UiTheme.CardBackground(),

@@ -525,6 +525,111 @@ Public Class DialogPolishTests
 
 
     ' ---------------------------------------------------------------
+    ' Route View (item 8)
+    ' ---------------------------------------------------------------
+
+    ' Route View's help icon keeps a gap before the chip after it (#258,
+    ' item 8). CURRENT STATE's "?" touched the CURRENT VERSION chip. Each
+    ' help icon is at least 4 pixels (at 96 DPI) from what follows it on its
+    ' line.
+    '
+    ' The chips' captions are a guard, which cannot fail before the change:
+    ' C3 saw them sit high at 125%, 6 pixels above and 11 below, in boxes
+    ' about 5 pixels taller than their text. Drawn here as the app draws
+    ' text, with GDI, each chip is as tall as its caption and its padding,
+    ' and its ink is within 2 pixels of the middle at each DPI; the captions
+    ' are now centred in their boxes, which changes nothing in a box that
+    ' tight, and the taller box C3 saw is left to its capture.
+    <TestMethod>
+    Public Sub RouteViewHelpIconsKeepAGapAndChipCaptionsSitInTheMiddle()
+
+        Dim chips As String() = {"CURRENT STATE", "CURRENT VERSION"}
+        Dim found As New List(Of String)()
+        Dim measured As New List(Of String)()
+        Dim icons As Integer = 0
+
+        Dim failures As List(Of String) =
+            AtEachDpi(
+                {("ManuscriptRouteViewForm", GetType(ManuscriptRouteViewForm), Function() ViewCatalog.Dialogs(GetType(ManuscriptRouteViewForm))(String.Empty))},
+                Sub(name, shown, dpi)
+
+                    For Each help As ContextHelpControl In ViewCatalog.Descendants(shown).OfType(Of ContextHelpControl)().Where(Function(item) item.Visible AndAlso TypeOf item.Parent Is FlowLayoutPanel)
+
+                        Dim siblings As Control.ControlCollection = help.Parent.Controls
+                        Dim index As Integer = siblings.IndexOf(help)
+                        Dim [next] As Control = If(index + 1 < siblings.Count, siblings(index + 1), Nothing)
+
+                        If [next] Is Nothing OrElse Not [next].Visible OrElse [next].Top >= help.Bottom Then
+                            Continue For
+                        End If
+
+                        icons += 1
+
+                        If [next].Left - help.Right < UiTheme.Px(4, dpi) Then
+                            found.Add($"{name} at {dpi} DPI: '{help.AccessibleName}' is {[next].Left - help.Right} pixels from '{[next].Text}'.")
+                        End If
+
+                    Next
+
+                    For Each chip As Label In ViewCatalog.Descendants(shown).OfType(Of Label)().Where(Function(item) item.Visible AndAlso chips.Contains(item.Text))
+
+                        Dim ink As (Above As Integer, Below As Integer) = InkGaps(chip)
+                        Dim line As String = $"{name} at {dpi} DPI: '{chip.Text}', {chip.Height} pixels tall, has {ink.Above} above its caption and {ink.Below} below"
+
+                        measured.Add(line)
+
+                        If Math.Abs(ink.Above - ink.Below) > 2 Then
+                            found.Add(line)
+                        End If
+
+                    Next
+
+                End Sub)
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        Assert.IsTrue(icons >= Dpis.Length, "A help icon with a chip after it was judged at each DPI.")
+        Assert.IsTrue(measured.Count >= 2 * Dpis.Length, "Both chips were judged at each DPI: " & String.Join("; ", measured))
+
+    End Sub
+
+
+    ' The rows of a label's picture above and below its caption's ink: the
+    ' pixels that differ clearly from its back color.
+    Private Shared Function InkGaps(label As Label) As (Above As Integer, Below As Integer)
+
+        ' The app draws text with GDI; a test host starts with GDI+.
+        label.UseCompatibleTextRendering = False
+
+        Using image As New Bitmap(label.Width, label.Height, PixelFormat.Format32bppArgb)
+
+            label.DrawToBitmap(image, New Rectangle(Point.Empty, label.Size))
+
+            Dim back As Color = label.BackColor
+            Dim inked As New List(Of Integer)()
+
+            For y As Integer = 0 To image.Height - 1
+                For x As Integer = 0 To image.Width - 1
+                    Dim pixel As Color = image.GetPixel(x, y)
+                    If Math.Abs(CInt(pixel.R) - back.R) + Math.Abs(CInt(pixel.G) - back.G) + Math.Abs(CInt(pixel.B) - back.B) > 96 Then
+                        inked.Add(y)
+                        Exit For
+                    End If
+                Next
+            Next
+
+            If inked.Count = 0 Then
+                Throw New InvalidOperationException("'" & label.Text & "' drew no caption.")
+            End If
+
+            Return (inked.Min(), image.Height - 1 - inked.Max())
+
+        End Using
+
+    End Function
+
+
+    ' ---------------------------------------------------------------
     ' Showing a view at each DPI
     ' ---------------------------------------------------------------
 
