@@ -546,6 +546,105 @@ Public Class DashboardShelfLayoutTests
             End Sub)
     End Sub
 
+    ' The empty Board's privacy note has as much room below its text as
+    ' above (#258, item 14). Its panel was sized to the text as the welcome
+    ' was built, before the note had the window's font, and the text then
+    ' grew: 14 pixels above it and 2 below at 125%, the descenders nearly
+    ' on the edge. With the window's text at 100%, 125% and 150%, the note
+    ' is as far from the panel's bottom as from its top, to a pixel.
+    <TestMethod>
+    Public Sub TheEmptyBoardsPrivacyNoteSitsInTheMiddleOfItsPanel()
+        For Each scale As Single In {1.0F, 1.25F, 1.5F}
+            Dim fontScale As Single = scale
+            RunOnStaThread(
+                Sub()
+                    Using board As New LayoutOnlyBoard()
+                        board.Prepare(fontScale)
+                        board.SetManuscripts(New List(Of Manuscript)())
+                        board.Show()
+                        Application.DoEvents()
+
+                        Dim note As Label = Descendants(board).OfType(Of Label)().Single(Function(label) label.Text.StartsWith("PaperRoute keeps your library on this computer.", StringComparison.Ordinal))
+                        Dim panel As Control = note.Parent
+                        Assert.IsTrue(note.Visible, "The welcome shows on an empty library.")
+
+                        Dim above As Integer = note.Top
+                        Dim below As Integer = panel.ClientSize.Height - note.Bottom
+                        Assert.IsTrue(Math.Abs(above - below) <= 1, $"With the text at {fontScale:P0} the note has {above} pixels above it in its panel and {below} below.")
+
+                        board.Close()
+                    End Using
+                End Sub)
+        Next
+    End Sub
+
+    ' A card's route line sits where it does whether or not it is cut short
+    ' (#258, item 15). Cut short with an ellipsis, "2nd journal · major
+    ' rev..." sat 2 pixels above every other card's route line and its own
+    ' View route: a label centres its text only when the text fits its box,
+    ' and the box was taller than a line. With the window's text at 100%,
+    ' 125% and 150%, the line's ink starts on the same row cut short as
+    ' whole.
+    <TestMethod>
+    Public Sub ACardsShortenedRouteLineSitsWhereAWholeOneDoes()
+        For Each scale As Single In {1.0F, 1.25F, 1.5F}
+            Dim fontScale As Single = scale
+            RunOnStaThread(
+                Sub()
+                    Using board As New LayoutOnlyBoard()
+                        board.Prepare(fontScale)
+                        board.Show()
+                        Application.DoEvents()
+
+                        Dim card As Control = board.Shelves.First().Controls(0)
+                        Dim route As Label = card.Controls.OfType(Of Label)().Single(Function(label) Not TypeOf label Is LinkLabel AndAlso label.AutoEllipsis AndAlso label.TextAlign = ContentAlignment.MiddleLeft)
+                        ' The app draws text with GDI; a test host starts with GDI+.
+                        route.UseCompatibleTextRendering = False
+
+                        route.Text = "2nd journal"
+                        Application.DoEvents()
+                        Dim whole As Integer = InkTop(route)
+
+                        route.Text = "2nd journal · major revision · two rejections before it, and a long way still to go"
+                        Application.DoEvents()
+                        Assert.IsTrue(TextRenderer.MeasureText(route.Text, route.Font).Width > route.Width, "The long line is cut short.")
+                        Dim shortened As Integer = InkTop(route)
+
+                        Assert.AreEqual(whole, shortened, $"With the text at {fontScale:P0} the route line's ink starts {whole} pixels into its {route.Height}-pixel box whole and {shortened} cut short.")
+
+                        board.Close()
+                    End Using
+                End Sub)
+        Next
+    End Sub
+
+    ' The first row of a control's picture with ink on it: a pixel clearly
+    ' unlike the commonest color, its background.
+    Private Shared Function InkTop(control As Control) As Integer
+        Using image As New Bitmap(control.Width, control.Height)
+            control.DrawToBitmap(image, New Rectangle(Point.Empty, control.Size))
+            Dim counts As New Dictionary(Of Integer, Integer)()
+            For y As Integer = 0 To image.Height - 1
+                For x As Integer = 0 To image.Width - 1
+                    Dim pixel As Integer = image.GetPixel(x, y).ToArgb()
+                    Dim count As Integer = 0
+                    counts.TryGetValue(pixel, count)
+                    counts(pixel) = count + 1
+                Next
+            Next
+            Dim back As Color = Color.FromArgb(counts.OrderByDescending(Function(entry) entry.Value).First().Key)
+            For y As Integer = 0 To image.Height - 1
+                For x As Integer = 0 To image.Width - 1
+                    Dim pixel As Color = image.GetPixel(x, y)
+                    If Math.Abs(CInt(pixel.R) - back.R) + Math.Abs(CInt(pixel.G) - back.G) + Math.Abs(CInt(pixel.B) - back.B) > 96 Then
+                        Return y
+                    End If
+                Next
+            Next
+            Throw New InvalidOperationException("'" & control.Text & "' drew no ink.")
+        End Using
+    End Function
+
     Private Shared Sub AssertTagStrip(card As Control, context As String)
         Dim strip As TagStrip = card.Controls.OfType(Of TagStrip)().Single()
         Dim journal As Label = card.Controls.OfType(Of Label)().Single(Function(label) label.Text = "Memory & Cognition")

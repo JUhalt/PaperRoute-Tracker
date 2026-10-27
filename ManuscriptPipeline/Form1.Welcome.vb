@@ -161,8 +161,17 @@ Partial Public Class Form1
         }
 
         privacy.Controls.Add(lblPrivacy)
-        privacy.Size = New Size(lblPrivacy.PreferredSize.Width + privacy.Padding.Horizontal, lblPrivacy.PreferredSize.Height + privacy.Padding.Vertical)
         lblPrivacy.Location = New Point(privacy.Padding.Left, privacy.Padding.Top)
+
+        ' The panel follows its text (#258): sized once, as the welcome was
+        ' built, it kept the height of the default font's text, and the
+        ' window's larger text ran down to its bottom edge.
+        Dim fitPrivacy As Action =
+            Sub()
+                privacy.Size = New Size(lblPrivacy.Width + privacy.Padding.Horizontal, lblPrivacy.Height + privacy.Padding.Vertical)
+            End Sub
+        AddHandler lblPrivacy.SizeChanged, Sub(sender, e) fitPrivacy()
+        fitPrivacy()
 
         column.Controls.Add(lblTitle)
         column.Controls.Add(lblText)

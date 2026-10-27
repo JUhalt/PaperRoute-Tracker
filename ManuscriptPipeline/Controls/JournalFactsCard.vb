@@ -38,6 +38,20 @@ Namespace Controls
             content.BackColor = BackColor
             content.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
             Controls.Add(content)
+
+            ' Scrolls to the end of the content and the padding below it
+            ' (#258): the range kept the content's height from before its
+            ' text last wrapped, until something laid the card out again,
+            ' and then ended at the content's last line, on the border. A
+            ' range set as the content grows takes effect at the card's next
+            ' layout, so the card is laid out once more after.
+            AddHandler content.SizeChanged,
+                Sub(sender, e)
+                    AutoScrollMinSize = New Size(0, content.Height + Padding.Vertical)
+                    If IsHandleCreated Then
+                        BeginInvoke(New Action(AddressOf PerformLayout))
+                    End If
+                End Sub
         End Sub
 
 

@@ -3168,14 +3168,17 @@ Public Class Form1
         dots.Top = footerTop + (footerHeight - dots.Height) \ 2
         dots.Visible = route.Dots.Count > 0
 
+        ' A line tall, in the middle of the footer (#258): a label centres
+        ' its text only while the text fits, so in a taller box a line cut
+        ' short with an ellipsis sat 2 pixels above the others.
         Dim lblRouteSummary As New Label With {
             .Text = route.Text,
             .AutoSize = False,
             .AutoEllipsis = True,
             .UseMnemonic = False,
             .Left = If(route.Dots.Count > 0, dots.Right + UiTheme.Px(6, dpi), pad),
-            .Top = footerTop,
-            .Height = footerHeight,
+            .Top = footerTop + (footerHeight - metaLine) \ 2,
+            .Height = metaLine,
             .TextAlign = ContentAlignment.MiddleLeft,
             .Font = cardMetaFont,
             .ForeColor = UiTheme.SecondaryText()

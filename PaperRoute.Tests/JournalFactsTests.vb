@@ -694,6 +694,51 @@ Public Class JournalFactsTests
             End Sub)
     End Sub
 
+    ' The Journals page's card keeps its padding below its last line when
+    ' it scrolls (#258, item 13). Its content filled the scroll range to the
+    ' card's edge, so scrolled to the end the last line painted over the
+    ' card's bottom border. Scrolled to the end, with the text at 100%, 125%
+    ' and 150%, the last line ends at least the card's bottom padding above
+    ' its edge.
+    <TestMethod>
+    Public Sub TheJournalLibraryCardKeepsItsPaddingBelowItsLastLineWhenScrolled()
+        For Each scale As Single In {1.0F, 1.25F, 1.5F}
+            Dim textScale As Single = scale
+            RunOnStaThread(
+                Sub()
+                    Dim repository As New AuthorLibraryRepository(Path.Combine(_directory, "data-" & CInt(textScale * 100)))
+                    Dim plos As New JournalRecord With {.Name = "PLOS ONE", .Issns = New List(Of String) From {"1932-6203"}}
+                    JournalFactsService.Apply(plos, JournalFactsService.Plan(plos, PlosLookup()))
+                    repository.Save(New AuthorLibraryData With {.Journals = New List(Of JournalRecord) From {plos}})
+
+                    Using page As New JournalLibraryForm(Enumerable.Empty(Of Manuscript)(), repository, New RecordedFacts(PlosLookup()))
+                        page.Font = New Font(page.Font.FontFamily, 10.0F * textScale)
+                        ShowOffscreen(page)
+                        page.Height = page.LogicalToDeviceUnits(520)
+                        page.SelectJournal(plos.Id)
+                        Application.DoEvents()
+
+                        Dim card As JournalFactsCard = page.Card
+                        Assert.IsTrue(card.VerticalScroll.Visible, "The card has more than it shows.")
+
+                        card.AutoScrollPosition = New Point(0, card.DisplayRectangle.Height)
+                        Application.DoEvents()
+
+                        Dim last As Control =
+                            ViewCatalog.Descendants(card).Where(Function(item) item.Visible AndAlso Not item.HasChildren).
+                                OrderBy(Function(item) card.RectangleToClient(item.Parent.RectangleToScreen(item.Bounds)).Bottom).Last()
+                        Dim below As Integer = card.ClientSize.Height - card.RectangleToClient(last.Parent.RectangleToScreen(last.Bounds)).Bottom
+
+                        Assert.IsTrue(below >= card.Padding.Bottom,
+                            $"With the text at {textScale:P0}, scrolled to the end, the last line ends {below} pixels above the card's edge, inside its {card.Padding.Bottom}-pixel padding: " &
+                            $"'{last.Text}' in a card {card.ClientSize} scrolled to {card.AutoScrollPosition} of {card.DisplayRectangle}, its content at {card.Controls(0).Bounds}.")
+
+                        page.Close()
+                    End Using
+                End Sub)
+        Next
+    End Sub
+
     <TestMethod>
     Public Sub TheLookupDialogPreviewsWhatWasFoundBeforeSaving()
         RunOnStaThread(
