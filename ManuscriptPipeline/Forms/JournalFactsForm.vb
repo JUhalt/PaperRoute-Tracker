@@ -202,7 +202,8 @@ Namespace Forms
         End Sub
 
 
-        ' UiPolish has no ListView branch, so the lists take the theme here.
+        ' A list takes the theme's colors as it is built; one that joins the
+        ' window after it was styled is styled again as it joins (#258).
         Private Sub ConfigureList(list As ListView, checkBoxes As Boolean)
             list.Dock = DockStyle.Fill
             list.View = View.Details
