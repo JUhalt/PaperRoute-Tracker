@@ -63,7 +63,7 @@ Namespace Forms
                     End If
                     Return If(_working.ReviewerResponses.Count = 0,
                               "No reviewer comments yet. Choose Add Comment... to record the first request.",
-                              "No comments have this status.")
+                              "No comments have this status. Choose All statuses to see the complete matrix.")
                 End Function)
             UiPolish.ApplyDialog(Me)
             RefreshItems()

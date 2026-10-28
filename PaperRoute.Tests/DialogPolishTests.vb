@@ -61,7 +61,11 @@ Public Class DialogPolishTests
 
                         judged.Add(name & ": " & text)
 
-                        If Not DrawsEndingInAnEllipsis(combo, text, box.Size) Then
+                        ' Windows asks only an owner-drawn combo to draw its
+                        ' item; one it draws itself cuts the text mid-letter.
+                        If combo.DrawMode = DrawMode.Normal Then
+                            found.Add($"{name} at {dpi} DPI: '{text}' is wider than its {box.Width}-pixel box, and Windows draws it.")
+                        ElseIf Not DrawsEndingInAnEllipsis(combo, text, box.Size) Then
                             found.Add($"{name} at {dpi} DPI: '{text}' is wider than its {box.Width}-pixel box and is not drawn ending in an ellipsis.")
                         End If
 
@@ -78,7 +82,9 @@ Public Class DialogPolishTests
 
     ' Whether the combo draws its item, in a box of the given size as
     ' Windows asks it to, with the pixels TextRenderer draws for the text
-    ' ending in an ellipsis. A combo Windows draws draws nothing here.
+    ' ending in an ellipsis. OnDrawItem raises DrawItem whatever the
+    ' combo's DrawMode, so a combo with no handler draws nothing here;
+    ' whether Windows asks it to draw at all is the caller's check.
     Private Shared Function DrawsEndingInAnEllipsis(combo As ComboBox, text As String, size As Size) As Boolean
 
         Dim bounds As New Rectangle(Point.Empty, size)
@@ -163,11 +169,15 @@ Public Class DialogPolishTests
     ' lookup's at its least height and the journals' list narrowed until
     ' its columns run 6 pixels past it, has no horizontal bar while all its
     ' columns but the last, and the last one's caption, fit beside each
-    ' other.
+    ' other. Below that the list scrolls as it did before #258 and its last
+    ' column keeps the width the window built it with: the journals' list
+    ' at its window's least width, where the fit cut "Yours" to its caption
+    ' and "On your shortlist" to an ellipsis while the list scrolled anyway.
     <TestMethod>
     Public Sub LookupAndJournalListsScrollSidewaysOnlyWhenTheirColumnsCannotFit()
 
         Dim judged As New List(Of String)()
+        Dim narrowed As New List(Of String)()
         Dim found As New List(Of String)()
         Dim failures As New List(Of String)()
 
@@ -202,6 +212,16 @@ Public Class DialogPolishTests
                         shown.Width -= list.ClientSize.Width - (columns - 6)
                         Application.DoEvents()
                         JudgeSidewaysBar(name & " at " & at & " DPI", list, judged, found)
+
+                        shown.Width = shown.MinimumSize.Width
+                        Application.DoEvents()
+                        Dim yours As ColumnHeader = list.Columns(list.Columns.Count - 1)
+                        Dim others As Integer = list.Columns.Cast(Of ColumnHeader)().Where(Function(column) column IsNot yours).Sum(Function(column) column.Width)
+                        Assert.IsTrue(others > list.ClientSize.Width, $"At its least width the list's {others} pixels of columns before 'Yours' run past its {list.ClientSize.Width}.")
+                        narrowed.Add(name & " at " & at & " DPI")
+                        If yours.Width < list.LogicalToDeviceUnits(150) Then
+                            found.Add($"{name} at {at} DPI, at its least width: 'Yours' is {yours.Width} pixels of the {list.LogicalToDeviceUnits(150)} it was built with, in a list that scrolls sideways: {HasStyle(list, WS_HSCROLL)}.")
+                        End If
                     End Sub))
 
         Next
@@ -209,6 +229,7 @@ Public Class DialogPolishTests
         Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
         Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
         Assert.AreEqual(2 * Dpis.Length, judged.Count, "Both lists were judged at each DPI: " & String.Join("; ", judged))
+        Assert.AreEqual(Dpis.Length, narrowed.Count, "The journals' list was narrowed at each DPI: " & String.Join("; ", narrowed))
 
     End Sub
 
@@ -681,7 +702,8 @@ Public Class DialogPolishTests
     ' the details box beside it "No reviewer comments yet. Choose Add
     ' Comment to begin."; so too with no decision and with a status that
     ' has no comments. The list's hint is the one sentence, and the details
-    ' box, with no comment selected, is empty.
+    ' box, with no comment selected, is empty. Behind a status filter the
+    ' hint still says to choose All statuses, as the details box did.
     <TestMethod>
     Public Sub ReviewerResponseMatrixSaysOnceThatItHasNothingToShow()
 
@@ -730,6 +752,12 @@ Public Class DialogPolishTests
 
                     If details.TextLength > 0 Then
                         found.Add($"{name}: the list says ""{hint.Text}"" and the details box ""{details.Text}"".")
+                    End If
+
+                    ' The one sentence keeps the way back to every comment
+                    ' that the details box gave.
+                    If name = "With no comments of the chosen status" AndAlso Not hint.Text.Contains("Choose All statuses") Then
+                        found.Add($"{name}: the list says ""{hint.Text}"" and nothing says how to see every comment again.")
                     End If
 
                 End Sub)
