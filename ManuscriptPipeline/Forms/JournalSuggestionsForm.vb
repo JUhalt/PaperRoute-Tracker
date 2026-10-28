@@ -480,6 +480,9 @@ Namespace Forms
             If result.ExamplesBusy IsNot Nothing Then NoteExamplesBusy(result.ExamplesBusy)
             body.Controls.Clear()
             body.Controls.Add(evidencePanel)
+            ' Styled as it joins the window (#258): the window was styled
+            ' before, and in Dark the list kept Windows' Light check boxes.
+            UiPolish.ApplyToControls(body)
             btnBack.Visible = True
             btnPrimary.Text = "Add Checked to Shortlist"
 

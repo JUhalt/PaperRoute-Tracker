@@ -370,6 +370,9 @@ Namespace Forms
             searchRow.Visible = False
             body.Controls.Clear()
             body.Controls.Add(lvChanges)
+            ' Styled as it joins the window (#258): the window was styled
+            ' before, and in Dark the list kept Windows' Light check boxes.
+            UiPolish.ApplyToControls(body)
 
             _allowCheck = True
             lvChanges.BeginUpdate()

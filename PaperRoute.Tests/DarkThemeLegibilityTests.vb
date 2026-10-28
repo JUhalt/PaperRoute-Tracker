@@ -713,6 +713,100 @@ Public Class DarkThemeLegibilityTests
 
     End Sub
 
+    ' The journals found in Journals That Publish Work Like This have the
+    ' theme's check marks in Dark when the window is styled as the app
+    ' styles it (#258). The list joins the window only once the search has
+    ' found the journals, after the window was styled, so its marks stayed
+    ' Windows' own: a near-white square, as the certification capture
+    ' showed. Styled before the search, each mark is the accent when
+    ' checked, and the card color inside the secondary outline when not.
+    <TestMethod>
+    Public Sub CheckGlyph_JournalSuggestionsMarksFollowTheTokensWhenStyledBeforeTheSearchInDark()
+
+        RunWithColorMode(SystemColorMode.Dark,
+            Sub()
+                Dim found As New JournalSuggestionsResult With {
+                    .Journals = New List(Of JournalSuggestion) From {
+                        New JournalSuggestion With {.OpenAlexId = "S1", .Name = "Fictional Journal of Anchoring", .Publisher = "Fictional Press", .MatchingArticles = 12, .AllArticles = 400, .ExamplesLoaded = True},
+                        New JournalSuggestion With {.OpenAlexId = "S2", .Name = "Fictional Review of Judgment", .Publisher = "Fictional Press", .MatchingArticles = 8, .AllArticles = 300, .ExamplesLoaded = True}
+                    },
+                    .TotalMatching = 20
+                }
+                Using dialog As New JournalSuggestionsForm("Anchoring", {"anchoring effects"}, New JournalSuggestionsTests.RecordedSuggestions(found), Nothing, Nothing, DateTime.Today)
+                    ShowOffscreen(dialog)
+                    ' As the idle hook styles each window once it is open.
+                    UiPolish.ApplyDialog(dialog)
+                    Application.DoEvents()
+                    dialog.SearchAsync().GetAwaiter().GetResult()
+                    Application.DoEvents()
+
+                    Dim list As ListView = dialog.JournalsList
+                    ' Every journal starts clear; the second is checked here.
+                    list.Items(1).Checked = True
+                    Application.DoEvents()
+                    Dim marks As List(Of (Cell As Rectangle, Checked As Boolean)) = CheckMarks(list).ToList()
+                    Assert.IsTrue(marks.Any(Function(mark) mark.Checked) AndAlso marks.Any(Function(mark) Not mark.Checked), "There are checked and clear marks.")
+
+                    Using image As Bitmap = Picture(list)
+                        Dim client As Point = ClientOffset(list)
+                        For Each mark In marks
+                            Dim cell As Rectangle = mark.Cell
+                            cell.Offset(client)
+                            Dim color As Color? = MarkColor(image, cell)
+                            Dim expected As Color() = If(mark.Checked, {UiTheme.AccentColor()}, {UiTheme.SecondaryText(), UiTheme.CardBackground()})
+                            Assert.IsTrue(color.HasValue AndAlso expected.Any(Function(item) item.ToArgb() = color.Value.ToArgb()), $"A {If(mark.Checked, "checked", "clear")} mark is mostly {color}.")
+                        Next
+                    End Using
+                End Using
+            End Sub)
+
+    End Sub
+
+    ' What Look Up Journal Facts found has the theme's check marks in Dark
+    ' when the window is styled as the app styles it (#258). The list joins
+    ' the window only once the lookup has found the facts, after the window
+    ' was styled, so its marks stayed Windows' own. Styled before the
+    ' lookup, each mark is the accent when checked, and the card color
+    ' inside the secondary outline when not.
+    <TestMethod>
+    Public Sub CheckGlyph_JournalFactsMarksFollowTheTokensWhenStyledBeforeTheLookupInDark()
+
+        RunWithColorMode(SystemColorMode.Dark,
+            Sub()
+                ' The researcher's own publisher is kept, so its row is clear.
+                Dim record As New JournalRecord With {.Name = "Fictional Journal", .Publisher = "Fictional Press (my spelling)", .Issns = New List(Of String) From {"1932-6203"}}
+                Dim lookup As New JournalFactsLookup With {
+                    .Issns = New List(Of String) From {"1932-6203"},
+                    .Doaj = New DoajJournal With {.Title = "Fictional Journal", .Publisher = "Fictional Press", .HomepageUrl = "https://journal.example.invalid/"},
+                    .DoajChecked = True
+                }
+                Using dialog As New JournalFactsForm(record, New JournalFactsTests.RecordedFacts(lookup))
+                    ShowOffscreen(dialog)
+                    ' As the idle hook styles each window once it is open.
+                    UiPolish.ApplyDialog(dialog)
+                    Application.DoEvents()
+                    dialog.LookUpAsync().GetAwaiter().GetResult()
+                    Application.DoEvents()
+
+                    Dim list As ListView = dialog.ChangesList
+                    Dim marks As List(Of (Cell As Rectangle, Checked As Boolean)) = CheckMarks(list).ToList()
+                    Assert.IsTrue(marks.Any(Function(mark) mark.Checked) AndAlso marks.Any(Function(mark) Not mark.Checked), "There are checked and clear marks.")
+
+                    Using image As Bitmap = Picture(list)
+                        Dim client As Point = ClientOffset(list)
+                        For Each mark In marks
+                            Dim cell As Rectangle = mark.Cell
+                            cell.Offset(client)
+                            Dim color As Color? = MarkColor(image, cell)
+                            Dim expected As Color() = If(mark.Checked, {UiTheme.AccentColor()}, {UiTheme.SecondaryText(), UiTheme.CardBackground()})
+                            Assert.IsTrue(color.HasValue AndAlso expected.Any(Function(item) item.ToArgb() = color.Value.ToArgb()), $"A {If(mark.Checked, "checked", "clear")} mark is mostly {color}.")
+                        Next
+                    End Using
+                End Using
+            End Sub)
+
+    End Sub
+
     ' ---------------------------------------------------------------
     ' Disabled captions
     ' ---------------------------------------------------------------
