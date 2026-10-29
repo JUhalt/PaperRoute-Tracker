@@ -2,6 +2,7 @@ Imports System
 Imports System.Drawing
 Imports System.Linq
 Imports System.Windows.Forms
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
@@ -336,6 +337,16 @@ Namespace Forms
 
             Me.CancelButton =
                 btnCancel
+
+            ' A long version label or journal name ends in an ellipsis
+            ' rather than being cut mid-letter (#258).
+            For Each combo As ComboBox In {cmbVersion, cmbReadiness, cmbSubmission}
+
+                ComboEllipsis.Attach(
+                    combo
+                )
+
+            Next
 
             Me.Controls.Add(
                 root

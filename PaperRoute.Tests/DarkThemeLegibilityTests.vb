@@ -627,6 +627,186 @@ Public Class DarkThemeLegibilityTests
 
     End Sub
 
+    ' No column line crosses a group heading in Update Your Citations in
+    ' Dark (#258, item 9). In Dark Windows draws a line down each column's
+    ' edge, and the line between Work and Year ran through the headings this
+    ' list draws itself. The first heading ends before that edge: across
+    ' its row there, but for its rule, the list is its own color.
+    <TestMethod>
+    Public Sub GroupHeadingsInTheCitationsUpdateListAreNotCrossedByColumnLinesInDark()
+
+        RunWithColorMode(SystemColorMode.Dark,
+            Sub()
+                Using dialog As CitationsUpdateForm = ViewCatalog.CitationsDialog()
+                    ShowOffscreen(dialog)
+                    dialog.LookUpAsync().GetAwaiter().GetResult()
+                    Application.DoEvents()
+
+                    Dim list As ListView = dialog.WorksList
+                    Dim group As ListViewGroup = list.Groups(0)
+                    Dim edge As Integer = list.Columns(0).Width
+
+                    Assert.IsTrue(TextRenderer.MeasureText(group.Header, list.Font).Width + list.LogicalToDeviceUnits(20) < edge, "The first heading ends before the edge of the Work column.")
+
+                    Using image As Bitmap = Picture(list)
+                        Dim client As Point = ClientOffset(list)
+                        Dim firstRow As Rectangle = group.Items(0).Bounds
+                        ' The heading's row, as AssertHeadingsReadable finds it.
+                        Dim heading As Rectangle = Rectangle.FromLTRB(client.X + edge - 3, client.Y + firstRow.Top - list.Font.Height, client.X + edge + 3, client.Y + firstRow.Top - 2)
+                        Dim crossed As New List(Of String)()
+                        For y As Integer = heading.Top To heading.Bottom - 1
+                            Dim row As New List(Of Color)()
+                            For x As Integer = heading.Left To heading.Right - 1
+                                row.Add(image.GetPixel(x, y))
+                            Next
+                            ' The rule runs the width of the row in one color.
+                            Dim rule As Boolean = row.All(Function(pixel) pixel.ToArgb() = UiTheme.CardBorder().ToArgb())
+                            If Not rule AndAlso row.Any(Function(pixel) pixel.ToArgb() <> list.BackColor.ToArgb()) Then
+                                crossed.Add($"y {y - client.Y}: {String.Join(", ", row.Select(Function(pixel) pixel.Name))}")
+                            End If
+                        Next
+                        Assert.AreEqual(0, crossed.Count, $"Across '{group.Header}' at the Work column's edge the row is {list.BackColor.Name} but for the rule:{Environment.NewLine}{String.Join(Environment.NewLine, crossed)}")
+                    End Using
+                End Using
+            End Sub)
+
+    End Sub
+
+    ' The works found in Update Your Citations have the theme's check marks
+    ' in Dark when the window is styled as the app styles it (#258, item 9).
+    ' The list joins the window only once the lookup has found the works,
+    ' after the window was styled as it was made and again as it opened, so
+    ' its marks stayed Windows' own: a near-white square, and Windows blue
+    ' when checked. The catalog styles a step once it has reached it, so
+    ' the sweep above found them themed. Styled before the lookup, each
+    ' mark is the accent when checked, and the card color inside the
+    ' secondary outline when not.
+    <TestMethod>
+    Public Sub CheckGlyph_CitationsUpdateMarksFollowTheTokensWhenStyledBeforeTheLookupInDark()
+
+        RunWithColorMode(SystemColorMode.Dark,
+            Sub()
+                Using dialog As CitationsUpdateForm = ViewCatalog.CitationsDialog()
+                    ShowOffscreen(dialog)
+                    ' As the idle hook styles each window once it is open.
+                    UiPolish.ApplyDialog(dialog)
+                    Application.DoEvents()
+                    dialog.LookUpAsync().GetAwaiter().GetResult()
+                    Application.DoEvents()
+
+                    Dim list As ListView = dialog.WorksList
+                    Dim marks As List(Of (Cell As Rectangle, Checked As Boolean)) = CheckMarks(list).ToList()
+                    Assert.IsTrue(marks.Any(Function(mark) mark.Checked) AndAlso marks.Any(Function(mark) Not mark.Checked), "There are checked and clear marks.")
+
+                    Using image As Bitmap = Picture(list)
+                        Dim client As Point = ClientOffset(list)
+                        For Each mark In marks
+                            Dim cell As Rectangle = mark.Cell
+                            cell.Offset(client)
+                            Dim color As Color? = MarkColor(image, cell)
+                            Dim expected As Color() = If(mark.Checked, {UiTheme.AccentColor()}, {UiTheme.SecondaryText(), UiTheme.CardBackground()})
+                            Assert.IsTrue(color.HasValue AndAlso expected.Any(Function(item) item.ToArgb() = color.Value.ToArgb()), $"A {If(mark.Checked, "checked", "clear")} mark is mostly {color}.")
+                        Next
+                    End Using
+                End Using
+            End Sub)
+
+    End Sub
+
+    ' The journals found in Journals That Publish Work Like This have the
+    ' theme's check marks in Dark when the window is styled as the app
+    ' styles it (#258). The list joins the window only once the search has
+    ' found the journals, after the window was styled, so its marks stayed
+    ' Windows' own: a near-white square, as the certification capture
+    ' showed. Styled before the search, each mark is the accent when
+    ' checked, and the card color inside the secondary outline when not.
+    <TestMethod>
+    Public Sub CheckGlyph_JournalSuggestionsMarksFollowTheTokensWhenStyledBeforeTheSearchInDark()
+
+        RunWithColorMode(SystemColorMode.Dark,
+            Sub()
+                Dim found As New JournalSuggestionsResult With {
+                    .Journals = New List(Of JournalSuggestion) From {
+                        New JournalSuggestion With {.OpenAlexId = "S1", .Name = "Fictional Journal of Anchoring", .Publisher = "Fictional Press", .MatchingArticles = 12, .AllArticles = 400, .ExamplesLoaded = True},
+                        New JournalSuggestion With {.OpenAlexId = "S2", .Name = "Fictional Review of Judgment", .Publisher = "Fictional Press", .MatchingArticles = 8, .AllArticles = 300, .ExamplesLoaded = True}
+                    },
+                    .TotalMatching = 20
+                }
+                Using dialog As New JournalSuggestionsForm("Anchoring", {"anchoring effects"}, New JournalSuggestionsTests.RecordedSuggestions(found), Nothing, Nothing, DateTime.Today)
+                    ShowOffscreen(dialog)
+                    ' As the idle hook styles each window once it is open.
+                    UiPolish.ApplyDialog(dialog)
+                    Application.DoEvents()
+                    dialog.SearchAsync().GetAwaiter().GetResult()
+                    Application.DoEvents()
+
+                    Dim list As ListView = dialog.JournalsList
+                    ' Every journal starts clear; the second is checked here.
+                    list.Items(1).Checked = True
+                    Application.DoEvents()
+                    Dim marks As List(Of (Cell As Rectangle, Checked As Boolean)) = CheckMarks(list).ToList()
+                    Assert.IsTrue(marks.Any(Function(mark) mark.Checked) AndAlso marks.Any(Function(mark) Not mark.Checked), "There are checked and clear marks.")
+
+                    Using image As Bitmap = Picture(list)
+                        Dim client As Point = ClientOffset(list)
+                        For Each mark In marks
+                            Dim cell As Rectangle = mark.Cell
+                            cell.Offset(client)
+                            Dim color As Color? = MarkColor(image, cell)
+                            Dim expected As Color() = If(mark.Checked, {UiTheme.AccentColor()}, {UiTheme.SecondaryText(), UiTheme.CardBackground()})
+                            Assert.IsTrue(color.HasValue AndAlso expected.Any(Function(item) item.ToArgb() = color.Value.ToArgb()), $"A {If(mark.Checked, "checked", "clear")} mark is mostly {color}.")
+                        Next
+                    End Using
+                End Using
+            End Sub)
+
+    End Sub
+
+    ' What Look Up Journal Facts found has the theme's check marks in Dark
+    ' when the window is styled as the app styles it (#258). The list joins
+    ' the window only once the lookup has found the facts, after the window
+    ' was styled, so its marks stayed Windows' own. Styled before the
+    ' lookup, each mark is the accent when checked, and the card color
+    ' inside the secondary outline when not.
+    <TestMethod>
+    Public Sub CheckGlyph_JournalFactsMarksFollowTheTokensWhenStyledBeforeTheLookupInDark()
+
+        RunWithColorMode(SystemColorMode.Dark,
+            Sub()
+                ' The researcher's own publisher is kept, so its row is clear.
+                Dim record As New JournalRecord With {.Name = "Fictional Journal", .Publisher = "Fictional Press (my spelling)", .Issns = New List(Of String) From {"1932-6203"}}
+                Dim lookup As New JournalFactsLookup With {
+                    .Issns = New List(Of String) From {"1932-6203"},
+                    .Doaj = New DoajJournal With {.Title = "Fictional Journal", .Publisher = "Fictional Press", .HomepageUrl = "https://journal.example.invalid/"},
+                    .DoajChecked = True
+                }
+                Using dialog As New JournalFactsForm(record, New JournalFactsTests.RecordedFacts(lookup))
+                    ShowOffscreen(dialog)
+                    ' As the idle hook styles each window once it is open.
+                    UiPolish.ApplyDialog(dialog)
+                    Application.DoEvents()
+                    dialog.LookUpAsync().GetAwaiter().GetResult()
+                    Application.DoEvents()
+
+                    Dim list As ListView = dialog.ChangesList
+                    Dim marks As List(Of (Cell As Rectangle, Checked As Boolean)) = CheckMarks(list).ToList()
+                    Assert.IsTrue(marks.Any(Function(mark) mark.Checked) AndAlso marks.Any(Function(mark) Not mark.Checked), "There are checked and clear marks.")
+
+                    Using image As Bitmap = Picture(list)
+                        Dim client As Point = ClientOffset(list)
+                        For Each mark In marks
+                            Dim cell As Rectangle = mark.Cell
+                            cell.Offset(client)
+                            Dim color As Color? = MarkColor(image, cell)
+                            Dim expected As Color() = If(mark.Checked, {UiTheme.AccentColor()}, {UiTheme.SecondaryText(), UiTheme.CardBackground()})
+                            Assert.IsTrue(color.HasValue AndAlso expected.Any(Function(item) item.ToArgb() = color.Value.ToArgb()), $"A {If(mark.Checked, "checked", "clear")} mark is mostly {color}.")
+                        Next
+                    End Using
+                End Using
+            End Sub)
+
+    End Sub
+
     ' ---------------------------------------------------------------
     ' Disabled captions
     ' ---------------------------------------------------------------

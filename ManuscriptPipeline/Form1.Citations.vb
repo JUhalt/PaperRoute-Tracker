@@ -221,7 +221,15 @@ Partial Public Class Form1
                     label.MaximumSize = New Size(width, 0)
                 Next
                 ' Tall enough for every row, so the page scrolls instead of the grid.
-                If grid IsNot Nothing Then grid.Size = New Size(width, grid.ColumnHeadersHeight + grid.Rows.GetRowsHeight(DataGridViewElementStates.Visible) + UiTheme.Px(2, dpi))
+                If grid IsNot Nothing Then
+                    grid.Size = New Size(width, grid.ColumnHeadersHeight + grid.Rows.GetRowsHeight(DataGridViewElementStates.Visible) + UiTheme.Px(2, dpi))
+                    ' The title's and journal's shares again at this width
+                    ' (#258): by the time the grid had its width, the shares
+                    ' it had kept were no longer 220 to 110, and the journal
+                    ' had the larger, beside titles cut short.
+                    grid.Columns("Title").FillWeight = CitationsTitleWeight
+                    grid.Columns("Journal").FillWeight = CitationsJournalWeight
+                End If
                 ' The tiles re-flow for the new width before the card sizes to them.
                 tiles?.PerformLayout()
                 card.PerformLayout()
@@ -242,6 +250,11 @@ Partial Public Class Form1
     End Sub
 
 
+    ' The title's and the journal's shares of what the other columns leave.
+    Private Const CitationsTitleWeight As Single = 220
+    Private Const CitationsJournalWeight As Single = 110
+
+
     Private Function CreateCitationsGrid(tracked As List(Of (Manuscript As Manuscript, Work As CitedWork)), retrievalYear As Integer) As DataGridView
 
         Dim dpi As Integer = DeviceDpi
@@ -250,8 +263,8 @@ Partial Public Class Form1
         grid.Margin = New Padding(0)
         grid.ScrollBars = ScrollBars.None
 
-        grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Title", .HeaderText = "Manuscript", .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = 220, .MinimumWidth = UiTheme.Px(200, dpi)})
-        grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Journal", .HeaderText = "Journal", .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = 110})
+        grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Title", .HeaderText = "Manuscript", .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = CitationsTitleWeight, .MinimumWidth = UiTheme.Px(200, dpi)})
+        grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Journal", .HeaderText = "Journal", .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = CitationsJournalWeight})
         grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Published", .HeaderText = "Published", .AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells, .ValueType = GetType(DateTime)})
         grid.Columns("Published").DefaultCellStyle.Format = "d"
         grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "Citations", .HeaderText = "Citations", .AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells, .ValueType = GetType(Double)})

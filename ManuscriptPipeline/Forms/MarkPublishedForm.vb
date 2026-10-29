@@ -59,14 +59,29 @@ Namespace Forms
                 .Margin = New Padding(0, 0, 0, 4)
             })
 
+            ' Each line beside its bullet, so a line that wraps goes on under
+            ' its text rather than under the bullet (#258).
             For Each line As String In PublicationMatchService.DescribeMarkPublished(manuscript, match, today)
-                root.Controls.Add(New Label With {
-                    .Text = "•  " & line,
+                Dim item As New TableLayoutPanel With {
                     .AutoSize = True,
-                    .MaximumSize = New Size(460, 0),
-                    .UseMnemonic = False,
+                    .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                    .ColumnCount = 2,
+                    .RowCount = 1,
                     .Margin = New Padding(8, 0, 0, 4)
-                })
+                }
+                item.Controls.Add(New Label With {
+                    .Text = "•",
+                    .AutoSize = True,
+                    .Margin = New Padding(0, 0, 6, 0)
+                }, 0, 0)
+                item.Controls.Add(New Label With {
+                    .Text = line,
+                    .AutoSize = True,
+                    .MaximumSize = New Size(444, 0),
+                    .UseMnemonic = False,
+                    .Margin = New Padding(0)
+                }, 1, 0)
+                root.Controls.Add(item)
             Next
 
             root.Controls.Add(New Label With {

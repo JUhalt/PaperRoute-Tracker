@@ -1871,6 +1871,71 @@ Public Class ManuscriptPageTests
             End Sub)
     End Sub
 
+    ' Your Citations' table gives a manuscript's title twice the width of
+    ' its journal, as its columns' weights ask, 220 to 110 (#258, item 12).
+    ' At 125% the split was the other way round: titles were cut short in
+    ' about 275 pixels while Journal held "Fictional Journal" in about 458.
+    ' With the window's text at 100%, 125% and 150%, from saved figures,
+    ' Manuscript is drawn within a tenth of twice as wide as Journal.
+    <TestMethod>
+    Public Sub YourCitationsTableSplitsTitleAndJournalAsItsWeightsAsk()
+        For Each scale As Single In {1.0F, 1.25F, 1.5F}
+            Dim textScale As Single = scale
+            RunOnStaThread(
+                Sub()
+                    Dim folder As String = Path.Combine(Path.GetTempPath(), "PaperRoute-Citations-" & Guid.NewGuid().ToString("N"))
+                    Dim network As New NoNetwork()
+                    OnlineAccess.ResetForTests()
+                    OnlineAccess.InnerHandlerFactory = Function() network
+                    Try
+                        Using board As New PageBoard()
+                            Dim published As Manuscript = RouteMapServiceTests.Anchoring()
+                            published.Metadata.Doi = "10.5555/example.anchoring"
+                            Dim second As Manuscript = RouteMapServiceTests.Anchoring()
+                            second.Title = "A second published manuscript"
+                            second.Metadata.Doi = "10.5555/example.second"
+                            board.Prepare(published, second)
+                            board.Font = New Font(board.Font.FontFamily, 10.0F * textScale)
+
+                            Dim store As New CitationStore(folder)
+                            Dim snapshot As New CitationSnapshot With {.Orcid = "0000-0002-1825-0097", .Source = JournalFactCatalog.OpenAlexSource, .RetrievedUtc = New DateTime(2026, 9, 30, 12, 0, 0, DateTimeKind.Utc)}
+                            snapshot.Works.Add(New CitedWork With {.OpenAlexId = "W1", .Doi = "10.5555/example.anchoring", .Journal = "Fictional Journal", .Year = 2026, .CitedByCount = 12})
+                            snapshot.Works.Add(New CitedWork With {.OpenAlexId = "W2", .Doi = "10.5555/example.second", .Journal = "Fictional Journal", .Year = 2018, .CitedByCount = 40})
+                            store.Save(snapshot)
+                            board.citationStoreFactory = Function() store
+                            board.SetAuthors(New AuthorRecord With {.GivenName = "Josiah", .FamilyName = "Carberry", .IsMe = True, .Orcid = "https://orcid.org/0000-0002-1825-0097"})
+
+                            board.PressCommandKey(Keys.Control Or Keys.D5)
+                            board.WaitForInsights()
+                            Descendants(board).OfType(Of ShelfTabButton)().Single(Function(item) item.Text = "Your Citations").Checked = True
+                            Application.DoEvents()
+                            board.WaitForInsights()
+
+                            Dim grid As DataGridView = Descendants(board).OfType(Of DataGridView)().Single()
+                            Dim title As Integer = grid.Columns("Title").Width
+                            Dim journal As Integer = grid.Columns("Journal").Width
+                            Dim least As Integer = grid.Columns("Title").MinimumWidth
+                            Dim line As String = $"With the text at {textScale:P0}, in a table {grid.Width} pixels wide, titles have {title} pixels and journals {journal}"
+
+                            ' Where two thirds of what the two share is less than the
+                            ' title's least width, the title has that width.
+                            If (title + journal) * 2 \ 3 < least Then
+                                Assert.AreEqual(least, title, line & ", and the title is held at its least width.")
+                            Else
+                                Assert.IsTrue(Math.Abs(title / journal - 2.0) <= 0.2, $"{line}: {title / journal:F2} to 1, not 220 to 110.")
+                            End If
+
+                            Assert.AreEqual(0, network.Requests, "Saved figures send nothing.")
+                            board.Close()
+                        End Using
+                    Finally
+                        OnlineAccess.ResetForTests()
+                        If Directory.Exists(folder) Then Directory.Delete(folder, True)
+                    End Try
+                End Sub)
+        Next
+    End Sub
+
     <TestMethod>
     Public Sub TheRouteViewOpensOnItsRouteDrawnToScale()
         RunOnStaThread(

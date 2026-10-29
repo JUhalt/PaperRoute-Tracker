@@ -3,6 +3,7 @@ Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.Linq
 Imports System.Windows.Forms
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
@@ -144,6 +145,12 @@ Namespace Forms
 
             cmbProfiles.Width =
                 300
+
+            ' A long journal name ends in an ellipsis rather than being cut
+            ' mid-letter (#258).
+            ComboEllipsis.Attach(
+                cmbProfiles
+            )
 
             AddHandler cmbProfiles.SelectedIndexChanged,
                 AddressOf ProfileSelectionChanged
