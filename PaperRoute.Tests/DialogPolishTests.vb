@@ -304,28 +304,10 @@ Public Class DialogPolishTests
 
         Dim failures As List(Of String) =
             AtEachDpi(
-                {
-                    ("AddCorrespondenceForm", GetType(AddCorrespondenceForm), Function() CType(New AddCorrespondenceForm(), Form)),
-                    ("AddSubmissionForm", GetType(AddSubmissionForm), Function() CType(New AddSubmissionForm(), Form)),
-                    ("AddManuscriptForm", GetType(AddManuscriptForm), Function() CType(New AddManuscriptForm(), Form)),
-                    ("ManuscriptVersionEditForm", GetType(ManuscriptVersionEditForm), Function() ViewCatalog.Dialogs(GetType(ManuscriptVersionEditForm))(String.Empty)),
-                    ("SubmissionPacketFileEditForm, Edit", GetType(SubmissionPacketFileEditForm), Function() ViewCatalog.Dialogs(GetType(SubmissionPacketFileEditForm))(String.Empty)),
-                    ("SubmissionPacketFileEditForm, New", GetType(SubmissionPacketFileEditForm), Function() CType(New SubmissionPacketFileEditForm(LongNames().SubmissionPackets(0), Nothing), Form))
-                },
+                LabelledWindows(),
                 Sub(name, shown, dpi)
 
-                    ' The app draws text with GDI; a test host starts with GDI+,
-                    ' which sizes a label or a check box a few pixels taller.
-                    For Each control As Control In ViewCatalog.Descendants(shown).Where(Function(item) TypeOf item Is Label OrElse TypeOf item Is ButtonBase)
-                        If TypeOf control Is Label Then
-                            DirectCast(control, Label).UseCompatibleTextRendering = False
-                        Else
-                            DirectCast(control, ButtonBase).UseCompatibleTextRendering = False
-                        End If
-                    Next
-
-                    shown.PerformLayout()
-                    Application.DoEvents()
+                    DrawTextAsTheAppDoes(shown)
 
                     For Each caption As String In rows(name)
 
@@ -353,6 +335,110 @@ Public Class DialogPolishTests
         Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
         Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
         Assert.AreEqual(rows.Values.Sum(Function(captions) captions.Length) * Dpis.Length, measured.Count, "Every row was measured at each DPI.")
+
+    End Sub
+
+
+    ' A label is whole in a window built as a display builds it (#263).
+    ' Windows Forms does not scale Add Manuscript, so its label column kept
+    ' 145 pixels and its first rows 55 while its text grew: at 150% Target
+    ' journal and Starting stage wrapped onto a second line, which their
+    ' rows, with each label at its row's top (#258), cut. Each window
+    ' LabelledWindows names is built as at each display
+    ' (ScalingMeasurementTests.AtDisplayDpi) and draws its text as the app
+    ' does, with GDI, which measures it at that display's DPI. Every label
+    ' it shows has the width and height its text needs at its width, inside
+    ' its parent, and so does the help beside a label. On 88a191e Add
+    ' Manuscript's two labels were cut at 144 DPI, 48 pixels tall of the 56
+    ' they need, and Record Journal Submission's help beside Journal
+    ' manuscript ID showed 3 of its 19 pixels, as a real 150% display
+    ' showed it. The sweep only reports such a window above 96 DPI, and
+    ' does not judge help.
+    <TestMethod>
+    Public Sub LabelsAreWholeInAWindowBuiltAt96To144Dpi()
+
+        Dim judged As New HashSet(Of String)(StringComparer.Ordinal)
+        Dim found As New List(Of String)()
+        Dim failures As New List(Of String)()
+
+        For Each dpi As Integer In Dpis
+
+            Dim at As Integer = dpi
+
+            ScalingMeasurementTests.AtDisplayDpi(
+                at,
+                Sub()
+                    failures.AddRange(
+                        ViewCatalog.ShowEach(
+                            LabelledWindows().Select(Function(view) (view.Name, CType(Function(root As String) view.Build(), Func(Of String, Form)))),
+                            Sub(name, shown)
+
+                                DrawTextAsTheAppDoes(shown)
+
+                                For Each label As Label In ViewCatalog.Descendants(shown).OfType(Of Label)().Where(Function(item) item.Visible AndAlso item.Text.Length > 0)
+
+                                    Dim needs As Size = label.GetPreferredSize(New Size(label.Width, 0))
+
+                                    judged.Add(name & " at " & at & " DPI")
+
+                                    If needs.Width > label.Width OrElse needs.Height > label.Height OrElse Not Holds(label.Parent, label) Then
+                                        found.Add($"{name} at {at} DPI: '{label.Text}' is {label.Width}x{label.Height} at {label.Location} in {label.Parent.ClientSize}; its text needs {needs.Width}x{needs.Height}.")
+                                    End If
+
+                                Next
+
+                                For Each help As ContextHelpControl In ViewCatalog.Descendants(shown).OfType(Of ContextHelpControl)().Where(Function(item) item.Visible AndAlso Not Holds(item.Parent, item))
+                                    found.Add($"{name} at {at} DPI: '{help.AccessibleName}' is at {help.Bounds} in {help.Parent.ClientSize}.")
+                                Next
+
+                            End Sub))
+                End Sub)
+
+        Next
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        Assert.AreEqual(LabelledWindows().Length * Dpis.Length, judged.Count, "Each window's labels were judged at each DPI.")
+
+    End Sub
+
+
+    ' Whether the parent shows all of the control, or brings it into view
+    ' by scrolling.
+    Private Shared Function Holds(parent As Control, control As Control) As Boolean
+        Return Rectangle.Union(parent.ClientRectangle, parent.DisplayRectangle).Contains(control.Bounds)
+    End Function
+
+
+    ' The windows whose field labels #258 put on their fields' line.
+    Private Shared Function LabelledWindows() As (Name As String, View As Type, Build As Func(Of Form))()
+
+        Return {
+            ("AddCorrespondenceForm", GetType(AddCorrespondenceForm), Function() CType(New AddCorrespondenceForm(), Form)),
+            ("AddSubmissionForm", GetType(AddSubmissionForm), Function() CType(New AddSubmissionForm(), Form)),
+            ("AddManuscriptForm", GetType(AddManuscriptForm), Function() CType(New AddManuscriptForm(), Form)),
+            ("ManuscriptVersionEditForm", GetType(ManuscriptVersionEditForm), Function() ViewCatalog.Dialogs(GetType(ManuscriptVersionEditForm))(String.Empty)),
+            ("SubmissionPacketFileEditForm, Edit", GetType(SubmissionPacketFileEditForm), Function() ViewCatalog.Dialogs(GetType(SubmissionPacketFileEditForm))(String.Empty)),
+            ("SubmissionPacketFileEditForm, New", GetType(SubmissionPacketFileEditForm), Function() CType(New SubmissionPacketFileEditForm(LongNames().SubmissionPackets(0), Nothing), Form))
+        }
+
+    End Function
+
+
+    ' The app draws text with GDI; a test host starts with GDI+, which
+    ' sizes a label or a check box a few pixels taller.
+    Private Shared Sub DrawTextAsTheAppDoes(shown As Form)
+
+        For Each control As Control In ViewCatalog.Descendants(shown).Where(Function(item) TypeOf item Is Label OrElse TypeOf item Is ButtonBase)
+            If TypeOf control Is Label Then
+                DirectCast(control, Label).UseCompatibleTextRendering = False
+            Else
+                DirectCast(control, ButtonBase).UseCompatibleTextRendering = False
+            End If
+        Next
+
+        shown.PerformLayout()
+        Application.DoEvents()
 
     End Sub
 
