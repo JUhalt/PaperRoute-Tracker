@@ -52,11 +52,11 @@ and the Setup and Update.exe that the Velopack packer, vpk 1.2.0, builds)
   Copyright © Velopack Ltd. All rights reserved.
   https://github.com/velopack/velopack
 
-.NET runtime 10.0.12, bundled as the packs
+.NET runtime 10.0.14, bundled as the packs
 Microsoft.NETCore.App.Runtime.win-x64 and
 Microsoft.WindowsDesktop.App.Runtime.win-x64 (source
 https://github.com/dotnet/dotnet, commit
-95017c711e6afc1085133d440e42b4bd78155701)
+0427b9abbead3fa64c6655eb4290c537397131fa)
   Copyright (c) .NET Foundation and Contributors
   © Microsoft Corporation. All rights reserved.
   https://dot.net/
@@ -300,7 +300,7 @@ Third-party notices of the .NET runtime
 ---------------------------------------
 
 Reproduced from THIRD-PARTY-NOTICES.TXT in the package
-Microsoft.NETCore.App.Runtime.win-x64 10.0.12.
+Microsoft.NETCore.App.Runtime.win-x64 10.0.14.
 
 .NET Runtime uses third-party libraries or other resources that may be
 distributed under licenses different than the .NET Runtime software.
