@@ -1335,3 +1335,5 @@ When reporting a problem, include:
 - screenshots or exact error text when possible.
 
 Avoid posting manuscript content or private correspondence publicly unless you intentionally choose to share it.
+
+Report a suspected security vulnerability privately, not in a public issue, as the [security policy](https://github.com/JUhalt/PaperRoute-Tracker/blob/master/.github/SECURITY.md) describes.
