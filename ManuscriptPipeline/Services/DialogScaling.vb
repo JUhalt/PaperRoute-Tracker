@@ -115,7 +115,11 @@ Namespace Services
         ' shrinks from there, so it ends at the larger of that minimum and
         ' its caption. A minimum it already had, such as one shared to give
         ' buttons one width, is kept. Its parent waits meanwhile, so the
-        ' size read is the one it was given.
+        ' size read is the one it was given, and is not laid out after:
+        ' that layout reached the panels above it, which have no size until
+        ' the window lays out, and at 125% About's logo, squeezed by it, was
+        ' scaled to a 1-pixel line (#255). The window lays it out once
+        ' scaled.
         Private Shared Sub HoldAtGivenSize(
             button As Button
         )
@@ -136,7 +140,7 @@ Namespace Services
             button.AutoSizeMode = AutoSizeMode.GrowAndShrink
             button.AutoSize = True
 
-            parent.ResumeLayout(True)
+            parent.ResumeLayout(False)
 
         End Sub
 

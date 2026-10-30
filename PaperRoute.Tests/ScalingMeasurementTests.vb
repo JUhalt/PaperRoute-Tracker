@@ -3,6 +3,7 @@ Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.IO
 Imports System.Linq
+Imports System.Reflection
 Imports System.Text
 Imports System.Text.RegularExpressions
 Imports System.Windows.Forms
@@ -10,6 +11,7 @@ Imports Microsoft.VisualStudio.TestTools.UnitTesting
 Imports ManuscriptPipeline
 Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Forms
+Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
 ' Every top-level window of the catalog, measured at 96, 120 and 144 DPI
@@ -18,8 +20,9 @@ Imports ManuscriptPipeline.Services
 ' step 4): whether the accept and cancel buttons are inside the client
 ' area, whether any button, check box, single-line label or tab caption
 ' is cut, and whether any list, list view, grid, tree view or multi-line
-' text box shows less than two rows (step 4). The per-window table goes
-' to the test output, as GitHub markdown, for #93.
+' text box shows less than two rows (step 4), and whether any control is
+' squeezed to a line or to nothing (#255). The per-window table goes to
+' the test output, as GitHub markdown, for #93.
 '
 ' The host runs at 96 DPI, so a display is simulated. Every font grows by
 ' the DPI's factor, as text does on a real display, and then a window
@@ -40,9 +43,12 @@ Imports ManuscriptPipeline.Services
 ' area (Measure), since a real 150% display showed what keeping the
 ' host's frame hid.
 '
-' Report-only for the windows not yet converted: the table is the proof.
-' Enforcing for the windows in Converted, which must pass at 120 and 144
-' DPI on both screens.
+' Enforcing for every window at 96 DPI on both screens, where nothing is
+' simulated, so a cut there is a cut whoever scales the window (#256:
+' Settings' service names were cut at 100% and only the table said so).
+' Above 96, report-only for the windows not yet converted: the table is
+' the proof. Enforcing for the windows in Converted, which must pass at
+' 120 and 144 DPI on both screens too.
 <TestClass>
 <DoNotParallelize>
 Public Class ScalingMeasurementTests
@@ -147,19 +153,300 @@ Public Class ScalingMeasurementTests
         Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
         Assert.AreEqual(ViewCatalog.Dialogs.Count, rows.Count, "Every top-level window was measured.")
 
-        ' The converted windows must pass at 120 and 144 on both screens.
+        ' Every window must pass at 96 on both screens, and the converted
+        ' windows at 120 and 144 too.
         Dim convertedNames As New HashSet(Of String)(Converted.Select(Function(view) view.Name))
 
         Dim enforced As List(Of String) =
             rows.Values.
-                Where(Function(row) convertedNames.Contains(row.Name)).
-                SelectMany(Function(row) row.Cells.Where(Function(cell) Not cell.Key.EndsWith(" 96", StringComparison.Ordinal) AndAlso Not cell.Value.Passes).
+                SelectMany(Function(row) row.Cells.Where(Function(cell) (cell.Key.EndsWith(" 96", StringComparison.Ordinal) OrElse convertedNames.Contains(row.Name)) AndAlso Not cell.Value.Passes).
                                                    Select(Function(cell) row.Name & " at " & cell.Key & ": " & cell.Value.Describe())).
                 ToList()
 
         Assert.AreEqual(0, enforced.Count, Environment.NewLine & String.Join(Environment.NewLine, enforced))
 
     End Sub
+
+
+    ' No control collapses in a window built at 120 or 144 DPI (#255). At
+    ' a real 125% About's logo was 130x1 pixels and the version date had
+    ' no width: the sweep above scales a window after it has opened at 96
+    ' DPI, where both were whole, so it read "ok". Here every window of the
+    ' catalog is built as at each display (AtDisplayDpi) and fails a
+    ' control the measure reports collapsed; at 96 DPI the sweep's own
+    ' windows are built so. Their text keeps the host's size, so nothing
+    ' else the measure reports is judged here.
+    <TestMethod>
+    Public Sub NoControlCollapsesInAWindowBuiltAt120Or144Dpi()
+
+        Dim found As New List(Of String)()
+        Dim measured As Integer = 0
+
+        For Each dpi As Integer In Dpis.Where(Function(value) value <> 96)
+
+            Dim current As Integer = dpi
+
+            AtDisplayDpi(
+                current,
+                Sub()
+                    found.AddRange(
+                        ViewCatalog.ShowEach(
+                            ViewCatalog.Dialogs.Select(Function(entry) (entry.Key.Name, entry.Value)),
+                            Sub(name, shown)
+
+                                measured += 1
+
+                                found.AddRange(
+                                    Inspect(shown).Cut.
+                                        Where(Function(entry) entry.Contains(" collapsed to ", StringComparison.Ordinal)).
+                                        Select(Function(entry) name & " at " & current & " DPI: " & entry)
+                                )
+
+                            End Sub
+                        )
+                    )
+                End Sub
+            )
+
+        Next
+
+        Assert.AreEqual(2 * ViewCatalog.Dialogs.Count, measured, "Every window was built at each DPI.")
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+
+    End Sub
+
+
+    ' Add Metric's Year and the version date keep their widths in a window
+    ' built at 96 to 144 DPI (#255). At a real 125% the Year showed only an
+    ' edge of its box and the version date nothing: each window's grid
+    ' squeezed them as they were added, before it had its size, and
+    ' Windows Forms scaled the squeezed widths as the window finished. Each
+    ' is its 96-DPI width scaled, within 3 pixels: Windows Forms scales
+    ' what is inside a box's border, not the border. At 96 DPI they were
+    ' whole before the fix too.
+    <TestMethod>
+    <DataRow(96)>
+    <DataRow(120)>
+    <DataRow(144)>
+    Public Sub TheYearAndTheVersionDateKeepTheirWidthsAt96To144Dpi(dpi As Integer)
+
+        Dim fields As (View As Type, Field As String, Width As Integer)() = {
+            (GetType(JournalMetricForm), "numYear", 90),
+            (GetType(ManuscriptVersionEditForm), "dtpVersionDate", 190)
+        }
+
+        Dim found As New List(Of String)()
+
+        AtDisplayDpi(
+            dpi,
+            Sub()
+                For Each field As (View As Type, Field As String, Width As Integer) In fields
+
+                    Dim current As (View As Type, Field As String, Width As Integer) = field
+
+                    found.AddRange(
+                        ViewCatalog.ShowEach(
+                            {(current.View.Name, ViewCatalog.Dialogs(current.View))},
+                            Sub(name, shown)
+
+                                Dim control As Control =
+                                    DirectCast(current.View.GetField(current.Field, BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(shown), Control)
+
+                                Dim expected As Integer = CInt(Math.Round(current.Width * dpi / 96.0))
+
+                                If Math.Abs(control.Width - expected) > 3 Then
+                                    found.Add($"{name}'s {current.Field} at {dpi} DPI is {control.Width} pixels wide, not {expected}")
+                                End If
+
+                            End Sub
+                        )
+                    )
+
+                Next
+            End Sub
+        )
+
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+
+    End Sub
+
+
+    ' The captions C3 found cut at 125% (#256) are whole at 96 to 144 DPI,
+    ' each with the longest text it takes: Postpone's default button with
+    ' the widest date it can name, the publication check's with a count of
+    ' three figures, Your Citations' Update from OpenAlex..., and the name
+    ' of every service Settings can switch. Each window is shown with its
+    ' captions set, the display simulated as the sweep simulates it, and
+    ' the measure judges each caption. All four were cut at 96 DPI too.
+    <TestMethod>
+    <DataRow(96)>
+    <DataRow(120)>
+    <DataRow(144)>
+    Public Sub EachCaptionIsWholeWithTheLongestTextItTakesAt96To144Dpi(dpi As Integer)
+
+        Dim checks As New List(Of Manuscript)()
+
+        For index As Integer = 1 To 120
+            checks.Add(New Manuscript With {.Title = "Submitted study " & index, .CurrentStage = PaperStage.UnderReview})
+        Next
+
+        Dim places As (View As Type, Build As Func(Of String, Form), Captions As String())() = {
+            (GetType(DeadlineDateForm), Function(root) WidestPostpone(), {WidestPostponeCaption()}),
+            (GetType(PublicationCheckForm), Function(root) New PublicationCheckForm(checks, checks.Select(Function(item) item.Id), String.Empty, Nothing, Function() True, DateTime.Today), {"Check 120 Manuscripts"}),
+            (GetType(Form1), ViewCatalog.Stages.Single(Function(stage) stage.Name = "Insights page, Your Citations from a saved update").Build, {"Update from OpenAlex..."}),
+            (GetType(SettingsForm), Function(root) New SettingsForm(New AppSettings()), OnlineServiceCatalog.Services.Where(Function(service) Not service.OffUntilTurnedOn).Select(Function(service) service.Name).ToArray())
+        }
+
+        Dim found As New List(Of String)()
+
+        For Each place As (View As Type, Build As Func(Of String, Form), Captions As String()) In places
+
+            Dim current As (View As Type, Build As Func(Of String, Form), Captions As String()) = place
+
+            found.AddRange(
+                ViewCatalog.ShowEach(
+                    {(current.View.Name, current.Build)},
+                    Sub(name, shown)
+
+                        Simulate(shown, dpi, ScalingOf(current.View).ScalesWithWinForms)
+
+                        Dim cut As List(Of String) = Inspect(shown).Cut
+
+                        For Each caption As String In current.Captions
+
+                            If Not ViewCatalog.Descendants(shown).OfType(Of ButtonBase)().Any(Function(button) button.Visible AndAlso button.Text = caption) Then
+                                found.Add($"{name} at {dpi} DPI shows no '{caption}'")
+                            End If
+
+                            found.AddRange(
+                                cut.Where(Function(entry) entry.Contains("'" & Abbreviate(caption) & "'", StringComparison.Ordinal)).
+                                    Select(Function(entry) $"{name} at {dpi} DPI: {entry}")
+                            )
+
+                        Next
+
+                    End Sub
+                )
+            )
+
+        Next
+
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+
+    End Sub
+
+
+    ' The buttons of a footer share its line (#257). At 125% the default
+    ' button sat 3 to 5 pixels below Cancel in fifteen dialogs: each footer
+    ' gave its other buttons no margin above them, and the default button
+    ' kept Windows Forms' 3 pixels. In every catalog window and step, at
+    ' 96, 120 and 144 DPI as the sweep simulates them, the buttons in the
+    ' row that holds the window's default or Cancel button have one top and
+    ' one height. The main window and its pages have no such row.
+    '
+    ' The simulation never showed C3's other mismatch, Cancel 44 pixels
+    ' tall to the default button's 42 at 125%: on 80e1a7c the dialogs C3
+    ' listed failed here on their tops only, so their heights rest on the
+    ' 125% captures.
+    <TestMethod>
+    Public Sub TheButtonsOfAFooterShareItsTopAndHeightAt96To144Dpi()
+
+        Dim found As New List(Of String)()
+        Dim rows As Integer = 0
+
+        Dim views As List(Of (Name As String, Build As Func(Of String, Form))) =
+            ViewCatalog.Dialogs.Where(Function(entry) entry.Key IsNot GetType(Form1)).Select(Function(entry) (entry.Key.Name, entry.Value)).
+                Concat(ViewCatalog.Stages.Where(Function(entry) Not entry.Name.StartsWith("Insights page", StringComparison.Ordinal) AndAlso entry.Name <> ViewCatalog.ShortlistStage).
+                           Select(Function(entry) (entry.Name, entry.Build))).
+                ToList()
+
+        For Each dpi As Integer In Dpis
+
+            Dim current As Integer = dpi
+
+            found.AddRange(
+                ViewCatalog.ShowEach(
+                    views,
+                    Sub(name, shown)
+
+                        Simulate(shown, current, ScalingOf(shown.GetType()).ScalesWithWinForms)
+
+                        For Each row As FlowLayoutPanel In FooterRows(shown)
+
+                            Dim buttons As List(Of Button) = row.Controls.OfType(Of Button)().Where(Function(button) button.Visible).ToList()
+
+                            If buttons.Count < 2 Then
+                                Continue For
+                            End If
+
+                            rows += 1
+
+                            For Each button As Button In buttons.Skip(1)
+                                If button.Top <> buttons(0).Top OrElse button.Height <> buttons(0).Height Then
+                                    found.Add($"{name} at {current} DPI: '{Abbreviate(buttons(0).Text)}' at {buttons(0).Top}, {buttons(0).Height} tall; '{Abbreviate(button.Text)}' at {button.Top}, {button.Height} tall")
+                                End If
+                            Next
+
+                        Next
+
+                    End Sub
+                )
+            )
+
+        Next
+
+        TestContext.WriteLine("Footer rows measured: " & rows)
+        Assert.IsTrue(rows >= 3 * 40, "The footers were measured: " & rows)
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+
+    End Sub
+
+
+    ' The rows across a window that hold its default or Cancel button: the
+    ' flow rows UiPolish lines up. Two footers outside that rule are not
+    ' measured, and both were level at 96 to 144 DPI when #257 was fixed:
+    ' Title Page Import's, a grid, and the error dialog's Copy Details and
+    ' Open Log Folder, a row beside the one with its default button.
+    Private Shared Function FooterRows(shown As Form) As List(Of FlowLayoutPanel)
+
+        Return {TryCast(shown.AcceptButton, Control), TryCast(shown.CancelButton, Control)}.
+            Select(Function(button) TryCast(button?.Parent, FlowLayoutPanel)).
+            Where(Function(row) row IsNot Nothing AndAlso (row.FlowDirection = FlowDirection.LeftToRight OrElse row.FlowDirection = FlowDirection.RightToLeft)).
+            Distinct().
+            ToList()
+
+    End Function
+
+
+    ' Postpone as the Deadlines page opens it, its date picked as the one
+    ' of the twelve months whose caption is widest.
+    Private Shared Function WidestPostpone() As Form
+
+        Dim dialog As New DeadlineDateForm("Postpone the follow-up", "Follow up  ·  Active Study", "This changes the follow-up date on the journal submission.", "Postpone to", DateTime.Today.AddDays(7), DateTime.Today)
+
+        DirectCast(GetType(DeadlineDateForm).GetField("dtpDate", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(dialog), DateTimePicker).Value = WidestPostponeDay()
+
+        Return dialog
+
+    End Function
+
+
+    Private Shared Function WidestPostponeCaption() As String
+        Return "Postpone to " & WidestPostponeDay().ToString("MMM d", Globalization.CultureInfo.CurrentCulture)
+    End Function
+
+
+    ' The 28th of each month next year, the one whose caption is widest.
+    Private Shared Function WidestPostponeDay() As DateTime
+
+        Using font As New Font("Segoe UI", 9.0F)
+            Return Enumerable.Range(1, 12).
+                Select(Function(month) New DateTime(DateTime.Today.Year + 1, month, 28)).
+                OrderByDescending(Function(day) TextRenderer.MeasureText("Postpone to " & day.ToString("MMM d", Globalization.CultureInfo.CurrentCulture), font).Width).
+                First()
+        End Using
+
+    End Function
 
 
     ' The measure has teeth. A probe window that is not scaled keeps its
@@ -1099,6 +1386,63 @@ Public Class ScalingMeasurementTests
     End Sub
 
 
+    ' Runs the action as at a display of the DPI (#255): every window it
+    ' builds is built as that display builds it. Windows Forms reads the
+    ' display's DPI once, as the app starts, and scales a window from it
+    ' when the window's layout resumes at the end of its build
+    ' (DialogScaling.Finish, or a window's own ResumeLayout), before its
+    ' first full layout and before it has a handle; Simulate scales a
+    ' window after it has opened and laid out at 96 DPI. What a window's
+    ' panels did to its controls while it was built is scaled here as at
+    ' the display: at a real 125% About's logo was 130x1 pixels, which
+    ' Simulate scaled from a whole 104x104. Windows Forms is told the DPI
+    ' for the action, through the one value it keeps it in, and told the
+    ' host's again after, with the rest of its scaling state as it was.
+    ' What this judges is layout, not captions: a control still sizes its
+    ' text at the host's DPI, while TextRenderer, asked on its own,
+    ' measures at the DPI told (#256), so the two disagree.
+    Friend Shared Sub AtDisplayDpi(dpi As Integer, action As Action)
+
+        Dim helper As Type =
+            Type.GetType("System.Windows.Forms.ScaleHelper, System.Windows.Forms.Primitives", throwOnError:=False)
+
+        Dim display As FieldInfo =
+            helper?.GetField("<InitialSystemDpi>k__BackingField", BindingFlags.Static Or BindingFlags.NonPublic)
+
+        Assert.IsNotNull(display, "Windows Forms keeps the display's DPI where a test can set it; without it no window can be built as at a display.")
+
+        Dim state As List(Of (Field As FieldInfo, Value As Object)) =
+            helper.GetFields(BindingFlags.Static Or BindingFlags.NonPublic Or BindingFlags.Public).
+                Where(Function(field) Not field.IsLiteral AndAlso Not field.IsInitOnly).
+                Select(Function(field) (field, field.GetValue(Nothing))).
+                ToList()
+
+        display.SetValue(Nothing, dpi)
+
+        Try
+
+            ' The measure has teeth only if Windows Forms scales from it.
+            StaRunner.Run(
+                Sub()
+                    Using probe As New Form With {.AutoScaleMode = AutoScaleMode.Dpi}
+                        Assert.AreEqual(New SizeF(dpi, dpi), probe.CurrentAutoScaleDimensions, "Windows Forms scales a window from the display's DPI.")
+                    End Using
+                End Sub
+            )
+
+            action()
+
+        Finally
+
+            For Each kept As (Field As FieldInfo, Value As Object) In state
+                kept.Field.SetValue(Nothing, kept.Value)
+            Next
+
+        End Try
+
+    End Sub
+
+
     ' Grown text and Scale defer the layouts they cause, and Scale drops
     ' them. A window that opens is laid out by the size messages its new
     ' windows get; these windows exist, so each control is laid out by
@@ -1279,8 +1623,11 @@ Public Class ScalingMeasurementTests
                 Continue For
             End If
 
-            ' Before the size: a list squeezed to no height is reported too.
-            InspectRows(child, clip, cut)
+            ' Before the size: a list squeezed to no height is reported too,
+            ' and so is any other control squeezed to a line or to nothing.
+            If Not InspectRows(child, clip, cut) Then
+                InspectSize(child, cut)
+            End If
 
             If child.Width <= 0 OrElse child.Height <= 0 Then
                 Continue For
@@ -1376,8 +1723,14 @@ Public Class ScalingMeasurementTests
     ' A button, check box or single-line label clipped by a parent or the
     ' window, or whose caption needs more width than it has; a tab whose
     ' caption is wider than its tab or whose tab runs past the control's
-    ' edge. A control Windows Forms sizes for its text (AutoSize) is not
-    ' cut by it; a check box or label tall enough for two lines wraps.
+    ' edge. A check box or label tall enough for two lines wraps. A
+    ' control Windows Forms sizes for its text (AutoSize) is cut when its
+    ' parent holds it narrower than it asks for, or shorter than a line of
+    ' its text (#256): Settings' name column held Your citations (ORCID and
+    ' OpenAlex) to 251 of its 309 pixels at 125%. An ActionButton draws its
+    ' caption across its whole face, so its caption is judged whatever its
+    ' size: one that sized itself asked for too little, and its caption was
+    ' cut where it stood.
     Private Shared Sub InspectControl(control As Control, bounds As Rectangle, clip As Rectangle, cut As List(Of String))
 
         Dim tabs As TabControl = TryCast(control, TabControl)
@@ -1416,7 +1769,9 @@ Public Class ScalingMeasurementTests
 
             If Not clip.Contains(bounds) Then
                 cut.Add(Kind(control) & " '" & Abbreviate(button.Text) & "' clipped")
-            ElseIf Not button.AutoSize AndAlso Not (boxed AndAlso button.Height >= 2 * lineHeight) Then
+            ElseIf button.AutoSize AndAlso Held(button, lineHeight) Then
+                cut.Add(Kind(control) & " '" & Abbreviate(button.Text) & "'")
+            ElseIf (Not button.AutoSize OrElse TypeOf button Is ActionButton) AndAlso Not (boxed AndAlso button.Height >= 2 * lineHeight) Then
 
                 ' The caption, the box and its gap, the button's padding (an
                 ' ActionButton's is room it asks for, not a border it clips
@@ -1447,13 +1802,22 @@ Public Class ScalingMeasurementTests
 
             If Not clip.Contains(bounds) Then
                 cut.Add("label '" & Abbreviate(label.Text) & "' clipped")
-            ElseIf Not label.AutoSize AndAlso TextWidth(label.Text, label.Font, label.UseMnemonic) > label.ClientSize.Width - label.Padding.Horizontal Then
+            ElseIf If(label.AutoSize, Held(label, lineHeight), TextWidth(label.Text, label.Font, label.UseMnemonic) > label.ClientSize.Width - label.Padding.Horizontal) Then
                 cut.Add("label '" & Abbreviate(label.Text) & "'")
             End If
 
         End If
 
     End Sub
+
+
+    ' Whether a control that sizes itself is held narrower than it asks for,
+    ' or shorter than a line of its text. A few pixels less height than it
+    ' asks for cut nothing: the version editor's storage options, 22 of 24
+    ' pixels tall at 96 DPI, show their captions whole.
+    Private Shared Function Held(control As Control, lineHeight As Integer) As Boolean
+        Return control.Width < control.PreferredSize.Width OrElse control.Height < lineHeight
+    End Function
 
 
     ' A list, list view, grid, tree view or multi-line text box that shows
@@ -1464,8 +1828,9 @@ Public Class ScalingMeasurementTests
     ' line of its font while it has none, below the details view's column
     ' header (the first item's top, or one row while it has none); a grid's
     ' first row, or its row template while it has none, below its column
-    ' headers; and a line of a text box's font.
-    Private Shared Sub InspectRows(control As Control, clip As Rectangle, cut As List(Of String))
+    ' headers; and a line of a text box's font. Whether the control is one
+    ' of these.
+    Private Shared Function InspectRows(control As Control, clip As Rectangle, cut As List(Of String)) As Boolean
 
         Dim kind As String
         Dim row As Integer
@@ -1508,7 +1873,7 @@ Public Class ScalingMeasurementTests
 
         Else
 
-            Return
+            Return False
 
         End If
 
@@ -1516,11 +1881,45 @@ Public Class ScalingMeasurementTests
             Rectangle.Intersect(clip, control.RectangleToScreen(control.ClientRectangle))
 
         If seen.Height - above < 2 * row Then
-            Dim name As String = If(String.IsNullOrWhiteSpace(control.AccessibleName), control.Name, control.AccessibleName)
-            cut.Add(kind & If(String.IsNullOrWhiteSpace(name), String.Empty, " '" & Abbreviate(name) & "'") & " under two rows")
+            cut.Add(kind & Named(control) & " under two rows")
         End If
 
+        Return True
+
+    End Function
+
+
+    ' Every visible control has a few pixels each way (#255). At a real
+    ' 125% About's logo was 130x1 pixels and the version date had no
+    ' width, and the measure, which judged only captions and lists, read
+    ' "ok". What is designed smaller is not reported: a rule or a spacer,
+    ' a panel with nothing in it (the Board card's divider is 1 pixel
+    ' tall), and a label with nothing to say yet, which sizes itself to no
+    ' width.
+    Private Const FewestPixels As Integer = 4
+
+    Private Shared Sub InspectSize(control As Control, cut As List(Of String))
+
+        If control.Width >= FewestPixels AndAlso control.Height >= FewestPixels Then
+            Return
+        End If
+
+        If (control.GetType() Is GetType(Panel) AndAlso control.Controls.Count = 0) OrElse
+           (TypeOf control Is Label AndAlso String.IsNullOrEmpty(control.Text)) Then
+            Return
+        End If
+
+        cut.Add(control.GetType().Name & Named(control) & " collapsed to " & control.Width & "x" & control.Height)
+
     End Sub
+
+
+    ' A control's accessible name, or its name, quoted after a space; empty
+    ' when it has neither.
+    Private Shared Function Named(control As Control) As String
+        Dim name As String = If(String.IsNullOrWhiteSpace(control.AccessibleName), control.Name, control.AccessibleName)
+        Return If(String.IsNullOrWhiteSpace(name), String.Empty, " '" & Abbreviate(name) & "'")
+    End Function
 
 
     ' The text's width on one line, with "&" read as a mnemonic prefix or

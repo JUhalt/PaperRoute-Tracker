@@ -110,8 +110,12 @@ Namespace Controls
         ' Never smaller than the button's minimum: a layout must place the
         ' button at the size it is drawn, or its neighbors overlap it and its
         ' row is too short for it (as Look Up Journal Facts showed at 150%).
+        ' The caption is measured with room to spare: measured in an empty
+        ' box, the end ellipsis it is drawn with cut it short, so "Postpone
+        ' to Nov 3" asked for 23 pixels and its button stayed at its minimum,
+        ' cut (#256).
         Public Overrides Function GetPreferredSize(proposedSize As Size) As Size
-            Dim text As Size = TextRenderer.MeasureText(Me.Text, Me.Font, Size.Empty, TextFlags())
+            Dim text As Size = TextRenderer.MeasureText(Me.Text, Me.Font, New Size(Integer.MaxValue, Integer.MaxValue), TextFlags())
             Return New Size(
                 Math.Max(text.Width + Padding.Horizontal, MinimumSize.Width),
                 Math.Max(text.Height + Padding.Vertical, MinimumSize.Height))

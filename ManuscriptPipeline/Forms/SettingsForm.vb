@@ -764,7 +764,10 @@ Namespace Forms
                 .Margin = New Padding(0)
             }
 
-            grid.ColumnStyles.Add(New ColumnStyle(SizeType.Absolute, nameWidth))
+            ' The services' names take the width they need (#256): in a fixed
+            ' 210 pixels, Journal facts (DOAJ and OpenAlex) and Your citations
+            ' (ORCID and OpenAlex) were cut, at 100% too.
+            grid.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
             grid.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
 
             Dim addRow As Action(Of Control, Control) =
@@ -898,15 +901,18 @@ Namespace Forms
                 End Sub
             addRow(lnkSends, Nothing)
 
-            ' Long text wraps to the card's width at every size and scale.
+            ' Long text wraps to the card's width at every size and scale,
+            ' beside the names as wide as they have laid out.
             AddHandler grid.SizeChanged,
                 Sub(sender, e)
                     Dim minimum As Integer = UiTheme.Px(120, DeviceDpi)
+                    Dim columns As Integer() = grid.GetColumnWidths()
+                    Dim names As Integer = If(columns.Length > 0 AndAlso columns(0) > 0, columns(0), nameWidth)
                     For Each item As Label In spanning
                         item.MaximumSize = New Size(Math.Max(minimum, grid.ClientSize.Width - item.Margin.Horizontal - UiTheme.Px(4, DeviceDpi)), 0)
                     Next
                     For Each item As Label In detailed
-                        item.MaximumSize = New Size(Math.Max(minimum, grid.ClientSize.Width - nameWidth - item.Margin.Horizontal - UiTheme.Px(4, DeviceDpi)), 0)
+                        item.MaximumSize = New Size(Math.Max(minimum, grid.ClientSize.Width - names - item.Margin.Horizontal - UiTheme.Px(4, DeviceDpi)), 0)
                     Next
                 End Sub
 

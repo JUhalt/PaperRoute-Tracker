@@ -130,6 +130,14 @@ Namespace Services
                 TryCast(form.AcceptButton, Button)
             )
 
+            AlignFooter(
+                TryCast(form.AcceptButton, Control)
+            )
+
+            AlignFooter(
+                TryCast(form.CancelButton, Control)
+            )
+
         End Sub
 
 
@@ -634,6 +642,82 @@ Namespace Services
 
             button.FlatAppearance.MouseDownBackColor =
                 UiTheme.HoverBackground()
+
+        End Sub
+
+
+        ' =====================================================
+        ' Footers (#257)
+        ' =====================================================
+
+        ' The buttons of a footer share its line: the row that holds the
+        ' default or the Cancel button. A footer gave the buttons beside the
+        ' default one no margin above or below them, and the default button
+        ' kept Windows Forms' 3 pixels, so it sat 3 pixels lower (4 at 125%)
+        ' in fifteen dialogs. Each button takes the row's least top and
+        ' bottom margins, its sides keeping the spacing between the buttons,
+        ' and one shorter than the row's tallest is held to its height.
+        Private Shared Sub AlignFooter(
+            member As Control
+        )
+
+            Dim row As FlowLayoutPanel =
+                TryCast(
+                    member?.Parent,
+                    FlowLayoutPanel
+                )
+
+            If row Is Nothing OrElse
+               (row.FlowDirection <> FlowDirection.LeftToRight AndAlso
+                row.FlowDirection <> FlowDirection.RightToLeft) Then
+
+                Return
+
+            End If
+
+            Dim buttons As New List(Of Button)()
+            Dim top As Integer = Integer.MaxValue
+            Dim bottom As Integer = Integer.MaxValue
+            Dim tallest As Integer = 0
+
+            For Each child As Control In row.Controls
+
+                Dim button As Button =
+                    TryCast(
+                        child,
+                        Button
+                    )
+
+                If button IsNot Nothing Then
+                    buttons.Add(button)
+                    top = Math.Min(top, button.Margin.Top)
+                    bottom = Math.Min(bottom, button.Margin.Bottom)
+                    tallest = Math.Max(tallest, button.Height)
+                End If
+
+            Next
+
+            For Each button As Button In buttons
+
+                button.Margin =
+                    New Padding(
+                        button.Margin.Left,
+                        top,
+                        button.Margin.Right,
+                        bottom
+                    )
+
+                If button.Height < tallest Then
+
+                    button.MinimumSize =
+                        New Size(
+                            button.MinimumSize.Width,
+                            tallest
+                        )
+
+                End If
+
+            Next
 
         End Sub
 
