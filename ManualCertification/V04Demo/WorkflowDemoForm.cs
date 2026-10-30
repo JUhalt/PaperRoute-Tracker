@@ -93,6 +93,8 @@ internal sealed class WorkflowDemoForm : Form
         {
             Text = "Practice readiness, Version History, Submission Packets, and recording a journal submission. " +
                 "Save & Close in Manuscript Details writes only to this disposable session. Reopen to verify your changes.",
+            // The "&" is literal, not a mnemonic (#259): it read "Save  Close".
+            UseMnemonic = false,
             AutoSize = true,
             Dock = DockStyle.Fill,
             Margin = new Padding(0, 0, 0, 12)

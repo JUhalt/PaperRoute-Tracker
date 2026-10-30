@@ -303,10 +303,16 @@ Public Class Form1
                 DeviceDpi
             )
 
+        ' The scaling mode before the font, and both before the sizes
+        ' (#259). Load builds the window once its handle exists, and a font
+        ' set while the designer's Font mode held scaled the window by its
+        ' text's growth from 9 to 10 points: the minimum and the start size
+        ' grew with it, the minimum to 1348 pixels wide at 125% rather than
+        ' 1200, and the start size past the screen it was capped to.
+        Me.AutoScaleMode = AutoScaleMode.Dpi
+        Me.Font = New Font("Segoe UI", 10.0F)
         Me.Size = sizes.Start
         Me.MinimumSize = sizes.Minimum
-        Me.Font = New Font("Segoe UI", 10.0F)
-        Me.AutoScaleMode = AutoScaleMode.Dpi
         Me.BackColor = UiTheme.BoardBackground()
         Me.DoubleBuffered = True
 
@@ -3168,14 +3174,17 @@ Public Class Form1
         dots.Top = footerTop + (footerHeight - dots.Height) \ 2
         dots.Visible = route.Dots.Count > 0
 
+        ' A line tall, in the middle of the footer (#258): a label centres
+        ' its text only while the text fits, so in a taller box a line cut
+        ' short with an ellipsis sat 2 pixels above the others.
         Dim lblRouteSummary As New Label With {
             .Text = route.Text,
             .AutoSize = False,
             .AutoEllipsis = True,
             .UseMnemonic = False,
             .Left = If(route.Dots.Count > 0, dots.Right + UiTheme.Px(6, dpi), pad),
-            .Top = footerTop,
-            .Height = footerHeight,
+            .Top = footerTop + (footerHeight - metaLine) \ 2,
+            .Height = metaLine,
             .TextAlign = ContentAlignment.MiddleLeft,
             .Font = cardMetaFont,
             .ForeColor = UiTheme.SecondaryText()

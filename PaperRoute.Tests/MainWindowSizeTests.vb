@@ -2,9 +2,11 @@ Imports System
 Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.Linq
+Imports System.Reflection
 Imports System.Windows.Forms
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
 Imports ManuscriptPipeline
+Imports ManuscriptPipeline.Services
 
 ' The main window's start and minimum size (#93, step 0). It opened at
 ' 1280x840 with a 960x680 minimum, unscaled and with no screen cap, so on
@@ -98,6 +100,117 @@ Public Class MainWindowSizeTests
         Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
 
     End Sub
+
+
+    ' The window built as Form1_Load builds it has the minimum StartSizes
+    ' gives, Px(960) wide on a screen that holds it, and opens at its start
+    ' size inside the screen's working area, with its text at 100%, 125%
+    ' and 150% (#259). Load builds the window once its handle exists, and
+    ' BuildInterface set its font while the designer's Font scaling still
+    ' held: Windows Forms scaled the window by its text's growth from 9 to
+    ' 10 points, its size and minimum with it. At 125% the average
+    ' character grows from 8 to 9 pixels, so the minimum was (1200 - 16) x
+    ' 9/8 + 16 = 1348 pixels wide, as C3 measured, and the start size,
+    ' capped to the screen, grew past it. At 100% the width does not grow,
+    ' but the height does: 680 became 765, and the start size's 840 947.
+    ' The catalog's Board builds the window before it has a handle, which
+    ' does not scale, so the test above cannot see this. The host is at 96
+    ' DPI, so 125% and 150% are the display's text: every font the window
+    ' starts with or is given grown by the scale (GrownTextBoard), which is
+    ' what the Font scaling measures; the window's own DPI stays 96, so the
+    ' sizes it should keep are 96's.
+    <TestMethod>
+    Public Sub TheMinimumIsPx960WideAt96To144Dpi()
+
+        Dim found As New List(Of String)()
+        Dim judged As Integer = 0
+
+        For Each scale As Single In {1.0F, 1.25F, 1.5F}
+
+            Dim textScale As Single = scale
+
+            Dim failures As List(Of String) =
+                ViewCatalog.ShowEach(
+                    {("The main window with its text at " & textScale.ToString("P0"),
+                      CType(Function(root As String)
+                                Dim board As New GrownTextBoard(textScale)
+                                board.BuildAsLoadDoes()
+                                Return board
+                            End Function, Func(Of String, Form)))},
+                    Sub(name, board)
+
+                        Dim expected As List(Of (Area As Rectangle, Sizes As (Start As Size, Minimum As Size))) =
+                            Screen.AllScreens.Select(Function(screen) (Area:=screen.WorkingArea, Sizes:=Form1.StartSizes(screen.WorkingArea, board.DeviceDpi))).ToList()
+
+                        Dim match = expected.FirstOrDefault(Function(item) item.Sizes.Minimum = board.MinimumSize AndAlso item.Sizes.Start = board.Size)
+
+                        judged += 1
+
+                        If match.Area.IsEmpty Then
+                            found.Add($"{name}: opened at {board.Size} with a minimum of {board.MinimumSize}; StartSizes gives {String.Join(", ", expected.Select(Function(item) item.Sizes.Start.ToString() & " and " & item.Sizes.Minimum.ToString()).Distinct())}.")
+                            Return
+                        End If
+
+                        If match.Area.Width >= UiTheme.Px(960, board.DeviceDpi) AndAlso board.MinimumSize.Width <> UiTheme.Px(960, board.DeviceDpi) Then
+                            found.Add($"{name}: a minimum {board.MinimumSize.Width} pixels wide, not {UiTheme.Px(960, board.DeviceDpi)}.")
+                        End If
+
+                        If board.Width > match.Area.Width OrElse board.Height > match.Area.Height Then
+                            found.Add($"{name}: {board.Size} is larger than the {match.Area.Size} working area.")
+                        End If
+
+                    End Sub)
+
+            found.AddRange(failures)
+
+        Next
+
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        Assert.AreEqual(3, judged, "The window was judged at each text size.")
+
+    End Sub
+
+
+    ' The main window with its text at a display's size: the font it has
+    ' when Load builds it, the default font at that display, and every font
+    ' it is then given, grown by the scale. The Font scaling measures the
+    ' window's text from the first. Load does nothing; BuildAsLoadDoes
+    ' builds the window as Form1_Load does, once the window has its handle.
+    Private NotInheritable Class GrownTextBoard
+        Inherits Form1
+
+        Private ReadOnly _scale As Single
+
+        Public Sub New(scale As Single)
+            _scale = scale
+        End Sub
+
+        Public Overrides Property Font As Font
+            Get
+                Return MyBase.Font
+            End Get
+            Set(value As Font)
+                MyBase.Font = If(_scale = 0, value, New Font(value.FontFamily, value.Size * _scale, value.Style))
+            End Set
+        End Property
+
+        Protected Overrides Sub OnLoad(e As EventArgs)
+        End Sub
+
+        Protected Overrides ReadOnly Property ShowWithoutActivation As Boolean
+            Get
+                Return True
+            End Get
+        End Property
+
+        Public Sub BuildAsLoadDoes()
+            CreateHandle()
+            MyBase.Font = New Font(MyBase.Font.FontFamily, MyBase.Font.Size * _scale)
+            WindowChrome.Apply(Me)
+            GetType(Form1).GetMethod("BuildInterface", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(Me, Nothing)
+        End Sub
+
+    End Class
 
 
     Private Shared Sub AssertInside(area As Rectangle, size As Size)

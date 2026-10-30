@@ -152,16 +152,19 @@ Namespace Forms
 
             layout.Controls.Add(cmbStage, 1, 2)
 
+            ' The button's line: 4 pixels lower than a box's for the row's
+            ' margin, and 4 more for the button's height.
             layout.Controls.Add(
-                CreateFieldLabel("From a draft"),
+                CreateFieldLabel("From a draft", 15),
                 0,
                 3
             )
 
             layout.Controls.Add(BuildTitlePageRow(), 1, 3)
 
+            ' The box's line, 4 pixels lower for the row's margin.
             layout.Controls.Add(
-                CreateFieldLabel("First deadline"),
+                CreateFieldLabel("First deadline", 11),
                 0,
                 4
             )
@@ -225,12 +228,17 @@ Namespace Forms
 
         End Sub
 
-        Private Function CreateFieldLabel(text As String) As Label
+        ' At the top of its row, its text on the line of the field beside
+        ' it (#258): centred in the row, it sat below a box at the top of
+        ' the row, and beside the middle of a row that wraps rather than its
+        ' first line. Top is how far down that line puts its text.
+        Private Function CreateFieldLabel(text As String, Optional top As Integer = 7) As Label
 
             Return New Label With {
                 .Text = text,
                 .AutoSize = True,
-                .Anchor = AnchorStyles.Left,
+                .Anchor = AnchorStyles.Top Or AnchorStyles.Left,
+                .Margin = New Padding(3, top, 3, 0),
                 .Font = New Font(Me.Font, FontStyle.Bold)
             }
 

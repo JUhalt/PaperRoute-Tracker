@@ -88,11 +88,14 @@ Namespace Forms
             Controls.Add(root)
             AcceptButton = send
             CancelButton = cancel
-            AddHandler Resize, Sub(sender, e)
-                                   Dim width As Integer = Math.Max(LogicalToDeviceUnits(200), root.ClientSize.Width - root.Padding.Horizontal)
-                                   intro.MaximumSize = New Size(width, 0)
-                                   note.MaximumSize = New Size(width, 0)
-                               End Sub
+            ' As the table resizes, not the window (#258): the window is
+            ' scaled for the display with its layout held, before the table
+            ' takes its new width, and the text wrapped at the old one.
+            AddHandler root.SizeChanged, Sub(sender, e)
+                                             Dim width As Integer = Math.Max(LogicalToDeviceUnits(200), root.ClientSize.Width - root.Padding.Horizontal)
+                                             intro.MaximumSize = New Size(width, 0)
+                                             note.MaximumSize = New Size(width, 0)
+                                         End Sub
 
             ResumeLayout(False)
             PerformLayout()

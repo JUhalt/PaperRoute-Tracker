@@ -202,7 +202,8 @@ Namespace Forms
         End Sub
 
 
-        ' UiPolish has no ListView branch, so the lists take the theme here.
+        ' A list takes the theme's colors as it is built; one that joins the
+        ' window after it was styled is styled again as it joins (#258).
         Private Sub ConfigureList(list As ListView, checkBoxes As Boolean)
             list.Dock = DockStyle.Fill
             list.View = View.Details
@@ -213,6 +214,8 @@ Namespace Forms
             list.ShowItemToolTips = True
             list.BackColor = UiTheme.CardBackground()
             list.ForeColor = UiTheme.PrimaryText()
+            ' Not sideways for a few pixels once the vertical bar shows (#258).
+            ColumnFit.Attach(list)
         End Sub
 
 
@@ -368,6 +371,9 @@ Namespace Forms
             searchRow.Visible = False
             body.Controls.Clear()
             body.Controls.Add(lvChanges)
+            ' Styled as it joins the window (#258): the window was styled
+            ' before, and in Dark the list kept Windows' Light check boxes.
+            UiPolish.ApplyToControls(body)
 
             _allowCheck = True
             lvChanges.BeginUpdate()

@@ -316,6 +316,8 @@ Namespace Forms
             lvJournals.Columns.Add("Of all its articles", LogicalToDeviceUnits(150), HorizontalAlignment.Right)
             lvJournals.Columns.Add("Open access and listed fee", LogicalToDeviceUnits(230))
             lvJournals.Columns.Add("Yours", LogicalToDeviceUnits(150))
+            ' Not sideways for a few pixels on a smaller screen (#258).
+            ColumnFit.Attach(lvJournals)
             AddHandler lvJournals.ItemCheck, AddressOf JournalChecking
             AddHandler lvJournals.ItemChecked, Sub(sender, e) RefreshAddButton()
             AddHandler lvJournals.SelectedIndexChanged, Async Sub(sender, e) Await ShowExamplesAsync()
@@ -478,6 +480,9 @@ Namespace Forms
             If result.ExamplesBusy IsNot Nothing Then NoteExamplesBusy(result.ExamplesBusy)
             body.Controls.Clear()
             body.Controls.Add(evidencePanel)
+            ' Styled as it joins the window (#258): the window was styled
+            ' before, and in Dark the list kept Windows' Light check boxes.
+            UiPolish.ApplyToControls(body)
             btnBack.Visible = True
             btnPrimary.Text = "Add Checked to Shortlist"
 

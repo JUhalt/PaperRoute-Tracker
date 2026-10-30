@@ -106,6 +106,12 @@ Namespace Controls
                 TextFormatFlags.NoPrefix Or
                 TextFormatFlags.NoPadding
 
+            ' The row is the list's own color first: Windows draws a line down
+            ' each column's edge, which ran through the heading (#258).
+            Using fill As New SolidBrush(BackColor)
+                g.FillRectangle(fill, row)
+            End Using
+
             Dim area As New Rectangle(row.Left + inset, row.Top, Math.Max(0, row.Width - 2 * inset), row.Height)
             Dim needed As Size = TextRenderer.MeasureText(g, heading, Font, area.Size, flags)
             Dim label As New Rectangle(area.Left, area.Top, Math.Min(needed.Width, area.Width), area.Height)

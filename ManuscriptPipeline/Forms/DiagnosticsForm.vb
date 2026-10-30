@@ -89,6 +89,9 @@ Namespace Forms
             txtReport.WordWrap = False
             txtReport.Font = New Font("Consolas", 9.5F)
             txtReport.Text = BuildReport(_settings)
+            ' Opens with nothing selected (#258): a box given the keyboard
+            ' first selects all its text unless a selection was set.
+            txtReport.Select(0, 0)
             txtReport.Margin = New Padding(0)
 
             Dim buttons As New FlowLayoutPanel With {

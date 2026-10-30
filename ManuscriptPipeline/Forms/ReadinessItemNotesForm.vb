@@ -107,6 +107,10 @@ Namespace Forms
                 .Margin = New Padding(0, 0, 0, 10)
             }
 
+            ' Opens with nothing selected (#258): a box given the keyboard
+            ' first selects all its text unless a selection was set.
+            intro.Select(0, 0)
+
             txtNotes.Dock =
                 DockStyle.Fill
 

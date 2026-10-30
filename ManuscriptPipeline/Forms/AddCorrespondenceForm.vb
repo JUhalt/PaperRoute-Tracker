@@ -151,10 +151,12 @@ Namespace Forms
             ' Local file
             ' =================================================
 
+            ' No margin of its own, so its box is where the other fields are.
             Dim filePanel As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .ColumnCount = 3,
-                .RowCount = 1
+                .RowCount = 1,
+                .Margin = New Padding(0)
             }
 
             filePanel.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
@@ -267,12 +269,15 @@ Namespace Forms
         End Sub
 
 
+        ' At the top of its row, its text on the line of the field beside
+        ' it, which sits there too (#258): centred in the row, it sat below.
         Private Function CreateFieldLabel(text As String) As Label
 
             Return New Label With {
                 .Text = text,
                 .AutoSize = True,
-                .Anchor = AnchorStyles.Left,
+                .Anchor = AnchorStyles.Top Or AnchorStyles.Left,
+                .Margin = New Padding(3, 7, 3, 0),
                 .Font = New Font(Me.Font, FontStyle.Bold)
             }
 

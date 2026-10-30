@@ -361,6 +361,38 @@ Public Class WindowChromeTests
     End Sub
 
 
+    ' The certification harness shows the app's windows as Main does
+    ' (#259): around everything it shows, its thread's message boxes and
+    ' file dialogs take the theme's title bar and its menus the contrast
+    ' theme's colors, so a capture shows what the app shows. It installed
+    ' neither, and its message boxes kept Windows' light title bar in Dark.
+    ' Read from its source; the harness is not run here.
+    <TestMethod>
+    Public Sub TheHarnessHooksDialogsAndMenusAroundItsWindowsAsMainDoes()
+
+        Dim source As String =
+            File.ReadAllText(Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManualCertification", "V04Demo", "Program.cs"))
+
+        Dim main As Integer =
+            source.IndexOf("private static void Main(", StringComparison.Ordinal)
+
+        Dim hooking As Integer =
+            source.IndexOf("using (WindowChrome.HookDialogs())", Math.Max(main, 0), StringComparison.Ordinal)
+
+        Dim menus As Integer =
+            source.IndexOf("ThemedMenuRenderer.Install();", Math.Max(hooking, 0), StringComparison.Ordinal)
+
+        Dim running As Integer =
+            source.IndexOf("Run(args);", Math.Max(menus, 0), StringComparison.Ordinal)
+
+        Assert.IsTrue(
+            main >= 0 AndAlso hooking > main AndAlso menus > hooking AndAlso running > menus,
+            "The harness's Main hooks its thread's dialogs and installs the menu renderer around everything it shows."
+        )
+
+    End Sub
+
+
     ' Guard: the catalog's main window skips Form1_Load, which would read
     ' the library, so the call there is checked in the source, as the
     ' recovery draft's offer is; ApplyDialog's is proved by every dialog

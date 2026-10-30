@@ -68,8 +68,10 @@ public static class HarnessCapture
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr handle, out RECT rectangle);
     [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr handle, IntPtr hdc, uint flags);
     [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+    [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr handle, int attribute, out RECT value, int size);
     public struct RECT { public int Left, Top, Right, Bottom; }
     public const uint PW_RENDERFULLCONTENT = 2;
+    public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
     // Visible top-level windows of one process, in Z order.
     public static List<IntPtr> Windows(int processId)
     {
@@ -101,6 +103,15 @@ function Save-Window([IntPtr] $Handle, [string] $Path) {
     $width = $rectangle.Right - $rectangle.Left
     $height = $rectangle.Bottom - $rectangle.Top
     if ($width -le 0 -or $height -le 0) { throw "The window has no area to capture ($width x $height)." }
+    # The frame Windows draws (#259): the window's rectangle also holds its invisible resize borders, which
+    # PrintWindow paints as black strips on the left, right and bottom. Without the frame's bounds, the whole.
+    $visible = [Drawing.Rectangle]::new(0, 0, $width, $height)
+    $frame = [HarnessCapture+RECT]::new()
+    if ([HarnessCapture]::DwmGetWindowAttribute($Handle, [HarnessCapture]::DWMWA_EXTENDED_FRAME_BOUNDS, [ref] $frame, 16) -eq 0) {
+        $visible = [Drawing.Rectangle]::Intersect($visible, [Drawing.Rectangle]::FromLTRB(
+            $frame.Left - $rectangle.Left, $frame.Top - $rectangle.Top, $frame.Right - $rectangle.Left, $frame.Bottom - $rectangle.Top))
+        if ($visible.Width -le 0 -or $visible.Height -le 0) { throw 'The window''s visible frame is outside its rectangle.' }
+    }
     $bitmap = [Drawing.Bitmap]::new($width, $height)
     try {
         $graphics = [Drawing.Graphics]::FromImage($bitmap)
@@ -111,10 +122,12 @@ function Save-Window([IntPtr] $Handle, [string] $Path) {
             if (-not $painted) { throw 'PrintWindow failed.' }
         }
         finally { $graphics.Dispose() }
-        $bitmap.Save($Path, [Drawing.Imaging.ImageFormat]::Png)
+        $cropped = $bitmap.Clone($visible, $bitmap.PixelFormat)
+        try { $cropped.Save($Path, [Drawing.Imaging.ImageFormat]::Png) }
+        finally { $cropped.Dispose() }
     }
     finally { $bitmap.Dispose() }
-    return [ordered]@{ Width = $width; Height = $height }
+    return [ordered]@{ Width = $visible.Width; Height = $visible.Height }
 }
 
 function Get-Sha256([string] $Path) {
@@ -171,7 +184,7 @@ try {
         ApplicationDllSha256 = if (Test-Path -LiteralPath $applicationDll -PathType Leaf) { Get-Sha256 $applicationDll } else { $null }
         Arguments = @($HarnessArguments); StartedAtUtc = $startedAt.ToString('o'); Painted = $marker
         WaitedSeconds = $waitedSeconds; CapturedAtUtc = [DateTime]::UtcNow.ToString('o')
-        CaptureMethod = 'PrintWindow PW_RENDERFULLCONTENT'; Windows = @($windows.ToArray())
+        CaptureMethod = 'PrintWindow PW_RENDERFULLCONTENT, cropped to DWMWA_EXTENDED_FRAME_BOUNDS'; Windows = @($windows.ToArray())
     }
     $evidencePath = Join-Path $outputRoot "$Name.json"
     [IO.File]::WriteAllText($evidencePath, (ConvertTo-Json -InputObject $evidence -Depth 6), $utf8)
