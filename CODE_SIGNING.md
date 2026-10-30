@@ -1,6 +1,6 @@
 # Code signing policy
 
-**Status:** PaperRoute Tracker's Windows releases are not code-signed yet. The project will apply to the [SignPath Foundation](https://signpath.org) for free code signing for open-source projects once v0.9.2 is published ([#216](https://github.com/JUhalt/PaperRoute-Tracker/issues/216)). Until a certificate is issued, Windows shows a warning before Setup runs; the User Guide's [Installing](docs/USER_GUIDE.md#installing) section explains the warning and how to check a download against `SHA256SUMS.txt`.
+**Status:** PaperRoute Tracker's Windows releases are not code-signed yet. The project applied to the [SignPath Foundation](https://signpath.org) for free code signing for open-source projects on October 30, 2026, after v0.9.2 was published, and the application is under review ([#216](https://github.com/JUhalt/PaperRoute-Tracker/issues/216)). Until a certificate is issued, Windows shows a warning before Setup runs; the User Guide's [Installing](docs/USER_GUIDE.md#installing) section explains the warning and how to check a download against `SHA256SUMS.txt`.
 
 When signing begins, this section will read: "Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org)."
 
