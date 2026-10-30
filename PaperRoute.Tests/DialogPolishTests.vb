@@ -47,19 +47,15 @@ Public Class DialogPolishTests
 
         Dim failures As List(Of String) =
             AtEachDpi(
-                {
-                    ("SubmissionPacketEditForm, Edit", GetType(SubmissionPacketEditForm), Function() CType(PacketEditor(existing:=True), Form)),
-                    ("SubmissionPacketEditForm, New", GetType(SubmissionPacketEditForm), Function() CType(PacketEditor(existing:=False), Form)),
-                    ("ManuscriptReadinessForm", GetType(ManuscriptReadinessForm), Function() CType(New ManuscriptReadinessForm(LongNames(), New AuthorLibraryData()), Form))
-                },
+                ComboViews,
                 Sub(name, shown, dpi)
 
-                    For Each combo As ComboBox In ViewCatalog.Descendants(shown).OfType(Of ComboBox)().Where(Function(item) item.Visible AndAlso item.DropDownStyle = ComboBoxStyle.DropDownList AndAlso item.SelectedIndex >= 0)
+                    For Each combo As ComboBox In ChosenItemCombos(shown)
 
                         Dim box As Rectangle = SelectionField(combo)
                         Dim text As String = combo.GetItemText(combo.SelectedItem)
 
-                        If TextRenderer.MeasureText(text, combo.Font, New Size(Integer.MaxValue, Integer.MaxValue), TextFormatFlags.SingleLine Or TextFormatFlags.NoPrefix).Width <= box.Width Then
+                        If TextWidth(combo, text) <= box.Width Then
                             Continue For
                         End If
 
@@ -69,7 +65,7 @@ Public Class DialogPolishTests
                         ' item; one it draws itself cuts the text mid-letter.
                         If combo.DrawMode = DrawMode.Normal Then
                             found.Add($"{name} at {dpi} DPI: '{text}' is wider than its {box.Width}-pixel box, and Windows draws it.")
-                        ElseIf Not DrawsEndingInAnEllipsis(combo, text, box.Size) Then
+                        ElseIf Not DrawsAsTextRendererDoes(combo, text, box.Size) Then
                             found.Add($"{name} at {dpi} DPI: '{text}' is wider than its {box.Width}-pixel box and is not drawn ending in an ellipsis.")
                         End If
 
@@ -84,31 +80,163 @@ Public Class DialogPolishTests
     End Sub
 
 
+    ' A drop-down list's chosen item that fits its box is drawn whole, from
+    ' the field's left edge as Windows draws it (#265). At 125% the packet's
+    ' "Real journal submission" read "... Methods — Sep 9, 20...", which
+    ' Windows drew whole on 80e1a7c: TextRenderer's padding moved the item
+    ' 3 pixels right and ended it about 6 pixels early. Each owner-drawn
+    ' item, in a box exactly as wide as its text, is drawn as TextRenderer
+    ' draws the text there, whole; on aaea437 each ended in an ellipsis.
+    <TestMethod>
+    Public Sub ComboItemsThatFitTheirBoxAreDrawnWhole()
+
+        Dim judged As Integer = 0
+        Dim found As New List(Of String)()
+
+        Dim failures As List(Of String) =
+            AtEachDpi(
+                ComboViews,
+                Sub(name, shown, dpi)
+
+                    For Each combo As ComboBox In ChosenItemCombos(shown).Where(Function(item) item.DrawMode <> DrawMode.Normal)
+
+                        Dim text As String = combo.GetItemText(combo.SelectedItem)
+                        Dim width As Integer = TextWidth(combo, text)
+
+                        judged += 1
+
+                        If Not DrawsAsTextRendererDoes(combo, text, New Size(width, SelectionField(combo).Height)) Then
+                            found.Add($"{name} at {dpi} DPI: '{text}' is not drawn whole in a box as wide as its text, {width} pixels.")
+                        End If
+
+                    Next
+
+                End Sub)
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        Assert.IsTrue(judged >= 4 * Dpis.Length, "The packet's version, readiness and submission and the readiness profile at each DPI: " & judged.ToString())
+
+    End Sub
+
+
+    ' In Dark, a drop-down list's selected item is drawn white on the blue
+    ' of Windows' own lists (#265). .NET's Dark colors pair the selection's
+    ' blue, (40, 100, 180), with black text, about 3.6:1: C3 found the
+    ' focused readiness profile drawn so, where on 80e1a7c, as in every
+    ' list Windows draws itself, it was white on (0, 120, 215). Each
+    ' owner-drawn item, drawn selected in its box in Dark, is drawn as
+    ' TextRenderer draws its text white on that blue, inside the focus
+    ' rectangle; on aaea437 it was black on (40, 100, 180).
+    <TestMethod>
+    Public Sub ComboSelectionsInDarkAreWhiteOnWindowsBlue()
+
+        If SystemInformation.HighContrast Then
+            Assert.Inconclusive("A contrast theme sets its own selection colors; these checks do not change OS settings.")
+        End If
+
+        If Not OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000) Then
+            Assert.Inconclusive("Native WinForms dark mode requires Windows 11 or later.")
+        End If
+
+        Dim windowsBlue As Color = Color.FromArgb(0, 120, 215)
+        Dim judged As Integer = 0
+        Dim found As New List(Of String)()
+
+        Dim failures As List(Of String) =
+            AtEachDpi(
+                ComboViews,
+                Sub(name, shown, dpi)
+
+                    For Each combo As ComboBox In ChosenItemCombos(shown).Where(Function(item) item.DrawMode <> DrawMode.Normal)
+
+                        Dim text As String = combo.GetItemText(combo.SelectedItem)
+                        Dim size As Size = SelectionField(combo).Size
+                        judged += 1
+
+                        Using drawn As Bitmap = DrawnItem(combo, size, DrawItemState.Selected Or DrawItemState.Focus Or DrawItemState.ComboBoxEdit), expected As New Bitmap(size.Width, size.Height, PixelFormat.Format32bppArgb)
+
+                            Using g As Graphics = Graphics.FromImage(expected)
+                                g.Clear(windowsBlue)
+                                TextRenderer.DrawText(g, text, combo.Font, New Rectangle(Point.Empty, size), Color.White, TextFormatFlags.VerticalCenter Or TextFormatFlags.SingleLine Or TextFormatFlags.EndEllipsis Or TextFormatFlags.NoPrefix Or TextFormatFlags.NoPadding)
+                            End Using
+
+                            ' The focus rectangle is drawn on the box's edge.
+                            If Not SamePixels(drawn, expected, inset:=2) Then
+                                Dim fill As Color = drawn.GetPixel(2, 2)
+                                found.Add($"{name} at {dpi} DPI: '{text}' is not drawn white on (0, 120, 215); its box is ({fill.R}, {fill.G}, {fill.B}).")
+                            End If
+
+                        End Using
+
+                    Next
+
+                End Sub,
+                SystemColorMode.Dark)
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        Assert.IsTrue(judged >= 4 * Dpis.Length, "The packet's version, readiness and submission and the readiness profile at each DPI: " & judged.ToString())
+
+    End Sub
+
+
+    ' The windows whose drop-down lists draw their own items, with C3's
+    ' long names.
+    Private Shared ReadOnly ComboViews As (Name As String, View As Type, Build As Func(Of Form))() = {
+        ("SubmissionPacketEditForm, Edit", GetType(SubmissionPacketEditForm), Function() CType(PacketEditor(existing:=True), Form)),
+        ("SubmissionPacketEditForm, New", GetType(SubmissionPacketEditForm), Function() CType(PacketEditor(existing:=False), Form)),
+        ("ManuscriptReadinessForm", GetType(ManuscriptReadinessForm), Function() CType(New ManuscriptReadinessForm(LongNames(), New AuthorLibraryData()), Form))
+    }
+
+
+    ' The drop-down lists showing a chosen item.
+    Private Shared Function ChosenItemCombos(shown As Form) As IEnumerable(Of ComboBox)
+        Return ViewCatalog.Descendants(shown).OfType(Of ComboBox)().Where(Function(item) item.Visible AndAlso item.DropDownStyle = ComboBoxStyle.DropDownList AndAlso item.SelectedIndex >= 0)
+    End Function
+
+
+    ' How wide the text is, with no padding, as Windows draws a box's item.
+    Private Shared Function TextWidth(combo As ComboBox, text As String) As Integer
+        Return TextRenderer.MeasureText(text, combo.Font, New Size(Integer.MaxValue, Integer.MaxValue), TextFormatFlags.SingleLine Or TextFormatFlags.NoPrefix Or TextFormatFlags.NoPadding).Width
+    End Function
+
+
     ' Whether the combo draws its item, in a box of the given size as
     ' Windows asks it to, with the pixels TextRenderer draws for the text
-    ' ending in an ellipsis. OnDrawItem raises DrawItem whatever the
-    ' combo's DrawMode, so a combo with no handler draws nothing here;
-    ' whether Windows asks it to draw at all is the caller's check.
-    Private Shared Function DrawsEndingInAnEllipsis(combo As ComboBox, text As String, size As Size) As Boolean
+    ' from the box's left edge (#265), whole or ending in an ellipsis.
+    ' OnDrawItem raises DrawItem whatever the combo's DrawMode, so a combo
+    ' with no handler draws nothing here; whether Windows asks it to draw
+    ' at all is the caller's check.
+    Private Shared Function DrawsAsTextRendererDoes(combo As ComboBox, text As String, size As Size) As Boolean
 
-        Dim bounds As New Rectangle(Point.Empty, size)
-
-        Using drawn As New Bitmap(size.Width, size.Height, PixelFormat.Format32bppArgb), expected As New Bitmap(size.Width, size.Height, PixelFormat.Format32bppArgb)
-
-            Using g As Graphics = Graphics.FromImage(drawn)
-                g.Clear(combo.BackColor)
-                Dim args As New DrawItemEventArgs(g, combo.Font, bounds, combo.SelectedIndex, DrawItemState.ComboBoxEdit, combo.ForeColor, combo.BackColor)
-                GetType(ComboBox).GetMethod("OnDrawItem", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(combo, New Object() {args})
-            End Using
+        Using drawn As Bitmap = DrawnItem(combo, size, DrawItemState.ComboBoxEdit), expected As New Bitmap(size.Width, size.Height, PixelFormat.Format32bppArgb)
 
             Using g As Graphics = Graphics.FromImage(expected)
                 g.Clear(combo.BackColor)
-                TextRenderer.DrawText(g, text, combo.Font, bounds, combo.ForeColor, TextFormatFlags.VerticalCenter Or TextFormatFlags.SingleLine Or TextFormatFlags.EndEllipsis Or TextFormatFlags.NoPrefix)
+                TextRenderer.DrawText(g, text, combo.Font, New Rectangle(Point.Empty, size), combo.ForeColor, TextFormatFlags.VerticalCenter Or TextFormatFlags.SingleLine Or TextFormatFlags.EndEllipsis Or TextFormatFlags.NoPrefix Or TextFormatFlags.NoPadding)
             End Using
 
             Return SamePixels(drawn, expected)
 
         End Using
+
+    End Function
+
+
+    ' What the combo draws for its chosen item in a box of the given size
+    ' and the given state, as Windows asks it to.
+    Private Shared Function DrawnItem(combo As ComboBox, size As Size, state As DrawItemState) As Bitmap
+
+        Dim drawn As New Bitmap(size.Width, size.Height, PixelFormat.Format32bppArgb)
+
+        Using g As Graphics = Graphics.FromImage(drawn)
+            g.Clear(combo.BackColor)
+            Dim args As New DrawItemEventArgs(g, combo.Font, New Rectangle(Point.Empty, size), combo.SelectedIndex, state, combo.ForeColor, combo.BackColor)
+            GetType(ComboBox).GetMethod("OnDrawItem", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(combo, New Object() {args})
+        End Using
+
+        Return drawn
 
     End Function
 
@@ -863,11 +991,13 @@ Public Class DialogPolishTests
     ' ---------------------------------------------------------------
 
     ' Shows each view at each DPI, simulated for the display as its source
-    ' asks (ScalingMeasurementTests.ScalingOf), and hands it to inspect;
-    ' returns a line for each view that failed.
+    ' asks (ScalingMeasurementTests.ScalingOf), in the color mode if one is
+    ' given, and hands it to inspect; returns a line for each view that
+    ' failed.
     Private Shared Function AtEachDpi(
         views As IEnumerable(Of (Name As String, View As Type, Build As Func(Of Form))),
-        inspect As Action(Of String, Form, Integer)
+        inspect As Action(Of String, Form, Integer),
+        Optional mode As SystemColorMode? = Nothing
     ) As List(Of String)
 
         Dim failures As New List(Of String)()
@@ -887,7 +1017,8 @@ Public Class DialogPolishTests
                         Sub(name, shown)
                             ScalingMeasurementTests.Simulate(shown, at, ScalingMeasurementTests.ScalingOf(current.View).ScalesWithWinForms)
                             inspect(current.Name, shown, at)
-                        End Sub))
+                        End Sub,
+                        mode))
 
             Next
 
@@ -898,14 +1029,16 @@ Public Class DialogPolishTests
     End Function
 
 
-    Private Shared Function SamePixels(first As Bitmap, second As Bitmap) As Boolean
+    ' Whether the two are the same, apart from a band of the given width
+    ' around the edge.
+    Private Shared Function SamePixels(first As Bitmap, second As Bitmap, Optional inset As Integer = 0) As Boolean
 
         If first.Size <> second.Size Then
             Return False
         End If
 
-        For y As Integer = 0 To first.Height - 1
-            For x As Integer = 0 To first.Width - 1
+        For y As Integer = inset To first.Height - 1 - inset
+            For x As Integer = inset To first.Width - 1 - inset
                 If first.GetPixel(x, y).ToArgb() <> second.GetPixel(x, y).ToArgb() Then
                     Return False
                 End If
