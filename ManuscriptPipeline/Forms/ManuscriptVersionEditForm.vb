@@ -250,6 +250,12 @@ Namespace Forms
                 .MinimumSize = New Size(0, 786)
             }
 
+            ' The table holds its layout until the window is scaled (#255).
+            ' Laid out as the version date was added, in the table's first
+            ' 200x100, the date was left no width, and at 125% Windows
+            ' Forms scaled that, which the date then kept.
+            root.SuspendLayout()
+
             ' A panel leaves a child docked to fill it out of its scroll
             ' range, so the body scrolls as far as the table's minimum,
             ' read as Windows Forms has scaled it for the display.
@@ -556,6 +562,10 @@ Namespace Forms
 
             Me.Controls.Add(
                 buttons
+            )
+
+            root.ResumeLayout(
+                False
             )
 
             DialogScaling.Finish(Me)

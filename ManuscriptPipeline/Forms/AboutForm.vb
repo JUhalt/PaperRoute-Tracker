@@ -41,6 +41,12 @@ Namespace Forms
                 .BackColor = UiTheme.BoardBackground()
             }
 
+            ' The grid holds its layout until the window is scaled (#255).
+            ' Laid out as the logo was added, in the grid's first 200x100,
+            ' the logo was squeezed to 1 pixel tall, and at 125% Windows
+            ' Forms scaled the squeezed size, which the logo then kept.
+            root.SuspendLayout()
+
             root.ColumnStyles.Add(New ColumnStyle(SizeType.Absolute, 116))
             root.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
 
@@ -163,6 +169,7 @@ Namespace Forms
             Me.CancelButton = btnClose
             Me.Controls.Add(root)
 
+            root.ResumeLayout(False)
             DialogScaling.Finish(Me)
 
         End Sub
