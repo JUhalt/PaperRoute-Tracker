@@ -18,13 +18,15 @@ Each of these runs only when you choose it, shows what it will send first where 
 
 | Feature | Contacts | Sends | Their privacy policy |
 | --- | --- | --- | --- |
-| Update check | GitHub | Nothing about you; it reads the list of releases. | [GitHub Privacy Statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement) |
-| DOI lookup, Fill Blanks, Check for Publications | Crossref | A DOI, or the DOIs and titles of the manuscripts you check. | [Crossref privacy](https://www.crossref.org/operations-and-sustainability/privacy/) |
-| ORCID import, Check for Publications, Your Citations | ORCID | An ORCID iD you enter. | [ORCID Privacy Policy](https://info.orcid.org/privacy-policy/) |
-| Journal facts | DOAJ, OpenAlex | A journal's ISSNs, or a journal name you type. | [DOAJ privacy notice](https://doaj.org/privacy/); [OpenAlex privacy](https://openalex.org/privacy) |
-| Find Journals, Your Citations | OpenAlex | The keywords you review and a start date; the DOIs of your works; your ORCID iD only if you choose. | [OpenAlex privacy](https://openalex.org/privacy) |
-| AI assistant: Claude | Anthropic | Only what the assistant's window shows you before sending: a pasted decision letter or author instructions, one reviewer comment, or a manuscript's title, abstract, keywords and target journal. | With your own key you are Anthropic's customer: its [Commercial Terms](https://www.anthropic.com/legal/commercial-terms) and [Data Processing Addendum](https://www.anthropic.com/legal/data-processing-addendum) apply |
-| AI assistant: another server | The address you set | The same, sent only to that address. | The server's operator |
+| Update check | GitHub | Nothing about you or your library; it reads the list of PaperRoute releases. | [GitHub Privacy Statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement) |
+| DOI lookup | Crossref | A DOI. | [Crossref privacy](https://www.crossref.org/operations-and-sustainability/privacy/) |
+| Publication check | Crossref, ORCID | The DOIs and titles of the manuscripts you check, and your ORCID iD if you include it. | [Crossref privacy](https://www.crossref.org/operations-and-sustainability/privacy/); [ORCID Privacy Policy](https://info.orcid.org/privacy-policy/) |
+| ORCID import | ORCID | An ORCID iD you enter. | [ORCID Privacy Policy](https://info.orcid.org/privacy-policy/) |
+| Journal facts | DOAJ, OpenAlex | A journal's ISSNs, or a name you type to find a journal and the id of the one you pick. | [DOAJ privacy notice](https://doaj.org/privacy/); [OpenAlex privacy](https://openalex.org/privacy) |
+| Find journals | OpenAlex | The keywords you review, a start date, and the ids of the journals found. | [OpenAlex privacy](https://openalex.org/privacy) |
+| Your citations | ORCID, OpenAlex | Your ORCID iD to ORCID, and the DOIs of your works to OpenAlex; your iD to OpenAlex only if you choose. | [ORCID Privacy Policy](https://info.orcid.org/privacy-policy/); [OpenAlex privacy](https://openalex.org/privacy) |
+| AI assistant: Claude | Anthropic | Only what an AI assistant window shows you before sending: a decision letter you paste; a journal's author instructions you paste, with the article type you enter; one reviewer comment with its reviewer label and your planned action; or a manuscript's title, abstract, keywords, type of work, and target journal with its Journal Library facts. Test Connection in Preferences sends only your key, if you added one. | With your own key you are Anthropic's customer: its [Commercial Terms](https://www.anthropic.com/legal/commercial-terms) and [Data Processing Addendum](https://www.anthropic.com/legal/data-processing-addendum) apply |
+| AI assistant: another server or a model on this computer | The address you set | The same, sent only to that address. | The server's operator |
 
 The [User Guide](docs/USER_GUIDE.md#what-paperroute-sends-and-when) gives the exact hosts and wording for each feature.
 
