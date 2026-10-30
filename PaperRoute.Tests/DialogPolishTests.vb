@@ -17,6 +17,10 @@ Imports ManuscriptPipeline.Services
 ' (ScalingMeasurementTests.Simulate): the text grown, and the window
 ' scaled as Windows Forms scales it if its source asks for that. Each test
 ' failed on 80e1a7c, the cut candidate.
+' LabelsAreWholeInAWindowBuiltAt96To144Dpi (#263, C5) instead builds each
+' window as a display builds it (ScalingMeasurementTests.AtDisplayDpi),
+' which Simulate cannot do faithfully for a window scaled by hand; it
+' failed on 88a191e.
 <TestClass>
 <DoNotParallelize>
 Public Class DialogPolishTests
