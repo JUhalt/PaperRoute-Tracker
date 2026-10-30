@@ -685,19 +685,27 @@ Public Class DialogPolishTests
     ' keyboard as their windows opened, as a window's first box does, and
     ' a text box given the keyboard for the first time selects all its
     ' text unless a selection was set. Each, given the keyboard, selects
-    ' nothing. AssistantConsentForm already set one.
+    ' nothing. AssistantConsentForm already set one. Submission Details'
+    ' notes did the same (#266). Each box is found by its name.
     <TestMethod>
-    Public Sub ReadinessItemNotesAndDiagnosticsOpenWithTheirReadOnlyBoxUnselected()
+    Public Sub ReadOnlyBoxesOpenWithNothingSelected()
+
+        Dim boxes As (View As Type, Box As String)() = {
+            (GetType(ReadinessItemNotesForm), "Requirement instructions"),
+            (GetType(DiagnosticsForm), "Diagnostics report"),
+            (GetType(SubmissionDetailsForm), "Submission notes")
+        }
 
         Dim found As New List(Of String)()
         Dim judged As Integer = 0
 
         Dim failures As List(Of String) =
             ViewCatalog.ShowEach(
-                {GetType(ReadinessItemNotesForm), GetType(DiagnosticsForm)}.Select(Function(view) (view.Name, ViewCatalog.Dialogs(view))),
+                boxes.Select(Function(entry) (entry.View.Name, ViewCatalog.Dialogs(entry.View))),
                 Sub(name, shown)
 
-                    Dim box As TextBox = ViewCatalog.Descendants(shown).OfType(Of TextBox)().First(Function(item) item.ReadOnly AndAlso item.Visible)
+                    Dim boxName As String = boxes.Single(Function(entry) entry.View.Name = name).Box
+                    Dim box As TextBox = ViewCatalog.Descendants(shown).OfType(Of TextBox)().Single(Function(item) item.ReadOnly AndAlso item.AccessibleName = boxName)
 
                     Assert.IsTrue(box.Focus(), name & ": the box takes the keyboard.")
                     Application.DoEvents()
@@ -712,7 +720,7 @@ Public Class DialogPolishTests
 
         Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
         Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
-        Assert.AreEqual(2, judged, "Both boxes were judged.")
+        Assert.AreEqual(boxes.Length, judged, "Every box was judged.")
 
     End Sub
 
