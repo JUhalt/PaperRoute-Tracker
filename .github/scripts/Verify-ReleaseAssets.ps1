@@ -95,9 +95,37 @@ function Get-BundledRuntimeVersion([string] $PublishRoot) {
     return [string] $runtime[0].version
 }
 
-# Stage records the runtime; Verify checks only the draft and the staged
-# assets, so it needs no publish folder.
+# THIRD-PARTY-NOTICES.txt names the bundled runtime twice: in its '.NET
+# runtime <version>, bundled as the packs' entry and in the heading of the
+# runtime's reproduced notices. v0.9.2 bundled 10.0.14 under notices for
+# 10.0.12; a runtime that moves without the notices is refused (#269).
+function Assert-NoticesNameRuntime([string] $NoticesPath, [string] $RuntimeVersion) {
+    if (-not (Test-Path -LiteralPath $NoticesPath -PathType Leaf)) {
+        throw "THIRD-PARTY-NOTICES.txt at '$NoticesPath' does not exist."
+    }
+    $notices = [IO.File]::ReadAllText($NoticesPath)
+    $runtimeLines = [ordered]@{
+        "its '.NET runtime <version>, bundled as the packs' entry" =
+            '(?m)^\.NET runtime (?<version>\S+), bundled as the packs'
+        "the reproduced runtime notices' 'Microsoft.NETCore.App.Runtime.win-x64 <version>.' heading" =
+            '(?m)^Reproduced from THIRD-PARTY-NOTICES\.TXT in the package\s+Microsoft\.NETCore\.App\.Runtime\.win-x64 (?<version>\S+?)\.\r?$'
+    }
+    foreach ($line in $runtimeLines.GetEnumerator()) {
+        $named = @([regex]::Matches($notices, $line.Value) | ForEach-Object { $_.Groups['version'].Value })
+        if ($named.Count -ne 1) {
+            throw "THIRD-PARTY-NOTICES.txt must name the bundled .NET runtime exactly once in $($line.Key); found $($named.Count)."
+        }
+        if ($named[0] -cne $RuntimeVersion) {
+            throw "THIRD-PARTY-NOTICES.txt names .NET runtime $($named[0]) in $($line.Key), but the publish bundles $RuntimeVersion. Regenerate the notices for the bundled runtime, or pin the SDK that bundles the runtime they name (#269)."
+        }
+    }
+}
+
+# Stage records the runtime and, before the draft can be published, checks
+# that the notices the release uploads name it; Verify checks only the draft
+# and the staged assets, so it needs no publish folder.
 $runtimeVersion = if ($Mode -eq 'Stage') { Get-BundledRuntimeVersion $publishRoot } else { $null }
+if ($Mode -eq 'Stage') { Assert-NoticesNameRuntime (Join-Path $repoRoot 'THIRD-PARTY-NOTICES.txt') $runtimeVersion }
 $release = Get-DraftRelease
 $ExpectedReleaseId = [long] $release.databaseId
 $remoteAssets = @(Get-RemoteAssets $ExpectedReleaseId)

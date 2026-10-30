@@ -98,8 +98,13 @@ $releaseNotes = Join-Path $repoRoot "docs/releases/$Version.md"
 if (-not (Test-Path -LiteralPath $releaseNotes -PathType Leaf)) {
     throw "Exact release notes are required at '$releaseNotes'."
 }
-$sdk = (& $dotnet --version | Out-String).Trim()
-if ($LASTEXITCODE -ne 0 -or $sdk -notmatch '^10\.') { throw 'An active .NET 10 SDK is required.' }
+# global.json pins the SDK, and so the runtime the candidate bundles (#269).
+# The SDK is resolved from the repository root, where the build runs.
+$pinnedSdk = [string] (Get-Content -LiteralPath (Join-Path $repoRoot 'global.json') -Raw | ConvertFrom-Json).sdk.version
+Push-Location $repoRoot
+try { $sdk = (& $dotnet --version | Out-String).Trim() }
+finally { Pop-Location }
+if ($LASTEXITCODE -ne 0 -or $sdk -cne $pinnedSdk) { throw "The .NET SDK global.json pins, $pinnedSdk, is required." }
 $commit = (& $git -C $repoRoot rev-parse HEAD | Out-String).Trim()
 if ($LASTEXITCODE -ne 0) { throw 'Could not identify the checkout commit.' }
 $sourceStatus = @(& $git -C $repoRoot status --porcelain=v1 --untracked-files=all)
@@ -158,6 +163,32 @@ function Get-BundledRuntimeVersion([string] $PublishRoot) {
         throw "'$configPath' does not name one bundled Microsoft.NETCore.App; the publish must be self-contained."
     }
     return [string] $runtime[0].version
+}
+
+# THIRD-PARTY-NOTICES.txt names the bundled runtime twice: in its '.NET
+# runtime <version>, bundled as the packs' entry and in the heading of the
+# runtime's reproduced notices. v0.9.2 bundled 10.0.14 under notices for
+# 10.0.12; a runtime that moves without the notices is refused (#269).
+function Assert-NoticesNameRuntime([string] $NoticesPath, [string] $RuntimeVersion) {
+    if (-not (Test-Path -LiteralPath $NoticesPath -PathType Leaf)) {
+        throw "THIRD-PARTY-NOTICES.txt at '$NoticesPath' does not exist."
+    }
+    $notices = [IO.File]::ReadAllText($NoticesPath)
+    $runtimeLines = [ordered]@{
+        "its '.NET runtime <version>, bundled as the packs' entry" =
+            '(?m)^\.NET runtime (?<version>\S+), bundled as the packs'
+        "the reproduced runtime notices' 'Microsoft.NETCore.App.Runtime.win-x64 <version>.' heading" =
+            '(?m)^Reproduced from THIRD-PARTY-NOTICES\.TXT in the package\s+Microsoft\.NETCore\.App\.Runtime\.win-x64 (?<version>\S+?)\.\r?$'
+    }
+    foreach ($line in $runtimeLines.GetEnumerator()) {
+        $named = @([regex]::Matches($notices, $line.Value) | ForEach-Object { $_.Groups['version'].Value })
+        if ($named.Count -ne 1) {
+            throw "THIRD-PARTY-NOTICES.txt must name the bundled .NET runtime exactly once in $($line.Key); found $($named.Count)."
+        }
+        if ($named[0] -cne $RuntimeVersion) {
+            throw "THIRD-PARTY-NOTICES.txt names .NET runtime $($named[0]) in $($line.Key), but the publish bundles $RuntimeVersion. Regenerate the notices for the bundled runtime, or pin the SDK that bundles the runtime they name (#269)."
+        }
+    }
 }
 
 function Assert-ArchivePayload([string] $Path, [string] $ExpectedDllHash, [switch] $CheckNuspec) {
@@ -240,6 +271,7 @@ try {
         }
     }
     $runtimeVersion = Get-BundledRuntimeVersion $publishRoot
+    Assert-NoticesNameRuntime (Join-Path $repoRoot 'THIRD-PARTY-NOTICES.txt') $runtimeVersion
     $dllPath = Join-Path $publishRoot 'PaperRouteTracker.dll'
     $versionInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo($dllPath)
     $assemblyVersion = [Reflection.AssemblyName]::GetAssemblyName($dllPath).Version.ToString()
