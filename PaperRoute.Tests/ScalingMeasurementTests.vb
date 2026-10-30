@@ -343,6 +343,11 @@ Public Class ScalingMeasurementTests
     ' 96, 120 and 144 DPI as the sweep simulates them, the buttons in the
     ' row that holds the window's default or Cancel button have one top and
     ' one height. The main window and its pages have no such row.
+    '
+    ' The simulation never showed C3's other mismatch, Cancel 44 pixels
+    ' tall to the default button's 42 at 125%: on 80e1a7c the dialogs C3
+    ' listed failed here on their tops only, so their heights rest on the
+    ' 125% captures.
     <TestMethod>
     Public Sub TheButtonsOfAFooterShareItsTopAndHeightAt96To144Dpi()
 
@@ -397,7 +402,11 @@ Public Class ScalingMeasurementTests
     End Sub
 
 
-    ' The rows across a window that hold its default or Cancel button.
+    ' The rows across a window that hold its default or Cancel button: the
+    ' flow rows UiPolish lines up. Two footers outside that rule are not
+    ' measured, and both were level at 96 to 144 DPI when #257 was fixed:
+    ' Title Page Import's, a grid, and the error dialog's Copy Details and
+    ' Open Log Folder, a row beside the one with its default button.
     Private Shared Function FooterRows(shown As Form) As List(Of FlowLayoutPanel)
 
         Return {TryCast(shown.AcceptButton, Control), TryCast(shown.CancelButton, Control)}.
