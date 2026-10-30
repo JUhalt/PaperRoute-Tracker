@@ -1275,6 +1275,8 @@ The [privacy policy](https://github.com/JUhalt/PaperRoute-Tracker/blob/master/PR
 
 PaperRoute includes high-DPI and responsive-dialog support, but Windows display scaling can expose edge cases.
 
+PaperRoute 1.0 is certified at 1920x1080 up to 150% display scaling and at 1366x768 up to 125%. 1366x768 at 150% is not certified: there, **Add Metric**'s buttons sit below the bottom of the screen, and two of **Paste a Title Page**'s boxes are slightly too short for two lines.
+
 Try:
 
 1. resize the dialog;
