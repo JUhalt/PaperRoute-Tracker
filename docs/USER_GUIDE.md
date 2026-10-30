@@ -1245,6 +1245,12 @@ Installed application data is stored under:
 %LocalAppData%\PaperRoute\
 ```
 
+The copies PaperRoute manages of your files, such as version snapshots, packet files, and correspondence copies, are stored under:
+
+```text
+Documents\PaperRoute Library\
+```
+
 Visual Studio debugger sessions use the isolated development profile:
 
 ```text
@@ -1258,6 +1264,8 @@ External services are used only for the features listed in **What PaperRoute sen
 **Export Packet...** writes a .zip only where you choose, and sends nothing. The summary and metadata it writes leave out notes, correspondence, reviewer names and comments, manuscript numbers, portal links, and where files are kept on your computer. The files themselves travel exactly as they are, so check the hidden information the export lists, such as a document's author, before you share the .zip.
 
 PaperRoute does not require a PaperRoute account for the core manuscript library.
+
+The [privacy policy](https://github.com/JUhalt/PaperRoute-Tracker/blob/master/PRIVACY.md) sums up what PaperRoute keeps on your computer, what it sends, and what it never sends.
 
 ---
 
