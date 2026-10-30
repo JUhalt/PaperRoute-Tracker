@@ -43,9 +43,12 @@ Imports ManuscriptPipeline.Services
 ' area (Measure), since a real 150% display showed what keeping the
 ' host's frame hid.
 '
-' Report-only for the windows not yet converted: the table is the proof.
-' Enforcing for the windows in Converted, which must pass at 120 and 144
-' DPI on both screens.
+' Enforcing for every window at 96 DPI on both screens, where nothing is
+' simulated, so a cut there is a cut whoever scales the window (#256:
+' Settings' service names were cut at 100% and only the table said so).
+' Above 96, report-only for the windows not yet converted: the table is
+' the proof. Enforcing for the windows in Converted, which must pass at
+' 120 and 144 DPI on both screens too.
 <TestClass>
 <DoNotParallelize>
 Public Class ScalingMeasurementTests
@@ -150,13 +153,13 @@ Public Class ScalingMeasurementTests
         Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
         Assert.AreEqual(ViewCatalog.Dialogs.Count, rows.Count, "Every top-level window was measured.")
 
-        ' The converted windows must pass at 120 and 144 on both screens.
+        ' Every window must pass at 96 on both screens, and the converted
+        ' windows at 120 and 144 too.
         Dim convertedNames As New HashSet(Of String)(Converted.Select(Function(view) view.Name))
 
         Dim enforced As List(Of String) =
             rows.Values.
-                Where(Function(row) convertedNames.Contains(row.Name)).
-                SelectMany(Function(row) row.Cells.Where(Function(cell) Not cell.Key.EndsWith(" 96", StringComparison.Ordinal) AndAlso Not cell.Value.Passes).
+                SelectMany(Function(row) row.Cells.Where(Function(cell) (cell.Key.EndsWith(" 96", StringComparison.Ordinal) OrElse convertedNames.Contains(row.Name)) AndAlso Not cell.Value.Passes).
                                                    Select(Function(cell) row.Name & " at " & cell.Key & ": " & cell.Value.Describe())).
                 ToList()
 
