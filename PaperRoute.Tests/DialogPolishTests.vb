@@ -726,6 +726,30 @@ Public Class DialogPolishTests
 
     End Sub
 
+    ' Readiness Notes opens with the keyboard in its notes (#266). It
+    ' opened in the read-only requirement above them, the window's first
+    ' box, so what was typed went nowhere until the notes were clicked.
+    <TestMethod>
+    Public Sub ReadinessItemNotesOpensWithTheKeyboardInItsNotes()
+
+        Dim active As String = Nothing
+
+        Dim failures As List(Of String) =
+            ViewCatalog.ShowEach(
+                {(GetType(ReadinessItemNotesForm).Name, ViewCatalog.Dialogs(GetType(ReadinessItemNotesForm)))},
+                Sub(name, shown)
+
+                    Application.DoEvents()
+
+                    active = If(shown.ActiveControl Is Nothing, "nothing", $"{shown.ActiveControl.GetType().Name} '{shown.ActiveControl.AccessibleName}'")
+
+                End Sub)
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual("TextBox 'Manuscript-specific notes'", active, "Readiness Notes opens with the keyboard in its notes.")
+
+    End Sub
+
 
     ' ---------------------------------------------------------------
     ' Bullets (item 7)

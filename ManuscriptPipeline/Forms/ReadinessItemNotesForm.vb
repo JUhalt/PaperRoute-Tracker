@@ -160,6 +160,11 @@ Namespace Forms
 
             Me.Controls.Add(root)
 
+            ' Opens with the keyboard in the notes (#266), not in the
+            ' read-only requirement above them, the window's first box.
+            Me.ActiveControl =
+                txtNotes
+
         End Sub
 
 
