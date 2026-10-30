@@ -347,6 +347,10 @@ Namespace Forms
             txtDetails.WordWrap = False
             txtDetails.Font = New Font("Consolas", 9.5F)
             txtDetails.Text = BuildDetails()
+            ' Opens with nothing selected (#266, as #258 did for
+            ' Diagnostics): a box given the keyboard first selects all its
+            ' text unless a selection was set.
+            txtDetails.Select(0, 0)
             txtDetails.Margin = New Padding(0)
 
             Dim lnkGuide As New LinkLabel With {
