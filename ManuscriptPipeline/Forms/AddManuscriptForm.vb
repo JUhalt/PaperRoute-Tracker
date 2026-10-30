@@ -95,8 +95,12 @@ Namespace Forms
                 .Padding = New Padding(20)
             }
 
+            ' As wide as its widest label, and never less than 145 pixels
+            ' (CreateFieldLabel). Windows Forms does not scale this window,
+            ' so at 150% Target journal and Starting stage outgrew a fixed
+            ' 145 and wrapped onto a second line, which their rows cut (#263).
             layout.ColumnStyles.Add(
-                New ColumnStyle(SizeType.Absolute, 145)
+                New ColumnStyle(SizeType.AutoSize)
             )
 
             layout.ColumnStyles.Add(
@@ -231,7 +235,9 @@ Namespace Forms
         ' At the top of its row, its text on the line of the field beside
         ' it (#258): centred in the row, it sat below a box at the top of
         ' the row, and beside the middle of a row that wraps rather than its
-        ' first line. Top is how far down that line puts its text.
+        ' first line. Top is how far down that line puts its text. Its
+        ' least width, with its margins, is the 145 pixels its column had,
+        ' so the column keeps them wherever every label fits (#263).
         Private Function CreateFieldLabel(text As String, Optional top As Integer = 7) As Label
 
             Return New Label With {
@@ -239,6 +245,7 @@ Namespace Forms
                 .AutoSize = True,
                 .Anchor = AnchorStyles.Top Or AnchorStyles.Left,
                 .Margin = New Padding(3, top, 3, 0),
+                .MinimumSize = New Size(139, 0),
                 .Font = New Font(Me.Font, FontStyle.Bold)
             }
 

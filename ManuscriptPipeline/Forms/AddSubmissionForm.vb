@@ -165,10 +165,13 @@ Namespace Forms
                 .Padding = New Padding(22)
             }
 
+            ' As wide as its widest label, and never less than 235 pixels
+            ' (CreateFieldLabel). Windows Forms does not scale this window,
+            ' so at 150% Journal manuscript ID outgrew a fixed 235 and cut
+            ' its help to a sliver (#263).
             root.ColumnStyles.Add(
                 New ColumnStyle(
-                    SizeType.Absolute,
-                    235
+                    SizeType.AutoSize
                 )
             )
 
@@ -541,7 +544,9 @@ Namespace Forms
 
         ' At the top of its row, its text on the line of the field beside
         ' it, which sits there too, as a label with help is (#258): centred
-        ' in the row, it sat below.
+        ' in the row, it sat below. Its least width, with its margins, is
+        ' the 235 pixels its column had, so the column keeps them wherever
+        ' every label fits (#263).
         Private Function CreateFieldLabel(
             text As String
         ) As Label
@@ -556,6 +561,11 @@ Namespace Forms
                         3,
                         7,
                         3,
+                        0
+                    ),
+                .MinimumSize =
+                    New Size(
+                        229,
                         0
                     ),
                 .Font =
@@ -585,6 +595,13 @@ Namespace Forms
                     3,
                     0,
                     3,
+                    0
+                )
+
+            ' Its help follows its text, not the column's least width.
+            label.MinimumSize =
+                New Size(
+                    0,
                     0
                 )
 
