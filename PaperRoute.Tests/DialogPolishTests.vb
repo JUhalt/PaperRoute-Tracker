@@ -910,7 +910,8 @@ Public Class DialogPolishTests
     ' Pasted text whose only recognized part is a title said "Nothing
     ' recognized yet. You can still type a title." while Title showed it.
     ' The summary now begins with the title; with nothing recognized it
-    ' still says so.
+    ' still says so. What it found follows "Found: " (#266), so a title
+    ' alone is not one bare word, "title".
     <TestMethod>
     Public Sub TitlePageImportSummaryNamesARecognizedTitle()
 
@@ -918,7 +919,7 @@ Public Class DialogPolishTests
             Sub()
 
                 Using dialog As New TitlePageImportForm(New AuthorLibraryData(), "A preregistered replication of anchoring effects")
-                    Assert.AreEqual("title", SummaryOf(dialog), "Only a title was recognized.")
+                    Assert.AreEqual("Found: title", SummaryOf(dialog), "Only a title was recognized.")
                 End Using
 
                 Dim page As String = String.Join(vbLf, {
@@ -931,7 +932,7 @@ Public Class DialogPolishTests
                 })
 
                 Using dialog As New TitlePageImportForm(New AuthorLibraryData(), page)
-                    StringAssert.StartsWith(SummaryOf(dialog), "title " & ChrW(&HB7) & " 3 authors", "The title comes first.")
+                    StringAssert.StartsWith(SummaryOf(dialog), "Found: title " & ChrW(&HB7) & " 3 authors", "The title comes first.")
                 End Using
 
                 Using dialog As New TitlePageImportForm(New AuthorLibraryData())
