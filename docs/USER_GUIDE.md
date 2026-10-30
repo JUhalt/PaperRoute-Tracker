@@ -1061,7 +1061,7 @@ PaperRoute's automated tests check, in every window and page:
 - that a screen reader's press reaches chips, tags, and **?** help buttons as a click does; and
 - that the shortcuts listed here are the ones PaperRoute handles.
 
-Before release, PaperRoute is also checked by hand with Narrator on its six pages and its five most-used windows, and under one dark and one light Windows contrast theme.
+Each release is also checked by hand, on its published build, with Narrator on its six pages and its five most-used windows, and under one dark and one light Windows contrast theme.
 
 ---
 
