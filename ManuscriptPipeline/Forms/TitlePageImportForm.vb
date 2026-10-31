@@ -447,10 +447,11 @@ Namespace Forms
                 parts.Add(Plural(_parsed.UnplacedLines.Count, "line") & " not placed")
             End If
 
+            ' Led in, so a title alone does not read as one bare word (#266).
             lblSummary.Text =
                 If(parts.Count = 0,
                    "Nothing recognized yet. You can still type a title.",
-                   String.Join(" " & ChrW(&HB7) & " ", parts))
+                   "Found: " & String.Join(" " & ChrW(&HB7) & " ", parts))
 
             btnUse.Enabled =
                 txtTitle.Text.Trim().Length > 0 OrElse

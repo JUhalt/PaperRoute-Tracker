@@ -24,3 +24,8 @@ Useful reports include:
 - any suggested mitigation.
 
 PaperRoute is local-first, but features involving files, imports, external metadata services, the optional AI assistant and its provider keys, update infrastructure, and local persistence should still be treated as security-sensitive.
+
+## Related policies
+
+- The [privacy policy](../PRIVACY.md) says what PaperRoute keeps on your computer, what it sends, and what it never sends.
+- The [code signing policy](../CODE_SIGNING.md) says how releases are built, which files are signed, and who approves each signing request.

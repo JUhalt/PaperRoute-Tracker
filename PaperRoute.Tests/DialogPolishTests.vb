@@ -415,10 +415,14 @@ Public Class DialogPolishTests
     ' Label, Version file and Current version were 11 or 12 pixels off,
     ' centred in rows the field sat at the top of, and the correspondence,
     ' submission and manuscript windows' labels 8 to 10 pixels below their
-    ' fields. The middle of each label's first line of text is within 2
-    ' pixels of its field's middle: the first box, list or date in the
-    ' field's cell, else its first check box, else its first button, each
-    ' of which centres its text. The text is drawn as the app draws it.
+    ' fields. The packet's Packet name, Exact manuscript version, Readiness
+    ' profile and Real journal submission were 2.5 to 3.5 pixels below
+    ' theirs, 6.5 to 7 at 150%, centred in rows the field sat at the top
+    ' of, and Revision round 3 below its box at 150% (#266). The middle of each label's
+    ' first line of text is within 2 pixels of its field's middle: the
+    ' first box, list or date in the field's cell, else its first check
+    ' box, else its first button, each of which centres its text. The text
+    ' is drawn as the app draws it.
     <TestMethod>
     Public Sub FieldLabelsShareTheirFieldsCentreLine()
 
@@ -428,7 +432,9 @@ Public Class DialogPolishTests
             {"AddManuscriptForm", {"Title", "Target journal", "Starting stage", "From a draft", "First deadline"}},
             {"ManuscriptVersionEditForm", {"Label", "Version file", "Current version"}},
             {"SubmissionPacketFileEditForm, Edit", {"Local file"}},
-            {"SubmissionPacketFileEditForm, New", {"Local file"}}
+            {"SubmissionPacketFileEditForm, New", {"Local file"}},
+            {"SubmissionPacketEditForm, Edit", {"Packet name", "Exact manuscript version", "Readiness profile", "Real journal submission", "Revision round"}},
+            {"SubmissionPacketEditForm, New", {"Packet name", "Exact manuscript version", "Readiness profile", "Real journal submission", "Revision round"}}
         }
 
         Dim measured As New List(Of String)()
@@ -542,7 +548,8 @@ Public Class DialogPolishTests
     End Function
 
 
-    ' The windows whose field labels #258 put on their fields' line.
+    ' The windows whose field labels #258 and #266 put on their fields'
+    ' line.
     Private Shared Function LabelledWindows() As (Name As String, View As Type, Build As Func(Of Form))()
 
         Return {
@@ -551,7 +558,9 @@ Public Class DialogPolishTests
             ("AddManuscriptForm", GetType(AddManuscriptForm), Function() CType(New AddManuscriptForm(), Form)),
             ("ManuscriptVersionEditForm", GetType(ManuscriptVersionEditForm), Function() ViewCatalog.Dialogs(GetType(ManuscriptVersionEditForm))(String.Empty)),
             ("SubmissionPacketFileEditForm, Edit", GetType(SubmissionPacketFileEditForm), Function() ViewCatalog.Dialogs(GetType(SubmissionPacketFileEditForm))(String.Empty)),
-            ("SubmissionPacketFileEditForm, New", GetType(SubmissionPacketFileEditForm), Function() CType(New SubmissionPacketFileEditForm(LongNames().SubmissionPackets(0), Nothing), Form))
+            ("SubmissionPacketFileEditForm, New", GetType(SubmissionPacketFileEditForm), Function() CType(New SubmissionPacketFileEditForm(LongNames().SubmissionPackets(0), Nothing), Form)),
+            ("SubmissionPacketEditForm, Edit", GetType(SubmissionPacketEditForm), Function() CType(PacketEditor(existing:=True), Form)),
+            ("SubmissionPacketEditForm, New", GetType(SubmissionPacketEditForm), Function() CType(PacketEditor(existing:=False), Form))
         }
 
     End Function
@@ -685,19 +694,29 @@ Public Class DialogPolishTests
     ' keyboard as their windows opened, as a window's first box does, and
     ' a text box given the keyboard for the first time selects all its
     ' text unless a selection was set. Each, given the keyboard, selects
-    ' nothing. AssistantConsentForm already set one.
+    ' nothing. AssistantConsentForm already set one. Submission Details'
+    ' notes and the startup failure window's details did the same (#266).
+    ' Each box is found by its name.
     <TestMethod>
-    Public Sub ReadinessItemNotesAndDiagnosticsOpenWithTheirReadOnlyBoxUnselected()
+    Public Sub ReadOnlyBoxesOpenWithNothingSelected()
+
+        Dim boxes As (View As Type, Box As String)() = {
+            (GetType(ReadinessItemNotesForm), "Requirement instructions"),
+            (GetType(DiagnosticsForm), "Diagnostics report"),
+            (GetType(SubmissionDetailsForm), "Submission notes"),
+            (GetType(StartupFailureForm), "Technical details")
+        }
 
         Dim found As New List(Of String)()
         Dim judged As Integer = 0
 
         Dim failures As List(Of String) =
             ViewCatalog.ShowEach(
-                {GetType(ReadinessItemNotesForm), GetType(DiagnosticsForm)}.Select(Function(view) (view.Name, ViewCatalog.Dialogs(view))),
+                boxes.Select(Function(entry) (entry.View.Name, ViewCatalog.Dialogs(entry.View))),
                 Sub(name, shown)
 
-                    Dim box As TextBox = ViewCatalog.Descendants(shown).OfType(Of TextBox)().First(Function(item) item.ReadOnly AndAlso item.Visible)
+                    Dim boxName As String = boxes.Single(Function(entry) entry.View.Name = name).Box
+                    Dim box As TextBox = ViewCatalog.Descendants(shown).OfType(Of TextBox)().Single(Function(item) item.ReadOnly AndAlso item.AccessibleName = boxName)
 
                     Assert.IsTrue(box.Focus(), name & ": the box takes the keyboard.")
                     Application.DoEvents()
@@ -712,7 +731,38 @@ Public Class DialogPolishTests
 
         Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
         Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
-        Assert.AreEqual(2, judged, "Both boxes were judged.")
+        Assert.AreEqual(boxes.Length, judged, "Every box was judged.")
+
+    End Sub
+
+    ' Readiness Notes opens with the keyboard in its notes (#266). It
+    ' opened in the read-only requirement above them, the window's first
+    ' box, so what was typed went nowhere until the notes were clicked.
+    ' The saved notes open unselected, so a key and Enter, Save Notes,
+    ' never replace them; the catalog's item has some.
+    <TestMethod>
+    Public Sub ReadinessItemNotesOpensWithTheKeyboardInItsNotes()
+
+        Dim active As String = Nothing
+        Dim selected As String = Nothing
+
+        Dim failures As List(Of String) =
+            ViewCatalog.ShowEach(
+                {(GetType(ReadinessItemNotesForm).Name, ViewCatalog.Dialogs(GetType(ReadinessItemNotesForm)))},
+                Sub(name, shown)
+
+                    Application.DoEvents()
+
+                    active = If(shown.ActiveControl Is Nothing, "nothing", $"{shown.ActiveControl.GetType().Name} '{shown.ActiveControl.AccessibleName}'")
+
+                    Dim notes As TextBox = ViewCatalog.Descendants(shown).OfType(Of TextBox)().Single(Function(item) item.AccessibleName = "Manuscript-specific notes")
+                    selected = $"{notes.SelectionLength} of its {notes.TextLength} characters"
+
+                End Sub)
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual("TextBox 'Manuscript-specific notes'", active, "Readiness Notes opens with the keyboard in its notes.")
+        Assert.AreEqual($"0 of its {"Check the affiliations.".Length} characters", selected, "Readiness Notes opens with its saved notes unselected.")
 
     End Sub
 
@@ -876,7 +926,8 @@ Public Class DialogPolishTests
     ' Pasted text whose only recognized part is a title said "Nothing
     ' recognized yet. You can still type a title." while Title showed it.
     ' The summary now begins with the title; with nothing recognized it
-    ' still says so.
+    ' still says so. What it found follows "Found: " (#266), so a title
+    ' alone is not one bare word, "title".
     <TestMethod>
     Public Sub TitlePageImportSummaryNamesARecognizedTitle()
 
@@ -884,7 +935,7 @@ Public Class DialogPolishTests
             Sub()
 
                 Using dialog As New TitlePageImportForm(New AuthorLibraryData(), "A preregistered replication of anchoring effects")
-                    Assert.AreEqual("title", SummaryOf(dialog), "Only a title was recognized.")
+                    Assert.AreEqual("Found: title", SummaryOf(dialog), "Only a title was recognized.")
                 End Using
 
                 Dim page As String = String.Join(vbLf, {
@@ -897,7 +948,7 @@ Public Class DialogPolishTests
                 })
 
                 Using dialog As New TitlePageImportForm(New AuthorLibraryData(), page)
-                    StringAssert.StartsWith(SummaryOf(dialog), "title " & ChrW(&HB7) & " 3 authors", "The title comes first.")
+                    StringAssert.StartsWith(SummaryOf(dialog), "Found: title " & ChrW(&HB7) & " 3 authors", "The title comes first.")
                 End Using
 
                 Using dialog As New TitlePageImportForm(New AuthorLibraryData())
@@ -912,6 +963,37 @@ Public Class DialogPolishTests
     Private Shared Function SummaryOf(dialog As TitlePageImportForm) As String
         Return DirectCast(GetType(TitlePageImportForm).GetField("lblSummary", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(dialog), Label).Text
     End Function
+
+    ' Export BibTeX's and RIS's list names each manuscript's shelf as the
+    ' app does (#266). A filed manuscript read "[FileDrawer]", the shelf's
+    ' name in the code; it reads "[File Drawer]", as the reports and the
+    ' Library's Shelf column name it. The other two shelves read as before.
+    <TestMethod>
+    Public Sub BibliographyExportListNamesTheFileDrawerAsTheAppDoes()
+
+        StaRunner.Run(
+            Sub()
+
+                Dim library As New List(Of Manuscript) From {
+                    New Manuscript With {.Title = "A filed replication", .Location = ManuscriptLocation.FileDrawer},
+                    New Manuscript With {.Title = "A published replication", .Location = ManuscriptLocation.Published},
+                    New Manuscript With {.Title = "A replication under way", .Location = ManuscriptLocation.Pipeline}
+                }
+
+                Using dialog As New BibliographyExportSelectionForm(library, "BibTeX")
+
+                    Dim list As CheckedListBox = ViewCatalog.Descendants(dialog).OfType(Of CheckedListBox)().Single()
+
+                    Assert.AreEqual(
+                        "A filed replication  [File Drawer] | A published replication  [Published] | A replication under way  [Pipeline]",
+                        String.Join(" | ", list.Items.Cast(Of Object)().Select(Function(item) list.GetItemText(item))),
+                        "Each shelf is named as the app names it.")
+
+                End Using
+
+            End Sub)
+
+    End Sub
 
 
     ' The reviewer response matrix says once that it has nothing to show

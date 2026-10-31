@@ -430,6 +430,51 @@ Public Class OnlineServicesTests
         StringAssert.StartsWith(OnlineServiceCatalog.Find(OnlineServiceCatalog.Updates).WhenUsed, "At startup, if automatic checks are on", "The table's row, which the guide copies, says so too.")
     End Sub
 
+    ' #152: PRIVACY.md sums up what the catalog describes. It says what the
+    ' startup check sends in the words the pinned sentence uses, and its
+    ' table has one row for each service, named as Online services names
+    ' it, less a closing "(...)": Contacts says who. Rows are matched by
+    ' their first cell, ignoring case. Each row's Sends starts with what
+    ' the catalog says that service sends, less its full stop and ignoring
+    ' case, so the policy can add words after it but can't be left behind
+    ' when a service comes to send more. The configured-host row says it
+    ' sends the same, only to that address.
+    <TestMethod>
+    Public Sub ThePrivacyPolicyNamesEachServiceTheAppCanContact()
+        Dim privacy As String = IO.File.ReadAllText(Path.Combine(RepositoryRoot(), "PRIVACY.md")).Replace(vbCrLf, vbLf)
+        Dim sectionOf As Func(Of String, String) =
+            Function(heading)
+                Dim start As Integer = privacy.IndexOf(vbLf & heading & vbLf, StringComparison.Ordinal)
+                Assert.IsTrue(start >= 0, "PRIVACY.md has a section: " & heading)
+                Dim finish As Integer = privacy.IndexOf(vbLf & "## ", start + 1, StringComparison.Ordinal)
+                Return privacy.Substring(start, If(finish < 0, privacy.Length, finish) - start)
+            End Function
+
+        Dim startup As String = sectionOf("## The one request PaperRoute makes by itself")
+        StringAssert.Contains(startup, "reads the list of PaperRoute releases and sends nothing about you or your library", "PRIVACY.md says what the startup check sends, as the README and the guide do.")
+        StringAssert.Contains(startup, "**Work offline**", "PRIVACY.md says Work offline stops it.")
+
+        Dim rows As List(Of String()) = sectionOf("## Online features you start").Split(ChrW(10)).
+            Where(Function(line) line.StartsWith("| ", StringComparison.Ordinal) AndAlso Not line.StartsWith("| ---", StringComparison.Ordinal)).
+            Skip(1).Select(Function(line) line.Split("|"c).Skip(1).Select(Function(cell) cell.Trim()).ToArray()).ToList()
+        Dim named As List(Of String) = rows.Select(Function(cells) cells(0)).ToList()
+        Dim rowName As Func(Of OnlineService, String) = Function(item) Text.RegularExpressions.Regex.Replace(item.Name, "\s*\([^)]*\)$", String.Empty)
+        Dim catalogNames As List(Of String) = OnlineServiceCatalog.Services.Select(rowName).ToList()
+        For Each service As String In catalogNames
+            Assert.IsTrue(named.Any(Function(name) String.Equals(name, service, StringComparison.OrdinalIgnoreCase)), "PRIVACY.md's table has a row for " & service & ".")
+        Next
+        For Each name As String In named
+            Assert.IsTrue(catalogNames.Any(Function(service) String.Equals(name, service, StringComparison.OrdinalIgnoreCase)), "PRIVACY.md's row " & name & " is a service the catalog lists.")
+        Next
+
+        For Each service As OnlineService In OnlineServiceCatalog.Services.Where(Function(item) Not item.ConfiguredHost)
+            Dim name As String = rowName(service)
+            Dim sends As String = service.Sends.TrimEnd("."c)
+            Dim row As String() = rows.First(Function(cells) String.Equals(cells(0), name, StringComparison.OrdinalIgnoreCase))
+            Assert.IsTrue(row(2).StartsWith(sends, StringComparison.OrdinalIgnoreCase), "PRIVACY.md's row " & name & " says what the catalog says it sends: " & sends & ".")
+        Next
+    End Sub
+
 
     ' ---------------------------------------------------------------
     ' Preferences and the main window

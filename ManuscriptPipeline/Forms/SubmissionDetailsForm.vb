@@ -420,6 +420,11 @@ Namespace Forms
                 .AccessibleName = "Submission notes"
             }
 
+            ' Opens with nothing selected (#266, as #258 did for Readiness
+            ' Notes): a box given the keyboard first selects all its text
+            ' unless a selection was set.
+            txtSubmissionNotes.Select(0, 0)
+
             notesGroup.Controls.Add(txtSubmissionNotes)
 
             ' The notes keep two lines of their box, with the card around

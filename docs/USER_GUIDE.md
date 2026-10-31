@@ -750,6 +750,7 @@ How the numbers work:
 - Days are calendar days between dates recorded in PaperRoute. A first decision is the earliest decision recorded for a submission.
 - A missing or inconsistent date (a decision dated before its submission, for example) leaves that value out. Nothing is estimated.
 - A date PaperRoute had to fill in during a spreadsheet import (a missing submission date becomes the day of the import, and a missing decision date the submission date) is noted on the record and counts here as written, so figures that include imported records are approximate to that extent.
+- A Crossref, ORCID, BibTeX, or RIS import that gives a publication date as only a year, or a year and month, stores it as the first day of that year or month. It counts here as written, like the spreadsheet dates above.
 - On the route maps, time with you after a revision request ends at the next recorded Submitted or Under Review history entry. Without one, that stretch is drawn as not recorded.
 - Submissions count under a Journal Library record when they are linked to it or use exactly its name (ignoring capitals and spacing). A different spelling is shown on its own line rather than merged by guess.
 
@@ -1060,7 +1061,7 @@ PaperRoute's automated tests check, in every window and page:
 - that a screen reader's press reaches chips, tags, and **?** help buttons as a click does; and
 - that the shortcuts listed here are the ones PaperRoute handles.
 
-Before release, PaperRoute is also checked by hand with Narrator on its six pages and its five most-used windows, and under one dark and one light Windows contrast theme.
+Each release is also checked by hand, on its published build, with Narrator on its six pages and its five most-used windows, and under one dark and one light Windows contrast theme.
 
 ---
 
@@ -1244,6 +1245,12 @@ Installed application data is stored under:
 %LocalAppData%\PaperRoute\
 ```
 
+The copies PaperRoute manages of your files, such as version snapshots, packet files, and correspondence copies, are stored under:
+
+```text
+Documents\PaperRoute Library\
+```
+
 Visual Studio debugger sessions use the isolated development profile:
 
 ```text
@@ -1258,6 +1265,8 @@ External services are used only for the features listed in **What PaperRoute sen
 
 PaperRoute does not require a PaperRoute account for the core manuscript library.
 
+The [privacy policy](https://github.com/JUhalt/PaperRoute-Tracker/blob/master/PRIVACY.md) sums up what PaperRoute keeps on your computer, what it sends, and what it never sends.
+
 ---
 
 ## Troubleshooting
@@ -1265,6 +1274,8 @@ PaperRoute does not require a PaperRoute account for the core manuscript library
 ### A window looks clipped or unusable
 
 PaperRoute includes high-DPI and responsive-dialog support, but Windows display scaling can expose edge cases.
+
+PaperRoute 1.0 is certified at 1920x1080 up to 150% display scaling and at 1366x768 up to 125%. 1366x768 at 150% is not certified: there, **Add Metric**'s buttons sit below the bottom of the screen, and two of **Paste a Title Page**'s boxes are slightly too short for two lines.
 
 Try:
 
@@ -1334,3 +1345,5 @@ When reporting a problem, include:
 - screenshots or exact error text when possible.
 
 Avoid posting manuscript content or private correspondence publicly unless you intentionally choose to share it.
+
+Report a suspected security vulnerability privately, not in a public issue, as the [security policy](https://github.com/JUhalt/PaperRoute-Tracker/blob/master/.github/SECURITY.md) describes.

@@ -218,9 +218,10 @@ Namespace Forms
                     Return "(Invalid manuscript)"
                 End If
 
+                ' The shelf as the app names it: File Drawer, not FileDrawer (#266).
                 Return Manuscript.Title &
                     "  [" &
-                    Manuscript.Location.ToString() &
+                    ReportService.ShelfName(Manuscript.Location) &
                     "]"
             End Function
 

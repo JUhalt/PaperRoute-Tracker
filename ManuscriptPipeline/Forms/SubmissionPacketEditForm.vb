@@ -132,8 +132,12 @@ Namespace Forms
                 2
             )
 
-            txtLabel.Dock =
-                DockStyle.Fill
+            ' Centred in its row, on the line of its label, which is centred
+            ' there too (#266): at the top of the row, it sat 3 or 4 pixels
+            ' above the label, and 7 at 150%, as it is shorter than the label
+            ' and its margins, which set the row's height.
+            txtLabel.Anchor =
+                AnchorStyles.Left Or AnchorStyles.Right
 
             txtLabel.PlaceholderText =
                 "e.g., Initial submission packet"
@@ -152,8 +156,9 @@ Namespace Forms
                 1
             )
 
-            cmbVersion.Dock =
-                DockStyle.Fill
+            ' On its label's line, as the packet name is (#266).
+            cmbVersion.Anchor =
+                AnchorStyles.Left Or AnchorStyles.Right
 
             cmbVersion.DropDownStyle =
                 ComboBoxStyle.DropDownList
@@ -172,8 +177,8 @@ Namespace Forms
                 2
             )
 
-            cmbReadiness.Dock =
-                DockStyle.Fill
+            cmbReadiness.Anchor =
+                AnchorStyles.Left Or AnchorStyles.Right
 
             cmbReadiness.DropDownStyle =
                 ComboBoxStyle.DropDownList
@@ -192,8 +197,8 @@ Namespace Forms
                 3
             )
 
-            cmbSubmission.Dock =
-                DockStyle.Fill
+            cmbSubmission.Anchor =
+                AnchorStyles.Left Or AnchorStyles.Right
 
             cmbSubmission.DropDownStyle =
                 ComboBoxStyle.DropDownList
@@ -224,8 +229,11 @@ Namespace Forms
             nudRevisionRound.Width =
                 130
 
+            ' As tall as its box and centred in the row, so the box is on
+            ' Revision round's line (#266): filling the row, the box sat at
+            ' its top, 3 pixels above the label at 150%.
             Dim revisionPanel As New FlowLayoutPanel With {
-                .Dock = DockStyle.Fill,
+                .Anchor = AnchorStyles.Left Or AnchorStyles.Right,
                 .AutoSize = True,
                 .FlowDirection = FlowDirection.LeftToRight,
                 .WrapContents = False
