@@ -186,7 +186,7 @@ PaperRoute treats **Published** and **File Drawer** as terminal shelves, while s
 Requirements:
 
 - Windows 11 recommended
-- .NET 10 SDK
+- .NET SDK 10.0.403, which `global.json` pins ([#269](https://github.com/JUhalt/PaperRoute-Tracker/issues/269))
 - Visual Studio 2026 or another environment capable of building VB.NET WinForms projects
 
 Clone the repository and build:

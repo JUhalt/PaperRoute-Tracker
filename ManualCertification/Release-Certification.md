@@ -44,7 +44,7 @@ The release's certification issue lists the standing gates and holds each result
 
 ## 10. A richer standing fixture and a documented collector
 
-Certification uses one standing fixture richer than any single defect needs, and a documented collector for its evidence. Evidence JSON is preferred to screenshots. `Application.HighDpiMode` and the bundled .NET runtime version are recorded in the evidence (the capture JSON carries the first from the harness; the second is `RuntimeVersion` in `candidate-verification.json` and `Stage-verification.json`, #144), so the app, the harness and the release record are known to agree.
+Certification uses one standing fixture richer than any single defect needs, and a documented collector for its evidence. Evidence JSON is preferred to screenshots. `Application.HighDpiMode` and the bundled .NET runtime version are recorded in the evidence (the capture JSON carries the first from the harness; the second is `RuntimeVersion` in `candidate-verification.json` and `Stage-verification.json`, #144), so the app, the harness and the release record are known to agree. `global.json` pins the SDK at 10.0.403, so the candidate and the release bundle the same runtime, and both scripts refuse a `THIRD-PARTY-NOTICES.txt` whose runtime lines name another (#269). Moving the SDK is a deliberate change, made together with the notices.
 
 ## 11. The certification issue is opened at the start of the release
 

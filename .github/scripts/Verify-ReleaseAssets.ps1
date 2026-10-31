@@ -95,9 +95,75 @@ function Get-BundledRuntimeVersion([string] $PublishRoot) {
     return [string] $runtime[0].version
 }
 
-# Stage records the runtime; Verify checks only the draft and the staged
-# assets, so it needs no publish folder.
+# THIRD-PARTY-NOTICES.txt names the bundled runtime twice: in its '.NET
+# runtime <version>, bundled as the packs' entry and in the heading of the
+# runtime's reproduced notices. v0.9.2 bundled 10.0.14 under notices for
+# 10.0.12; a runtime that moves without the notices is refused (#269). The
+# entry's source commit and the reproduced notices are checked against the
+# runtime pack the publish restored into the NuGet global packages folder:
+# line 1 of its Microsoft.NETCore.App.versions.txt, and its own
+# THIRD-PARTY-NOTICES.TXT, which follows the heading and a blank line to
+# the end of the file, without the pack's trailing blank line.
+function Assert-NoticesNameRuntime([string] $NoticesPath, [string] $RuntimeVersion) {
+    if (-not (Test-Path -LiteralPath $NoticesPath -PathType Leaf)) {
+        throw "THIRD-PARTY-NOTICES.txt at '$NoticesPath' does not exist."
+    }
+    $notices = [IO.File]::ReadAllText($NoticesPath)
+    $runtimeLines = [ordered]@{
+        "its '.NET runtime <version>, bundled as the packs' entry" =
+            '(?m)^\.NET runtime (?<version>\S+), bundled as the packs'
+        "the reproduced runtime notices' 'Microsoft.NETCore.App.Runtime.win-x64 <version>.' heading" =
+            '(?m)^Reproduced from THIRD-PARTY-NOTICES\.TXT in the package\s+Microsoft\.NETCore\.App\.Runtime\.win-x64 (?<version>\S+?)\.\r?$'
+    }
+    foreach ($line in $runtimeLines.GetEnumerator()) {
+        $named = @([regex]::Matches($notices, $line.Value) | ForEach-Object { $_.Groups['version'].Value })
+        if ($named.Count -ne 1) {
+            throw "THIRD-PARTY-NOTICES.txt must name the bundled .NET runtime exactly once in $($line.Key); found $($named.Count)."
+        }
+        if ($named[0] -cne $RuntimeVersion) {
+            throw "THIRD-PARTY-NOTICES.txt names .NET runtime $($named[0]) in $($line.Key), but the publish bundles $RuntimeVersion. Regenerate the notices for the bundled runtime, or pin the SDK that bundles the runtime they name (#269)."
+        }
+    }
+    $packagesRoot = if ($env:NUGET_PACKAGES) { $env:NUGET_PACKAGES } else { Join-Path $HOME '.nuget/packages' }
+    $pack = "Microsoft.NETCore.App.Runtime.win-x64 $RuntimeVersion"
+    $packRoot = Join-Path $packagesRoot "microsoft.netcore.app.runtime.win-x64/$($RuntimeVersion.ToLowerInvariant())"
+    $versionsPath = Join-Path $packRoot 'Microsoft.NETCore.App.versions.txt'
+    $packNoticesPath = Join-Path $packRoot 'THIRD-PARTY-NOTICES.TXT'
+    foreach ($path in @($versionsPath, $packNoticesPath)) {
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            throw "The runtime pack $pack has no '$([IO.Path]::GetFileName($path))' at '$path'. The publish restores the pack into the NuGet global packages folder, NUGET_PACKAGES or ~/.nuget/packages."
+        }
+    }
+    $packCommit = ([IO.File]::ReadAllText($versionsPath) -split '\r?\n')[0].Trim()
+    if ($packCommit -cnotmatch '^[0-9a-f]{40}$') {
+        throw "Line 1 of '$versionsPath' is not the runtime pack's source commit."
+    }
+    $entry = "its '.NET runtime <version>, bundled as the packs' entry"
+    $commits = @([regex]::Matches($notices, '(?ms)^\.NET runtime \S+, bundled as the packs(?:(?!\n\r?\n).)*?commit\s+(?<commit>[0-9a-f]{40})\)') |
+        ForEach-Object { $_.Groups['commit'].Value })
+    if ($commits.Count -ne 1) {
+        throw "THIRD-PARTY-NOTICES.txt must name the bundled .NET runtime's source commit exactly once in $entry; found $($commits.Count)."
+    }
+    if ($commits[0] -cne $packCommit) {
+        throw "THIRD-PARTY-NOTICES.txt names source commit $($commits[0]) in $entry, but the runtime pack $pack was built from $packCommit. Regenerate the notices for the bundled runtime (#269)."
+    }
+    $text = $notices.Replace("`r`n", "`n")
+    $heading = [regex]::Match($text, '(?m)^Reproduced from THIRD-PARTY-NOTICES\.TXT in the package\s+Microsoft\.NETCore\.App\.Runtime\.win-x64 \S+?\.\n\n')
+    if (-not $heading.Success) {
+        throw "THIRD-PARTY-NOTICES.txt must follow the reproduced runtime notices' heading with a blank line."
+    }
+    $packNotices = [IO.File]::ReadAllText($packNoticesPath).Replace("`r`n", "`n")
+    if ($packNotices.EndsWith("`n`n")) { $packNotices = $packNotices.Substring(0, $packNotices.Length - 1) }
+    if ($text.Substring($heading.Index + $heading.Length) -cne $packNotices) {
+        throw "The runtime notices reproduced in THIRD-PARTY-NOTICES.txt differ from THIRD-PARTY-NOTICES.TXT in the runtime pack $pack at '$packNoticesPath'. Reproduce the pack's notices after the heading (#269)."
+    }
+}
+
+# Stage records the runtime and, before the draft can be published, checks
+# that the notices the release uploads name it; Verify checks only the draft
+# and the staged assets, so it needs no publish folder.
 $runtimeVersion = if ($Mode -eq 'Stage') { Get-BundledRuntimeVersion $publishRoot } else { $null }
+if ($Mode -eq 'Stage') { Assert-NoticesNameRuntime (Join-Path $repoRoot 'THIRD-PARTY-NOTICES.txt') $runtimeVersion }
 $release = Get-DraftRelease
 $ExpectedReleaseId = [long] $release.databaseId
 $remoteAssets = @(Get-RemoteAssets $ExpectedReleaseId)
