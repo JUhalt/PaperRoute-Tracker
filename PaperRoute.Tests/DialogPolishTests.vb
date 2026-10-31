@@ -948,6 +948,37 @@ Public Class DialogPolishTests
         Return DirectCast(GetType(TitlePageImportForm).GetField("lblSummary", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(dialog), Label).Text
     End Function
 
+    ' Export BibTeX's and RIS's list names each manuscript's shelf as the
+    ' app does (#266). A filed manuscript read "[FileDrawer]", the shelf's
+    ' name in the code; it reads "[File Drawer]", as the reports and the
+    ' Library's Shelf column name it. The other two shelves read as before.
+    <TestMethod>
+    Public Sub BibliographyExportListNamesTheFileDrawerAsTheAppDoes()
+
+        StaRunner.Run(
+            Sub()
+
+                Dim library As New List(Of Manuscript) From {
+                    New Manuscript With {.Title = "A filed replication", .Location = ManuscriptLocation.FileDrawer},
+                    New Manuscript With {.Title = "A published replication", .Location = ManuscriptLocation.Published},
+                    New Manuscript With {.Title = "A replication under way", .Location = ManuscriptLocation.Pipeline}
+                }
+
+                Using dialog As New BibliographyExportSelectionForm(library, "BibTeX")
+
+                    Dim list As CheckedListBox = ViewCatalog.Descendants(dialog).OfType(Of CheckedListBox)().Single()
+
+                    Assert.AreEqual(
+                        "A filed replication  [File Drawer] | A published replication  [Published] | A replication under way  [Pipeline]",
+                        String.Join(" | ", list.Items.Cast(Of Object)().Select(Function(item) list.GetItemText(item))),
+                        "Each shelf is named as the app names it.")
+
+                End Using
+
+            End Sub)
+
+    End Sub
+
 
     ' The reviewer response matrix says once that it has nothing to show
     ' (#258, item 11). With no comments, the list's hint said "No reviewer
