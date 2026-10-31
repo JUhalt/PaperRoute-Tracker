@@ -738,10 +738,13 @@ Public Class DialogPolishTests
     ' Readiness Notes opens with the keyboard in its notes (#266). It
     ' opened in the read-only requirement above them, the window's first
     ' box, so what was typed went nowhere until the notes were clicked.
+    ' The saved notes open unselected, so a key and Enter, Save Notes,
+    ' never replace them; the catalog's item has some.
     <TestMethod>
     Public Sub ReadinessItemNotesOpensWithTheKeyboardInItsNotes()
 
         Dim active As String = Nothing
+        Dim selected As String = Nothing
 
         Dim failures As List(Of String) =
             ViewCatalog.ShowEach(
@@ -752,10 +755,14 @@ Public Class DialogPolishTests
 
                     active = If(shown.ActiveControl Is Nothing, "nothing", $"{shown.ActiveControl.GetType().Name} '{shown.ActiveControl.AccessibleName}'")
 
+                    Dim notes As TextBox = ViewCatalog.Descendants(shown).OfType(Of TextBox)().Single(Function(item) item.AccessibleName = "Manuscript-specific notes")
+                    selected = $"{notes.SelectionLength} of its {notes.TextLength} characters"
+
                 End Sub)
 
         Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
         Assert.AreEqual("TextBox 'Manuscript-specific notes'", active, "Readiness Notes opens with the keyboard in its notes.")
+        Assert.AreEqual($"0 of its {"Check the affiliations.".Length} characters", selected, "Readiness Notes opens with its saved notes unselected.")
 
     End Sub
 

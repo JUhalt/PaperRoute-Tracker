@@ -44,6 +44,15 @@ Namespace Forms
                     String.Empty
                 )
 
+            ' The caret after the saved notes, nothing selected (#266): the
+            ' notes take the keyboard as the window opens, and a box given
+            ' the keyboard first selects all its text unless a selection
+            ' was set, so a key and Enter, Save Notes, replaced them.
+            txtNotes.Select(
+                txtNotes.TextLength,
+                0
+            )
+
         End Sub
 
 
