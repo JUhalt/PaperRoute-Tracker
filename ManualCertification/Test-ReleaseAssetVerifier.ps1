@@ -51,16 +51,29 @@ function Write-RuntimeConfig([string] $Root, [string] $Version) {
             @{ name = 'Microsoft.NETCore.App'; version = $Version }, @{ name = 'Microsoft.WindowsDesktop.App'; version = $Version }) }
     }))
 }
+# The runtime pack the publish restores into the NuGet global packages
+# folder, which NUGET_PACKAGES points at for the verifier: the source commit
+# its versions.txt names and its own third-party notices, with CRLF line ends
+# and a trailing blank line as in the real pack (#269).
+$runtimeCommit = '0123456789abcdef0123456789abcdef01234567'
+$runtimeNotices = @('Synthetic .NET runtime third-party notices.', '',
+    'License notice for a synthetic component', '----------------------------------------', '', 'Synthetic license text.')
+function Write-RuntimePack([string] $Root, [string] $Version, [string[]] $Notices = $runtimeNotices) {
+    $pack = Join-Path $Root "nuget-packages/microsoft.netcore.app.runtime.win-x64/$Version"
+    Write-Bytes (Join-Path $pack 'Microsoft.NETCore.App.versions.txt') (Text-Bytes "$runtimeCommit`r`n$Version`r`n")
+    Write-Bytes (Join-Path $pack 'THIRD-PARTY-NOTICES.TXT') (Text-Bytes ((@($Notices) + '' + '') -join "`r`n"))
+}
 # The notices name the bundled runtime in their entry and in the heading of
-# the runtime's reproduced notices, with CRLF line ends as in a Windows
-# checkout; Stage refuses notices that name another runtime (#269).
-function Write-Notices([string] $Root, [string] $Entry, [string] $Heading) {
-    Write-Bytes (Join-Path $Root 'THIRD-PARTY-NOTICES.txt') (Text-Bytes (@(
+# the runtime's reproduced notices, the entry names the pack's source commit,
+# and the pack's notices follow the heading, with CRLF line ends as in a
+# Windows checkout; Stage refuses notices for another runtime (#269).
+function Write-Notices([string] $Root, [string] $Entry, [string] $Heading, [string] $Commit = $runtimeCommit) {
+    Write-Bytes (Join-Path $Root 'THIRD-PARTY-NOTICES.txt') (Text-Bytes ((@(
         'Synthetic THIRD-PARTY-NOTICES.txt', '',
         ".NET runtime $Entry, bundled as the packs", 'Microsoft.NETCore.App.Runtime.win-x64 and',
-        'Microsoft.WindowsDesktop.App.Runtime.win-x64', '',
+        'Microsoft.WindowsDesktop.App.Runtime.win-x64 (source', 'https://github.com/dotnet/dotnet, commit', "$Commit)", '',
         'Reproduced from THIRD-PARTY-NOTICES.TXT in the package', "Microsoft.NETCore.App.Runtime.win-x64 $Heading.", ''
-    ) -join "`r`n"))
+    ) + $runtimeNotices + '') -join "`r`n"))
 }
 function New-Case([string] $Name) {
     $root = Join-Path $runRoot $Name
@@ -71,6 +84,7 @@ function New-Case([string] $Name) {
     }
     Write-Notices $root '10.0.12' '10.0.12'
     Write-RuntimeConfig $root '10.0.12'
+    Write-RuntimePack $root '10.0.12'
     $local = Join-Path $root 'Releases'
     $remote = [ordered]@{}
     $build = [Collections.Generic.List[object]]::new()
@@ -151,13 +165,17 @@ function Invoke-Verifier([object] $Case, [string] $Mode) {
         ReleaseDirectory = $Case.Local; StageDirectory = $Case.Stage; EvidenceDirectory = $Case.Evidence
     }
     if ($Mode -ceq 'Verify') { $parameters.ExpectedReleaseId = 404 }
-    # Keep the real workflow output file untouched when this runner itself runs in CI.
+    # Keep the real workflow output file untouched when this runner itself runs
+    # in CI, and read the case's runtime pack, not the real packages folder.
     $priorOutput = $env:GITHUB_OUTPUT
+    $priorPackages = $env:NUGET_PACKAGES
     $env:GITHUB_OUTPUT = Join-Path $Case.Root 'github-output.txt'
+    $env:NUGET_PACKAGES = Join-Path $Case.Root 'nuget-packages'
     try {
         & $Case.Script @parameters *> (Join-Path $Case.Root "$Mode-output.log")
     } finally {
         $env:GITHUB_OUTPUT = $priorOutput
+        $env:NUGET_PACKAGES = $priorPackages
     }
 }
 function Publish-LocalStageToMock([object] $Case) {
@@ -302,6 +320,25 @@ Run-Case 'notices-without-runtime-heading' {
     Write-Bytes $path (Text-Bytes ([IO.File]::ReadAllText($path).Replace('Reproduced from', 'Copied from')))
     Invoke-Verifier $c Stage
 } "*must name the bundled .NET runtime exactly once in the reproduced runtime notices' * heading; found 0.*"
+Run-Case 'notices-name-another-runtime-commit' {
+    param($c)
+    # Both versions were moved to the bundled runtime; the entry's source
+    # commit was not.
+    Write-Notices $c.Root '10.0.12' '10.0.12' -Commit ('f' * 40)
+    Invoke-Verifier $c Stage
+} "*names source commit $('f' * 40) in its '.NET runtime <version>, bundled as the packs' entry, but the runtime pack Microsoft.NETCore.App.Runtime.win-x64 10.0.12 was built from $runtimeCommit*"
+Run-Case 'notices-reproduce-stale-runtime-notices' {
+    param($c)
+    # The bundled runtime's pack lists a component the reproduced notices
+    # do not, so its license would not ship.
+    Write-RuntimePack $c.Root '10.0.12' ($runtimeNotices + @('', 'License notice for a new synthetic component', '---', '', 'New license text.'))
+    Invoke-Verifier $c Stage
+} "*runtime notices reproduced in THIRD-PARTY-NOTICES.txt differ from THIRD-PARTY-NOTICES.TXT in the runtime pack Microsoft.NETCore.App.Runtime.win-x64 10.0.12*"
+Run-Case 'missing-runtime-pack' {
+    param($c)
+    [IO.Directory]::Delete((Join-Path $c.Root 'nuget-packages'), $true)
+    Invoke-Verifier $c Stage
+} "*runtime pack Microsoft.NETCore.App.Runtime.win-x64 10.0.12 has no 'Microsoft.NETCore.App.versions.txt'*"
 Run-Case 'unexpected-portable-zip-built' {
     param($c)
     # The portable build is skipped from v0.9.2 (#149); a build that still

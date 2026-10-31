@@ -15,7 +15,7 @@ Thanks for helping improve PaperRoute Tracker.
 
 PaperRoute currently targets .NET 10 Windows Forms and is written in Visual Basic .NET.
 
-`global.json` pins the .NET SDK at 10.0.403, so local and GitHub Actions builds bundle the same .NET runtime, the one `THIRD-PARTY-NOTICES.txt` names. Moving the SDK is a deliberate change, made together with the notices, which the release scripts check ([#269](https://github.com/JUhalt/PaperRoute-Tracker/issues/269)).
+`global.json` pins the .NET SDK at 10.0.403, so local and GitHub Actions builds bundle the same .NET runtime, the one `THIRD-PARTY-NOTICES.txt` names. Moving the SDK is a deliberate change, made together with the notices. The release scripts check them against the runtime pack the publish restores: its version, the source commit on line 1 of its `Microsoft.NETCore.App.versions.txt`, and its own `THIRD-PARTY-NOTICES.TXT`, which the notices reproduce ([#269](https://github.com/JUhalt/PaperRoute-Tracker/issues/269)).
 
 ```powershell
 dotnet restore ManuscriptPipeline.slnx
