@@ -434,7 +434,11 @@ Public Class OnlineServicesTests
     ' startup check sends in the words the pinned sentence uses, and its
     ' table has one row for each service, named as Online services names
     ' it, less a closing "(...)": Contacts says who. Rows are matched by
-    ' their first cell, ignoring case, so its wording can change freely.
+    ' their first cell, ignoring case. Each row's Sends starts with what
+    ' the catalog says that service sends, less its full stop and ignoring
+    ' case, so the policy can add words after it but can't be left behind
+    ' when a service comes to send more. The configured-host row says it
+    ' sends the same, only to that address.
     <TestMethod>
     Public Sub ThePrivacyPolicyNamesEachServiceTheAppCanContact()
         Dim privacy As String = IO.File.ReadAllText(Path.Combine(RepositoryRoot(), "PRIVACY.md")).Replace(vbCrLf, vbLf)
@@ -450,15 +454,24 @@ Public Class OnlineServicesTests
         StringAssert.Contains(startup, "reads the list of PaperRoute releases and sends nothing about you or your library", "PRIVACY.md says what the startup check sends, as the README and the guide do.")
         StringAssert.Contains(startup, "**Work offline**", "PRIVACY.md says Work offline stops it.")
 
-        Dim named As List(Of String) = sectionOf("## Online features you start").Split(ChrW(10)).
+        Dim rows As List(Of String()) = sectionOf("## Online features you start").Split(ChrW(10)).
             Where(Function(line) line.StartsWith("| ", StringComparison.Ordinal) AndAlso Not line.StartsWith("| ---", StringComparison.Ordinal)).
-            Skip(1).Select(Function(line) line.Split("|"c)(1).Trim()).ToList()
-        Dim catalogNames As List(Of String) = OnlineServiceCatalog.Services.Select(Function(item) Text.RegularExpressions.Regex.Replace(item.Name, "\s*\([^)]*\)$", String.Empty)).ToList()
+            Skip(1).Select(Function(line) line.Split("|"c).Skip(1).Select(Function(cell) cell.Trim()).ToArray()).ToList()
+        Dim named As List(Of String) = rows.Select(Function(cells) cells(0)).ToList()
+        Dim rowName As Func(Of OnlineService, String) = Function(item) Text.RegularExpressions.Regex.Replace(item.Name, "\s*\([^)]*\)$", String.Empty)
+        Dim catalogNames As List(Of String) = OnlineServiceCatalog.Services.Select(rowName).ToList()
         For Each service As String In catalogNames
             Assert.IsTrue(named.Any(Function(name) String.Equals(name, service, StringComparison.OrdinalIgnoreCase)), "PRIVACY.md's table has a row for " & service & ".")
         Next
         For Each name As String In named
             Assert.IsTrue(catalogNames.Any(Function(service) String.Equals(name, service, StringComparison.OrdinalIgnoreCase)), "PRIVACY.md's row " & name & " is a service the catalog lists.")
+        Next
+
+        For Each service As OnlineService In OnlineServiceCatalog.Services.Where(Function(item) Not item.ConfiguredHost)
+            Dim name As String = rowName(service)
+            Dim sends As String = service.Sends.TrimEnd("."c)
+            Dim row As String() = rows.First(Function(cells) String.Equals(cells(0), name, StringComparison.OrdinalIgnoreCase))
+            Assert.IsTrue(row(2).StartsWith(sends, StringComparison.OrdinalIgnoreCase), "PRIVACY.md's row " & name & " says what the catalog says it sends: " & sends & ".")
         Next
     End Sub
 
