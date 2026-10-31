@@ -415,10 +415,14 @@ Public Class DialogPolishTests
     ' Label, Version file and Current version were 11 or 12 pixels off,
     ' centred in rows the field sat at the top of, and the correspondence,
     ' submission and manuscript windows' labels 8 to 10 pixels below their
-    ' fields. The middle of each label's first line of text is within 2
-    ' pixels of its field's middle: the first box, list or date in the
-    ' field's cell, else its first check box, else its first button, each
-    ' of which centres its text. The text is drawn as the app draws it.
+    ' fields. The packet's Packet name, Exact manuscript version, Readiness
+    ' profile and Real journal submission were 2.5 to 3.5 pixels below
+    ' theirs, 6.5 to 7 at 150%, centred in rows the field sat at the top
+    ' of, and Revision round 3 below its box at 150% (#266). The middle of each label's
+    ' first line of text is within 2 pixels of its field's middle: the
+    ' first box, list or date in the field's cell, else its first check
+    ' box, else its first button, each of which centres its text. The text
+    ' is drawn as the app draws it.
     <TestMethod>
     Public Sub FieldLabelsShareTheirFieldsCentreLine()
 
@@ -428,7 +432,9 @@ Public Class DialogPolishTests
             {"AddManuscriptForm", {"Title", "Target journal", "Starting stage", "From a draft", "First deadline"}},
             {"ManuscriptVersionEditForm", {"Label", "Version file", "Current version"}},
             {"SubmissionPacketFileEditForm, Edit", {"Local file"}},
-            {"SubmissionPacketFileEditForm, New", {"Local file"}}
+            {"SubmissionPacketFileEditForm, New", {"Local file"}},
+            {"SubmissionPacketEditForm, Edit", {"Packet name", "Exact manuscript version", "Readiness profile", "Real journal submission", "Revision round"}},
+            {"SubmissionPacketEditForm, New", {"Packet name", "Exact manuscript version", "Readiness profile", "Real journal submission", "Revision round"}}
         }
 
         Dim measured As New List(Of String)()
@@ -542,7 +548,8 @@ Public Class DialogPolishTests
     End Function
 
 
-    ' The windows whose field labels #258 put on their fields' line.
+    ' The windows whose field labels #258 and #266 put on their fields'
+    ' line.
     Private Shared Function LabelledWindows() As (Name As String, View As Type, Build As Func(Of Form))()
 
         Return {
@@ -551,7 +558,9 @@ Public Class DialogPolishTests
             ("AddManuscriptForm", GetType(AddManuscriptForm), Function() CType(New AddManuscriptForm(), Form)),
             ("ManuscriptVersionEditForm", GetType(ManuscriptVersionEditForm), Function() ViewCatalog.Dialogs(GetType(ManuscriptVersionEditForm))(String.Empty)),
             ("SubmissionPacketFileEditForm, Edit", GetType(SubmissionPacketFileEditForm), Function() ViewCatalog.Dialogs(GetType(SubmissionPacketFileEditForm))(String.Empty)),
-            ("SubmissionPacketFileEditForm, New", GetType(SubmissionPacketFileEditForm), Function() CType(New SubmissionPacketFileEditForm(LongNames().SubmissionPackets(0), Nothing), Form))
+            ("SubmissionPacketFileEditForm, New", GetType(SubmissionPacketFileEditForm), Function() CType(New SubmissionPacketFileEditForm(LongNames().SubmissionPackets(0), Nothing), Form)),
+            ("SubmissionPacketEditForm, Edit", GetType(SubmissionPacketEditForm), Function() CType(PacketEditor(existing:=True), Form)),
+            ("SubmissionPacketEditForm, New", GetType(SubmissionPacketEditForm), Function() CType(PacketEditor(existing:=False), Form))
         }
 
     End Function
