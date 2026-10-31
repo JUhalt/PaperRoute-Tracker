@@ -31,7 +31,7 @@ Setup is published only on this repository's [Releases page](https://github.com/
 
 ### What Windows shows
 
-Setup is not code-signed, so Windows warns before it runs. Your browser may say the file isn't commonly downloaded and offer to delete it; keep it. When you open the file, Microsoft Defender SmartScreen shows **Windows protected your PC** ("Microsoft Defender SmartScreen prevented an unrecognized app from starting"). Choose **More info**, check that the app is `JUhalt.PaperRouteTracker-stable-Setup.exe` and the publisher is unknown, and choose **Run anyway**.
+Setup is not code-signed, so your browser and Windows may warn before it runs. In Microsoft Edge, the download says `JUhalt.PaperRouteTracker-stable-Setup.exe` "isn't commonly downloaded": choose **More actions**, then **Keep**. Edge then asks you to make sure you trust the file, and shows its name and "Publisher: Unknown"; check the name, open the menu on **Delete**, and choose **Keep anyway**. Other browsers may only offer to delete the file; keep it. When you open the file, Microsoft Defender SmartScreen may show **Windows protected your PC** ("Microsoft Defender SmartScreen prevented an unrecognized app from starting"). If it does, choose **More info**, check that the app is `JUhalt.PaperRouteTracker-stable-Setup.exe` and the publisher is unknown, and choose **Run anyway**. On Windows 11 with Edge, once Edge had kept the file, Setup opened without that window.
 
 To check the download first, compare its SHA-256 hash with the line for the Setup file in the release's `SHA256SUMS.txt`. In PowerShell, in the folder you downloaded to:
 
