@@ -14,7 +14,7 @@ When PaperRoute starts, it checks GitHub for a newer release. The check reads th
 
 ## Online features you start
 
-Each of these runs only when you choose it, shows what it will send first where it sends anything of yours, and stops under **Work offline**. **Settings > Preferences > Online services** lists them with the hosts each one contacts.
+Apart from the update check at startup, described above, each of these runs only when you choose it, shows what it will send first where it sends anything of yours, and stops under **Work offline**. **Settings > Preferences > Online services** lists them with the hosts each one contacts.
 
 | Feature | Contacts | Sends | Their privacy policy |
 | --- | --- | --- | --- |
