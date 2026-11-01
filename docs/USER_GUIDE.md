@@ -47,7 +47,7 @@ Setup's last step starts PaperRoute once, briefly, to finish installing, and wai
 
 ### Updates and the Preview channel
 
-An installed PaperRoute checks GitHub Releases for a newer version when it starts, and **Settings > Check for Updates...** checks now; see **Updates** under Preferences, Updates, and Diagnostics. If you tested a Preview release, switch back to Stable under **Settings > Preferences... > Update channel** once the release is out: a Preview install is not offered the Stable release that follows it.
+An installed PaperRoute checks GitHub Releases for a newer version when it starts, and **Settings > Check for Updates...** checks now; see **Updates** under Preferences, Updates, and Diagnostics. The update channel starts as Stable, even when you install with a Preview release's Setup, so a Preview install is offered the next Stable release unless you choose **Preview** under **Settings > Preferences... > Update channel**. While the channel is Preview, PaperRoute is not offered the Stable release that follows, so switch back to **Stable** there once that release is out.
 
 ## Uninstalling
 
@@ -912,7 +912,7 @@ Theme changes currently take effect after restarting PaperRoute.
 
 Installed builds can check GitHub Releases for PaperRoute updates.
 
-Stable installations default to the Stable channel. To opt into Preview, choose **Settings > Preferences... > Update channel**. Use **Settings > Check for Updates...** to check immediately.
+Installations default to the Stable channel, including one made with a Preview release's Setup (see **Updates and the Preview channel** under Installing). To opt into Preview, choose **Settings > Preferences... > Update channel**. Use **Settings > Check for Updates...** to check immediately.
 
 Developer builds, including the CI smoke-test artifact, are intended for development and smoke testing and do not behave exactly like an installed updater-enabled build.
 
@@ -1214,6 +1214,22 @@ Backups hold your library and its files, not your preferences or OpenAlex key. O
 
 Where the library's files are, and which copies PaperRoute keeps of them, is in [Recovering your library](https://github.com/JUhalt/PaperRoute-Tracker/blob/master/docs/USER_GUIDE.md#recovering-your-library).
 
+## How do I start fresh with an empty library?
+
+PaperRoute has no command that empties the library. To start again with an empty one, set your library aside and keep it:
+
+1. Create a portable backup with **Settings > Backup Library...**.
+2. Close PaperRoute.
+3. In File Explorer, rename PaperRoute's two folders, for example by adding `.old` to each name: the data folder, `%LocalAppData%\PaperRoute`, and the PaperRoute Library folder, `Documents\PaperRoute Library`. Rename them; do not delete them. Leave `%LocalAppData%\JUhalt.PaperRouteTracker`, where PaperRoute itself is installed, as it is.
+4. Start PaperRoute. It opens an empty library on the welcome, as on a first start.
+5. To go back, close PaperRoute, rename the new `PaperRoute` folder, and the new `PaperRoute Library` folder if there is one, out of the way (for example, add `.new`), and rename the `.old` folders back. Or restore the backup from step 1 with **Settings > Restore Backup...**.
+
+Your preferences and any keys you added are in the data folder too, so the empty library starts with the default preferences, on the Stable update channel, and with no keys. Renaming the folders back brings them back; a backup does not hold them.
+
+If your Documents folder is in OneDrive, the PaperRoute Library folder is in it too, and OneDrive syncs the rename.
+
+Externally linked files are outside both folders, and nothing here touches them.
+
 ## Recovering your library
 
 Your library is two files in PaperRoute's data folder: `manuscripts.json`, the record of your manuscripts, and `authors.json`, your reusable authors, affiliations, and journals. The files PaperRoute manages for you, version snapshots, packet files, and correspondence copies, are in the PaperRoute Library folder in your Documents. **Settings > Diagnostics...** prints every path named here, and its **Open Data Folder** opens the data folder. A library belongs to one computer: to move it, use backup and restore as in **How do I move PaperRoute to another computer?**, not a copy of the folders.
@@ -1259,7 +1275,11 @@ Visual Studio debugger sessions use the isolated development profile:
 %LocalAppData%\PaperRoute-Dev\
 ```
 
-Development managed-file copies are stored separately from the stable managed library.
+Its managed-file copies are stored separately from the stable managed library, under:
+
+```text
+Documents\PaperRoute Dev Library\
+```
 
 External services are used only for the features listed in **What PaperRoute sends, and when**, and for links you choose to open. You can turn each service off, or work offline; see **Online Services and Working Offline**. The optional AI assistant is off until you turn it on, and sends only what its windows show; see **AI Assistant**. A publication check sends Crossref the titles and DOIs of the manuscripts you check, and nothing else.
 
