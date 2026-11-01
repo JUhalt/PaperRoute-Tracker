@@ -652,15 +652,16 @@ Open **Deadlines** in the left rail, press **Ctrl+4**, or choose **View in Deadl
 Deadlines lists everything that needs action, grouped by when:
 
 - **Overdue**, **Today**, **Next 7 days** (counted from today), and **Later** for dated items;
-- **No date** for work that is under way without a date, such as a revision whose decision records no deadline, or a submission packet whose checklist still has required items open;
+- **No date** for work that is under way without a date, such as a revision whose decision records no deadline, a submission packet whose checklist still has required items open, or a possible publication from a publication check;
 - **Done in the last 30 days**, folded away until you choose **Show**.
 
-Four kinds of item appear, each from the record that owns it:
+Five kinds of item appear, each from the record that owns it:
 
 1. **Revisions**: the deadline on the latest editorial decision. A revision with reviewer comments shows how many are addressed.
 2. **Follow-ups**: follow-up dates recorded on journal submissions. They remain until you clear or change them; recording a decision does not remove them.
 3. **Reminders**: your own reminders.
 4. **Preparation**: a submission packet not yet linked to a submission whose readiness checklist has required items open.
+5. **Publications**: a possible publication found by a publication check that you have not yet marked published or ignored (see **Check for publications** under DOI and Crossref Metadata). Its chip appears only while there are some.
 
 The counts across the top ignore the filters. Use the chips to show one kind, or type in the filter box to narrow by manuscript, journal, or title. Clicking the active chip shows everything again.
 
@@ -674,6 +675,7 @@ Each row has its main action as a button and the rest under **⋯**. With a row 
 | Follow-up | **Open** (lands on the submission), **Postpone...**, **Clear Follow-up...** |
 | Reminder | **Done**, **Postpone...**, **Edit Reminder...**, **Open Manuscript** |
 | Preparation | **Open Readiness** (the manuscript's Readiness & Packets tab) |
+| Publication | **Review Match** (opens the article's page), **Mark Published...**, **Ignore Match**, **Open Manuscript** |
 
 **Postpone** offers tomorrow, one week, two weeks, or any date, and its button says exactly what will happen, for example **Postpone to Oct 4**. It changes the date on the record that owns the item (the editorial decision, the journal submission, or the reminder) and saves, so the manuscript page always shows the same date. Nothing is copied: Deadlines is a view of your records, not a second list to keep in sync.
 
