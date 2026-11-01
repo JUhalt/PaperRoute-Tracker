@@ -59,6 +59,7 @@ Targets are directional rather than promises. Data integrity, migrations, backup
 | **v0.9.2** | 1.0 Hardening ✅ | Is the entire workflow polished, resilient, and certifiable? |
 | **v1.0** | **Trusted Research Workflow — next, target November 9, 2026** | Would I trust this with my real publication pipeline? |
 | **v1.1** | macOS and Linux | Can PaperRoute be the same calm, trustworthy app on every desktop? |
+| **v1.2** | Open Science Studies | What did I plan before I saw the data, and where can others check what I shared? |
 
 On September 26, 2026, the train was re-sequenced so the interface can catch up with the depth of the data model: v0.6 became **Workspace UI**, Deadline Center moved to v0.7, Route Analytics & Reports moved to v0.8, and optional AI assistance became a proposal for after 1.0. Deadlines and Analytics arrive as pages in the new workspace rather than as additional dialogs.
 
@@ -491,9 +492,63 @@ Its issues are:
 
 ---
 
+# v1.2 Open Science Studies
+
+Milestone: **[v1.2 — Open Science Studies](https://github.com/JUhalt/PaperRoute-Tracker/milestone/16)**. Tracker: **[#254](https://github.com/JUhalt/PaperRoute-Tracker/issues/254)**.
+
+PaperRoute's route begins at the manuscript, but research begins earlier. A study is planned, preregistered and approved; its data are collected and analysed; then it feeds one paper or several. v1.2 adds the study above the manuscript, so a study can move out of a folder tree into PaperRoute. What the study shares goes to the open-science site the researcher chooses.
+
+On November 1, 2026, the proposal was scoped into fourteen bounded issues. OSF's changes shaped it ([COS](https://www.cos.io/osf-changes)):
+- from November 16, 2026, no new OSF projects can be created;
+- from February 19, 2027, projects are read-only;
+- OSF Registries carry on unchanged.
+
+The home for open materials and data is moving; preregistration on OSF is not.
+
+```text
+Study
+├─ Ethics approvals, funder, sharing commitment, licence
+├─ Preregistration
+│  ├─ guided plan (van 't Veer & Giner-Sorolla, 2016), frozen and fingerprinted
+│  ├─ amendments, each a new frozen version
+│  └─ registry record (OSF Registries, AsPredicted, PsychArchives, a Registered Report)
+├─ Deviations log → transparency statement at submission
+├─ Materials · Data · Code (participant data linked, never copied in)
+├─ Sharing records (any site; through a connector, drafts only)
+└─ Manuscripts it feeds → each with its own route
+```
+
+- **The record.**
+  - Studies in the library, under Schema 11 ([#279](https://github.com/JUhalt/PaperRoute-Tracker/issues/279)).
+  - Study files: managed, linked or metadata only, fingerprinted, and found again when moved ([#280](https://github.com/JUhalt/PaperRoute-Tracker/issues/280)).
+  - The Studies page and the study workspace ([#281](https://github.com/JUhalt/PaperRoute-Tracker/issues/281)).
+  - Studies brought in from a folder tree or an OSF download ([#283](https://github.com/JUhalt/PaperRoute-Tracker/issues/283)).
+- **The plan.**
+  - A guided preregistration, frozen and fingerprinted, or an existing one recorded ([#284](https://github.com/JUhalt/PaperRoute-Tracker/issues/284)).
+  - The deviations log and a transparency statement ([#287](https://github.com/JUhalt/PaperRoute-Tracker/issues/287)).
+  - Ethics approvals and data-sharing dates in Deadlines ([#288](https://github.com/JUhalt/PaperRoute-Tracker/issues/288)).
+- **The data.** Participant data stays outside the library, and never enters an export, an upload or a shared report ([#282](https://github.com/JUhalt/PaperRoute-Tracker/issues/282)).
+- **Your open-science home.**
+  - Any site works through a study export as an RO-Crate ([#285](https://github.com/JUhalt/PaperRoute-Tracker/issues/285)) and a recorded deposit.
+  - **Check deposit** and **Upload a new version** work under one contract that never publishes, submits or deletes on a site ([#286](https://github.com/JUhalt/PaperRoute-Tracker/issues/286)).
+  - Three connectors:
+    - OSF Registries, for preregistrations ([#289](https://github.com/JUhalt/PaperRoute-Tracker/issues/289));
+    - InvenioRDM, for Zenodo and institutional repositories ([#290](https://github.com/JUhalt/PaperRoute-Tracker/issues/290));
+    - Dataverse ([#291](https://github.com/JUhalt/PaperRoute-Tracker/issues/291)).
+- **Teaching.** An example study in the example library ([#292](https://github.com/JUhalt/PaperRoute-Tracker/issues/292)).
+
+**Deferred:**
+- a timestamp of a frozen plan's fingerprint;
+- Route View starting at the study;
+- connectors without a draft-only path or an upload API: Figshare, Dryad and SWORD. ResearchBox, AsPredicted and PsychArchives are reached by export and a recorded link.
+
+Reference management stays with tools such as Zotero. v1.2 follows v1.1, so its interface is built on Avalonia.
+
+---
+
 # Proposals awaiting scope review
 
-- **Open-science Studies** ([#254](https://github.com/JUhalt/PaperRoute-Tracker/issues/254), in the [v1.2 milestone](https://github.com/JUhalt/PaperRoute-Tracker/milestone/16)): preregistration, study materials and data, and deposit to open repositories. It was filed on October 27, 2026, for discussion when v1.2 starts, and is not scoped yet.
+None at present. Open-science Studies ([#254](https://github.com/JUhalt/PaperRoute-Tracker/issues/254)) was scoped into v1.2 on November 1, 2026.
 
 The proposals reviewed on September 28, 2026 are scoped into v0.9, and #45 was adopted for v0.9 on October 3, 2026.
 
