@@ -225,6 +225,8 @@ PaperRoute is an independent, open-source project. Its implementation, local-fir
 | **Released** | v0.9 — Journal Choice & Guidance | Choosing a journal, journal facts, packet export, a teaching example, optional AI help |
 | **Released** | v0.9.2 — 1.0 Hardening | Recovery, speed, accessibility, display scaling, certification |
 | **Now** | [v1.0 — Trusted Research Workflow](https://github.com/JUhalt/PaperRoute-Tracker/milestone/12) | "I trust this application with my research workflow." |
+| **Next** | [v1.1 — macOS and Linux](https://github.com/JUhalt/PaperRoute-Tracker/milestone/15) | One calm interface on Windows, macOS, and Linux |
+| **Then** | [v1.2 — Open Science Studies](https://github.com/JUhalt/PaperRoute-Tracker/milestone/16) | Studies, preregistration, materials and data, shared on the open-science site you choose |
 
 See [`ROADMAP.md`](ROADMAP.md) for the reasoning behind each release. GitHub milestones and issues are the live source of truth for active release work.
 
