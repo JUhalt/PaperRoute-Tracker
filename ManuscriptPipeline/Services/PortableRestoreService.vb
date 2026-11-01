@@ -5,6 +5,7 @@ Imports System.IO
 Imports System.IO.Compression
 Imports System.Text.Json
 Imports System.Text.Json.Serialization
+Imports System.Threading
 Imports ManuscriptPipeline.Models
 
 Namespace Services
@@ -160,6 +161,15 @@ Namespace Services
         ' Backup reports a library over these at backup time (#114).
         Friend Const MaximumArchiveEntries As Integer = 20000
         Friend Const MaximumUncompressedBytes As Long = 21474836480L
+
+        ' OneDrive and Defender hold files just written into a sync root
+        ' for a moment, and a folder cannot be renamed over them:
+        ' Directory.Move reports "Access to the path ... is denied" as an
+        ' IOException. Restores into Documents in OneDrive failed so in 2 of
+        ' 5 attempts (#295). Each folder move of the swap and its rollback
+        ' tries again after these waits, under ten seconds for the move.
+        Private Shared ReadOnly BusyFolderWaitsMilliseconds As Integer() =
+            {250, 500, 1000, 2000, 3000, 3000}
 
         Private ReadOnly _jsonOptions As JsonSerializerOptions
         Private ReadOnly _managedLibrary As ManagedLibraryService
@@ -366,7 +376,8 @@ Namespace Services
 
                     Return emergencyBackupPath
 
-                End Function
+                End Function,
+                waitIfBusy:=True
             )
 
         End Function
@@ -374,7 +385,8 @@ Namespace Services
 
         ' Restores over the library on disk when it could not be loaded
         ' (#124): the emergency copy is of the storage files as they are,
-        ' safety backups included.
+        ' safety backups included. The startup window runs this on its UI
+        ' thread, so a busy folder is not waited for here (#295).
         Public Function RestoreBackup(
             backupZipPath As String,
             repository As ManuscriptRepository
@@ -387,7 +399,8 @@ Namespace Services
             Return Restore(
                 backupZipPath,
                 repository,
-                Function(backupDirectory) ZipStorageFiles(backupDirectory, repository)
+                Function(backupDirectory) ZipStorageFiles(backupDirectory, repository),
+                waitIfBusy:=False
             )
 
         End Function
@@ -395,11 +408,14 @@ Namespace Services
 
         ' writeEmergencyBackup writes a copy of the current library into the
         ' backups folder and returns its path, or an empty string when there
-        ' was nothing to copy.
+        ' was nothing to copy. waitIfBusy lets the swap wait for a folder
+        ' OneDrive or Defender holds (#295), for a caller off the UI thread:
+        ' the main window runs a restore on a worker thread (#132).
         Private Function Restore(
             backupZipPath As String,
             repository As ManuscriptRepository,
-            writeEmergencyBackup As Func(Of String, String)
+            writeEmergencyBackup As Func(Of String, String),
+            waitIfBusy As Boolean
         ) As RestoreResult
 
             ValidateBackupPath(
@@ -451,16 +467,24 @@ Namespace Services
                 managedParent
             )
 
+            ' Named after the managed folder itself (#295), so the
+            ' development profile's "PaperRoute Dev Library" stages under
+            ' its own name, never under "PaperRoute Library".
+            Dim managedFolderName As String =
+                Path.GetFileName(
+                    managedRoot
+                )
+
             Dim stagedFilesDirectory As String =
                 Path.Combine(
                     managedParent,
-                    "PaperRoute Library.restore-staging-" & restoreId
+                    managedFolderName & ".restore-staging-" & restoreId
                 )
 
             Dim rollbackFilesDirectory As String =
                 Path.Combine(
                     managedParent,
-                    "PaperRoute Library.restore-rollback-" & restoreId
+                    managedFolderName & ".restore-rollback-" & restoreId
                 )
 
             Dim stagedJsonPath As String =
@@ -692,9 +716,9 @@ Namespace Services
                             Directory.Delete(rollbackFilesDirectory, True)
                         End If
 
-                        MoveDirectory(
-                            managedRoot,
-                            rollbackFilesDirectory
+                        MoveWhenFree(
+                            Sub() MoveDirectory(managedRoot, rollbackFilesDirectory),
+                            waitIfBusy
                         )
 
                         oldLibraryMoved =
@@ -702,9 +726,9 @@ Namespace Services
 
                     End If
 
-                    MoveDirectory(
-                        stagedFilesDirectory,
-                        managedRoot
+                    MoveWhenFree(
+                        Sub() MoveDirectory(stagedFilesDirectory, managedRoot),
+                        waitIfBusy
                     )
 
                     newLibraryInstalled =
@@ -915,9 +939,9 @@ Namespace Services
                         If oldLibraryMoved AndAlso
                            Directory.Exists(rollbackFilesDirectory) Then
 
-                            Directory.Move(
-                                rollbackFilesDirectory,
-                                managedRoot
+                            MoveWhenFree(
+                                Sub() Directory.Move(rollbackFilesDirectory, managedRoot),
+                                waitIfBusy
                             )
 
                         End If
@@ -2313,6 +2337,55 @@ Namespace Services
                 sourceFile,
                 destinationFile,
                 True
+            )
+
+        End Sub
+
+
+        ' Runs one folder move of the swap or its rollback, trying again
+        ' while the folder is busy (#295) when the caller may wait. After
+        ' the last wait the failure is passed on as it is.
+        Private Sub MoveWhenFree(
+            move As Action,
+            waitIfBusy As Boolean
+        )
+
+            Dim attempt As Integer =
+                0
+
+            Do
+
+                Try
+
+                    move()
+
+                    Return
+
+                Catch ex As Exception When waitIfBusy AndAlso
+                                           attempt < BusyFolderWaitsMilliseconds.Length AndAlso
+                                           (TypeOf ex Is IOException OrElse
+                                            TypeOf ex Is UnauthorizedAccessException)
+
+                    WaitBeforeRetry(
+                        BusyFolderWaitsMilliseconds(attempt)
+                    )
+
+                    attempt += 1
+
+                End Try
+
+            Loop
+
+        End Sub
+
+
+        ' Overridable so a test need not wait (#295).
+        Friend Overridable Sub WaitBeforeRetry(
+            milliseconds As Integer
+        )
+
+            Thread.Sleep(
+                milliseconds
             )
 
         End Sub
