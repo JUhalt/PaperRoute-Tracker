@@ -58,28 +58,96 @@ Public Class MotionFadeTests
 
     ' Runs the work on a started board, the seams set as asked and put back.
     ' The test host is DPI-unaware, so above 100% Windows scales the board,
-    ' and a switch there is a cut (AWindowWindowsScalesSwitchesAsACut): the
-    ' fade is told the board is not scaled.
-    Private Sub OnBoard(work As Action(Of LibraryBoard), Optional manuscripts As Integer = 60, Optional motion As Boolean = True, Optional awaitPicture As Boolean = True)
+    ' and a switch there is a cut (AWindowWindowsScalesSwitchesAsACut): off
+    ' the screen the fade is told the board is not scaled. On the screen
+    ' that tests nothing PaperRoute does: at 125% the board faded stretched,
+    ' and the screen was read in other coordinates than the board's (#268).
+    ' So there the board is made SystemAware, as PaperRoute makes its
+    ' window: this thread is put in that awareness for the board's life
+    ' (the fade's overlay is made on it too), the fade asks Windows whether
+    ' the board is scaled, as in PaperRoute, and the board is put on the
+    ' screen (PutOnScreen). The fade's worker reads the screen at the host's
+    ' awareness, in the screen's own pixels as a SystemAware thread reads
+    ' it: the unaware run's pictures in #268 were read so.
+    Private Sub OnBoard(work As Action(Of LibraryBoard), Optional manuscripts As Integer = 60, Optional motion As Boolean = True, Optional awaitPicture As Boolean = True, Optional onScreen As Boolean = False)
 
         StaRunner.Run(
             Sub()
+                Dim previous As IntPtr = IntPtr.Zero
+                If onScreen Then
+                    previous = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE)
+                    Assert.AreNotEqual(IntPtr.Zero, previous, "The thread is put in PaperRoute's awareness, SystemAware.")
+                End If
                 Try
                     UiMotion.EnabledOverride = motion
                     UiTheme.HighContrastOverride = False
                     PageFade.AwaitPicture = awaitPicture
-                    PageFade.ScaledOverride = False
+                    If Not onScreen Then PageFade.ScaledOverride = False
                     Using board As New LibraryBoard(LargeLibraryFixture.Create(Path.Combine(_root, "library"), manuscripts), Path.Combine(_root, "settings"))
                         board.Start()
                         board.WaitForIdleWork()
+                        If onScreen Then PutOnScreen(board)
                         work(board)
                         board.Close()
                     End Using
                 Finally
                     ResetSeams()
+                    If previous <> IntPtr.Zero Then SetThreadDpiAwarenessContext(previous)
                 End Try
             End Sub,
             TimeSpan.FromMinutes(5))
+
+    End Sub
+
+
+    ' The board on the primary screen, above the other windows as it would
+    ' be in use, never activated. Windows scales a SystemAware window whose
+    ' screen's scale has changed since sign-in, and PaperRoute's window
+    ' then switches as a cut (#252), so there is no fade to test there: the
+    ' test is Inconclusive and says so.
+    Private Shared Sub PutOnScreen(board As LibraryBoard)
+
+        Dim area As Rectangle = Screen.PrimaryScreen.WorkingArea
+        board.Location = New Point(area.Left + 20, area.Top + 20)
+        SetWindowPos(board.Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE Or SWP_NOSIZE Or SWP_NOACTIVATE)
+        Application.DoEvents()
+
+        Dim windowDpi As Integer = GetDpiForWindow(board.Handle)
+        Dim screenDpi As Integer = MonitorDpi(board.Handle)
+        If windowDpi <> screenDpi Then
+            Assert.Inconclusive($"Windows scales the test window, as it would PaperRoute's, so every switch is a cut: the window is at {windowDpi} DPI, its screen at {screenDpi}. " &
+                                "The display's scale has changed since sign-in: sign out and in, then run again.")
+        End If
+
+    End Sub
+
+
+    ' Puts the board above the other windows again, never activated, and
+    ' fails unless it is then in front (InFront). In #268 another process's
+    ' window was over the board, and the pictures compared that window.
+    Private Shared Sub PutInFront(board As LibraryBoard)
+        SetWindowPos(board.Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE Or SWP_NOSIZE Or SWP_NOACTIVATE)
+        Pump(80)
+        InFront(board, "before the switch")
+    End Sub
+
+
+    ' Fails unless Windows finds the board at the page area's corners and
+    ' middle, so that what the screen shows there is the board's. Windows
+    ' passes over the fade's overlay, disabled and transparent to the
+    ' pointer, so it finds the board under it too. Nothing here pumps the
+    ' thread's messages, so the fade's clock does not step.
+    Private Shared Sub InFront(board As LibraryBoard, moment As String)
+
+        Dim area As Rectangle = board.ContentHost.RectangleToScreen(board.ContentHost.ClientRectangle)
+        For Each at As Point In {area.Location, New Point(area.Right - 1, area.Top), New Point(area.Left, area.Bottom - 1),
+                                 New Point(area.Right - 1, area.Bottom - 1), New Point(area.Left + area.Width \ 2, area.Top + area.Height \ 2)}
+            Dim found As IntPtr = WindowFromPoint(at)
+            If GetAncestor(found, GA_ROOT) <> board.Handle Then
+                Assert.Fail($"The test window is not in front on the screen {moment}: at {at} Windows finds {WindowName(found)}. " &
+                            $"The test window is topmost {(GetWindowLong(board.Handle, GWL_EXSTYLE) And WS_EX_TOPMOST) <> 0}, cloaked {Cloaked(board.Handle)}.")
+            End If
+        Next
 
     End Sub
 
@@ -257,8 +325,9 @@ Public Class MotionFadeTests
     ' Export's commands would open their dialogs). The overlay answers
     ' Windows' hit test over the tab as transparent. On the screen (the
     ' OnScreen test, with PAPERROUTE_ON_SCREEN_TESTS=1 on an unlocked
-    ' desktop, the window put above the others and never activated;
-    ' Inconclusive otherwise, or where Windows finds another window over
+    ' desktop, the window made SystemAware as PaperRoute's is and put above
+    ' the others, never activated, #268; Inconclusive otherwise, where
+    ' Windows scales the window, or where Windows finds another window over
     ' the tab with no fade showing), Windows' hit test at the tab finds the
     ' tab with the overlay showing over it, and the click checks the tab,
     ' as a tab clicked does once Windows finds it under the pointer. (Off
@@ -302,12 +371,6 @@ Public Class MotionFadeTests
         OnBoard(
             Sub(board)
                 UiMotion.FadeMilliseconds = 10000
-                If onScreen Then
-                    Dim area As Rectangle = Screen.PrimaryScreen.WorkingArea
-                    board.Location = New Point(area.Left + 20, area.Top + 20)
-                    SetWindowPos(board.Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE Or SWP_NOSIZE Or SWP_NOACTIVATE)
-                    Application.DoEvents()
-                End If
                 Dim findTab As Func(Of RadioButton) =
                     Function() ViewCatalog.Descendants(board.PageView).OfType(Of RadioButton)().Single(Function(item) item.Text = "Authors & Affiliations")
 
@@ -359,7 +422,8 @@ Public Class MotionFadeTests
                 Assert.IsFalse(board.PageFade.Showing, "The click ended the fade.")
                 Assert.AreEqual(1, downs, "The click reached the tab under the pointer.")
                 If onScreen Then Assert.IsTrue(tab.Checked, "On the screen, the click checked the tab.")
-            End Sub)
+            End Sub,
+            onScreen:=onScreen)
 
     End Sub
 
@@ -1014,7 +1078,11 @@ Public Class MotionFadeTests
     ' unlocked desktop, and only when PAPERROUTE_ON_SCREEN_TESTS is set,
     ' since the window is put on the screen for a moment; otherwise
     ' Inconclusive. CI and the release candidate leave OnScreen tests out;
-    ' certification runs them by hand.
+    ' certification runs them by hand. The window is made SystemAware, as
+    ' PaperRoute's is, and the fade asks Windows whether it is scaled
+    ' (OnBoard, #268); it is put in front before each switch, and the test
+    ' fails if another window is over the page area at any of the three
+    ' pictures, which would compare that window instead.
     <TestMethod>
     <TestCategory("OnScreen")>
     Public Sub ThePictureIsThePageLeft()
@@ -1032,11 +1100,6 @@ Public Class MotionFadeTests
         OnBoard(
             Sub(board)
                 UiMotion.FadeMilliseconds = 10000
-                Dim area As Rectangle = Screen.PrimaryScreen.WorkingArea
-                board.Location = New Point(area.Left + 20, area.Top + 20)
-                ' Above the other windows, as it would be in use, never activated.
-                SetWindowPos(board.Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE Or SWP_NOSIZE Or SWP_NOACTIVATE)
-                Application.DoEvents()
                 board.NavigateTo(Form1.WorkspacePage.Journals)
                 Application.DoEvents()
                 board.PageFade.End()
@@ -1046,15 +1109,18 @@ Public Class MotionFadeTests
                 Pump(300)
 
                 For Each page As Form1.WorkspacePage In {Form1.WorkspacePage.Journals, Form1.WorkspacePage.Board, Form1.WorkspacePage.ImportExport, Form1.WorkspacePage.Board}
+                    PutInFront(board)
                     Dim screenArea As Rectangle = board.ContentHost.RectangleToScreen(board.ContentHost.ClientRectangle)
                     Using before As Bitmap = FromScreen(screenArea)
                         board.NavigateTo(page)
                         Assert.AreEqual("faded", board.PageFade.LastOutcome)
                         board.PaintNow()
                         Thread.Sleep(100)
+                        InFront(board, "under the opaque overlay")
                         Using during As Bitmap = FromScreen(screenArea)
                             board.PageFade.End()
                             Pump(300)
+                            InFront(board, "once the fade ended")
                             Using after As Bitmap = FromScreen(screenArea)
                                 Dim kept As Double = Matching(before, during)
                                 Dim changed As Double = Matching(before, after)
@@ -1069,7 +1135,8 @@ Public Class MotionFadeTests
                         End Using
                     End Using
                 Next
-            End Sub)
+            End Sub,
+            onScreen:=True)
 
         Console.WriteLine(String.Join(Environment.NewLine, lines))
 
@@ -1371,7 +1438,9 @@ Public Class MotionFadeTests
     Private Const GWL_STYLE As Integer = -16
     Private Const GWL_EXSTYLE As Integer = -20
     Private Const WS_VISIBLE As Integer = &H10000000
+    Private Const WS_EX_TOPMOST As Integer = &H8
     Private Const GW_OWNER As UInteger = 4
+    Private Const GA_ROOT As UInteger = 2
     Private Const WM_KEYDOWN As UInteger = &H100
     Private Const WM_CHAR As UInteger = &H102
     Private Const WM_LBUTTONDOWN As UInteger = &H201
@@ -1470,6 +1539,10 @@ Public Class MotionFadeTests
 
     <DllImport("user32.dll")>
     Private Shared Function GetWindow(window As IntPtr, command As UInteger) As IntPtr
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function GetAncestor(window As IntPtr, flags As UInteger) As IntPtr
     End Function
 
     <DllImport("user32.dll")>
