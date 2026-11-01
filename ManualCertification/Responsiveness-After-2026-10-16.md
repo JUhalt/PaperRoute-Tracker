@@ -837,3 +837,46 @@ The brief's targeted Debug filter, with ResponsivenessBudgetTests, ManuscriptEdi
 
 - **Board to Library is enforced.** With it, every page and shelf switch the budget test times is enforced but the Pipeline manuscript's open; that open, the paint rows (the Board's paint after Library to Board read 38, 25 and 31 ms after, and 37, 444 and 100 before: the screen's wait) and the idle slice (the longest idle step 72 to 97 ms against 30, each under the UI thread's 250, which is enforced) stay reported, as the section above left them.
 - **Left to the release certification:** the Library at 125% and 150% display scaling on a real display (the test host is DPI-unaware, so the text sizes 1.25 and 1.5 stand in, in `TheKeptLibraryShowsSettledAtTheSmallestWindow` and the catalog's scaling sweeps), and the Narrator pass on the certification VM (where Ctrl+2 puts the keyboard is pinned in-process).
+
+## The managed folder inside OneDrive: the published v0.9.2 — 2026-11-01
+
+[#147](https://github.com/JUhalt/PaperRoute-Tracker/issues/147)'s E10.1 is one manual pass on the 500 library with the managed folder inside OneDrive.
+
+**How it differs from the tables above**
+- **The build.** It is the installed Release build from outside, not the in-process test.
+- **The machine.** The maintainer's PC: i5-1334U, 12 logical processors, Windows build 26300, 1920x1200 at 125%. It was busy as before, with Windows' load figure averaging 28%, the other session's R jobs on about 1 core, and OneDrive on about 1 core throughout.
+- **The profile.** PaperRoute ran as the development profile, so its managed folder was `Documents\PaperRoute Dev Library`. Documents is in OneDrive on this PC.
+- **What the columns mean.**
+  - *Wall* runs from the action to its visible end: the dialog, the status line, or the window.
+  - *UI ms* is the longest WM_NULL round trip to the main window from a probe sending one every 100 ms. Stalls shorter than the gap between probes can be missed.
+  - The verdicts use the budgets above, x 1.
+
+| Library | Action | Wall ms | UI ms | Budget ms | Verdict |
+|---|---|---:|---:|---:|---|
+| 500, OneDrive | Start to a loaded, answering window (cold) | 9909 | — | 1500 (warm startup) | OVER |
+| 500, OneDrive | Start to a loaded, answering window (warm) | 3443 | — | 1500 (warm startup) | OVER |
+| 500, OneDrive | Save from the manuscript page (first of three) | 3973 | 9 | 250 (save) | within |
+| 500, OneDrive | Save from the manuscript page (second) | 1819 | 0 | 250 (save) | within |
+| 500, OneDrive | Save from the manuscript page (third) | 1697 | 1 | 250 (save) | within |
+| 500, OneDrive | Backup (to a folder outside OneDrive) | 41498 | 961 | 250 (UI thread) | OVER |
+| 500, OneDrive | Restore: inspect the backup (a 0.9.1 backup, into an empty library) | 10067 | 885 | 250 (UI thread) | OVER |
+| 500, OneDrive | Restore: replace the library (the window then restarts) | 29770 | 1 | 250 (UI thread) | within |
+| 500, OneDrive | Restore: the restart, to a loaded window | 38461 | 4269 | 1500 (warm startup) | OVER |
+| 500, OneDrive | Restore: inspect the backup (its own 0.9.2 backup) | 6659 | 0 | 250 (UI thread) | within |
+| 500, OneDrive | Restore: replace the library | failed | — | 250 (UI thread) | Restore Error ([#295](https://github.com/JUhalt/PaperRoute-Tracker/issues/295)) |
+| 500, OneDrive | Restore, again: inspect the backup | 5248 | 2 | 250 (UI thread) | within |
+| 500, OneDrive | Restore, again: replace the library | 62138 | 2 | 250 (UI thread) | within |
+| 500, OneDrive | Restore, again: the restart, to a loaded window | 24530 | 8598 | 1500 (warm startup) | OVER |
+| 500, OneDrive | Close the window (process gone) | 31109 | 30418 | 250 (UI thread) | OVER ([#300](https://github.com/JUhalt/PaperRoute-Tracker/issues/300)) |
+| 500, OneDrive | Close the window (process gone) | 18982 | 18451 | 250 (UI thread) | OVER ([#300](https://github.com/JUhalt/PaperRoute-Tracker/issues/300)) |
+
+**What the pass found**
+- **Load, save, backup and restore each completed.**
+- **The UI thread stayed answering through the save, backup and replace work.** That work runs on a worker thread, as #132 made it. Backup's and inspection's longest stalls, 0.7–1.0 s, came in the first second after the file dialog closed and as the question appeared, not during the work.
+- **The restart rows' stalls are the old window closing,** in the hand-over to the new process: 4.3 s with an empty library behind it, 8.6 s with 500 cards. The new window then stalled for up to 5.1 s in the seconds after it showed "Loaded"; a warm start showed 0.65 and 0.92 s there. These stalls come after the wall time ends, so the wall times do not include them.
+- **Restore failed safely in one of three attempts** with "Access to the path ... restore-staging ... is denied", the folder OneDrive was handling ([#295](https://github.com/JUhalt/PaperRoute-Tracker/issues/295)). The VM's attempt failed once in two the same way.
+- **Closing was not timed before, and it is the largest stall here.** The window stays visible and does not answer for 18–30 s before it goes ([#300](https://github.com/JUhalt/PaperRoute-Tracker/issues/300)).
+- **OneDrive uploaded none of the 2,297 managed files in the 40 minutes after the first restore,** and made no conflict copies.
+- **The warm and cold starts are wall times from a click,** so they include the process's start. They are not the in-process test's "Show, queue drained" row, which they sit near.
+
+The full record, with the VM's attempt, is in the v0.9.2 certification evidence, `E-results.md`, under E10.1.
