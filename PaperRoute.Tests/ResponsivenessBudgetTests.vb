@@ -452,8 +452,14 @@ Public Class ResponsivenessBudgetTests
             ' With motion off no switch made a cross-fade (#142).
             Assert.IsNull(board.PageFade, "With motion off no switch fades.")
 
+            ' The close the restore above hands over with (#116), on a Board
+            ' whose Pipeline and Published shelves have shown every card. It
+            ' disposed every card while the window was up, each laying its
+            ' shelf out again (#300): 8.6 s on the 500 library by hand, and
+            ' 52 s here in a Debug build; 0.7 s since the change, 2026-11-01.
+            ' Reported.
             Dim dpi As Integer = board.DeviceDpi
-            board.Close()
+            rows.Add(Time(library, "Close the window (the restore's hand-over)", UiThread, Sub() board.Close()))
             Return dpi
 
         End Using

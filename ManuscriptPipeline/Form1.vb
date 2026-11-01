@@ -2513,13 +2513,24 @@ Public Class Form1
         idleWorkTimer.Dispose()
         idleWork.Clear()
         cardToolTip.Dispose()
-        DisposeSharedDashboardFonts()
 
         ' Parked cards are not in the window's control tree, so they are
-        ' disposed here. The kept pages are in it, hidden while another page
-        ' shows (#133), and are disposed with it.
+        ' disposed here. The cards on a shelf and the kept pages are in it,
+        ' the pages hidden while another page shows (#133), and are disposed
+        ' with it, once the window is hidden and lays nothing out. Disposed
+        ' here, each card left its shelf while the window was still up, and
+        ' the shelf laid out every card after it again: closing the
+        ' 500-manuscript library took 18 to 30 s (#300). The shelves are
+        ' held from here on, and never let go, so nothing disposed after
+        ' this lays them out.
+        For Each shelf As ManuscriptShelfPanel In {pipelinePanel, publishedPanel, fileDrawerPanel}
+            shelf.SuspendLayout()
+        Next
+
         For Each card As RoundedPanel In manuscriptCards.Values
-            card.Dispose()
+            If card.Parent Is Nothing Then
+                card.Dispose()
+            End If
         Next
 
         manuscriptCards.Clear()
@@ -2527,6 +2538,20 @@ Public Class Form1
         MyBase.OnFormClosed(
             e
         )
+
+    End Sub
+
+
+    ' The shared fonts go once the window's controls have gone with it
+    ' (#300): the cards on a shelf, the attention title and the kept pages'
+    ' headings draw with them until then, and a restart's close (#116) or
+    ' Windows shutting down (#123) leaves the window up after it closes.
+    Private Sub Form1_Disposed(
+        sender As Object,
+        e As EventArgs
+    ) Handles MyBase.Disposed
+
+        DisposeSharedDashboardFonts()
 
     End Sub
 
