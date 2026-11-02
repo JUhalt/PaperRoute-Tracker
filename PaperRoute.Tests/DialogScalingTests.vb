@@ -4,6 +4,7 @@ Imports System.Diagnostics
 Imports System.Drawing
 Imports System.IO
 Imports System.Linq
+Imports System.Reflection
 Imports System.Text.RegularExpressions
 Imports System.Windows.Forms
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
@@ -158,7 +159,8 @@ Public Class DialogScalingTests
     ' The release candidate records the mode the built app sets (#302):
     ' Build-ReleaseCandidate.ps1 reads it from PaperRouteTracker.dll, here
     ' the tests' copy, and names it from the Windows Forms the tests run
-    ' on. A folder without the app is refused rather than recorded.
+    ' on. A folder without the app, or an app whose mode depends on a
+    ' branch, is refused rather than recorded.
     <TestMethod>
     Public Sub TheCandidateRecordsTheModeTheBuiltAppSets()
 
@@ -176,6 +178,55 @@ Public Class DialogScalingTests
 
         Assert.AreNotEqual(0, refused.ExitCode, "A folder without the app is refused: " & refused.Output)
         StringAssert.Contains(refused.Output, "PaperRouteTracker.dll was not found", "It says why.")
+
+        Dim branching As String =
+            Path.Combine(Path.GetTempPath(), "PaperRoute-HighDpiMode-" & Guid.NewGuid().ToString("N"))
+
+        Try
+            Directory.CreateDirectory(branching)
+            WriteBranchingApp(Path.Combine(branching, "PaperRouteTracker.dll"))
+
+            Dim computed As (ExitCode As Integer, Output As String) =
+                CandidateHighDpiMode(branching, forms)
+
+            Assert.AreNotEqual(0, computed.ExitCode, "A mode chosen by a branch is refused, not recorded as one of its values: " & computed.Output)
+            StringAssert.Contains(computed.Output, "computed value", "It says why.")
+        Finally
+            If Directory.Exists(branching) Then Directory.Delete(branching, True)
+        End Try
+
+    End Sub
+
+
+    ' A stand-in PaperRouteTracker.dll that sets the mode as
+    ' If(flag, SystemAware, PerMonitor) compiles: the constant just before
+    ' the call is only the value of the branch that falls through to it.
+    Private Shared Sub WriteBranchingApp(path As String)
+
+        Dim app As New Emit.PersistedAssemblyBuilder(New AssemblyName("PaperRouteTracker"), GetType(Object).Assembly)
+
+        Dim startup As Emit.TypeBuilder =
+            app.DefineDynamicModule("PaperRouteTracker").DefineType("Startup", TypeAttributes.Public Or TypeAttributes.Class)
+
+        Dim il As Emit.ILGenerator =
+            startup.DefineMethod("Apply", MethodAttributes.Public Or MethodAttributes.Static, Nothing, {GetType(Boolean)}).GetILGenerator()
+
+        Dim systemAware As Emit.Label = il.DefineLabel()
+        Dim setMode As Emit.Label = il.DefineLabel()
+
+        il.Emit(Emit.OpCodes.Ldarg_0)
+        il.Emit(Emit.OpCodes.Brtrue_S, systemAware)
+        il.Emit(Emit.OpCodes.Ldc_I4, CInt(HighDpiMode.PerMonitor))
+        il.Emit(Emit.OpCodes.Br_S, setMode)
+        il.MarkLabel(systemAware)
+        il.Emit(Emit.OpCodes.Ldc_I4, CInt(HighDpiMode.SystemAware))
+        il.MarkLabel(setMode)
+        il.Emit(Emit.OpCodes.Call, GetType(Application).GetMethod(NameOf(Application.SetHighDpiMode)))
+        il.Emit(Emit.OpCodes.Pop)
+        il.Emit(Emit.OpCodes.Ret)
+
+        startup.CreateType()
+        app.Save(path)
 
     End Sub
 

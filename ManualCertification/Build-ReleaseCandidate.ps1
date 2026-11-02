@@ -195,17 +195,23 @@ function Get-PublishedHighDpiMode([string] $PublishRoot, [string] $FormsRoot = $
         'Microsoft.VisualBasic.ApplicationServices.WindowsFormsApplicationBase.set_HighDpiMode',
         'System.Windows.Forms.Application.SetHighDpiMode')
     # Each opcode's operand size, from the runtime's own opcode table, so the
-    # IL is decoded an instruction at a time rather than searched for bytes.
+    # IL is decoded an instruction at a time rather than searched for bytes,
+    # and the opcodes that branch, by the kind of target they carry.
     $operandSizes = @{}
+    $branches = @{}
     foreach ($field in [Reflection.Emit.OpCodes].GetFields()) {
         $opCode = [Reflection.Emit.OpCode] $field.GetValue($null)
-        $operandSizes[$opCode.Value -band 0xFFFF] = switch ($opCode.OperandType.ToString()) {
+        $operandType = $opCode.OperandType.ToString()
+        $operandSizes[$opCode.Value -band 0xFFFF] = switch ($operandType) {
             'InlineNone' { 0 }
             { $_ -in 'ShortInlineBrTarget', 'ShortInlineI', 'ShortInlineVar' } { 1 }
             'InlineVar' { 2 }
             { $_ -in 'InlineI8', 'InlineR' } { 8 }
             'InlineSwitch' { -1 }
             default { 4 }
+        }
+        if ($operandType -in 'ShortInlineBrTarget', 'InlineBrTarget', 'InlineSwitch') {
+            $branches[$opCode.Value -band 0xFFFF] = $operandType
         }
     }
     $modes = [Collections.Generic.List[int]]::new()
@@ -228,14 +234,33 @@ function Get-PublishedHighDpiMode([string] $PublishRoot, [string] $FormsRoot = $
             $il = [Reflection.Metadata.PEReaderExtensions]::GetMethodBody($pe, $method.RelativeVirtualAddress).GetILBytes()
             $hex = [Convert]::ToHexString($il)
             if (@($tokens.Values | Where-Object { $hex.Contains($_) }).Count -eq 0) { continue }
-            $constant = $null
+            # Decoded whole first, for every offset a branch lands on: the
+            # constant loaded before one is not the only value that reaches
+            # it (If(flag, SystemAware, PerMonitorV2) jumps to the setter
+            # with the other), so a setter there is passed a computed value.
+            $instructions = [Collections.Generic.List[int[]]]::new()
+            $targets = [Collections.Generic.HashSet[int]]::new()
             $i = 0
             while ($i -lt $il.Length) {
+                $start = $i
                 $code = [int] $il[$i++]
                 if ($code -eq 0xFE) { $code = 0xFE00 -bor $il[$i++] }
                 $size = $operandSizes[$code]
                 if ($null -eq $size) { throw "'$appPath' holds IL opcode 0x$($code.ToString('X')), which this runtime does not define." }
                 if ($size -lt 0) { $size = 4 + 4 * [BitConverter]::ToInt32($il, $i) }
+                $next = $i + $size
+                switch ($branches[$code]) {
+                    'ShortInlineBrTarget' { [void] $targets.Add($next + ([int] $il[$i] -bxor 0x80) - 0x80) }
+                    'InlineBrTarget' { [void] $targets.Add($next + [BitConverter]::ToInt32($il, $i)) }
+                    'InlineSwitch' { for ($k = 1; 4 * $k -lt $size; $k++) { [void] $targets.Add($next + [BitConverter]::ToInt32($il, $i + 4 * $k)) } }
+                }
+                $instructions.Add(@($start, $code, $i, $size))
+                $i = $next
+            }
+            $constant = $null
+            foreach ($instruction in $instructions) {
+                $start, $code, $i, $size = $instruction
+                if ($targets.Contains($start)) { $constant = $null }
                 if (($code -eq 0x28 -or $code -eq 0x6F) -and $tokens.ContainsKey([BitConverter]::ToInt32($il, $i))) {
                     if ($null -eq $constant) {
                         throw "The published app's $($reader.GetString($method.Name)) sets HighDpiMode to a computed value, which cannot be recorded."
@@ -247,7 +272,6 @@ function Get-PublishedHighDpiMode([string] $PublishRoot, [string] $FormsRoot = $
                     elseif ($code -eq 0x1F) { ([int] $il[$i] -bxor 0x80) - 0x80 }
                     elseif ($code -eq 0x20) { [BitConverter]::ToInt32($il, $i) }
                     else { $null }
-                $i += $size
             }
         }
     }
