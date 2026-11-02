@@ -1081,8 +1081,9 @@ Public Class MotionFadeTests
     ' certification runs them by hand. The window is made SystemAware, as
     ' PaperRoute's is, and the fade asks Windows whether it is scaled
     ' (OnBoard, #268); it is put in front before each switch, and the test
-    ' fails if another window is over the page area at any of the three
-    ' pictures, which would compare that window instead.
+    ' fails unless Windows finds it at the page area's corners and middle
+    ' before each of the three pictures (InFront): in #268 another window
+    ' was over the page area, and the pictures compared that window.
     <TestMethod>
     <TestCategory("OnScreen")>
     Public Sub ThePictureIsThePageLeft()
