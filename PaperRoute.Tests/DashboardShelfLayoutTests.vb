@@ -645,6 +645,131 @@ Public Class DashboardShelfLayoutTests
         End Using
     End Function
 
+    ' Closing the window lays out no shelf and moves no card (#300). The
+    ' window disposed every card it kept while it was still up, and each
+    ' card that left a shelf laid the shelf out again, moving every card
+    ' after it: 18 to 30 s to close the 500-manuscript library. Here, the
+    ' three shelves of 30 cards and the cards on them were laid out 522
+    ' times and moved or resized 1,377 times. The cards on a shelf now go
+    ' with the window, which is hidden first and lays out nothing as it
+    ' goes.
+    <TestMethod>
+    Public Sub ClosingTheWindowLaysOutNoShelfAndMovesNoCard()
+        RunOnStaThread(
+            Sub()
+                Using board As New LayoutOnlyBoard()
+                    board.Prepare(1.0F)
+                    board.Show()
+                    Application.DoEvents()
+
+                    Dim cards As List(Of Control) = board.Cards
+                    Assert.AreEqual(90, cards.Count)
+                    Assert.IsTrue(cards.All(Function(card) TypeOf card.Parent Is ManuscriptShelfPanel), "Every card is on a shelf.")
+                    Dim probes As List(Of LayoutProbe) = board.Shelves.Select(Function(shelf) New LayoutProbe(shelf)).ToList()
+
+                    board.Close()
+
+                    Dim counts As String = String.Join(", ", probes.Select(Function(probe, index) $"shelf {index}: {probe.Layouts.Count} layouts, {probe.Moves.Count} moves"))
+                    Dim changes As Integer = probes.Sum(Function(probe) probe.Layouts.Count + probe.Moves.Count)
+                    For Each probe As LayoutProbe In probes
+                        probe.Dispose()
+                    Next
+                    Assert.AreEqual(0, changes, "Closing laid out or moved the cards: " & counts & ".")
+                    Assert.IsTrue(cards.All(Function(card) card.IsDisposed), "Every card goes with the window.")
+                    Assert.IsTrue(board.IsDisposed AndAlso Not board.IsHandleCreated, "The window is gone.")
+                End Using
+            End Sub)
+    End Sub
+
+    ' Cards no shelf shows wait parked, outside the window's controls, for
+    ' a render that shows them again (#133), so the window cannot dispose
+    ' them with itself; it disposes them as it is disposed, once it is
+    ' hidden (#300). Each destroys its own windows, which held the window
+    ' up the longer for every card a filter parked. A search that matches
+    ' nothing parks every card.
+    <TestMethod>
+    Public Sub ClosingTheWindowDisposesTheCardsParkedOffTheShelves()
+        RunOnStaThread(
+            Sub()
+                Using board As New LayoutOnlyBoard()
+                    board.Prepare(1.0F)
+                    board.Show()
+                    Application.DoEvents()
+                    Dim cards As List(Of Control) = board.Cards
+
+                    board.SearchBoard("matches no manuscript")
+                    Application.DoEvents()
+                    Assert.AreEqual(90, cards.Count)
+                    CollectionAssert.AreEquivalent(cards, board.Cards, "The cards are kept.")
+                    Assert.IsTrue(cards.All(Function(card) card.Parent Is Nothing AndAlso Not card.IsDisposed), "The search parked every card.")
+                    Dim whileUp As Integer = 0
+                    For Each parked As Control In cards
+                        AddHandler parked.Disposed,
+                            Sub(sender, e)
+                                If board.IsHandleCreated Then whileUp += 1
+                            End Sub
+                    Next
+
+                    board.Close()
+
+                    Assert.IsTrue(cards.All(Function(card) card.IsDisposed), "Every parked card goes as the window closes.")
+                    Assert.AreEqual(0, whileUp, "No parked card is disposed while the window is up.")
+                    Assert.IsTrue(board.IsDisposed)
+                End Using
+            End Sub)
+    End Sub
+
+    ' Nothing fails as the window closes with tagged cards on a shelf that
+    ' scrolls, and nothing the window still shows holds a disposed font
+    ' until the window is disposed (#300). The cards' and the attention
+    ' title's shared fonts were disposed as the window closed, before the
+    ' window and what it showed with them were, so a paint in between, as
+    ' a restart's close leaves room for (#116), drew with disposed fonts.
+    ' Here the window is painted and each part's font measured as it
+    ' closes: an error in the paint reaches the thread's handler, and a
+    ' disposed font is caught where it is measured. The shared fonts still
+    ' go with the window.
+    <TestMethod>
+    Public Sub ClosingWithTaggedCardsAndAScrollbarFailsNothingAndDisposesNoFontInUse()
+        RunOnStaThread(
+            Sub()
+                Dim failures As New List(Of String)()
+                AddHandler Application.ThreadException, Sub(sender, e) failures.Add(e.Exception.ToString())
+
+                Using board As New LayoutOnlyBoard()
+                    board.Prepare(1.0F)
+                    board.SetSamples(30, tags:={"teaching", "grant"})
+                    board.Show()
+                    Application.DoEvents()
+
+                    Dim pipeline As FlowLayoutPanel = board.Shelves.First()
+                    Assert.IsTrue(pipeline.VerticalScroll.Visible, "The shelf scrolls.")
+                    Dim cards As List(Of Control) = board.Cards
+                    Assert.IsTrue(cards.All(Function(card) card.Controls.OfType(Of TagStrip)().Any()), "Every card shows its tags.")
+                    Assert.IsTrue(board.SharedFonts.All(Function(item) item IsNot Nothing), "The board has its shared fonts.")
+
+                    AddHandler board.FormClosed,
+                        Sub(sender, e)
+                            board.Refresh()
+                            For Each part As Control In Descendants(board)
+                                Try
+                                    If part.Font.Height <= 0 Then failures.Add(LayoutProbe.PathOf(part, board) & " has no font height.")
+                                Catch ex As ArgumentException
+                                    failures.Add(LayoutProbe.PathOf(part, board) & " holds a disposed font as the window closes.")
+                                End Try
+                            Next
+                        End Sub
+
+                    board.Close()
+
+                    Assert.AreEqual(0, failures.Count, String.Join(Environment.NewLine, failures))
+                    Assert.IsTrue(cards.All(Function(card) card.IsDisposed), "Every card goes with the window.")
+                    Assert.IsTrue(board.SharedFonts.All(Function(item) item Is Nothing), "The shared fonts go with the window.")
+                    Assert.IsTrue(board.IsDisposed)
+                End Using
+            End Sub)
+    End Sub
+
     Private Shared Sub AssertTagStrip(card As Control, context As String)
         Dim strip As TagStrip = card.Controls.OfType(Of TagStrip)().Single()
         Dim journal As Label = card.Controls.OfType(Of Label)().Single(Function(label) label.Text = "Memory & Cognition")
@@ -688,16 +813,18 @@ Public Class DashboardShelfLayoutTests
             ShowInTaskbar = False
         End Sub
 
-        Public Sub SetSamples(count As Integer, Optional withTargetJournal As Boolean = True)
+        Public Sub SetSamples(count As Integer, Optional withTargetJournal As Boolean = True, Optional tags As String() = Nothing)
             Dim samples As New List(Of Manuscript)
             For Each location As ManuscriptLocation In [Enum].GetValues(Of ManuscriptLocation)()
                 For index As Integer = 1 To count
-                    samples.Add(New Manuscript With {
+                    Dim sample As New Manuscript With {
                         .Title = "Synthetic shelf layout manuscript with a long title " & index,
                         .Location = location,
                         .CurrentStage = If(location = ManuscriptLocation.Published, PaperStage.Published, PaperStage.Draft),
                         .TargetJournal = If(withTargetJournal, "A fictional journal with a long descriptive name", String.Empty)
-                    })
+                    }
+                    If tags IsNot Nothing Then sample.Tags.AddRange(tags)
+                    samples.Add(sample)
                 Next
             Next
             SetManuscripts(samples)
@@ -707,6 +834,30 @@ Public Class DashboardShelfLayoutTests
             GetType(Form1).GetField("manuscripts", BindingFlags.Instance Or BindingFlags.NonPublic).SetValue(Me, samples)
             InvokePrivate("RenderManuscripts")
         End Sub
+
+        ' Typing in the Board's search, then the pause its timer waits for.
+        Public Sub SearchBoard(text As String)
+            DirectCast(GetType(Form1).GetField("txtBoardSearch", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me), TextBox).Text = text
+            InvokePrivate("RenderManuscripts")
+        End Sub
+
+        ' Every card the board has built and keeps (#133), on a shelf or
+        ' parked off one.
+        Public ReadOnly Property Cards As List(Of Control)
+            Get
+                Dim kept = DirectCast(GetType(Form1).GetField("manuscriptCards", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me), System.Collections.IDictionary)
+                Return kept.Values.Cast(Of Control)().ToList()
+            End Get
+        End Property
+
+        ' The fonts the cards and the attention title share, which go with
+        ' the window (#300).
+        Public ReadOnly Property SharedFonts As List(Of Font)
+            Get
+                Return {"cardTitleFont", "cardBadgeFont", "cardInsightFont", "cardMetaFont", "attentionTitleFont"}.Select(
+                    Function(name) DirectCast(GetType(Form1).GetField(name, BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me), Font)).ToList()
+            End Get
+        End Property
 
         Public ReadOnly Property Shelves As IEnumerable(Of FlowLayoutPanel)
             Get

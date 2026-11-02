@@ -2513,20 +2513,51 @@ Public Class Form1
         idleWorkTimer.Dispose()
         idleWork.Clear()
         cardToolTip.Dispose()
-        DisposeSharedDashboardFonts()
 
-        ' Parked cards are not in the window's control tree, so they are
-        ' disposed here. The kept pages are in it, hidden while another page
-        ' shows (#133), and are disposed with it.
-        For Each card As RoundedPanel In manuscriptCards.Values
-            card.Dispose()
+        ' The cards are disposed with the window, once it is hidden
+        ' (Form1_Disposed): the cards on a shelf and the kept pages are in
+        ' its control tree, the pages hidden while another page shows
+        ' (#133). Disposed here, each card left its shelf while the window
+        ' was still up, and the shelf laid out every card after it again:
+        ' closing the 500-manuscript library took 18 to 30 s (#300). The
+        ' shelves are held from here on, and never let go, so nothing
+        ' disposed after this lays them out; a restart's close (#116)
+        ' leaves the window up until the message loop ends.
+        For Each shelf As ManuscriptShelfPanel In {pipelinePanel, publishedPanel, fileDrawerPanel}
+            shelf.SuspendLayout()
         Next
-
-        manuscriptCards.Clear()
 
         MyBase.OnFormClosed(
             e
         )
+
+    End Sub
+
+
+    ' Runs as the window is disposed, once it is hidden and its controls
+    ' have gone with it (#300). Parked cards are not in its control tree,
+    ' so they are disposed here, each destroying its own windows: done as
+    ' the window closed, a filter that parked most of the cards held the
+    ' window up that much longer. The cards on a shelf are already
+    ' disposed, and a second Dispose would raise their Disposed again. The
+    ' shared fonts go last: the cards on a shelf, the attention title and
+    ' the kept pages' headings draw with them until the window is
+    ' disposed, and a restart's close (#116) leaves the window up until
+    ' the message loop ends.
+    Private Sub Form1_Disposed(
+        sender As Object,
+        e As EventArgs
+    ) Handles MyBase.Disposed
+
+        For Each card As RoundedPanel In manuscriptCards.Values
+            If Not card.IsDisposed Then
+                card.Dispose()
+            End If
+        Next
+
+        manuscriptCards.Clear()
+
+        DisposeSharedDashboardFonts()
 
     End Sub
 
