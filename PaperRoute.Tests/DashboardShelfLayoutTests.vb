@@ -648,10 +648,11 @@ Public Class DashboardShelfLayoutTests
     ' Closing the window lays out no shelf and moves no card (#300). The
     ' window disposed every card it kept while it was still up, and each
     ' card that left a shelf laid the shelf out again, moving every card
-    ' after it: 18 to 30 s to close the 500-manuscript library. Here, three
-    ' shelves of 30 cards were laid out 522 times and their cards moved or
-    ' resized 1,377 times. The cards on a shelf now go with the window,
-    ' which is hidden first and lays out nothing as it goes.
+    ' after it: 18 to 30 s to close the 500-manuscript library. Here, the
+    ' three shelves of 30 cards and the cards on them were laid out 522
+    ' times and moved or resized 1,377 times. The cards on a shelf now go
+    ' with the window, which is hidden first and lays out nothing as it
+    ' goes.
     <TestMethod>
     Public Sub ClosingTheWindowLaysOutNoShelfAndMovesNoCard()
         RunOnStaThread(
@@ -682,8 +683,10 @@ Public Class DashboardShelfLayoutTests
 
     ' Cards no shelf shows wait parked, outside the window's controls, for
     ' a render that shows them again (#133), so the window cannot dispose
-    ' them with itself; it disposes them as it closes (#300). A search that
-    ' matches nothing parks every card.
+    ' them with itself; it disposes them as it is disposed, once it is
+    ' hidden (#300). Each destroys its own windows, which held the window
+    ' up the longer for every card a filter parked. A search that matches
+    ' nothing parks every card.
     <TestMethod>
     Public Sub ClosingTheWindowDisposesTheCardsParkedOffTheShelves()
         RunOnStaThread(
@@ -699,10 +702,18 @@ Public Class DashboardShelfLayoutTests
                     Assert.AreEqual(90, cards.Count)
                     CollectionAssert.AreEquivalent(cards, board.Cards, "The cards are kept.")
                     Assert.IsTrue(cards.All(Function(card) card.Parent Is Nothing AndAlso Not card.IsDisposed), "The search parked every card.")
+                    Dim whileUp As Integer = 0
+                    For Each parked As Control In cards
+                        AddHandler parked.Disposed,
+                            Sub(sender, e)
+                                If board.IsHandleCreated Then whileUp += 1
+                            End Sub
+                    Next
 
                     board.Close()
 
                     Assert.IsTrue(cards.All(Function(card) card.IsDisposed), "Every parked card goes as the window closes.")
+                    Assert.AreEqual(0, whileUp, "No parked card is disposed while the window is up.")
                     Assert.IsTrue(board.IsDisposed)
                 End Using
             End Sub)
@@ -715,7 +726,9 @@ Public Class DashboardShelfLayoutTests
     ' window and what it showed with them were, so a paint in between, as
     ' a restart's close leaves room for (#116), drew with disposed fonts.
     ' Here the window is painted and each part's font measured as it
-    ' closes; an error in either reaches the thread's handler.
+    ' closes: an error in the paint reaches the thread's handler, and a
+    ' disposed font is caught where it is measured. The shared fonts still
+    ' go with the window.
     <TestMethod>
     Public Sub ClosingWithTaggedCardsAndAScrollbarFailsNothingAndDisposesNoFontInUse()
         RunOnStaThread(
@@ -733,6 +746,7 @@ Public Class DashboardShelfLayoutTests
                     Assert.IsTrue(pipeline.VerticalScroll.Visible, "The shelf scrolls.")
                     Dim cards As List(Of Control) = board.Cards
                     Assert.IsTrue(cards.All(Function(card) card.Controls.OfType(Of TagStrip)().Any()), "Every card shows its tags.")
+                    Assert.IsTrue(board.SharedFonts.All(Function(item) item IsNot Nothing), "The board has its shared fonts.")
 
                     AddHandler board.FormClosed,
                         Sub(sender, e)
@@ -750,6 +764,7 @@ Public Class DashboardShelfLayoutTests
 
                     Assert.AreEqual(0, failures.Count, String.Join(Environment.NewLine, failures))
                     Assert.IsTrue(cards.All(Function(card) card.IsDisposed), "Every card goes with the window.")
+                    Assert.IsTrue(board.SharedFonts.All(Function(item) item Is Nothing), "The shared fonts go with the window.")
                     Assert.IsTrue(board.IsDisposed)
                 End Using
             End Sub)
@@ -832,6 +847,15 @@ Public Class DashboardShelfLayoutTests
             Get
                 Dim kept = DirectCast(GetType(Form1).GetField("manuscriptCards", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me), System.Collections.IDictionary)
                 Return kept.Values.Cast(Of Control)().ToList()
+            End Get
+        End Property
+
+        ' The fonts the cards and the attention title share, which go with
+        ' the window (#300).
+        Public ReadOnly Property SharedFonts As List(Of Font)
+            Get
+                Return {"cardTitleFont", "cardBadgeFont", "cardInsightFont", "cardMetaFont", "attentionTitleFont"}.Select(
+                    Function(name) DirectCast(GetType(Form1).GetField(name, BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(Me), Font)).ToList()
             End Get
         End Property
 

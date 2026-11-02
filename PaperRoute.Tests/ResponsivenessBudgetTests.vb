@@ -456,10 +456,26 @@ Public Class ResponsivenessBudgetTests
             ' whose Pipeline and Published shelves have shown every card. It
             ' disposed every card while the window was up, each laying its
             ' shelf out again (#300): 8.6 s on the 500 library by hand, and
-            ' 52 s here in a Debug build; 0.7 s since the change, 2026-11-01.
-            ' Reported.
+            ' 52 s here in a Debug build; 0.7 s in all since the change,
+            ' 2026-11-01. It is timed in two parts, split at FormClosed, the
+            ' last of the close before the window is disposed. Until then the
+            ' window is up, and the researcher waits on it. After it, the
+            ' window is hidden first, then its cards' and kept pages' windows
+            ' are destroyed one by one, which grows with the cards and which
+            ' nothing small and safe can cut (#300). On 2026-11-02 the two
+            ' read 13 and 679 ms on the 500 library in a Debug build. Both are
+            ' reported, not enforced.
             Dim dpi As Integer = board.DeviceDpi
-            rows.Add(Time(library, "Close the window (the restore's hand-over)", UiThread, Sub() board.Close()))
+            Dim closing As New Stopwatch()
+            Dim untilClosed As Double = 0
+            AddHandler board.FormClosed, Sub(sender, e) untilClosed = closing.Elapsed.TotalMilliseconds
+            Dim whole As Row = Time(library, "Close the window", UiThread,
+                                    Sub()
+                                        closing.Start()
+                                        board.Close()
+                                    End Sub)
+            rows.Add(New Row With {.Library = library.Name, .Action = "Close the window (the restore's hand-over): until FormClosed, the window still up", .Wall = untilClosed, .Ui = untilClosed, .Budget = UiThread})
+            rows.Add(New Row With {.Library = library.Name, .Action = "Close the window: its teardown after FormClosed, the window hidden first", .Wall = whole.Wall - untilClosed, .Ui = whole.Wall - untilClosed, .Budget = UiThread})
             Return dpi
 
         End Using
