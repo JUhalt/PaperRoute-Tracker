@@ -111,6 +111,11 @@ Public Class ManuscriptEditorReuseTests
                             Assert.AreEqual(savedOpened, Json(Record(reused, opened.Id)), "Opening changes nothing.")
                             Assert.AreEqual(0, reused.SaveCount, "Nothing was saved.")
 
+                            ' The page left held the keyboard (EditEverything leaves it in
+                            ' the title), and a switch hands the keyboard straight to the
+                            ' page arrived at (#276), so the fresh board opens from a Board
+                            ' that holds the keyboard too.
+                            fresh.Part(Of TextBox)("txtBoardSearch").Focus()
                             Open(fresh, Record(fresh, opened.Id))
                             AssertSamePage(fresh, reused, opened.Title)
 
