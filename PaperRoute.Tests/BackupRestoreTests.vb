@@ -4,6 +4,7 @@ Imports System.IO
 Imports System.IO.Compression
 Imports System.Linq
 Imports System.Text.Json
+Imports System.Text.RegularExpressions
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
@@ -12,6 +13,10 @@ Imports ManuscriptPipeline.Services
 Public Class BackupRestoreTests
 
     Private _root As String = String.Empty
+
+    ' The HResult of the IOException Directory.Move raises for a folder
+    ' with a file held inside (#295).
+    Private Const AccessDeniedHResult As Integer = &H80070005
 
     <TestInitialize>
     Public Sub Initialize()
@@ -710,7 +715,7 @@ Public Class BackupRestoreTests
         Assert.AreEqual("The one copy.", File.ReadAllText(removedFile), "The removed folder comes across to the restored library.")
         Assert.AreEqual(
             0,
-            Directory.GetDirectories(_root, "PaperRoute Library.restore-rollback-*").Length,
+            Directory.GetDirectories(_root, "*.restore-rollback-*").Length,
             "Nothing of the old library is left beside the new one."
         )
 
@@ -782,6 +787,221 @@ Public Class BackupRestoreTests
             Directory.GetFileSystemEntries(_root, "*restore-*", SearchOption.AllDirectories).Length,
             "Nothing of the restore is left beside the library."
         )
+
+    End Sub
+
+
+    ' OneDrive and Defender refuse a folder rename for a moment while they
+    ' hold a file inside (#295). Each of the swap's two moves is refused
+    ' three times, then goes through: the restore waits, tries again and
+    ' puts the backup's library in place. The library is in its place at
+    ' every wait, put back first when the move into its folder is refused.
+    ' Before the change the first refusal failed the restore.
+    <TestMethod>
+    Public Sub Restore_TriesABusyFolderAgainAndCompletes()
+
+        Dim scenario As RestoreScenario = CreateRestoreScenario()
+        Dim service As New BusyFolderRestoreService(
+            scenario.TargetManaged,
+            3,
+            Function(folder) New UnauthorizedAccessException("Access to the path '" & folder & "' is denied.")
+        )
+
+        Dim result As RestoreResult = service.RestoreBackup(scenario.BackupPath, scenario.Current, scenario.TargetRepository)
+
+        StringAssert.EndsWith(service.Moves.Last(), " -> " & Path.GetFileName(scenario.TargetManaged), "The backup's folder was moved in last.")
+        Assert.AreEqual(6, service.Waits.Count, "Three waits before each move.")
+        Assert.AreEqual(0, service.WaitsWithTheLibraryAside, "The library was in its place at every wait.")
+        Assert.AreEqual(3, result.ManuscriptCount)
+        Assert.AreEqual(3, scenario.TargetRepository.Load().Count, "The library is the backup's.")
+        Assert.AreEqual("Jane Researcher", New AuthorLibraryRepository(scenario.TargetData).Load().Authors.Single().DisplayName)
+
+        Dim letter As String =
+            scenario.TargetRepository.Load().
+                SelectMany(Function(manuscript) manuscript.Submissions).
+                SelectMany(Function(submission) submission.Correspondence).
+                Single(Function(item) item.IsManagedCopy).LocalFilePath
+        StringAssert.StartsWith(letter, scenario.TargetManaged, "The backup's managed file is in the managed folder.")
+        Assert.IsTrue(File.Exists(letter), "The backup's managed file is on disk.")
+
+        Assert.AreEqual(
+            0,
+            Directory.GetFileSystemEntries(_root, "*restore-*", SearchOption.AllDirectories).Length,
+            "Nothing of the restore is left beside the library."
+        )
+
+    End Sub
+
+
+    ' A folder that stays busy (#295): the move into the managed folder is
+    ' tried again for under ten seconds, with the library in its place at
+    ' each wait, then the restore rolls back as it did before, leaves the
+    ' library as it was and nothing beside it, and says so. The refusal is
+    ' the IOException Directory.Move raises for access denied. Before the
+    ' change nothing was tried again.
+    <TestMethod>
+    Public Sub Restore_RollsBackWhenAFolderStaysBusy()
+
+        Dim scenario As RestoreScenario = CreateRestoreScenario()
+        Dim before As Dictionary(Of String, Byte()) = SnapshotLibrary(scenario)
+        Dim service As New BusyFolderRestoreService(
+            scenario.TargetManaged,
+            Integer.MaxValue,
+            Function(folder) New IOException("Access to the path '" & folder & "' is denied.", AccessDeniedHResult),
+            intoFolder:=scenario.TargetManaged
+        )
+
+        Dim failure As RestoreFailedException =
+            Assert.ThrowsExactly(Of RestoreFailedException)(
+                Sub() service.RestoreBackup(scenario.BackupPath, scenario.Current, scenario.TargetRepository))
+
+        Assert.IsTrue(service.Waits.Count > 1, "The move was tried again.")
+        Assert.IsTrue(service.Waits.Sum() < 10000, "The waits came to " & service.Waits.Sum().ToString() & " ms, under ten seconds.")
+        Assert.AreEqual(0, service.WaitsWithTheLibraryAside, "The library was in its place at every wait.")
+
+        StringAssert.Contains(failure.Message, "Access to the path", "The message carries the cause.")
+        StringAssert.Contains(failure.Message, "put back as it was")
+        StringAssert.Contains(failure.Message, failure.EmergencyBackupPath, "The message names the emergency ZIP.")
+        Assert.IsTrue(File.Exists(failure.EmergencyBackupPath))
+        Assert.AreEqual(0, failure.LeftBehind.Count)
+
+        AssertSameFiles(before, SnapshotLibrary(scenario), "The library on disk after a folder stayed busy")
+        Assert.AreEqual(
+            0,
+            Directory.GetFileSystemEntries(_root, "*restore-*", SearchOption.AllDirectories).Length,
+            "Nothing of the restore is left beside the library."
+        )
+
+    End Sub
+
+
+    ' The rollback's move is tried again too (#295). The move into the
+    ' managed folder is refused, and a file of the library set aside is
+    ' held, so Windows itself refuses to put the library back until the
+    ' hold ends during a wait. The library goes back as it was, with nothing
+    ' beside it. Before the change it stayed set aside.
+    <TestMethod>
+    Public Sub Restore_PutsTheLibraryBackOnceItsHeldFileIsFree()
+
+        Dim scenario As RestoreScenario = CreateRestoreScenario()
+        Dim before As Dictionary(Of String, Byte()) = SnapshotLibrary(scenario)
+        Dim heldFile As String =
+            Path.GetRelativePath(scenario.TargetManaged, Directory.GetFiles(scenario.TargetManaged, "*", SearchOption.AllDirectories).First())
+        Dim service As New BusyFolderRestoreService(
+            scenario.TargetManaged,
+            Integer.MaxValue,
+            Function(folder) New IOException("Access to the path '" & folder & "' is denied.", AccessDeniedHResult),
+            intoFolder:=scenario.TargetManaged,
+            holdOnceSetAside:=heldFile
+        )
+
+        Dim failure As RestoreFailedException = Nothing
+
+        Try
+            failure = Assert.ThrowsExactly(Of RestoreFailedException)(
+                Sub() service.RestoreBackup(scenario.BackupPath, scenario.Current, scenario.TargetRepository))
+        Finally
+            service.ReleaseHold()
+        End Try
+
+        Assert.IsTrue(service.WaitsWithTheLibraryAside > 0, "Putting the library back waited for the held file.")
+        StringAssert.Contains(failure.Message, "put back as it was")
+        Assert.AreEqual(0, failure.LeftBehind.Count)
+        AssertSameFiles(before, SnapshotLibrary(scenario), "The library on disk after its held file was let go")
+        Assert.AreEqual(
+            0,
+            Directory.GetFileSystemEntries(_root, "*restore-*", SearchOption.AllDirectories).Length,
+            "Nothing of the restore is left beside the library."
+        )
+
+    End Sub
+
+
+    ' The removed folder's move into the restored library is tried again
+    ' too (#295): with a file inside it held once the old library is set
+    ' aside, the move waits for the hold to end, and the old library does
+    ' not stay beside the new one. Before the change it stayed.
+    <TestMethod>
+    Public Sub Restore_CarriesABusyRemovedFolderOverOnceItIsFree()
+
+        Dim scenario As RestoreScenario = CreateRestoreScenario()
+        Dim removedFile As String = Path.Combine(scenario.TargetManaged, "removed", "2026-10-09", "old-snapshot.txt")
+        Directory.CreateDirectory(Path.GetDirectoryName(removedFile))
+        File.WriteAllText(removedFile, "The one copy.")
+        Dim service As New BusyFolderRestoreService(
+            scenario.TargetManaged,
+            0,
+            Nothing,
+            holdOnceSetAside:=Path.GetRelativePath(scenario.TargetManaged, removedFile)
+        )
+
+        Try
+            service.RestoreBackup(scenario.BackupPath, scenario.Current, scenario.TargetRepository)
+        Finally
+            service.ReleaseHold()
+        End Try
+
+        Assert.IsTrue(service.Waits.Count > 0, "The move of the removed folder waited for the held file.")
+        Assert.AreEqual("The one copy.", File.ReadAllText(removedFile), "The removed folder comes across to the restored library.")
+        Assert.AreEqual(3, scenario.TargetRepository.Load().Count, "The library is the backup's.")
+        Assert.AreEqual(
+            0,
+            Directory.GetDirectories(_root, "*.restore-rollback-*").Length,
+            "Nothing of the old library is left beside the new one."
+        )
+
+    End Sub
+
+
+    ' Guard: the startup window runs its restore on its UI thread, which
+    ' must not wait (#295), so there a busy folder fails the restore at
+    ' once and the rollback leaves the library as it was. It passed before
+    ' the change as well.
+    <TestMethod>
+    Public Sub Restore_WithNoLibraryLoadedDoesNotWaitForABusyFolder()
+
+        Dim scenario As RestoreScenario = CreateRestoreScenario()
+        Dim before As Dictionary(Of String, Byte()) = SnapshotLibrary(scenario)
+        Dim service As New BusyFolderRestoreService(
+            scenario.TargetManaged,
+            1,
+            Function(folder) New IOException("Access to the path '" & folder & "' is denied.", AccessDeniedHResult),
+            intoFolder:=scenario.TargetManaged
+        )
+
+        Dim failure As RestoreFailedException =
+            Assert.ThrowsExactly(Of RestoreFailedException)(
+                Sub() service.RestoreBackup(scenario.BackupPath, scenario.TargetRepository))
+
+        Assert.AreEqual(0, service.Waits.Count, "The UI thread did not wait.")
+        StringAssert.Contains(failure.Message, "put back as it was")
+        AssertSameFiles(before, SnapshotLibrary(scenario), "The library on disk after the startup restore")
+
+    End Sub
+
+
+    ' The staging and rollback folders are named after the managed folder
+    ' (#295), so the development profile's stage as "PaperRoute Dev
+    ' Library.restore-staging-<id>". Before the change every profile's were
+    ' "PaperRoute Library.restore-...".
+    <TestMethod>
+    Public Sub Restore_NamesItsFoldersAfterTheManagedFolder()
+
+        Dim scenario As RestoreScenario = CreateRestoreScenario(ProductInfo.DevelopmentManagedLibraryFolderName)
+        Dim service As New BusyFolderRestoreService(scenario.TargetManaged, 0, Nothing)
+
+        service.RestoreBackup(scenario.BackupPath, scenario.Current, scenario.TargetRepository)
+
+        Assert.AreEqual(2, service.Moves.Count)
+        Assert.IsTrue(
+            Regex.IsMatch(service.Moves(0), "^PaperRoute Dev Library -> PaperRoute Dev Library\.restore-rollback-[0-9a-f]{32}$"),
+            "The library is set aside under its own name: " & service.Moves(0)
+        )
+        Assert.IsTrue(
+            Regex.IsMatch(service.Moves(1), "^PaperRoute Dev Library\.restore-staging-[0-9a-f]{32} -> PaperRoute Dev Library$"),
+            "The backup is staged under the library's own name: " & service.Moves(1)
+        )
+        Assert.AreEqual(3, scenario.TargetRepository.Load().Count)
 
     End Sub
 
@@ -941,7 +1161,7 @@ Public Class BackupRestoreTests
     End Structure
 
 
-    Private Function CreateRestoreScenario() As RestoreScenario
+    Private Function CreateRestoreScenario(Optional targetManagedName As String = "scenario-target-library") As RestoreScenario
 
         Dim sourceData As String = Path.Combine(_root, "scenario-source-data")
         Dim sourceManaged As String = Path.Combine(_root, "scenario-source-library")
@@ -958,7 +1178,7 @@ Public Class BackupRestoreTests
         Dim scenario As New RestoreScenario With {
             .BackupPath = Path.Combine(_root, "scenario.zip"),
             .TargetData = Path.Combine(_root, "scenario-target-data"),
-            .TargetManaged = Path.Combine(_root, "scenario-target-library")
+            .TargetManaged = Path.Combine(_root, targetManagedName)
         }
 
         Call New PortableBackupService(sourceManaged).CreateBackup(scenario.BackupPath, sourceManuscripts, sourceRepository)
@@ -1078,6 +1298,77 @@ Public Class BackupRestoreTests
         Private Sub FailAtTarget(destination As String)
             If String.Equals(Path.GetFullPath(destination), _failAt, StringComparison.OrdinalIgnoreCase) Then
                 Throw New IOException("There is not enough space on the disk: " & Path.GetFileName(destination))
+            End If
+        End Sub
+
+        ' A failed folder move is tried again (#295), without the wait.
+        Friend Overrides Sub WaitBeforeRetry(milliseconds As Integer)
+        End Sub
+    End Class
+
+
+    ' Refuses the swap's folder moves as OneDrive or Defender does while it
+    ' holds a file inside (#295): each move busyAttempts times before it goes
+    ' through, or, given intoFolder, only the move into that folder. Given
+    ' holdOnceSetAside, a path inside the library, that file is held once the
+    ' library is first set aside, so Windows itself refuses to move the
+    ' folder that holds it until the next wait. The moves that went through,
+    ' the waits between tries and the waits with the library not in its
+    ' place are recorded; no wait is slept.
+    Private NotInheritable Class BusyFolderRestoreService
+        Inherits PortableRestoreService
+
+        Private ReadOnly _managedRoot As String
+        Private ReadOnly _busyAttempts As Integer
+        Private ReadOnly _refusal As Func(Of String, Exception)
+        Private ReadOnly _intoFolder As String
+        Private ReadOnly _holdOnceSetAside As String
+        Private ReadOnly _refusals As New Dictionary(Of String, Integer)(StringComparer.OrdinalIgnoreCase)
+        Private _held As FileStream
+        Private _holdTaken As Boolean
+
+        Public ReadOnly Property Moves As New List(Of String)()
+        Public ReadOnly Property Waits As New List(Of Integer)()
+        Public Property WaitsWithTheLibraryAside As Integer
+
+        Public Sub New(managedLibraryRootDirectory As String, busyAttempts As Integer, refusal As Func(Of String, Exception), Optional intoFolder As String = Nothing, Optional holdOnceSetAside As String = Nothing)
+            MyBase.New(managedLibraryRootDirectory)
+            _managedRoot = Path.GetFullPath(managedLibraryRootDirectory)
+            _busyAttempts = busyAttempts
+            _refusal = refusal
+            _intoFolder = If(intoFolder Is Nothing, Nothing, Path.GetFullPath(intoFolder))
+            _holdOnceSetAside = holdOnceSetAside
+        End Sub
+
+        Friend Overrides Sub MoveDirectory(sourceDirectory As String, destinationDirectory As String)
+            Dim refused As Integer = 0
+            _refusals.TryGetValue(sourceDirectory, refused)
+            If refused < _busyAttempts AndAlso
+               (_intoFolder Is Nothing OrElse String.Equals(Path.GetFullPath(destinationDirectory), _intoFolder, StringComparison.OrdinalIgnoreCase)) Then
+                _refusals(sourceDirectory) = refused + 1
+                Throw _refusal(sourceDirectory)
+            End If
+            MyBase.MoveDirectory(sourceDirectory, destinationDirectory)
+            Moves.Add(Path.GetFileName(sourceDirectory) & " -> " & Path.GetFileName(destinationDirectory))
+            If _holdOnceSetAside IsNot Nothing AndAlso Not _holdTaken AndAlso
+               String.Equals(Path.GetFullPath(sourceDirectory), _managedRoot, StringComparison.OrdinalIgnoreCase) Then
+                _holdTaken = True
+                _held = New FileStream(Path.Combine(destinationDirectory, _holdOnceSetAside), FileMode.Open, FileAccess.Read, FileShare.None)
+            End If
+        End Sub
+
+        Friend Overrides Sub WaitBeforeRetry(milliseconds As Integer)
+            Waits.Add(milliseconds)
+            If Not Directory.Exists(_managedRoot) Then
+                WaitsWithTheLibraryAside += 1
+            End If
+            ReleaseHold()
+        End Sub
+
+        Public Sub ReleaseHold()
+            If _held IsNot Nothing Then
+                _held.Dispose()
+                _held = Nothing
             End If
         End Sub
     End Class
