@@ -43,7 +43,14 @@ if (-not $IsWindows) { throw 'Window capture requires Windows.' }
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $harness = Get-Item -LiteralPath $HarnessPath
 if ($harness.PSIsContainer) { throw "HarnessPath must be the harness executable, not a directory: '$HarnessPath'." }
-$surface = @($HarnessArguments | Where-Object { -not $_.StartsWith('--') } | Select-Object -First 1)
+# The surface names the capture. As the harness reads it, it is the first argument that is neither an option
+# nor the value of one of its valued options, so "--shelf published board" is named board.
+$valuedOptions = @('--painted', '--load-delay', '--shelf')
+$surface = @()
+for ($position = 0; $position -lt $HarnessArguments.Count; $position++) {
+    if ($valuedOptions -contains $HarnessArguments[$position]) { $position++ }
+    elseif (-not $HarnessArguments[$position].StartsWith('--')) { $surface = @($HarnessArguments[$position]); break }
+}
 if (-not $Name) { $Name = if ($surface.Count -gt 0) { $surface[0] } else { 'capture' } }
 if (-not $OutputDirectory) {
     $OutputDirectory = Join-Path $repoRoot ('artifacts/captures/{0}-{1}' -f $Name, [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss'))
@@ -84,17 +91,21 @@ public static class HarnessCapture
     const int SM_CXMINTRACK = 34, SM_CYMINTRACK = 35;
     // The smallest size the window can be given (#266). WM_GETMINMAXINFO is a system message, so SendMessage
     // carries its MINMAXINFO across processes, and WinForms answers it with the form's MinimumSize. The
-    // system's minimum goes in first, as a window that sets no minimum leaves it as it is. A window that does
-    // not answer in time, or seems hung, is held to the system's minimum, and false says so.
-    public static bool MinimumTrackSize(IntPtr handle, uint milliseconds, out int width, out int height)
+    // system's minimum goes in first, as a form that sets no MinimumSize leaves it as it is; changed says
+    // whether the answer differs from it. A window that does not answer in time, or seems hung, is held to the
+    // system's minimum, and false says so.
+    public static bool MinimumTrackSize(IntPtr handle, uint milliseconds, out int width, out int height, out bool changed)
     {
+        var systemWidth = GetSystemMetrics(SM_CXMINTRACK);
+        var systemHeight = GetSystemMetrics(SM_CYMINTRACK);
         var info = new MINMAXINFO();
-        info.MinTrackSize.X = GetSystemMetrics(SM_CXMINTRACK);
-        info.MinTrackSize.Y = GetSystemMetrics(SM_CYMINTRACK);
+        info.MinTrackSize.X = systemWidth;
+        info.MinTrackSize.Y = systemHeight;
         IntPtr result;
         var answered = SendMessageTimeout(handle, WM_GETMINMAXINFO, IntPtr.Zero, ref info, SMTO_ABORTIFHUNG, milliseconds, out result) != IntPtr.Zero;
-        width = answered ? info.MinTrackSize.X : GetSystemMetrics(SM_CXMINTRACK);
-        height = answered ? info.MinTrackSize.Y : GetSystemMetrics(SM_CYMINTRACK);
+        width = answered ? info.MinTrackSize.X : systemWidth;
+        height = answered ? info.MinTrackSize.Y : systemHeight;
+        changed = width != systemWidth || height != systemHeight;
         return answered;
     }
     // Visible top-level windows of one process, in Z order.
@@ -137,8 +148,12 @@ function Test-Window([IntPtr] $Handle) {
     }
     $minimumWidth = 0
     $minimumHeight = 0
-    $answered = [HarnessCapture]::MinimumTrackSize($Handle, 3000, [ref] $minimumWidth, [ref] $minimumHeight)
-    $source = if ($answered) { 'WM_GETMINMAXINFO' } else { 'SM_CXMINTRACK/SM_CYMINTRACK: the window did not answer WM_GETMINMAXINFO in 3 s' }
+    $changed = $false
+    $answered = [HarnessCapture]::MinimumTrackSize($Handle, 3000, [ref] $minimumWidth, [ref] $minimumHeight, [ref] $changed)
+    # An answer that leaves the system's minimum is not the form's own MinimumSize, so the evidence says so.
+    $source = if (-not $answered) { 'SM_CXMINTRACK/SM_CYMINTRACK: the window did not answer WM_GETMINMAXINFO in 3 s' }
+        elseif (-not $changed) { 'SM_CXMINTRACK/SM_CYMINTRACK: the window answered WM_GETMINMAXINFO without changing the system minimum' }
+        else { 'WM_GETMINMAXINFO' }
     if ($width -lt $minimumWidth -or $height -lt $minimumHeight) {
         throw "The window '$title' is $width x $height, smaller than its minimum size $minimumWidth x $minimumHeight ($source); nothing was captured."
     }
@@ -172,6 +187,10 @@ function Save-Window([IntPtr] $Handle, [string] $Path) {
             try { $painted = [HarnessCapture]::PrintWindow($Handle, $hdc, [HarnessCapture]::PW_RENDERFULLCONTENT) }
             finally { $graphics.ReleaseHdc($hdc) }
             if (-not $painted) { throw 'PrintWindow failed.' }
+            # Test-Window ran before the captures; a window minimized since then would print as a caption strip.
+            if ([HarnessCapture]::IsIconic($Handle)) {
+                throw "The window '$([HarnessCapture]::Title($Handle))' was minimized during its capture; it was not saved."
+            }
         }
         finally { $graphics.Dispose() }
         $cropped = $bitmap.Clone($visible, $bitmap.PixelFormat)
@@ -240,7 +259,7 @@ try {
         Arguments = @($HarnessArguments); StartedAtUtc = $startedAt.ToString('o'); Painted = $marker
         WaitedSeconds = $waitedSeconds; CapturedAtUtc = [DateTime]::UtcNow.ToString('o')
         CaptureMethod = 'PrintWindow PW_RENDERFULLCONTENT, cropped to DWMWA_EXTENDED_FRAME_BOUNDS'
-        WindowCheck = 'Before any capture, each window not minimized (IsIconic) and at least its minimum track size (GetWindowRect against WM_GETMINMAXINFO)'
+        WindowCheck = 'Before any capture, each window not minimized (IsIconic) and at least its minimum track size (GetWindowRect against WM_GETMINMAXINFO); IsIconic again after each PrintWindow'
         Windows = @($windows.ToArray())
     }
     $evidencePath = Join-Path $outputRoot "$Name.json"
