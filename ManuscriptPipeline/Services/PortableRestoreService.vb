@@ -390,8 +390,9 @@ Namespace Services
 
         ' Restores over the library on disk when it could not be loaded
         ' (#124): the emergency copy is of the storage files as they are,
-        ' safety backups included. The startup window runs this on its UI
-        ' thread, so a busy folder is not waited for here (#295).
+        ' safety backups included. The startup window runs this on a worker
+        ' thread, as the main window runs its restore (#132), so a busy
+        ' folder is waited for here too (#295).
         Public Function RestoreBackup(
             backupZipPath As String,
             repository As ManuscriptRepository
@@ -405,7 +406,7 @@ Namespace Services
                 backupZipPath,
                 repository,
                 Function(backupDirectory) ZipStorageFiles(backupDirectory, repository),
-                waitIfBusy:=False
+                waitIfBusy:=True
             )
 
         End Function
@@ -415,7 +416,7 @@ Namespace Services
         ' backups folder and returns its path, or an empty string when there
         ' was nothing to copy. waitIfBusy lets the swap wait for a folder
         ' OneDrive or Defender holds (#295), for a caller off the UI thread:
-        ' the main window runs a restore on a worker thread (#132).
+        ' both windows run a restore on a worker thread (#132, #295).
         Private Function Restore(
             backupZipPath As String,
             repository As ManuscriptRepository,

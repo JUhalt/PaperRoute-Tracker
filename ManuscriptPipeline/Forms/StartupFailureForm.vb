@@ -2,6 +2,7 @@
 Imports System.Drawing
 Imports System.IO
 Imports System.Text
+Imports System.Threading.Tasks
 Imports System.Windows.Forms
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
@@ -152,7 +153,13 @@ Namespace Forms
         Private ReadOnly _failure As StartupFailure
         Private ReadOnly _recovery As StartupRecoveryService
         Private ReadOnly txtDetails As New TextBox()
+        Private ReadOnly lblStatus As New Label() With {.LiveSetting = Automation.AutomationLiveSetting.Polite}
+        Private buttons As FlowLayoutPanel
         Private _recovered As Boolean = False
+
+        ' The backup's check or its restore, on a worker thread now (#295);
+        ' Nothing between them.
+        Private runningWork As Task = Nothing
 
         ' Choose the backup archive, confirm the restore and show a message;
         ' tests answer instead.
@@ -297,7 +304,7 @@ Namespace Forms
             Dim root As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .ColumnCount = 1,
-                .RowCount = 6,
+                .RowCount = 7,
                 .Padding = New Padding(20)
             }
 
@@ -310,6 +317,7 @@ Namespace Forms
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
             root.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
+            root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
             root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
 
@@ -362,7 +370,15 @@ Namespace Forms
             AddHandler lnkGuide.LinkClicked,
                 AddressOf OpenGuide
 
-            Dim buttons As New FlowLayoutPanel With {
+            ' Shown above the buttons while the backup is checked or
+            ' restored (#295).
+            lblStatus.AutoSize = True
+            lblStatus.Anchor = AnchorStyles.Left
+            lblStatus.Font = New Font(Me.Font, FontStyle.Bold)
+            lblStatus.Margin = New Padding(0, 10, 0, 0)
+            lblStatus.Visible = False
+
+            buttons = New FlowLayoutPanel With {
                 .Dock = DockStyle.Fill,
                 .AutoSize = True,
                 .AutoSizeMode = AutoSizeMode.GrowAndShrink,
@@ -436,7 +452,8 @@ Namespace Forms
             root.Controls.Add(lblExplanation, 0, 2)
             root.Controls.Add(txtDetails, 0, 3)
             root.Controls.Add(lnkGuide, 0, 4)
-            root.Controls.Add(buttons, 0, 5)
+            root.Controls.Add(lblStatus, 0, 5)
+            root.Controls.Add(buttons, 0, 6)
 
             Me.AcceptButton = btnClose
             Me.CancelButton = btnClose
@@ -626,10 +643,13 @@ Namespace Forms
 
             ' Checked and counted before anything changes, as Settings >
             ' Restore Backup... does, so a wrong archive is caught here.
-            Dim inspection As BackupInspection
+            Dim inspection As BackupInspection = Nothing
 
             Try
-                inspection = _recovery.InspectBackup(backupPath)
+                RunRecoveryWork(
+                    "Reading the backup...",
+                    Sub() inspection = _recovery.InspectBackup(backupPath)
+                )
             Catch ex As Exception
                 ShowMessage(
                     "This backup could not be validated. Nothing was changed." &
@@ -646,10 +666,15 @@ Namespace Forms
                 Return
             End If
 
-            Dim result As RestoreResult
+            Dim result As RestoreResult = Nothing
 
+            ' Off the window's thread, the swap can wait for a folder
+            ' OneDrive or Defender holds (#295).
             Try
-                result = _recovery.RestoreFromBackup(backupPath)
+                RunRecoveryWork(
+                    "Restoring the backup...",
+                    Sub() result = _recovery.RestoreFromBackup(backupPath)
+                )
             Catch ex As Exception
                 ' A failure during the swap says what was put back and names
                 ' the emergency ZIP (#116); before it, nothing was changed.
@@ -666,6 +691,79 @@ Namespace Forms
                    ".",
                    " and kept your library files from before the restore at " & result.EmergencyBackupPath & ".")
             )
+
+        End Sub
+
+
+        ' Runs the backup's check or its restore on a worker thread, as the
+        ' main window runs its library work (#132), processing messages
+        ' until it ends: the window keeps painting while a restore waits
+        ' for a folder OneDrive or Defender holds (#295), and a failure
+        ' arrives here, in the caller's Catch. Meanwhile the buttons are
+        ' disabled, the line above them says what is happening, and a close
+        ' waits for the work (OnFormClosing).
+        Private Sub RunRecoveryWork(
+            status As String,
+            work As Action
+        )
+
+            Dim focused As Control = ActiveControl
+
+            buttons.Enabled = False
+            lblStatus.Text = status
+            lblStatus.Visible = True
+
+            Try
+
+                Dim pending As Task = Task.Run(work)
+
+                runningWork = pending
+
+                While Not pending.IsCompleted
+                    Application.DoEvents()
+                    DirectCast(pending, IAsyncResult).AsyncWaitHandle.WaitOne(10)
+                End While
+
+                ' The work's own exception, not an AggregateException.
+                pending.GetAwaiter().GetResult()
+
+            Finally
+
+                runningWork = Nothing
+
+                lblStatus.Visible = False
+                buttons.Enabled = True
+
+                ' Disabling the buttons moved the keyboard off the one used.
+                focused?.Focus()
+
+            End Try
+
+        End Sub
+
+
+        ' Closed partway, a restore could leave the library half replaced
+        ' (#295). The title bar's X, Alt+F4 or End task is refused while the
+        ' work runs; Windows shutting down waits for it to end, without
+        ' processing messages, as the main window's does (#132), then goes
+        ' on.
+        Protected Overrides Sub OnFormClosing(
+            e As FormClosingEventArgs
+        )
+
+            Dim pending As Task = runningWork
+
+            If pending IsNot Nothing Then
+
+                If e.CloseReason = CloseReason.WindowsShutDown Then
+                    DirectCast(pending, IAsyncResult).AsyncWaitHandle.WaitOne()
+                Else
+                    e.Cancel = True
+                End If
+
+            End If
+
+            MyBase.OnFormClosing(e)
 
         End Sub
 

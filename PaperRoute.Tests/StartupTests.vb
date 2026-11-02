@@ -5,6 +5,7 @@ Imports System.Globalization
 Imports System.IO
 Imports System.Linq
 Imports System.Reflection
+Imports System.Threading
 Imports System.Windows.Forms
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
 Imports ManuscriptPipeline
@@ -860,6 +861,177 @@ Public Class StartupTests
     End Sub
 
 
+    ' The window's restore runs on a worker thread (#295), as the main
+    ' window's does (#132), so it waits for a folder OneDrive or Defender
+    ' holds: the move into the managed folder is refused once, and the
+    ' restore waits, tries again and completes. While it runs the buttons
+    ' are disabled and the window says the restore is under way; a user's
+    ' close is refused, and Windows shutting down waits for the restore to
+    ' end. Before the change the restore ran on the window's thread, waited
+    ' for nothing and failed at the refusal.
+    <TestMethod>
+    Public Sub RestoreFromBackup_WaitsOffTheWindowsThreadForABusyFolder()
+
+        Dim backupPath As String =
+            CreateBackupOfThreeManuscripts()
+
+        Dim repository As ManuscriptRepository =
+            LibraryWithADamagedPrimary(
+                "Lost to both files"
+            )
+
+        File.WriteAllText(
+            repository.BackupFilePath,
+            "[null]"
+        )
+
+        Assert.IsFalse(
+            File.Exists(StorageMigrationService.SchemaFilePath()),
+            "No marker yet: the restore writes one as its last step."
+        )
+
+        Dim window As OffScreenStartupWindow = Nothing
+        Dim messages As New List(Of String)()
+        Dim recovered As Boolean = False
+        Dim waitedOffTheWindowsThread As Boolean = False
+        Dim enabledDuringWork As New List(Of String)()
+        Dim shownDuringWork As New List(Of String)()
+        Dim stayedOpen As Boolean = False
+        Dim shutdown As New FormClosingEventArgs(CloseReason.WindowsShutDown, False)
+        Dim restoredBeforeTheShutdownWentOn As Boolean = False
+
+        Dim recovery As New BusyFolderRecovery(
+            Sub()
+
+                waitedOffTheWindowsThread =
+                    window.InvokeRequired
+
+                window.Invoke(
+                    New Action(
+                        Sub()
+                            enabledDuringWork.AddRange(Descendants(window).OfType(Of Button)().Where(Function(item) item.Enabled).Select(Function(item) item.Text))
+                            shownDuringWork.AddRange(Descendants(window).OfType(Of Label)().Where(Function(item) item.Visible).Select(Function(item) item.Text))
+                            ' As the title bar's X and Alt+F4 close it.
+                            window.Close()
+                            stayedOpen = Not window.IsDisposed AndAlso window.Visible
+                        End Sub
+                    )
+                )
+
+                ' Windows' close arrives while the restore goes on.
+                Using closing As New ManualResetEventSlim(False)
+
+                    window.BeginInvoke(
+                        New Action(
+                            Sub()
+                                closing.Set()
+                                window.SimulateClosing(shutdown)
+                                restoredBeforeTheShutdownWentOn = File.Exists(StorageMigrationService.SchemaFilePath())
+                            End Sub
+                        )
+                    )
+
+                    closing.Wait(TimeSpan.FromSeconds(30))
+
+                End Using
+
+            End Sub
+        )
+
+        RunOnStaThread(
+            Sub()
+
+                Using shown As New OffScreenStartupWindow(
+                    StartupFailure.ForManuscriptLibrary(New InvalidDataException("The test's failure."), repository.DataFilePath),
+                    Function() recovery
+                )
+
+                    window = shown
+
+                    shown.messagePrompt =
+                        Sub(text, caption, icon) messages.Add(text)
+
+                    shown.backupFilePrompt =
+                        Function() backupPath
+
+                    shown.restoreConfirmPrompt =
+                        Function(question) True
+
+                    shown.Show()
+                    Application.DoEvents()
+
+                    Descendants(shown).
+                        OfType(Of Button)().
+                        Single(Function(button) button.Text = RestoreAction).
+                        PerformClick()
+
+                    recovered =
+                        shown.Recovered
+
+                End Using
+
+            End Sub
+        )
+
+        Assert.IsTrue(
+            recovered,
+            "The restore went through: " & String.Join(" ", messages)
+        )
+
+        Assert.AreEqual(
+            1,
+            recovery.Waits.Count,
+            "It waited once for the busy folder."
+        )
+
+        Assert.IsTrue(
+            waitedOffTheWindowsThread,
+            "It waited off the window's thread."
+        )
+
+        Assert.AreEqual(
+            0,
+            enabledDuringWork.Count,
+            "No button took clicks while the restore ran: " & String.Join(", ", enabledDuringWork)
+        )
+
+        CollectionAssert.Contains(
+            shownDuringWork,
+            "Restoring the backup...",
+            "The window said the restore was under way."
+        )
+
+        Assert.IsTrue(
+            stayedOpen,
+            "A user's close was refused while the restore ran."
+        )
+
+        Assert.IsFalse(
+            shutdown.Cancel,
+            "Windows' close is not refused."
+        )
+
+        Assert.IsTrue(
+            restoredBeforeTheShutdownWentOn,
+            "Windows' close went on only once the restore had ended."
+        )
+
+        StringAssert.Contains(
+            messages.Single(),
+            "restored 3 manuscripts"
+        )
+
+        StorageMigrationService.EnsureCurrentStorage()
+
+        Assert.AreEqual(
+            3,
+            New ManuscriptRepository().Load().Count,
+            "The library opens."
+        )
+
+    End Sub
+
+
     ' A backup from a newer storage schema fails the window's check, before
     ' anything is asked or changed, with the Update PaperRoute message
     ' (#115). Before the change the window asked, and Yes replaced the
@@ -1422,6 +1594,17 @@ Public Class StartupTests
                 "The window closes itself exactly when it recovered the library."
             )
 
+            ' The buttons disabled while a backup was checked or restored
+            ' (#295) take clicks again.
+            If Not recovered Then
+
+                Assert.IsTrue(
+                    Descendants(window).OfType(Of Button)().All(Function(button) button.Enabled),
+                    "Every button is enabled again."
+                )
+
+            End If
+
             If Not window.IsDisposed Then
                 window.Close()
             End If
@@ -1472,11 +1655,71 @@ Public Class StartupTests
             ShowInTaskbar = False
         End Sub
 
+        Public Sub New(failure As StartupFailure, createRecovery As Func(Of StartupRecoveryService))
+            MyBase.New(failure, createRecovery)
+            StartPosition = FormStartPosition.Manual
+            Location = New Point(-20000, -20000)
+            ShowInTaskbar = False
+        End Sub
+
         Protected Overrides ReadOnly Property ShowWithoutActivation As Boolean
             Get
                 Return True
             End Get
         End Property
+
+        ' A close as Windows sends it.
+        Public Sub SimulateClosing(e As FormClosingEventArgs)
+            OnFormClosing(e)
+        End Sub
+    End Class
+
+
+    ' The app's recovery on the test root, whose restore finds the managed
+    ' folder busy once, as OneDrive or Defender leaves it (#295): the move
+    ' into it is refused, and atWait runs in place of the wait, which is
+    ' not slept, on the thread the restore runs on.
+    Private NotInheritable Class BusyFolderRecovery
+        Inherits StartupRecoveryService
+
+        Private ReadOnly _atWait As Action
+
+        Public ReadOnly Waits As New List(Of Integer)()
+
+        Public Sub New(atWait As Action)
+            _atWait = atWait
+        End Sub
+
+        Friend Overrides Function CreateRestoreService() As PortableRestoreService
+            Return New BusyFolderRestore(Me)
+        End Function
+
+        Private NotInheritable Class BusyFolderRestore
+            Inherits PortableRestoreService
+
+            Private ReadOnly _recovery As BusyFolderRecovery
+            Private _refused As Boolean = False
+
+            Public Sub New(recovery As BusyFolderRecovery)
+                _recovery = recovery
+            End Sub
+
+            ' The first move into the managed folder is refused with the
+            ' IOException Directory.Move raises for a folder with a file
+            ' held inside, access denied.
+            Friend Overrides Sub MoveDirectory(sourceDirectory As String, destinationDirectory As String)
+                If Not _refused AndAlso Not Path.GetFileName(destinationDirectory).Contains(".restore-", StringComparison.Ordinal) Then
+                    _refused = True
+                    Throw New IOException("Access to the path '" & sourceDirectory & "' is denied.", &H80070005)
+                End If
+                MyBase.MoveDirectory(sourceDirectory, destinationDirectory)
+            End Sub
+
+            Friend Overrides Sub WaitBeforeRetry(milliseconds As Integer)
+                _recovery.Waits.Add(milliseconds)
+                _recovery._atWait.Invoke()
+            End Sub
+        End Class
     End Class
 
 
