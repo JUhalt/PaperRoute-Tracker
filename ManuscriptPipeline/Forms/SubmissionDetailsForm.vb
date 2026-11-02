@@ -934,7 +934,9 @@ Namespace Forms
         ' Two lines of a control's font, each as tall as Windows lays out a
         ' line of it either way (a list's item is a pixel taller than the
         ' font's height at 150%), and its border above and below, from its
-        ' border's style: one squeezed to no height has none to measure.
+        ' border's style: one squeezed to no height has none to measure. A
+        ' box that scrolls has no border style once styled, and the window
+        ' border ThemedBorder frames it with (#266) is measured instead.
         Private Shared Function TwoLinesTall(
             control As Control,
             border As BorderStyle
@@ -946,7 +948,7 @@ Namespace Forms
                     TextRenderer.MeasureText("Xg", control.Font).Height
                 )
 
-            Return 2 * line + 2 * BorderTall(border)
+            Return 2 * line + Math.Max(2 * BorderTall(border), control.Height - control.ClientSize.Height)
 
         End Function
 

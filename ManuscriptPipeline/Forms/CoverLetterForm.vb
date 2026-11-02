@@ -205,10 +205,12 @@ Namespace Forms
             readyPanel.Controls.Add(lblWorkType, 1, 4)
 
             readyPanel.Controls.Add(FieldLabel("&Abstract"), 0, 5)
+            ' Its label's margins, so it is on the label's line (#266): 10
+            ' pixels down and 2 up, it sat about 5 pixels below at 125%.
             Dim note As New Label With {
                 .Text = "Used only for this request; PaperRoute doesn't save it.",
                 .AutoSize = True, .Anchor = AnchorStyles.Left, .UseMnemonic = False,
-                .ForeColor = UiTheme.MutedText(), .Margin = New Padding(0, 10, 0, 2)
+                .ForeColor = UiTheme.MutedText(), .Margin = New Padding(0, 6, 0, 6)
             }
             readyPanel.Controls.Add(note, 1, 5)
 

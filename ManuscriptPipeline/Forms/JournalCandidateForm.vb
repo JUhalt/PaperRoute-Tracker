@@ -266,9 +266,18 @@ Namespace Forms
                 Sub(sender, e)
                     Dim width As Integer = Math.Max(160, list.ClientSize.Width - SystemInformation.VerticalScrollBarWidth)
                     Dim glyph As Integer = CInt(Math.Ceiling(16 * DialogScaling.Dpi(list) / 96.0)) + 8
+                    ' Each question as tall as the lines its box wraps it to,
+                    ' measured with the flags it draws with (#266). A box
+                    ' wraps its text beside its glyph, 13 pixels at 96 DPI and
+                    ' scaled with the display, a pixel after it and one more,
+                    ' and 2 pixels of inset each side of the text: 19 pixels
+                    ' at 96 DPI. The 24 guessed gave "Its articles are indexed
+                    ' and archived in services you use" two lines for one.
+                    Dim beside As Integer = CInt(Math.Round(13 * DialogScaling.Dpi(list) / 96.0)) + 6
+                    Const wraps As TextFormatFlags = TextFormatFlags.WordBreak Or TextFormatFlags.TextBoxControl Or TextFormatFlags.NoPrefix
                     For Each box As CheckBox In list.Controls.OfType(Of CheckBox)()
                         box.Width = width
-                        box.Height = TextRenderer.MeasureText(box.Text, box.Font, New Size(width - glyph, 0), TextFormatFlags.WordBreak).Height + 6
+                        box.Height = TextRenderer.MeasureText(box.Text, box.Font, New Size(width - beside, 0), wraps).Height + 6
                     Next
                     For Each hint As LinkLabel In list.Controls.OfType(Of LinkLabel)()
                         hint.MaximumSize = New Size(Math.Max(120, width - glyph), 0)

@@ -136,6 +136,9 @@ Namespace Forms
                 "Import records with publication metadata as Published"
 
             chkPublished.AutoSize = True
+            ' Centred on the buttons beside it (#266): at the top of the row
+            ' it sat about 5 pixels above their line at 125%.
+            chkPublished.Anchor = AnchorStyles.Left
             chkPublished.Checked = True
 
             Dim btnSelectAllNew As New Button With {

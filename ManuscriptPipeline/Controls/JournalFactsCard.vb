@@ -31,6 +31,11 @@ Namespace Controls
             ForeColor = UiTheme.PrimaryText()
             Padding = New Padding(18, 16, 18, 16)
 
+            ' The frame is the window's border, outside what scrolls (#266):
+            ' drawn on the card, the content scrolled over its foot.
+            BorderStyle = BorderStyle.FixedSingle
+            ThemedBorder.Attach(Me)
+
             content.Dock = DockStyle.Top
             content.AutoSize = True
             content.AutoSizeMode = AutoSizeMode.GrowAndShrink
@@ -342,14 +347,6 @@ Namespace Controls
             For Each value As Label In Descendants(content).OfType(Of Label)().Where(Function(item) TryCast(item.Tag, String) = "value")
                 value.MaximumSize = New Size(valueWidth, 0)
             Next
-        End Sub
-
-
-        Protected Overrides Sub OnPaint(e As PaintEventArgs)
-            MyBase.OnPaint(e)
-            Using pen As New Pen(UiTheme.CardBorder())
-                e.Graphics.DrawRectangle(pen, 0, 0, ClientSize.Width - 1, ClientSize.Height - 1)
-            End Using
         End Sub
 
 

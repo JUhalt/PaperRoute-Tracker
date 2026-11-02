@@ -348,8 +348,15 @@ Public Class ScalingMeasurementTests
     ' tall to the default button's 42 at 125%: on 80e1a7c the dialogs C3
     ' listed failed here on their tops only, so their heights rest on the
     ' 125% captures.
+    '
+    ' And a row of three buttons or more keeps one space between each two
+    ' (#266). Its footer gave the buttons beside the default one margins
+    ' of their own, and the default one kept Windows Forms' 3 pixels a
+    ' side: it stood 11 pixels from its neighbour where they are 8 apart.
+    ' On 81bb29d the readings of a decision letter's and of author
+    ' instructions and the journals found failed here.
     <TestMethod>
-    Public Sub TheButtonsOfAFooterShareItsTopAndHeightAt96To144Dpi()
+    Public Sub TheButtonsOfAFooterShareItsTopHeightAndSpacingAt96To144Dpi()
 
         Dim found As New List(Of String)()
         Dim rows As Integer = 0
@@ -386,6 +393,13 @@ Public Class ScalingMeasurementTests
                                     found.Add($"{name} at {current} DPI: '{Abbreviate(buttons(0).Text)}' at {buttons(0).Top}, {buttons(0).Height} tall; '{Abbreviate(button.Text)}' at {button.Top}, {button.Height} tall")
                                 End If
                             Next
+
+                            Dim across As List(Of Button) = buttons.OrderBy(Function(button) button.Left).ToList()
+                            Dim gaps As List(Of Integer) = Enumerable.Range(1, across.Count - 1).Select(Function(index) across(index).Left - across(index - 1).Right).ToList()
+
+                            If gaps.Distinct().Count() > 1 Then
+                                found.Add($"{name} at {current} DPI: the spaces between {String.Join(", ", across.Select(Function(button) "'" & Abbreviate(button.Text) & "'"))} are {String.Join(", ", gaps)} pixels")
+                            End If
 
                         Next
 

@@ -238,13 +238,35 @@ Namespace Controls
             Return text
         End Function
 
-        Private Function ContextText() As String
-            Dim text As String = Item.ManuscriptTitle
-            If Not String.IsNullOrWhiteSpace(Item.JournalName) AndAlso Not Item.Title.Contains(Item.JournalName) Then
-                text &= "  ·  " & Item.JournalName
-            End If
-            Return text
+        ' The journal after the manuscript, when the title does not name it.
+        Private Function JournalText() As String
+            If String.IsNullOrWhiteSpace(Item.JournalName) OrElse Item.Title.Contains(Item.JournalName) Then Return String.Empty
+            Return "  ·  " & Item.JournalName
         End Function
+
+        ' For which manuscript, and at which journal, in bounds. When both
+        ' do not fit, the manuscript's title ends in an ellipsis before the
+        ' journal does, and each keeps at least half the line (#266): at
+        ' 1600 pixels a revision's line ended at "Fictional ...", cutting
+        ' the name of the journal it is due at.
+        Private Sub DrawContext(g As Graphics, font As Font, bounds As Rectangle, flags As TextFormatFlags)
+
+            Dim ink As Color = UiTheme.SecondaryText()
+            Dim journal As String = JournalText()
+            Dim measure As Func(Of String, Integer) =
+                Function(text) TextRenderer.MeasureText(g, text, font, New Size(Integer.MaxValue, Integer.MaxValue), flags And Not TextFormatFlags.EndEllipsis).Width
+
+            If journal.Length = 0 OrElse measure(Item.ManuscriptTitle & journal) <= bounds.Width Then
+                TextRenderer.DrawText(g, Item.ManuscriptTitle & journal, font, bounds, ink, flags)
+                Return
+            End If
+
+            Dim journalWidth As Integer = Math.Min(measure(journal), bounds.Width - Math.Min(measure(Item.ManuscriptTitle), bounds.Width \ 2))
+            Dim titleWidth As Integer = bounds.Width - journalWidth
+            TextRenderer.DrawText(g, Item.ManuscriptTitle, font, New Rectangle(bounds.Left, bounds.Top, titleWidth, bounds.Height), ink, flags)
+            TextRenderer.DrawText(g, journal, font, New Rectangle(bounds.Left + titleWidth, bounds.Top, journalWidth, bounds.Height), ink, flags)
+
+        End Sub
 
         ' The row's height: at least 64 pixels, taller with a progress line.
         Friend Function MeasureHeight(metrics As DeadlineMetrics) As Integer
@@ -366,7 +388,7 @@ Namespace Controls
             Dim y As Integer = center - lines \ 2
             TextRenderer.DrawText(g, Item.Title, boldFont, New Rectangle(textLeft, y, textWidth, boldFont.Height), TitleInkOf(Item.Group), flags)
             y += boldFont.Height + UiTheme.Px(2, dpi)
-            TextRenderer.DrawText(g, ContextText(), font, New Rectangle(textLeft, y, textWidth, font.Height), UiTheme.SecondaryText(), flags)
+            DrawContext(g, font, New Rectangle(textLeft, y, textWidth, font.Height), flags)
             y += font.Height
 
             If Item.ProgressTotal > 0 Then

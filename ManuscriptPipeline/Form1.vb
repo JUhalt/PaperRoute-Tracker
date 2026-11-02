@@ -515,6 +515,9 @@ Public Class Form1
         cboStageFilter.BackColor = UiTheme.CardBackground()
         cboStageFilter.ForeColor = UiTheme.PrimaryText()
         cboStageFilter.FlatStyle = FlatStyle.Flat
+        ' Framed as the dialogs' drop-downs are (#266): a flat one's own
+        ' frame is white in Light.
+        ThemedBorder.Attach(cboStageFilter)
         cboStageFilter.AccessibleName = "Filter by stage"
 
         cboBoardSort.Width =
@@ -540,6 +543,7 @@ Public Class Form1
         cboBoardSort.BackColor = UiTheme.CardBackground()
         cboBoardSort.ForeColor = UiTheme.PrimaryText()
         cboBoardSort.FlatStyle = FlatStyle.Flat
+        ThemedBorder.Attach(cboBoardSort)
         cboBoardSort.AccessibleName = "Sort the board"
 
         btnClearBoardFilters.Text = "Clear"

@@ -148,6 +148,10 @@ Namespace Forms
         End Sub
 
 
+        ' At the top of its row, its text on the line of the field beside
+        ' it, which sits there too, as the correspondence window's labels
+        ' are (#258, #266): centred in the row, it sat about 3 pixels below
+        ' its box. Its row keeps the height it had.
         Private Function CreateLabel(
             text As String
         ) As Label
@@ -155,16 +159,16 @@ Namespace Forms
             Return New Label With {
                 .Text = text,
                 .AutoSize = True,
-                .Anchor = AnchorStyles.Left,
+                .Anchor = AnchorStyles.Top Or AnchorStyles.Left,
                 .Font = New Font(
                     Me.Font,
                     FontStyle.Bold
                 ),
                 .Margin = New Padding(
                     3,
-                    9,
+                    6,
                     3,
-                    9
+                    12
                 )
             }
 

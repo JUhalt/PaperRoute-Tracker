@@ -192,11 +192,15 @@ Namespace Forms
             profileBar.Controls.Add(cmbProfiles)
             profileBar.Controls.Add(btnNewProfile)
             profileBar.Controls.Add(btnRefreshTemplate)
+            ' Each "?" centred on the buttons beside it (#266): at the top
+            ' of the row it sat about 11 pixels above their centre at 125%,
+            ' like a superscript.
             profileBar.Controls.Add(
                 New ContextHelpControl(
                     WorkflowHelpCatalog.ReadinessTemplateRefresh
                 ) With {
-                    .AccessibleName = "Help: " & btnRefreshTemplate.Text
+                    .AccessibleName = "Help: " & btnRefreshTemplate.Text,
+                    .Anchor = AnchorStyles.Left
                 }
             )
             profileBar.Controls.Add(btnDeleteProfile)
@@ -232,6 +236,9 @@ Namespace Forms
 
             lstItems.Dock =
                 DockStyle.Fill
+            ' In line with the details beneath it on both sides (#266):
+            ' Windows Forms' default margin set it 3 pixels in.
+            lstItems.Margin = New Padding(0, 3, 0, 3)
             lstItems.IntegralHeight = False
             lstItems.HorizontalScrollbar = True
             ' Not the summary WinForms finds before it (#137).
@@ -334,7 +341,8 @@ Namespace Forms
                 New ContextHelpControl(
                     WorkflowHelpCatalog.ReadinessNotApplicable
                 ) With {
-                    .AccessibleName = "Help: " & btnNotApplicable.Text
+                    .AccessibleName = "Help: " & btnNotApplicable.Text,
+                    .Anchor = AnchorStyles.Left
                 }
             )
             itemButtons.Controls.Add(btnReset)

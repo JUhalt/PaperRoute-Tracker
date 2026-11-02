@@ -267,12 +267,27 @@ Namespace Forms
 
                 End Sub
 
-            options.Controls.Add(
+            ' Together, so the toolbar never wraps between them (#266): at
+            ' its default width at 125% it put Select None on a line of its
+            ' own, apart from Select All.
+            Dim selection As New FlowLayoutPanel With {
+                .AutoSize = True,
+                .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                .FlowDirection = FlowDirection.LeftToRight,
+                .WrapContents = False,
+                .Margin = New Padding(0)
+            }
+
+            selection.Controls.Add(
                 btnAll
             )
 
-            options.Controls.Add(
+            selection.Controls.Add(
                 btnNone
+            )
+
+            options.Controls.Add(
+                selection
             )
 
             AddHandler cmbScope.SelectedIndexChanged,

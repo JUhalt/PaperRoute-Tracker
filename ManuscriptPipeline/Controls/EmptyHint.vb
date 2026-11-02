@@ -25,8 +25,70 @@ Namespace Controls
         Private Shared ReadOnly Entries As New List(Of Entry)()
         Private Shared _idleHooked As Boolean
 
+        ' How a hint's text is wrapped, both where it is measured
+        ' (NeededHeight) and where it is drawn (HintLabel): centred, and
+        ' broken only between words.
+        Private Const HintFlags As TextFormatFlags =
+            TextFormatFlags.WordBreak Or
+            TextFormatFlags.HorizontalCenter Or
+            TextFormatFlags.NoPrefix
+
         Private Sub New()
         End Sub
+
+        ' The hint draws its text as NeededHeight measures it (#278). A
+        ' Label lays its lines out with flags of its own, Windows'
+        ' edit-control layout among them, which can break them where the
+        ' measure does not: at 150% in the certification VM the empty
+        ' Correspondence & Files list, given the height its hint measured,
+        ' ended "...or drag files her", its last word cut at the right. Its
+        ' text is wrapped at the width inside its padding, as measured, and
+        ' centred in the height there, as a Label centres it.
+        Private NotInheritable Class HintLabel
+            Inherits Label
+
+            Protected Overrides Sub OnPaint(e As PaintEventArgs)
+
+                Dim face As Rectangle = TextArea(Me)
+                Dim tall As Integer = TextSize(Text, Font, face.Width).Height
+                Dim top As Integer = face.Top + Math.Max(0, face.Height \ 2 - tall \ 2)
+
+                TextRenderer.DrawText(
+                    e.Graphics,
+                    Text,
+                    Font,
+                    Rectangle.FromLTRB(face.Left, top, face.Right, face.Bottom),
+                    ForeColor,
+                    HintFlags
+                )
+
+            End Sub
+
+        End Class
+
+        ' Where a hint's text goes: inside its padding.
+        Private Shared Function TextArea(hint As Label) As Rectangle
+
+            Return New Rectangle(
+                hint.Padding.Left,
+                hint.Padding.Top,
+                hint.ClientSize.Width - hint.Padding.Horizontal,
+                hint.ClientSize.Height - hint.Padding.Vertical
+            )
+
+        End Function
+
+        ' The size the text takes wrapped at the width, as a hint draws it.
+        Private Shared Function TextSize(text As String, font As Font, width As Integer) As Size
+
+            Return TextRenderer.MeasureText(
+                text,
+                font,
+                New Size(width, Integer.MaxValue),
+                HintFlags
+            )
+
+        End Function
 
         Public Shared Sub Attach(target As Control, text As String)
             Attach(target, Function() text)
@@ -40,9 +102,8 @@ Namespace Controls
                 Return
             End If
 
-            Dim hint As New Label With {
+            Dim hint As New HintLabel With {
                 .AutoSize = False,
-                .TextAlign = ContentAlignment.MiddleCenter,
                 .UseMnemonic = False,
                 .Padding = New Padding(16),
                 .Visible = False,
@@ -95,9 +156,10 @@ Namespace Controls
         End Sub
 
         ' The height a list's hint needs to be read whole at the list's
-        ' width: its text, wrapped inside its padding, and the padding, so a
-        ' window can give an empty list that much (#93). None while the list
-        ' has items or no hint, or before it has a width to wrap to.
+        ' width: its text, wrapped inside its padding as the hint draws it
+        ' (#278), and the padding, so a window can give an empty list that
+        ' much (#93). None while the list has items or no hint, or before it
+        ' has a width to wrap to.
         Public Shared Function NeededHeight(target As Control) As Integer
 
             If target Is Nothing OrElse ItemCount(target) > 0 Then
@@ -107,18 +169,14 @@ Namespace Controls
             For Each entry As Entry In Entries.Where(Function(item) item.Target Is target)
 
                 Dim width As Integer =
-                    target.ClientSize.Width - entry.Hint.Padding.Horizontal
+                    HintBounds(target).Width - entry.Hint.Padding.Horizontal
 
                 If width <= 0 Then
                     Return 0
                 End If
 
-                Return TextRenderer.MeasureText(
-                    entry.Text(),
-                    entry.Hint.Font,
-                    New Size(width, Integer.MaxValue),
-                    TextFormatFlags.WordBreak Or TextFormatFlags.NoPrefix
-                ).Height + entry.Hint.Padding.Vertical
+                Return TextSize(entry.Text(), entry.Hint.Font, width).Height +
+                    entry.Hint.Padding.Vertical
 
             Next
 
@@ -161,14 +219,7 @@ Namespace Controls
                 Dim text As String = entry.Text()
                 If entry.Hint.Text <> text Then entry.Hint.Text = text
 
-                ' A table keeps its column headings visible above the hint.
-                Dim top As Integer = 0
-                Dim grid As DataGridView = TryCast(target, DataGridView)
-                If grid IsNot Nothing AndAlso grid.ColumnHeadersVisible Then
-                    top = grid.ColumnHeadersHeight
-                End If
-
-                Dim bounds As New Rectangle(0, top, target.ClientSize.Width, Math.Max(0, target.ClientSize.Height - top))
+                Dim bounds As Rectangle = HintBounds(target)
                 If entry.Hint.Bounds <> bounds Then entry.Hint.Bounds = bounds
             End If
 
@@ -178,6 +229,31 @@ Namespace Controls
             End If
 
         End Sub
+
+        ' Where a list's hint lies: over the whole list, but for a table's
+        ' column headings, which stay visible above it, and a table's frame.
+        ' A table draws its frame inside its own client area, so a hint laid
+        ' over all of it hid the frame on its left, right and bottom (#266).
+        Private Shared Function HintBounds(target As Control) As Rectangle
+
+            Dim frame As Integer = 0
+            Dim top As Integer = 0
+            Dim grid As DataGridView = TryCast(target, DataGridView)
+
+            If grid IsNot Nothing Then
+                ' The frame UiPolish draws is a pixel wide.
+                If grid.BorderStyle <> BorderStyle.None Then frame = 1
+                top = frame + If(grid.ColumnHeadersVisible, grid.ColumnHeadersHeight, 0)
+            End If
+
+            Return New Rectangle(
+                frame,
+                top,
+                Math.Max(0, target.ClientSize.Width - 2 * frame),
+                Math.Max(0, target.ClientSize.Height - top - frame)
+            )
+
+        End Function
 
         Private Shared Function ItemCount(target As Control) As Integer
 

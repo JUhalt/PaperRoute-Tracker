@@ -739,6 +739,56 @@ Public Class JournalFactsTests
         Next
     End Sub
 
+    ' The Journals page's card keeps its frame while it scrolls (#266). The
+    ' card drew its frame on itself, and its content, scrolled, was drawn
+    ' over the frame's foot, in Light and Dark. Scrolled half way, with the
+    ' text at 100%, 125% and 150%, every outermost pixel of the card is the
+    ' theme's border, its scroll bar inside. On 81bb29d the content covered
+    ' its top and foot, and the bar its right side.
+    <TestMethod>
+    Public Sub TheJournalLibraryCardKeepsItsFrameWhileItScrolls()
+        For Each scale As Single In {1.0F, 1.25F, 1.5F}
+            Dim textScale As Single = scale
+            RunOnStaThread(
+                Sub()
+                    Dim repository As New AuthorLibraryRepository(Path.Combine(_directory, "frame-" & CInt(textScale * 100)))
+                    Dim plos As New JournalRecord With {.Name = "PLOS ONE", .Issns = New List(Of String) From {"1932-6203"}}
+                    JournalFactsService.Apply(plos, JournalFactsService.Plan(plos, PlosLookup()))
+                    repository.Save(New AuthorLibraryData With {.Journals = New List(Of JournalRecord) From {plos}})
+
+                    Using page As New JournalLibraryForm(Enumerable.Empty(Of Manuscript)(), repository, New RecordedFacts(PlosLookup()))
+                        page.Font = New Font(page.Font.FontFamily, 10.0F * textScale)
+                        ShowOffscreen(page)
+                        page.Height = page.LogicalToDeviceUnits(520)
+                        page.SelectJournal(plos.Id)
+                        Application.DoEvents()
+
+                        Dim card As JournalFactsCard = page.Card
+                        Assert.IsTrue(card.VerticalScroll.Visible, "The card has more than it shows.")
+
+                        card.AutoScrollPosition = New Point(0, (card.DisplayRectangle.Height - card.ClientSize.Height) \ 2)
+                        Application.DoEvents()
+                        Assert.IsTrue(card.AutoScrollPosition.Y < 0, "The card is scrolled.")
+
+                        Using picture As New Bitmap(card.Width, card.Height)
+                            card.DrawToBitmap(picture, New Rectangle(Point.Empty, card.Size))
+                            Dim frame As Integer = UiTheme.CardBorder().ToArgb()
+                            Dim sides As New Dictionary(Of String, Integer) From {
+                                {"top", Enumerable.Range(0, picture.Width).Count(Function(x) picture.GetPixel(x, 0).ToArgb() <> frame)},
+                                {"foot", Enumerable.Range(0, picture.Width).Count(Function(x) picture.GetPixel(x, picture.Height - 1).ToArgb() <> frame)},
+                                {"left", Enumerable.Range(0, picture.Height).Count(Function(y) picture.GetPixel(0, y).ToArgb() <> frame)},
+                                {"right", Enumerable.Range(0, picture.Height).Count(Function(y) picture.GetPixel(picture.Width - 1, y).ToArgb() <> frame)}
+                            }
+                            Assert.IsTrue(sides.Values.All(Function(count) count = 0),
+                                $"With the text at {textScale:P0}, scrolled to {card.AutoScrollPosition}, pixels off the frame: " & String.Join(", ", sides.Select(Function(side) $"{side.Key} {side.Value}")))
+                        End Using
+
+                        page.Close()
+                    End Using
+                End Sub)
+        Next
+    End Sub
+
     <TestMethod>
     Public Sub TheLookupDialogPreviewsWhatWasFoundBeforeSaving()
         RunOnStaThread(
