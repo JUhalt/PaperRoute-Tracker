@@ -586,11 +586,14 @@ Partial Public Class Form1
     ' way back to the Board while pages faded (#276). The keyboard moves
     ' under the hold: a control given it can draw itself there and then (a
     ' radio button does), and under the hold it draws once the hold is
-    ' released. The kept manuscript page shown again for another
-    ' manuscript loads it hidden, so it alone is put away first, the
-    ' keyboard out of it as before (MoveFocusOutOf). The Board is hidden
-    ' last (HideBoardPage); shown again, it takes back the keyboard a page
-    ' opened from it took (ReturnFocusToBoard, #213).
+    ' released. The manuscript page shown again, by Discard on its save
+    ' bar or after Check for Publication... (or for another manuscript),
+    ' loads its record hidden, so it alone is put away first, the keyboard
+    ' out of it to the rail's Collapse navigation (MoveFocusOutOf) until
+    ' the page's first stop takes it: no fade covers that reload, and the
+    ' page arrived at has no control to hold the keyboard while it loads.
+    ' The Board is hidden last (HideBoardPage); shown again, it takes back
+    ' the keyboard a page opened from it took (ReturnFocusToBoard, #213).
     Private Sub SwitchPage(request As PageRequest)
 
         Dim pageLeft As Control = currentPageView
@@ -911,11 +914,12 @@ Partial Public Class Form1
 
 
     ' Focus still in a page being put away, the manuscript page shown
-    ' again or a page left whose successor failed to show, moves where
-    ' removing the page from the window moved it: to the window's first
-    ' stop, the rail's collapse button. Disposed or hidden with focus
-    ' inside, a page would otherwise leave it on the page area itself.
-    ' Every other switch gives it to the page shown first (#276).
+    ' again (Discard, Check for Publication..., another manuscript) or a
+    ' page left whose successor failed to show, moves where removing the
+    ' page from the window moved it: to the window's first stop, the
+    ' rail's collapse button. Disposed or hidden with focus inside, a page
+    ' would otherwise leave it on the page area itself. Every other switch
+    ' gives it to the page shown first (#276).
     Private Sub MoveFocusOutOf(page As Control)
 
         If page IsNot Nothing AndAlso HoldsKeyboard(page) Then
@@ -1386,7 +1390,7 @@ Partial Public Class Form1
 
     ' The page a visit shows, kept, prepared or just built, begins as a
     ' new page did (#133): on its Manuscripts view, which a kept page was
-    ' left on (PutAwayCurrentPage), the filter empty, every manuscript in
+    ' left on (PutAwayPage), the filter empty, every manuscript in
     ' the library's order with no column sorted, no row current or
     ' selected, the grid at its top, and its columns as wide as they were
     ' built. Its rows are put right only as far as the library changed

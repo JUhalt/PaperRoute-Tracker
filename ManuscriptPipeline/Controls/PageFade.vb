@@ -34,9 +34,10 @@ Namespace Controls
     ' Narrator, which reads the event once the window's thread answers it,
     ' after the switch, read nothing of the page shown while the picture
     ' covered it (#276). So once the fade ends on its own, at an input or
-    ' for the page to show more, with nothing over the page, that
-    ' control's focus event is raised again, if it still has the keyboard
-    ' (Finish). Nothing waits for it.
+    ' for the page to show more, with nothing over the page, the focus
+    ' event of the control in the page area with the keyboard, if it took
+    ' it since the switch began, is raised again (Finish). Nothing waits
+    ' for it.
     Friend NotInheritable Class PageFade
         Implements IMessageFilter
 
@@ -50,10 +51,8 @@ Namespace Controls
         Private _lastHidden As Long = 0
         Private Shared _inFlight As Integer = 0
 
-        ' Windows' focus as the switch began, and the window the switch gave
-        ' it to, under the fade showing (#276).
+        ' Windows' focus as the switch began (#276).
         Private _focusBefore As IntPtr = IntPtr.Zero
-        Private _focusToTell As IntPtr = IntPtr.Zero
 
         ' How long the screen may go on showing a fade once it is hidden: a
         ' few of Windows' frames.
@@ -296,8 +295,6 @@ Namespace Controls
                 ElseIf Not UiMotion.Enabled OrElse Not CanShow() OrElse bounds <> picture.Screen OrElse OverlayHandle = IntPtr.Zero Then
                     LastOutcome = "cut: the window changed"
                 Else
-                    Dim focus As IntPtr = GetFocus()
-                    _focusToTell = If(focus <> _focusBefore, focus, IntPtr.Zero)
                     Show()
                     FadesShown += 1
                     LastOutcome = "faded"
@@ -328,26 +325,63 @@ Namespace Controls
                 _lastHidden = Stopwatch.GetTimestamp()
             End If
 
-            _focusToTell = IntPtr.Zero
-
         End Sub
 
 
         ' The fade ends on its own, at a key, a click or the wheel, or for
         ' the page shown to show more (Insights' figures): the picture goes,
-        ' and the control the switch gave the keyboard, if it still has it,
-        ' has its focus event raised again, as Windows raised it when the
-        ' switch moved the keyboard (#276). Not as the next switch begins,
-        ' which moves the keyboard itself, nor as the window moves, sizes,
-        ' hides or goes to the background (End).
-        Friend Sub Finish()
+        ' and the control in the page area with the keyboard, if it took it
+        ' since the switch began, has its focus event raised again, as
+        ' Windows raised it under the picture (#276): the control the switch
+        ' gave it, or one given it once the switch had returned (Ctrl+F's
+        ' search box). At an input, which can move the keyboard itself (a
+        ' Tab, a click, the next switch), the event is raised once the input
+        ' has been handled, and only if that control still has the keyboard
+        ' and no picture shows: a control the input gave the keyboard has
+        ' its own event, with nothing over the page. Not as the next switch
+        ' begins, nor as the window moves, sizes, hides or goes to the
+        ' background (End).
+        Friend Sub Finish(Optional atAnInput As Boolean = False)
 
-            Dim focused As IntPtr = _focusToTell
+            Dim covered As IntPtr = If(Showing, FocusTakenInTheArea(), IntPtr.Zero)
 
             [End]()
 
-            If focused <> IntPtr.Zero AndAlso focused = GetFocus() Then
-                NotifyWinEvent(EVENT_OBJECT_FOCUS, focused, OBJID_CLIENT, CHILDID_SELF)
+            If covered = IntPtr.Zero Then
+                Return
+            End If
+
+            If Not atAnInput Then
+                TellFocus(covered)
+            ElseIf _owner.IsHandleCreated Then
+                _owner.BeginInvoke(New Action(Sub() TellFocus(covered)))
+            End If
+
+        End Sub
+
+
+        ' The window with the keyboard, if it is in the page area and took the
+        ' keyboard since the switch began; otherwise none.
+        Private Function FocusTakenInTheArea() As IntPtr
+
+            Dim focus As IntPtr = GetFocus()
+
+            If focus = IntPtr.Zero OrElse focus = _focusBefore OrElse Not _area.IsHandleCreated OrElse
+               Not (focus = _area.Handle OrElse IsChild(_area.Handle, focus)) Then
+                Return IntPtr.Zero
+            End If
+
+            Return focus
+
+        End Function
+
+
+        ' A window's focus event raised again, if it still has the keyboard
+        ' and no picture shows over it.
+        Private Sub TellFocus(window As IntPtr)
+
+            If window = GetFocus() AndAlso Not Showing Then
+                NotifyWinEvent(EVENT_OBJECT_FOCUS, window, OBJID_CLIENT, CHILDID_SELF)
             End If
 
         End Sub
@@ -514,7 +548,7 @@ Namespace Controls
                      WM_LBUTTONDOWN, WM_RBUTTONDOWN, WM_MBUTTONDOWN, WM_XBUTTONDOWN,
                      WM_NCLBUTTONDOWN, WM_NCRBUTTONDOWN, WM_NCMBUTTONDOWN, WM_NCXBUTTONDOWN,
                      WM_MOUSEWHEEL, WM_MOUSEHWHEEL, WM_POINTERDOWN
-                    Finish()
+                    Finish(atAnInput:=True)
             End Select
 
             Return False
@@ -917,6 +951,10 @@ Namespace Controls
 
         <DllImport("user32.dll")>
         Private Shared Function GetFocus() As IntPtr
+        End Function
+
+        <DllImport("user32.dll")>
+        Private Shared Function IsChild(parent As IntPtr, window As IntPtr) As Boolean
         End Function
 
         <DllImport("user32.dll")>

@@ -1997,20 +1997,29 @@ Public Class KeyboardAccessTests
 
     ' Each page switch by keyboard (#276), the window holding the keyboard:
     ' Ctrl+2 from the Board's search box, then Ctrl+3 to Ctrl+6 from page
-    ' to page, Alt+Left and Alt+Right, Ctrl+1 back to the Board, and a
-    ' card's title opened with Enter and left with Alt+Left. Every focus
-    ' event Windows raises for the window as a switch runs, the events
-    ' Narrator hears through UI Automation, names a control inside the page
-    ' arrived at, the last of them the control with the keyboard: it goes
-    ' straight from the page left to the page shown. With motion on (#142),
-    ' a switch whose picture fades over the page shown raises that
-    ' control's focus event once more after the picture is hidden, as the
-    ' fade ends on its own or at a key. Until #276 leaving a page put the
-    ' keyboard on the rail's Collapse navigation first, where it stayed
-    ' from one rail page to the next, and Narrator read Collapse navigation
-    ' on the way back to the Board while pages faded; and the only focus
-    ' event of the page shown came while the picture covered it, and
-    ' Narrator read nothing of the page.
+    ' to page, Alt+Left and Alt+Right, Ctrl+1 back to the Board; a card's
+    ' title opened with Enter and left with Alt+Left, then opened again and
+    ' left with Ctrl+F, which gives the search box the keyboard once the
+    ' switch has returned; Ctrl+2 with a Tab during its fade; and a Library
+    ' row opened with Enter and left with Alt+Left. Every focus event
+    ' Windows raises for the window as a switch runs, the events Narrator
+    ' hears through UI Automation, names a control inside the page arrived
+    ' at, the last of them the control with the keyboard: it goes straight
+    ' from the page left to the page shown. With motion on (#142), a switch
+    ' whose picture fades over the page shown raises that control's focus
+    ' event once more after the picture is hidden, as the fade ends on its
+    ' own or at a key, and no other: at a Tab, only the control the Tab
+    ' moved to. (Insights ends its fade early as its figures show, if they
+    ' come within the fade, as they usually do here; the test does not ask
+    ' which end it was.) Discard on the save bar reloads the manuscript
+    ' page shown, hidden, with no fade: the keyboard waits on the rail's
+    ' Collapse navigation while it loads, then takes the page's first stop,
+    ' the one route that still leaves the page arrived at. Until #276
+    ' leaving a page put the keyboard on Collapse navigation first, where
+    ' it stayed from one rail page to the next, and Narrator read Collapse
+    ' navigation on the way back to the Board while pages faded; and the
+    ' only focus event of the page shown came while the picture covered
+    ' it, and Narrator read nothing of the page.
     <TestMethod>
     <DataRow(False)>
     <DataRow(True)>
@@ -2055,13 +2064,27 @@ Public Class KeyboardAccessTests
                         Dim title As Func(Of Control) =
                             Function() board.Shelf("pipelinePanel").Controls.OfType(Of RoundedPanel)().First().Controls.OfType(Of LinkLabel)().First()
 
+                        Dim row As Func(Of Control) =
+                            Function()
+                                Dim grid As DataGridView = ViewCatalog.Descendants(board.PageView).OfType(Of DataGridView)().Single()
+                                grid.CurrentCell = grid.Rows(0).Cells(0)
+                                Return grid
+                            End Function
+                        Dim discard As Func(Of Control) =
+                            Function()
+                                board.Field("Title").Text &= " (edited)"
+                                board.Tick()
+                                Return ViewCatalog.Descendants(board.KeptPage).OfType(Of ActionButton)().Single(Function(button) button.AccessibleName = "Discard unsaved changes")
+                            End Function
+
                         ' Lets a fade end, on its own or at a key down posted
-                        ' to the control with the keyboard, and a few of
-                        ' Windows' frames go, so the next switch can fade.
-                        Dim settle As Action(Of Boolean) =
-                            Sub(atAKey)
-                                If atAKey AndAlso board.PageFade IsNot Nothing AndAlso board.PageFade.Showing Then
-                                    PostMessage(GetFocus(), WM_KEYDOWN, New IntPtr(VK_SHIFT), New IntPtr(1))
+                        ' to the control with the keyboard (Shift, which moves
+                        ' nothing, or Tab), and a few of Windows' frames go, so
+                        ' the next switch can fade.
+                        Dim settle As Action(Of Keys) =
+                            Sub(endKey)
+                                If endKey <> Keys.None AndAlso board.PageFade IsNot Nothing AndAlso board.PageFade.Showing Then
+                                    PostMessage(GetFocus(), WM_KEYDOWN, New IntPtr(CInt(endKey)), New IntPtr(1))
                                 End If
                                 Dim waited As Stopwatch = Stopwatch.StartNew()
                                 While (board.PageFade IsNot Nothing AndAlso board.PageFade.Fading AndAlso waited.ElapsedMilliseconds < 10000) OrElse waited.ElapsedMilliseconds < 80
@@ -2070,24 +2093,32 @@ Public Class KeyboardAccessTests
                                 End While
                             End Sub
 
-                        settle(False)
+                        settle(Keys.None)
 
                         If Not search.Focus() OrElse Not search.Focused Then
                             Assert.Inconclusive("The test window was given no keyboard focus on this host.")
                         End If
                         Application.DoEvents()
 
-                        Dim switches As (Name As String, Origin As Func(Of Control), Act As Action, AtAKey As Boolean)() = {
-                            ("Ctrl+2 from the search box", Nothing, Sub() board.PressCommandKey(Keys.Control Or Keys.D2), True),
-                            ("Ctrl+3", Nothing, Sub() board.PressCommandKey(Keys.Control Or Keys.D3), False),
-                            ("Ctrl+4", Nothing, Sub() board.PressCommandKey(Keys.Control Or Keys.D4), False),
-                            ("Ctrl+5", Nothing, Sub() board.PressCommandKey(Keys.Control Or Keys.D5), False),
-                            ("Ctrl+6", Nothing, Sub() board.PressCommandKey(Keys.Control Or Keys.D6), False),
-                            ("Alt+Left", Nothing, Sub() board.PressCommandKey(Keys.Alt Or Keys.Left), False),
-                            ("Alt+Right", Nothing, Sub() board.PressCommandKey(Keys.Alt Or Keys.Right), False),
-                            ("Ctrl+1", Nothing, Sub() board.PressCommandKey(Keys.Control Or Keys.D1), False),
-                            ("Enter on a card's title", title, Sub() Press(board, Keys.Enter), False),
-                            ("Alt+Left to the card's title", Nothing, Sub() board.PressCommandKey(Keys.Alt Or Keys.Left), True)
+                        ' Through: the focus events of the one route that
+                        ' leaves the page arrived at, in turn.
+                        Dim switches As (Name As String, Origin As Func(Of Control), Act As Action, EndKey As Keys, Through As String)() = {
+                            ("Ctrl+2 from the search box", Nothing, Sub() board.PressCommandKey(Keys.Control Or Keys.D2), Keys.ShiftKey, Nothing),
+                            ("Ctrl+3", Nothing, Sub() board.PressCommandKey(Keys.Control Or Keys.D3), Keys.None, Nothing),
+                            ("Ctrl+4", Nothing, Sub() board.PressCommandKey(Keys.Control Or Keys.D4), Keys.None, Nothing),
+                            ("Ctrl+5", Nothing, Sub() board.PressCommandKey(Keys.Control Or Keys.D5), Keys.None, Nothing),
+                            ("Ctrl+6", Nothing, Sub() board.PressCommandKey(Keys.Control Or Keys.D6), Keys.None, Nothing),
+                            ("Alt+Left", Nothing, Sub() board.PressCommandKey(Keys.Alt Or Keys.Left), Keys.None, Nothing),
+                            ("Alt+Right", Nothing, Sub() board.PressCommandKey(Keys.Alt Or Keys.Right), Keys.None, Nothing),
+                            ("Ctrl+1", Nothing, Sub() board.PressCommandKey(Keys.Control Or Keys.D1), Keys.None, Nothing),
+                            ("Enter on a card's title", title, Sub() Press(board, Keys.Enter), Keys.None, Nothing),
+                            ("Alt+Left to the card's title", Nothing, Sub() board.PressCommandKey(Keys.Alt Or Keys.Left), Keys.ShiftKey, Nothing),
+                            ("Enter on the card's title again", title, Sub() Press(board, Keys.Enter), Keys.None, Nothing),
+                            ("Ctrl+F from the page opened from the card's title", Nothing, Sub() board.PressCommandKey(Keys.Control Or Keys.F), Keys.None, Nothing),
+                            ("Ctrl+2, Tab in its fade", Nothing, Sub() board.PressCommandKey(Keys.Control Or Keys.D2), Keys.Tab, Nothing),
+                            ("Enter on a Library row", row, Sub() KeyDownMethod.Invoke(Control.FromChildHandle(GetFocus()), New Object() {New KeyEventArgs(Keys.Enter)}), Keys.None, Nothing),
+                            ("Discard on the save bar", discard, Sub() board.Discard(), Keys.None, "RailCommandButton 'Collapse navigation' then ShelfTabButton 'Overview'"),
+                            ("Alt+Left back to the Library", Nothing, Sub() board.PressCommandKey(Keys.Alt Or Keys.Left), Keys.None, Nothing)
                         }
 
                         Using events As New SwitchEvents(board)
@@ -2102,20 +2133,32 @@ Public Class KeyboardAccessTests
                                 events.Heard.Clear()
 
                                 switch.Act()
-                                Dim outcome As String = If(board.PageFade?.LastOutcome, "no fade made")
-                                settle(switch.AtAKey)
+                                Dim outcome As String = If(switch.Through IsNot Nothing, "a reload", If(board.PageFade?.LastOutcome, "no fade made"))
+                                settle(switch.EndKey)
                                 board.WaitForIdleWork()
                                 If board.PageName = Form1.WorkspacePage.Insights.ToString() Then board.WaitForInsights()
-                                settle(False)
+                                settle(Keys.None)
 
                                 Dim arrived As Control = If(board.PageName = Form1.WorkspacePage.Board.ToString(), board.BoardPage, board.PageView)
                                 Dim landed As Control = Control.FromChildHandle(GetFocus())
-                                Dim heard As List(Of (Kind As String, Control As Control)) = events.Heard.ToList()
+                                Dim heard As List(Of (Kind As String, Control As Control, ObjectId As Integer, ChildId As Integer)) = events.Heard.ToList()
                                 Dim name As String = switch.Name & " (page " & board.PageName & ", " & outcome & ")"
 
-                                Console.WriteLine(name & ": " & String.Join(", ", heard.Select(Function(item) If(item.Kind = "focus", DescribeOnBoard(item.Control), "the picture " & item.Kind))))
+                                ' Each focus event with the object and child Windows
+                                ' named, so a run shows whether the one raised again
+                                ' after a fade (the window itself) is the last Windows
+                                ' raised.
+                                Console.WriteLine(name & ": " & String.Join(", ", heard.Select(Function(item) If(item.Kind = "focus", DescribeOnBoard(item.Control) & " [" & item.ObjectId.ToString() & ", " & item.ChildId.ToString() & "]", "the picture " & item.Kind))))
 
                                 Dim focused As List(Of Control) = heard.Where(Function(item) item.Kind = "focus").Select(Function(item) item.Control).ToList()
+
+                                If switch.Through IsNot Nothing Then
+                                    Dim through As String = String.Join(" then ", focused.Select(Function(target) DescribeOnBoard(target)))
+                                    If through <> switch.Through OrElse focused.LastOrDefault() IsNot landed OrElse heard.Any(Function(item) item.Kind <> "focus") Then
+                                        report.Add(name & ": through " & through & ", the keyboard on " & DescribeOnBoard(landed))
+                                    End If
+                                    Continue For
+                                End If
 
                                 For Each control As Control In focused
                                     If control Is Nothing OrElse Not (control Is arrived OrElse arrived.Contains(control)) Then
@@ -2136,6 +2179,10 @@ Public Class KeyboardAccessTests
                                         report.Add(name & ": the picture was never hidden")
                                     ElseIf Not heard.Skip(hidden + 1).Any(Function(item) item.Kind = "focus" AndAlso item.Control Is landed) Then
                                         report.Add(name & ": no focus event for " & DescribeOnBoard(landed) & " once the picture was hidden")
+                                    ElseIf heard.Skip(hidden + 1).Any(Function(item) item.Kind = "focus" AndAlso item.Control IsNot landed) Then
+                                        report.Add(name & ": once the picture was hidden, a focus event for " &
+                                                   DescribeOnBoard(heard.Skip(hidden + 1).First(Function(item) item.Kind = "focus" AndAlso item.Control IsNot landed).Control) &
+                                                   ", which no longer had the keyboard")
                                     End If
                                 ElseIf heard.Any(Function(item) item.Kind <> "focus") Then
                                     report.Add(name & ": a cut showed the picture")
@@ -2164,11 +2211,11 @@ Public Class KeyboardAccessTests
 
         Assert.AreEqual(0, report.Count, Environment.NewLine & String.Join(Environment.NewLine, report))
 
-        ' With motion on the switches fade, but for the manuscript's open,
-        ' a cut; a tooltip over the page area as a switch begins makes a cut
-        ' too.
+        ' With motion on the switches fade, but for a manuscript's open, a
+        ' cut, and Discard's reload, which is no switch's; a tooltip over the
+        ' page area as a switch begins makes a cut too.
         If motion Then
-            Assert.IsTrue(faded >= 6, "Switches faded: " & faded.ToString() & " of 10.")
+            Assert.IsTrue(faded >= 6, "Switches faded: " & faded.ToString() & " of 12.")
         Else
             Assert.AreEqual(0, faded, "With motion off nothing fades.")
         End If
@@ -2188,7 +2235,7 @@ Public Class KeyboardAccessTests
         Private ReadOnly _callback As WinEventProc
         Private ReadOnly _hook As IntPtr
 
-        Public ReadOnly Heard As New List(Of (Kind As String, Control As Control))()
+        Public ReadOnly Heard As New List(Of (Kind As String, Control As Control, ObjectId As Integer, ChildId As Integer))()
 
         Public Sub New(board As LibraryBoard)
             _board = board
@@ -2201,9 +2248,9 @@ Public Class KeyboardAccessTests
             Dim overlay As IntPtr = If(_board.PageFade Is Nothing, IntPtr.Zero, _board.PageFade.OverlayHandle)
             If eventType = EVENT_OBJECT_FOCUS AndAlso (window = _board.Handle OrElse IsChild(_board.Handle, window)) Then
                 Dim found As Control = Control.FromChildHandle(window)
-                Heard.Add(("focus", If(found Is _board OrElse (found IsNot Nothing AndAlso _board.Contains(found)), found, Nothing)))
+                Heard.Add(("focus", If(found Is _board OrElse (found IsNot Nothing AndAlso _board.Contains(found)), found, Nothing), objectId, childId))
             ElseIf (eventType = EVENT_OBJECT_SHOW OrElse eventType = EVENT_OBJECT_HIDE) AndAlso overlay <> IntPtr.Zero AndAlso window = overlay AndAlso objectId = OBJID_WINDOW Then
-                Heard.Add((If(eventType = EVENT_OBJECT_SHOW, "shown", "hidden"), CType(Nothing, Control)))
+                Heard.Add((If(eventType = EVENT_OBJECT_SHOW, "shown", "hidden"), CType(Nothing, Control), objectId, childId))
             End If
         End Sub
 
