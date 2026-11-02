@@ -323,8 +323,9 @@ Partial Public Class Form1
 
         ' Showing the figures holds the UI thread, and a cross-fade still
         ' running would hold the page left's picture over them until it was
-        ' done (#142): the fade ends, and the figures show.
-        pageFade?.End()
+        ' done (#142): the fade ends, as one ending on its own does (#276),
+        ' and the figures show.
+        pageFade?.Finish()
 
         insightsStatus.Visible = False
         ShowInsights(calculation.GetAwaiter().GetResult())

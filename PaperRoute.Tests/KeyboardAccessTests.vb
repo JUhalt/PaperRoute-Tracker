@@ -1265,15 +1265,16 @@ Public Class KeyboardAccessTests
             DeleteTemporaryRoot(root)
         End Try
 
-        ' Focus moves to the first stop of the window, the rail's collapse
-        ' button, and the control left loses it once, from a page disposed
-        ' as from one kept (the manuscript page, Deadlines and Import &
-        ' Export, hidden in place and shown again on the next visit).
+        ' Focus moves into the Board, to its search box, and the control left
+        ' loses it once, from a page disposed as from one kept (the
+        ' manuscript page, Deadlines and Import & Export, hidden in place and
+        ' shown again on the next visit). (Until #276 it moved to the first
+        ' stop of the window, the rail's collapse button, and stayed there.)
         Dim expected As List(Of String) =
             {"the Library filter", "an Insights tab", "the Journals list", "the Deadlines filter", "an Import & Export command",
              "the manuscript page's Back link", "the manuscript page's Title box"}.
                 SelectMany(Function(target) {"Alt+Left", "Ctrl+1", "Back"}.
-                    Select(Function(leave) target & ", " & leave & ": page Board, active RailCommandButton 'Collapse navigation', Leave 1")).
+                    Select(Function(leave) target & ", " & leave & ": page Board, active TextBox 'Search the board (Ctrl+F)', Leave 1")).
                 ToList()
 
         CollectionAssert.AreEqual(
@@ -1294,8 +1295,7 @@ Public Class KeyboardAccessTests
     ' idled or switched without painting, and changed by #213 only where
     ' a page opened from the Board left the keyboard on the hidden Board.
     ' The way back to the Board names each control the keyboard passes
-    ' through in turn: leaving the page puts it on the window's first stop,
-    ' the rail's collapse button, before the Board's control takes it.
+    ' through in turn: only the Board's control that takes it (#276).
     <TestMethod>
     Public Sub EnteringAPageByKeyboardKeepsFocusWhereItLandsToday()
 
@@ -1463,38 +1463,38 @@ Public Class KeyboardAccessTests
     ' Board, or the Board's search box left by Ctrl+N, puts the keyboard on
     ' the opened page's first stop: the manuscript page's Overview tab, a
     ' rail page's own first control, entered once, the control left losing
-    ' focus once; and Alt+Left back puts it on the control that opened the
-    ' page, by way of the rail's collapse button, which takes it for a
-    ' moment as the page is left (two focus changes, which the Narrator
-    ' pass listens for). (On f5c6947, before pages were prepared while the
-    ' window idled or switched without painting, and until #213, these
-    ' rows left the keyboard where it was, on the hidden Board, entered,
-    ' left and validated 0 times.) A rail button or a shelf tab reached
-    ' with an arrow key is entered once, the one left loses focus once and
-    ' is validated once, as on f5c6947. "Entered new" is a control the
-    ' action itself made, on a page built at that visit, as Deadlines and
-    ' Import & Export are at their first: the Library's filter was one
-    ' until the Library was kept and prepared while the window idled
-    ' (#133), and is now entered once, as Journals' list is.
+    ' focus once; and Alt+Left back puts it straight on the control that
+    ' opened the page. (Until #276 it went by way of the rail's collapse
+    ' button, which took it for a moment as the page was left, and which
+    ' Narrator read while pages faded.) (On f5c6947, before pages were
+    ' prepared while the window idled or switched without painting, and
+    ' until #213, these rows left the keyboard where it was, on the hidden
+    ' Board, entered, left and validated 0 times.) A rail button or a
+    ' shelf tab reached with an arrow key is entered once, the one left
+    ' loses focus once and is validated once, as on f5c6947. "Entered new"
+    ' is a control the action itself made, on a page built at that visit,
+    ' as Deadlines and Import & Export are at their first: the Library's
+    ' filter was one until the Library was kept and prepared while the
+    ' window idled (#133), and is now entered once, as Journals' list is.
     Private Shared ReadOnly EnteringAPageExpected As New List(Of String) From {
         "Pipeline title, Enter: page Manuscript, active ShelfTabButton 'Overview', entered 1, left 1, validated 1, origin entered 0",
-        "Pipeline title, Enter, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 1, left 1, validated 1, origin entered 0, through RailCommandButton 'Collapse navigation' then LinkLabel 0 of card 0 on its shelf",
+        "Pipeline title, Enter, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 1, left 1, validated 1, origin entered 0, through LinkLabel 0 of card 0 on its shelf",
         "Pipeline title, Space: page Manuscript, active ShelfTabButton 'Overview', entered 1, left 1, validated 1, origin entered 0",
-        "Pipeline title, Space, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 1, left 1, validated 1, origin entered 0, through RailCommandButton 'Collapse navigation' then LinkLabel 0 of card 0 on its shelf",
+        "Pipeline title, Space, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 1, left 1, validated 1, origin entered 0, through LinkLabel 0 of card 0 on its shelf",
         "Published title, Enter: page Manuscript, active ShelfTabButton 'Overview', entered 1, left 1, validated 1, origin entered 0",
-        "Published title, Enter, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 1, left 1, validated 1, origin entered 0, through RailCommandButton 'Collapse navigation' then LinkLabel 0 of card 0 on its shelf",
+        "Published title, Enter, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 1, left 1, validated 1, origin entered 0, through LinkLabel 0 of card 0 on its shelf",
         "Published title, Space: page Manuscript, active ShelfTabButton 'Overview', entered 1, left 1, validated 1, origin entered 0",
-        "Published title, Space, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 1, left 1, validated 1, origin entered 0, through RailCommandButton 'Collapse navigation' then LinkLabel 0 of card 0 on its shelf",
+        "Published title, Space, then Alt+Left: page Board, active LinkLabel 0 of card 0 on its shelf, entered 1, left 1, validated 1, origin entered 0, through LinkLabel 0 of card 0 on its shelf",
         "Ctrl+2 from the search box: page Library, active TextBox 'Filter the Library', entered 1, left 1, validated 1, origin entered 0",
-        "Ctrl+2, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 1, left 1, validated 1, origin entered 0, through RailCommandButton 'Collapse navigation' then TextBox 'Search the board (Ctrl+F)'",
+        "Ctrl+2, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 1, left 1, validated 1, origin entered 0, through TextBox 'Search the board (Ctrl+F)'",
         "Ctrl+3 from the search box: page Journals, active ListBox 'Journals', entered 1, left 1, validated 1, origin entered 0",
-        "Ctrl+3, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 1, left 1, validated 1, origin entered 0, through RailCommandButton 'Collapse navigation' then TextBox 'Search the board (Ctrl+F)'",
+        "Ctrl+3, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 1, left 1, validated 1, origin entered 0, through TextBox 'Search the board (Ctrl+F)'",
         "Ctrl+4 from the search box: page Deadlines, active TextBox 'Filter deadlines', entered new, left 1, validated 1, origin entered 0",
-        "Ctrl+4, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 1, left 1, validated 1, origin entered 0, through RailCommandButton 'Collapse navigation' then TextBox 'Search the board (Ctrl+F)'",
+        "Ctrl+4, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 1, left 1, validated 1, origin entered 0, through TextBox 'Search the board (Ctrl+F)'",
         "Ctrl+5 from the search box: page Insights, active ActionButton 'Pipeline Report...', entered 1, left 1, validated 1, origin entered 0",
-        "Ctrl+5, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 1, left 1, validated 1, origin entered 0, through RailCommandButton 'Collapse navigation' then TextBox 'Search the board (Ctrl+F)'",
+        "Ctrl+5, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 1, left 1, validated 1, origin entered 0, through TextBox 'Search the board (Ctrl+F)'",
         "Ctrl+6 from the search box: page ImportExport, active ActionButton 'Import Spreadsheet...', entered new, left 1, validated 1, origin entered 0",
-        "Ctrl+6, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 1, left 1, validated 1, origin entered 0, through RailCommandButton 'Collapse navigation' then TextBox 'Search the board (Ctrl+F)'",
+        "Ctrl+6, then Alt+Left: page Board, active TextBox 'Search the board (Ctrl+F)', entered 1, left 1, validated 1, origin entered 0, through TextBox 'Search the board (Ctrl+F)'",
         "Down on the rail from RailButton 'Board': page Library, active RailButton 'Library', entered 1, left 1, validated 1, origin entered 0",
         "Down on the rail from RailButton 'Library': page Journals, active RailButton 'Journals', entered 1, left 1, validated 1, origin entered 0",
         "Down on the rail from RailButton 'Journals': page Deadlines, active RailButton 'Deadlines', entered 1, left 1, validated 1, origin entered 0",
@@ -1884,9 +1884,10 @@ Public Class KeyboardAccessTests
     ' text rebuilds the card at once, so the title the page was opened
     ' from is gone: Alt+Left puts the keyboard on the new card's title,
     ' shown, in the Board. A manuscript deleted from its page takes its
-    ' card with it: back on the Board the keyboard is where leaving the
-    ' page put it, the window's first stop, outside the Board and on no
-    ' control that is gone.
+    ' card with it: back on the Board the keyboard is on the Board's first
+    ' stop, its search box, and on no control that is gone. (Until #276 it
+    ' was where leaving the page put it, the window's first stop, outside
+    ' the Board.)
     <TestMethod>
     Public Sub ReturningAfterASaveOrADeleteLandsOnAShownControl()
 
@@ -1986,12 +1987,278 @@ Public Class KeyboardAccessTests
                 "Saved: the title opened from is disposed",
                 "Alt+Left: page Board, active LinkLabel titled as saved, shown, in the Board",
                 "Enter on it: page Manuscript, active ShelfTabButton 'Overview'",
-                "Deleted: page Board, the manuscript gone, the title opened from disposed, active RailCommandButton 'Collapse navigation', shown, outside the page area"
+                "Deleted: page Board, the manuscript gone, the title opened from disposed, active TextBox 'Search the board (Ctrl+F)', shown, in the Board"
             },
             report,
             Environment.NewLine & String.Join(Environment.NewLine, report))
 
     End Sub
+
+
+    ' Each page switch by keyboard (#276), the window holding the keyboard:
+    ' Ctrl+2 from the Board's search box, then Ctrl+3 to Ctrl+6 from page
+    ' to page, Alt+Left and Alt+Right, Ctrl+1 back to the Board; a card's
+    ' title opened with Enter and left with Alt+Left, then opened again and
+    ' left with Ctrl+F, which gives the search box the keyboard once the
+    ' switch has returned; Ctrl+2 with a Tab during its fade; and a Library
+    ' row opened with Enter and left with Alt+Left. Every focus event
+    ' Windows raises for the window as a switch runs, the events Narrator
+    ' hears through UI Automation, names a control inside the page arrived
+    ' at, the last of them the control with the keyboard: it goes straight
+    ' from the page left to the page shown. With motion on (#142), a switch
+    ' whose picture fades over the page shown raises that control's focus
+    ' event once more after the picture is hidden, as the fade ends on its
+    ' own or at a key, and no other: at a Tab, only the control the Tab
+    ' moved to. (Insights ends its fade early as its figures show, if they
+    ' come within the fade, as they usually do here; the test does not ask
+    ' which end it was.) Discard on the save bar reloads the manuscript
+    ' page shown, hidden, with no fade: the keyboard waits on the rail's
+    ' Collapse navigation while it loads, then takes the page's first stop,
+    ' the one route that still leaves the page arrived at. Until #276
+    ' leaving a page put the keyboard on Collapse navigation first, where
+    ' it stayed from one rail page to the next, and Narrator read Collapse
+    ' navigation on the way back to the Board while pages faded; and the
+    ' only focus event of the page shown came while the picture covered
+    ' it, and Narrator read nothing of the page.
+    <TestMethod>
+    <DataRow(False)>
+    <DataRow(True)>
+    Public Sub ASwitchByKeyboardMovesFocusOnlyIntoThePageArrivedAt(motion As Boolean)
+
+        Dim root As String = CreateTemporaryRoot()
+        Dim report As New List(Of String)()
+        Dim faded As Integer = 0
+
+        StorageEnvironment.RootOverride = Path.Combine(root, "storage")
+        UiMotion.EnabledOverride = motion
+        PageFade.AwaitPicture = motion
+        ' Motion on is on whatever the host's theme: a contrast theme stops it.
+        If motion Then UiTheme.HighContrastOverride = False
+        ' The test host is DPI-unaware: above 100% Windows scales the board,
+        ' where a switch is a cut.
+        If motion Then PageFade.ScaledOverride = False
+        ' Longer than a switch takes on a busy host, which is otherwise a
+        ' cut, and short enough to let each fade end on its own.
+        UiMotion.FadeMilliseconds = 1500
+
+        Try
+
+            StaRunner.Run(
+                Sub()
+
+                    Dim library As LargeLibraryFixture.SyntheticLibrary =
+                        LargeLibraryFixture.Create(Path.Combine(root, "library"), 60)
+
+                    Using board As New LibraryBoard(library, Path.Combine(root, "settings"))
+
+                        board.Start()
+                        board.WaitForIdleWork()
+
+                        ' Every open below is an open of the kept page, as most are.
+                        board.Open(board.Library.First(Function(item) item.Location = ManuscriptLocation.Pipeline))
+                        Application.DoEvents()
+                        board.NavigateTo(Form1.WorkspacePage.Board)
+                        board.WaitForIdleWork()
+
+                        Dim search As TextBox = ViewCatalog.Descendants(board).OfType(Of TextBox)().Single(Function(box) box.AccessibleName = "Search the board (Ctrl+F)")
+                        Dim title As Func(Of Control) =
+                            Function() board.Shelf("pipelinePanel").Controls.OfType(Of RoundedPanel)().First().Controls.OfType(Of LinkLabel)().First()
+
+                        Dim row As Func(Of Control) =
+                            Function()
+                                Dim grid As DataGridView = ViewCatalog.Descendants(board.PageView).OfType(Of DataGridView)().Single()
+                                grid.CurrentCell = grid.Rows(0).Cells(0)
+                                Return grid
+                            End Function
+                        Dim discard As Func(Of Control) =
+                            Function()
+                                board.Field("Title").Text &= " (edited)"
+                                board.Tick()
+                                Return ViewCatalog.Descendants(board.KeptPage).OfType(Of ActionButton)().Single(Function(button) button.AccessibleName = "Discard unsaved changes")
+                            End Function
+
+                        ' Lets a fade end, on its own or at a key down posted
+                        ' to the control with the keyboard (Shift, which moves
+                        ' nothing, or Tab), and a few of Windows' frames go, so
+                        ' the next switch can fade.
+                        Dim settle As Action(Of Keys) =
+                            Sub(endKey)
+                                If endKey <> Keys.None AndAlso board.PageFade IsNot Nothing AndAlso board.PageFade.Showing Then
+                                    PostMessage(GetFocus(), WM_KEYDOWN, New IntPtr(CInt(endKey)), New IntPtr(1))
+                                End If
+                                Dim waited As Stopwatch = Stopwatch.StartNew()
+                                While (board.PageFade IsNot Nothing AndAlso board.PageFade.Fading AndAlso waited.ElapsedMilliseconds < 10000) OrElse waited.ElapsedMilliseconds < 80
+                                    Application.DoEvents()
+                                    Threading.Thread.Sleep(1)
+                                End While
+                            End Sub
+
+                        settle(Keys.None)
+
+                        If Not search.Focus() OrElse Not search.Focused Then
+                            Assert.Inconclusive("The test window was given no keyboard focus on this host.")
+                        End If
+                        Application.DoEvents()
+
+                        ' Through: the focus events of the one route that
+                        ' leaves the page arrived at, in turn.
+                        Dim switches As (Name As String, Origin As Func(Of Control), Act As Action, EndKey As Keys, Through As String)() = {
+                            ("Ctrl+2 from the search box", Nothing, Sub() board.PressCommandKey(Keys.Control Or Keys.D2), Keys.ShiftKey, Nothing),
+                            ("Ctrl+3", Nothing, Sub() board.PressCommandKey(Keys.Control Or Keys.D3), Keys.None, Nothing),
+                            ("Ctrl+4", Nothing, Sub() board.PressCommandKey(Keys.Control Or Keys.D4), Keys.None, Nothing),
+                            ("Ctrl+5", Nothing, Sub() board.PressCommandKey(Keys.Control Or Keys.D5), Keys.None, Nothing),
+                            ("Ctrl+6", Nothing, Sub() board.PressCommandKey(Keys.Control Or Keys.D6), Keys.None, Nothing),
+                            ("Alt+Left", Nothing, Sub() board.PressCommandKey(Keys.Alt Or Keys.Left), Keys.None, Nothing),
+                            ("Alt+Right", Nothing, Sub() board.PressCommandKey(Keys.Alt Or Keys.Right), Keys.None, Nothing),
+                            ("Ctrl+1", Nothing, Sub() board.PressCommandKey(Keys.Control Or Keys.D1), Keys.None, Nothing),
+                            ("Enter on a card's title", title, Sub() Press(board, Keys.Enter), Keys.None, Nothing),
+                            ("Alt+Left to the card's title", Nothing, Sub() board.PressCommandKey(Keys.Alt Or Keys.Left), Keys.ShiftKey, Nothing),
+                            ("Enter on the card's title again", title, Sub() Press(board, Keys.Enter), Keys.None, Nothing),
+                            ("Ctrl+F from the page opened from the card's title", Nothing, Sub() board.PressCommandKey(Keys.Control Or Keys.F), Keys.None, Nothing),
+                            ("Ctrl+2, Tab in its fade", Nothing, Sub() board.PressCommandKey(Keys.Control Or Keys.D2), Keys.Tab, Nothing),
+                            ("Enter on a Library row", row, Sub() KeyDownMethod.Invoke(Control.FromChildHandle(GetFocus()), New Object() {New KeyEventArgs(Keys.Enter)}), Keys.None, Nothing),
+                            ("Discard on the save bar", discard, Sub() board.Discard(), Keys.None, "RailCommandButton 'Collapse navigation' then ShelfTabButton 'Overview'"),
+                            ("Alt+Left back to the Library", Nothing, Sub() board.PressCommandKey(Keys.Alt Or Keys.Left), Keys.None, Nothing)
+                        }
+
+                        Using events As New SwitchEvents(board)
+
+                            For Each switch In switches
+
+                                If switch.Origin IsNot Nothing Then
+                                    Dim origin As Control = switch.Origin.Invoke()
+                                    If Not origin.Focus() Then Assert.Inconclusive(switch.Name & ": the test window took back no keyboard focus.")
+                                End If
+                                Application.DoEvents()
+                                events.Heard.Clear()
+
+                                switch.Act()
+                                Dim outcome As String = If(switch.Through IsNot Nothing, "a reload", If(board.PageFade?.LastOutcome, "no fade made"))
+                                settle(switch.EndKey)
+                                board.WaitForIdleWork()
+                                If board.PageName = Form1.WorkspacePage.Insights.ToString() Then board.WaitForInsights()
+                                settle(Keys.None)
+
+                                Dim arrived As Control = If(board.PageName = Form1.WorkspacePage.Board.ToString(), board.BoardPage, board.PageView)
+                                Dim landed As Control = Control.FromChildHandle(GetFocus())
+                                Dim heard As List(Of (Kind As String, Control As Control, ObjectId As Integer, ChildId As Integer)) = events.Heard.ToList()
+                                Dim name As String = switch.Name & " (page " & board.PageName & ", " & outcome & ")"
+
+                                ' Each focus event with the object and child Windows
+                                ' named, so a run shows whether the one raised again
+                                ' after a fade (the window itself) is the last Windows
+                                ' raised.
+                                Console.WriteLine(name & ": " & String.Join(", ", heard.Select(Function(item) If(item.Kind = "focus", DescribeOnBoard(item.Control) & " [" & item.ObjectId.ToString() & ", " & item.ChildId.ToString() & "]", "the picture " & item.Kind))))
+
+                                Dim focused As List(Of Control) = heard.Where(Function(item) item.Kind = "focus").Select(Function(item) item.Control).ToList()
+
+                                If switch.Through IsNot Nothing Then
+                                    Dim through As String = String.Join(" then ", focused.Select(Function(target) DescribeOnBoard(target)))
+                                    If through <> switch.Through OrElse focused.LastOrDefault() IsNot landed OrElse heard.Any(Function(item) item.Kind <> "focus") Then
+                                        report.Add(name & ": through " & through & ", the keyboard on " & DescribeOnBoard(landed))
+                                    End If
+                                    Continue For
+                                End If
+
+                                For Each control As Control In focused
+                                    If control Is Nothing OrElse Not (control Is arrived OrElse arrived.Contains(control)) Then
+                                        report.Add(name & ": focus went to " & DescribeOnBoard(control) & ", outside the page arrived at")
+                                    End If
+                                Next
+
+                                If focused.Count = 0 Then
+                                    report.Add(name & ": no focus event, the keyboard on " & DescribeOnBoard(landed))
+                                ElseIf focused.Last() IsNot landed Then
+                                    report.Add(name & ": the last focus event named " & DescribeOnBoard(focused.Last()) & ", the keyboard is on " & DescribeOnBoard(landed))
+                                End If
+
+                                If outcome = "faded" Then
+                                    faded += 1
+                                    Dim hidden As Integer = heard.FindLastIndex(Function(item) item.Kind = "hidden")
+                                    If hidden < 0 Then
+                                        report.Add(name & ": the picture was never hidden")
+                                    ElseIf Not heard.Skip(hidden + 1).Any(Function(item) item.Kind = "focus" AndAlso item.Control Is landed) Then
+                                        report.Add(name & ": no focus event for " & DescribeOnBoard(landed) & " once the picture was hidden")
+                                    ElseIf heard.Skip(hidden + 1).Any(Function(item) item.Kind = "focus" AndAlso item.Control IsNot landed) Then
+                                        report.Add(name & ": once the picture was hidden, a focus event for " &
+                                                   DescribeOnBoard(heard.Skip(hidden + 1).First(Function(item) item.Kind = "focus" AndAlso item.Control IsNot landed).Control) &
+                                                   ", which no longer had the keyboard")
+                                    End If
+                                ElseIf heard.Any(Function(item) item.Kind <> "focus") Then
+                                    report.Add(name & ": a cut showed the picture")
+                                End If
+
+                            Next
+
+                        End Using
+
+                        board.Close()
+
+                    End Using
+
+                End Sub,
+                TimeSpan.FromMinutes(5))
+
+        Finally
+            UiMotion.EnabledOverride = Nothing
+            UiMotion.FadeMilliseconds = UiMotion.DefaultFadeMilliseconds
+            PageFade.AwaitPicture = False
+            UiTheme.HighContrastOverride = Nothing
+            PageFade.ScaledOverride = Nothing
+            StorageEnvironment.RootOverride = Nothing
+            DeleteTemporaryRoot(root)
+        End Try
+
+        Assert.AreEqual(0, report.Count, Environment.NewLine & String.Join(Environment.NewLine, report))
+
+        ' With motion on the switches fade, but for a manuscript's open, a
+        ' cut, and Discard's reload, which is no switch's; a tooltip over the
+        ' page area as a switch begins makes a cut too.
+        If motion Then
+            Assert.IsTrue(faded >= 6, "Switches faded: " & faded.ToString() & " of 12.")
+        Else
+            Assert.AreEqual(0, faded, "With motion off nothing fades.")
+        End If
+
+    End Sub
+
+
+    ' The focus events Windows raises for a window's controls, and its
+    ' fade's overlay shown and hidden (#142), in the order raised, as a
+    ' screen reader hears them through UI Automation (#276). A focus event
+    ' for a window that is no control of the window's own is heard as one
+    ' for no control.
+    Private NotInheritable Class SwitchEvents
+        Implements IDisposable
+
+        Private ReadOnly _board As LibraryBoard
+        Private ReadOnly _callback As WinEventProc
+        Private ReadOnly _hook As IntPtr
+
+        Public ReadOnly Heard As New List(Of (Kind As String, Control As Control, ObjectId As Integer, ChildId As Integer))()
+
+        Public Sub New(board As LibraryBoard)
+            _board = board
+            _callback = AddressOf OnEvent
+            _hook = SetWinEventHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_FOCUS, IntPtr.Zero, _callback, CUInt(Environment.ProcessId), 0UI, 0UI)
+            Assert.AreNotEqual(IntPtr.Zero, _hook, "The event hook is set.")
+        End Sub
+
+        Private Sub OnEvent(hook As IntPtr, eventType As UInteger, window As IntPtr, objectId As Integer, childId As Integer, thread As UInteger, time As UInteger)
+            Dim overlay As IntPtr = If(_board.PageFade Is Nothing, IntPtr.Zero, _board.PageFade.OverlayHandle)
+            If eventType = EVENT_OBJECT_FOCUS AndAlso (window = _board.Handle OrElse IsChild(_board.Handle, window)) Then
+                Dim found As Control = Control.FromChildHandle(window)
+                Heard.Add(("focus", If(found Is _board OrElse (found IsNot Nothing AndAlso _board.Contains(found)), found, Nothing), objectId, childId))
+            ElseIf (eventType = EVENT_OBJECT_SHOW OrElse eventType = EVENT_OBJECT_HIDE) AndAlso overlay <> IntPtr.Zero AndAlso window = overlay AndAlso objectId = OBJID_WINDOW Then
+                Heard.Add((If(eventType = EVENT_OBJECT_SHOW, "shown", "hidden"), CType(Nothing, Control), objectId, childId))
+            End If
+        End Sub
+
+        Public Sub Dispose() Implements IDisposable.Dispose
+            UnhookWinEvent(_hook)
+        End Sub
+
+    End Class
 
 
     ' A control as the pins name it: a card's parts by their place on the
@@ -2370,6 +2637,25 @@ Public Class KeyboardAccessTests
 
     <DllImport("user32.dll")>
     Private Shared Function SetKeyboardState(state As Byte()) As Boolean
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function IsChild(parent As IntPtr, window As IntPtr) As Boolean
+    End Function
+
+    Private Const EVENT_OBJECT_SHOW As UInteger = &H8002UI
+    Private Const EVENT_OBJECT_HIDE As UInteger = &H8003UI
+    Private Const EVENT_OBJECT_FOCUS As UInteger = &H8005UI
+    Private Const OBJID_WINDOW As Integer = 0
+
+    Private Delegate Sub WinEventProc(hook As IntPtr, eventType As UInteger, window As IntPtr, objectId As Integer, childId As Integer, thread As UInteger, time As UInteger)
+
+    <DllImport("user32.dll")>
+    Private Shared Function SetWinEventHook(eventMin As UInteger, eventMax As UInteger, library As IntPtr, callback As WinEventProc, processId As UInteger, threadId As UInteger, flags As UInteger) As IntPtr
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function UnhookWinEvent(hook As IntPtr) As Boolean
     End Function
 
 

@@ -575,18 +575,35 @@ Partial Public Class Form1
 
     ' One page switch (#133), once any question about the page left has
     ' been answered. The page left is prepared first, outside the hold: its
-    ' draft and its timers, focus out of it, and the author library its
-    ' editor saved read back. Then, with the page area's drawing held, it
-    ' is put away and the next page shown, so nothing under the page area
-    ' is painted until the switch has returned; one paint of it is posted
-    ' as the hold is released. The Board is hidden last (HideBoardPage);
-    ' shown again, it takes back the keyboard a page opened from it took
-    ' (ReturnFocusToBoard, #213), while the page area is held: a control
-    ' given the keyboard can draw itself there and then (a radio button
-    ' does), and under the hold it draws once the hold is released.
+    ' draft and its timers, and the author library its editor saved read
+    ' back. Then, with the page area's drawing held, the next page is
+    ' shown, the keyboard the page left had goes straight to it, and the
+    ' page left is put away, so nothing under the page area is painted
+    ' until the switch has returned; one paint of it is posted as the hold
+    ' is released. Taken out of the page left first, the keyboard stopped
+    ' on the window's first stop, the rail's Collapse navigation, and
+    ' stayed there from one rail page to the next; Narrator read it on the
+    ' way back to the Board while pages faded (#276). The keyboard moves
+    ' under the hold: a control given it can draw itself there and then (a
+    ' radio button does), and under the hold it draws once the hold is
+    ' released. The manuscript page shown again, by Discard on its save
+    ' bar or after Check for Publication... (or for another manuscript),
+    ' loads its record hidden, so it alone is put away first, the keyboard
+    ' out of it to the rail's Collapse navigation (MoveFocusOutOf) until
+    ' the page's first stop takes it: no fade covers that reload, and the
+    ' page arrived at has no control to hold the keyboard while it loads.
+    ' The Board is hidden last (HideBoardPage); shown again, it takes back
+    ' the keyboard a page opened from it took (ReturnFocusToBoard, #213).
     Private Sub SwitchPage(request As PageRequest)
 
+        Dim pageLeft As Control = currentPageView
         Dim pageHeldFocus As Boolean = LeaveCurrentPage()
+        Dim showsPageLeft As Boolean =
+            pageLeft IsNot Nothing AndAlso pageLeft Is manuscriptPage AndAlso request.Page = WorkspacePage.Manuscript
+
+        If showsPageLeft Then
+            MoveFocusOutOf(pageLeft)
+        End If
 
         ' Hosted editors save as they go. The board's copies are refreshed
         ' from what they saved, as the board did after their dialogs
@@ -601,7 +618,9 @@ Partial Public Class Form1
 
         Using New RedrawHold(contentHost)
 
-            PutAwayCurrentPage()
+            If showsPageLeft Then
+                PutAwayPage(pageLeft)
+            End If
 
             If authorsRead Then
                 RenderManuscripts()
@@ -614,12 +633,28 @@ Partial Public Class Form1
                 currentManuscriptId = request.ManuscriptId
             End If
 
-            currentPage = request.Page
-            ShowPage(request)
+            ' A page that fails to show leaves the page left put away all
+            ' the same, the keyboard out of it, as before.
+            Try
 
-            If request.Page = WorkspacePage.Board Then
-                ReturnFocusToBoard(pageHeldFocus)
-            End If
+                currentPage = request.Page
+                ShowPage(request)
+
+                ' On the Board, the control that opened the page left takes
+                ' the keyboard back; otherwise the keyboard the page left had
+                ' goes to the page shown's first stop.
+                Dim returned As Boolean = request.Page = WorkspacePage.Board AndAlso ReturnFocusToBoard(pageHeldFocus)
+
+                If pageHeldFocus AndAlso Not returned Then
+                    FocusPageShown(If(request.Page = WorkspacePage.Board, boardPage, currentPageView))
+                End If
+
+            Finally
+                If Not showsPageLeft Then
+                    MoveFocusOutOf(pageLeft)
+                    PutAwayPage(pageLeft)
+                End If
+            End Try
 
         End Using
 
@@ -657,9 +692,7 @@ Partial Public Class Form1
             If boardHasKeyboard Then
                 boardFocusToReturn = active
                 boardFocusCardId = If(TryCast(TryCast(active?.Parent, CardPanel)?.Tag, CardRecord)?.Manuscript?.Id, Guid.Empty)
-                If Not FocusFirstStop(currentPageView) Then
-                    SelectNextControl(Nothing, True, True, True, True)
-                End If
+                FocusPageShown(currentPageView)
                 boardFocusLanded = ActiveControl
             End If
 
@@ -688,14 +721,26 @@ Partial Public Class Form1
     End Function
 
 
+    ' The keyboard to a page just shown (#213, #276): to its first stop, or
+    ' the window's for a page with none, such as the page of a manuscript
+    ' the library no longer holds.
+    Private Sub FocusPageShown(page As Control)
+
+        If Not FocusFirstStop(page) Then
+            SelectNextControl(Nothing, True, True, True, True)
+        End If
+
+    End Sub
+
+
     ' Back on the Board (#213), the control that had the keyboard when a
     ' page was opened from it takes it again, if the page left had it, or
     ' it is still where the opening put it; a card a save rebuilt meanwhile
     ' gives it to the new card's title. A card whose manuscript is gone,
-    ' or one not shown, takes nothing, and the keyboard stays where leaving
-    ' the page put it (LeaveCurrentPage). Each opening's control comes
-    ' back once, never later.
-    Private Sub ReturnFocusToBoard(pageHeldFocus As Boolean)
+    ' or one not shown, takes nothing; the switch then gives the keyboard
+    ' the page left had to the Board's first stop (#276). Each opening's
+    ' control comes back once, never later. Returns whether it came back.
+    Private Function ReturnFocusToBoard(pageHeldFocus As Boolean) As Boolean
 
         Dim target As Control = boardFocusToReturn
         Dim cardId As Guid = boardFocusCardId
@@ -705,12 +750,12 @@ Partial Public Class Form1
         boardFocusLanded = Nothing
 
         If target Is Nothing OrElse Not (pageHeldFocus OrElse (landed IsNot Nothing AndAlso ActiveControl Is landed)) Then
-            Return
+            Return False
         End If
 
         If cardId <> Guid.Empty Then
             If FindManuscript(cardId) Is Nothing Then
-                Return
+                Return False
             End If
             Dim card As RoundedPanel = Nothing
             If (target.IsDisposed OrElse Not boardPage.Contains(target)) AndAlso manuscriptCards.TryGetValue((cardId, 0), card) Then
@@ -720,9 +765,12 @@ Partial Public Class Form1
 
         If target IsNot Nothing AndAlso Not target.IsDisposed AndAlso boardPage.Contains(target) AndAlso target.CanSelect Then
             target.Select()
+            Return True
         End If
 
-    End Sub
+        Return False
+
+    End Function
 
 
     Private Sub GoBack()
@@ -778,9 +826,8 @@ Partial Public Class Form1
 
 
     ' What leaving a page does before the page area's drawing is held
-    ' (SwitchPage): its draft and its timers, and focus out of it, since a
-    ' control under a held window cannot take focus. Returns whether the
-    ' page had the keyboard.
+    ' (SwitchPage): its draft and its timers. Returns whether the page had
+    ' the keyboard, which the switch gives to the page shown (#276).
     Private Function LeaveCurrentPage() As Boolean
 
         ' A manuscript page is left only once its edits were saved or let go
@@ -795,17 +842,26 @@ Partial Public Class Form1
         manuscriptSaveBar = Nothing
         manuscriptSaveHint = Nothing
 
-        ' Focus in the page moves out of it first, as removing the page
-        ' moved it.
-        Return currentPageView IsNot Nothing AndAlso MoveFocusOutOf(currentPageView)
+        Return currentPageView IsNot Nothing AndAlso HoldsKeyboard(currentPageView)
 
     End Function
 
 
-    ' Puts the page left away, with the page area's drawing held.
-    Private Sub PutAwayCurrentPage()
+    ' Whether the keyboard is in a page, as the window records it.
+    Private Function HoldsKeyboard(page As Control) As Boolean
 
-        If currentPageView Is Nothing Then
+        Dim active As Control = ActiveControl
+        Return active IsNot Nothing AndAlso (active Is page OrElse page.Contains(active))
+
+    End Function
+
+
+    ' Puts the page left away, with the page area's drawing held: after
+    ' the next page has shown, but for the manuscript page shown again
+    ' (SwitchPage).
+    Private Sub PutAwayPage(page As Control)
+
+        If page Is Nothing Then
             Return
         End If
 
@@ -824,52 +880,53 @@ Partial Public Class Form1
         ' (#133). Disposing removes it from the page area once its windows
         ' are gone.
         Dim keep As Boolean =
-            IsKeptPage(currentPageView) AndAlso Not leaveDisposesKeptPage AndAlso
-            Not (currentPageView Is libraryPage AndAlso libraryGrid Is Nothing)
+            IsKeptPage(page) AndAlso Not leaveDisposesKeptPage AndAlso
+            Not (page Is libraryPage AndAlso libraryGrid Is Nothing)
 
         If keep Then
-            currentPageView.Visible = False
-            If currentPageView Is manuscriptPage Then
+            page.Visible = False
+            If page Is manuscriptPage Then
                 QueueManuscriptPageUnload()
-            ElseIf currentPageView Is insightsPage Then
+            ElseIf page Is insightsPage Then
                 LeaveInsightsKept()
             End If
-        ElseIf currentPageView Is manuscriptPage Then
+        ElseIf page Is manuscriptPage Then
             DropManuscriptPage()
-        ElseIf currentPageView Is insightsPage Then
+        ElseIf page Is insightsPage Then
             DropInsightsPage()
             QueueKeptPagesPreparation()
-        ElseIf currentPageView Is libraryPage Then
+        ElseIf page Is libraryPage Then
             DropLibraryPage()
             QueueKeptPagesPreparation()
         Else
-            Dim wasKept As Boolean = currentPageView Is journalsPage
-            currentPageView.Dispose()
+            Dim wasKept As Boolean = page Is journalsPage
+            page.Dispose()
             If wasKept Then QueueKeptPagesPreparation()
         End If
 
         leaveDisposesKeptPage = False
-        currentPageView = Nothing
+
+        If currentPageView Is page Then
+            currentPageView = Nothing
+        End If
 
     End Sub
 
 
-    ' Focus in a page being put away moves where removing the page from
-    ' the window moved it: to the window's first stop, the rail's collapse
-    ' button. Disposed or hidden with focus inside, a page would otherwise
-    ' leave it on the page area itself. Returns whether focus was inside.
-    Private Function MoveFocusOutOf(page As Control) As Boolean
+    ' Focus still in a page being put away, the manuscript page shown
+    ' again (Discard, Check for Publication..., another manuscript) or a
+    ' page left whose successor failed to show, moves where removing the
+    ' page from the window moved it: to the window's first stop, the
+    ' rail's collapse button. Disposed or hidden with focus inside, a page
+    ' would otherwise leave it on the page area itself. Every other switch
+    ' gives it to the page shown first (#276).
+    Private Sub MoveFocusOutOf(page As Control)
 
-        Dim active As Control = ActiveControl
-
-        If active IsNot Nothing AndAlso (active Is page OrElse page.Contains(active)) Then
+        If page IsNot Nothing AndAlso HoldsKeyboard(page) Then
             SelectNextControl(Nothing, True, True, True, True)
-            Return True
         End If
 
-        Return False
-
-    End Function
+    End Sub
 
 
     ' The pages built once and kept while the window lives (#133): the
@@ -1333,7 +1390,7 @@ Partial Public Class Form1
 
     ' The page a visit shows, kept, prepared or just built, begins as a
     ' new page did (#133): on its Manuscripts view, which a kept page was
-    ' left on (PutAwayCurrentPage), the filter empty, every manuscript in
+    ' left on (PutAwayPage), the filter empty, every manuscript in
     ' the library's order with no column sorted, no row current or
     ' selected, the grid at its top, and its columns as wide as they were
     ' built. Its rows are put right only as far as the library changed

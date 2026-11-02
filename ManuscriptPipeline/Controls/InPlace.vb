@@ -268,14 +268,13 @@ Namespace Controls
     '
     ' Held, a window loses WS_VISIBLE, so it and everything in it read as
     ' not visible to Windows: Control.Focus refuses a control it cannot
-    ' see. So a hold comes only after focus has moved out of what goes
-    ' away, and on the page area, the shelves' host or the rail's pages
-    ' (SyncRail), never the form.
-    ' (Select and SelectNextControl go by WinForms' own record of what is
-    ' visible, and do move the keyboard to a control under a hold, which
-    ' the Board's hide and return use, #213.) A window with no handle, or
-    ' not visible, is left alone: releasing a hold on a hidden window
-    ' would mark it visible.
+    ' see. So a hold is only on the page area, the shelves' host or the
+    ' rail's pages (SyncRail), never the form, and under it the keyboard
+    ' moves only by Select and SelectNextControl, which go by WinForms' own
+    ' record of what is visible and do move it to a control under a hold:
+    ' a page switch hands it so from the page left to the page shown
+    ' (#213, #276). A window with no handle, or not visible, is left
+    ' alone: releasing a hold on a hidden window would mark it visible.
     Friend NotInheritable Class RedrawHold
         Implements IDisposable
 

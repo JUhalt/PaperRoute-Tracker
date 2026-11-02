@@ -1544,8 +1544,9 @@ Public Class PageSwitchTests
     ' left to draw once the window processed its messages. Nor is the rail
     ' drawn while any switch runs: the two page buttons a switch checks
     ' and unchecks drew themselves there and then until SyncRail held the
-    ' rail's pages (#142), and its collapse button takes the keyboard for a
-    ' moment on the way back to the Board (#213). With motion on (#142),
+    ' rail's pages (#142), and its collapse button took the keyboard for a
+    ' moment on the way back to the Board (#213) until the keyboard went
+    ' straight to the page shown (#276). With motion on (#142),
     ' each switch but a manuscript's open also reads the page left and
     ' shows its picture over the page area as it returns (the picture
     ' waited for here, so every switch that can fade does): that draws
@@ -1606,8 +1607,9 @@ Public Class PageSwitchTests
 
                     ' The rail is watched through every switch too: the two page
                     ' buttons a switch checks and unchecks (SyncRail), and the
-                    ' collapse button, which the keyboard passes through on the
-                    ' way back to the Board from a page that had it (#213).
+                    ' collapse button, which the keyboard passed through on the
+                    ' way back to the Board from a page that had it (#213) until
+                    ' it went straight to the page shown (#276).
                     Dim rail As Control = ViewCatalog.Descendants(board).OfType(Of Controls.RailButton)().First().Parent.Parent
 
                     Dim watchSwitch As Action(Of String, Control, Action) =

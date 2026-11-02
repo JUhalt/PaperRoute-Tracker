@@ -28,6 +28,16 @@ Namespace Controls
     ' to the page; so do the next switch and the window moving, sizing,
     ' hiding or changing colors. Made on the first switch that could fade,
     ' it is kept hidden between fades and destroyed with the window.
+    '
+    ' A switch raises the focus event of the control it gives the keyboard
+    ' as it moves it, before the picture shows over that control; and
+    ' Narrator, which reads the event once the window's thread answers it,
+    ' after the switch, read nothing of the page shown while the picture
+    ' covered it (#276). So once the fade ends on its own, at an input or
+    ' for the page to show more, with nothing over the page, the focus
+    ' event of the control in the page area with the keyboard, if it took
+    ' it since the switch began, is raised again (Finish). Nothing waits
+    ' for it.
     Friend NotInheritable Class PageFade
         Implements IMessageFilter
 
@@ -40,6 +50,9 @@ Namespace Controls
         Private _filtering As Boolean = False
         Private _lastHidden As Long = 0
         Private Shared _inFlight As Integer = 0
+
+        ' Windows' focus as the switch began (#276).
+        Private _focusBefore As IntPtr = IntPtr.Zero
 
         ' How long the screen may go on showing a fade once it is hidden: a
         ' few of Windows' frames.
@@ -153,6 +166,7 @@ Namespace Controls
             [End]()
             Abandon()
             LastBeginMilliseconds = 0
+            _focusBefore = GetFocus()
 
             If Not allowed Then
                 LastOutcome = "cut: " & If(reason, "not faded")
@@ -314,6 +328,65 @@ Namespace Controls
         End Sub
 
 
+        ' The fade ends on its own, at a key, a click or the wheel, or for
+        ' the page shown to show more (Insights' figures): the picture goes,
+        ' and the control in the page area with the keyboard, if it took it
+        ' since the switch began, has its focus event raised again, as
+        ' Windows raised it under the picture (#276): the control the switch
+        ' gave it, or one given it once the switch had returned (Ctrl+F's
+        ' search box). At an input, which can move the keyboard itself (a
+        ' Tab, a click, the next switch), the event is raised once the input
+        ' has been handled, and only if that control still has the keyboard
+        ' and no picture shows: a control the input gave the keyboard has
+        ' its own event, with nothing over the page. Not as the next switch
+        ' begins, nor as the window moves, sizes, hides or goes to the
+        ' background (End).
+        Friend Sub Finish(Optional atAnInput As Boolean = False)
+
+            Dim covered As IntPtr = If(Showing, FocusTakenInTheArea(), IntPtr.Zero)
+
+            [End]()
+
+            If covered = IntPtr.Zero Then
+                Return
+            End If
+
+            If Not atAnInput Then
+                TellFocus(covered)
+            ElseIf _owner.IsHandleCreated Then
+                _owner.BeginInvoke(New Action(Sub() TellFocus(covered)))
+            End If
+
+        End Sub
+
+
+        ' The window with the keyboard, if it is in the page area and took the
+        ' keyboard since the switch began; otherwise none.
+        Private Function FocusTakenInTheArea() As IntPtr
+
+            Dim focus As IntPtr = GetFocus()
+
+            If focus = IntPtr.Zero OrElse focus = _focusBefore OrElse Not _area.IsHandleCreated OrElse
+               Not (focus = _area.Handle OrElse IsChild(_area.Handle, focus)) Then
+                Return IntPtr.Zero
+            End If
+
+            Return focus
+
+        End Function
+
+
+        ' A window's focus event raised again, if it still has the keyboard
+        ' and no picture shows over it.
+        Private Sub TellFocus(window As IntPtr)
+
+            If window = GetFocus() AndAlso Not Showing Then
+                NotifyWinEvent(EVENT_OBJECT_FOCUS, window, OBJID_CLIENT, CHILDID_SELF)
+            End If
+
+        End Sub
+
+
         ' A picture whose switch never began is let go.
         Private Sub Abandon()
 
@@ -455,7 +528,7 @@ Namespace Controls
             Dim alpha As Double = Math.Round(255.0 * (1.0 - UiMotion.EaseOut(elapsed / UiMotion.FadeMilliseconds)))
 
             If elapsed >= UiMotion.FadeMilliseconds OrElse alpha <= 0.0 OrElse Not UiMotion.Enabled Then
-                [End]()
+                Finish()
                 Return False
             End If
 
@@ -475,7 +548,7 @@ Namespace Controls
                      WM_LBUTTONDOWN, WM_RBUTTONDOWN, WM_MBUTTONDOWN, WM_XBUTTONDOWN,
                      WM_NCLBUTTONDOWN, WM_NCRBUTTONDOWN, WM_NCMBUTTONDOWN, WM_NCXBUTTONDOWN,
                      WM_MOUSEWHEEL, WM_MOUSEHWHEEL, WM_POINTERDOWN
-                    [End]()
+                    Finish(atAnInput:=True)
             End Select
 
             Return False
@@ -871,6 +944,22 @@ Namespace Controls
         <DllImport("user32.dll")>
         Private Shared Function IsWindowVisible(window As IntPtr) As Boolean
         End Function
+
+        Private Const EVENT_OBJECT_FOCUS As UInteger = &H8005UI
+        Private Const OBJID_CLIENT As Integer = &HFFFFFFFC
+        Private Const CHILDID_SELF As Integer = 0
+
+        <DllImport("user32.dll")>
+        Private Shared Function GetFocus() As IntPtr
+        End Function
+
+        <DllImport("user32.dll")>
+        Private Shared Function IsChild(parent As IntPtr, window As IntPtr) As Boolean
+        End Function
+
+        <DllImport("user32.dll")>
+        Private Shared Sub NotifyWinEvent(eventType As UInteger, window As IntPtr, objectId As Integer, childId As Integer)
+        End Sub
 
         <DllImport("user32.dll")>
         Private Shared Function LogicalToPhysicalPointForPerMonitorDPI(window As IntPtr, ByRef point As NativePoint) As Boolean
