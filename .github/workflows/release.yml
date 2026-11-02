@@ -70,8 +70,8 @@ jobs:
               }
           }
           $runtime = @($project.SelectNodes('/Project/ItemGroup/PackageReference[@Include="Velopack"]'))
-          if ($runtime.Count -ne 1 -or $runtime[0].GetAttribute('Version') -cne '1.2.0') {
-              throw 'The runtime and release packager must both use Velopack 1.2.0.'
+          if ($runtime.Count -ne 1 -or $runtime[0].GetAttribute('Version') -cne '1.2.161') {
+              throw 'The runtime and release packager must both use Velopack 1.2.161.'
           }
 
           Write-Host "Tag:        $tag"
@@ -228,7 +228,7 @@ jobs:
         continue-on-error: true
         shell: pwsh
         run: >
-          dnx vpk --version 1.2.0 download github
+          dnx vpk --version 1.2.161 download github
           --repoUrl https://github.com/${{ github.repository }}
           --token "${{ github.token }}"
           --channel preview
@@ -240,7 +240,7 @@ jobs:
         continue-on-error: true
         shell: pwsh
         run: >
-          dnx vpk --version 1.2.0 download github
+          dnx vpk --version 1.2.161 download github
           --repoUrl https://github.com/${{ github.repository }}
           --token "${{ github.token }}"
           --channel stable
@@ -251,7 +251,7 @@ jobs:
       - name: Build Velopack installer and update packages
         shell: pwsh
         run: >
-          dnx vpk --version 1.2.0 pack
+          dnx vpk --version 1.2.161 pack
           --packId JUhalt.PaperRouteTracker
           --packVersion "${{ steps.meta.outputs.version }}"
           --packDir "${{ github.workspace }}/publish/win-x64"
@@ -268,7 +268,7 @@ jobs:
         if: steps.meta.outputs.is_prerelease == 'true'
         shell: pwsh
         run: >
-          dnx vpk --version 1.2.0 upload github
+          dnx vpk --version 1.2.161 upload github
           --repoUrl https://github.com/${{ github.repository }}
           --token "${{ github.token }}"
           --channel preview
@@ -284,7 +284,7 @@ jobs:
         if: steps.meta.outputs.is_prerelease != 'true'
         shell: pwsh
         run: >
-          dnx vpk --version 1.2.0 upload github
+          dnx vpk --version 1.2.161 upload github
           --repoUrl https://github.com/${{ github.repository }}
           --token "${{ github.token }}"
           --channel stable
