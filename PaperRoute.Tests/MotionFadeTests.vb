@@ -112,7 +112,7 @@ Public Class MotionFadeTests
 
         Dim area As Rectangle = Screen.PrimaryScreen.WorkingArea
         board.Location = New Point(area.Left + 20, area.Top + 20)
-        SetWindowPos(board.Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE Or SWP_NOSIZE Or SWP_NOACTIVATE)
+        MakeTopmost(board)
         Application.DoEvents()
 
         Dim windowDpi As Integer = GetDpiForWindow(board.Handle)
@@ -129,9 +129,37 @@ Public Class MotionFadeTests
     ' fails unless it is then in front (InFront). In #268 another process's
     ' window was over the board, and the pictures compared that window.
     Private Shared Sub PutInFront(board As LibraryBoard)
-        SetWindowPos(board.Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE Or SWP_NOSIZE Or SWP_NOACTIVATE)
+        MakeTopmost(board)
         Pump(80)
         InFront(board, "before the switch")
+    End Sub
+
+
+    ' What the last call to make the board topmost returned, and what it
+    ' did, for the front check's failure (InFront).
+    Private Shared _lastTopmostCall As String = "not made"
+
+    ' Windows keeps a background program's window below the window in use
+    ' and ignores its call to be topmost, which still reports success: on
+    ' November 2 the board went under a terminal, a browser and the desktop
+    ' in turn (#268). Sharing the input of the thread of the window in use
+    ' for the call lets the board go above it, still never activated.
+    Private Shared Sub MakeTopmost(board As LibraryBoard)
+        Dim thisThread As Integer = GetCurrentThreadId()
+        Dim inUseProcess As Integer = 0
+        Dim inUse As Integer = GetWindowThreadProcessId(GetForegroundWindow(), inUseProcess)
+        Dim attached As Boolean = inUse <> 0 AndAlso inUse <> thisThread AndAlso AttachThreadInput(thisThread, inUse, True)
+        Dim made As Boolean = False
+        Dim lastError As Integer = 0
+        Try
+            made = SetWindowPos(board.Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE Or SWP_NOSIZE Or SWP_NOACTIVATE)
+            lastError = Marshal.GetLastWin32Error()
+        Finally
+            If attached Then AttachThreadInput(thisThread, inUse, False)
+        End Try
+        _lastTopmostCall = If(made, "succeeded", $"failed with error {lastError}") &
+            $"; the window was topmost just after it {(GetWindowLong(board.Handle, GWL_EXSTYLE) And WS_EX_TOPMOST) <> 0}" &
+            $"; the input of the window in use was shared {attached}"
     End Sub
 
 
@@ -148,7 +176,8 @@ Public Class MotionFadeTests
             Dim found As IntPtr = WindowFromPoint(at)
             If GetAncestor(found, GA_ROOT) <> board.Handle Then
                 Assert.Fail($"The test window is not in front on the screen {moment}: at {at} Windows finds {WindowName(found)}. " &
-                            $"The test window is topmost {(GetWindowLong(board.Handle, GWL_EXSTYLE) And WS_EX_TOPMOST) <> 0}, cloaked {Cloaked(board.Handle)}.")
+                            $"The test window is topmost {(GetWindowLong(board.Handle, GWL_EXSTYLE) And WS_EX_TOPMOST) <> 0}, cloaked {Cloaked(board.Handle)}; " &
+                            $"the last call to make it topmost {_lastTopmostCall}.")
             End If
         Next
 
@@ -1227,7 +1256,9 @@ Public Class MotionFadeTests
     ' (OnBoard, #268); it is put in front before each switch, and the test
     ' fails unless Windows finds it at the page area's corners and middle
     ' before each of the three pictures (InFront): in #268 another window
-    ' was over the page area, and the pictures compared that window.
+    ' was over the page area, and the pictures compared that window. With
+    ' PAPERROUTE_ON_SCREEN_PICTURES set to a folder, each switch's three
+    ' pictures are saved there, as the certification's evidence.
     <TestMethod>
     <TestCategory("OnScreen")>
     Public Sub ThePictureIsThePageLeft()
@@ -1267,6 +1298,13 @@ Public Class MotionFadeTests
                             Pump(300)
                             InFront(board, "once the fade ended")
                             Using after As Bitmap = FromScreen(screenArea)
+                                Dim keepIn As String = Environment.GetEnvironmentVariable("PAPERROUTE_ON_SCREEN_PICTURES")
+                                If Not String.IsNullOrEmpty(keepIn) Then
+                                    Directory.CreateDirectory(keepIn)
+                                    before.Save(Path.Combine(keepIn, $"{lines.Count}-{page}-1-before.png"), Imaging.ImageFormat.Png)
+                                    during.Save(Path.Combine(keepIn, $"{lines.Count}-{page}-2-during.png"), Imaging.ImageFormat.Png)
+                                    after.Save(Path.Combine(keepIn, $"{lines.Count}-{page}-3-after.png"), Imaging.ImageFormat.Png)
+                                End If
                                 Dim kept As Double = Matching(before, during)
                                 Dim changed As Double = Matching(before, after)
                                 lines.Add($"To {page}: {kept:P1} of the page area matched the page left under the opaque overlay, {changed:P1} once the fade ended")
@@ -1600,8 +1638,16 @@ Public Class MotionFadeTests
     Private Const SWP_NOMOVE As UInteger = &H2
     Private Const SWP_NOACTIVATE As UInteger = &H10
 
-    <DllImport("user32.dll")>
+    <DllImport("user32.dll", SetLastError:=True)>
     Private Shared Function SetWindowPos(window As IntPtr, after As IntPtr, x As Integer, y As Integer, width As Integer, height As Integer, flags As UInteger) As Boolean
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function GetForegroundWindow() As IntPtr
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function AttachThreadInput(attach As Integer, attachTo As Integer, share As Boolean) As Boolean
     End Function
 
     Private Const SW_SHOWNOACTIVATE As Integer = 4
