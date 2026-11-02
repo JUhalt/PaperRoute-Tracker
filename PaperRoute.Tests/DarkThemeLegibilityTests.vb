@@ -379,6 +379,9 @@ Public Class DarkThemeLegibilityTests
     ' of the four windows that show one, at the step that fills it, is
     ' drawn with its outermost pixels in the theme's border. On 81bb29d
     ' none was. A grid on the main window has no frame.
+    ' The two readings' grids are judged again with nothing found, their
+    ' hint showing: it lies inside the frame. On b394de1 it covered the
+    ' frame's left, right and bottom in the grid's background.
     <TestMethod>
     <DataRow(SystemColorMode.Dark)>
     <DataRow(SystemColorMode.Classic)>
@@ -388,31 +391,46 @@ Public Class DarkThemeLegibilityTests
 
         Dim views = ViewCatalog.AllViewsAndStages().Where(Function(view) GridViews.Contains(view.Name))
         Dim grids As New List(Of String)()
+        Dim emptied As New List(Of String)()
         Dim found As New List(Of String)()
 
         Dim failures As List(Of String) = ViewCatalog.ShowEach(views,
             Sub(name, shown)
-                Dim border As Integer = UiTheme.CardBorder().ToArgb()
-                For Each grid As DataGridView In Descendants(shown).OfType(Of DataGridView)().Where(Function(item) item.Visible AndAlso item.BorderStyle <> BorderStyle.None)
+                For Each grid As DataGridView In Descendants(shown).OfType(Of DataGridView)().Where(Function(item) item.Visible AndAlso item.BorderStyle <> BorderStyle.None).ToList()
                     grids.Add(name)
-                    Using image As Bitmap = Picture(grid)
-                        Dim ring As List(Of Integer) =
-                            Enumerable.Range(0, image.Width).SelectMany(Function(x) {image.GetPixel(x, 0).ToArgb(), image.GetPixel(x, image.Height - 1).ToArgb()}).
-                                Concat(Enumerable.Range(1, image.Height - 2).SelectMany(Function(y) {image.GetPixel(0, y).ToArgb(), image.GetPixel(image.Width - 1, y).ToArgb()})).
-                                ToList()
-                        Dim other As List(Of Integer) = ring.Where(Function(pixel) pixel <> border).ToList()
-                        If other.Count > 0 Then
-                            found.Add($"{name}: {Describe(grid)} has {other.Count} of its {ring.Count} outermost pixels off the theme's border, such as {Color.FromArgb(other(0))}.")
-                        End If
-                    End Using
+                    JudgeGridFrame(name, grid, found)
+                    Dim hint As Label = grid.Controls.OfType(Of Label)().SingleOrDefault()
+                    If hint IsNot Nothing Then
+                        grid.Rows.Clear()
+                        Application.DoEvents()
+                        Assert.IsTrue(hint.Visible, name & ": its grid shows its hint with nothing found.")
+                        emptied.Add(name)
+                        JudgeGridFrame(name & ", with nothing found", grid, found)
+                    End If
                 Next
             End Sub,
             mode:=mode)
 
         Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
         CollectionAssert.AreEquivalent(GridViews, grids, "Each of the four windows shows one framed grid.")
+        CollectionAssert.AreEquivalent({"DecisionLetterForm, reviewing the comments it read", "AuthorInstructionsForm, reviewing the requirements it read"}, emptied, "The two readings' grids have a hint.")
         Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
 
+    End Sub
+
+    ' Whether each of the grid's outermost pixels is the theme's border.
+    Private Shared Sub JudgeGridFrame(name As String, grid As DataGridView, found As List(Of String))
+        Dim border As Integer = UiTheme.CardBorder().ToArgb()
+        Using image As Bitmap = Picture(grid)
+            Dim ring As List(Of Integer) =
+                Enumerable.Range(0, image.Width).SelectMany(Function(x) {image.GetPixel(x, 0).ToArgb(), image.GetPixel(x, image.Height - 1).ToArgb()}).
+                    Concat(Enumerable.Range(1, image.Height - 2).SelectMany(Function(y) {image.GetPixel(0, y).ToArgb(), image.GetPixel(image.Width - 1, y).ToArgb()})).
+                    ToList()
+            Dim other As List(Of Integer) = ring.Where(Function(pixel) pixel <> border).ToList()
+            If other.Count > 0 Then
+                found.Add($"{name}: {Describe(grid)} has {other.Count} of its {ring.Count} outermost pixels off the theme's border, such as {Color.FromArgb(other(0))}.")
+            End If
+        End Using
     End Sub
 
     ' The windows that show a framed grid, at the step that fills it.

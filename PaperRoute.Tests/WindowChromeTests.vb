@@ -96,8 +96,17 @@ Public Class WindowChromeTests
                 Dim style As Integer = GetWindowLong(shown.Handle, GWL_STYLE)
                 Dim sizable As Boolean = (style And WS_THICKFRAME) <> 0
 
-                If shown.ShowIcon OrElse (style And WS_MINIMIZEBOX) <> 0 OrElse ((style And WS_MAXIMIZEBOX) <> 0 AndAlso Not sizable) Then
-                    found.Add($"{name}: {shown.FormBorderStyle} with its icon {shown.ShowIcon}, Minimize {(style And WS_MINIMIZEBOX) <> 0} and Maximize {(style And WS_MAXIMIZEBOX) <> 0}.")
+                ' Windows draws a title bar's icon, its own if the window
+                ' was given none, unless the window is framed as a dialog
+                ' and was given none.
+                Dim showsIcon As Boolean =
+                    (style And WS_SYSMENU) <> 0 AndAlso
+                    ((GetWindowLong(shown.Handle, GWL_EXSTYLE) And WS_EX_DLGMODALFRAME) = 0 OrElse
+                     SendMessage(shown.Handle, WM_GETICON, New IntPtr(ICON_SMALL), IntPtr.Zero) <> IntPtr.Zero OrElse
+                     SendMessage(shown.Handle, WM_GETICON, New IntPtr(ICON_BIG), IntPtr.Zero) <> IntPtr.Zero)
+
+                If showsIcon OrElse (style And WS_MINIMIZEBOX) <> 0 OrElse ((style And WS_MAXIMIZEBOX) <> 0 AndAlso Not sizable) Then
+                    found.Add($"{name}: {shown.FormBorderStyle} with an icon {showsIcon}, Minimize {(style And WS_MINIMIZEBOX) <> 0} and Maximize {(style And WS_MAXIMIZEBOX) <> 0}.")
                 End If
 
             End Sub,
@@ -641,12 +650,22 @@ Public Class WindowChromeTests
     End Function
 
     Private Const GWL_STYLE As Integer = -16
+    Private Const GWL_EXSTYLE As Integer = -20
     Private Const WS_THICKFRAME As Integer = &H40000
     Private Const WS_MINIMIZEBOX As Integer = &H20000
     Private Const WS_MAXIMIZEBOX As Integer = &H10000
+    Private Const WS_SYSMENU As Integer = &H80000
+    Private Const WS_EX_DLGMODALFRAME As Integer = &H1
+    Private Const WM_GETICON As Integer = &H7F
+    Private Const ICON_SMALL As Integer = 0
+    Private Const ICON_BIG As Integer = 1
 
     <DllImport("user32.dll", EntryPoint:="GetWindowLongW")>
     Private Shared Function GetWindowLong(window As IntPtr, index As Integer) As Integer
+    End Function
+
+    <DllImport("user32.dll", EntryPoint:="SendMessageW")>
+    Private Shared Function SendMessage(window As IntPtr, message As Integer, wParam As IntPtr, lParam As IntPtr) As IntPtr
     End Function
 
     <DllImport("kernel32.dll")>

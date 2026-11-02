@@ -169,7 +169,7 @@ Namespace Controls
             For Each entry As Entry In Entries.Where(Function(item) item.Target Is target)
 
                 Dim width As Integer =
-                    target.ClientSize.Width - entry.Hint.Padding.Horizontal
+                    HintBounds(target).Width - entry.Hint.Padding.Horizontal
 
                 If width <= 0 Then
                     Return 0
@@ -219,14 +219,7 @@ Namespace Controls
                 Dim text As String = entry.Text()
                 If entry.Hint.Text <> text Then entry.Hint.Text = text
 
-                ' A table keeps its column headings visible above the hint.
-                Dim top As Integer = 0
-                Dim grid As DataGridView = TryCast(target, DataGridView)
-                If grid IsNot Nothing AndAlso grid.ColumnHeadersVisible Then
-                    top = grid.ColumnHeadersHeight
-                End If
-
-                Dim bounds As New Rectangle(0, top, target.ClientSize.Width, Math.Max(0, target.ClientSize.Height - top))
+                Dim bounds As Rectangle = HintBounds(target)
                 If entry.Hint.Bounds <> bounds Then entry.Hint.Bounds = bounds
             End If
 
@@ -236,6 +229,31 @@ Namespace Controls
             End If
 
         End Sub
+
+        ' Where a list's hint lies: over the whole list, but for a table's
+        ' column headings, which stay visible above it, and a table's frame.
+        ' A table draws its frame inside its own client area, so a hint laid
+        ' over all of it hid the frame on its left, right and bottom (#266).
+        Private Shared Function HintBounds(target As Control) As Rectangle
+
+            Dim frame As Integer = 0
+            Dim top As Integer = 0
+            Dim grid As DataGridView = TryCast(target, DataGridView)
+
+            If grid IsNot Nothing Then
+                ' The frame UiPolish draws is a pixel wide.
+                If grid.BorderStyle <> BorderStyle.None Then frame = 1
+                top = frame + If(grid.ColumnHeadersVisible, grid.ColumnHeadersHeight, 0)
+            End If
+
+            Return New Rectangle(
+                frame,
+                top,
+                Math.Max(0, target.ClientSize.Width - 2 * frame),
+                Math.Max(0, target.ClientSize.Height - top - frame)
+            )
+
+        End Function
 
         Private Shared Function ItemCount(target As Control) As Integer
 

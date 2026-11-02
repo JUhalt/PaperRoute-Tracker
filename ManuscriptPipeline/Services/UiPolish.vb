@@ -806,8 +806,8 @@ Namespace Services
         ' pixels from its neighbour where the others are 8 apart, 14 and 10
         ' at 125% (#266). Where the row's other buttons share one margin,
         ' the default button takes it on each side another button is on, so
-        ' a footer of two keeps the same 8; the side toward the row's edge
-        ' keeps its own.
+        ' a footer of two gets the same 8 (it had 11); the side toward the
+        ' row's edge keeps its own.
         Private Shared Sub SpaceDefaultButton(
             primary As Button
         )

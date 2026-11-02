@@ -24,7 +24,6 @@ Namespace Controls
         Private Const WM_SETFOCUS As Integer = &H7
         Private Const WM_KILLFOCUS As Integer = &H8
         Private Const WM_PRINT As Integer = &H317
-        Private Const WM_STYLECHANGING As Integer = &H7C
         Private Const PRF_NONCLIENT As Integer = &H4
         Private Const RDW_INVALIDATE As Integer = &H1
         Private Const RDW_FRAME As Integer = &H400
@@ -41,9 +40,20 @@ Namespace Controls
         Private Sub New(control As Control)
             _control = control
             AddHandler control.HandleCreated, Sub(sender, e) Hook()
+            ' An editable drop-down's keyboard focus is in its text, whose
+            ' window alone hears it come and go (#266); Windows Forms tells
+            ' the drop-down as GotFocus and LostFocus.
+            If TypeOf control Is ComboBox Then
+                AddHandler control.GotFocus, Sub(sender, e) Redraw()
+                AddHandler control.LostFocus, Sub(sender, e) Redraw()
+            End If
             If control.IsHandleCreated Then Hook()
         End Sub
 
+        ' Windows Forms sets a box's styles from its own only as it makes a
+        ' new window for the box, as a change of its BorderStyle, Multiline
+        ' or ScrollBars does, so each window is given the border as it is
+        ' made.
         Private Sub Hook()
 
             AssignHandle(_control.Handle)
@@ -86,15 +96,16 @@ Namespace Controls
                         End Using
                     End If
                 Case WM_SETFOCUS, WM_KILLFOCUS
-                    RedrawWindow(Handle, IntPtr.Zero, IntPtr.Zero, RDW_FRAME Or RDW_INVALIDATE)
-                ' Windows Forms sets a window's styles again from its own,
-                ' which give such a box no border.
-                Case WM_STYLECHANGING
-                    If (m.WParam.ToInt64() And &HFFFFFFFFL) = (GWL_STYLE And &HFFFFFFFFL) AndAlso HasNoBorderOfItsOwn() Then
-                        Marshal.WriteInt32(m.LParam, 4, Marshal.ReadInt32(m.LParam, 4) Or WS_BORDER)
-                    End If
+                    Redraw()
             End Select
 
+        End Sub
+
+        ' The frame is painted again in the color for the control's focus.
+        Private Sub Redraw()
+            If Handle <> IntPtr.Zero Then
+                RedrawWindow(Handle, IntPtr.Zero, IntPtr.Zero, RDW_FRAME Or RDW_INVALIDATE)
+            End If
         End Sub
 
         Private Sub PaintBorder()
