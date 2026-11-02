@@ -28,7 +28,7 @@ Real 150% display scaling gets one calibration session and one session per conve
 
 ## 6. Capture only after the window is ready
 
-The harness writes a "painted" marker when a window's background load has finished and its message loop is idle (`--painted <file>`; the marker carries the UTC time, `Application.HighDpiMode` and the window's `DeviceDpi`). `Capture-HarnessWindow.ps1` passes that option, waits for the marker, and fails on timeout instead of capturing; there is no fixed settle time. The marker time goes into the capture's evidence JSON.
+The harness writes a "painted" marker when a window's background load has finished and its message loop is idle (`--painted <file>`; the marker carries the UTC time, `Application.HighDpiMode`, the window's `DeviceDpi` and, on the Board, the shelf shown). `Capture-HarnessWindow.ps1` passes that option, waits for the marker, and fails on timeout instead of capturing; there is no fixed settle time. Before it captures, it checks each window: one that is minimized, or smaller than its minimum size (`WM_GETMINMAXINFO`, which WinForms answers with the form's `MinimumSize`), fails the capture with the window's title and size. A minimized window once came out as a 183x34 caption strip and was reported captured (#266). The marker time and the check go into the capture's evidence JSON.
 
 ## 7. A quiet host
 

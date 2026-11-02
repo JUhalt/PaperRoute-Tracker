@@ -7,6 +7,30 @@ namespace PaperRoute.V04Demo;
 
 internal static class BoardDemo
 {
+    // The --shelf values (#266) and the board's fields for their tabs. A tab's
+    // text carries the shelf's count, "Published (5)", so it is found by field.
+    private static readonly (string Name, string Tab)[] Shelves =
+    {
+        ("pipeline", "tabPipeline"), ("published", "tabPublished"), ("drawer", "tabFileDrawer")
+    };
+
+    internal static bool IsShelf(string name) => Shelves.Any(shelf => shelf.Name == name);
+
+    // A shelf's tab. Checking it shows the shelf, as a click on it does.
+    internal static ManuscriptPipeline.Controls.ShelfTabButton ShelfTab(ManuscriptPipeline.Form1 board, string name) =>
+        Tab(board, Shelves.Single(shelf => shelf.Name == name).Tab)
+            ?? throw new InvalidOperationException("The board has no tab for the " + name + " shelf.");
+
+    // The shelf the board shows: its tab is checked and visible. Null on the
+    // welcome or another page, where no shelf shows.
+    internal static string? ShownShelf(ManuscriptPipeline.Form1 board) =>
+        Shelves.Where(shelf => Tab(board, shelf.Tab) is { Checked: true, Visible: true })
+            .Select(shelf => shelf.Name).FirstOrDefault();
+
+    private static ManuscriptPipeline.Controls.ShelfTabButton? Tab(ManuscriptPipeline.Form1 board, string field) =>
+        typeof(ManuscriptPipeline.Form1).GetField(field, BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(board)
+            as ManuscriptPipeline.Controls.ShelfTabButton;
+
     internal static void RecordLayoutEvidence(ManuscriptPipeline.Form1 board, string sessionRoot)
     {
         // Harness-only diagnostics for native scaling and maximize/restore checks.
@@ -27,7 +51,8 @@ internal static class BoardDemo
                     cards = shelf.Controls.Cast<Control>().Select(card => new { card.Bounds, card.Margin }).ToArray()
                 };
             }).ToArray();
-            observations.Add(new { time = DateTime.UtcNow, board.DeviceDpi, board.WindowState, board.Bounds, board.ClientSize, shelves });
+            // The shelf shown (#266): the hidden shelves keep the sizes they were last laid out at.
+            observations.Add(new { time = DateTime.UtcNow, board.DeviceDpi, board.WindowState, board.Bounds, board.ClientSize, shelf = ShownShelf(board), shelves });
             if (observations.Count > 30) observations.RemoveAt(0);
             File.WriteAllText(Path.Combine(sessionRoot, "board-layout.json"),
                 JsonSerializer.Serialize(observations, new JsonSerializerOptions { WriteIndented = true }));

@@ -3,6 +3,7 @@ using ManuscriptPipeline.Models;
 using ManuscriptPipeline.Services;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace PaperRoute.V04Demo;
 
@@ -10,8 +11,8 @@ internal static class Program
 {
     private const string Usage = "PaperRoute workflow manual demo\n\n" +
         "Surfaces: vault (default), readiness, packet, packet-new, file, file-new, notes, submission, responses, workflow, board, publications, fill, about, route, update, report, candidate, online, key, journals, lookup, suggest, suggest-results, citations, citations-update, assistant-settings, assistant-consent, letter, letter-read, decision-prefill, draft-response, cover-letter, cover-letter-result, author-instructions, author-instructions-read, journal-checklist, packet-export, packet-export-blinded\n" +
-        "Options: --minimum, --primary, --empty (vault/readiness/board), --offline and --collapsed (board, journals, citations), --integrity (populated vault only), --dark or --system, --help\n" +
-        "Capture: --painted <file> writes a JSON marker (UTC time, HighDpiMode, DeviceDpi) once the shown window has loaded and its message loop is idle; --load-delay <ms> is a test hook that holds the shown window's load that long first. With --painted nobody is assumed to be watching: a failure is written to standard error with a non-zero exit code (2 arguments, 3 setup, 4 marker) and no dialog is shown.\n\n" +
+        "Options: --minimum, --primary, --empty (vault/readiness/board), --shelf <pipeline|published|drawer> (populated board only), --offline and --collapsed (board, journals, citations), --integrity (populated vault only), --dark or --system, --help\n" +
+        "Capture: --painted <file> writes a JSON marker (UTC time, HighDpiMode, DeviceDpi, and on the board its shelf) once the shown window has loaded and its message loop is idle; --load-delay <ms> is a test hook that holds the shown window's load that long first. With --painted nobody is assumed to be watching: a failure is written to standard error with a non-zero exit code (2 arguments, 3 setup, 4 marker) and no dialog is shown.\n\n" +
         "Default surfaces discard manuscript changes when the window closes.\n" +
         "workflow and board save only in a new disposable temporary session.\n" +
         "--integrity creates and retains disposable files in a unique temporary directory.";
@@ -20,6 +21,9 @@ internal static class Program
     // hook's delay in milliseconds.
     private static string? paintedPath;
     private static int loadDelay;
+    // The board's shelf for the marker (#266), so a capture's evidence says
+    // which shelf it shows. Null on every other surface.
+    private static Func<string?>? shownShelf;
 
     [STAThread]
     private static void Main(string[] args)
@@ -46,11 +50,12 @@ internal static class Program
             return;
         }
 
-        // The two valued options are taken out first; the rest are flags.
+        // The valued options are taken out first; the rest are flags.
         var arguments = args.ToList();
         paintedPath = TakeValue(arguments, "--painted");
         var delayText = TakeValue(arguments, "--load-delay");
-        if (paintedPath == "" || delayText == "" ||
+        var shelf = TakeValue(arguments, "--shelf")?.ToLowerInvariant();
+        if (paintedPath == "" || delayText == "" || shelf == "" ||
             (delayText is not null && (!int.TryParse(delayText, out loadDelay) || loadDelay < 0)))
         {
             Report("Invalid demo arguments", Usage, MessageBoxIcon.Information, 2);
@@ -89,6 +94,8 @@ internal static class Program
             (dark && system) ||
             ((offline || collapsed) && surface != "board" && surface != "journals" && surface != "citations") ||
             (empty && surface != "vault" && surface != "readiness" && surface != "board") ||
+            // The empty board shows the welcome, not a shelf.
+            (shelf is not null && (surface != "board" || empty || !BoardDemo.IsShelf(shelf))) ||
             (integrity && (surface != "vault" || empty)))
         {
             Report("Invalid demo arguments", Usage, MessageBoxIcon.Information, 2);
@@ -225,12 +232,19 @@ internal static class Program
                 if (offline || collapsed)
                     new AppSettingsService().Save(new AppSettings { NavigationCollapsed = collapsed, OnlineServices = new OnlineServicesSettings { WorkOffline = offline } });
                 using var board = new ManuscriptPipeline.Form1();
+                // Found before the window shows, so a missing tab fails as setup does.
+                var shelfTab = shelf is null ? null : BoardDemo.ShelfTab(board, shelf);
                 BoardDemo.RecordLayoutEvidence(board, sessionRoot);
                 board.Shown += (_, _) =>
                 {
                     board.Text += " [DEMO - disposable synthetic library]";
                     if (minimum) board.Size = board.MinimumSize;
+                    // As a click on the tab (#266): checking it shows its shelf, built and
+                    // laid out at this size before Shown returns. The painted marker waits
+                    // for the Idle after this handler, so the capture shows that shelf painted.
+                    if (shelfTab is not null) shelfTab.Checked = true;
                 };
+                shownShelf = () => BoardDemo.ShownShelf(board);
                 ConfigureDisplayEvidence(board, primary);
                 board.ShowDialog();
                 return;
@@ -469,8 +483,10 @@ internal static class Program
                     PaintedAtUtc = DateTime.UtcNow,
                     HighDpiMode = Application.HighDpiMode.ToString(),
                     form.DeviceDpi,
-                    Title = form.Text
-                }, new JsonSerializerOptions { WriteIndented = true });
+                    Title = form.Text,
+                    // Left out where there is no shelf to name.
+                    Shelf = shownShelf?.Invoke()
+                }, new JsonSerializerOptions { WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
                 // Written whole, then moved: the capture script is already polling the path.
                 // A failure here is the marker's, not the fixtures': it is reported as such
                 // and the window closes, so the script sees the exit code at once.
