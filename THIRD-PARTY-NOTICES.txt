@@ -47,8 +47,8 @@ RBush.Signed 4.0.0 (Excel workbooks)
   Copyright © 2017-2024 Turning Code, LLC (and others)
   https://github.com/viceroypenguin/RBush
 
-Velopack 1.2.0 (installation and updates: the Velopack library in the app,
-and the Setup and Update.exe that the Velopack packer, vpk 1.2.0, builds)
+Velopack 1.2.161 (installation and updates: the Velopack library in the app,
+and the Setup and Update.exe that the Velopack packer, vpk 1.2.161, builds)
   Copyright © Velopack Ltd. All rights reserved.
   https://github.com/velopack/velopack
 

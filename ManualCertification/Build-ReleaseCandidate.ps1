@@ -90,9 +90,12 @@ foreach ($pair in @(@('Version', $Version), @('AssemblyVersion', $numericVersion
         throw "Project $($pair[0]) must explicitly equal '$($pair[1])' before packaging."
     }
 }
+# The Velopack library the app references and the vpk that packs it are one
+# version, as release.yml requires; 1.2.161 from 1.0 (#179).
+$velopackVersion = '1.2.161'
 $velopack = @($project.SelectNodes('/Project/ItemGroup/PackageReference[@Include="Velopack"]'))
-if ($velopack.Count -ne 1 -or $velopack[0].GetAttribute('Version') -ne '1.2.0') {
-    throw 'The runtime and this candidate packager must both use Velopack 1.2.0.'
+if ($velopack.Count -ne 1 -or $velopack[0].GetAttribute('Version') -ne $velopackVersion) {
+    throw "The runtime and this candidate packager must both use Velopack $velopackVersion."
 }
 $releaseNotes = Join-Path $repoRoot "docs/releases/$Version.md"
 if (-not (Test-Path -LiteralPath $releaseNotes -PathType Leaf)) {
@@ -116,7 +119,7 @@ if ($PreflightOnly) {
     [pscustomobject]@{
         Version = $Version; Channel = $channel; OutputDirectory = $candidateRoot
         Commit = $commit; DirtyCheckout = ($sourceStatus.Count -gt 0); DotnetSdk = $sdk
-        Velopack = '1.2.0'; ReleaseNotes = $releaseNotes
+        Velopack = $velopackVersion; ReleaseNotes = $releaseNotes
     }
     return
 }
@@ -319,7 +322,7 @@ try {
     }
     $dllHash = Get-Sha256 $dllPath
     Invoke-CandidateCommand '04-package' $dnx @(
-        'vpk', '--version', '1.2.0', 'pack', '--packId', $packId, '--packVersion', $Version,
+        'vpk', '--version', $velopackVersion, 'pack', '--packId', $packId, '--packVersion', $Version,
         '--packDir', $publishRoot, '--mainExe', 'PaperRouteTracker.exe', '--packTitle', 'PaperRoute Tracker',
         '--packAuthors', 'Joshua Uhalt', '--icon', (Join-Path $repoRoot 'ManuscriptPipeline/Assets/PaperRoute.ico'),
         '--releaseNotes', $releaseNotes, '--channel', $channel, '--outputDir', $releaseRoot,
@@ -364,7 +367,7 @@ try {
     }
     $evidence = [ordered]@{
         Status = 'VerifiedLocalCandidate'; Version = $Version; NumericVersion = $numericVersion
-        Channel = $channel; PackageId = $packId; VelopackVersion = '1.2.0'; DotnetSdk = $sdk; RuntimeVersion = $runtimeVersion
+        Channel = $channel; PackageId = $packId; VelopackVersion = $velopackVersion; DotnetSdk = $sdk; RuntimeVersion = $runtimeVersion
         Commit = $commit; DirtyCheckout = ($sourceStatus.Count -gt 0); SourceStatusFile = 'source-status.txt'
         SourceSnapshotFile = 'source-files.json'; SourceSnapshotSha256 = (Get-Sha256 (Join-Path $candidateRoot 'source-files.json'))
         StartedAtUtc = $startedAt.ToString('o'); CompletedAtUtc = [DateTime]::UtcNow.ToString('o')

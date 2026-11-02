@@ -5,8 +5,11 @@ upload and prepares the exact public asset/checksum set locally; Verify checks
 the complete draft again after the workflow uploads documentation/checksums.
 Velopack 1.2 uploads BuildAssets, then generates a feed from its Full/Delta
 entries. Its local feed can also contain prior download seeds and differs.
-Sources: https://github.com/velopack/velopack/blob/1.2.0/src/vpk/Velopack.Deployment/GitHubRepository.cs
-         https://github.com/velopack/velopack/blob/1.2.0/src/vpk/Velopack.Core/BuildAssets.cs
+1.2.161 uploads in _GitRelease.cs and GitHub.cs, which replaced 1.2.0's
+GitHubRepository.cs; what it uploads, and under which names, is unchanged (#179).
+Sources: https://github.com/velopack/velopack/blob/1.2.161/src/vpk/Velopack.Deployment/_GitRelease.cs
+         https://github.com/velopack/velopack/blob/1.2.161/src/vpk/Velopack.Deployment/GitHub.cs
+         https://github.com/velopack/velopack/blob/1.2.161/src/vpk/Velopack.Core/BuildAssets.cs
 #>
 [CmdletBinding()]
 param(
