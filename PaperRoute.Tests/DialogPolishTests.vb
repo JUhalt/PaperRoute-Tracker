@@ -426,23 +426,40 @@ Public Class DialogPolishTests
     ' fields. The packet's Packet name, Exact manuscript version, Readiness
     ' profile and Real journal submission were 2.5 to 3.5 pixels below
     ' theirs, 6.5 to 7 at 150%, centred in rows the field sat at the top
-    ' of, and Revision round 3 below its box at 150% (#266). The middle of each label's
-    ' first line of text is within 2 pixels of its field's middle: the
-    ' first box, list or date in the field's cell, else its first check
-    ' box, else its first button, each of which centres its text. The text
-    ' is drawn as the app draws it.
+    ' of, and Revision round 3 below its box at 150% (#266). So were the
+    ' packet file's File role, Storage and Label, 2.5 to 3 pixels, and the
+    ' reminder's, author's, external link's and affiliation's fields, built
+    ' as the packet file's are; the checklist item's Requirement title sat
+    ' about 4 pixels below its box and Importance about 6 below its check
+    ' box at 125%, and the cover letter's note beside Abstract about 5
+    ' below that label (#266). The middle of each label's first line of
+    ' text is within 2 pixels of its field's middle: the first box, list or
+    ' date in the field's cell, else its first check box, else its first
+    ' button, each of which centres its text, else the middle of the first
+    ' line of the label there. The text is drawn as the app draws it. On
+    ' e40f42c each of those was 3 or 4 pixels off at 96 DPI; the author's
+    ' Identity and the cover letter's other rows, measured with them, were
+    ' already on their fields' line.
     <TestMethod>
     Public Sub FieldLabelsShareTheirFieldsCentreLine()
+
+        Dim packetFile As String() = {"File role", "Storage", "Label", "Local file"}
 
         Dim rows As New Dictionary(Of String, String()) From {
             {"AddCorrespondenceForm", {"Type", "Date", "Title", "Local file", "Source URL"}},
             {"AddSubmissionForm", {"Journal", "Journal manuscript ID", "Submitted", "Publisher portal URL", "Follow-up"}},
             {"AddManuscriptForm", {"Title", "Target journal", "Starting stage", "From a draft", "First deadline"}},
             {"ManuscriptVersionEditForm", {"Label", "Version file", "Current version"}},
-            {"SubmissionPacketFileEditForm, Edit", {"Local file"}},
-            {"SubmissionPacketFileEditForm, New", {"Local file"}},
+            {"SubmissionPacketFileEditForm, Edit", packetFile},
+            {"SubmissionPacketFileEditForm, New", packetFile},
             {"SubmissionPacketEditForm, Edit", {"Packet name", "Exact manuscript version", "Readiness profile", "Real journal submission", "Revision round"}},
-            {"SubmissionPacketEditForm, New", {"Packet name", "Exact manuscript version", "Readiness profile", "Real journal submission", "Revision round"}}
+            {"SubmissionPacketEditForm, New", {"Packet name", "Exact manuscript version", "Readiness profile", "Real journal submission", "Revision round"}},
+            {"ReminderEditForm", {"Manuscript", "Due date", "Reminder"}},
+            {"AuthorEditForm", {"Given name", "Middle name", "Family name", "Suffix", "Display override", "ORCID iD", "Identity"}},
+            {"ExternalLinkEditForm", {"Label", "URL"}},
+            {"AffiliationEditForm", {"Institution", "Department", "City", "State / region", "Country"}},
+            {"JournalChecklistItemEditForm", {"Requirement title", "Category", "Importance"}},
+            {"CoverLetterForm", {"&Journal", "&Title", "&Keywords (comma-separated)", "Type of work", "&Abstract"}}
         }
 
         Dim measured As New List(Of String)()
@@ -465,7 +482,7 @@ Public Class DialogPolishTests
                         End If
 
                         Dim labelCentre As Double = FirstLineCentreY(shown, pair.Label)
-                        Dim fieldCentre As Double = CentreY(shown, pair.Field)
+                        Dim fieldCentre As Double = If(TypeOf pair.Field Is Label, FirstLineCentreY(shown, DirectCast(pair.Field, Label)), CentreY(shown, pair.Field))
                         Dim line As String = $"{name} at {dpi} DPI: '{caption}' has its text's middle at {labelCentre}, its {pair.Field.GetType().Name} at {fieldCentre}"
 
                         measured.Add(line)
@@ -568,7 +585,13 @@ Public Class DialogPolishTests
             ("SubmissionPacketFileEditForm, Edit", GetType(SubmissionPacketFileEditForm), Function() ViewCatalog.Dialogs(GetType(SubmissionPacketFileEditForm))(String.Empty)),
             ("SubmissionPacketFileEditForm, New", GetType(SubmissionPacketFileEditForm), Function() CType(New SubmissionPacketFileEditForm(LongNames().SubmissionPackets(0), Nothing), Form)),
             ("SubmissionPacketEditForm, Edit", GetType(SubmissionPacketEditForm), Function() CType(PacketEditor(existing:=True), Form)),
-            ("SubmissionPacketEditForm, New", GetType(SubmissionPacketEditForm), Function() CType(PacketEditor(existing:=False), Form))
+            ("SubmissionPacketEditForm, New", GetType(SubmissionPacketEditForm), Function() CType(PacketEditor(existing:=False), Form)),
+            ("ReminderEditForm", GetType(ReminderEditForm), Function() ViewCatalog.Dialogs(GetType(ReminderEditForm))(String.Empty)),
+            ("AuthorEditForm", GetType(AuthorEditForm), Function() ViewCatalog.Dialogs(GetType(AuthorEditForm))(String.Empty)),
+            ("ExternalLinkEditForm", GetType(ExternalLinkEditForm), Function() ViewCatalog.Dialogs(GetType(ExternalLinkEditForm))(String.Empty)),
+            ("AffiliationEditForm", GetType(AffiliationEditForm), Function() ViewCatalog.Dialogs(GetType(AffiliationEditForm))(String.Empty)),
+            ("JournalChecklistItemEditForm", GetType(JournalChecklistItemEditForm), Function() ViewCatalog.Dialogs(GetType(JournalChecklistItemEditForm))(String.Empty)),
+            ("CoverLetterForm", GetType(CoverLetterForm), Function() ViewCatalog.Dialogs(GetType(CoverLetterForm))(String.Empty))
         }
 
     End Function
@@ -618,7 +641,8 @@ Public Class DialogPolishTests
             Dim field As Control =
                 If(candidates.FirstOrDefault(Function(item) TypeOf item Is TextBoxBase OrElse TypeOf item Is ComboBox OrElse TypeOf item Is DateTimePicker OrElse TypeOf item Is NumericUpDown),
                    If(candidates.FirstOrDefault(Function(item) TypeOf item Is CheckBox),
-                      candidates.FirstOrDefault(Function(item) TypeOf item Is Button)))
+                      If(candidates.FirstOrDefault(Function(item) TypeOf item Is Button),
+                         candidates.FirstOrDefault(Function(item) TypeOf item Is Label))))
 
             Return (label, field)
 
@@ -641,6 +665,257 @@ Public Class DialogPolishTests
         Dim bounds As Rectangle = shown.RectangleToClient(label.Parent.RectangleToScreen(label.Bounds))
         Return bounds.Top + label.Padding.Top + TextRenderer.MeasureText("Ag", label.Font).Height / 2.0
     End Function
+
+
+    ' ---------------------------------------------------------------
+    ' Rows of buttons, lists and checks (#266)
+    ' ---------------------------------------------------------------
+
+    ' A help icon or a check box in a row of buttons shares their centre
+    ' line (#266). Submission Readiness' "?" icons sat at the top of their
+    ' rows, about 11 pixels above the middle of the buttons beside them at
+    ' 125%, like superscripts, and Bibliography import's "Import records
+    ' with publication metadata as Published" about 5 above. At each DPI,
+    ' its text drawn as the app draws it, each one that shares its row
+    ' with a button has its middle within 2 pixels of the nearest such
+    ' button's. On e40f42c the icons were 11.5 pixels off at 96 DPI and the
+    ' check box 4.5.
+    <TestMethod>
+    Public Sub HelpIconsAndCheckBoxesShareTheirButtonsCentreLine()
+
+        Dim judged As New HashSet(Of String)(StringComparer.Ordinal)
+        Dim found As New List(Of String)()
+
+        Dim failures As List(Of String) =
+            AtEachDpi(
+                {
+                    ("ManuscriptReadinessForm", GetType(ManuscriptReadinessForm), Function() ViewCatalog.Dialogs(GetType(ManuscriptReadinessForm))(String.Empty)),
+                    ("BibliographyImportForm", GetType(BibliographyImportForm), Function() ViewCatalog.Dialogs(GetType(BibliographyImportForm))(String.Empty))
+                },
+                Sub(name, shown, dpi)
+
+                    DrawTextAsTheAppDoes(shown)
+
+                    For Each item As Control In ViewCatalog.Descendants(shown).Where(Function(candidate) candidate.Visible AndAlso (TypeOf candidate Is ContextHelpControl OrElse TypeOf candidate Is CheckBox) AndAlso TypeOf candidate.Parent Is FlowLayoutPanel).ToList()
+
+                        Dim beside As Button =
+                            item.Parent.Controls.OfType(Of Button)().
+                                Where(Function(other) other.Visible AndAlso other.Top < item.Bottom AndAlso item.Top < other.Bottom).
+                                OrderBy(Function(other) Math.Abs(other.Left - item.Left)).
+                                FirstOrDefault()
+
+                        If beside Is Nothing Then
+                            Continue For
+                        End If
+
+                        Dim caption As String = If(TypeOf item Is CheckBox, item.Text, item.AccessibleName)
+                        Dim middle As Double = item.Top + item.Height / 2.0
+                        Dim buttonMiddle As Double = beside.Top + beside.Height / 2.0
+
+                        judged.Add(name & ": " & caption)
+
+                        If Math.Abs(middle - buttonMiddle) > 2 Then
+                            found.Add($"{name} at {dpi} DPI: '{caption}' has its middle at {middle}, '{beside.Text}' beside it at {buttonMiddle}.")
+                        End If
+
+                    Next
+
+                End Sub)
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        Assert.AreEqual(3, judged.Count, "Readiness' two help icons and the import's check box were judged: " & String.Join("; ", judged))
+
+    End Sub
+
+
+    ' Submission Readiness' requirements and the details beneath them
+    ' share their left and right edges (#266): the list kept Windows Forms'
+    ' default margin, 3 pixels in from the details on both sides, as it was
+    ' on e40f42c at each DPI.
+    <TestMethod>
+    Public Sub ReadinessRequirementsAndTheirDetailsShareTheirEdges()
+
+        Dim judged As Integer = 0
+        Dim found As New List(Of String)()
+
+        Dim failures As List(Of String) =
+            AtEachDpi(
+                {("ManuscriptReadinessForm", GetType(ManuscriptReadinessForm), Function() ViewCatalog.Dialogs(GetType(ManuscriptReadinessForm))(String.Empty))},
+                Sub(name, shown, dpi)
+
+                    Dim list As ListBox = ViewCatalog.Descendants(shown).OfType(Of ListBox)().Single(Function(item) item.AccessibleName = "Readiness requirements")
+                    Dim details As TextBox = ViewCatalog.Descendants(shown).OfType(Of TextBox)().Single(Function(item) item.AccessibleName = "Selected readiness requirement details")
+                    Dim listBounds As Rectangle = shown.RectangleToClient(list.Parent.RectangleToScreen(list.Bounds))
+                    Dim detailsBounds As Rectangle = shown.RectangleToClient(details.Parent.RectangleToScreen(details.Bounds))
+
+                    judged += 1
+
+                    If listBounds.Left <> detailsBounds.Left OrElse listBounds.Right <> detailsBounds.Right Then
+                        found.Add($"{name} at {dpi} DPI: the requirements run from {listBounds.Left} to {listBounds.Right}, their details from {detailsBounds.Left} to {detailsBounds.Right}.")
+                    End If
+
+                End Sub)
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        Assert.AreEqual(Dpis.Length, judged, "The list and its details were judged at each DPI.")
+
+    End Sub
+
+
+    ' Each question of the journal candidate is as tall as the lines its
+    ' check box draws (#266). Its height was measured beside a guess at
+    ' the box's glyph, 24 pixels at 96 DPI where the box keeps 19 beside
+    ' its text, so "Its articles are indexed and archived in services you
+    ' use" was given two lines for the one it drew, which left a gap in the
+    ' list. At each DPI, its text drawn as the app draws it, and at each of
+    ' 20 widths a pixel apart down from the window's own, each box draws
+    ' its last line where a twin as wide and three lines taller draws it,
+    ' so none of its lines is cut, and leaves less than a line below it.
+    ' On e40f42c that question was given two lines for one at 120 DPI, at
+    ' 10 of the 20 widths.
+    <TestMethod>
+    Public Sub JournalCandidateChecksAreAsTallAsTheLinesTheyDraw()
+
+        Dim judged As Integer = 0
+        Dim found As New List(Of String)()
+
+        Dim failures As List(Of String) =
+            AtEachDpi(
+                {("JournalCandidateForm", GetType(JournalCandidateForm), Function() ViewCatalog.Dialogs(GetType(JournalCandidateForm))(String.Empty))},
+                Sub(name, shown, dpi)
+
+                    DrawTextAsTheAppDoes(shown)
+
+                    Dim boxes As List(Of CheckBox) = DirectCast(shown, JournalCandidateForm).CheckBoxes
+                    Dim widest As Integer = shown.Width
+
+                    ' Every list laid out again with the text as the app
+                    ' draws it, as each width below does for the one it
+                    ' changes.
+                    shown.Width = widest + 40
+                    Application.DoEvents()
+
+                    For narrower As Integer = 0 To 19
+
+                        shown.Width = widest - narrower
+                        Application.DoEvents()
+
+                        For Each box As CheckBox In boxes
+
+                            Dim line As Integer = TextRenderer.MeasureText("Ag", box.Font).Height
+                            Dim drawn As Integer = LastInkRow(box)
+                            Dim whole As Integer
+
+                            Using twin As New CheckBox With {
+                                .Text = box.Text, .Font = box.Font, .AutoSize = False, .CheckAlign = box.CheckAlign, .TextAlign = box.TextAlign,
+                                .UseMnemonic = False, .UseCompatibleTextRendering = False, .ForeColor = box.ForeColor, .BackColor = box.BackColor,
+                                .Size = New Size(box.Width, box.Height + 3 * line)
+                            }
+                                shown.Controls.Add(twin)
+                                whole = LastInkRow(twin)
+                                shown.Controls.Remove(twin)
+                            End Using
+
+                            judged += 1
+
+                            If drawn <> whole Then
+                                found.Add($"{name} at {dpi} DPI, {shown.Width} wide: '{box.Text}' ends its text at row {drawn} of {box.Height}, a taller box at {whole}.")
+                            ElseIf box.Height - 1 - drawn >= line Then
+                                found.Add($"{name} at {dpi} DPI, {shown.Width} wide: '{box.Text}' has {box.Height - 1 - drawn} rows below its text, {box.Height} tall for lines of {line}.")
+                            End If
+
+                        Next
+
+                    Next
+
+                End Sub)
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        Assert.IsTrue(judged >= 20 * Dpis.Length * 10, "Every question was judged at each width and DPI: " & judged.ToString())
+
+    End Sub
+
+
+    ' The last row of the control's picture with ink: a pixel that differs
+    ' clearly from its back color, as InkGaps reads ink; -1 for none.
+    Private Shared Function LastInkRow(control As Control) As Integer
+
+        Using picture As New Bitmap(control.Width, control.Height, PixelFormat.Format32bppArgb)
+
+            control.DrawToBitmap(picture, New Rectangle(Point.Empty, control.Size))
+
+            Dim data As BitmapData = picture.LockBits(New Rectangle(Point.Empty, picture.Size), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb)
+            Dim stride As Integer = data.Stride \ 4
+            Dim pixels(stride * picture.Height - 1) As Integer
+            Marshal.Copy(data.Scan0, pixels, 0, pixels.Length)
+            picture.UnlockBits(data)
+
+            Dim back As Color = control.BackColor
+
+            For y As Integer = picture.Height - 1 To 0 Step -1
+                For x As Integer = 0 To picture.Width - 1
+                    Dim pixel As Color = Color.FromArgb(pixels(y * stride + x))
+                    If Math.Abs(CInt(pixel.R) - back.R) + Math.Abs(CInt(pixel.G) - back.G) + Math.Abs(CInt(pixel.B) - back.B) > 96 Then
+                        Return y
+                    End If
+                Next
+            Next
+
+            Return -1
+
+        End Using
+
+    End Function
+
+
+    ' Publication export keeps Select All beside Select None (#266): at
+    ' its default width at 125% its toolbar wrapped between them, Select
+    ' None alone on a second line. At each DPI, its text drawn as the app
+    ' draws it, and at each width from the window's own down to its least,
+    ' 10 pixels apart, Select None is on Select All's line, just after it.
+    ' On e40f42c they were apart at its default width at 96 and 120 DPI.
+    <TestMethod>
+    Public Sub PublicationExportKeepsSelectAllBesideSelectNone()
+
+        Dim judged As Integer = 0
+        Dim found As New List(Of String)()
+
+        Dim failures As List(Of String) =
+            AtEachDpi(
+                {("PublicationExportForm", GetType(PublicationExportForm), Function() ViewCatalog.Dialogs(GetType(PublicationExportForm))(String.Empty))},
+                Sub(name, shown, dpi)
+
+                    DrawTextAsTheAppDoes(shown)
+
+                    Dim selectAll As Button = ViewCatalog.Descendants(shown).OfType(Of Button)().Single(Function(item) item.Text = "Select All")
+                    Dim selectNone As Button = ViewCatalog.Descendants(shown).OfType(Of Button)().Single(Function(item) item.Text = "Select None")
+
+                    For width As Integer = shown.Width To shown.MinimumSize.Width Step -10
+
+                        shown.Width = width
+                        Application.DoEvents()
+
+                        Dim first As Rectangle = shown.RectangleToClient(selectAll.Parent.RectangleToScreen(selectAll.Bounds))
+                        Dim second As Rectangle = shown.RectangleToClient(selectNone.Parent.RectangleToScreen(selectNone.Bounds))
+
+                        judged += 1
+
+                        If second.Top <> first.Top OrElse second.Left < first.Right Then
+                            found.Add($"{name} at {dpi} DPI, {width} wide: Select All is at {first.Location}, Select None at {second.Location}.")
+                        End If
+
+                    Next
+
+                End Sub)
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        Assert.IsTrue(judged >= 10 * Dpis.Length, "The toolbar was judged at each width and DPI: " & judged.ToString())
+
+    End Sub
 
 
     ' ---------------------------------------------------------------

@@ -133,7 +133,9 @@ Namespace Forms
 
             chkMe.Text = "This is me"
             chkMe.AutoSize = True
-            chkMe.Anchor = AnchorStyles.Left
+            ' At the top of its row, its caption on Identity's line (#266).
+            chkMe.Anchor = AnchorStyles.Top Or AnchorStyles.Left
+            chkMe.Margin = New Padding(3, 5, 3, 3)
 
             root.Controls.Add(CreateLabel("Given name"), 0, 0)
             root.Controls.Add(txtGiven, 1, 0)
@@ -195,6 +197,10 @@ Namespace Forms
         End Sub
 
 
+        ' At the top of its row, its text on the line of the field beside
+        ' it, which sits there too, as the correspondence window's labels
+        ' are (#258, #266): centred in the row, it sat about 3 pixels below
+        ' its box. Its row keeps the height it had.
         Private Function CreateLabel(
             text As String
         ) As Label
@@ -202,9 +208,9 @@ Namespace Forms
             Return New Label With {
                 .Text = text,
                 .AutoSize = True,
-                .Anchor = AnchorStyles.Left,
+                .Anchor = AnchorStyles.Top Or AnchorStyles.Left,
                 .Font = New Font(Me.Font, FontStyle.Bold),
-                .Margin = New Padding(3, 9, 3, 9)
+                .Margin = New Padding(3, 6, 3, 12)
             }
 
         End Function

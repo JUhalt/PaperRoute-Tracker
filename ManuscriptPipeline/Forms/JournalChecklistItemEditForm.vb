@@ -129,6 +129,15 @@ Namespace Forms
             chkRequired.AutoSize =
                 True
 
+            ' At the top of its row, its caption on Importance's line (#266).
+            chkRequired.Margin =
+                New Padding(
+                    3,
+                    5,
+                    3,
+                    3
+                )
+
             chkRequired.Checked =
                 True
 
@@ -270,18 +279,23 @@ Namespace Forms
             Dim label As Label =
                 CreateLabel(text)
 
+            ' Its row's padding puts it and its help on the line of the
+            ' field beside it, at the top of its row, as the version editor's
+            ' are (#266): 9 pixels down, Requirement title sat about 4 pixels
+            ' below its box's text at 125%, and Importance about 6 below its
+            ' check box's caption.
             label.Margin =
                 New Padding(
                     3,
-                    2,
+                    0,
                     3,
-                    2
+                    0
                 )
 
             Return ContextHelpControl.LabelWithHelp(
                 label,
                 helpText,
-                7,
+                6,
                 field
             )
 

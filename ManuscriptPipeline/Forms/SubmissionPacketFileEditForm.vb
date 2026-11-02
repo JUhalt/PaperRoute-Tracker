@@ -251,10 +251,25 @@ Namespace Forms
                 0
             )
 
-            root.Controls.Add(
+            ' Centred, on the line of the box centred beside its button.
+            Dim fileLabel As Label =
                 CreateFieldLabel(
                     "Local file"
-                ),
+                )
+
+            fileLabel.Anchor =
+                AnchorStyles.Left
+
+            fileLabel.Margin =
+                New Padding(
+                    3,
+                    9,
+                    3,
+                    9
+                )
+
+            root.Controls.Add(
+                fileLabel,
                 0,
                 4
             )
@@ -352,6 +367,11 @@ Namespace Forms
         End Sub
 
 
+        ' At the top of its row, its text on the line of the field beside
+        ' it, which sits there too, as the correspondence window's labels
+        ' are (#258, #266): centred in the row, File role, Storage and Label
+        ' sat 2.5 to 3 pixels below their fields. Its row keeps the height
+        ' it had.
         Private Function CreateFieldLabel(
             text As String
         ) As Label
@@ -359,16 +379,16 @@ Namespace Forms
             Return New Label With {
                 .Text = text,
                 .AutoSize = True,
-                .Anchor = AnchorStyles.Left,
+                .Anchor = AnchorStyles.Top Or AnchorStyles.Left,
                 .Font = New Font(
                     Me.Font,
                     FontStyle.Bold
                 ),
                 .Margin = New Padding(
                     3,
-                    9,
+                    6,
                     3,
-                    9
+                    12
                 )
             }
 

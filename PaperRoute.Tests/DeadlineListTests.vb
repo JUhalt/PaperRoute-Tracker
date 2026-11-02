@@ -1,6 +1,7 @@
 Imports System
 Imports System.Collections.Generic
 Imports System.Drawing
+Imports System.Drawing.Imaging
 Imports System.IO
 Imports System.Linq
 Imports System.Reflection
@@ -813,6 +814,129 @@ Public Class DeadlineListTests
         Assert.AreEqual(0, failures.Count, String.Join(Environment.NewLine, failures))
 
     End Sub
+
+
+    ' A row names the journal whole when its line is too short for the
+    ' manuscript's title and the journal (#266): at 1600 pixels a
+    ' revision's line ended at "Fictional ...", the title taking the line
+    ' before the journal the revision is due at. A revision of a long
+    ' title, drawn at text sizes 1, 1.25 and 1.5 and at widths from 1200 to
+    ' 1600 pixels, draws the journal's name somewhere on the row exactly as
+    ' TextRenderer draws the name alone, so it is whole. On e40f42c eight
+    ' of the fifteen rows, at text sizes 1.25 and 1.5, did not.
+    <TestMethod>
+    Public Sub DeadlineRowsNameTheJournalWhole()
+
+        Const journal As String = "Fictional Open Psychology"
+
+        Dim judged As Integer = 0
+        Dim found As New List(Of String)()
+
+        StaRunner.Run(
+            Sub()
+
+                Dim today As DateTime = DateTime.Today
+                Dim row As DeadlineRow = DrawnRow(New DeadlineItem With {
+                    .Kind = DeadlineKind.Revision, .Group = DeadlineGroup.Later, .Title = "Revision due", .DueDate = today.AddDays(20), .JournalName = journal,
+                    .ManuscriptTitle = "A preregistered multi-site replication of anchoring effects in clinical risk estimates by nurses and physicians across three hospitals"
+                }, today)
+                Dim state As New DeadlineRowPaintState With {.FocusRingPart = DeadlineRow.NoPart, .HoverPart = DeadlineRow.NoPart, .PressedPart = DeadlineRow.NoPart, .Enabled = True}
+
+                For Each scale As Single In {1.0F, 1.25F, 1.5F}
+
+                    Using font As New Font(SystemFonts.MessageBoxFont.FontFamily, 9.0F * scale), metrics As New DeadlineMetrics(font, 96), alone As Bitmap = TextAlone(journal, font)
+
+                        For width As Integer = 1200 To 1600 Step 100
+
+                            Dim bounds As New Rectangle(0, 0, width, row.MeasureHeight(metrics))
+
+                            Using picture As New Bitmap(bounds.Width, bounds.Height)
+
+                                Using g As Graphics = Graphics.FromImage(picture)
+                                    g.Clear(UiTheme.BoardBackground())
+                                    row.Paint(g, bounds, metrics, state)
+                                End Using
+
+                                judged += 1
+
+                                If Not Holds(picture, alone) Then
+                                    found.Add($"At text size {scale} and {width} pixels, the row does not draw '{journal}' whole.")
+                                End If
+
+                            End Using
+
+                        Next
+
+                    End Using
+
+                Next
+
+            End Sub)
+
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        Assert.AreEqual(15, judged, "Each width at each text size was judged.")
+
+    End Sub
+
+
+    ' The text alone, drawn as a row draws its manuscript and journal line
+    ' on a card.
+    Private Shared Function TextAlone(text As String, font As Font) As Bitmap
+
+        Const flags As TextFormatFlags = TextFormatFlags.NoPrefix Or TextFormatFlags.NoPadding Or TextFormatFlags.SingleLine
+        Dim width As Integer = TextRenderer.MeasureText(text, font, New Size(Integer.MaxValue, Integer.MaxValue), flags).Width
+        Dim alone As New Bitmap(width, font.Height)
+
+        Using g As Graphics = Graphics.FromImage(alone)
+            g.Clear(UiTheme.CardBackground())
+            TextRenderer.DrawText(g, text, font, New Rectangle(0, 0, width, font.Height), UiTheme.SecondaryText(), flags)
+        End Using
+
+        Return alone
+
+    End Function
+
+
+    ' Whether the picture has the part somewhere in it, pixel for pixel.
+    ' The part's ink is compared first, so a place that lacks it is passed
+    ' over at once.
+    Private Shared Function Holds(picture As Bitmap, part As Bitmap) As Boolean
+
+        Dim whole As Integer() = PixelsOf(picture)
+        Dim piece As Integer() = PixelsOf(part)
+        Dim back As Integer = piece(0)
+        Dim order As List(Of Integer) = Enumerable.Range(0, piece.Length).OrderBy(Function(index) If(piece(index) = back, 1, 0)).ToList()
+
+        For top As Integer = 0 To picture.Height - part.Height
+            For left As Integer = 0 To picture.Width - part.Width
+                Dim at As Integer = top * picture.Width + left
+                If order.All(Function(index) whole(at + (index \ part.Width) * picture.Width + index Mod part.Width) = piece(index)) Then
+                    Return True
+                End If
+            Next
+        Next
+
+        Return False
+
+    End Function
+
+
+    ' A picture's pixels, row after row, without their alpha.
+    Private Shared Function PixelsOf(picture As Bitmap) As Integer()
+
+        Dim data As BitmapData = picture.LockBits(New Rectangle(Point.Empty, picture.Size), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb)
+
+        Try
+            Dim pixels(picture.Width * picture.Height - 1) As Integer
+            For y As Integer = 0 To picture.Height - 1
+                Marshal.Copy(IntPtr.Add(data.Scan0, y * data.Stride), pixels, y * picture.Width, picture.Width)
+            Next
+            Return pixels.Select(Function(pixel) pixel And &HFFFFFF).ToArray()
+        Finally
+            picture.UnlockBits(data)
+        End Try
+
+    End Function
 
 
     ' Under a Windows contrast theme the lists that draw their own items,
