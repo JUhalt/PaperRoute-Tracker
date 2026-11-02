@@ -180,7 +180,13 @@ Namespace Services
         End Function
 
 
-        ' The SDK on the gate's client, holding only a placeholder key.
+        ' The SDK on the gate's client, holding only a placeholder key. It
+        ' sends that as Authorization: Bearer since 13.0 (#298); the gate
+        ' removes it and adds the real key as x-api-key. Its OpenTelemetry
+        ' spans are off: with a listener in the process, a span would add
+        ' trace headers below the gate, and ANTHROPIC_OPEN_TELEMETRY_*
+        ' variables could put the researcher's text in it. Given options,
+        ' the SDK uses none of those variables.
         Private Shared Function NewClient(http As HttpClient, timeout As TimeSpan) As AnthropicClient
             Return New AnthropicClient With {
                 .HttpClient = http,
@@ -188,7 +194,8 @@ Namespace Services
                 .ApiKey = PlaceholderKey,
                 .AuthToken = Nothing,
                 .MaxRetries = 0,
-                .Timeout = timeout
+                .Timeout = timeout,
+                .OpenTelemetry = False
             }
         End Function
 
@@ -253,7 +260,7 @@ Namespace Services
                 .MaxTokens = request.MaxTokens,
                 .System = request.Instructions,
                 .Messages = New List(Of Beta.BetaMessageParam) From {
-                    New Beta.BetaMessageParam With {.Role = Beta.Role.User, .Content = request.Content}
+                    New Beta.BetaUserMessageParam With {.Content = request.Content}
                 }
             }
             If output IsNot Nothing Then parameters = New Beta.MessageCreateParams(parameters) With {.OutputConfig = output}

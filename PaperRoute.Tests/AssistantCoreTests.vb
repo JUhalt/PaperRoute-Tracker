@@ -147,27 +147,47 @@ Public Class AssistantCoreTests
         Dim previousToken As String = Environment.GetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN")
         Dim previousHeaders As String = Environment.GetEnvironmentVariable("ANTHROPIC_CUSTOM_HEADERS")
         Dim previousBase As String = Environment.GetEnvironmentVariable("ANTHROPIC_BASE_URL")
+        Dim previousTraceContent As String = Environment.GetEnvironmentVariable("ANTHROPIC_OPEN_TELEMETRY_TRACES_CONTENT_MODE")
         Environment.SetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN", "token-from-the-environment")
         Environment.SetEnvironmentVariable("ANTHROPIC_CUSTOM_HEADERS", "X-From-Environment: yes")
         Environment.SetEnvironmentVariable("ANTHROPIC_BASE_URL", "https://elsewhere.example.com")
+        Environment.SetEnvironmentVariable("ANTHROPIC_OPEN_TELEMETRY_TRACES_CONTENT_MODE", "content")
+        ' A listener on the SDK's spans, as a tracer in the process would add
+        ' (#298): the SDK is told to make none, whatever the variables say.
+        Dim spans As New List(Of String)()
         Dim reply As AssistantReply
-        Try
-            Dim provider As IAssistantProvider = AssistantService.CurrentProvider()
-            Assert.IsInstanceOfType(Of ClaudeAssistantProvider)(provider)
-            reply = provider.CompleteAsync(AssistantService.BuildLetterRequest(Letter), CancellationToken.None).GetAwaiter().GetResult()
-        Finally
-            Environment.SetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN", previousToken)
-            Environment.SetEnvironmentVariable("ANTHROPIC_CUSTOM_HEADERS", previousHeaders)
-            Environment.SetEnvironmentVariable("ANTHROPIC_BASE_URL", previousBase)
-        End Try
+        Using listener As New System.Diagnostics.ActivityListener With {
+            .ShouldListenTo = Function(source) source.Name.StartsWith("com.anthropic", StringComparison.Ordinal),
+            .Sample = Function(ByRef options As System.Diagnostics.ActivityCreationOptions(Of System.Diagnostics.ActivityContext)) System.Diagnostics.ActivitySamplingResult.AllDataAndRecorded,
+            .ActivityStarted = Sub(activity)
+                                   SyncLock spans
+                                       spans.Add(activity.Source.Name & " " & activity.OperationName)
+                                   End SyncLock
+                               End Sub
+        }
+            System.Diagnostics.ActivitySource.AddActivityListener(listener)
+            Try
+                Dim provider As IAssistantProvider = AssistantService.CurrentProvider()
+                Assert.IsInstanceOfType(Of ClaudeAssistantProvider)(provider)
+                reply = provider.CompleteAsync(AssistantService.BuildLetterRequest(Letter), CancellationToken.None).GetAwaiter().GetResult()
+            Finally
+                Environment.SetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN", previousToken)
+                Environment.SetEnvironmentVariable("ANTHROPIC_CUSTOM_HEADERS", previousHeaders)
+                Environment.SetEnvironmentVariable("ANTHROPIC_BASE_URL", previousBase)
+                Environment.SetEnvironmentVariable("ANTHROPIC_OPEN_TELEMETRY_TRACES_CONTENT_MODE", previousTraceContent)
+            End Try
+        End Using
+        Assert.AreEqual(0, spans.Count, "No span holds the letter or adds trace headers: " & String.Join(", ", spans))
 
+        ' Since SDK 13 (#298): the beta header alone marks the beta route, and
+        ' the API version is 2026-10-21.
         Dim sent As SentRequest = network.Requests.Single()
-        Assert.AreEqual("https://api.anthropic.com/v1/messages?beta=true", sent.Uri.AbsoluteUri)
+        Assert.AreEqual("https://api.anthropic.com/v1/messages", sent.Uri.AbsoluteUri)
         Assert.AreEqual("sk-ant-test-key-0001", sent.Header("x-api-key"), "The gate adds the key; the SDK only holds a placeholder.")
-        Assert.AreEqual("2023-06-01", sent.Header("anthropic-version"))
+        Assert.AreEqual("2026-10-21", sent.Header("anthropic-version"))
         Assert.AreEqual("server-side-fallback-2026-07-01", sent.Header("anthropic-beta"))
         StringAssert.StartsWith(sent.Header("User-Agent"), "PaperRoute-Tracker/")
-        Assert.IsNull(sent.Header("Authorization"), "No token from the environment.")
+        Assert.IsNull(sent.Header("Authorization"), "Neither the SDK's placeholder, which it sends as a bearer token, nor a token from the environment.")
         Assert.IsFalse(sent.HeaderNames.Any(Function(name) name.StartsWith("X-Stainless", StringComparison.OrdinalIgnoreCase) OrElse name.Equals("X-From-Environment", StringComparison.OrdinalIgnoreCase)),
                        "No system details or extra headers: " & String.Join(", ", sent.HeaderNames))
 
@@ -176,10 +196,15 @@ Public Class AssistantCoreTests
             Assert.AreEqual("claude-opus-5-5", root.GetProperty("model").GetString())
             Assert.AreEqual(AssistantService.LetterInstructions, root.GetProperty("system").GetString())
             Assert.AreEqual(Letter.Trim(), root.GetProperty("messages")(0).GetProperty("content").GetString(), "The letter as pasted, and nothing else.")
+            Assert.AreEqual("user", root.GetProperty("messages")(0).GetProperty("role").GetString(), "The SDK's user message type sends the role it no longer takes (#298).")
             Assert.AreEqual(1, root.GetProperty("messages").GetArrayLength())
             Assert.AreEqual("medium", root.GetProperty("output_config").GetProperty("effort").GetString())
             Assert.AreEqual("json_schema", root.GetProperty("output_config").GetProperty("format").GetProperty("type").GetString())
             Assert.AreEqual("default", root.GetProperty("fallbacks").GetString())
+            ' The gate drops headers it does not know, but not body fields: an
+            ' SDK update that adds a default one fails here (#298).
+            CollectionAssert.AreEquivalent({"model", "max_tokens", "system", "messages", "output_config", "fallbacks"}, root.EnumerateObject().Select(Function(field) field.Name).ToList(), "Nothing else is sent.")
+            CollectionAssert.AreEquivalent({"role", "content"}, root.GetProperty("messages")(0).EnumerateObject().Select(Function(field) field.Name).ToList(), "The one message holds only its role and the letter.")
         End Using
 
         Assert.AreEqual("Claude", reply.ProviderName)
@@ -406,8 +431,8 @@ Public Class AssistantCoreTests
         Assert.AreEqual("https://api.anthropic.com/v1/models?limit=1000", sent.Uri.AbsoluteUri)
         Assert.AreEqual(String.Empty, sent.Body, "Only the key is sent.")
         Assert.AreEqual("sk-ant-test-key-0001", sent.Header("x-api-key"), "The key added in the window, as a header, by the gate.")
-        Assert.AreEqual("2023-06-01", sent.Header("anthropic-version"))
-        Assert.IsNull(sent.Header("Authorization"))
+        Assert.AreEqual("2026-10-21", sent.Header("anthropic-version"))
+        Assert.IsNull(sent.Header("Authorization"), "The gate removes the SDK's placeholder bearer token.")
         Assert.IsFalse(sent.HeaderNames.Any(Function(name) name.StartsWith("X-Stainless", StringComparison.OrdinalIgnoreCase)), String.Join(", ", sent.HeaderNames))
         Assert.IsFalse(_keys.HasKey(ProtectedKeyStore.Anthropic), "Testing stores no key.")
         Assert.IsNull(OnlineAccess.CurrentAssistant(), "...and changes nothing the gate goes by.")
