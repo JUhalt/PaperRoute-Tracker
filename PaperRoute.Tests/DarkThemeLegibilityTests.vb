@@ -33,11 +33,10 @@ Public Class DarkThemeLegibilityTests
     ' guide says above its list.
     Private Shared ReadOnly DarkAllowList As (Name As String, Reason As String, Guide As String, Matches As Func(Of Control, Boolean))() = {
         ("The report preview", "A web page that Windows' browser control draws.", "The report preview", Function(control As Control) TypeOf control Is WebBrowser),
-        ("Grid frames", "WinForms draws a white frame one pixel wide round a grid; UiPolish leaves the grid's border as it is.", "The thin white frame around a table", Function(control As Control) False),
-        ("Combo and number box borders", "Windows draws them in greys of its own.", "The borders of drop-down lists and number boxes", Function(control As Control) False),
+        ("Number box borders", "Windows draws them in greys of its own.", "The borders of number boxes", Function(control As Control) False),
         ("The route map's fills", "The journal and author segments and the numbered events keep their Light fills in Dark; their white labels keep 4.5:1.", "the journal and author segments and the numbered events", Function(control As Control) False),
         ("Help's links", "The guide's links are in the color Windows' rich text box gives links.", "The links in this guide's window", Function(control As Control) False),
-        ("Input borders", "Text boxes and lists are outlined in the quiet card border, under the 3:1 an input's outline should have.", "The outlines of text boxes and lists", Function(control As Control) False)
+        ("Input borders", "Text boxes, lists and drop-down lists are outlined in the quiet card border, under the 3:1 an input's outline should have.", "The outlines of text boxes, lists and drop-down lists", Function(control As Control) False)
     }
 
     ' ---------------------------------------------------------------
@@ -367,6 +366,62 @@ Public Class DarkThemeLegibilityTests
     Private Shared Function CommonestColor(image As Bitmap) As Color
         Return Color.FromArgb(PixelsOf(image).GroupBy(Function(pixel) pixel).OrderByDescending(Function(group) group.Count()).First().Key)
     End Function
+
+    ' ---------------------------------------------------------------
+    ' Grid frames (#266)
+    ' ---------------------------------------------------------------
+
+    ' A grid is framed in the theme's border, as the text boxes and lists
+    ' beside it are (#266). Windows Forms draws a grid's frame in the text
+    ' color: #147's E4.3 found Export Submission Packet's file grid in a
+    ' white frame in Dark, every pixel of it #FFFFFF on the #181B20 window,
+    ' and in Light the frame is black. In Dark and Light, each framed grid
+    ' of the four windows that show one, at the step that fills it, is
+    ' drawn with its outermost pixels in the theme's border. On 81bb29d
+    ' none was. A grid on the main window has no frame.
+    <TestMethod>
+    <DataRow(SystemColorMode.Dark)>
+    <DataRow(SystemColorMode.Classic)>
+    Public Sub GridFramesAreTheThemesBorder(mode As SystemColorMode)
+
+        SkipWhereThemesCannotBeChecked(mode)
+
+        Dim views = ViewCatalog.AllViewsAndStages().Where(Function(view) GridViews.Contains(view.Name))
+        Dim grids As New List(Of String)()
+        Dim found As New List(Of String)()
+
+        Dim failures As List(Of String) = ViewCatalog.ShowEach(views,
+            Sub(name, shown)
+                Dim border As Integer = UiTheme.CardBorder().ToArgb()
+                For Each grid As DataGridView In Descendants(shown).OfType(Of DataGridView)().Where(Function(item) item.Visible AndAlso item.BorderStyle <> BorderStyle.None)
+                    grids.Add(name)
+                    Using image As Bitmap = Picture(grid)
+                        Dim ring As List(Of Integer) =
+                            Enumerable.Range(0, image.Width).SelectMany(Function(x) {image.GetPixel(x, 0).ToArgb(), image.GetPixel(x, image.Height - 1).ToArgb()}).
+                                Concat(Enumerable.Range(1, image.Height - 2).SelectMany(Function(y) {image.GetPixel(0, y).ToArgb(), image.GetPixel(image.Width - 1, y).ToArgb()})).
+                                ToList()
+                        Dim other As List(Of Integer) = ring.Where(Function(pixel) pixel <> border).ToList()
+                        If other.Count > 0 Then
+                            found.Add($"{name}: {Describe(grid)} has {other.Count} of its {ring.Count} outermost pixels off the theme's border, such as {Color.FromArgb(other(0))}.")
+                        End If
+                    End Using
+                Next
+            End Sub,
+            mode:=mode)
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        CollectionAssert.AreEquivalent(GridViews, grids, "Each of the four windows shows one framed grid.")
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+
+    End Sub
+
+    ' The windows that show a framed grid, at the step that fills it.
+    Private Shared ReadOnly GridViews As String() = {
+        "PacketExportForm",
+        "DecisionLetterForm, reviewing the comments it read",
+        "AuthorInstructionsForm, reviewing the requirements it read",
+        "TitlePageImportForm, with the authors it read"
+    }
 
     ' ---------------------------------------------------------------
     ' Check marks in lists and grids (#106)

@@ -119,6 +119,26 @@ Namespace Services
                 form
             )
 
+            ' One title bar for every dialog (#266): no icon and no
+            ' Minimize, as the fixed dialogs never had, and Maximize only
+            ' on one the user can resize, as the sizable dialogs that chose
+            ' have it. Each sizable dialog showed Windows Forms' own icon,
+            ' thirty of them Minimize too, and Updating PaperRoute, a fixed
+            ' one, Minimize and Maximize.
+            form.ShowIcon =
+                False
+
+            form.MinimizeBox =
+                False
+
+            If form.FormBorderStyle <> FormBorderStyle.Sizable AndAlso
+               form.FormBorderStyle <> FormBorderStyle.SizableToolWindow Then
+
+                form.MaximizeBox =
+                    False
+
+            End If
+
             form.BackColor =
                 UiTheme.BoardBackground()
 
@@ -136,6 +156,10 @@ Namespace Services
 
             AlignFooter(
                 TryCast(form.CancelButton, Control)
+            )
+
+            SpaceDefaultButton(
+                TryCast(form.AcceptButton, Button)
             )
 
         End Sub
@@ -248,8 +272,12 @@ Namespace Services
                 textBox.ForeColor =
                     UiTheme.PrimaryText()
 
+                ' A box that scrolls has no border of its own, and
+                ' ThemedBorder frames it round its scroll bars (#266).
                 textBox.BorderStyle =
-                    BorderStyle.FixedSingle
+                    If(textBox.Multiline AndAlso textBox.ScrollBars <> ScrollBars.None,
+                       BorderStyle.None,
+                       BorderStyle.FixedSingle)
 
                 ThemedBorder.Attach(
                     textBox
@@ -329,6 +357,14 @@ Namespace Services
                 comboBox.FlatStyle =
                     FlatStyle.Flat
 
+                ' Windows Forms frames a flat drop-down in the window color,
+                ' white in Light, which a white card hides (#266); one that
+                ' draws its items had Windows' grey. Each is framed as a
+                ' text box is.
+                ThemedBorder.Attach(
+                    comboBox
+                )
+
                 Return
 
             End If
@@ -397,6 +433,16 @@ Namespace Services
                 CheckGlyph.Attach(
                     grid
                 )
+
+                ' A grid draws its frame in the text color, black in Light
+                ' and white in Dark (#266), which none of the theme's
+                ' other frames is; it is drawn again in the theme's border
+                ' as the grid paints.
+                RemoveHandler grid.Paint,
+                    AddressOf PaintGridFrame
+
+                AddHandler grid.Paint,
+                    AddressOf PaintGridFrame
 
                 Return
 
@@ -647,6 +693,37 @@ Namespace Services
 
 
         ' =====================================================
+        ' Grid frames (#266)
+        ' =====================================================
+
+        ' A framed grid's frame, drawn again in the theme's border over the
+        ' one the grid drew in the text color.
+        Private Shared Sub PaintGridFrame(
+            sender As Object,
+            e As PaintEventArgs
+        )
+
+            Dim grid As DataGridView =
+                TryCast(
+                    sender,
+                    DataGridView
+                )
+
+            If grid Is Nothing OrElse
+               grid.BorderStyle = BorderStyle.None Then
+
+                Return
+
+            End If
+
+            Using pen As New Pen(UiTheme.CardBorder())
+                e.Graphics.DrawRectangle(pen, 0, 0, grid.ClientSize.Width - 1, grid.ClientSize.Height - 1)
+            End Using
+
+        End Sub
+
+
+        ' =====================================================
         ' Footers (#257)
         ' =====================================================
 
@@ -718,6 +795,86 @@ Namespace Services
                 End If
 
             Next
+
+        End Sub
+
+
+        ' The buttons beside the default one keep the space their footer
+        ' gave them as margins, and the default one kept Windows Forms' 3
+        ' pixels a side: in a footer of three buttons, as the assistant's
+        ' readings and drafts and the journals it found have, it stood 11
+        ' pixels from its neighbour where the others are 8 apart, 14 and 10
+        ' at 125% (#266). Where the row's other buttons share one margin,
+        ' the default button takes it on each side another button is on, so
+        ' a footer of two keeps the same 8; the side toward the row's edge
+        ' keeps its own.
+        Private Shared Sub SpaceDefaultButton(
+            primary As Button
+        )
+
+            Dim row As FlowLayoutPanel =
+                TryCast(
+                    primary?.Parent,
+                    FlowLayoutPanel
+                )
+
+            If row Is Nothing OrElse
+               (row.FlowDirection <> FlowDirection.LeftToRight AndAlso
+                row.FlowDirection <> FlowDirection.RightToLeft) Then
+
+                Return
+
+            End If
+
+            Dim others As New List(Of Button)()
+            Dim index As Integer = -1
+
+            For Each child As Control In row.Controls
+
+                Dim button As Button =
+                    TryCast(
+                        child,
+                        Button
+                    )
+
+                If button Is primary Then
+                    index = others.Count
+                ElseIf button IsNot Nothing Then
+                    others.Add(button)
+                End If
+
+            Next
+
+            If others.Count = 0 Then
+                Return
+            End If
+
+            Dim spacing As Padding = others(0).Margin
+
+            For Each button As Button In others
+
+                If button.Margin.Left <> spacing.Left OrElse
+                   button.Margin.Right <> spacing.Right Then
+
+                    Return
+
+                End If
+
+            Next
+
+            ' A row that flows right to left puts the buttons after the
+            ' default one on its left.
+            Dim before As Boolean = index > 0
+            Dim after As Boolean = index < others.Count
+            Dim leftToRight As Boolean = row.FlowDirection = FlowDirection.LeftToRight
+
+            primary.Margin =
+                New Padding(
+                    If(If(leftToRight, before, after), spacing.Left, primary.Margin.Left),
+                    primary.Margin.Top,
+                    If(If(leftToRight, after, before), spacing.Right, primary.Margin.Right),
+                    primary.Margin.Bottom
+                )
 
         End Sub
 

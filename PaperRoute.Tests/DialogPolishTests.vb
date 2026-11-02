@@ -80,13 +80,14 @@ Public Class DialogPolishTests
     End Sub
 
 
-    ' A drop-down list's chosen item that fits its box is drawn whole, from
-    ' the field's left edge as Windows draws it (#265). At 125% the packet's
-    ' "Real journal submission" read "... Methods — Sep 9, 20...", which
-    ' Windows drew whole on 80e1a7c: TextRenderer's padding moved the item
-    ' 3 pixels right and ended it about 6 pixels early. Each owner-drawn
-    ' item, in a box exactly as wide as its text, is drawn as TextRenderer
-    ' draws the text there, whole; on aaea437 each ended in an ellipsis.
+    ' A drop-down list's chosen item that fits its box is drawn whole, a
+    ' pixel in from the field's left edge as Windows draws it (#265, #266).
+    ' At 125% the packet's "Real journal submission" read "... Methods —
+    ' Sep 9, 20...", which Windows drew whole on 80e1a7c: TextRenderer's
+    ' padding moved the item 3 pixels right and ended it about 6 pixels
+    ' early. Each owner-drawn item, in a box as wide as its text and the
+    ' pixel before it, is drawn as TextRenderer draws the text there,
+    ' whole; on aaea437 each ended in an ellipsis.
     <TestMethod>
     Public Sub ComboItemsThatFitTheirBoxAreDrawnWhole()
 
@@ -101,12 +102,12 @@ Public Class DialogPolishTests
                     For Each combo As ComboBox In ChosenItemCombos(shown).Where(Function(item) item.DrawMode <> DrawMode.Normal)
 
                         Dim text As String = combo.GetItemText(combo.SelectedItem)
-                        Dim width As Integer = TextWidth(combo, text)
+                        Dim width As Integer = TextWidth(combo, text) + 1
 
                         judged += 1
 
                         If Not DrawsAsTextRendererDoes(combo, text, New Size(width, SelectionField(combo).Height)) Then
-                            found.Add($"{name} at {dpi} DPI: '{text}' is not drawn whole in a box as wide as its text, {width} pixels.")
+                            found.Add($"{name} at {dpi} DPI: '{text}' is not drawn whole in a box as wide as its text and the pixel before it, {width} pixels.")
                         End If
 
                     Next
@@ -158,7 +159,7 @@ Public Class DialogPolishTests
 
                             Using g As Graphics = Graphics.FromImage(expected)
                                 g.Clear(windowsBlue)
-                                TextRenderer.DrawText(g, text, combo.Font, New Rectangle(Point.Empty, size), Color.White, TextFormatFlags.VerticalCenter Or TextFormatFlags.SingleLine Or TextFormatFlags.EndEllipsis Or TextFormatFlags.NoPrefix Or TextFormatFlags.NoPadding)
+                                TextRenderer.DrawText(g, text, combo.Font, InTheField(size), Color.White, TextFormatFlags.VerticalCenter Or TextFormatFlags.SingleLine Or TextFormatFlags.EndEllipsis Or TextFormatFlags.NoPrefix Or TextFormatFlags.NoPadding)
                             End Using
 
                             ' The focus rectangle is drawn on the box's edge.
@@ -204,23 +205,30 @@ Public Class DialogPolishTests
 
     ' Whether the combo draws its item, in a box of the given size as
     ' Windows asks it to, with the pixels TextRenderer draws for the text
-    ' from the box's left edge (#265), whole or ending in an ellipsis.
-    ' OnDrawItem raises DrawItem whatever the combo's DrawMode, so a combo
-    ' with no handler draws nothing here; whether Windows asks it to draw
-    ' at all is the caller's check.
+    ' a pixel in from the box's left edge (#265, #266), whole or ending in
+    ' an ellipsis. OnDrawItem raises DrawItem whatever the combo's
+    ' DrawMode, so a combo with no handler draws nothing here; whether
+    ' Windows asks it to draw at all is the caller's check.
     Private Shared Function DrawsAsTextRendererDoes(combo As ComboBox, text As String, size As Size) As Boolean
 
         Using drawn As Bitmap = DrawnItem(combo, size, DrawItemState.ComboBoxEdit), expected As New Bitmap(size.Width, size.Height, PixelFormat.Format32bppArgb)
 
             Using g As Graphics = Graphics.FromImage(expected)
                 g.Clear(combo.BackColor)
-                TextRenderer.DrawText(g, text, combo.Font, New Rectangle(Point.Empty, size), combo.ForeColor, TextFormatFlags.VerticalCenter Or TextFormatFlags.SingleLine Or TextFormatFlags.EndEllipsis Or TextFormatFlags.NoPrefix Or TextFormatFlags.NoPadding)
+                TextRenderer.DrawText(g, text, combo.Font, InTheField(size), combo.ForeColor, TextFormatFlags.VerticalCenter Or TextFormatFlags.SingleLine Or TextFormatFlags.EndEllipsis Or TextFormatFlags.NoPrefix Or TextFormatFlags.NoPadding)
             End Using
 
             Return SamePixels(drawn, expected)
 
         End Using
 
+    End Function
+
+
+    ' Where Windows draws a box's item in a field of the given size: from
+    ' a pixel in from its left edge to its right edge.
+    Private Shared Function InTheField(size As Size) As Rectangle
+        Return Rectangle.FromLTRB(1, 0, size.Width, size.Height)
     End Function
 
 
@@ -1069,6 +1077,240 @@ Public Class DialogPolishTests
 
 
     ' ---------------------------------------------------------------
+    ' Frames and drop-downs (#266)
+    ' ---------------------------------------------------------------
+
+    ' A box that scrolls is framed round its scroll bar (#266). Windows'
+    ' edit control draws a FixedSingle box's frame round its text, so the
+    ' theme's frame, drawn round the box, met a scroll bar that runs to the
+    ' box's edge and paints over what is drawn there: in Assistant
+    ' consent's instructions and the packet file's Notes the frame stopped
+    ' at the bar, the box open on its right, with Windows' dark line
+    ' between the text and the bar. Windows paints no scroll bar off
+    ' screen, so where it lies is read: in each box of the two windows that
+    ' scrolls, at each DPI, the bar Windows reports is a pixel inside the
+    ' box on its top, right and bottom, the box's outermost pixels are the
+    ' theme's border, or the accent while it has the keyboard, and the
+    ' column left of the bar is not Windows' frame color. On 81bb29d each
+    ' bar ran to the box's edge.
+    <TestMethod>
+    Public Sub ABoxThatScrollsIsFramedRoundItsScrollBar()
+
+        Dim judged As New List(Of String)()
+        Dim found As New List(Of String)()
+
+        Dim failures As List(Of String) =
+            AtEachDpi(
+                {
+                    ("AssistantConsentForm", GetType(AssistantConsentForm), Function() ViewCatalog.Dialogs(GetType(AssistantConsentForm))(String.Empty)),
+                    ("SubmissionPacketFileEditForm", GetType(SubmissionPacketFileEditForm), Function() ViewCatalog.Dialogs(GetType(SubmissionPacketFileEditForm))(String.Empty))
+                },
+                Sub(name, shown, dpi)
+
+                    For Each box As TextBox In ViewCatalog.Descendants(shown).OfType(Of TextBox)().Where(Function(item) item.Visible AndAlso item.Multiline AndAlso HasStyle(item, WS_VSCROLL))
+
+                        Dim line As String = $"{name} at {dpi} DPI: '{box.AccessibleName}'"
+                        Dim window As New NativeRect()
+                        Dim bar As New ScrollBarInfo With {.Size = Marshal.SizeOf(Of ScrollBarInfo)()}
+
+                        GetWindowRect(box.Handle, window)
+                        Assert.IsTrue(GetScrollBarInfo(box.Handle, OBJID_VSCROLL, bar), line & ": Windows describes its scroll bar.")
+                        judged.Add(line)
+
+                        If bar.Bar.Top < window.Top + 1 OrElse bar.Bar.Right > window.Right - 1 OrElse bar.Bar.Bottom > window.Bottom - 1 Then
+                            found.Add($"{line}: its scroll bar, {bar.Bar.Left - window.Left} to {bar.Bar.Right - window.Left} across and {bar.Bar.Top - window.Top} to {bar.Bar.Bottom - window.Top} down, runs to the edge of the box, {window.Right - window.Left}x{window.Bottom - window.Top}.")
+                        End If
+
+                        Dim frame As Color = If(box.Focused, UiTheme.AccentColor(), UiTheme.CardBorder())
+
+                        Using picture As New Bitmap(box.Width, box.Height, PixelFormat.Format32bppArgb)
+
+                            box.DrawToBitmap(picture, New Rectangle(Point.Empty, box.Size))
+
+                            Dim open As Integer = Ring(picture).Count(Function(pixel) pixel.ToArgb() <> frame.ToArgb())
+                            If open > 0 Then
+                                found.Add($"{line}: {open} of its outermost pixels are not its frame's color.")
+                            End If
+
+                            Dim column As Integer = bar.Bar.Left - window.Left - 1
+                            Dim dark As Integer = Enumerable.Range(1, picture.Height - 2).Count(Function(y) picture.GetPixel(column, y).ToArgb() = SystemColors.WindowFrame.ToArgb())
+                            If dark > 0 Then
+                                found.Add($"{line}: {dark} pixels of the column left of its scroll bar are Windows' frame color.")
+                            End If
+
+                        End Using
+
+                    Next
+
+                End Sub)
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        Assert.AreEqual(2 * Dpis.Length, judged.Count, "The consent's instructions and the packet file's Notes at each DPI: " & String.Join("; ", judged))
+
+    End Sub
+
+
+    ' A drop-down list that draws its items puts its value where Windows
+    ' puts a list's own (#266): drawn from the field's left edge (#265), it
+    ' stood a pixel left of it, and in a focused list the "J" of a journal
+    ' touched the selection's edge. Beside each owner-drawn drop-down of
+    ' the packet and readiness windows, at each DPI, a twin that Windows
+    ' draws, of the same width, style, font, colors and item: neither has
+    ' the keyboard, and the first column of ink in the field is the same
+    ' in both pictures. On 81bb29d each value began a pixel left of its
+    ' twin's.
+    <TestMethod>
+    Public Sub ComboValuesStartWhereWindowsDrawsAListsOwn()
+
+        Dim judged As Integer = 0
+        Dim found As New List(Of String)()
+
+        Dim failures As List(Of String) =
+            AtEachDpi(
+                ComboViews,
+                Sub(name, shown, dpi)
+
+                    shown.ActiveControl = Nothing
+
+                    For Each combo As ComboBox In ChosenItemCombos(shown).Where(Function(item) item.DrawMode <> DrawMode.Normal).ToList()
+
+                        Dim text As String = combo.GetItemText(combo.SelectedItem)
+
+                        Using twin As New ComboBox With {.DropDownStyle = combo.DropDownStyle, .FlatStyle = combo.FlatStyle, .Font = combo.Font, .BackColor = combo.BackColor, .ForeColor = combo.ForeColor, .Width = combo.Width}
+
+                            twin.Items.Add(text)
+                            combo.Parent.Controls.Add(twin)
+                            twin.SelectedIndex = 0
+                            Application.DoEvents()
+
+                            Dim drawn As Integer = FirstInk(combo)
+                            Dim byWindows As Integer = FirstInk(twin)
+                            judged += 1
+
+                            If drawn <> byWindows Then
+                                found.Add($"{name} at {dpi} DPI: '{text}' begins {drawn} pixels into its drop-down; Windows begins it {byWindows} in.")
+                            End If
+
+                        End Using
+
+                    Next
+
+                End Sub)
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        Assert.IsTrue(judged >= 4 * Dpis.Length, "The packet's version, readiness and submission and the readiness profile at each DPI: " & judged.ToString())
+
+    End Sub
+
+
+    ' The first column of a drop-down's picture, from its left, with ink in
+    ' the field Windows draws its value in.
+    Private Shared Function FirstInk(combo As ComboBox) As Integer
+
+        Dim field As Rectangle = SelectionField(combo)
+        Dim back As Color = combo.BackColor
+
+        Using picture As New Bitmap(combo.Width, combo.Height, PixelFormat.Format32bppArgb)
+
+            combo.DrawToBitmap(picture, New Rectangle(Point.Empty, combo.Size))
+
+            For x As Integer = field.Left To field.Right - 1
+                For y As Integer = field.Top To field.Bottom - 1
+                    Dim pixel As Color = picture.GetPixel(x, y)
+                    If Math.Abs(CInt(pixel.R) - back.R) + Math.Abs(CInt(pixel.G) - back.G) + Math.Abs(CInt(pixel.B) - back.B) > 96 Then
+                        Return x
+                    End If
+                Next
+            Next
+
+        End Using
+
+        Throw New InvalidOperationException("'" & combo.GetItemText(combo.SelectedItem) & "' drew no value.")
+
+    End Function
+
+
+    ' A drop-down is framed as a text box is (#266). Windows Forms frames a
+    ' flat drop-down in the window color, white in Light, which a white
+    ' card hides, as C3 found Assistant settings' Claude Model, the Board's
+    ' filter and sort and Record Decision's Decision; Windows framed one
+    ' that draws its items in a grey of its own. In Light and Dark, each
+    ' drop-down those windows and the packet and readiness windows show is
+    ' drawn with its outermost pixels in the theme's border, or the accent
+    ' while it has the keyboard. On 81bb29d none was.
+    <TestMethod>
+    Public Sub DropDownsAreFramedAsTextBoxesAre()
+
+        Dim views As (Name As String, Build As Func(Of String, Form))() =
+            {GetType(ManuscriptPipeline.Form1), GetType(AddDecisionForm), GetType(SettingsForm), GetType(SubmissionPacketEditForm), GetType(ManuscriptReadinessForm)}.
+                Select(Function(view) (view.Name, ViewCatalog.Dialogs(view))).
+                ToArray()
+
+        Dim judged As New HashSet(Of String)(StringComparer.Ordinal)
+        Dim found As New List(Of String)()
+
+        For Each mode As SystemColorMode In {SystemColorMode.Classic, SystemColorMode.Dark}
+
+            Dim current As SystemColorMode = mode
+
+            Dim failures As List(Of String) =
+                ViewCatalog.ShowEach(
+                    views,
+                    Sub(name, shown)
+
+                        For Each combo As ComboBox In ViewCatalog.Descendants(shown).OfType(Of ComboBox)().Where(Function(item) item.Visible)
+
+                            Dim frame As Color = If(combo.Focused, UiTheme.AccentColor(), UiTheme.CardBorder())
+                            judged.Add($"{name}: '{combo.AccessibleName}'")
+
+                            Using picture As New Bitmap(combo.Width, combo.Height, PixelFormat.Format32bppArgb)
+
+                                combo.DrawToBitmap(picture, New Rectangle(Point.Empty, combo.Size))
+
+                                Dim other As List(Of Color) = Ring(picture).Where(Function(pixel) pixel.ToArgb() <> frame.ToArgb()).ToList()
+                                If other.Count > 0 Then
+                                    found.Add($"{name} in {current}: '{combo.AccessibleName}' has {other.Count} outermost pixels not in its frame's color, such as {other(0)}.")
+                                End If
+
+                            End Using
+
+                        Next
+
+                    End Sub,
+                    current)
+
+            Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+
+        Next
+
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+
+        For Each expected As String In {"Form1: 'Filter by stage'", "Form1: 'Sort the board'", "SettingsForm: 'Claude model'"}
+            Assert.IsTrue(judged.Contains(expected), $"{expected} was judged among: {String.Join("; ", judged)}")
+        Next
+
+    End Sub
+
+
+    ' A picture's outermost pixels, all round.
+    Private Shared Iterator Function Ring(picture As Bitmap) As IEnumerable(Of Color)
+
+        For x As Integer = 0 To picture.Width - 1
+            Yield picture.GetPixel(x, 0)
+            Yield picture.GetPixel(x, picture.Height - 1)
+        Next
+
+        For y As Integer = 1 To picture.Height - 2
+            Yield picture.GetPixel(0, y)
+            Yield picture.GetPixel(picture.Width - 1, y)
+        Next
+
+    End Function
+
+
+    ' ---------------------------------------------------------------
     ' Showing a view at each DPI
     ' ---------------------------------------------------------------
 
@@ -1181,6 +1423,28 @@ Public Class DialogPolishTests
 
     <DllImport("user32.dll")>
     Private Shared Function GetScrollInfo(handle As IntPtr, bar As Integer, ByRef info As ScrollInfo) As Boolean
+    End Function
+
+    Private Const OBJID_VSCROLL As Integer = &HFFFFFFFB
+
+    <StructLayout(LayoutKind.Sequential)>
+    Private Structure ScrollBarInfo
+        Public Size As Integer
+        Public Bar As NativeRect
+        Public LineButton As Integer
+        Public ThumbTop As Integer
+        Public ThumbBottom As Integer
+        Public Reserved As Integer
+        <MarshalAs(UnmanagedType.ByValArray, SizeConst:=6)>
+        Public States As Integer()
+    End Structure
+
+    <DllImport("user32.dll")>
+    Private Shared Function GetScrollBarInfo(handle As IntPtr, id As Integer, ByRef info As ScrollBarInfo) As Boolean
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function GetWindowRect(handle As IntPtr, ByRef bounds As NativeRect) As Boolean
     End Function
 
 End Class

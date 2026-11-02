@@ -60,10 +60,13 @@ Namespace Controls
 
             If e.Index >= 0 Then
 
-                ' In the box itself, from the field's left edge, as Windows
-                ' draws it: TextRenderer's padding moved the item 3 pixels
-                ' right and ended it a few pixels early, which hid a
-                ' submission's year at 125% (#265). The list keeps it.
+                ' In the box itself, one pixel in from the field's left
+                ' edge, as Windows draws it: TextRenderer's padding moved the
+                ' item 3 pixels right and ended it a few pixels early, which
+                ' hid a submission's year at 125% (#265), and from the edge
+                ' itself it stood a pixel left of Windows' own, a focused
+                ' "J" touching the selection's edge (#266). The list keeps
+                ' TextRenderer's padding.
                 Dim inBox As Boolean =
                     (e.State And DrawItemState.ComboBoxEdit) = DrawItemState.ComboBoxEdit
 
@@ -71,7 +74,7 @@ Namespace Controls
                     e.Graphics,
                     combo.GetItemText(combo.Items(e.Index)),
                     e.Font,
-                    e.Bounds,
+                    If(inBox, Rectangle.FromLTRB(e.Bounds.Left + 1, e.Bounds.Top, e.Bounds.Right, e.Bounds.Bottom), e.Bounds),
                     If(selectedInDark, Color.White, e.ForeColor),
                     If(inBox, Flags Or TextFormatFlags.NoPadding, Flags)
                 )

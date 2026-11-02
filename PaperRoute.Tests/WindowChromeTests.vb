@@ -26,6 +26,11 @@ Public Class WindowChromeTests
     ' and reading them back gives the same where Windows lets them be read.
     ' The title bar is dark in Dark, light in Light, and in Follow Windows
     ' dark exactly when Windows' app mode is dark (read, never written).
+    ' And every dialog's title bar is one (#266): no icon and no Minimize,
+    ' and Maximize only on a dialog the user can resize. On 81bb29d each
+    ' of the 46 sizable dialogs showed Windows Forms' icon, 30 of them
+    ' Minimize too, and Updating PaperRoute, a fixed one, Minimize and
+    ' Maximize.
     <TestMethod>
     <DataRow(SystemColorMode.Classic)>
     <DataRow(SystemColorMode.Dark)>
@@ -81,6 +86,18 @@ Public Class WindowChromeTests
 
                 If answer = 0 AndAlso value <> WindowChrome.DWMWCP_ROUND Then
                     found.Add($"{name}: reads back corners of {value}.")
+                End If
+
+                ' The main window keeps its icon and both buttons.
+                If TypeOf shown Is Form1 Then
+                    Return
+                End If
+
+                Dim style As Integer = GetWindowLong(shown.Handle, GWL_STYLE)
+                Dim sizable As Boolean = (style And WS_THICKFRAME) <> 0
+
+                If shown.ShowIcon OrElse (style And WS_MINIMIZEBOX) <> 0 OrElse ((style And WS_MAXIMIZEBOX) <> 0 AndAlso Not sizable) Then
+                    found.Add($"{name}: {shown.FormBorderStyle} with its icon {shown.ShowIcon}, Minimize {(style And WS_MINIMIZEBOX) <> 0} and Maximize {(style And WS_MAXIMIZEBOX) <> 0}.")
                 End If
 
             End Sub,
@@ -621,6 +638,15 @@ Public Class WindowChromeTests
 
     <DllImport("dwmapi.dll")>
     Private Shared Function DwmGetWindowAttribute(window As IntPtr, attribute As Integer, ByRef value As Integer, size As Integer) As Integer
+    End Function
+
+    Private Const GWL_STYLE As Integer = -16
+    Private Const WS_THICKFRAME As Integer = &H40000
+    Private Const WS_MINIMIZEBOX As Integer = &H20000
+    Private Const WS_MAXIMIZEBOX As Integer = &H10000
+
+    <DllImport("user32.dll", EntryPoint:="GetWindowLongW")>
+    Private Shared Function GetWindowLong(window As IntPtr, index As Integer) As Integer
     End Function
 
     <DllImport("kernel32.dll")>

@@ -1046,11 +1046,10 @@ Message boxes, the Open and Save dialogs, and the folder picker are drawn by Win
 In PaperRoute's Dark appearance, these keep the colors Windows gives them, or PaperRoute's Light ones, for 1.0. None of them hides anything you need to read:
 
 - The report preview, a web page that Windows draws.
-- The thin white frame around a table.
-- The borders of drop-down lists and number boxes, in Windows' own greys.
+- The borders of number boxes, in Windows' own greys.
 - On a route map, the journal and author segments and the numbered events, which keep their Light colors; their white labels stay easy to read.
 - The links in this guide's window, in the color Windows gives links.
-- The outlines of text boxes and lists, which are fainter than accessibility guidelines ask of an input's outline.
+- The outlines of text boxes, lists and drop-down lists, which are fainter than accessibility guidelines ask of an input's outline.
 
 ### What was tested
 
