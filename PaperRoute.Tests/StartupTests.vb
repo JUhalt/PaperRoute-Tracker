@@ -931,7 +931,7 @@ Public Class StartupTests
                         )
                     )
 
-                    closing.Wait(TimeSpan.FromSeconds(30))
+                    Assert.IsTrue(closing.Wait(TimeSpan.FromSeconds(30)), "The window took Windows' close.")
 
                 End Using
 
@@ -1698,6 +1698,7 @@ Public Class StartupTests
             Inherits PortableRestoreService
 
             Private ReadOnly _recovery As BusyFolderRecovery
+            Private ReadOnly _managedRoot As String = New ManagedLibraryService().RootDirectory
             Private _refused As Boolean = False
 
             Public Sub New(recovery As BusyFolderRecovery)
@@ -1708,7 +1709,7 @@ Public Class StartupTests
             ' IOException Directory.Move raises for a folder with a file
             ' held inside, access denied.
             Friend Overrides Sub MoveDirectory(sourceDirectory As String, destinationDirectory As String)
-                If Not _refused AndAlso Not Path.GetFileName(destinationDirectory).Contains(".restore-", StringComparison.Ordinal) Then
+                If Not _refused AndAlso String.Equals(Path.GetFullPath(destinationDirectory), _managedRoot, StringComparison.OrdinalIgnoreCase) Then
                     _refused = True
                     Throw New IOException("Access to the path '" & sourceDirectory & "' is denied.", &H80070005)
                 End If

@@ -700,8 +700,9 @@ Namespace Forms
         ' until it ends: the window keeps painting while a restore waits
         ' for a folder OneDrive or Defender holds (#295), and a failure
         ' arrives here, in the caller's Catch. Meanwhile the buttons are
-        ' disabled, the line above them says what is happening, and a close
-        ' waits for the work (OnFormClosing).
+        ' disabled, the line above them says what is happening, a user's
+        ' close is refused, and Windows shutting down waits for the work
+        ' (OnFormClosing).
         Private Sub RunRecoveryWork(
             status As String,
             work As Action
@@ -710,8 +711,11 @@ Namespace Forms
             Dim focused As Control = ActiveControl
 
             buttons.Enabled = False
-            lblStatus.Text = status
+
+            ' Shown before its text changes, and emptied once hidden, so a
+            ' screen reader hears every status, a repeated one included.
             lblStatus.Visible = True
+            lblStatus.Text = status
 
             Try
 
@@ -732,6 +736,7 @@ Namespace Forms
                 runningWork = Nothing
 
                 lblStatus.Visible = False
+                lblStatus.Text = String.Empty
                 buttons.Enabled = True
 
                 ' Disabling the buttons moved the keyboard off the one used.
@@ -743,10 +748,10 @@ Namespace Forms
 
 
         ' Closed partway, a restore could leave the library half replaced
-        ' (#295). The title bar's X, Alt+F4 or End task is refused while the
-        ' work runs; Windows shutting down waits for it to end, without
-        ' processing messages, as the main window's does (#132), then goes
-        ' on.
+        ' (#295). The title bar's X, Alt+F4 or a close another program sends
+        ' is refused while the work runs; Windows shutting down waits for it
+        ' to end, without processing messages, as the main window's does
+        ' (#132), then goes on.
         Protected Overrides Sub OnFormClosing(
             e As FormClosingEventArgs
         )
