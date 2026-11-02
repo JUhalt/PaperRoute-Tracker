@@ -381,8 +381,7 @@ Namespace Services
 
                     Return emergencyBackupPath
 
-                End Function,
-                waitIfBusy:=True
+                End Function
             )
 
         End Function
@@ -390,8 +389,9 @@ Namespace Services
 
         ' Restores over the library on disk when it could not be loaded
         ' (#124): the emergency copy is of the storage files as they are,
-        ' safety backups included. The startup window runs this on its UI
-        ' thread, so a busy folder is not waited for here (#295).
+        ' safety backups included. The startup window runs this on a worker
+        ' thread, as the main window runs its restore (#132), so a busy
+        ' folder is waited for here too (#295).
         Public Function RestoreBackup(
             backupZipPath As String,
             repository As ManuscriptRepository
@@ -404,8 +404,7 @@ Namespace Services
             Return Restore(
                 backupZipPath,
                 repository,
-                Function(backupDirectory) ZipStorageFiles(backupDirectory, repository),
-                waitIfBusy:=False
+                Function(backupDirectory) ZipStorageFiles(backupDirectory, repository)
             )
 
         End Function
@@ -413,14 +412,13 @@ Namespace Services
 
         ' writeEmergencyBackup writes a copy of the current library into the
         ' backups folder and returns its path, or an empty string when there
-        ' was nothing to copy. waitIfBusy lets the swap wait for a folder
-        ' OneDrive or Defender holds (#295), for a caller off the UI thread:
-        ' the main window runs a restore on a worker thread (#132).
+        ' was nothing to copy. The swap waits for a folder OneDrive or
+        ' Defender holds (#295), which only a caller off the UI thread can
+        ' afford: both windows run a restore on a worker thread (#132, #295).
         Private Function Restore(
             backupZipPath As String,
             repository As ManuscriptRepository,
-            writeEmergencyBackup As Func(Of String, String),
-            waitIfBusy As Boolean
+            writeEmergencyBackup As Func(Of String, String)
         ) As RestoreResult
 
             ValidateBackupPath(
@@ -751,8 +749,7 @@ Namespace Services
                             newLibraryInstalled =
                                 True
 
-                        Catch moveError As Exception When waitIfBusy AndAlso
-                                                          busyAttempt < BusyFolderWaitsMilliseconds.Length AndAlso
+                        Catch moveError As Exception When busyAttempt < BusyFolderWaitsMilliseconds.Length AndAlso
                                                           IsBusyFolder(moveError)
 
                             ' If this move is refused too, the rollback below
@@ -985,8 +982,7 @@ Namespace Services
                            Directory.Exists(rollbackFilesDirectory) Then
 
                             MoveWhenFree(
-                                Sub() Directory.Move(rollbackFilesDirectory, managedRoot),
-                                waitIfBusy
+                                Sub() Directory.Move(rollbackFilesDirectory, managedRoot)
                             )
 
                         End If
@@ -1018,7 +1014,7 @@ Namespace Services
                 ' no longer needs, which no backup holds. It comes across to
                 ' the restored library; if it cannot, the old library stays
                 ' beside the new one rather than being lost with it.
-                If CarryRemovedFolderOver(rollbackFilesDirectory, waitIfBusy) Then
+                If CarryRemovedFolderOver(rollbackFilesDirectory) Then
 
                     SafeDeleteDirectory(
                         rollbackFilesDirectory
@@ -2316,8 +2312,7 @@ Namespace Services
         ' move still fails after the waits for a busy folder (#295): the
         ' set-aside library then stays where it is.
         Private Function CarryRemovedFolderOver(
-            rollbackFilesDirectory As String,
-            waitIfBusy As Boolean
+            rollbackFilesDirectory As String
         ) As Boolean
 
             Dim rollbackRemoved As String =
@@ -2344,8 +2339,7 @@ Namespace Services
                 )
 
                 MoveWhenFree(
-                    Sub() Directory.Move(rollbackRemoved, destination),
-                    waitIfBusy
+                    Sub() Directory.Move(rollbackRemoved, destination)
                 )
 
                 Return True
@@ -2391,12 +2385,10 @@ Namespace Services
 
 
         ' Runs one folder move after the swap, of the rollback or the
-        ' removed folder, trying again while the folder is busy (#295) when
-        ' the caller may wait. After the last wait the failure is passed on
-        ' as it is.
+        ' removed folder, trying again while the folder is busy (#295).
+        ' After the last wait the failure is passed on as it is.
         Private Sub MoveWhenFree(
-            move As Action,
-            waitIfBusy As Boolean
+            move As Action
         )
 
             Dim attempt As Integer =
@@ -2410,8 +2402,7 @@ Namespace Services
 
                     Return
 
-                Catch ex As Exception When waitIfBusy AndAlso
-                                           attempt < BusyFolderWaitsMilliseconds.Length AndAlso
+                Catch ex As Exception When attempt < BusyFolderWaitsMilliseconds.Length AndAlso
                                            IsBusyFolder(ex)
 
                     WaitBeforeRetry(

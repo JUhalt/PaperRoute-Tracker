@@ -953,15 +953,15 @@ Public Class BackupRestoreTests
     End Sub
 
 
-    ' Guard: the startup window runs its restore on its UI thread, which
-    ' must not wait (#295), so there a busy folder fails the restore at
-    ' once and the rollback leaves the library as it was. It passed before
-    ' the change as well.
+    ' The startup window runs its restore on a worker thread too (#295),
+    ' so with no library loaded a busy folder is waited for as well: the
+    ' move into the managed folder is refused once, and the restore waits,
+    ' with the library in its place, tries again and completes. Before the
+    ' change it failed at once and rolled back.
     <TestMethod>
-    Public Sub Restore_WithNoLibraryLoadedDoesNotWaitForABusyFolder()
+    Public Sub Restore_WithNoLibraryLoadedWaitsForABusyFolder()
 
         Dim scenario As RestoreScenario = CreateRestoreScenario()
-        Dim before As Dictionary(Of String, Byte()) = SnapshotLibrary(scenario)
         Dim service As New BusyFolderRestoreService(
             scenario.TargetManaged,
             1,
@@ -969,13 +969,17 @@ Public Class BackupRestoreTests
             intoFolder:=scenario.TargetManaged
         )
 
-        Dim failure As RestoreFailedException =
-            Assert.ThrowsExactly(Of RestoreFailedException)(
-                Sub() service.RestoreBackup(scenario.BackupPath, scenario.TargetRepository))
+        Dim result As RestoreResult = service.RestoreBackup(scenario.BackupPath, scenario.TargetRepository)
 
-        Assert.AreEqual(0, service.Waits.Count, "The UI thread did not wait.")
-        StringAssert.Contains(failure.Message, "put back as it was")
-        AssertSameFiles(before, SnapshotLibrary(scenario), "The library on disk after the startup restore")
+        Assert.AreEqual(1, service.Waits.Count, "The restore waited once.")
+        Assert.AreEqual(0, service.WaitsWithTheLibraryAside, "The library was in its place at the wait.")
+        Assert.AreEqual(3, result.ManuscriptCount)
+        Assert.AreEqual(3, scenario.TargetRepository.Load().Count, "The library is the backup's.")
+        Assert.AreEqual(
+            0,
+            Directory.GetFileSystemEntries(_root, "*restore-*", SearchOption.AllDirectories).Length,
+            "Nothing of the restore is left beside the library."
+        )
 
     End Sub
 

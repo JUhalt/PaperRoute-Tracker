@@ -194,7 +194,7 @@ Namespace Services
             backupZipPath As String
         ) As BackupInspection
 
-            Return New PortableRestoreService(_managedLibraryRoot).InspectBackup(
+            Return CreateRestoreService().InspectBackup(
                 backupZipPath
             )
 
@@ -204,7 +204,8 @@ Namespace Services
         ' Restores the archive over the library on disk, loaded or not, and
         ' rewrites the marker it restored over. A library from a newer
         ' PaperRoute stops this before anything changes, with the message
-        ' startup gave.
+        ' startup gave. The startup window runs this and InspectBackup on a
+        ' worker thread (#295): nothing here needs the window's thread.
         Public Function RestoreFromBackup(
             backupZipPath As String
         ) As RestoreResult
@@ -222,7 +223,7 @@ Namespace Services
             End If
 
             Dim result As RestoreResult =
-                New PortableRestoreService(_managedLibraryRoot).RestoreBackup(
+                CreateRestoreService().RestoreBackup(
                     backupZipPath,
                     _repository
                 )
@@ -235,6 +236,14 @@ Namespace Services
             )
 
             Return result
+
+        End Function
+
+
+        ' Tests restore through one that finds a folder busy (#295).
+        Friend Overridable Function CreateRestoreService() As PortableRestoreService
+
+            Return New PortableRestoreService(_managedLibraryRoot)
 
         End Function
 
