@@ -2,7 +2,7 @@
 
 PaperRoute is a local-first academic manuscript tracker for researchers. It is designed to keep the complete route of a paper understandable: idea, writing, submission, peer review, revision, publication, or the File Drawer.
 
-This guide describes **PaperRoute v0.9.2 — 1.0 Hardening**. See the [v0.9.2 release notes](releases/0.9.2.md) for the hardening changes, the [v0.9.0 release notes](releases/0.9.0.md) for the v0.9 features, and the [repository homepage](../README.md) for current release availability.
+This guide describes **PaperRoute v1.0.0-rc.1 — Trusted Research Workflow**, a Preview. The current Stable release is v0.9.2; see the [v1.0.0-rc.1 release notes](releases/1.0.0-rc.1.md) for what 1.0 means and what changed, the [v0.9.2 release notes](releases/0.9.2.md) for the hardening it builds on, and the [repository homepage](../README.md) for current release availability.
 
 ## Quick Start
 
@@ -1340,7 +1340,8 @@ PaperRoute ships a local copy of this guide. Open it with **Help** at the bottom
 
 The Route, Version History, readiness profiles, submission packets, reviewer responses, and Deadlines form one connected manuscript record. Later releases build on that record:
 
-- **v1.0 — Trusted Research Workflow:** a release you can trust with your real publication pipeline.
+- **v1.1 — macOS and Linux:** one cross-platform interface, so PaperRoute is the same calm, trustworthy app on Windows, macOS, and Linux.
+- **v1.2 — Open Science Studies:** studies, preregistration, materials and data, shared on the open-science site you choose.
 
 Planned releases are directional and may change; see the [roadmap](https://github.com/JUhalt/PaperRoute-Tracker/blob/master/ROADMAP.md).
 

@@ -17,7 +17,7 @@ PaperRoute Tracker helps researchers manage manuscripts from idea through submis
 ## Current status
 
 - **Stable:** [v0.9.2 — 1.0 Hardening](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v0.9.2) readies PaperRoute for 1.0: your files and your library are harder to lose and easier to recover, the window no longer stalls on a large library, and PaperRoute can be worked from the keyboard and with a screen reader throughout. It builds on v0.9, which helps you decide where a manuscript should go: a journal shortlist for each manuscript, a guide to choosing a journal, journal facts and metrics from open indexes, journals that publish work like yours, your own citations, a teaching example library, packet export with RO-Crate metadata, and optional AI help, all under one local-first rule with a **Work offline** switch. See the [v0.9.2 release notes](docs/releases/0.9.2.md), the [v0.9 release notes](docs/releases/0.9.0.md), and the [user guide](docs/USER_GUIDE.md).
-- **Next:** [v1.0 — Trusted Research Workflow](https://github.com/JUhalt/PaperRoute-Tracker/milestone/12): a release you can trust with your real publication pipeline.
+- **Preview:** [v1.0.0-rc.1 — Trusted Research Workflow](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v1.0.0-rc.1) is the candidate for 1.0, the release to trust with your real publication pipeline. It keeps the Schema 9 library, so v0.9.2 can still open a library it has used; read the [release notes](docs/releases/1.0.0-rc.1.md) before trying it.
 
 v0.9 moves the library to Schema 9, which v0.8 cannot open, so keep a backup made with v0.8 before upgrading. The [upgrade notes](UPGRADE_NOTES.md) explain the save and compatibility boundaries.
 
@@ -113,7 +113,7 @@ When legacy ManuscriptPipeline storage is migrated, PaperRoute retains the legac
 
 ## Installing PaperRoute
 
-Download the PaperRoute Setup executable from the latest Stable release on this repository's [Releases page](https://github.com/JUhalt/PaperRoute-Tracker/releases) and run it. Setup is not code-signed yet (see the [Code signing policy](CODE_SIGNING.md)), so Windows warns before it runs; the User Guide's [Installing](docs/USER_GUIDE.md#installing) section explains the prompt, how to check the download against `SHA256SUMS.txt`, which Windows versions are supported, and what "Install Partially Succeeded" means. [Uninstalling](docs/USER_GUIDE.md#uninstalling) says what is removed and what stays.
+Download the PaperRoute Setup executable from the latest Stable release on this repository's [Releases page](https://github.com/JUhalt/PaperRoute-Tracker/releases) and run it. Setup is not code-signed yet (see the [Code signing policy](CODE_SIGNING.md)), so your browser and Windows may warn before it runs; the User Guide's [Installing](docs/USER_GUIDE.md#installing) section explains the warnings, how to check the download against `SHA256SUMS.txt`, which Windows versions are supported, and what "Install Partially Succeeded" means. [Uninstalling](docs/USER_GUIDE.md#uninstalling) says what is removed and what stays.
 
 Fresh installations default to the **Stable** update channel. Users who intentionally want prerelease builds can choose **Preview** under **Settings → Preferences... → Update channel**. Use **Settings → Check for Updates...** to check immediately.
 
@@ -224,7 +224,7 @@ PaperRoute is an independent, open-source project. Its implementation, local-fir
 | **Released** | v0.8 — Route Analytics & Reports | Route maps, your own turnaround data, reports, types and tags |
 | **Released** | v0.9 — Journal Choice & Guidance | Choosing a journal, journal facts, packet export, a teaching example, optional AI help |
 | **Released** | v0.9.2 — 1.0 Hardening | Recovery, speed, accessibility, display scaling, certification |
-| **Now** | [v1.0 — Trusted Research Workflow](https://github.com/JUhalt/PaperRoute-Tracker/milestone/12) | "I trust this application with my research workflow." |
+| **Preview** | [v1.0 — Trusted Research Workflow](https://github.com/JUhalt/PaperRoute-Tracker/milestone/12) | "I trust this application with my research workflow." |
 | **Next** | [v1.1 — macOS and Linux](https://github.com/JUhalt/PaperRoute-Tracker/milestone/15) | One calm interface on Windows, macOS, and Linux |
 | **Then** | [v1.2 — Open Science Studies](https://github.com/JUhalt/PaperRoute-Tracker/milestone/16) | Studies, preregistration, materials and data, shared on the open-science site you choose |
 
