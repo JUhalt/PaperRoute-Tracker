@@ -168,6 +168,116 @@ function Get-BundledRuntimeVersion([string] $PublishRoot) {
     return [string] $runtime[0].version
 }
 
+# Hands $Read an assembly's PE and metadata readers; nothing is loaded or run.
+function Read-AssemblyMetadata([string] $Path, [scriptblock] $Read) {
+    $stream = [IO.File]::OpenRead($Path)
+    try {
+        $pe = [Reflection.PortableExecutable.PEReader]::new($stream)
+        try { & $Read $pe ([Reflection.Metadata.PEReaderExtensions]::GetMetadataReader($pe)) }
+        finally { $pe.Dispose() }
+    }
+    finally { $stream.Dispose() }
+}
+
+# The Application.HighDpiMode the published app runs in, read from the
+# published PaperRouteTracker.dll rather than assumed (#302): the constant
+# each call in it that sets the mode passes (ApplicationEvents.vb's
+# e.HighDpiMode, the startup window's Application.SetHighDpiMode), named
+# from the HighDpiMode enum the published Windows Forms assemblies define
+# ($FormsRoot's, for the tests' build, which bundles none). No such call, a
+# computed value, or two values cannot be recorded, so each is refused.
+function Get-PublishedHighDpiMode([string] $PublishRoot, [string] $FormsRoot = $PublishRoot) {
+    $appPath = Join-Path $PublishRoot 'PaperRouteTracker.dll'
+    if (-not (Test-Path -LiteralPath $appPath -PathType Leaf)) {
+        throw "The published PaperRouteTracker.dll was not found at '$appPath', so its HighDpiMode cannot be read."
+    }
+    $setters = @('Microsoft.VisualBasic.ApplicationServices.ApplyApplicationDefaultsEventArgs.set_HighDpiMode',
+        'Microsoft.VisualBasic.ApplicationServices.WindowsFormsApplicationBase.set_HighDpiMode',
+        'System.Windows.Forms.Application.SetHighDpiMode')
+    # Each opcode's operand size, from the runtime's own opcode table, so the
+    # IL is decoded an instruction at a time rather than searched for bytes.
+    $operandSizes = @{}
+    foreach ($field in [Reflection.Emit.OpCodes].GetFields()) {
+        $opCode = [Reflection.Emit.OpCode] $field.GetValue($null)
+        $operandSizes[$opCode.Value -band 0xFFFF] = switch ($opCode.OperandType.ToString()) {
+            'InlineNone' { 0 }
+            { $_ -in 'ShortInlineBrTarget', 'ShortInlineI', 'ShortInlineVar' } { 1 }
+            'InlineVar' { 2 }
+            { $_ -in 'InlineI8', 'InlineR' } { 8 }
+            'InlineSwitch' { -1 }
+            default { 4 }
+        }
+    }
+    $modes = [Collections.Generic.List[int]]::new()
+    Read-AssemblyMetadata $appPath {
+        param($pe, $reader)
+        $tokens = @{}
+        foreach ($handle in $reader.MemberReferences) {
+            $member = $reader.GetMemberReference($handle)
+            if ($member.Parent.Kind -ne 'TypeReference') { continue }
+            $parent = $reader.GetTypeReference([Reflection.Metadata.TypeReferenceHandle] $member.Parent)
+            $name = '{0}.{1}.{2}' -f $reader.GetString($parent.Namespace), $reader.GetString($parent.Name), $reader.GetString($member.Name)
+            if ($name -cin $setters) {
+                $token = [Reflection.Metadata.Ecma335.MetadataTokens]::GetToken([Reflection.Metadata.EntityHandle] $handle)
+                $tokens[$token] = [Convert]::ToHexString([BitConverter]::GetBytes($token))
+            }
+        }
+        foreach ($handle in $reader.MethodDefinitions) {
+            $method = $reader.GetMethodDefinition($handle)
+            if ($method.RelativeVirtualAddress -eq 0) { continue }
+            $il = [Reflection.Metadata.PEReaderExtensions]::GetMethodBody($pe, $method.RelativeVirtualAddress).GetILBytes()
+            $hex = [Convert]::ToHexString($il)
+            if (@($tokens.Values | Where-Object { $hex.Contains($_) }).Count -eq 0) { continue }
+            $constant = $null
+            $i = 0
+            while ($i -lt $il.Length) {
+                $code = [int] $il[$i++]
+                if ($code -eq 0xFE) { $code = 0xFE00 -bor $il[$i++] }
+                $size = $operandSizes[$code]
+                if ($null -eq $size) { throw "'$appPath' holds IL opcode 0x$($code.ToString('X')), which this runtime does not define." }
+                if ($size -lt 0) { $size = 4 + 4 * [BitConverter]::ToInt32($il, $i) }
+                if (($code -eq 0x28 -or $code -eq 0x6F) -and $tokens.ContainsKey([BitConverter]::ToInt32($il, $i))) {
+                    if ($null -eq $constant) {
+                        throw "The published app's $($reader.GetString($method.Name)) sets HighDpiMode to a computed value, which cannot be recorded."
+                    }
+                    $modes.Add($constant)
+                }
+                # ldc.i4.m1 to ldc.i4.8, ldc.i4.s and ldc.i4 load a constant.
+                $constant = if ($code -ge 0x15 -and $code -le 0x1E) { $code - 0x16 }
+                    elseif ($code -eq 0x1F) { ([int] $il[$i] -bxor 0x80) - 0x80 }
+                    elseif ($code -eq 0x20) { [BitConverter]::ToInt32($il, $i) }
+                    else { $null }
+                $i += $size
+            }
+        }
+    }
+    $set = @($modes | Sort-Object -Unique)
+    if ($set.Count -ne 1) {
+        throw "The published app must set one HighDpiMode; it sets $($set.Count) ($($set -join ', '))."
+    }
+    $names = @{}
+    $definitions = [Collections.Generic.List[string]]::new()
+    foreach ($forms in @(Get-ChildItem -LiteralPath $FormsRoot -File -Filter 'System.Windows.Forms*.dll')) {
+        Read-AssemblyMetadata $forms.FullName {
+            param($pe, $reader)
+            foreach ($handle in $reader.TypeDefinitions) {
+                $type = $reader.GetTypeDefinition($handle)
+                if ($reader.GetString($type.Namespace) -cne 'System.Windows.Forms' -or $reader.GetString($type.Name) -cne 'HighDpiMode') { continue }
+                $definitions.Add($forms.Name)
+                foreach ($fieldHandle in $type.GetFields()) {
+                    $field = $reader.GetFieldDefinition($fieldHandle)
+                    if ($field.GetDefaultValue().IsNil) { continue }
+                    $names[[BitConverter]::ToInt32($reader.GetBlobBytes($reader.GetConstant($field.GetDefaultValue()).Value), 0)] = $reader.GetString($field.Name)
+                }
+            }
+        }
+    }
+    if ($definitions.Count -ne 1 -or -not $names.ContainsKey($set[0])) {
+        throw "The published Windows Forms assemblies must define HighDpiMode once, with the value $($set[0]) the app sets; found $($definitions.Count) definition(s)."
+    }
+    return [string] $names[$set[0]]
+}
+
 # THIRD-PARTY-NOTICES.txt names the bundled runtime twice: in its '.NET
 # runtime <version>, bundled as the packs' entry and in the heading of the
 # runtime's reproduced notices. v0.9.2 bundled 10.0.14 under notices for
@@ -313,6 +423,7 @@ try {
     }
     $runtimeVersion = Get-BundledRuntimeVersion $publishRoot
     Assert-NoticesNameRuntime (Join-Path $repoRoot 'THIRD-PARTY-NOTICES.txt') $runtimeVersion
+    $highDpiMode = Get-PublishedHighDpiMode $publishRoot
     $dllPath = Join-Path $publishRoot 'PaperRouteTracker.dll'
     $versionInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo($dllPath)
     $assemblyVersion = [Reflection.AssemblyName]::GetAssemblyName($dllPath).Version.ToString()
@@ -368,6 +479,7 @@ try {
     $evidence = [ordered]@{
         Status = 'VerifiedLocalCandidate'; Version = $Version; NumericVersion = $numericVersion
         Channel = $channel; PackageId = $packId; VelopackVersion = $velopackVersion; DotnetSdk = $sdk; RuntimeVersion = $runtimeVersion
+        HighDpiMode = $highDpiMode
         Commit = $commit; DirtyCheckout = ($sourceStatus.Count -gt 0); SourceStatusFile = 'source-status.txt'
         SourceSnapshotFile = 'source-files.json'; SourceSnapshotSha256 = (Get-Sha256 (Join-Path $candidateRoot 'source-files.json'))
         StartedAtUtc = $startedAt.ToString('o'); CompletedAtUtc = [DateTime]::UtcNow.ToString('o')
@@ -383,6 +495,6 @@ try {
     }
     [IO.File]::WriteAllText((Join-Path $candidateRoot 'candidate-verification.json'), ($evidence | ConvertTo-Json -Depth 8), $utf8)
     Write-Host "Verified local candidate: $candidateRoot"
-    Write-Host "Tests: $($evidence.TestsPassed) passed; the OnDemand tests are left to CI and the OnScreen tests to certification. Installer signature: $($evidence.InstallerSignatureStatus). Bundled .NET runtime: $runtimeVersion."
+    Write-Host "Tests: $($evidence.TestsPassed) passed; the OnDemand tests are left to CI and the OnScreen tests to certification. Installer signature: $($evidence.InstallerSignatureStatus). Bundled .NET runtime: $runtimeVersion. HighDpiMode: $highDpiMode."
 }
 finally { Pop-Location }

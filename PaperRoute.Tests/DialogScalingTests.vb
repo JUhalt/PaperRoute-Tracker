@@ -1,5 +1,6 @@
 Imports System
 Imports System.Collections.Generic
+Imports System.Diagnostics
 Imports System.Drawing
 Imports System.IO
 Imports System.Linq
@@ -16,7 +17,7 @@ Imports ManuscriptPipeline.Services
 ' the ones the measuring test failed) use it, with every hand-scaled
 ' value on a property Windows Forms scales written as its 96-DPI
 ' literal. And the mode the app runs in is pinned to the one it has
-' always run in.
+' always run in, which the release candidate reads from the built app.
 <TestClass>
 <DoNotParallelize>
 Public Class DialogScalingTests
@@ -152,6 +153,70 @@ Public Class DialogScalingTests
         Assert.AreEqual(0, others.Count, "No file names another mode: " & String.Join(", ", others))
 
     End Sub
+
+
+    ' The release candidate records the mode the built app sets (#302):
+    ' Build-ReleaseCandidate.ps1 reads it from PaperRouteTracker.dll, here
+    ' the tests' copy, and names it from the Windows Forms the tests run
+    ' on. A folder without the app is refused rather than recorded.
+    <TestMethod>
+    Public Sub TheCandidateRecordsTheModeTheBuiltAppSets()
+
+        Dim forms As String =
+            Path.GetDirectoryName(GetType(Form).Assembly.Location)
+
+        Dim recorded As (ExitCode As Integer, Output As String) =
+            CandidateHighDpiMode(Path.GetDirectoryName(GetType(DialogScaling).Assembly.Location), forms)
+
+        Assert.AreEqual(0, recorded.ExitCode, "The mode is read from the built app: " & recorded.Output)
+        Assert.AreEqual(HighDpiMode.SystemAware.ToString(), recorded.Output.Trim(), "The mode ApplicationEvents.vb sets.")
+
+        Dim refused As (ExitCode As Integer, Output As String) =
+            CandidateHighDpiMode(forms, forms)
+
+        Assert.AreNotEqual(0, refused.ExitCode, "A folder without the app is refused: " & refused.Output)
+        StringAssert.Contains(refused.Output, "PaperRouteTracker.dll was not found", "It says why.")
+
+    End Sub
+
+
+    ' The script's own Get-PublishedHighDpiMode, taken from it without
+    ' running the rest, in a PowerShell that opens no window. A failure's
+    ' message is the output, with a non-zero exit code.
+    Private Shared Function CandidateHighDpiMode(build As String, forms As String) As (ExitCode As Integer, Output As String)
+
+        Dim script As String =
+            Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManualCertification", "Build-ReleaseCandidate.ps1")
+
+        Dim command As String =
+            "Set-StrictMode -Version Latest; $ErrorActionPreference = 'Stop'; try { " &
+            "$ast = [Management.Automation.Language.Parser]::ParseFile(" & Quoted(script) & ", [ref] $null, [ref] $null); " &
+            "foreach ($name in 'Read-AssemblyMetadata', 'Get-PublishedHighDpiMode') { " &
+            ". ([scriptblock]::Create($ast.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq $name }, $true).Extent.Text)) }; " &
+            "Get-PublishedHighDpiMode " & Quoted(build) & " " & Quoted(forms) &
+            " } catch { $_.Exception.Message; exit 1 }"
+
+        Dim start As New ProcessStartInfo("pwsh.exe") With {
+            .UseShellExecute = False, .CreateNoWindow = True, .RedirectStandardOutput = True
+        }
+
+        For Each argument As String In {"-NoProfile", "-NonInteractive", "-Command", command}
+            start.ArgumentList.Add(argument)
+        Next
+
+        Using pwsh As Process = Process.Start(start)
+            Dim output As String = pwsh.StandardOutput.ReadToEnd()
+            Assert.IsTrue(pwsh.WaitForExit(120000), "PowerShell finished.")
+            Return (pwsh.ExitCode, output)
+        End Using
+
+    End Function
+
+
+    ' A PowerShell single-quoted string.
+    Private Shared Function Quoted(text As String) As String
+        Return "'" & text.Replace("'", "''") & "'"
+    End Function
 
 
     Private Shared Function Code(path As String) As String
