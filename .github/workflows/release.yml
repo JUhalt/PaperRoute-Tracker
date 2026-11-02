@@ -25,8 +25,13 @@ jobs:
       # Releases are built only from master, as CODE_SIGNING.md says (#44;
       # the maintainer's decision of November 2, 2026). This runs before
       # anything is built, for Preview and Stable tags alike. The checkout
-      # holds only the tagged commit, so master is fetched first. A refused
-      # tag is still pushed, so certification's D1 checks before tagging.
+      # holds only the tagged commit, so master is fetched first.
+      # GitHub runs this file as it is at the tagged commit, so the check
+      # guards only commits that carry it, and a refused tag stays pushed:
+      # certification's D1 still checks before tagging. Do not re-run a
+      # refused run. A merge commit can later put the tagged commit on
+      # master, and a re-run would then publish it, not the merge commit.
+      # Tag the merge commit under a new name instead.
       - name: Reject a tag whose commit is not on master
         shell: pwsh
         run: |

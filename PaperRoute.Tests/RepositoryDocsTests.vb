@@ -296,6 +296,76 @@ Public Class RepositoryDocsTests
     End Sub
 
 
+    ' #44, the maintainer's decision 5 of November 2, 2026: release.yml
+    ' refuses a tag whose commit is not on master, before it sets up,
+    ' builds, packs, uploads or publishes anything. Pull requests never run
+    ' release.yml, and a release tag can be neither moved nor deleted, so a
+    ' check dropped or moved later would otherwise show only on a real tag.
+    <TestMethod>
+    Public Sub TheReleaseWorkflowRefusesATagNotOnMasterBeforeItBuilds()
+
+        Const stepPrefix As String =
+            "      - name: "
+
+        Dim lines As String() =
+            ReadDocument(
+                Path.Combine(".github", "workflows", "release.yml")
+            ).Split(
+                ChrW(10)
+            )
+
+        Dim steps As List(Of Integer) =
+            Enumerable.Range(
+                0,
+                lines.Length
+            ).Where(
+                Function(index) lines(index).StartsWith(
+                    stepPrefix,
+                    StringComparison.Ordinal
+                )
+            ).ToList()
+
+        Assert.IsTrue(
+            steps.Count > 2,
+            "release.yml has a step after the tag check."
+        )
+
+        Assert.AreEqual(
+            "Check out repository",
+            lines(steps(0)).Substring(stepPrefix.Length).Trim(),
+            "The checkout is release.yml's first step."
+        )
+
+        Assert.AreEqual(
+            "Reject a tag whose commit is not on master",
+            lines(steps(1)).Substring(stepPrefix.Length).Trim(),
+            "The tag check comes right after the checkout, before any other step."
+        )
+
+        Dim check As String =
+            String.Join(
+                vbLf,
+                lines.Skip(steps(1)).Take(steps(2) - steps(1))
+            )
+
+        For Each expected As String In {
+            "git fetch --no-tags origin '+refs/heads/master:refs/remotes/origin/master'",
+            "git merge-base --is-ancestor $env:GITHUB_SHA origin/master",
+            "Release tag '$env:GITHUB_REF_NAME'",
+            "which is not on master"
+        }
+
+            StringAssert.Contains(
+                check,
+                expected,
+                "The tag check runs or says: " & expected
+            )
+
+        Next
+
+    End Sub
+
+
     ' #156, recorded with #148: the 1.0 bar's accessibility claim is the
     ' one the maintainer decided, and it points at what was tested.
     <TestMethod>
