@@ -4,10 +4,13 @@
 Launch the disposable UI harness, wait until it reports its window painted, capture the window, and write evidence.
 .EXAMPLE
 pwsh -NoProfile -File .\ManualCertification\Capture-HarnessWindow.ps1 -HarnessPath .\ManualCertification\V04Demo\bin\Debug\net10.0-windows\PaperRoute.V04Demo.exe board --primary
+.EXAMPLE
+pwsh -NoProfile -File .\ManualCertification\Capture-HarnessWindow.ps1 -HarnessPath .\ManualCertification\V04Demo\bin\Debug\net10.0-windows\PaperRoute.V04Demo.exe -Name board-published board --primary --shelf published
 .NOTES
 The harness writes a "painted" marker (--painted <file>) once the shown window's load has finished and its
 message loop has gone idle. This script waits for that marker and fails on timeout instead of capturing a
-blank window; the marker's time goes into the evidence JSON (#146). PrintWindow reads the window's own
+blank window; the marker's time goes into the evidence JSON (#146). It also refuses a window that is
+minimized or smaller than its minimum size (#266), and records that check. PrintWindow reads the window's own
 pixels, so other windows may overlap it. Evidence goes to a fresh directory under the ignored artifacts
 folder unless -OutputDirectory says otherwise. The harness process is ended when the script finishes.
 #>
@@ -69,9 +72,31 @@ public static class HarnessCapture
     [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr handle, IntPtr hdc, uint flags);
     [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
     [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr handle, int attribute, out RECT value, int size);
+    [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr handle);
+    [DllImport("user32.dll")] static extern int GetSystemMetrics(int index);
+    [DllImport("user32.dll")] static extern IntPtr SendMessageTimeout(IntPtr handle, uint message, IntPtr wParam, ref MINMAXINFO lParam, uint flags, uint timeout, out IntPtr result);
     public struct RECT { public int Left, Top, Right, Bottom; }
+    struct POINT { public int X, Y; }
+    struct MINMAXINFO { public POINT Reserved, MaxSize, MaxPosition, MinTrackSize, MaxTrackSize; }
     public const uint PW_RENDERFULLCONTENT = 2;
     public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
+    const uint WM_GETMINMAXINFO = 0x0024, SMTO_ABORTIFHUNG = 0x0002;
+    const int SM_CXMINTRACK = 34, SM_CYMINTRACK = 35;
+    // The smallest size the window can be given (#266). WM_GETMINMAXINFO is a system message, so SendMessage
+    // carries its MINMAXINFO across processes, and WinForms answers it with the form's MinimumSize. The
+    // system's minimum goes in first, as a window that sets no minimum leaves it as it is. A window that does
+    // not answer in time, or seems hung, is held to the system's minimum, and false says so.
+    public static bool MinimumTrackSize(IntPtr handle, uint milliseconds, out int width, out int height)
+    {
+        var info = new MINMAXINFO();
+        info.MinTrackSize.X = GetSystemMetrics(SM_CXMINTRACK);
+        info.MinTrackSize.Y = GetSystemMetrics(SM_CYMINTRACK);
+        IntPtr result;
+        var answered = SendMessageTimeout(handle, WM_GETMINMAXINFO, IntPtr.Zero, ref info, SMTO_ABORTIFHUNG, milliseconds, out result) != IntPtr.Zero;
+        width = answered ? info.MinTrackSize.X : GetSystemMetrics(SM_CXMINTRACK);
+        height = answered ? info.MinTrackSize.Y : GetSystemMetrics(SM_CYMINTRACK);
+        return answered;
+    }
     // Visible top-level windows of one process, in Z order.
     public static List<IntPtr> Windows(int processId)
     {
@@ -96,6 +121,33 @@ public static class HarnessCapture
 }
 # Physical pixels from GetWindowRect, so the bitmap matches the window at any scale.
 [void][HarnessCapture]::SetProcessDPIAware()
+
+# A capture must show the window whole (#266): packet-new-dark at ab07950 came out as a 183x34 caption strip, a
+# minimized window, and was reported captured. Refuses a window that is minimized or smaller than its minimum
+# size, naming it; otherwise returns what was checked, for the evidence. The harness is system aware too, so
+# its minimum and this rectangle are in the same pixels.
+function Test-Window([IntPtr] $Handle) {
+    $title = [HarnessCapture]::Title($Handle)
+    $rectangle = [HarnessCapture+RECT]::new()
+    if (-not [HarnessCapture]::GetWindowRect($Handle, [ref] $rectangle)) { throw "GetWindowRect failed for '$title'." }
+    $width = $rectangle.Right - $rectangle.Left
+    $height = $rectangle.Bottom - $rectangle.Top
+    if ([HarnessCapture]::IsIconic($Handle)) {
+        throw "The window '$title' is minimized ($width x $height); nothing was captured."
+    }
+    $minimumWidth = 0
+    $minimumHeight = 0
+    $answered = [HarnessCapture]::MinimumTrackSize($Handle, 3000, [ref] $minimumWidth, [ref] $minimumHeight)
+    $source = if ($answered) { 'WM_GETMINMAXINFO' } else { 'SM_CXMINTRACK/SM_CYMINTRACK: the window did not answer WM_GETMINMAXINFO in 3 s' }
+    if ($width -lt $minimumWidth -or $height -lt $minimumHeight) {
+        throw "The window '$title' is $width x $height, smaller than its minimum size $minimumWidth x $minimumHeight ($source); nothing was captured."
+    }
+    return [ordered]@{
+        Iconic = $false
+        WindowRect = [ordered]@{ Width = $width; Height = $height }
+        MinimumTrackSize = [ordered]@{ Width = $minimumWidth; Height = $minimumHeight; Source = $source }
+    }
+}
 
 function Save-Window([IntPtr] $Handle, [string] $Path) {
     $rectangle = [HarnessCapture+RECT]::new()
@@ -167,6 +219,8 @@ try {
 
     $handles = @([HarnessCapture]::Windows($process.Id) | Where-Object { [HarnessCapture]::Title($_) -ne '' })
     if ($handles.Count -eq 0) { throw 'The harness reported its window painted, but it has no visible titled window to capture.' }
+    # Every window is checked before any is captured, so a refusal leaves no capture behind.
+    $checks = @($handles | ForEach-Object { Test-Window $_ })
     $windows = [Collections.Generic.List[object]]::new()
     for ($index = 0; $index -lt $handles.Count; $index++) {
         $fileName = if ($handles.Count -eq 1) { "$Name.png" } else { '{0}-{1}.png' -f $Name, $index }
@@ -175,6 +229,7 @@ try {
         $windows.Add([ordered]@{
             Title = [HarnessCapture]::Title($handles[$index]); Width = $size.Width; Height = $size.Height
             File = $fileName; Sha256 = (Get-Sha256 $path)
+            Iconic = $checks[$index].Iconic; WindowRect = $checks[$index].WindowRect; MinimumTrackSize = $checks[$index].MinimumTrackSize
         })
         Write-Host ('{0}  {1}x{2}  {3}' -f $path, $size.Width, $size.Height, $windows[$index].Title)
     }
@@ -184,7 +239,9 @@ try {
         ApplicationDllSha256 = if (Test-Path -LiteralPath $applicationDll -PathType Leaf) { Get-Sha256 $applicationDll } else { $null }
         Arguments = @($HarnessArguments); StartedAtUtc = $startedAt.ToString('o'); Painted = $marker
         WaitedSeconds = $waitedSeconds; CapturedAtUtc = [DateTime]::UtcNow.ToString('o')
-        CaptureMethod = 'PrintWindow PW_RENDERFULLCONTENT, cropped to DWMWA_EXTENDED_FRAME_BOUNDS'; Windows = @($windows.ToArray())
+        CaptureMethod = 'PrintWindow PW_RENDERFULLCONTENT, cropped to DWMWA_EXTENDED_FRAME_BOUNDS'
+        WindowCheck = 'Before any capture, each window not minimized (IsIconic) and at least its minimum track size (GetWindowRect against WM_GETMINMAXINFO)'
+        Windows = @($windows.ToArray())
     }
     $evidencePath = Join-Path $outputRoot "$Name.json"
     [IO.File]::WriteAllText($evidencePath, (ConvertTo-Json -InputObject $evidence -Depth 6), $utf8)
