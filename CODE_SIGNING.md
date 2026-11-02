@@ -12,7 +12,7 @@ When signing begins, this section will read: "Free code signing provided by [Sig
 
 ## How a release is built and signed
 
-- Releases are built only by [`.github/workflows/release.yml`](.github/workflows/release.yml), on GitHub-hosted runners, from a clean checkout of a `v*` tag on `master`, with no files carried over from earlier builds.
+- Releases are built only by [`.github/workflows/release.yml`](.github/workflows/release.yml), on GitHub-hosted runners, from a clean checkout of a `v*` tag on `master`, with no files carried over from earlier builds. Before it builds anything, the workflow refuses a tag whose commit is not on `master`, and the maintainer checks the same before making the tag.
 - The workflow uploads the unsigned files as a workflow artifact and submits them to SignPath, which verifies where they came from: the repository, the branch, the commit and the build job.
 - Every signing request is approved by hand by an approver listed below before anything is signed.
 - Signing happens before `SHA256SUMS.txt` is written and before the release is published, so the published checksums are those of the signed files.

@@ -22,6 +22,29 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # Releases are built only from master, as CODE_SIGNING.md says (#44;
+      # the maintainer's decision of November 2, 2026). This runs before
+      # anything is built, for Preview and Stable tags alike. The checkout
+      # holds only the tagged commit, so master is fetched first.
+      # GitHub runs this file as it is at the tagged commit, so the check
+      # guards only commits that carry it, and a refused tag stays pushed:
+      # certification's D1 still checks before tagging. Do not re-run a
+      # refused run. A merge commit can later put the tagged commit on
+      # master, and a re-run would then publish it, not the merge commit.
+      # Tag the merge commit under a new name instead.
+      - name: Reject a tag whose commit is not on master
+        shell: pwsh
+        run: |
+          git fetch --no-tags origin '+refs/heads/master:refs/remotes/origin/master'
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot fetch master to check the release tag.' }
+          git merge-base --is-ancestor $env:GITHUB_SHA origin/master
+          $onMaster = $LASTEXITCODE
+          if ($onMaster -eq 1) {
+              throw "Release tag '$env:GITHUB_REF_NAME' is at $env:GITHUB_SHA, which is not on master. A release tag must be on master."
+          }
+          if ($onMaster -ne 0) { throw "Cannot check whether release tag '$env:GITHUB_REF_NAME' is on master." }
+          Write-Host "Release tag $env:GITHUB_REF_NAME is at $env:GITHUB_SHA, which is on master."
+
       # global.json pins the SDK, and so the runtime a self-contained
       # publish bundles; it moves only with THIRD-PARTY-NOTICES.txt (#269).
       - name: Set up .NET 10
