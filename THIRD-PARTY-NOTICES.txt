@@ -17,10 +17,6 @@ Regenerate this file when those packages or the bundled runtime change.
 Components under the MIT License
 --------------------------------
 
-Anthropic 12.51.0 (the optional AI assistant's Claude requests)
-  Copyright 2026 Anthropic
-  https://www.github.com/anthropics/anthropic-sdk-csharp
-
 ClosedXML 0.105.1 (Excel workbooks)
   Authors: Jan Havlíček, Francois Botha, Aleksei Pankratev, Manuel de Leon,
   Amir Ghezelbash
@@ -85,8 +81,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 
-Component under the Apache License, Version 2.0
------------------------------------------------
+Components under the Apache License, Version 2.0
+------------------------------------------------
+
+Anthropic 13.3.0 (the optional AI assistant's Claude requests)
+  Copyright 2023 Anthropic, PBC.
+  https://www.github.com/anthropics/anthropic-sdk-csharp
+  Under the Apache License from version 13.0.0. Third-party contributions
+  merged before that change remain under the MIT License above, as its
+  LICENSE-MIT file states.
 
 SixLabors.Fonts 1.0.0 (Excel workbooks, used by ClosedXML)
   Copyright © Six Labors
