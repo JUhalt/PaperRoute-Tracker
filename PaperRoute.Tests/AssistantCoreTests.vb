@@ -201,6 +201,10 @@ Public Class AssistantCoreTests
             Assert.AreEqual("medium", root.GetProperty("output_config").GetProperty("effort").GetString())
             Assert.AreEqual("json_schema", root.GetProperty("output_config").GetProperty("format").GetProperty("type").GetString())
             Assert.AreEqual("default", root.GetProperty("fallbacks").GetString())
+            ' The gate drops headers it does not know, but not body fields: an
+            ' SDK update that adds a default one fails here (#298).
+            CollectionAssert.AreEquivalent({"model", "max_tokens", "system", "messages", "output_config", "fallbacks"}, root.EnumerateObject().Select(Function(field) field.Name).ToList(), "Nothing else is sent.")
+            CollectionAssert.AreEquivalent({"role", "content"}, root.GetProperty("messages")(0).EnumerateObject().Select(Function(field) field.Name).ToList(), "The one message holds only its role and the letter.")
         End Using
 
         Assert.AreEqual("Claude", reply.ProviderName)

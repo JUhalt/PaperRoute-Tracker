@@ -186,7 +186,7 @@ Namespace Services
         ' spans are off: with a listener in the process, a span would add
         ' trace headers below the gate, and ANTHROPIC_OPEN_TELEMETRY_*
         ' variables could put the researcher's text in it. Given options,
-        ' the SDK reads none of those variables.
+        ' the SDK uses none of those variables.
         Private Shared Function NewClient(http As HttpClient, timeout As TimeSpan) As AnthropicClient
             Return New AnthropicClient With {
                 .HttpClient = http,
