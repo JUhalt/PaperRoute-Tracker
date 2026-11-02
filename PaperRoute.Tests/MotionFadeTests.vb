@@ -19,9 +19,11 @@ Imports Microsoft.VisualStudio.TestTools.UnitTesting
 ' the page area once the switch has returned and fades out on its own
 ' within 200 ms; the first key or click ends it and reaches the new page;
 ' the overlay takes no focus, no input and no place in the window's tree
-' or in what a screen reader reads; a switch that outlasts the fade, or a
-' picture not read in time, is a cut, and the switch never waits for the
-' picture. Each test sets the seams it needs and puts them back.
+' or in what a screen reader reads; a switch that outlasts the fade is a
+' cut; the switch waits at most a moment for the picture (about 60 ms),
+' fades if it comes within it, and is a cut if not; and the overlay is
+' given its layered size on the window's thread (#268). Each test sets
+' the seams it needs and puts them back.
 <TestClass>
 <DoNotParallelize>
 Public Class MotionFadeTests
@@ -66,9 +68,10 @@ Public Class MotionFadeTests
     ' window: this thread is put in that awareness for the board's life
     ' (the fade's overlay is made on it too), the fade asks Windows whether
     ' the board is scaled, as in PaperRoute, and the board is put on the
-    ' screen (PutOnScreen). The fade's worker reads the screen at the host's
-    ' awareness, in the screen's own pixels as a SystemAware thread reads
-    ' it: the unaware run's pictures in #268 were read so.
+    ' screen (PutOnScreen). The fade's worker, a thread of the host's pool,
+    ' reads the screen in the overlay's awareness, SystemAware here as in
+    ' PaperRoute: in the host's own, it read a screen Windows had scaled
+    ' for it (#268).
     Private Sub OnBoard(work As Action(Of LibraryBoard), Optional manuscripts As Integer = 60, Optional motion As Boolean = True, Optional awaitPicture As Boolean = True, Optional onScreen As Boolean = False)
 
         StaRunner.Run(
@@ -282,6 +285,54 @@ Public Class MotionFadeTests
                 Assert.IsTrue(board.PageFade.FadesShown >= 2, "Switches faded: " & board.PageFade.FadesShown.ToString())
                 Assert.AreEqual(1, board.PageFade.OverlaysMade, "One overlay for the window.")
                 Assert.AreEqual(1, OverlaysOfThisThread().Count, "One overlay window on the thread.")
+            End Sub)
+
+    End Sub
+
+
+    ' The overlay is given its layered size on the window's thread as it
+    ' is made and again when the page area's size changes, never when it
+    ' does not (#268). Windows shows a picture put in a layered window only
+    ' at a layered size given it, and the worker puts the picture in at
+    ' that size so that Windows has nothing to ask the window's thread,
+    ' busy with the switch. Moved, the window moves the overlay at the same
+    ' size. Each switch here fades, the overlay over the page area.
+    <TestMethod>
+    Public Sub TheOverlayIsGivenItsLayeredSizeAsItIsMadeAndWhenTheAreaResizes()
+
+        OnBoard(
+            Sub(board)
+                UiMotion.FadeMilliseconds = 10000
+                Dim switchTo As Action(Of Form1.WorkspacePage, String) =
+                    Sub(page, moment)
+                        board.NavigateTo(page)
+                        Dim area As Rectangle = board.ContentHost.RectangleToScreen(board.ContentHost.ClientRectangle)
+                        Assert.AreEqual("faded", board.PageFade.LastOutcome, "To " & page.ToString() & " " & moment & ".")
+                        Assert.AreEqual(area, WindowBounds(board.PageFade.OverlayHandle), "The overlay is over the page area " & moment & ".")
+                        board.PageFade.End()
+                        Settle(board)
+                    End Sub
+
+                switchTo(Form1.WorkspacePage.Journals, "as the overlay is made")
+                Assert.AreEqual(1, board.PageFade.LayeredSizesGiven, "Given its size as it is made.")
+                switchTo(Form1.WorkspacePage.Board, "at the same size")
+                switchTo(Form1.WorkspacePage.Journals, "at the same size again")
+                Assert.AreEqual(1, board.PageFade.LayeredSizesGiven, "Not given it again at the same size.")
+
+                board.Location = New Point(board.Left + 30, board.Top + 20)
+                Application.DoEvents()
+                switchTo(Form1.WorkspacePage.Board, "with the window moved")
+                Assert.AreEqual(1, board.PageFade.LayeredSizesGiven, "Not given it again for a move alone.")
+
+                Dim before As Size = board.ContentHost.ClientSize
+                board.Size = New Size(board.Width + 40, board.Height + 30)
+                Application.DoEvents()
+                Assert.AreNotEqual(before, board.ContentHost.ClientSize, "The page area's size changed.")
+                switchTo(Form1.WorkspacePage.Journals, "with the page area resized")
+                Assert.AreEqual(2, board.PageFade.LayeredSizesGiven, "Given it again for the page area's new size.")
+                switchTo(Form1.WorkspacePage.Board, "at the new size")
+                Assert.AreEqual(2, board.PageFade.LayeredSizesGiven, "Not given it again at the new size.")
+                Assert.AreEqual(1, board.PageFade.OverlaysMade, "One overlay throughout.")
             End Sub)
 
     End Sub
@@ -541,14 +592,52 @@ Public Class MotionFadeTests
     End Sub
 
 
-    ' A picture still being read when the switch returns is a cut, and the
-    ' switch does not wait for it: with the read held 400 ms on the worker,
-    ' each switch returns in a fraction of that, shows no fade, and the
-    ' worker lets the picture go once it has read it.
+    ' A picture ready within the moment a switch waits for it fades, with
+    ' no test waiting for it (#268): with the read held 20 ms on the
+    ' worker, longer than most switches here take, each switch waits for
+    ' the picture and fades. Until #268 a switch never waited, and with the
+    ' screen read in 20 to 76 ms on a laptop at 125%, none faded. The fade
+    ' is made longer than any switch here, so that none is a cut for
+    ' taking longer than it.
     <TestMethod>
-    Public Sub APictureNotReadInTimeIsACutAndTheSwitchNeverWaits()
+    Public Sub APictureReadWithinTheWaitFades()
 
         Dim report As New List(Of String)()
+
+        OnBoard(
+            Sub(board)
+                UiMotion.FadeMilliseconds = 10000
+                PageFade.CaptureDelayMilliseconds = 20
+                For Each page As Form1.WorkspacePage In {Form1.WorkspacePage.Journals, Form1.WorkspacePage.Board, Form1.WorkspacePage.Deadlines, Form1.WorkspacePage.Board}
+                    Dim watch As Stopwatch = Stopwatch.StartNew()
+                    board.NavigateTo(page)
+                    Dim took As Double = watch.Elapsed.TotalMilliseconds
+                    Console.WriteLine("To " & page.ToString() & ": " & took.ToString("0") & " ms, " & board.PageFade.LastOutcome & ", Begin " & board.PageFade.LastBeginMilliseconds.ToString("0.0") & " ms")
+                    If board.PageFade.LastOutcome <> "faded" Then report.Add("To " & page.ToString() & " (" & took.ToString("0") & " ms): " & board.PageFade.LastOutcome)
+                    board.PageFade.End()
+                    Settle(board)
+                Next
+            End Sub,
+            awaitPicture:=False)
+
+        Assert.AreEqual(0, report.Count, String.Join(Environment.NewLine, report))
+
+    End Sub
+
+
+    ' A picture still being read once the switch has waited its moment for
+    ' it is a cut, and the switch waits no longer (#268): with the read
+    ' held 400 ms on the worker, each switch waits the moment
+    ' (PictureWaitMilliseconds), and no more than a little over it, returns
+    ' in a fraction of the read, shows no fade, and the worker lets the
+    ' picture go once it has read it. The wait takes turns with sleeps of
+    ' a millisecond, which can last a tick of Windows' timer (15.6 ms), and
+    ' longer on a busy host: hence the little.
+    <TestMethod>
+    Public Sub APictureNotReadWithinTheWaitIsACutAndTheSwitchWaitsNoLonger()
+
+        Dim report As New List(Of String)()
+        Dim longest As Double = PageFade.PictureWaitMilliseconds + 40 * ResponsivenessBudgetTests.BudgetMultiplier()
 
         OnBoard(
             Sub(board)
@@ -557,8 +646,11 @@ Public Class MotionFadeTests
                     Dim watch As Stopwatch = Stopwatch.StartNew()
                     board.NavigateTo(page)
                     Dim took As Double = watch.Elapsed.TotalMilliseconds
-                    Console.WriteLine("To " & page.ToString() & ": " & took.ToString("0") & " ms, " & board.PageFade.LastOutcome & ", Begin " & board.PageFade.LastBeginMilliseconds.ToString("0.0") & " ms")
+                    Dim waitedFor As Double = board.PageFade.LastBeginMilliseconds
+                    Console.WriteLine("To " & page.ToString() & ": " & took.ToString("0") & " ms, " & board.PageFade.LastOutcome & ", Begin " & waitedFor.ToString("0.0") & " ms")
                     If board.PageFade.LastOutcome <> "cut: the picture was not ready" Then report.Add("To " & page.ToString() & ": " & board.PageFade.LastOutcome)
+                    If waitedFor < PageFade.PictureWaitMilliseconds Then report.Add("To " & page.ToString() & ": the switch waited " & waitedFor.ToString("0.0") & " ms for the picture, less than its moment")
+                    If waitedFor > longest Then report.Add("To " & page.ToString() & ": the switch waited " & waitedFor.ToString("0.0") & " ms for the picture, more than " & longest.ToString("0") & " ms")
                     If took >= 400 Then report.Add("To " & page.ToString() & ": the switch took " & took.ToString("0") & " ms, as long as the read")
                     If board.PageFade.Showing Then report.Add("To " & page.ToString() & ": a fade shows")
                     Dim waited As Stopwatch = Stopwatch.StartNew()
@@ -855,6 +947,54 @@ Public Class MotionFadeTests
     End Sub
 
 
+    ' The fade's worker reads the screen, and puts the picture in, in the
+    ' overlay's DPI awareness (#268), and puts its thread's own back: a
+    ' pool thread left in another would measure and make windows in it in
+    ' whatever work it runs next. The read is run here (PageFade.ReadHere)
+    ' into a hidden layered popup made SystemAware, as PaperRoute's overlay
+    ' is, on a thread then put in another awareness: DPI-unaware, as the
+    ' tests' host and its pool are, or per-monitor aware.
+    <TestMethod>
+    <DataRow("Unaware")>
+    <DataRow("PerMonitorAwareV2")>
+    Public Sub TheFadesReadPutsItsThreadsDpiAwarenessBack(awareness As String)
+
+        StaRunner.Run(
+            Sub()
+                Dim context As IntPtr = If(awareness = "Unaware", DPI_AWARENESS_CONTEXT_UNAWARE, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
+                Dim previous As IntPtr = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE)
+                Assert.AreNotEqual(IntPtr.Zero, previous, "The thread is put in PaperRoute's awareness, SystemAware, to make the window.")
+                Try
+                    ' Made after the thread's awareness is set: a NativeWindow
+                    ' makes its window in the awareness it was made in.
+                    Dim window As New NativeWindow()
+                    window.CreateHandle(New CreateParams With {
+                        .Style = PageFade.WS_POPUP Or PageFade.WS_DISABLED,
+                        .ExStyle = PageFade.WS_EX_LAYERED Or PageFade.WS_EX_TRANSPARENT Or PageFade.WS_EX_NOACTIVATE Or PageFade.WS_EX_TOOLWINDOW,
+                        .X = -20000, .Y = -20000, .Width = 200, .Height = 100
+                    })
+                    Try
+                        Assert.AreNotEqual(IntPtr.Zero, SetThreadDpiAwarenessContext(context), "The thread is put in the " & awareness & " awareness.")
+                        Dim before As IntPtr = GetThreadDpiAwarenessContext()
+                        Dim placed As Boolean = PageFade.ReadHere(New Rectangle(-20000, -20000, 200, 100), window.Handle)
+                        Dim after As IntPtr = GetThreadDpiAwarenessContext()
+                        Dim line As String = $"the window {AwarenessName(GetWindowDpiAwarenessContext(window.Handle))}; the thread {AwarenessName(before)} before the read, {AwarenessName(after)} after it; the picture put in {placed}"
+                        Console.WriteLine(line)
+                        Assert.IsTrue(AreDpiAwarenessContextsEqual(GetWindowDpiAwarenessContext(window.Handle), DPI_AWARENESS_CONTEXT_SYSTEM_AWARE), "The window is SystemAware. " & line)
+                        Assert.IsTrue(AreDpiAwarenessContextsEqual(before, context), "The thread is in the " & awareness & " awareness before the read. " & line)
+                        Assert.IsTrue(placed, "The read put the picture in the window. " & line)
+                        Assert.IsTrue(AreDpiAwarenessContextsEqual(after, context), "The read put the thread's awareness back. " & line)
+                    Finally
+                        window.DestroyHandle()
+                    End Try
+                Finally
+                    SetThreadDpiAwarenessContext(previous)
+                End Try
+            End Sub)
+
+    End Sub
+
+
     ' A window whose DPI is not its screen's switches as a cut, by that
     ' alone: the fade's scaling check asks the DPI question
     ' (PageFade.ScaledByWindows calls DpiIsTheScreens). On the first v0.9.2
@@ -926,8 +1066,9 @@ Public Class MotionFadeTests
     ' the page area, as a tooltip going as the switch begins, is a cut: the
     ' picture read off the screen would hold that window over the page
     ' shown. Once it has gone, the next switch fades. The fade is made
-    ' longer than any switch here: at its own 150 ms, a switch on a busy
-    ' host outlasted it and was a cut for that reason instead.
+    ' longer than any switch here: at its own length (150 ms then), a
+    ' switch on a busy host outlasted it and was a cut for that reason
+    ' instead.
     <TestMethod>
     Public Sub AnotherWindowOverThePageAreaMakesTheSwitchACut()
 
@@ -969,15 +1110,18 @@ Public Class MotionFadeTests
     ' with it. On the 500 library, 50 switches with motion off and the same
     ' 50 with motion on and the pictures read for real, the two taking
     ' turns a page and back at a time, each switch followed by its paint
-    ' and the same pause with the window processing its messages. Reported: each mode's times, and with motion on what
-    ' showing the picture took, how long the reads took, how many waited
-    ' 50 ms or more, and how many switches such a read held (the switch 50
-    ' ms or more over the same switch's median with motion off). The test
-    ' fails if more than two were held. Off the screen, where the window
-    ' sits in every other test, a read of the screen has nothing to wait
-    ' for; with PAPERROUTE_ON_SCREEN_TESTS=1 on an unlocked desktop the
-    ' window is put on the screen, behind every other window, so the reads
-    ' wait as a researcher's would.
+    ' and the same pause with the window processing its messages.
+    ' Reported: each mode's times, and with motion on what waiting for and
+    ' showing the picture took (Begin), how long the reads took, how many
+    ' waited 50 ms or more, and how many switches such a read held (the
+    ' switch less its Begin 50 ms or more over the same switch's median
+    ' with motion off: the moment a switch waits for its picture on
+    ' purpose, #268, is Begin's, not the read holding the switch's own
+    ' work). The test fails if more than two were held. Off the screen,
+    ' where the window sits in every other test, a read of the screen has
+    ' nothing to wait for; with PAPERROUTE_ON_SCREEN_TESTS=1 on an unlocked
+    ' desktop the window is put on the screen, behind every other window,
+    ' so the reads wait as a researcher's would.
     <TestMethod>
     Public Sub AReadInFlightHoldsNoSwitch()
 
@@ -1046,10 +1190,10 @@ Public Class MotionFadeTests
                                 Dim waited = mine.Where(Function(item) item.Read + item.Place >= 50).ToList()
                                 For Each item In waited
                                     Dim usual As List(Of Double) = switches.Where(Function(other) Not other.Motion AndAlso other.Key = item.Key).Select(Function(other) other.Took).OrderBy(Function(value) value).ToList()
-                                    If usual.Count > 0 AndAlso item.Took >= usual(usual.Count \ 2) + 50 Then held += 1
+                                    If usual.Count > 0 AndAlso item.Took - item.Begin >= usual(usual.Count \ 2) + 50 Then held += 1
                                 Next
                                 line &= $"; outcomes {String.Join(", ", mine.GroupBy(Function(item) item.Outcome).Select(Function(group) group.Key & " " & group.Count().ToString()))}" &
-                                        $"; showing the picture {If(begins.Count > 0, begins(begins.Count \ 2), 0):0.0} ms median, {If(begins.Count > 0, begins.Last(), 0):0.0} longest" &
+                                        $"; waiting for and showing the picture {If(begins.Count > 0, begins(begins.Count \ 2), 0):0.0} ms median, {If(begins.Count > 0, begins.Last(), 0):0.0} longest" &
                                         $"; reads {reads(reads.Count \ 2):0.0} ms median, {reads.Last():0.0} longest; putting the picture in the overlay {places(places.Count \ 2):0.0} ms median, {places.Last():0.0} longest" &
                                         $"; {waited.Count} pictures took 50 ms or more, {held} switches held by one"
                             End If
@@ -1487,6 +1631,10 @@ Public Class MotionFadeTests
 
     <DllImport("user32.dll")>
     Private Shared Function GetThreadDpiAwarenessContext() As IntPtr
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function GetWindowDpiAwarenessContext(window As IntPtr) As IntPtr
     End Function
 
     <DllImport("user32.dll")>

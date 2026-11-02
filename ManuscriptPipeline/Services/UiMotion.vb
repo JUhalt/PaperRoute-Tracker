@@ -25,7 +25,9 @@ Namespace Services
 
         ' How long a page's cross-fade and a hover's ease last, in
         ' milliseconds. Tests may shorten or lengthen them and put them back.
-        Friend Const DefaultFadeMilliseconds As Integer = 150
+        ' The fade is 120 ms: once fades showed, the maintainer compared it
+        ' with 150 and chose it on November 2, 2026 (#268).
+        Friend Const DefaultFadeMilliseconds As Integer = 120
         Friend Const DefaultHoverMilliseconds As Integer = 100
         Friend Shared FadeMilliseconds As Integer = DefaultFadeMilliseconds
         Friend Shared HoverMilliseconds As Integer = DefaultHoverMilliseconds

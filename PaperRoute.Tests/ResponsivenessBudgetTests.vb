@@ -55,7 +55,8 @@ Public Class ResponsivenessBudgetTests
     ' while it idles is cut into steps about this long (#133).
     Friend Shared ReadOnly IdleSlice As New Budget("idle slice", 30)
     ' A page switch with motion on (#142): it may grow by no more than the
-    ' cross-fade's own length.
+    ' cross-fade's own length, the moment it waits for the picture of the
+    ' page left included (#268).
     Friend Shared ReadOnly PageSwitchWithFade As New Budget("page switch + fade", PageSwitch.Milliseconds + UiMotion.DefaultFadeMilliseconds)
 
     Private _root As String = String.Empty
@@ -485,15 +486,17 @@ Public Class ResponsivenessBudgetTests
 
     ' The page switches with motion on (#142), on the 500 library. Each
     ' switch the test above holds to the page-switch budget is held to it
-    ' plus the cross-fade's own length, 150 ms: reading the page left is
-    ' started as the switch begins and showing its picture is part of the
-    ' switch, both timed in it; the fade's frames follow on the window's
-    ' clock once the switch has returned. Each row says whether its switch
-    ' faded or was a cut, and why, and what showing the picture took. The
-    ' test fails if no switch faded, and if a switch quicker than the fade
-    ' was a cut for any reason but a picture not read in time (the switch
-    ' never waits for it) or a manuscript's open, which is a cut by
-    ' design. The example library runs first, report-only, as above. The
+    ' plus the cross-fade's own length (UiMotion.DefaultFadeMilliseconds,
+    ' 120 ms): reading the page left is started as the switch begins, and
+    ' waiting at most a moment for its picture (about 60 ms, #268) and
+    ' showing it are part of the switch, all timed in it; the fade's
+    ' frames follow on the window's clock once the switch has returned.
+    ' Each row says whether its switch faded or was a cut, and why, and
+    ' what waiting for and showing the picture took (Begin). The test
+    ' fails if no switch faded, and if a switch quicker than the fade was
+    ' a cut for any reason but a picture not read within that moment (the
+    ' switch waits no longer) or a manuscript's open, a cut by design.
+    ' The example library runs first, report-only, as above. The
     ' same switches are run with motion off first, report-only, on a board
     ' of their own and with the same pauses between them, so the two can
     ' be told apart switch by switch: a pause lets the processor idle, and
