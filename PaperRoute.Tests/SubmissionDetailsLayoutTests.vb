@@ -1,9 +1,11 @@
 Imports System
 Imports System.Collections.Generic
 Imports System.Drawing
+Imports System.Drawing.Imaging
 Imports System.Linq
 Imports System.Reflection
 Imports System.Runtime.ExceptionServices
+Imports System.Runtime.InteropServices
 Imports System.Threading
 Imports System.Windows.Forms
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
@@ -351,6 +353,133 @@ Public Class SubmissionDetailsLayoutTests
         Assert.IsTrue(hint.ClientSize.Height >= needed, $"{at} the hint has {hint.ClientSize.Height} of the {needed} pixels its text and padding need at {hint.ClientSize.Width} wide.")
 
     End Sub
+
+    ' An empty list's hint draws the lines its height was measured for
+    ' (#278). At 150% in the certification VM the empty Correspondence &
+    ' Files list, given the height EmptyHint.NeededHeight measured for its
+    ' hint, read "...or drag files her": the hint was a Label, which lays
+    ' its lines out with flags of its own, Windows' edit-control layout
+    ' among them, not the ones its height was measured with. Where the two
+    ' disagree depends on the computer's fonts, so the hint is held to the
+    ' measure itself: with the text at the display's size at 96, 120 and
+    ' 144 DPI, the dialog's hint at its own size, and a list with the same
+    ' hint and font at each width from 40 pixels to the dialog's, given the
+    ' height NeededHeight measures as the dialog gives it, draw exactly what
+    ' TextRenderer draws for the text wrapped at the width inside the
+    ' padding, every line of it, centred there. On 81bb29d none did.
+    <TestMethod>
+    Public Sub AnEmptyListsHintDrawsTheLinesItIsMeasuredFor()
+
+        Dim displays As (Dpi As Integer, Width As Integer, Height As Integer)() = {(96, 1366, 720), (120, 1366, 708), (144, 1920, 1008)}
+        Dim view As Type = GetType(SubmissionDetailsForm)
+        Dim judged As Integer = 0
+        Dim found As New List(Of String)()
+
+        For Each display In displays
+
+            Dim current = display
+            Dim screen As (Name As String, Area As Rectangle)() = ScalingMeasurementTests.HeldScreen(current.Width, current.Height)
+
+            Dim failures As List(Of String) =
+                ViewCatalog.ShowEach(
+                    {(view.Name, ViewCatalog.Dialogs(view))},
+                    Sub(name, shown)
+
+                        ScalingMeasurementTests.Measure(shown, current.Dpi, ScalingMeasurementTests.ScalingOf(view).ScalesWithWinForms, screen)
+
+                        Dim list As ListBox = ShowCorrespondence(shown)
+                        Dim hint As Label = list.Controls.OfType(Of Label)().Single()
+                        Dim at As String = $"At {current.Dpi} DPI"
+
+                        ManuscriptPipeline.Controls.EmptyHint.Refresh(list)
+                        AssertWholeHint(hint, at)
+                        JudgeHint(hint, $"{at}, the dialog's hint, {hint.Width}x{hint.Height}", found)
+                        judged += 1
+
+                        ' The same hint on a list of each width, as tall as
+                        ' NeededHeight says, as the dialog makes its list.
+                        Using probe As New ListBox With {.BorderStyle = list.BorderStyle, .Font = list.Font, .IntegralHeight = False}
+
+                            shown.Controls.Add(probe)
+                            ManuscriptPipeline.Controls.EmptyHint.Attach(probe, hint.Text)
+                            Dim probeHint As Label = probe.Controls.OfType(Of Label)().Single()
+                            Dim frame As Integer = probe.Width - probe.ClientSize.Width
+
+                            For width As Integer = 40 + probeHint.Padding.Horizontal To list.ClientSize.Width
+
+                                probe.Size = New Size(width + frame, 10)
+                                probe.Height = ManuscriptPipeline.Controls.EmptyHint.NeededHeight(probe) + frame
+                                ManuscriptPipeline.Controls.EmptyHint.Refresh(probe)
+
+                                JudgeHint(probeHint, $"{at}, a list {width} wide", found)
+                                judged += 1
+
+                            Next
+
+                        End Using
+
+                    End Sub
+                )
+
+            Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+
+        Next
+
+        Assert.AreEqual(0, found.Count, $"{found.Count} of {judged} hints:" & Environment.NewLine & String.Join(Environment.NewLine, found.Take(20)))
+        Assert.IsTrue(judged >= 3 * 300, "The hints were judged at each DPI: " & judged)
+
+    End Sub
+
+    ' Whether the hint draws what TextRenderer draws for its text wrapped at
+    ' the width inside its padding, centred in the height there; each
+    ' picture is drawn as the hint paints itself, on its back color.
+    Private Shared Sub JudgeHint(hint As Label, at As String, found As List(Of String))
+
+        Const measured As TextFormatFlags = TextFormatFlags.WordBreak Or TextFormatFlags.HorizontalCenter Or TextFormatFlags.NoPrefix
+
+        Dim face As New Rectangle(hint.Padding.Left, hint.Padding.Top, hint.ClientSize.Width - hint.Padding.Horizontal, hint.ClientSize.Height - hint.Padding.Vertical)
+        Dim tall As Integer = TextRenderer.MeasureText(hint.Text, hint.Font, New Size(face.Width, Integer.MaxValue), measured).Height
+
+        Using drawn As New Bitmap(hint.Width, hint.Height, PixelFormat.Format32bppArgb), expected As New Bitmap(hint.Width, hint.Height, PixelFormat.Format32bppArgb)
+
+            Using g As Graphics = Graphics.FromImage(drawn)
+                g.Clear(hint.BackColor)
+                Using args As New PaintEventArgs(g, New Rectangle(Point.Empty, hint.Size))
+                    GetType(Control).GetMethod("OnPaint", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(hint, New Object() {args})
+                End Using
+            End Using
+
+            Using g As Graphics = Graphics.FromImage(expected)
+                g.Clear(hint.BackColor)
+                TextRenderer.DrawText(g, hint.Text, hint.Font, Rectangle.FromLTRB(face.Left, face.Top + Math.Max(0, face.Height \ 2 - tall \ 2), face.Right, face.Bottom), hint.ForeColor, measured)
+            End Using
+
+            If Not SamePixels(drawn, expected) Then
+                found.Add($"{at}: the hint does not draw the {tall} pixels of lines it is measured for.")
+            End If
+
+        End Using
+
+    End Sub
+
+    Private Shared Function SamePixels(first As Bitmap, second As Bitmap) As Boolean
+
+        Dim area As New Rectangle(Point.Empty, first.Size)
+        Dim one As BitmapData = first.LockBits(area, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb)
+        Dim two As BitmapData = second.LockBits(area, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb)
+
+        Try
+            Dim a(area.Width * area.Height - 1) As Integer
+            Dim b(area.Width * area.Height - 1) As Integer
+            Marshal.Copy(one.Scan0, a, 0, a.Length)
+            Marshal.Copy(two.Scan0, b, 0, b.Length)
+            Return a.SequenceEqual(b)
+        Finally
+            first.UnlockBits(one)
+            second.UnlockBits(two)
+        End Try
+
+    End Function
 
     ' Hosted in the manuscript page, the detail is built as before and its
     ' lists and details boxes keep two rows. The page sits in the main
