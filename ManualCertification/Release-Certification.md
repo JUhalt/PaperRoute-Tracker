@@ -6,6 +6,8 @@ The certification issue lists the steps it ran. A step it skips is recorded ther
 
 For v0.9.2, these steps, the gates on #147 and what each merged pull request left to certification are one ordered list, grouped by what has to be set up: [v0.9.2-Certification-Checklist.md](v0.9.2-Certification-Checklist.md). Its results are posted to #147. A later release copies it and adds to it, as step 9 says of the gates.
 
+For 1.0, the list is [v1.0-Certification-Checklist.md](v1.0-Certification-Checklist.md): v0.9.2's, copied and added to, for v1.0.0-rc.1 on Preview and then Stable v1.0.0 with the rc's code. Its results are posted to #313.
+
 ## 1. Mismatched-library gate
 
 Standing from v0.9.1. Take a managed folder fuller than the library beside it: first an empty `manuscripts.json`, then an older one that names fewer manuscripts than the folder holds. Open each in the candidate, save once, and compare the managed tree before and after. It must be byte-identical: hash every file. A save that deletes, moves or rewrites anything in it fails the release.

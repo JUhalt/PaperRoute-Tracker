@@ -1,6 +1,6 @@
 # Narrator pass
 
-The scripted screen-reader check for a release (#139), run once during certification and recorded on the certification issue (for v0.9.2, #147). The automated tests already prove names, Esc, live regions, default actions, focus events, and the shortcut list; this pass checks what Narrator actually says. Each item names the issue or pull request that asked for it.
+The scripted screen-reader check for a release (#139), run once during certification and recorded on the certification issue (for 1.0, #313). The automated tests already prove names, Esc, live regions, default actions, focus events, and the shortcut list; this pass checks what Narrator actually says. Each item names the issue or pull request that asked for it.
 
 ## Before you start
 
@@ -8,7 +8,7 @@ The scripted screen-reader check for a release (#139), run once during certifica
 - [ ] Windows' **Animation effects** on (**Settings > Accessibility > Visual effects**), so page switches fade (#142).
 - [ ] Narrator on (**Ctrl+Win+Enter**), with its default voice and verbosity. The Narrator key is **Caps Lock** or **Insert**.
 - [ ] Note the date, the PaperRoute version, the Windows build, and the Narrator version (Narrator settings).
-- [ ] Run this after the certification's last collector report (for v0.9.2, E2.7 of the checklist): the status-line items below add, move and delete a manuscript of their own, `ZZZ-CERT-v0.9.2-Narrator`. Its `ZZZ-CERT-` name keeps the collector from rejecting the library, but the collector would report it as a fifth fixture manuscript, so a report taken after it would not compare with one taken before.
+- [ ] Run this after the certification's last collector report (for 1.0, E2.7 of the checklist): the status-line items below add, move and delete a manuscript of their own, `ZZZ-CERT-v1.0-Narrator`. Its `ZZZ-CERT-` name keeps the collector from rejecting the library, but the collector would report it as a fifth fixture manuscript, so a report taken after it would not compare with one taken before.
 
 ## For every page and window below
 
@@ -43,7 +43,7 @@ The scripted screen-reader check for a release (#139), run once during certifica
 ## Announcements
 
 - [ ] On a manuscript page, change a field and press **Ctrl+S**: Narrator reads "Saved locally" from the status line without moving focus (#139).
-- [ ] **What just happened** (#225, PR #236), each read from the status line without moving focus: add a manuscript named `ZZZ-CERT-v0.9.2-Narrator` ('Added "ZZZ-CERT-v0.9.2-Narrator".'); move it to the File Drawer ('Moved "…" to the File Drawer.'); restore it ('Restored "…" to the Pipeline.'); delete it, typing DELETE ('Deleted "…".').
+- [ ] **What just happened** (#225, PR #236), each read from the status line without moving focus: add a manuscript named `ZZZ-CERT-v1.0-Narrator` ('Added "ZZZ-CERT-v1.0-Narrator".'); move it to the File Drawer ('Moved "…" to the File Drawer.'); restore it ('Restored "…" to the Pipeline.'); delete it, typing DELETE ('Deleted "…".').
 - [ ] In **Check for Publications**, check one fixture manuscript (this sends its title to Crossref): the progress line is read as it changes; **Esc** stops the check and the window stays open.
 - [ ] **Shortcuts in tips** (#240, PR #247): point at **Save** on a manuscript page with unsaved changes, and reach the Board's search box with **Tab** and with **Alt+Left** (from the Library, as above). Narrator reads the shortcut in the name, "Save manuscript (Ctrl+S)" and "Search the board (Ctrl+F)", and once more when the tip opens, as it does for the rail's "Board (Ctrl+1)". Record its words.
 - [ ] **The author just added** (#242, PR #247), optional: in the Library's **Authors & Affiliations**, add an author. Focus does not move when the dialog closes, so nothing new is announced then; press **Shift+Tab** to the list, and Narrator reads the new author's name with it.
