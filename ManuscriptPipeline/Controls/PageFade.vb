@@ -10,15 +10,17 @@ Namespace Controls
 
     ' A page switch's cross-fade (#142). As a switch begins, a worker
     ' reads the page area off the screen, as it shows it, and puts the
-    ' picture in a window of its own, hidden over the page area; the UI
-    ' thread never waits for either, which on this machine have waited on
-    ' the screen for half a second. Once the switch has returned, that
-    ' window, if the picture is in it, is shown and faded out over
-    ' UiMotion.FadeMilliseconds on UiMotion's Windows Forms clock. A
-    ' picture not ready, a switch that took the fade's length or longer,
-    ' a switch just after a fade or with another of the thread's windows
-    ' over the page area, a window Windows scales for its screen, or motion
-    ' off, is a cut, as before.
+    ' picture in a window of its own, hidden over the page area; neither
+    ' is done on the UI thread, since on this machine either has waited on
+    ' the screen for half a second. Once the switch has returned, unless
+    ' it is a cut whatever the picture does, it waits at most a moment for
+    ' the picture (PictureWaitMilliseconds, #268), the page left still on
+    ' the screen, and that window, if the picture is in it, is shown and
+    ' faded out over UiMotion.FadeMilliseconds on UiMotion's Windows Forms
+    ' clock. A picture not ready by then, a switch that took the fade's
+    ' length or longer, a switch just after a fade or with another of the
+    ' thread's windows over the page area, a window Windows scales for its
+    ' screen, or motion off, is a cut, as before.
     '
     ' The window never takes part: disabled, never activated, transparent
     ' to the pointer, and in no view a screen reader reads (its UI
@@ -51,6 +53,10 @@ Namespace Controls
         Private _lastHidden As Long = 0
         Private Shared _inFlight As Integer = 0
 
+        ' The layered size last given to the overlay on the window's thread
+        ' (GiveLayeredSize); none for an overlay just made.
+        Private _layeredSize As Size = Size.Empty
+
         ' Windows' focus as the switch began (#276).
         Private _focusBefore As IntPtr = IntPtr.Zero
 
@@ -58,8 +64,26 @@ Namespace Controls
         ' few of Windows' frames.
         Private Const SettleMilliseconds As Double = 50
 
+        ' How long a switch, once it has returned, waits for the picture
+        ' before it is a cut: about 60 ms, the maintainer's choice on
+        ' November 2, 2026 (#268). On a laptop at 125% the screen took 20 to
+        ' 76 ms to read and a switch 7 to 27, so a switch that waited for
+        ' nothing was a cut every time. Nothing paints until the switch has
+        ' returned, so the page left stays on the screen while it waits. A
+        ' picture ready within it shows there and then; one not ready is a
+        ' cut once Windows ends the wait, on a tick of its timer (15.6 ms),
+        ' so 60 to about 75 ms in.
+        Friend Const PictureWaitMilliseconds As Integer = 60
+
+        ' Set by the worker as each read ends, so that the switch waiting
+        ' for its picture goes on at once: waited for in sleeps of a
+        ' millisecond, each lasting to a tick of Windows' timer, a picture
+        ' was seen up to 15.6 ms after it was ready (#268).
+        Private Shared ReadOnly _pictureDone As New AutoResetEvent(False)
+
         ' Test seams: how long the worker waits before it reads, and whether
-        ' Begin waits for the picture (functional tests only; the budget
+        ' Begin waits for the picture until it is ready, up to 2 s, in place
+        ' of PictureWaitMilliseconds (functional tests only; the budget
         ' never does).
         Friend Shared CaptureDelayMilliseconds As Integer = 0
         Friend Shared AwaitPicture As Boolean = False
@@ -104,6 +128,12 @@ Namespace Controls
         Friend Property LastBeginMilliseconds As Double = 0
         Friend Property FadesShown As Integer = 0
         Friend Property OverlaysMade As Integer = 0
+        Friend Property LayeredSizesGiven As Integer = 0
+
+        ' How long giving the overlay its layered size took on the window's
+        ' thread in the last switch, within the switch's time (Capture); 0
+        ' if it was not given.
+        Friend Property LastSizeMilliseconds As Double = 0
 
         Friend ReadOnly Property Fading As Boolean
             Get
@@ -152,6 +182,10 @@ Namespace Controls
             End Get
         End Property
 
+        ' The DPI awareness the worker's thread last read the screen in: the
+        ' overlay's, for the test of it (#268).
+        Friend Shared Property LastReadAwareness As IntPtr = IntPtr.Zero
+
 
         ' ---------------------------------------------------------------
         ' A switch
@@ -166,6 +200,7 @@ Namespace Controls
             [End]()
             Abandon()
             LastBeginMilliseconds = 0
+            LastSizeMilliseconds = 0
             _focusBefore = GetFocus()
 
             If Not allowed Then
@@ -216,16 +251,19 @@ Namespace Controls
                 Return
             End If
 
-            ' The overlay is made, and placed over the page area, on the
-            ' window's thread, hidden: the worker puts the picture in it
-            ' without moving or sizing it, which would have Windows ask this
-            ' thread, busy with the switch, about the move. A window Windows
-            ' cannot make (out of window handles) is a cut: the fade never
-            ' stops the switch.
+            ' The overlay is made, placed over the page area and given its
+            ' layered size on the window's thread, hidden: the worker puts
+            ' the picture in it at the place and size it has already, which
+            ' Windows does without this thread. A place or size it has not
+            ' would have Windows ask this thread, busy with the switch, about
+            ' the move (35 to 150 ms when tried for #268). A window Windows
+            ' cannot make (out of window handles), or cannot size, is a cut:
+            ' the fade never stops the switch.
             Try
 
                 If _overlay Is Nothing OrElse _overlay.Handle = IntPtr.Zero Then
                     _overlay = New Overlay(_owner)
+                    _layeredSize = Size.Empty
                     OverlaysMade += 1
                 End If
 
@@ -234,6 +272,30 @@ Namespace Controls
 
                 If WindowBounds(overlay) <> screen Then
                     SetWindowPos(overlay, IntPtr.Zero, screen.X, screen.Y, screen.Width, screen.Height, SWP_NOZORDER Or SWP_NOOWNERZORDER Or SWP_NOACTIVATE Or SWP_DEFERERASE Or SWP_NOREDRAW)
+                End If
+
+                ' Windows shows a picture put in a layered window only at a
+                ' layered size given it, which SetWindowPos does not give:
+                ' put in with no size, as until #268, every picture was taken
+                ' and none shown, so no switch had faded since at least
+                ' v0.9.2. So the overlay is given its size here, with a fully
+                ' transparent picture, when it is made and when the page
+                ' area's size changes. That can wait on the screen as the
+                ' worker's calls can, inside the switch's time, so it is
+                ' timed for the budget rows (LastSizeMilliseconds). Not given
+                ' it, the worker would pass a size the overlay has not, and
+                ' Windows would ask this thread, waiting in Begin, about it.
+                If _layeredSize <> screen.Size Then
+                    Dim sizing As Long = Stopwatch.GetTimestamp()
+                    Dim sized As Boolean = GiveLayeredSize(overlay, screen)
+                    LastSizeMilliseconds = (Stopwatch.GetTimestamp() - sizing) * 1000.0 / Stopwatch.Frequency
+                    If Not sized Then
+                        _layeredSize = Size.Empty
+                        LastOutcome = "cut: the overlay could not be sized"
+                        Return
+                    End If
+                    _layeredSize = screen.Size
+                    LayeredSizesGiven += 1
                 End If
 
                 Interlocked.Increment(_inFlight)
@@ -254,8 +316,12 @@ Namespace Controls
 
 
         ' Once the switch has returned, with how long it took: the overlay,
-        ' if the worker has put the picture in it, shows over the page area
-        ' and starts to fade. Its cost is part of the switch's.
+        ' once the worker has put the picture in it, within a moment at
+        ' most, shows over the page area and starts to fade. A switch that
+        ' is a cut whatever the picture does (it did not finish, as when it
+        ' threw, it took the fade's length or longer, or the window changed)
+        ' is one at once, and does not wait for it. Its cost, the wait
+        ' included, is part of the switch's.
         Friend Sub Begin(switchMilliseconds As Double, switched As Boolean)
 
             Dim watch As Stopwatch = Stopwatch.StartNew()
@@ -268,10 +334,29 @@ Namespace Controls
 
             Try
 
-                If AwaitPicture Then
-                    Dim waited As Stopwatch = Stopwatch.StartNew()
-                    While Volatile.Read(picture.State) = Taking AndAlso waited.ElapsedMilliseconds < 2000
-                        Thread.Sleep(1)
+                ' What makes the switch a cut whatever the picture does is
+                ' asked before the wait, so that such a switch waits for
+                ' nothing: none of it can change during the wait, in which
+                ' this thread handles no message.
+                Dim cut As String = Nothing
+
+                If Not switched Then
+                    cut = "cut: the switch did not finish"
+                ElseIf switchMilliseconds >= UiMotion.FadeMilliseconds Then
+                    cut = "cut: the switch took longer than the fade"
+                ElseIf Not UiMotion.Enabled OrElse Not CanShow() OrElse _area.RectangleToScreen(_area.ClientRectangle) <> picture.Screen OrElse OverlayHandle = IntPtr.Zero Then
+                    cut = "cut: the window changed"
+                End If
+
+                ' An earlier read, let go, may have left the event set: the
+                ' picture is then still being read, and the wait goes on for
+                ' what is left of the moment.
+                If cut Is Nothing Then
+                    Dim wait As Integer = If(AwaitPicture, 2000, PictureWaitMilliseconds)
+                    Dim left As Long = wait - watch.ElapsedMilliseconds
+                    While left > 0 AndAlso Volatile.Read(picture.State) = Taking
+                        WaitForSingleObject(_pictureDone.SafeWaitHandle, CUInt(left))
+                        left = wait - watch.ElapsedMilliseconds
                     End While
                 End If
 
@@ -279,21 +364,12 @@ Namespace Controls
                 ' with the hidden overlay and frees what it made.
                 Dim taken As Boolean = Interlocked.CompareExchange(picture.State, Abandoned, Taking) <> Taking
 
-                If Not taken Then
+                If cut IsNot Nothing Then
+                    LastOutcome = cut
+                ElseIf Not taken Then
                     LastOutcome = "cut: the picture was not ready"
-                    Return
-                End If
-
-                Dim bounds As Rectangle = _area.RectangleToScreen(_area.ClientRectangle)
-
-                If Not switched Then
-                    LastOutcome = "cut: the switch did not finish"
                 ElseIf Not picture.Placed Then
                     LastOutcome = "cut: the picture could not be read"
-                ElseIf switchMilliseconds >= UiMotion.FadeMilliseconds Then
-                    LastOutcome = "cut: the switch took longer than the fade"
-                ElseIf Not UiMotion.Enabled OrElse Not CanShow() OrElse bounds <> picture.Screen OrElse OverlayHandle = IntPtr.Zero Then
-                    LastOutcome = "cut: the window changed"
                 Else
                     Show()
                     FadesShown += 1
@@ -576,6 +652,56 @@ Namespace Controls
         End Function
 
 
+        ' The hidden overlay given its place and layered size, on the
+        ' window's thread, with a picture of that size drawn fully
+        ' transparent (Capture). False if Windows cannot.
+        Private Shared Function GiveLayeredSize(overlay As IntPtr, area As Rectangle) As Boolean
+
+            Dim surface As IntPtr = GetDC(IntPtr.Zero)
+
+            If surface = IntPtr.Zero Then
+                Return False
+            End If
+
+            Try
+                Dim memory As IntPtr = CreateCompatibleDC(surface)
+                If memory = IntPtr.Zero Then Return False
+                Try
+                    Dim header As New BitmapInfoHeader With {
+                        .Size = Marshal.SizeOf(Of BitmapInfoHeader)(),
+                        .Width = area.Width,
+                        .Height = -area.Height,
+                        .Planes = 1,
+                        .BitCount = 32,
+                        .Compression = 0
+                    }
+                    Dim bits As IntPtr = IntPtr.Zero
+                    Dim bitmap As IntPtr = CreateDIBSection(memory, header, 0, bits, IntPtr.Zero, 0)
+                    If bitmap = IntPtr.Zero Then Return False
+                    Try
+                        Dim previous As IntPtr = SelectObject(memory, bitmap)
+                        Try
+                            Dim place As New NativePoint With {.X = area.X, .Y = area.Y}
+                            Dim extent As New NativePoint With {.X = area.Width, .Y = area.Height}
+                            Dim origin As New NativePoint()
+                            Dim blend As BlendFunction = Opacity(0)
+                            Return UpdateLayeredWindowPicture(overlay, surface, place, extent, memory, origin, 0, blend, ULW_ALPHA)
+                        Finally
+                            SelectObject(memory, previous)
+                        End Try
+                    Finally
+                        DeleteObject(bitmap)
+                    End Try
+                Finally
+                    DeleteDC(memory)
+                End Try
+            Finally
+                ReleaseDC(IntPtr.Zero, surface)
+            End Try
+
+        End Function
+
+
         ' ---------------------------------------------------------------
         ' The worker's read
         ' ---------------------------------------------------------------
@@ -603,22 +729,35 @@ Namespace Controls
         ' library held 450 ms and more by reads that long); the screen's is
         ' no device context of the window's. Putting the picture in the
         ' overlay can wait on the screen as the read can (once 522 ms of 50
-        ' switches, done on the window's thread), so it is done here too,
-        ' and the switch only shows the overlay. Nothing of Windows Forms is
-        ' touched here, and what is made here is freed here.
+        ' switches, done on the window's thread), so it is done here too, at
+        ' the layered size the window's thread gave the hidden overlay with
+        ' a transparent picture as it was made or the page area's size
+        ' changed (Capture, LastSizeMilliseconds, #268); the switch then
+        ' only shows the overlay. Nothing of Windows Forms is touched here,
+        ' and what is made here is freed here.
         Private Shared Sub Read(picture As Picture, source As Rectangle, overlay As IntPtr)
 
             Dim bitmap As IntPtr = IntPtr.Zero
             Dim placed As Boolean = False
             Dim started As Long = Stopwatch.GetTimestamp()
             Dim readAt As Long = 0
+            Dim awareness As IntPtr = IntPtr.Zero
 
             Try
+
+                ' The screen is read, and the picture put in, in the
+                ' overlay's DPI awareness, the one the page area was measured
+                ' in. Every thread of PaperRoute's has it already; a pool
+                ' thread of the tests' host, which is DPI-unaware, read a
+                ' screen Windows scaled for it, at another place and size
+                ' (#268). The thread is put back as it came (Finally).
+                awareness = SetThreadDpiAwarenessContext(GetWindowDpiAwarenessContext(overlay))
 
                 If CaptureDelayMilliseconds > 0 Then
                     Thread.Sleep(CaptureDelayMilliseconds)
                 End If
 
+                LastReadAwareness = GetThreadDpiAwarenessContext()
                 Dim surface As IntPtr = GetDC(IntPtr.Zero)
 
                 If surface <> IntPtr.Zero Then
@@ -641,9 +780,15 @@ Namespace Controls
                                     Try
                                         If BitBlt(memory, 0, 0, source.Width, source.Height, surface, source.X, source.Y, SRCCOPY) Then
                                             readAt = Stopwatch.GetTimestamp()
+                                            ' At the place and layered size the
+                                            ' window's thread gave the overlay
+                                            ' (Capture): given no size, Windows
+                                            ' showed none of the picture (#268).
+                                            Dim place As New NativePoint With {.X = source.X, .Y = source.Y}
+                                            Dim extent As New NativePoint With {.X = source.Width, .Y = source.Height}
                                             Dim origin As New NativePoint()
                                             Dim blend As BlendFunction = Opacity(255)
-                                            placed = UpdateLayeredWindowPicture(overlay, surface, IntPtr.Zero, IntPtr.Zero, memory, origin, 0, blend, ULW_ALPHA)
+                                            placed = UpdateLayeredWindowPicture(overlay, surface, place, extent, memory, origin, 0, blend, ULW_ALPHA)
                                         End If
                                     Finally
                                         SelectObject(memory, previous)
@@ -663,15 +808,30 @@ Namespace Controls
                 placed = False
             Finally
                 If bitmap <> IntPtr.Zero Then DeleteObject(bitmap)
+                If awareness <> IntPtr.Zero Then SetThreadDpiAwarenessContext(awareness)
                 Dim finished As Long = Stopwatch.GetTimestamp()
                 Volatile.Write(_lastReadTicks, If(readAt = 0, finished, readAt) - started)
                 Volatile.Write(_lastPlaceTicks, If(readAt = 0, 0, finished - readAt))
                 picture.Placed = placed
                 Interlocked.CompareExchange(picture.State, Ready, Taking)
+                _pictureDone.Set()
                 Interlocked.Decrement(_inFlight)
             End Try
 
         End Sub
+
+
+        ' The worker's read of an area into a window, run on the calling
+        ' thread: Friend for the test that it puts the thread's DPI
+        ' awareness back. Whether the picture was put in.
+        Friend Shared Function ReadHere(source As Rectangle, overlay As IntPtr) As Boolean
+
+            Dim picture As New Picture With {.Screen = source}
+            Interlocked.Increment(_inFlight)
+            Read(picture, source, overlay)
+            Return picture.Placed
+
+        End Function
 
 
         ' ---------------------------------------------------------------
@@ -918,9 +1078,9 @@ Namespace Controls
         Private Shared Function BitBlt(target As IntPtr, x As Integer, y As Integer, width As Integer, height As Integer, source As IntPtr, sourceX As Integer, sourceY As Integer, operation As Integer) As Boolean
         End Function
 
-        ' The picture, where the window already is and at its size.
+        ' A picture, at a place and a size.
         <DllImport("user32.dll", EntryPoint:="UpdateLayeredWindow")>
-        Private Shared Function UpdateLayeredWindowPicture(window As IntPtr, screen As IntPtr, position As IntPtr, size As IntPtr, source As IntPtr, ByRef origin As NativePoint, key As Integer, ByRef blend As BlendFunction, flags As Integer) As Boolean
+        Private Shared Function UpdateLayeredWindowPicture(window As IntPtr, screen As IntPtr, ByRef position As NativePoint, ByRef size As NativePoint, source As IntPtr, ByRef origin As NativePoint, key As Integer, ByRef blend As BlendFunction, flags As Integer) As Boolean
         End Function
 
         <DllImport("user32.dll")>
@@ -975,6 +1135,21 @@ Namespace Controls
 
         <DllImport("user32.dll")>
         Private Shared Function SetThreadDpiAwarenessContext(context As IntPtr) As IntPtr
+        End Function
+
+        <DllImport("user32.dll")>
+        Private Shared Function GetWindowDpiAwarenessContext(window As IntPtr) As IntPtr
+        End Function
+
+        <DllImport("user32.dll")>
+        Private Shared Function GetThreadDpiAwarenessContext() As IntPtr
+        End Function
+
+        ' Waits on a handle and handles no message meanwhile: a wait of
+        ' .NET's on the window's thread, a single-threaded apartment's,
+        ' handles some, which could reenter the switch.
+        <DllImport("kernel32.dll")>
+        Private Shared Function WaitForSingleObject(handle As Microsoft.Win32.SafeHandles.SafeWaitHandle, milliseconds As UInteger) As UInteger
         End Function
 
         <DllImport("user32.dll")>
