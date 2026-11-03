@@ -502,8 +502,9 @@ Partial Public Class Form1
 
         ' The cross-fade (#142): the page left is read as the switch begins
         ' and, once the switch has returned, faded out over the page shown,
-        ' if the switch was quicker than the fade. What it costs is part of
-        ' the switch.
+        ' if the switch was quicker than the fade. The switch waits at most
+        ' a moment, about 60 ms, for that picture, and is a cut if it is not
+        ' ready by then (#268). What it costs is part of the switch.
         Dim switchTime As Stopwatch = Stopwatch.StartNew()
         CapturePageLeft(request, asked)
 
