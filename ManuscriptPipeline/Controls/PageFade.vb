@@ -12,15 +12,15 @@ Namespace Controls
     ' reads the page area off the screen, as it shows it, and puts the
     ' picture in a window of its own, hidden over the page area; neither
     ' is done on the UI thread, since on this machine either has waited on
-    ' the screen for half a second. Once the switch has returned, it waits
-    ' at most a moment for the picture (PictureWaitMilliseconds, #268),
-    ' the page left still on the screen, and that window, if the picture
-    ' is in it, is shown and faded out over UiMotion.FadeMilliseconds on
-    ' UiMotion's Windows Forms clock. A picture not ready by then, a
-    ' switch that took the fade's length or longer, a switch just after a
-    ' fade or with another of the thread's windows over the page area, a
-    ' window Windows scales for its screen, or motion off, is a cut, as
-    ' before.
+    ' the screen for half a second. Once the switch has returned, unless
+    ' it is a cut whatever the picture does, it waits at most a moment for
+    ' the picture (PictureWaitMilliseconds, #268), the page left still on
+    ' the screen, and that window, if the picture is in it, is shown and
+    ' faded out over UiMotion.FadeMilliseconds on UiMotion's Windows Forms
+    ' clock. A picture not ready by then, a switch that took the fade's
+    ' length or longer, a switch just after a fade or with another of the
+    ' thread's windows over the page area, a window Windows scales for its
+    ' screen, or motion off, is a cut, as before.
     '
     ' The window never takes part: disabled, never activated, transparent
     ' to the pointer, and in no view a screen reader reads (its UI
@@ -69,8 +69,17 @@ Namespace Controls
         ' November 2, 2026 (#268). On a laptop at 125% the screen took 20 to
         ' 76 ms to read and a switch 7 to 27, so a switch that waited for
         ' nothing was a cut every time. Nothing paints until the switch has
-        ' returned, so the page left stays on the screen while it waits.
+        ' returned, so the page left stays on the screen while it waits. A
+        ' picture ready within it shows there and then; one not ready is a
+        ' cut once Windows ends the wait, on a tick of its timer (15.6 ms),
+        ' so 60 to about 75 ms in.
         Friend Const PictureWaitMilliseconds As Integer = 60
+
+        ' Set by the worker as each read ends, so that the switch waiting
+        ' for its picture goes on at once: waited for in sleeps of a
+        ' millisecond, each lasting to a tick of Windows' timer, a picture
+        ' was seen up to 15.6 ms after it was ready (#268).
+        Private Shared ReadOnly _pictureDone As New AutoResetEvent(False)
 
         ' Test seams: how long the worker waits before it reads, and whether
         ' Begin waits for the picture until it is ready, up to 2 s, in place
@@ -121,6 +130,11 @@ Namespace Controls
         Friend Property OverlaysMade As Integer = 0
         Friend Property LayeredSizesGiven As Integer = 0
 
+        ' How long giving the overlay its layered size took on the window's
+        ' thread in the last switch, within the switch's time (Capture); 0
+        ' if it was not given.
+        Friend Property LastSizeMilliseconds As Double = 0
+
         Friend ReadOnly Property Fading As Boolean
             Get
                 Return _watch.IsRunning
@@ -168,6 +182,10 @@ Namespace Controls
             End Get
         End Property
 
+        ' The DPI awareness the worker's thread last read the screen in: the
+        ' overlay's, for the test of it (#268).
+        Friend Shared Property LastReadAwareness As IntPtr = IntPtr.Zero
+
 
         ' ---------------------------------------------------------------
         ' A switch
@@ -182,6 +200,7 @@ Namespace Controls
             [End]()
             Abandon()
             LastBeginMilliseconds = 0
+            LastSizeMilliseconds = 0
             _focusBefore = GetFocus()
 
             If Not allowed Then
@@ -238,8 +257,8 @@ Namespace Controls
             ' Windows does without this thread. A place or size it has not
             ' would have Windows ask this thread, busy with the switch, about
             ' the move (35 to 150 ms when tried for #268). A window Windows
-            ' cannot make (out of window handles) is a cut: the fade never
-            ' stops the switch.
+            ' cannot make (out of window handles), or cannot size, is a cut:
+            ' the fade never stops the switch.
             Try
 
                 If _overlay Is Nothing OrElse _overlay.Handle = IntPtr.Zero Then
@@ -261,8 +280,20 @@ Namespace Controls
                 ' and none shown, so no switch had faded since at least
                 ' v0.9.2. So the overlay is given its size here, with a fully
                 ' transparent picture, when it is made and when the page
-                ' area's size changes.
-                If _layeredSize <> screen.Size AndAlso GiveLayeredSize(overlay, screen) Then
+                ' area's size changes. That can wait on the screen as the
+                ' worker's calls can, inside the switch's time, so it is
+                ' timed for the budget rows (LastSizeMilliseconds). Not given
+                ' it, the worker would pass a size the overlay has not, and
+                ' Windows would ask this thread, waiting in Begin, about it.
+                If _layeredSize <> screen.Size Then
+                    Dim sizing As Long = Stopwatch.GetTimestamp()
+                    Dim sized As Boolean = GiveLayeredSize(overlay, screen)
+                    LastSizeMilliseconds = (Stopwatch.GetTimestamp() - sizing) * 1000.0 / Stopwatch.Frequency
+                    If Not sized Then
+                        _layeredSize = Size.Empty
+                        LastOutcome = "cut: the overlay could not be sized"
+                        Return
+                    End If
                     _layeredSize = screen.Size
                     LayeredSizesGiven += 1
                 End If
@@ -286,8 +317,11 @@ Namespace Controls
 
         ' Once the switch has returned, with how long it took: the overlay,
         ' once the worker has put the picture in it, within a moment at
-        ' most, shows over the page area and starts to fade. Its cost, the
-        ' wait included, is part of the switch's.
+        ' most, shows over the page area and starts to fade. A switch that
+        ' is a cut whatever the picture does (it did not finish, as when it
+        ' threw, it took the fade's length or longer, or the window changed)
+        ' is one at once, and does not wait for it. Its cost, the wait
+        ' included, is part of the switch's.
         Friend Sub Begin(switchMilliseconds As Double, switched As Boolean)
 
             Dim watch As Stopwatch = Stopwatch.StartNew()
@@ -300,30 +334,42 @@ Namespace Controls
 
             Try
 
-                Dim wait As Integer = If(AwaitPicture, 2000, PictureWaitMilliseconds)
-                While Volatile.Read(picture.State) = Taking AndAlso watch.ElapsedMilliseconds < wait
-                    Thread.Sleep(1)
-                End While
+                ' What makes the switch a cut whatever the picture does is
+                ' asked before the wait, so that such a switch waits for
+                ' nothing: none of it can change during the wait, in which
+                ' this thread handles no message.
+                Dim cut As String = Nothing
+
+                If Not switched Then
+                    cut = "cut: the switch did not finish"
+                ElseIf switchMilliseconds >= UiMotion.FadeMilliseconds Then
+                    cut = "cut: the switch took longer than the fade"
+                ElseIf Not UiMotion.Enabled OrElse Not CanShow() OrElse _area.RectangleToScreen(_area.ClientRectangle) <> picture.Screen OrElse OverlayHandle = IntPtr.Zero Then
+                    cut = "cut: the window changed"
+                End If
+
+                ' An earlier read, let go, may have left the event set: the
+                ' picture is then still being read, and the wait goes on for
+                ' what is left of the moment.
+                If cut Is Nothing Then
+                    Dim wait As Integer = If(AwaitPicture, 2000, PictureWaitMilliseconds)
+                    Dim left As Long = wait - watch.ElapsedMilliseconds
+                    While left > 0 AndAlso Volatile.Read(picture.State) = Taking
+                        WaitForSingleObject(_pictureDone.SafeWaitHandle, CUInt(left))
+                        left = wait - watch.ElapsedMilliseconds
+                    End While
+                End If
 
                 ' A picture still being read is let go; the worker finishes
                 ' with the hidden overlay and frees what it made.
                 Dim taken As Boolean = Interlocked.CompareExchange(picture.State, Abandoned, Taking) <> Taking
 
-                If Not taken Then
+                If cut IsNot Nothing Then
+                    LastOutcome = cut
+                ElseIf Not taken Then
                     LastOutcome = "cut: the picture was not ready"
-                    Return
-                End If
-
-                Dim bounds As Rectangle = _area.RectangleToScreen(_area.ClientRectangle)
-
-                If Not switched Then
-                    LastOutcome = "cut: the switch did not finish"
                 ElseIf Not picture.Placed Then
                     LastOutcome = "cut: the picture could not be read"
-                ElseIf switchMilliseconds >= UiMotion.FadeMilliseconds Then
-                    LastOutcome = "cut: the switch took longer than the fade"
-                ElseIf Not UiMotion.Enabled OrElse Not CanShow() OrElse bounds <> picture.Screen OrElse OverlayHandle = IntPtr.Zero Then
-                    LastOutcome = "cut: the window changed"
                 Else
                     Show()
                     FadesShown += 1
@@ -683,9 +729,12 @@ Namespace Controls
         ' library held 450 ms and more by reads that long); the screen's is
         ' no device context of the window's. Putting the picture in the
         ' overlay can wait on the screen as the read can (once 522 ms of 50
-        ' switches, done on the window's thread), so it is done here too,
-        ' and the switch only shows the overlay. Nothing of Windows Forms is
-        ' touched here, and what is made here is freed here.
+        ' switches, done on the window's thread), so it is done here too, at
+        ' the layered size the window's thread gave the hidden overlay with
+        ' a transparent picture as it was made or the page area's size
+        ' changed (Capture, LastSizeMilliseconds, #268); the switch then
+        ' only shows the overlay. Nothing of Windows Forms is touched here,
+        ' and what is made here is freed here.
         Private Shared Sub Read(picture As Picture, source As Rectangle, overlay As IntPtr)
 
             Dim bitmap As IntPtr = IntPtr.Zero
@@ -708,6 +757,7 @@ Namespace Controls
                     Thread.Sleep(CaptureDelayMilliseconds)
                 End If
 
+                LastReadAwareness = GetThreadDpiAwarenessContext()
                 Dim surface As IntPtr = GetDC(IntPtr.Zero)
 
                 If surface <> IntPtr.Zero Then
@@ -764,6 +814,7 @@ Namespace Controls
                 Volatile.Write(_lastPlaceTicks, If(readAt = 0, 0, finished - readAt))
                 picture.Placed = placed
                 Interlocked.CompareExchange(picture.State, Ready, Taking)
+                _pictureDone.Set()
                 Interlocked.Decrement(_inFlight)
             End Try
 
@@ -1088,6 +1139,17 @@ Namespace Controls
 
         <DllImport("user32.dll")>
         Private Shared Function GetWindowDpiAwarenessContext(window As IntPtr) As IntPtr
+        End Function
+
+        <DllImport("user32.dll")>
+        Private Shared Function GetThreadDpiAwarenessContext() As IntPtr
+        End Function
+
+        ' Waits on a handle and handles no message meanwhile: a wait of
+        ' .NET's on the window's thread, a single-threaded apartment's,
+        ' handles some, which could reenter the switch.
+        <DllImport("kernel32.dll")>
+        Private Shared Function WaitForSingleObject(handle As Microsoft.Win32.SafeHandles.SafeWaitHandle, milliseconds As UInteger) As UInteger
         End Function
 
         <DllImport("user32.dll")>

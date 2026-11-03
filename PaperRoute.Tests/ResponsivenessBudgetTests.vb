@@ -491,8 +491,10 @@ Public Class ResponsivenessBudgetTests
     ' waiting at most a moment for its picture (about 60 ms, #268) and
     ' showing it are part of the switch, all timed in it; the fade's
     ' frames follow on the window's clock once the switch has returned.
-    ' Each row says whether its switch faded or was a cut, and why, and
-    ' what waiting for and showing the picture took (Begin). The test
+    ' Each row says whether its switch faded or was a cut, and why, what
+    ' waiting for and showing the picture took (Begin), and, in a switch
+    ' that gave the overlay its layered size (as it was made, or the page
+    ' area had resized), what that took on the window's thread. The test
     ' fails if no switch faded, and if a switch quicker than the fade was
     ' a cut for any reason but a picture not read within that moment (the
     ' switch waits no longer) or a manuscript's open, a cut by design.
@@ -634,7 +636,8 @@ Public Class ResponsivenessBudgetTests
                     Dim row As Row = Time(library, action & label, If(motion, PageSwitchWithFade, PageSwitch), work, enforced:=enforce AndAlso enforced)
                     If motion Then
                         Dim fade As PageFade = board.PageFade
-                        row.Motion = If(fade Is Nothing, "no fade made", fade.LastOutcome & ", Begin " & fade.LastBeginMilliseconds.ToString("0.0", CultureInfo.InvariantCulture) & " ms")
+                        row.Motion = If(fade Is Nothing, "no fade made", fade.LastOutcome & ", Begin " & fade.LastBeginMilliseconds.ToString("0.0", CultureInfo.InvariantCulture) & " ms" &
+                                        If(fade.LastSizeMilliseconds > 0, ", sizing the overlay " & fade.LastSizeMilliseconds.ToString("0.0", CultureInfo.InvariantCulture) & " ms", String.Empty))
                     End If
                     board.PaintNow()
                     Dim waited As Stopwatch = Stopwatch.StartNew()
