@@ -880,3 +880,75 @@ The brief's targeted Debug filter, with ResponsivenessBudgetTests, ManuscriptEdi
 - **The warm and cold starts are wall times from a click,** so they include the process's start. They are not the in-process test's "Show, queue drained" row, which they sit near.
 
 The full record, with the VM's attempt, is in the v0.9.2 certification evidence, `E-results.md`, under E10.1.
+
+## 2026-11-04: v1.0.0-rc.1's release commit (B3)
+
+B3 of the v1.0 release certification ([#313](https://github.com/JUhalt/PaperRoute-Tracker/issues/313)) runs this test on the rc's release commit, `674bf37`, in a Release build from B1's checkout:
+
+```
+dotnet test PaperRoute.Tests/PaperRoute.Tests.vbproj -c Release --filter "FullyQualifiedName~ResponsivenessBudgetTests"
+```
+
+It ran twice. Both of its tests passed both times: `EveryActionIsMeasuredOnBothLibraries` and `PageSwitchesWithMotionOnGrowByNoMoreThanTheFade`.
+
+### Host during these runs
+
+Windows 11 (NT 10.0.26300), 12 logical processors, window DPI 96, with the test's window off-screen. No VirtualBox VM ran.
+
+- **Run 1, 07:01 to 07:03.** Not sampled. B3 asks for samples, so the run was repeated.
+- **Run 2, 07:34 to 07:36.** Sampled every 2 s, 70 samples:
+  - CPU 16 to 79%, mean 32;
+  - no test host other than this run's own;
+  - 22.6 GB of memory free;
+  - the desktop in use, with input within 10 s of 33 of the samples.
+
+### Numbers
+
+**Every enforced row held in both runs**, with motion off and with motion on. That is 59 rows on the 500 library: 37 in the first test and the 22 switches with motion on. The rows with the least room:
+
+| Row | Run 1 | Run 2 | Budget ms |
+|---|---:|---:|---:|
+| Warm startup | 876 | 715 | 1500 |
+| Board to a manuscript page, the kept page (another manuscript) | 43 | 40 | 100 |
+| Board: the rest of the shown shelf, shown in idle slices | 114 | 79 | 250 |
+
+The table below shows the watch row and the reported rows, for the Release build on the 500 library. Its figures are UI ms; wall times are in brackets where they differ.
+
+| Action | Run 1 | Run 2 | Budget ms | Held |
+|---|---:|---:|---:|---|
+| Board: the rest of the shown shelf, shown in idle slices (the watch row) | 114 (5,154) | 79 (3,014) | 250 | enforced |
+| Idle work from startup: its longest step, against the idle slice | 114 | 79 | 30 | reported, over |
+| Board to a manuscript page, the kept page (a Pipeline manuscript with three shortlisted journals and tags) | 38 | 36 | 100 | reported |
+| Published: its paint after the first switch | 6 | 5 | 250 | reported |
+| Board: its paint after Library to Board | 30 | 31 | 250 | reported |
+| Journals: its paint after the switch (first / second visit) | 15 / 15 | 7 / 6 | 250 | reported |
+| Insights: its paint after the switch (first / second visit) | 5 / 4 | 2 / 2 | 250 | reported |
+| Insights: figures ready (first / second visit) | 42 / 61 | 30 / 43 | 250 | reported |
+| Manuscript page: its first paint | 20 | 16 | 250 | reported |
+| Manuscript page: its paint after the edit | 5 | 1 | 250 | reported |
+| Board: its paint once the manuscript page is left | 56 | 26 | 250 | reported |
+| One dirty-timer tick (median of 10) | 0 | 0 | 5 | reported |
+| Backup | 46 (17,559) | 47 (14,399) | 250 | reported |
+| Restore: replace the library (the window then restarts) | 62 (25,148) | 47 (22,649) | 250 | reported |
+| Find Journals: click to first paint | 144 | 133 | 250 | reported |
+| Find Journals: results rendered (fixture responses) | 102 | 103 | 250 | reported |
+| Look Up Journal Facts: click to first paint | 47 | 71 | 250 | reported |
+| Look Up Journal Facts: results rendered (fixture responses) | 54 | 92 | 250 | reported |
+| Close the window (the restore's hand-over): until `FormClosed`, the window still up | 11 | 16 | 250 | reported |
+| Close the window: its teardown after `FormClosed`, the window hidden first | 262 | 323 | 250 | reported, over |
+
+### What the runs show
+
+- **The watch row held.** It read 114 and 79 ms against its 250 ms budget. It read 86 ms at `ab07950`, and failed standalone at `aaea437` (540 ms).
+- **The restore's hand-over close stays small** (PR [#305](https://github.com/JUhalt/PaperRoute-Tracker/pull/305)'s two rows).
+  - Until `FormClosed`, with the window still up, it took 11 and 16 ms. In PR #305's Debug runs it was 51,953 ms before the fix and 13 ms after it.
+  - The teardown after that, with the window already hidden, took 262 and 323 ms. That is over 250, but the row is report-only, as PR #305 left it; it read 679 ms there in Debug.
+  - [#147](https://github.com/JUhalt/PaperRoute-Tracker/issues/147)'s E10.1 measured an 8.6 s stall here on the published v0.9.2. The certification's E10, on the maintainer's PC, measures the installed rc.
+- **Motion on.**
+  - Every switch on the 500 library held 220 ms: the 100 ms page switch plus the 120 ms fade. The largest was Board to Import & Export, at 46 and 50 ms.
+  - 20 of the 22 switches faded. The other 2 are the manuscript opens, which open as a cut. None was a cut because the picture was not ready.
+- **Over budget, report-only:**
+  - The idle slice, as it has been since part C.
+  - The close's teardown.
+  - In run 2, the motion test's motion-off baseline for the first manuscript open (201 ms; 27 in run 1), while the desktop was in use. Its enforced motion-on twin read 29.
+  - The example library, which runs first and carries the process's first-time costs. It is report-only. Its idle slice was over in both runs (144 and 75), and run 1 also had Board to Deadlines (103) and Find Journals' first paint (287) over.
