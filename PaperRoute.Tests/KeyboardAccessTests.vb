@@ -2184,9 +2184,20 @@ Public Class KeyboardAccessTests
                                                    DescribeOnBoard(heard.Skip(hidden + 1).First(Function(item) item.Kind = "focus" AndAlso item.Control IsNot landed).Control) &
                                                    ", which no longer had the keyboard")
                                     End If
+                                    ' Narrator takes UI Automation's word, not the WinEvent: a
+                                    ' control that took the keyboard under the picture asked it to
+                                    ' say its name (#276). One an input gave the keyboard after the
+                                    ' picture had its own focus event, with nothing over the page.
+                                    Dim landedName As String = landed.AccessibilityObject.Name
+                                    Dim focusedUnderPicture As Boolean = hidden > 0 AndAlso heard.Take(hidden).Any(Function(item) item.Kind = "focus" AndAlso item.Control Is landed)
+                                    If focusedUnderPicture AndAlso Not String.IsNullOrWhiteSpace(landedName) AndAlso
+                                       (ManuscriptPipeline.Controls.PageFade.Announced.Count = 0 OrElse ManuscriptPipeline.Controls.PageFade.Announced.Last() <> landedName) Then
+                                        report.Add(name & ": UI Automation was not asked to say """ & landedName & """ once the picture was hidden")
+                                    End If
                                 ElseIf heard.Any(Function(item) item.Kind <> "focus") Then
                                     report.Add(name & ": a cut showed the picture")
                                 End If
+                                ManuscriptPipeline.Controls.PageFade.Announced.Clear()
 
                             Next
 
