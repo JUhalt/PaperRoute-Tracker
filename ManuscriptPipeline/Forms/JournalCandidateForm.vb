@@ -275,9 +275,18 @@ Namespace Forms
                     ' and archived in services you use" two lines for one.
                     Dim beside As Integer = CInt(Math.Round(13 * DialogScaling.Dpi(list) / 96.0)) + 6
                     Const wraps As TextFormatFlags = TextFormatFlags.WordBreak Or TextFormatFlags.TextBoxControl Or TextFormatFlags.NoPrefix
+                    ' A box wider than its own one-line size draws its text on
+                    ' one line, whatever the measure beside its glyph says: at
+                    ' a real 120 DPI that measure still wrapped "Its articles
+                    ' are indexed..." in a box a pixel wider than its one line
+                    ' (v1.0's C3, November 4, 2026). At exactly that width
+                    ' Windows Forms' own measure, which the scaling sweep
+                    ' reads, gives two lines, so that width keeps the measure.
                     For Each box As CheckBox In list.Controls.OfType(Of CheckBox)()
                         box.Width = width
-                        box.Height = TextRenderer.MeasureText(box.Text, box.Font, New Size(width - beside, 0), wraps).Height + 6
+                        Dim oneLine As Boolean = box.GetPreferredSize(Size.Empty).Width < width
+                        Dim room As New Size(If(oneLine, Short.MaxValue, width - beside), 0)
+                        box.Height = TextRenderer.MeasureText(box.Text, box.Font, room, wraps).Height + 6
                     Next
                     For Each hint As LinkLabel In list.Controls.OfType(Of LinkLabel)()
                         hint.MaximumSize = New Size(Math.Max(120, width - glyph), 0)
