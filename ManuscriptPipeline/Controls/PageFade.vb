@@ -453,12 +453,42 @@ Namespace Controls
 
 
         ' A window's focus event raised again, if it still has the keyboard
-        ' and no picture shows over it.
+        ' and no picture shows over it. Narrator follows UI Automation, which
+        ' takes a Windows Forms control's own provider over the window's
+        ' WinEvents, and with fades showing it still read only the key
+        ' (November 3), so the control also asks UI Automation to say its
+        ' name, which Narrator reads (#276).
         Private Sub TellFocus(window As IntPtr)
 
             If window = GetFocus() AndAlso Not Showing Then
                 NotifyWinEvent(EVENT_OBJECT_FOCUS, window, OBJID_CLIENT, CHILDID_SELF)
+                Announce(Control.FromChildHandle(window))
             End If
+
+        End Sub
+
+
+        ' Test seam: the names announced after fades, in order (the window's
+        ' thread only).
+        Friend Shared ReadOnly Announced As New Collections.Generic.List(Of String)()
+
+        Private Shared Sub Announce(control As Control)
+
+            If control Is Nothing OrElse control.IsDisposed Then
+                Return
+            End If
+
+            Dim name As String = control.AccessibilityObject.Name
+
+            If String.IsNullOrWhiteSpace(name) Then
+                Return
+            End If
+
+            control.AccessibilityObject.RaiseAutomationNotification(
+                Automation.AutomationNotificationKind.Other,
+                Automation.AutomationNotificationProcessing.ImportantMostRecent,
+                name)
+            Announced.Add(name)
 
         End Sub
 
