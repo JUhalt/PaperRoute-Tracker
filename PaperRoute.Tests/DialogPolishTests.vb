@@ -779,6 +779,7 @@ Public Class DialogPolishTests
     Public Sub JournalCandidateChecksAreAsTallAsTheLinesTheyDraw()
 
         Dim judged As Integer = 0
+        Dim edges As Integer = 0
         Dim found As New List(Of String)()
 
         Dim failures As List(Of String) =
@@ -830,11 +831,68 @@ Public Class DialogPolishTests
 
                     Next
 
+                    ' Where a question just fits on one line: its box a pixel
+                    ' and two wider than its one-line size. (At exactly that
+                    ' size Windows Forms measures two lines, which the scaling
+                    ' sweep reads, so the box keeps two.) v1.0's C3 at a real 125% (November 4, 2026)
+                    ' found "Its articles are indexed and archived in services
+                    ' you use" given two lines for one in a box a pixel wider
+                    ' than its one line. These simulated DPIs do not show it
+                    ' (this passed on 674bf37 too): the box's real glyph at a
+                    ' real 120 DPI is what the measure beside it misjudged, so
+                    ' the display-evidence tool on a 125% screen is its check.
+                    ' This holds the rule that fixed it at every DPI.
+                    For Each box As CheckBox In boxes
+
+                        Dim oneLine As Integer = box.GetPreferredSize(Size.Empty).Width
+
+                        For Each extra As Integer In {1, 2}
+
+                            ' The list takes a share of the window's width, so
+                            ' step the window until the box is that wide.
+                            For attempt As Integer = 1 To 24
+                                Dim gap As Integer = oneLine + extra - box.Width
+                                If gap = 0 Then Exit For
+                                shown.Width += If(gap > 0, Math.Max(1, gap), Math.Min(-1, gap))
+                                Application.DoEvents()
+                            Next
+
+                            If box.Width <> oneLine + extra Then
+                                Continue For
+                            End If
+
+                            Dim line As Integer = TextRenderer.MeasureText("Ag", box.Font).Height
+                            Dim drawn As Integer = LastInkRow(box)
+                            Dim whole As Integer
+
+                            Using twin As New CheckBox With {
+                                .Text = box.Text, .Font = box.Font, .AutoSize = False, .CheckAlign = box.CheckAlign, .TextAlign = box.TextAlign,
+                                .UseMnemonic = False, .UseCompatibleTextRendering = False, .ForeColor = box.ForeColor, .BackColor = box.BackColor,
+                                .Size = New Size(box.Width, box.Height + 3 * line)
+                            }
+                                shown.Controls.Add(twin)
+                                whole = LastInkRow(twin)
+                                shown.Controls.Remove(twin)
+                            End Using
+
+                            edges += 1
+
+                            If drawn <> whole Then
+                                found.Add($"{name} at {dpi} DPI, '{box.Text}' {box.Width} wide ({extra} over its one line): it ends its text at row {drawn} of {box.Height}, a taller box at {whole}.")
+                            ElseIf box.Height - 1 - drawn >= line Then
+                                found.Add($"{name} at {dpi} DPI, '{box.Text}' {box.Width} wide ({extra} over its one line): {box.Height - 1 - drawn} rows below its text, {box.Height} tall for lines of {line}.")
+                            End If
+
+                        Next
+
+                    Next
+
                 End Sub)
 
         Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
         Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
         Assert.IsTrue(judged >= 20 * Dpis.Length * 10, "Every question was judged at each width and DPI: " & judged.ToString())
+        Assert.IsTrue(edges >= Dpis.Length * 10, "Every question was judged at the edge of one line at each DPI: " & edges.ToString())
 
     End Sub
 
