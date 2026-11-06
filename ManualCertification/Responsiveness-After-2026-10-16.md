@@ -952,3 +952,32 @@ The table below shows the watch row and the reported rows, for the Release build
   - The close's teardown.
   - In run 2, the motion test's motion-off baseline for the first manuscript open (201 ms; 27 in run 1), while the desktop was in use. Its enforced motion-on twin read 29.
   - The example library, which runs first and carries the process's first-time costs. It is report-only. Its idle slice was over in both runs (144 and 75), and run 1 also had Board to Deadlines (103) and Find Journals' first paint (287) over.
+
+### 2026-11-05: on the new release commit, ca985fa
+
+The rc's release commit moved twice after these runs. PR #320 (7f74b30) and PR #321 (ca985fa) changed Journal candidate's question heights and the scaling measure's check-box rule (#266 item 12, #313). Neither touches what this test times, but B3 runs on the release commit, so it ran again. Both runs were on B1's fresh worktree of ca985fa, in Release, right after B1, with the host sampled every 2 s. The desktop was locked, with no input for over two and a half hours.
+
+- **Run 1, 23:02 to 23:05: failed one enforced row.** Warm startup read 1,673 ms against its 1,500 ms budget.
+  - CPU ran 23 to 100%, mean 51. The run's own Release build peaked at 100% for its first 30 s.
+  - Firefox, OneDrive and CrossDeviceService were busy throughout.
+  - No other test host ran.
+- **Run 2, 23:08 to 23:11: passed.** Every enforced row held, with motion off and with motion on.
+  - CPU ran 29 to 67%, mean 46, with the same background.
+  - Under the standing rule, a failure on a busy host is run again before it counts, so run 2 is B3's result.
+
+| Row, 500 library (UI ms) | Run 1 | Run 2 | Budget ms | Held |
+|---|---:|---:|---:|---|
+| Warm startup to an interactive Board | 1,673 | 1,251 | 1500 | enforced |
+| Board: the rest of the shown shelf, shown in idle slices (the watch row) | 98 | 94 | 250 | enforced |
+| Idle work from startup: its longest step, against the idle slice | 98 | 94 | 30 | reported, over |
+| Board to a manuscript page, the kept page (the Pipeline manuscript) | 99 | 75 | 100 | reported |
+| Manuscript page: versions and details after its first paint | 169 | 114 | 250 | enforced |
+| Insights: its paint after the switch (second visit) | 486 | 409 | 250 | reported, over |
+| Manuscript page: its paint after the edit | 444 | 1 | 250 | reported, over in run 1 |
+| Look Up Journal Facts: click to first paint | 60 | 352 | 250 | reported, over in run 2 |
+| Close the window (the restore's hand-over): until `FormClosed` | 9 | 14 | 250 | reported |
+| Close the window: its teardown after `FormClosed` | 737 | 358 | 250 | reported, over |
+
+- **The enforced rows with the least room in run 2** were warm startup (1,251 of 1,500), the kept page's other manuscript (69 of 100) and Board to Import & Export (67 of 100).
+- **Motion on:** 20 of 22 switches faded in both runs, and none was a cut because the picture was not ready.
+- **The rows are slower than on November 4 morning's quiet host** (warm startup 876 and 715 there). This is the busier host: the code these rows time is the same as 674bf37's.
