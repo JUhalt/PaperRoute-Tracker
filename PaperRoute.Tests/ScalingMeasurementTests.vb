@@ -216,6 +216,69 @@ Public Class ScalingMeasurementTests
     End Sub
 
 
+    ' A one-line check box or option is cut only when it is narrower than
+    ' the one line Windows Forms lays its glyph and caption out in. The
+    ' measure guessed that line as the caption plus 16 pixels of glyph, 3
+    ' of gap and 6 of border, which is wider than Windows Forms' own: at a
+    ' real 125% (v1.0's C3, November 4, 2026) it reported Journal
+    ' candidate's "Its articles are indexed and archived in services you
+    ' use" cut in a box a pixel wider than its one line, whose picture
+    ' shows it whole. A box as wide as its one line, or wider, is whole; a
+    ' pixel narrower, Windows Forms wraps it.
+    <TestMethod>
+    Public Sub AOneLineCheckBoxIsCutOnlyWhenNarrowerThanItsOneLine()
+
+        Dim found As New List(Of String)()
+
+        StaRunner.Run(
+            Sub()
+                Using shown As New Form With {
+                    .ShowInTaskbar = False, .StartPosition = FormStartPosition.Manual, .Location = New Point(0, 0),
+                    .FormBorderStyle = FormBorderStyle.None, .ClientSize = New Size(900, 200)
+                }
+
+                    Dim boxes As Control() = {
+                        New CheckBox With {.AutoSize = False, .UseMnemonic = False, .Text = "Its articles are indexed and archived in services you use"},
+                        New RadioButton With {.AutoSize = False, .UseMnemonic = False, .Text = "Its articles are indexed and archived in services you use"}
+                    }
+                    For Each box As Control In boxes
+                        shown.Controls.Add(box)
+                    Next
+                    shown.Show()
+                    Application.DoEvents()
+
+                    For Each box As Control In boxes
+
+                        Dim oneLine As Size = box.GetPreferredSize(Size.Empty)
+
+                        For Each extra As Integer In {-1, 0, 1}
+
+                            For Each other As Control In boxes
+                                other.Visible = other Is box
+                            Next
+                            box.Bounds = New Rectangle(10, 10, oneLine.Width + extra, oneLine.Height)
+                            Application.DoEvents()
+
+                            Dim reported As Boolean = Inspect(shown).Cut.Any(Function(entry) entry.Contains("'Its articles", StringComparison.Ordinal))
+                            Dim expected As Boolean = extra < 0
+
+                            If reported <> expected Then
+                                found.Add($"{box.GetType().Name} {box.Width} wide, its one line {oneLine.Width}: the measure reports it {If(reported, "cut", "whole")}.")
+                            End If
+
+                        Next
+
+                    Next
+
+                End Using
+            End Sub
+        )
+
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+
+    End Sub
+
+
     ' Add Metric's Year and the version date keep their widths in a window
     ' built at 96 to 144 DPI (#255). At a real 125% the Year showed only an
     ' edge of its box and the version date nothing: each window's grid
@@ -1787,14 +1850,20 @@ Public Class ScalingMeasurementTests
                 cut.Add(Kind(control) & " '" & Abbreviate(button.Text) & "'")
             ElseIf (Not button.AutoSize OrElse TypeOf button Is ActionButton) AndAlso Not (boxed AndAlso button.Height >= 2 * lineHeight) Then
 
-                ' The caption, the box and its gap, the button's padding (an
+                ' A check box or option: the one line Windows Forms lays its
+                ' glyph and caption out in, which is where it wraps. A guess
+                ' at the glyph (16 pixels, 3 of gap and 6 of border) was
+                ' wider than that line for Journal candidate's questions at a
+                ' real 125% and narrower for a plain box at 96 DPI (v1.0's
+                ' C3). A button: the caption, the button's padding (an
                 ' ActionButton's is room it asks for, not a border it clips
                 ' to) and three pixels of border a side.
                 Dim needed As Integer =
-                    TextWidth(button.Text, button.Font, button.UseMnemonic) +
-                    If(boxed, UiTheme.Px(16, button.DeviceDpi) + 3, 0) +
-                    If(TypeOf button Is ActionButton, 0, button.Padding.Horizontal) +
-                    6
+                    If(boxed,
+                       button.GetPreferredSize(Size.Empty).Width,
+                       TextWidth(button.Text, button.Font, button.UseMnemonic) +
+                       If(TypeOf button Is ActionButton, 0, button.Padding.Horizontal) +
+                       6)
 
                 If needed > button.ClientSize.Width Then
                     cut.Add(Kind(control) & " '" & Abbreviate(button.Text) & "'")
