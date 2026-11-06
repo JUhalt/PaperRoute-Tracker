@@ -831,11 +831,9 @@ Public Class DialogPolishTests
 
                     Next
 
-                    ' Where a question just fits on one line: its box a pixel
-                    ' and two wider than its one-line size. (At exactly that
-                    ' size Windows Forms measures two lines, which the scaling
-                    ' sweep reads, so the box keeps two.) v1.0's C3 at a real 125% (November 4, 2026)
-                    ' found "Its articles are indexed and archived in services
+                    ' Where a question just fits on one line: its box as wide
+                    ' as its one-line size, and a pixel and two wider. v1.0's
+                    ' C3 at a real 125% (November 4, 2026) found "Its articles are indexed and archived in services
                     ' you use" given two lines for one in a box a pixel wider
                     ' than its one line. These simulated DPIs do not show it
                     ' (this passed on 674bf37 too): the box's real glyph at a
@@ -846,7 +844,7 @@ Public Class DialogPolishTests
 
                         Dim oneLine As Integer = box.GetPreferredSize(Size.Empty).Width
 
-                        For Each extra As Integer In {1, 2}
+                        For Each extra As Integer In {0, 1, 2}
 
                             ' The list takes a share of the window's width, so
                             ' step the window until the box is that wide.
