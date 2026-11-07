@@ -158,6 +158,58 @@ Namespace Services
 
         End Function
 
+
+        ' Lets a checked list scroll sideways to the end of its widest row,
+        ' as wide as the list draws it: the check box and the gaps beside it
+        ' at the list's DPI, then the text with TextRenderer's padding
+        ' (#313). Windows Forms' own extent counts a 13-pixel check box until
+        ' the list has drawn one, 20 pixels at 150%, and measures "&" as a
+        ' mnemonic, so it stopped short of a row's end: a pixel short of C3's
+        ' affiliation at a real 150%, and 8 or more short of one with an "&"
+        ' at any DPI where it scrolls. Call it once the rows are in, and
+        ' again when the list's font changes.
+        Public Shared Sub FitCheckedListExtent(
+            list As CheckedListBox
+        )
+
+            If list Is Nothing Then
+                Throw New ArgumentNullException(NameOf(list))
+            End If
+
+            Dim listDpi As Integer =
+                Dpi(list)
+
+            Dim gap As Integer =
+                CInt(Math.Round(listDpi / 96.0))
+
+            Dim glyph As Integer =
+                CInt(Math.Round(13 * listDpi / 96.0))
+
+            Dim widest As Integer = 0
+
+            For Each item As Object In list.Items
+
+                widest =
+                    Math.Max(
+                        widest,
+                        TextRenderer.MeasureText(
+                            list.GetItemText(item),
+                            list.Font,
+                            New Size(Integer.MaxValue, Integer.MaxValue),
+                            TextFormatFlags.NoPrefix Or TextFormatFlags.ExpandTabs
+                        ).Width
+                    )
+
+            Next
+
+            list.HorizontalScrollbar = True
+
+            ' Never 0, which hands the extent back to Windows Forms.
+            list.HorizontalExtent =
+                Math.Max(1, glyph + 2 * gap + widest)
+
+        End Sub
+
     End Class
 
 End Namespace

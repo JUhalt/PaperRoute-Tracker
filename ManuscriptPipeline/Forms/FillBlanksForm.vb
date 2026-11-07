@@ -106,6 +106,14 @@ Namespace Forms
                 Dim index As Integer = lstManuscripts.Items.Add(ReminderService.SafeManuscriptTitle(manuscript) & "  ·  DOI " & DoiNormalizer.Normalize(manuscript.Metadata.Doi))
                 lstManuscripts.SetItemChecked(index, HasBlanks(manuscript))
             Next
+            ' A row wider than the list scrolls sideways to its end, its DOI
+            ' too. The window keeps its size at every scale while its text
+            ' grows, and at a real 150% a row's DOI was cut at the list's right
+            ' edge, "10.5555/demo.grit" reading "10.555", with no ellipsis and
+            ' no scroll bar (rc.2's C3, #313). Measured again when the text
+            ' grows.
+            DialogScaling.FitCheckedListExtent(lstManuscripts)
+            AddHandler lstManuscripts.FontChanged, Sub(sender, e) DialogScaling.FitCheckedListExtent(lstManuscripts)
             AddHandler lstManuscripts.ItemCheck, Sub(sender, e) If IsHandleCreated Then BeginInvoke(New Action(AddressOf UpdateButtons))
             body.Controls.Add(lstManuscripts)
 
