@@ -20,7 +20,9 @@ Imports ManuscriptPipeline.Services
 ' LabelsAreWholeInAWindowBuiltAt96To144Dpi (#263, C5) instead builds each
 ' window as a display builds it (ScalingMeasurementTests.AtDisplayDpi),
 ' which Simulate cannot do faithfully for a window scaled by hand; it
-' failed on 88a191e.
+' failed on 88a191e. The tests marked #313, from v1.0's C3 at a real 150%,
+' failed on ca985fa, the first release candidate; the main window's search
+' fields are among them.
 <TestClass>
 <DoNotParallelize>
 Public Class DialogPolishTests
@@ -1642,6 +1644,618 @@ Public Class DialogPolishTests
 
 
     ' ---------------------------------------------------------------
+    ' The main window's search fields (v1.0 C3 at 150%, #313)
+    ' ---------------------------------------------------------------
+
+    ' The main window's rounded search fields show their text whole, its
+    ' descenders too (#313). CreateSearchField docked a borderless box in
+    ' the field and left it to size itself, so the box was one font height
+    ' tall, and Windows Forms draws a placeholder a pixel down in a line up to
+    ' a pixel taller than that: at 150% each descender stopped two rows
+    ' short, 7 pixels above the field's frame, and "stage" read "staqe" and
+    ' "tag" "taq" on the Board, Library and Deadlines. Typed text lost a
+    ' row there, and at 100% the placeholder lost its last row; at 125% the
+    ' line just fit, so C3 passed it. Each field is built as a display
+    ' builds it, and its height and the box's place in it are the
+    ' captures' (30, 38 and 44 pixels, the box 7, 9 and 10 down):
+    ' CreateSearchField measures the box before the box is in a window, in
+    ' the default font, so that font is first grown for the display
+    ' (GrowText), as a display draws it, and the field takes its insets
+    ' and the stage filter's height at the display (AtDisplayDpi). Back at
+    ' this computer's DPI, where TextRenderer draws a font at its own size,
+    ' the box takes the window's font grown for the display (GrowText) and
+    ' is judged as Windows Forms draws it: the placeholder, drawn unclipped
+    ' as TextBox draws it, ends inside the box; typed text, as the box draws
+    ' it, leaves the box's last row clear; and the box stops above the
+    ' field's frame. On ca985fa the placeholder ran two rows past a
+    ' 27-pixel box at 144 DPI and one past an 18-pixel box at 96, and typed
+    ' text reached the last row at 144.
+    <TestMethod>
+    Public Sub SearchFieldsShowTheirTextWholeAt96To144Dpi()
+
+        ' The field's height and the box's top in it, as the 100%, 125% and
+        ' 150% captures measure them.
+        Dim captured As New Dictionary(Of Integer, (Height As Integer, Top As Integer)) From {
+            {96, (30, 7)}, {120, (38, 9)}, {144, (44, 10)}
+        }
+
+        ' The Board's, the Library's and the Deadlines' placeholders.
+        Dim placeholders As String() = {
+            "Search titles, journals, authors",
+            "Filter by title, journal, stage, route, type, or tag",
+            "Filter by manuscript or journal"
+        }
+
+        Dim createSearchField As MethodInfo =
+            GetType(ManuscriptPipeline.Form1).GetMethod("CreateSearchField", BindingFlags.Instance Or BindingFlags.NonPublic)
+
+        ' The lowest row with a pixel clearly unlike the background, or -1.
+        Dim lowestInk As Func(Of Bitmap, Color, Integer) =
+            Function(picture, background)
+                For y As Integer = picture.Height - 1 To 0 Step -1
+                    For x As Integer = 0 To picture.Width - 1
+                        Dim pixel As Color = picture.GetPixel(x, y)
+                        If Math.Abs(CInt(pixel.R) - background.R) + Math.Abs(CInt(pixel.G) - background.G) + Math.Abs(CInt(pixel.B) - background.B) > 96 Then
+                            Return y
+                        End If
+                    Next
+                Next
+                Return -1
+            End Function
+
+        Dim judged As New List(Of String)()
+        Dim found As New List(Of String)()
+        Dim failures As New List(Of String)()
+
+        For Each dpi As Integer In Dpis
+
+            Dim at As Integer = dpi
+
+            ' The three fields as CreateSearchField builds them at the
+            ' display, in a window with the scaling mode and font
+            ' BuildInterface gives the main window. The main window it runs
+            ' on is not built, so its stage filter is not in it, as when the
+            ' Board's field is built. Each box is made as its page makes it
+            ' and handed over before it is in a window, so it is measured in
+            ' the default font, grown for the display; in the window it takes
+            ' the window's font, as in the app.
+            Dim build As Func(Of String, Form) =
+                Function(root)
+                    Dim window As New ManuscriptPipeline.Form1()
+                    Dim host As New Form With {.AutoScaleMode = AutoScaleMode.Dpi, .Font = New Font("Segoe UI", 10.0F), .ClientSize = New Size(800, 450)}
+                    Dim fields As New FlowLayoutPanel With {.Dock = DockStyle.Fill, .FlowDirection = FlowDirection.TopDown, .WrapContents = False, .BackColor = UiTheme.BoardBackground()}
+                    AddHandler host.Disposed, Sub(sender, e) window.Dispose()
+                    ScalingMeasurementTests.AtDisplayDpi(
+                        at,
+                        Sub()
+                            For Each text As String In placeholders
+                                Dim box As New TextBox With {.PlaceholderText = text, .BorderStyle = BorderStyle.None, .BackColor = UiTheme.CardBackground(), .ForeColor = UiTheme.PrimaryText(), .Width = 640}
+                                ScalingMeasurementTests.GrowText(box, at)
+                                fields.Controls.Add(DirectCast(createSearchField.Invoke(window, New Object() {box}), Control))
+                                box.ResetFont()
+                            Next
+                        End Sub)
+                    host.Controls.Add(fields)
+                    Return host
+                End Function
+
+            failures.AddRange(
+                ViewCatalog.ShowEach(
+                    {("The search fields at " & at & " DPI", build)},
+                    Sub(name, shown)
+
+                        ' The text at the display's size, at this computer's DPI.
+                        ScalingMeasurementTests.GrowText(shown, at)
+                        For Each control As Control In New Control() {shown}.Concat(ViewCatalog.Descendants(shown))
+                            control.PerformLayout()
+                        Next
+                        Application.DoEvents()
+
+                        For Each field As ManuscriptPipeline.Controls.RoundedPanel In ViewCatalog.Descendants(shown).OfType(Of ManuscriptPipeline.Controls.RoundedPanel)()
+
+                            Dim box As TextBox = field.Controls.OfType(Of TextBox)().Single()
+                            Dim line As String = $"'{box.PlaceholderText}' at {at} DPI"
+                            Dim rows As Integer = box.ClientSize.Height
+
+                            Assert.AreEqual(captured(at).Height, field.Height, line & ": the field is as tall as the capture's.")
+                            Assert.AreEqual(captured(at).Top, box.Top, line & ": the box is as far down the field as the capture's.")
+                            judged.Add(line)
+
+                            ' The placeholder as TextBox draws it, unclipped:
+                            ' TextRenderer in the box's font, a pixel in and a
+                            ' pixel down, with no padding.
+                            Dim area As New Rectangle(1, 1, box.ClientSize.Width, rows * 3)
+                            Dim placeholder As Integer
+                            Using picture As New Bitmap(area.Right, area.Bottom, PixelFormat.Format32bppArgb)
+                                Using g As Graphics = Graphics.FromImage(picture)
+                                    g.Clear(box.BackColor)
+                                    TextRenderer.DrawText(g, box.PlaceholderText, box.Font, area, SystemColors.GrayText, box.BackColor,
+                                                          TextFormatFlags.NoPadding Or TextFormatFlags.Top Or TextFormatFlags.Left Or TextFormatFlags.EndEllipsis)
+                                End Using
+                                placeholder = lowestInk(picture, box.BackColor)
+                            End Using
+
+                            If placeholder >= rows Then
+                                found.Add($"{line}: the placeholder's ink runs to row {placeholder} of a box {rows} rows tall; {placeholder - rows + 1} cut.")
+                            End If
+
+                            ' Typed, as the box draws it.
+                            box.Text = box.PlaceholderText
+                            Application.DoEvents()
+                            Dim typed As Integer
+                            Using picture As New Bitmap(box.Width, box.Height, PixelFormat.Format32bppArgb)
+                                box.DrawToBitmap(picture, New Rectangle(Point.Empty, box.Size))
+                                typed = lowestInk(picture, box.BackColor)
+                            End Using
+                            box.Text = String.Empty
+
+                            If typed >= rows - 1 Then
+                                found.Add($"{line}: typed, its ink reaches row {typed}, the box's last, where the box cuts it.")
+                            End If
+
+                            Dim frame As Integer = field.Height - CInt(Math.Ceiling(field.BorderThickness))
+                            If box.Bottom > frame Then
+                                found.Add($"{line}: the box runs to row {box.Bottom - 1}, over the field's frame at row {frame}.")
+                            End If
+
+                        Next
+
+                    End Sub,
+                    styled:=False))
+
+        Next
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        Assert.AreEqual(placeholders.Length * Dpis.Length, judged.Count, "Each field was judged at each DPI: " & String.Join("; ", judged))
+
+    End Sub
+
+
+    ' ---------------------------------------------------------------
+    ' Help icons (#313)
+    ' ---------------------------------------------------------------
+
+    ' Every help icon draws its "?" whole, down to its dot (#313). At a
+    ' real 150% (v1.0's C3 on ca985fa, November 6, 2026) each "?" in
+    ' Submission Readiness and Record Journal Submission showed only its
+    ' hook, low in its circle, and at 125% it had lost its dot: the control
+    ' keeps 19 pixels in a window Windows Forms does not scale while its
+    ' 10-point text grows with the display, and TextRenderer, given a line
+    ' taller than the 16-pixel circle, draws the "?" from the circle's top
+    ' and cuts it at its foot. The simulated display reproduces this, where
+    ' it did not reproduce a check box's glyph at a real 125%
+    ' (JournalCandidateChecksAreAsTallAsTheLinesTheyDraw): nothing here is
+    ' drawn at a size Windows picks for the display's DPI. Windows Forms
+    ' does not scale these windows at a display either, so the control is
+    ' 19 pixels here as there; text grown to 15 points at 96 DPI is 20
+    ' pixels to the em, the font GDI makes for 10 points at 144 DPI, as 12.5
+    ' points at 96 is 10 at 120; and where TextRenderer puts the "?" and
+    ' where it cuts it follow from those pixels alone. In a window Windows
+    ' Forms scales, the control is scaled with its text here as at a
+    ' display. At each DPI each visible help icon of each window that has
+    ' one is drawn, and in the lower half of its circle the rows with ink
+    ' make two runs with a clear row between: the foot of the stem and the
+    ' dot. On ca985fa the icons of the three windows Windows Forms does not
+    ' scale made one run at 120 and 144 DPI.
+    <TestMethod>
+    Public Sub HelpIconsDrawTheirQuestionMarkWholeAt96To144Dpi()
+
+        Dim judged As New HashSet(Of String)(StringComparer.Ordinal)
+        Dim found As New List(Of String)()
+
+        Dim failures As List(Of String) =
+            AtEachDpi(
+                {
+                    ("ManuscriptReadinessForm", GetType(ManuscriptReadinessForm), Function() ViewCatalog.Dialogs(GetType(ManuscriptReadinessForm))(String.Empty)),
+                    ("AddSubmissionForm", GetType(AddSubmissionForm), Function() CType(New AddSubmissionForm(), Form)),
+                    ("ManuscriptRouteViewForm", GetType(ManuscriptRouteViewForm), Function() ViewCatalog.Dialogs(GetType(ManuscriptRouteViewForm))(String.Empty)),
+                    ("ManuscriptVersionEditForm", GetType(ManuscriptVersionEditForm), Function() ViewCatalog.Dialogs(GetType(ManuscriptVersionEditForm))(String.Empty)),
+                    ("JournalChecklistItemEditForm", GetType(JournalChecklistItemEditForm), Function() ViewCatalog.Dialogs(GetType(JournalChecklistItemEditForm))(String.Empty))
+                },
+                Sub(name, shown, dpi)
+
+                    For Each help As ContextHelpControl In ViewCatalog.Descendants(shown).OfType(Of ContextHelpControl)().Where(Function(item) item.Visible)
+
+                        Dim rows As String = LowerInkRows(help)
+                        Dim runs As Integer = rows.Split("."c, StringSplitOptions.RemoveEmptyEntries).Length
+
+                        judged.Add(name & ": " & help.AccessibleName)
+
+                        If runs < 2 Then
+                            found.Add($"{name} at {dpi} DPI: '{help.AccessibleName}', {help.Width}x{help.Height} in {help.Font.SizeInPoints}-point text, draws its '?' without its dot; the rows of its circle's lower half with ink: {rows}")
+                        End If
+
+                    Next
+
+                End Sub)
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+
+        For Each expected As String In {
+            "ManuscriptReadinessForm: Help: Add New Template Requirements",
+            "ManuscriptReadinessForm: Help: Not Applicable",
+            "AddSubmissionForm: Help: Journal manuscript ID",
+            "ManuscriptRouteViewForm: Help: Current state",
+            "ManuscriptRouteViewForm: Help: Current version"
+        }
+            Assert.IsTrue(judged.Contains(expected), "Judged " & expected & ": " & String.Join("; ", judged))
+        Next
+
+        Assert.IsTrue(
+            judged.Any(Function(item) item.StartsWith("ManuscriptVersionEditForm: ", StringComparison.Ordinal)) AndAlso
+            judged.Any(Function(item) item.StartsWith("JournalChecklistItemEditForm: ", StringComparison.Ordinal)),
+            "A help icon of each window Windows Forms scales was judged: " & String.Join("; ", judged))
+
+    End Sub
+
+
+    ' The rows of the lower half of a help icon's circle with ink 1.5
+    ' pixels or more inside the circle: "#" for a row with a pixel that
+    ' differs clearly from the icon's back color, as InkGaps reads ink, "."
+    ' for one without. The circle is the one the icon draws inscribed in its
+    ' box, 1.5 pixels in; its ring, 1.4 pixels wide on the circle, reaches
+    ' no pixel whose middle is 1.5 pixels inside it, and a focus rectangle
+    ' is on the box's edge, so the ink there is the "?"'s.
+    Private Shared Function LowerInkRows(help As ContextHelpControl) As String
+
+        Using picture As New Bitmap(help.Width, help.Height, PixelFormat.Format32bppArgb)
+
+            help.DrawToBitmap(picture, New Rectangle(Point.Empty, help.Size))
+
+            Dim back As Color = help.BackColor
+            Dim radius As Single = (Math.Min(help.Width, help.Height) - 3.0F) / 2.0F
+            Dim centre As Single = 1.5F + radius
+            Dim rows As New System.Text.StringBuilder()
+
+            For y As Integer = CInt(Math.Ceiling(centre)) To help.Height - 1
+
+                Dim inked As Boolean = False
+
+                For x As Integer = 0 To help.Width - 1
+
+                    Dim dx As Single = x + 0.5F - centre
+                    Dim dy As Single = y + 0.5F - centre
+                    Dim pixel As Color = picture.GetPixel(x, y)
+
+                    If Math.Sqrt(dx * dx + dy * dy) <= radius - 1.5F AndAlso
+                       Math.Abs(CInt(pixel.R) - back.R) + Math.Abs(CInt(pixel.G) - back.G) + Math.Abs(CInt(pixel.B) - back.B) > 96 Then
+                        inked = True
+                    End If
+
+                Next
+
+                rows.Append(If(inked, "#"c, "."c))
+
+            Next
+
+            Return rows.ToString()
+
+        End Using
+
+    End Function
+
+
+    ' ---------------------------------------------------------------
+    ' Delete Manuscript at 150% (v1.0's C3, #313)
+    ' ---------------------------------------------------------------
+
+    ' Delete Manuscript's warning names all that the deletion removes, whole,
+    ' at 96 to 144 DPI (v1.0's C3, #313). The window set its client size and
+    ' its rows in pixels and no 96-DPI base dimensions, so Windows Forms
+    ' never scaled it: at a real 150% display its warning kept the
+    ' 72-pixel row it has at 100% while its text grew to a 20-pixel font
+    ' that needs three lines there, and "'Active Study' will be removed
+    ' from PaperRoute, including its submission history, editorial
+    ' decisions,..." lost "notes, and file references." At 125% the three
+    ' lines just fit. The window is shown as the catalog builds it, with
+    ' C3's title, the display simulated as the sweep simulates it, and its
+    ' text drawn as the app draws it, with GDI; the warning has the height
+    ' its text needs at its width. At 96 DPI, where nothing is simulated, it
+    ' keeps its 466x72 box in a 520x300 window, so the window at 100% is as
+    ' it was. The sweep cannot see this cut: it does not judge a label two
+    ' lines tall.
+    '
+    ' The simulation shows what the real display showed because the cut is
+    ' two lengths in pixels, the warning's box and its wrapped text's
+    ' height, and both are the same here. The box: Windows Forms scales
+    ' nothing in a window without base dimensions, and this one keeps the
+    ' client size it set (the 150% evidence recorded 520x300 at 144 DPI);
+    ' the simulation scales only a window whose source asks for it. The
+    ' box's width is its column's, which the heading above it, sized to its
+    ' text, widens past the window's padding at 150%, in the simulation as
+    ' at the display. The text: 10 points at 144 DPI and the simulation's 15
+    ' points at the host's 96 are the same 20-pixel GDI font, with the same
+    ' widths, line height and word breaks, and 10 points at 120 and 12.5 at
+    ' 96 the same 17-pixel one. Nothing in it is drawn by Windows' theme at
+    ' the display's DPI, as the journal candidate's check box glyph was at a
+    ' real 120 that these simulated DPIs could not show, and nothing is
+    ' scaled by hand from DeviceDpi, which reads 96 here. On ca985fa this
+    ' failed at 144 DPI, where the text needed 84 pixels, three lines of 28,
+    ' and the warning was 72 pixels tall; at 120 it needed 69 of the 72.
+    <TestMethod>
+    Public Sub DeleteManuscriptsWarningIsWholeAt96To144Dpi()
+
+        Dim judged As New List(Of Integer)()
+        Dim found As New List(Of String)()
+
+        Dim failures As List(Of String) =
+            AtEachDpi(
+                {("DeleteManuscriptForm", GetType(DeleteManuscriptForm), Function() ViewCatalog.Dialogs(GetType(DeleteManuscriptForm))(String.Empty))},
+                Sub(name, shown, dpi)
+
+                    DrawTextAsTheAppDoes(shown)
+
+                    Dim warning As Label =
+                        ViewCatalog.Descendants(shown).OfType(Of Label)().Single(Function(item) item.Visible AndAlso item.Text.Contains(" will be removed from PaperRoute, ", StringComparison.Ordinal))
+
+                    Dim needs As Size = warning.GetPreferredSize(New Size(warning.Width, 0))
+                    Dim line As Integer = TextRenderer.MeasureText("Ag", warning.Font).Height
+
+                    judged.Add(dpi)
+
+                    If needs.Width > warning.Width OrElse needs.Height > warning.Height OrElse Not Holds(warning.Parent, warning) Then
+                        found.Add($"{name} at {dpi} DPI: the warning is {warning.Width}x{warning.Height}, room for {warning.Height \ line} lines of {line} pixels; its text needs {needs.Width}x{needs.Height}.")
+                    End If
+
+                    If dpi = 96 AndAlso (warning.Size <> New Size(466, 72) OrElse shown.ClientSize <> New Size(520, 300)) Then
+                        found.Add($"{name} at 96 DPI: the warning is {warning.Width}x{warning.Height} in a {shown.ClientSize.Width}x{shown.ClientSize.Height} window, not 466x72 in 520x300 as it was.")
+                    End If
+
+                End Sub)
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        CollectionAssert.AreEqual(Dpis, judged.ToArray(), "The warning was judged at each DPI.")
+
+    End Sub
+
+
+    ' ---------------------------------------------------------------
+    ' Add Author at 150% (v1.0's C3, #313)
+    ' ---------------------------------------------------------------
+
+    ' Add Author's Notes box is whole above its footer, and each field
+    ' label is on one line, at 96, 120 and 144 DPI (#313). Windows Forms
+    ' does not scale the window, so it kept 650x600 pixels and a 170-pixel
+    ' label column while its text grew: at a real 150% the bold "Display
+    ' override" wrapped, the rows above Notes grew with the text, and the
+    ' row left for Notes, 67 pixels, was shorter than the box's least
+    ' height of 110, so the box ran into the footer's row: in the app it
+    ' covered the tops of Cancel and Save, and in the catalog's picture,
+    ' which draws the footer over it, it lost its bottom frame and its
+    ' scroll bar's down arrow. The window is measured as the
+    ' scaling sweep measures it (ScalingMeasurementTests.Measure): its text
+    ' grown for the DPI and, since it keeps its outer size, the larger
+    ' frame taken from its client area, 628x544 at 144 DPI, the client area
+    ' display-evidence.json gives at the real 150% display, with the same
+    ' label bounds. Its text is drawn as a test host and the display
+    ' evidence tool draw it, with GDI+, and as the app draws it, with GDI.
+    ' The sweep's cells read "ok" either way: a box a sibling covers is
+    ' inside its parents' clip, and a wrapped label is not judged. At 96
+    ' and 120 DPI the label column keeps its 170 pixels, so the window at
+    ' 100% and 125% is as it was. On ca985fa this failed at 144 DPI only:
+    ' the box ran 43 pixels into the footer with GDI+ and 8 with GDI, and
+    ' Display override was 88x59 and 91x56 pixels where one line is 165x33
+    ' and 167x28.
+    <TestMethod>
+    Public Sub AddAuthorsNotesAreWholeAboveItsFooterAt96To144Dpi()
+
+        Dim judged As New List(Of String)()
+        Dim found As New List(Of String)()
+        Dim failures As New List(Of String)()
+        Dim scalesWithWinForms As Boolean = ScalingMeasurementTests.ScalingOf(GetType(AuthorEditForm)).ScalesWithWinForms
+
+        For Each dpi As Integer In Dpis
+
+            For Each asTheApp As Boolean In {False, True}
+
+                Dim at As Integer = dpi
+                Dim gdi As Boolean = asTheApp
+
+                failures.AddRange(
+                    ViewCatalog.ShowEach(
+                        {("AuthorEditForm", ViewCatalog.Dialogs(GetType(AuthorEditForm)))},
+                        Sub(name, shown)
+
+                            If gdi Then
+                                DrawTextAsTheAppDoes(shown)
+                            End If
+
+                            Dim line As String = $"{name} at {at} DPI drawn with {If(gdi, "GDI", "GDI+")}"
+
+                            For Each cell As (Screen As String, Dpi As Integer, Result As ScalingMeasurementTests.Cell) In ScalingMeasurementTests.Measure(shown, at, scalesWithWinForms)
+                                If Not cell.Result.Passes Then
+                                    found.Add($"{line} on {cell.Screen}: {cell.Result.Describe()}")
+                                End If
+                            Next
+
+                            Dim notes As TextBox = ViewCatalog.Descendants(shown).OfType(Of TextBox)().Single(Function(box) box.Multiline)
+                            Dim table As TableLayoutPanel = DirectCast(notes.Parent, TableLayoutPanel)
+                            Dim footer As Control = DirectCast(shown.AcceptButton, Control).Parent
+                            Dim inWindow As Rectangle = shown.RectangleToClient(table.RectangleToScreen(notes.Bounds))
+
+                            judged.Add(line)
+
+                            If notes.Bottom > footer.Top OrElse inWindow.Bottom > shown.ClientSize.Height Then
+                                found.Add($"{line}: Notes ends at y {notes.Bottom}, {notes.Bottom - footer.Top} pixels into its footer at y {footer.Top}, and at y {inWindow.Bottom} of a window {shown.ClientSize.Height} tall.")
+                            End If
+
+                            If notes.ClientSize.Height < 2 * notes.Font.Height Then
+                                found.Add($"{line}: Notes is {notes.ClientSize.Height} pixels inside, under two {notes.Font.Height}-pixel lines.")
+                            End If
+
+                            If at <= 120 AndAlso table.GetColumnWidths()(0) <> 170 Then
+                                found.Add($"{line}: the label column is {table.GetColumnWidths()(0)} pixels, not the 170 it was.")
+                            End If
+
+                            For Each label As Label In table.Controls.OfType(Of Label)().Where(Function(item) table.GetColumn(item) = 0)
+
+                                Dim oneLine As Size = label.GetPreferredSize(Size.Empty)
+
+                                If label.Height > oneLine.Height Then
+                                    found.Add($"{line}: '{label.Text}' is {label.Width}x{label.Height} where one line is {oneLine.Width}x{oneLine.Height}.")
+                                End If
+
+                            Next
+
+                        End Sub
+                    )
+                )
+
+            Next
+
+        Next
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        Assert.AreEqual(2 * Dpis.Length, judged.Count, "Add Author was judged at each DPI, drawn with GDI+ and with GDI: " & String.Join("; ", judged))
+
+    End Sub
+
+
+    ' ---------------------------------------------------------------
+    ' Lists that scroll sideways (v1.0, C3 at 150%)
+    ' ---------------------------------------------------------------
+
+    ' Every affiliation in the manuscript author window is whole or can be
+    ' scrolled to its end (v1.0's C3 at 150%, #313). Windows Forms does not
+    ' scale that window, so at a real 150% it kept its 720x560 and its list
+    ' about 477 pixels while its text grew by half, and "Department of
+    ' Psychology — Blue Mountain University" was cut at the list's right
+    ' frame, with no ellipsis and no horizontal scroll bar. At each DPI, as
+    ' the sweep simulates it, each affiliation, C3's two and one with an
+    ' "&", is drawn as the app draws it in a twin list three times as wide,
+    ' and its last column of ink is how wide its row needs to be: the list
+    ' is that wide, or it shows its horizontal scroll bar and scrolls at
+    ' least that far. Windows Forms' own extent reads "&" as a mnemonic and
+    ' stopped 8 to 10 pixels short of that row. The simulation reproduces
+    ' C3's cut because the window is not scaled (ScalingOf says "none"), so
+    ' the simulated list keeps the pixels the real one kept while its text
+    ' grows to the display's pixel size. What it cannot show is the check
+    ' box: it draws the 96-DPI box, 13 pixels, where a real 150% draws 20
+    ' that Windows Forms' extent does not count. The window measures the
+    ' box at its DPI, as Journal candidate does, and the hand check at a
+    ' real 150% is the check for that. On ca985fa C3's affiliation needed
+    ' 503 pixels at 144 DPI in a list 481 wide that did not scroll, and the
+    ' one with an "&" 572 at 120.
+    <TestMethod>
+    Public Sub ManuscriptAuthorAffiliationsAreWholeOrScrollToTheirEndAt96To144Dpi()
+
+        Dim judged As Integer = 0
+        Dim scrolled As New List(Of String)()
+        Dim found As New List(Of String)()
+
+        Dim failures As List(Of String) =
+            AtEachDpi(
+                {("ManuscriptAuthorForm", GetType(ManuscriptAuthorForm), Function() CType(New ManuscriptAuthorForm(AffiliationsToScroll(), Nothing, Array.Empty(Of Guid)()), Form))},
+                Sub(name, shown, dpi)
+
+                    Dim list As CheckedListBox =
+                        ViewCatalog.Descendants(shown).OfType(Of CheckedListBox)().Single(Function(candidate) candidate.AccessibleName = "Affiliations")
+
+                    Dim extent As Integer =
+                        CInt(SendMessage(list.Handle, LB_GETHORIZONTALEXTENT, IntPtr.Zero, IntPtr.Zero))
+
+                    Dim bar As Boolean =
+                        HasStyle(list, WS_HSCROLL)
+
+                    ' The app draws text with GDI; a test host starts with GDI+.
+                    Using twin As New CheckedListBox With {
+                        .Font = list.Font, .UseCompatibleTextRendering = False, .ForeColor = list.ForeColor, .BackColor = list.BackColor,
+                        .BorderStyle = BorderStyle.None, .IntegralHeight = False,
+                        .Size = New Size(3 * list.Width, (list.Items.Count + 1) * list.ItemHeight)
+                    }
+
+                        For Each row As Object In list.Items
+                            twin.Items.Add(row)
+                        Next
+
+                        shown.Controls.Add(twin)
+                        Application.DoEvents()
+
+                        For index As Integer = 0 To twin.Items.Count - 1
+
+                            Dim needs As Integer = LastInkColumn(twin, twin.GetItemRectangle(index)) + 1
+                            Dim line As String = $"{name} at {dpi} DPI: '{twin.GetItemText(twin.Items(index))}' needs {needs} pixels in a list {list.ClientSize.Width} wide"
+
+                            judged += 1
+
+                            If needs <= list.ClientSize.Width Then
+                                Continue For
+                            End If
+
+                            scrolled.Add(line)
+
+                            If Not bar OrElse extent < needs Then
+                                found.Add($"{line}, which scrolls sideways to {extent} (scroll bar shown: {bar}).")
+                            End If
+
+                        Next
+
+                        shown.Controls.Remove(twin)
+
+                    End Using
+
+                End Sub)
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        Assert.AreEqual(3 * Dpis.Length, judged, "Each affiliation was judged at each DPI.")
+        Assert.IsTrue(scrolled.Any(Function(entry) entry.StartsWith("ManuscriptAuthorForm at 144 DPI: 'Department of Psychology — Blue Mountain University'", StringComparison.Ordinal)), "The case is real: at 144 DPI C3's affiliation is wider than its list. " & String.Join("; ", scrolled))
+
+    End Sub
+
+
+    ' C3's researcher and the catalog's two affiliations, and one whose
+    ' name has an "&".
+    Private Shared Function AffiliationsToScroll() As AuthorLibraryData
+        Dim library As New AuthorLibraryData()
+        library.Affiliations.Add(New AffiliationRecord With {.Institution = "Blue Mountain University", .Department = "Department of Psychology"})
+        library.Affiliations.Add(New AffiliationRecord With {.Institution = "Cascade State University", .Department = "School of Nursing"})
+        library.Affiliations.Add(New AffiliationRecord With {.Institution = "Blue Mountain University", .Department = "Department of Psychology & Brain Sciences"})
+        library.Authors.Add(New AuthorRecord With {.GivenName = "Dana", .FamilyName = "Whitfield", .IsMe = True})
+        Return library
+    End Function
+
+
+    ' The last column of the control's picture with ink in the rows of the
+    ' given rectangle: a pixel that differs clearly from its back color, as
+    ' LastInkRow reads ink; -1 for none.
+    Private Shared Function LastInkColumn(control As Control, rows As Rectangle) As Integer
+
+        Using picture As New Bitmap(control.Width, control.Height, PixelFormat.Format32bppArgb)
+
+            control.DrawToBitmap(picture, New Rectangle(Point.Empty, control.Size))
+
+            Dim data As BitmapData = picture.LockBits(New Rectangle(Point.Empty, picture.Size), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb)
+            Dim stride As Integer = data.Stride \ 4
+            Dim pixels(stride * picture.Height - 1) As Integer
+            Marshal.Copy(data.Scan0, pixels, 0, pixels.Length)
+            picture.UnlockBits(data)
+
+            Dim back As Color = control.BackColor
+            Dim top As Integer = Math.Max(0, rows.Top)
+            Dim bottom As Integer = Math.Min(picture.Height, rows.Bottom)
+
+            For x As Integer = picture.Width - 1 To 0 Step -1
+                For y As Integer = top To bottom - 1
+                    Dim pixel As Color = Color.FromArgb(pixels(y * stride + x))
+                    If Math.Abs(CInt(pixel.R) - back.R) + Math.Abs(CInt(pixel.G) - back.G) + Math.Abs(CInt(pixel.B) - back.B) > 96 Then
+                        Return x
+                    End If
+                Next
+            Next
+
+            Return -1
+
+        End Using
+
+    End Function
+
+
+    ' ---------------------------------------------------------------
     ' Showing a view at each DPI
     ' ---------------------------------------------------------------
 
@@ -1776,6 +2390,12 @@ Public Class DialogPolishTests
 
     <DllImport("user32.dll")>
     Private Shared Function GetWindowRect(handle As IntPtr, ByRef bounds As NativeRect) As Boolean
+    End Function
+
+    Private Const LB_GETHORIZONTALEXTENT As Integer = &H193
+
+    <DllImport("user32.dll")>
+    Private Shared Function SendMessage(window As IntPtr, message As Integer, wParam As IntPtr, lParam As IntPtr) As IntPtr
     End Function
 
 End Class

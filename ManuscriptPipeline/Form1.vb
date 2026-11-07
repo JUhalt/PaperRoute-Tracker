@@ -1180,7 +1180,7 @@ Public Class Form1
             .BorderThickness = 1.0F,
             .CornerRadius = UiTheme.Px(UiTheme.ControlRadius, Me.DeviceDpi),
             .Margin = New Padding(0, 1, 10, 0),
-            .Padding = New Padding(iconSpace, inset, UiTheme.Px(10, Me.DeviceDpi), 0),
+            .Padding = New Padding(iconSpace, inset, UiTheme.Px(10, Me.DeviceDpi), 1),
             .Cursor = Cursors.IBeam
         }
 
@@ -1193,6 +1193,15 @@ Public Class Form1
                 box.PreferredHeight + inset * 2
             )
 
+        ' Not AutoSize (#313): left to size itself, a borderless box is one
+        ' font height tall, up to a pixel short of the line Windows draws its
+        ' text in, and Windows Forms draws the placeholder a pixel lower
+        ' still. At 150% every descender was cut two rows short ("staqe",
+        ' "taq"), typed text one, and at 100% the placeholder lost its last
+        ' row. Docked, the box fills the field below its inset down to the
+        ' frame's one pixel, which the padding's bottom leaves; its text
+        ' stays at its top.
+        box.AutoSize = False
         box.Dock = DockStyle.Fill
         field.Controls.Add(box)
 

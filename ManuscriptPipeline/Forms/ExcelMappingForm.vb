@@ -243,11 +243,18 @@ Namespace Forms
             gridMappings.BorderStyle = BorderStyle.None
             gridMappings.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells
 
+            ' Windows Forms does not scale a grid's columns with the window,
+            ' so their widths are scaled for the display here (DialogScaling):
+            ' at 150% the Spreadsheet and Map to columns kept 220 and 205
+            ' pixels while their text grew, and their headings wrapped and
+            ' their choices were cut (v1.0's C3, #313).
+            Dim dpi As Integer = DialogScaling.Dpi(gridMappings)
+
             Dim sourceColumn As New DataGridViewTextBoxColumn With {
                 .Name = "SourceColumn",
                 .HeaderText = "Spreadsheet column",
                 .ReadOnly = True,
-                .Width = 220,
+                .Width = UiTheme.Px(220, dpi),
                 .SortMode = DataGridViewColumnSortMode.NotSortable
             }
 
@@ -256,14 +263,14 @@ Namespace Forms
                 .HeaderText = "Example values",
                 .ReadOnly = True,
                 .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
-                .MinimumWidth = 260,
+                .MinimumWidth = UiTheme.Px(260, dpi),
                 .SortMode = DataGridViewColumnSortMode.NotSortable
             }
 
             Dim mappingColumn As New DataGridViewComboBoxColumn With {
                 .Name = "Mapping",
                 .HeaderText = "Map to PaperRoute",
-                .Width = 205,
+                .Width = UiTheme.Px(205, dpi),
                 .FlatStyle = FlatStyle.Flat,
                 .SortMode = DataGridViewColumnSortMode.NotSortable
             }
@@ -292,7 +299,9 @@ Namespace Forms
             gridMappings.ColumnHeadersDefaultCellStyle.BackColor = UiTheme.HeaderBackground()
             gridMappings.ColumnHeadersDefaultCellStyle.ForeColor = UiTheme.PrimaryText()
             gridMappings.ColumnHeadersDefaultCellStyle.Font = New Font(Me.Font, FontStyle.Bold)
-            gridMappings.ColumnHeadersHeight = 38
+            ' Its heading row, likewise: one line of its bold text needs 41
+            ' pixels at 150%. The rows size themselves to their text.
+            gridMappings.ColumnHeadersHeight = UiTheme.Px(38, DialogScaling.Dpi(gridMappings))
             gridMappings.RowTemplate.Height = 36
 
         End Sub

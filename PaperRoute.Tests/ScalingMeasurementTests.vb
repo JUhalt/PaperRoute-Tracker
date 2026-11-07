@@ -105,12 +105,14 @@ Public Class ScalingMeasurementTests
     ' top-level windows the first table showed cut or with a button
     ' outside the client area. Step 4: Edit Journal, scaled by hand until
     ' a real 150% capture showed it failing; then the Crossref window,
-    ' whose preview box a real 150% display left one line.
+    ' whose preview box a real 150% display left one line. v1.0's C3
+    ' (#313): Delete Manuscript, whose warning a real 150% display cut.
     Friend Shared ReadOnly Converted As Type() = {
         GetType(AboutForm), GetType(JournalCandidateForm), GetType(UpdateProgressForm), GetType(UpdatePromptForm),
         GetType(DeadlineDateForm), GetType(DiagnosticsForm), GetType(ExcelMappingForm), GetType(JournalChecklistItemEditForm),
         GetType(ManuscriptLinksForm), GetType(ManuscriptVersionEditForm), GetType(PublicationCheckForm), GetType(StartupFailureForm),
-        GetType(SubmissionPacketEditForm), GetType(UnexpectedErrorForm), GetType(JournalEditForm), GetType(CrossrefLookupForm)
+        GetType(SubmissionPacketEditForm), GetType(UnexpectedErrorForm), GetType(JournalEditForm), GetType(CrossrefLookupForm),
+        GetType(DeleteManuscriptForm)
     }
 
 
@@ -330,6 +332,100 @@ Public Class ScalingMeasurementTests
         )
 
         Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+
+    End Sub
+
+
+    ' The Excel mapping grid's headings and Map to choices are whole at 96
+    ' to 144 DPI (v1.0's C3 at 150%, #313). Windows Forms scales a window, not a
+    ' grid's column widths or its heading row, so at a real 150% the
+    ' Spreadsheet column kept 220 pixels, Map to 205 and the heading row
+    ' 38 while the text grew: the bold headings wrapped, the row showed
+    ' only "Spreadsheet" and "Map to", and the choices read "Ignore this
+    ' colu..." and "Submission jou...". The window is built as at each
+    ' display (AtDisplayDpi), not simulated (Simulate): the grid measures
+    ' and draws its text with GDI, which sizes each font at the display's
+    ' DPI, the bold font the grid's heading style holds among them, which
+    ' Simulate leaves at the host's size; its columns and heading row keep
+    ' the pixels the window gave them, as the 150% picture measures them;
+    ' and the window's own scaling from Dpi reads the display's DPI, which
+    ' under Simulate reads 96. A heading needs the width the grid asks for
+    ' it in its row's height, and the row the height the grid asks for at
+    ' the columns' widths; a Map to choice the width the grid asks for it,
+    ' with the drop-down button the display draws: the grid takes the
+    ' button's width from Windows' scroll bar thumb, 17 pixels on this
+    ' host at 96 DPI, 21 at a real 125% and 26 at a real 150%. On ca985fa
+    ' at 144 DPI the headings needed 222 and 214 pixels of 220 and 205,
+    ' their row 69 of 38, and Ignore this column 221 of 205. At 120
+    ' Publisher portal URL, which no catalog row shows, needed 206 of 205:
+    ' the grid asks a few pixels more than it paints with, and a real 125%
+    ' painted it whole in 203.
+    <TestMethod>
+    <DataRow(96)>
+    <DataRow(120)>
+    <DataRow(144)>
+    Public Sub TheExcelMappingGridsHeadingsAndChoicesAreWholeAt96To144Dpi(dpi As Integer)
+
+        Dim found As New List(Of String)()
+        Dim judged As Integer = 0
+
+        AtDisplayDpi(
+            dpi,
+            Sub()
+                found.AddRange(
+                    ViewCatalog.ShowEach(
+                        {(GetType(ExcelMappingForm).Name, ViewCatalog.Dialogs(GetType(ExcelMappingForm)))},
+                        Sub(name, shown)
+
+                            Dim grid As DataGridView = ViewCatalog.Descendants(shown).OfType(Of DataGridView)().Single()
+
+                            For Each column As DataGridViewColumn In grid.Columns
+
+                                Dim heading As Integer = column.GetPreferredWidth(DataGridViewAutoSizeColumnMode.ColumnHeader, fixedHeight:=True)
+
+                                judged += 1
+
+                                If heading > column.Width Then
+                                    found.Add($"{name} at {dpi} DPI: the heading '{column.HeaderText}' needs {heading} pixels; its column is {column.Width}.")
+                                End If
+
+                            Next
+
+                            Dim mapping As DataGridViewComboBoxColumn = grid.Columns.OfType(Of DataGridViewComboBoxColumn)().Single()
+                            Dim choiceCell As DataGridViewCell = grid.Rows(0).Cells(mapping.Index)
+                            Dim hostButton As Integer = SystemInformation.HorizontalScrollBarThumbWidth
+                            Dim displayButton As Integer = UiTheme.Px(hostButton, dpi)
+
+                            For Each choice As Object In mapping.Items
+
+                                choiceCell.Value = choice
+
+                                Dim needs As Integer = choiceCell.PreferredSize.Width - hostButton + displayButton
+
+                                judged += 1
+
+                                If needs > mapping.Width Then
+                                    found.Add($"{name} at {dpi} DPI: Map to '{choice}' needs {needs} pixels; its column is {mapping.Width}.")
+                                End If
+
+                            Next
+
+                            Dim given As Integer = grid.ColumnHeadersHeight
+
+                            grid.AutoResizeColumnHeadersHeight()
+
+                            If grid.ColumnHeadersHeight > given Then
+                                found.Add($"{name} at {dpi} DPI: the headings need a row {grid.ColumnHeadersHeight} pixels tall; it is {given}.")
+                            End If
+
+                        End Sub
+                    )
+                )
+            End Sub
+        )
+
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        Assert.AreEqual(3 + New FlexibleExcelImporter().GetFieldDisplayNames().Count, judged, "Each heading and each Map to choice was judged.")
 
     End Sub
 

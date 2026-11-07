@@ -84,10 +84,14 @@ Namespace Forms
                 .Padding = New Padding(20)
             }
 
+            ' As wide as its widest label, and never less than 170 pixels
+            ' (CreateLabel). Windows Forms does not scale this window, so
+            ' at 150% the bold Display override outgrew a fixed 170 and
+            ' wrapped onto a second line, as Add Manuscript's labels did
+            ' (#263, #313).
             root.ColumnStyles.Add(
                 New ColumnStyle(
-                    SizeType.Absolute,
-                    170
+                    SizeType.AutoSize
                 )
             )
 
@@ -126,10 +130,14 @@ Namespace Forms
             txtDisplay.Dock = DockStyle.Fill
             txtOrcid.Dock = DockStyle.Fill
 
+            ' The box takes the row the window leaves it. It kept a least
+            ' height of 110 pixels, which the row does not have at 150%,
+            ' where the window keeps its 650x600 pixels and the rows above
+            ' grow with the text: the box ran into the footer's row, over
+            ' the tops of Cancel and Save (#313).
             txtNotes.Dock = DockStyle.Fill
             txtNotes.Multiline = True
             txtNotes.ScrollBars = ScrollBars.Vertical
-            txtNotes.MinimumSize = New Size(0, 110)
 
             chkMe.Text = "This is me"
             chkMe.AutoSize = True
@@ -200,7 +208,9 @@ Namespace Forms
         ' At the top of its row, its text on the line of the field beside
         ' it, which sits there too, as the correspondence window's labels
         ' are (#258, #266): centred in the row, it sat about 3 pixels below
-        ' its box. Its row keeps the height it had.
+        ' its box. Its row keeps the height it had. Its least width, with
+        ' its margins, is the 170 pixels its column had, so the column
+        ' keeps them wherever every label fits (#313).
         Private Function CreateLabel(
             text As String
         ) As Label
@@ -210,7 +220,8 @@ Namespace Forms
                 .AutoSize = True,
                 .Anchor = AnchorStyles.Top Or AnchorStyles.Left,
                 .Font = New Font(Me.Font, FontStyle.Bold),
-                .Margin = New Padding(3, 6, 3, 12)
+                .Margin = New Padding(3, 6, 3, 12),
+                .MinimumSize = New Size(164, 0)
             }
 
         End Function
