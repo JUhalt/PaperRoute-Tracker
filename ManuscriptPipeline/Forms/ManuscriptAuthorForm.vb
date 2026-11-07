@@ -156,6 +156,17 @@ Namespace Forms
             lstAffiliations.CheckOnClick =
                 True
 
+            ' A row wider than the list scrolls sideways to its end, as in
+            ' the other lists: at 150% the window keeps its size while its
+            ' text grows, and an affiliation was cut at the list's right
+            ' edge with no way to read its end (v1.0's C3, #313).
+            lstAffiliations.HorizontalScrollbar =
+                True
+
+            ' Measured again when the text grows (FitAffiliationsExtent).
+            AddHandler lstAffiliations.FontChanged,
+                Sub(sender, e) FitAffiliationsExtent()
+
             ' Not the note WinForms finds before it (#137).
             lstAffiliations.AccessibleName =
                 "Affiliations"
@@ -337,6 +348,8 @@ Namespace Forms
 
             Next
 
+            FitAffiliationsExtent()
+
             If _source Is Nothing Then
 
                 If cboAuthor.Items.Count > 0 Then
@@ -399,6 +412,49 @@ Namespace Forms
 
             chkCorresponding.Checked =
                 _source.IsCorrespondingAuthor
+
+        End Sub
+
+
+        ' How far the affiliations scroll sideways: as wide as the list
+        ' draws its widest row, the check box and the gaps beside it at the
+        ' list's DPI and then the text with TextRenderer's padding (#313).
+        ' Windows Forms' own extent counts a 13-pixel check box until the
+        ' list has drawn one, 20 pixels at 150%, and measures "&" as a
+        ' mnemonic, so it stopped short of a row's end: a pixel short of
+        ' C3's affiliation at a real 150%, and 8 or more short of one with
+        ' an "&" at any DPI where it scrolls.
+        Private Sub FitAffiliationsExtent()
+
+            Dim dpi As Integer =
+                DialogScaling.Dpi(lstAffiliations)
+
+            Dim gap As Integer =
+                CInt(Math.Round(dpi / 96.0))
+
+            Dim glyph As Integer =
+                CInt(Math.Round(13 * dpi / 96.0))
+
+            Dim widest As Integer = 0
+
+            For Each item As Object In lstAffiliations.Items
+
+                widest =
+                    Math.Max(
+                        widest,
+                        TextRenderer.MeasureText(
+                            lstAffiliations.GetItemText(item),
+                            lstAffiliations.Font,
+                            New Size(Integer.MaxValue, Integer.MaxValue),
+                            TextFormatFlags.NoPrefix Or TextFormatFlags.ExpandTabs
+                        ).Width
+                    )
+
+            Next
+
+            ' Never 0, which hands the extent back to Windows Forms.
+            lstAffiliations.HorizontalExtent =
+                Math.Max(1, glyph + 2 * gap + widest)
 
         End Sub
 

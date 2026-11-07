@@ -26,6 +26,12 @@ Namespace Forms
 
         Private Sub BuildInterface()
 
+            ' Sizes below are at 96 DPI and scale with the display (#93). At a
+            ' real 150% display the window kept its 520x300 and its 72-pixel
+            ' warning row while its text grew, and the warning lost "notes,
+            ' and file references." to an ellipsis (v1.0's C3, #313).
+            DialogScaling.Begin(Me)
+
             Me.Text = "Delete Manuscript"
             Me.StartPosition = FormStartPosition.CenterParent
             Me.FormBorderStyle = FormBorderStyle.FixedDialog
@@ -33,7 +39,6 @@ Namespace Forms
             Me.MinimizeBox = False
             Me.ClientSize = New Size(520, 300)
             Me.Font = New Font("Segoe UI", 10.0F)
-            Me.AutoScaleMode = AutoScaleMode.Dpi
 
             Dim root As New TableLayoutPanel With {
                 .Dock = DockStyle.Fill,
@@ -109,6 +114,8 @@ Namespace Forms
             Me.CancelButton = btnCancel
 
             Me.Controls.Add(root)
+
+            DialogScaling.Finish(Me)
 
         End Sub
 

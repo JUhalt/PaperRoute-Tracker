@@ -15,6 +15,12 @@ Namespace Forms
 
         Private _clickHelpVisible As Boolean = False
 
+        ' The pixels to the em of a "?" its circle holds whole, for each
+        ' pixel of the circle's diameter: the 10-point text the control was
+        ' drawn for, 13 1/3 pixels to the em at 96 DPI, in its 16-pixel
+        ' circle.
+        Private Const GlyphEmPerDiameter As Single = 5.0F / 6.0F
+
 
         Public Sub New(
             helpText As String
@@ -126,16 +132,49 @@ Namespace Forms
                 e.Graphics.DrawEllipse(pen, bounds)
             End Using
 
-            TextRenderer.DrawText(
-                e.Graphics,
-                "?",
-                Me.Font,
-                Rectangle.Round(bounds),
-                UiTheme.SecondaryText(),
-                TextFormatFlags.HorizontalCenter Or
-                TextFormatFlags.VerticalCenter Or
-                TextFormatFlags.NoPadding
-            )
+            ' The "?" in the control's font, unless that is larger than the
+            ' circle holds whole (#313). Windows Forms scales the control
+            ' with a window it scales, circle and text together. A window it
+            ' does not scale, such as Submission Readiness, keeps the control
+            ' at 19 pixels while its text grows with the display: at 150%
+            ' the 10-point "?" was 20 pixels to the em, its line taller than
+            ' the 16-pixel circle, and TextRenderer, given a line taller than
+            ' its box, draws it from the box's top and cuts it at the box's
+            ' foot, so only the hook showed, and at 125% all but the dot.
+            ' There the "?" is drawn as at 96 DPI. GDI draws a font in whole
+            ' pixels to the em, so the two are compared in whole pixels: at
+            ' 96 DPI the 10-point "?" is the 13 the circle holds, and is
+            ' drawn in the control's font as before.
+            Dim holds As Single =
+                diameter * GlyphEmPerDiameter
+
+            Dim em As Single =
+                Me.Font.SizeInPoints * DialogScaling.Dpi(Me) / 72.0F
+
+            Using held As Font =
+                If(
+                    CInt(em) > CInt(holds),
+                    New Font(
+                        Me.Font.FontFamily,
+                        holds,
+                        Me.Font.Style,
+                        GraphicsUnit.Pixel
+                    ),
+                    Nothing
+                )
+
+                TextRenderer.DrawText(
+                    e.Graphics,
+                    "?",
+                    If(held, Me.Font),
+                    Rectangle.Round(bounds),
+                    UiTheme.SecondaryText(),
+                    TextFormatFlags.HorizontalCenter Or
+                    TextFormatFlags.VerticalCenter Or
+                    TextFormatFlags.NoPadding
+                )
+
+            End Using
 
             If Focused Then
                 ControlPaint.DrawFocusRectangle(
