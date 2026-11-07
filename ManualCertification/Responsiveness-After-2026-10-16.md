@@ -981,3 +981,83 @@ The rc's release commit moved twice after these runs. PR #320 (7f74b30) and PR #
 - **The enforced rows with the least room in run 2** were warm startup (1,251 of 1,500), the kept page's other manuscript (69 of 100) and Board to Import & Export (67 of 100).
 - **Motion on:** 20 of 22 switches faded in both runs, and none was a cut because the picture was not ready.
 - **The rows are slower than on November 4 morning's quiet host** (warm startup 876 and 715 there). This is the busier host: the code these rows time is the same as 674bf37's.
+
+## 2026-11-07: v1.0.0-rc.2's release commit, 5c95d5b (B3)
+
+C3 at 150% found six windows that cut text ([#313](https://github.com/JUhalt/PaperRoute-Tracker/issues/313), decision 24), and [PR #323](https://github.com/JUhalt/PaperRoute-Tracker/pull/323) fixes them for v1.0.0-rc.2. Only one of its changes is on a surface this test times. `CreateSearchField` now builds the Board's search field with a bottom padding of 1 and `AutoSize` off. Both are set once, when the field is built, and the field's paint handler is unchanged. The other changes are to `ContextHelpControl` and to four dialogs the test never opens. The test and its helpers are unchanged since 674bf37.
+
+B3 runs on the release commit, so it ran again. It ran once, on B1's fresh worktree of 5c95d5b, in Release, right after B1. The Release build ran first, unsampled. The tests then ran with `--no-build`, with the host sampled every 2 s. (rc.1's first run on ca985fa had failed warm startup while its own build loaded the host.)
+
+```
+dotnet build PaperRoute.Tests/PaperRoute.Tests.vbproj -c Release
+dotnet test PaperRoute.Tests/PaperRoute.Tests.vbproj -c Release --no-build --filter "FullyQualifiedName~ResponsivenessBudgetTests"
+```
+
+Both tests passed: `EveryActionIsMeasuredOnBothLibraries` and `PageSwitchesWithMotionOnGrowByNoMoreThanTheFade`.
+
+### Host during this run
+
+The run lasted from 01:37 to 01:40. The host was sampled 81 times:
+- CPU 14 to 79%, mean 42;
+- no test host other than this run's own;
+- no VM running (only VirtualBox's two services);
+- at least 18.2 GB of memory free;
+- the desktop locked, with no input for 4.5 hours. The lock screen was up in all 368 of B1's samples, which ended 30 s before the run, and it was still up at 03:22.
+
+### Numbers
+
+**Every enforced row held, with motion off and with motion on.** On the 500 library that is the first test's 37 rows and the 22 switches with motion on. The rows with the least room:
+- warm startup, 1,266 of 1,500;
+- Board to Import & Export, 57 of 100;
+- the first manuscript-page open, 50 of 100;
+- the kept page's other manuscript, 42 of 100.
+
+The table below shows the watch row and the reported rows for the Release build on the 500 library, beside rc.1's two sampled runs. Its figures are UI ms; wall times are in brackets where they differ.
+
+| Action | 5c95d5b | ca985fa run 2 | 674bf37 run 2 | Budget ms | Held |
+|---|---:|---:|---:|---:|---|
+| Warm startup to an interactive Board | 1,266 | 1,251 | 715 | 1500 | enforced |
+| Board: the rest of the shown shelf, shown in idle slices (the watch row) | 78 (5,070) | 94 (6,295) | 79 (3,014) | 250 | enforced |
+| Idle work from startup: its longest step, against the idle slice | 78 | 94 | 79 | 30 | reported, over |
+| Board: its paint after Library to Board | 500 | 158 | 31 | 250 | reported, over here |
+| Insights: its paint after the switch (second visit) | 3 | 409 | 2 | 250 | reported |
+| Manuscript page: its first paint | 445 | 23 | 16 | 250 | reported, over here |
+| Board: its paint once the manuscript page is left | 40 | 84 | 26 | 250 | reported |
+| Board to a manuscript page, the kept page (a Pipeline manuscript with three shortlisted journals and tags) | 67 | 75 | 36 | 100 | reported |
+| Backup | 47 (17,197) | 48 (20,834) | 47 (14,399) | 250 | reported |
+| Restore: replace the library (the window then restarts) | 47 (31,333) | 62 (37,031) | 47 (22,649) | 250 | reported |
+| Find Journals: click to first paint | 271 | 240 | 133 | 250 | reported, over here |
+| Find Journals: results rendered (fixture responses) | 200 | 186 | 103 | 250 | reported |
+| Look Up Journal Facts: click to first paint | 79 | 352 | 71 | 250 | reported |
+| Look Up Journal Facts: results rendered (fixture responses) | 119 | 88 | 92 | 250 | reported |
+| Close the window (the restore's hand-over): until `FormClosed`, the window still up | 14 | 14 | 16 | 250 | reported |
+| Close the window: its teardown after `FormClosed`, the window hidden first | 498 | 358 | 323 | 250 | reported, over |
+
+The other reported rows read 0 to 75 ms. They are the first paints of Published, Journals and Insights, Insights' figures, the dirty-timer tick and the paint after the edit.
+
+### What the run shows
+
+- **The watch row held**, at 78 ms of its 250.
+- **Motion on.**
+  - Every switch on the 500 library held 220 ms. The largest was Board to Import & Export, at 46.
+  - 20 of the 22 switches faded. The other 2 are the manuscript opens, which open as a cut. None was a cut because the picture was not ready.
+- **Two paint rows read about half a second.**
+  - The Board's paint after Library to Board read 500 ms and the manuscript page's first paint 445. The example library, timed first, read 504 and 423 on the same rows.
+  - This is the wait the 2026-10-18 profile found in this machine's painting ("Library to Board: where its spikes came from", above). At times the UI thread waited 420 to 545 ms inside Windows' own drawing, using 0 to 47 ms of CPU.
+  - Part C moved that wait out of the switches and into the paint after them. That is why these rows are reported, not enforced.
+  - **What the rows time.** They time `PumpPaints`, which dispatches the pending `WM_PAINT` messages with no time limit. Neither the test nor the app waits 400 to 600 ms on this path.
+  - **The wait moves between paint rows from run to run, on the same code.**
+    - On ca985fa, Insights' second-visit paint read 409 and 486 ms, and the paint after the edit 444. Here they read 3 and 1.
+    - The manuscript page's first paint read 23 to 30 ms on ca985fa and 445 here, although nothing on that page changed.
+  - **It falls on the same few rows each time:** the Board's paint after Library to Board and after the manuscript page, the manuscript page's first paint, Insights' second-visit paint, and the paint after the edit. On 2026-10-23 and 2026-10-25, before PR #323, those rows read 367 to 493 ms.
+  - **It shows most on a locked, idle desktop,** as in both runs on ca985fa and in this one. It is not limited to one: on 2026-10-23 it was timed on an unlocked desktop too, after 6 of 18 manuscript-page opens.
+  - **What Windows waits for is not known.** A per-row count of the dispatched paints, with the thread's CPU time, would tell a wait from a loop of paints. This run did not record them.
+  - **PR #323's one change on this path** is the Board search field's padding and `AutoSize`, set when the field is built. The 125% catalog draws that field exactly as rc.1's did, pixel for pixel.
+- **Find Journals' first paint read 271 ms, over its 250.**
+  - It is not a paint row. It builds the window, shows it, and processes its messages once.
+  - On the 500 library it read 133 and 144 on 674bf37 (unlocked), 211 and 240 on ca985fa (locked), and now 271, the highest of its five readings in B3.
+  - Its code has not changed since 674bf37. It stays reported.
+- **The close's teardown read 498 ms.**
+  - It is over its 250 in every run: 262, 323, 737, 358 and now 498. It is report-only, as PR #305 left it.
+  - [#147](https://github.com/JUhalt/PaperRoute-Tracker/issues/147)'s E10.1 measured 8.6 s here on v0.9.2. E10, on the maintainer's PC, measures the installed rc.
+- **The idle slice was over budget, report-only, as it has been since part C:** 78 against 30. On the example library it read 63. That library runs first and carries the process's first-time costs.
