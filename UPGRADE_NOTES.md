@@ -27,7 +27,7 @@ Use **Settings → Backup Library...** to create a portable backup. In v0.5 and 
 
 ## Moving from v0.9.2 to v1.0
 
-PaperRoute v1.0 — Trusted Research Workflow — is the release the project asks you to trust with your real publication pipeline, and adds no new workflow to v0.9.2. **v1.0.0-rc.1 is a Preview; v0.9.2 remains the current Stable release.** It uses the same **Schema 9** library as v0.9.0, v0.9.1 and v0.9.2 and migrates no data, and v0.9.2 can still open a library that v1.0 has used. Restore a backup made by v1.0 with v0.9.2 or later. The next library upgrade, Schema 10, is planned for v1.1.
+PaperRoute v1.0 — Trusted Research Workflow — is the release the project asks you to trust with your real publication pipeline, and adds no new workflow to v0.9.2. **v1.0.0-rc.2 is a Preview; v0.9.2 remains the current Stable release.** It uses the same **Schema 9** library as v0.9.0, v0.9.1 and v0.9.2 and migrates no data, and v0.9.2 can still open a library that v1.0 has used. Restore a backup made by v1.0 with v0.9.2 or later. The next library upgrade, Schema 10, is planned for v1.1.
 
 Updating from v0.9.2 asks about unsaved edits first. From v0.9.0 or v0.9.1, save any open manuscript page before you choose **Download & Restart**: those versions do not ask, so the edits would be lost. The sections below say what v0.9.1 and v0.9.2 changed. Setup is still not code-signed, so your browser and Windows may warn before a new install; the User Guide's **Installing** section explains the warnings. After an update from v0.9.2, the install folder holds two launchers, the new `PaperRoute Tracker.exe` and the old `PaperRouteTracker.exe`; both start v1.0, so a shortcut you made to the old one keeps working, and uninstalling removes both.
 
