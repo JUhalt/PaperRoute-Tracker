@@ -2417,27 +2417,32 @@ Public Class DialogPolishTests
     End Sub
 
 
-    ' Every checked list that scrolls sideways reaches the very end of its
-    ' widest row, at 96 to 144 DPI (#313, decision 26). Six lists besides
-    ' Fill Blanks and the affiliations showed a horizontal scroll bar but
-    ' left the extent to Windows Forms, which reads "&" as a mnemonic and
-    ' counts a 13-pixel check box: a row with an "&" stopped 8 or more
-    ' pixels short of its end at any DPI, and any long row a few pixels
-    ' short at a real 150%. Each list now measures its rows with
-    ' DialogScaling.FitCheckedListExtent when they are added and again when
-    ' its font changes. Here each window is shown as the catalog builds it,
-    ' each list is given one more row, an "&" in it and wider than the
-    ' list, and then a slightly larger font, as a window's text grows; each
-    ' row is drawn as the app draws it in a twin list, as the affiliations
-    ' are judged, and the list shows its scroll bar and scrolls at least as
-    ' far as its widest row needs. On 5c95d5b, Fill Blanks' list did not
-    ' scroll at all, and the lists of Bibliography export and import, ORCID
-    ' lookup and Publication & CV Export stopped 25 to 104 pixels short of
-    ' the added row. Publication Check's and the report's reached it here:
-    ' they fall short at a real 150% by the larger check box Windows draws
-    ' there, which this simulation does not draw (E4.7 checks it by hand).
+    ' Every list that scrolls sideways reaches the very end of its widest
+    ' row, at 96 to 144 DPI (#313, decisions 26 and 27). Twelve lists
+    ' besides Fill Blanks and the affiliations showed a horizontal scroll
+    ' bar but left the extent to Windows Forms, which reads "&" as a
+    ' mnemonic in every list and, in a checked list, counts a 13-pixel check
+    ' box: a row with an "&" stopped short of its end at any DPI, and in a
+    ' checked list any long row a few pixels short at a real 150%. Each
+    ' list now measures its rows with DialogScaling.FitListExtent when they
+    ' change and again when its font changes. Here each window is shown as
+    ' the catalog builds it, each list is given one more row, an "&" in it
+    ' and wider than the list, and then a slightly larger font, as a
+    ' window's text grows; each row is drawn as the app draws it in a twin
+    ' list of the same kind, as the affiliations are judged, and the list
+    ' shows its scroll bar and scrolls at least as far as its widest row
+    ' needs. On 5c95d5b, Fill Blanks' list did not scroll at all, and the
+    ' lists of Bibliography export and import, ORCID lookup and Publication
+    ' & CV Export stopped 25 to 104 pixels short of the added row.
+    ' Publication Check's and the report's reached it here: they fall short
+    ' at a real 150% by the larger check box Windows draws there, which this
+    ' simulation does not draw (E4.7 checks it by hand). On a6911c5, which
+    ' fitted the checked lists, Edit Manuscript's authors and versions and
+    ' Edit Journal's checklist stopped 4 to 141 pixels short of the added
+    ' row; Submission Readiness's list and the packet vault's two reached it
+    ' here, and are fitted the same way.
     <TestMethod>
-    Public Sub EveryScrollingCheckedListReachesTheEndOfItsWidestRowAt96To144Dpi()
+    Public Sub EveryListThatScrollsSidewaysReachesTheEndOfItsWidestRowAt96To144Dpi()
 
         Dim judged As New HashSet(Of String)(StringComparer.Ordinal)
         Dim found As New List(Of String)()
@@ -2446,7 +2451,8 @@ Public Class DialogPolishTests
             New Type() {
                 GetType(FillBlanksForm), GetType(ManuscriptAuthorForm), GetType(PublicationCheckForm),
                 GetType(BibliographyExportSelectionForm), GetType(BibliographyImportForm), GetType(OrcidLookupForm),
-                GetType(PublicationExportForm), GetType(ReportForm)
+                GetType(PublicationExportForm), GetType(ReportForm),
+                GetType(EditManuscriptForm), GetType(JournalEditForm), GetType(ManuscriptReadinessForm), GetType(SubmissionPacketVaultForm)
             }.Select(Function(view) (view.Name, view, CType(Function() ViewCatalog.Dialogs(view)(String.Empty), Func(Of Form)))).ToArray()
 
         Dim failures As List(Of String) =
@@ -2454,7 +2460,9 @@ Public Class DialogPolishTests
                 views,
                 Sub(name, shown, dpi)
 
-                    For Each list As CheckedListBox In ViewCatalog.Descendants(shown).OfType(Of CheckedListBox)().Where(Function(candidate) candidate.HorizontalScrollbar)
+                    Dim ordinal As Integer = 0
+
+                    For Each list As ListBox In ViewCatalog.Descendants(shown).OfType(Of ListBox)().Where(Function(candidate) candidate.HorizontalScrollbar).ToList()
 
                         ' One more row, with an "&", wider than the list.
                         Dim row As String = "Department of Psychology & Brain Sciences"
@@ -2473,12 +2481,16 @@ Public Class DialogPolishTests
                         Dim bar As Boolean =
                             HasStyle(list, WS_HSCROLL)
 
-                        ' The app draws text with GDI; a test host starts with GDI+.
-                        Using twin As New CheckedListBox With {
-                            .Font = list.Font, .UseCompatibleTextRendering = False, .ForeColor = list.ForeColor, .BackColor = list.BackColor,
-                            .BorderStyle = BorderStyle.None, .IntegralHeight = False,
-                            .Size = New Size(3 * Math.Max(list.Width, TextRenderer.MeasureText(row, list.Font).Width), (list.Items.Count + 1) * list.ItemHeight)
-                        }
+                        ' A twin of the same kind. The app draws text with GDI;
+                        ' a test host starts a checked list with GDI+.
+                        Using twin As ListBox = If(TypeOf list Is CheckedListBox, New CheckedListBox With {.UseCompatibleTextRendering = False}, New ListBox())
+
+                            twin.Font = list.Font
+                            twin.ForeColor = list.ForeColor
+                            twin.BackColor = list.BackColor
+                            twin.BorderStyle = BorderStyle.None
+                            twin.IntegralHeight = False
+                            twin.Size = New Size(3 * Math.Max(list.Width, TextRenderer.MeasureText(row, list.Font).Width), (list.Items.Count + 1) * list.ItemHeight)
 
                             For Each item As Object In list.Items
                                 twin.Items.Add(list.GetItemText(item))
@@ -2494,10 +2506,12 @@ Public Class DialogPolishTests
 
                             shown.Controls.Remove(twin)
 
-                            judged.Add($"{name}: {list.AccessibleName}")
+                            ordinal += 1
+                            Dim what As String = $"{name} list {ordinal} ({list.GetType().Name}, '{list.AccessibleName}')"
+                            judged.Add(what)
 
                             If Not bar OrElse extent < widest Then
-                                found.Add($"{name} at {dpi} DPI: '{list.AccessibleName}' needs {widest} pixels for its widest row in a list {list.ClientSize.Width} wide, and scrolls sideways to {extent} (scroll bar shown: {bar}).")
+                                found.Add($"{what} at {dpi} DPI needs {widest} pixels for its widest row in a list {list.ClientSize.Width} wide, and scrolls sideways to {extent} (scroll bar shown: {bar}).")
                             End If
 
                         End Using
@@ -2508,7 +2522,11 @@ Public Class DialogPolishTests
 
         Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
         Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
-        Assert.AreEqual(views.Length, judged.Count, "One scrolling checked list in each window was judged: " & String.Join("; ", judged))
+        ' Eight checked lists, one in each of their windows, and six plain
+        ' ones: Edit Manuscript's authors and versions, Edit Journal's
+        ' checklist, Submission Readiness's requirements, and the packet
+        ' vault's packets and files.
+        Assert.AreEqual(14, judged.Count, "Every list that scrolls sideways was judged: " & String.Join("; ", judged))
 
     End Sub
 

@@ -112,8 +112,8 @@ Namespace Forms
             ' edge, "10.5555/demo.grit" reading "10.555", with no ellipsis and
             ' no scroll bar (rc.2's C3, #313). Measured again when the text
             ' grows.
-            DialogScaling.FitCheckedListExtent(lstManuscripts)
-            AddHandler lstManuscripts.FontChanged, Sub(sender, e) DialogScaling.FitCheckedListExtent(lstManuscripts)
+            DialogScaling.FitListExtent(lstManuscripts)
+            AddHandler lstManuscripts.FontChanged, Sub(sender, e) DialogScaling.FitListExtent(lstManuscripts)
             AddHandler lstManuscripts.ItemCheck, Sub(sender, e) If IsHandleCreated Then BeginInvoke(New Action(AddressOf UpdateButtons))
             body.Controls.Add(lstManuscripts)
 

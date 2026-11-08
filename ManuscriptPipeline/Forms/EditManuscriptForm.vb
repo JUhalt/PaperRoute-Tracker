@@ -1436,6 +1436,8 @@ Namespace Forms
             lstAuthors.Dock = DockStyle.Fill
             lstAuthors.IntegralHeight = False
             lstAuthors.HorizontalScrollbar = True
+            ' Measured again when the text grows (#313).
+            AddHandler lstAuthors.FontChanged, Sub(sender, e) DialogScaling.FitListExtent(lstAuthors)
             lstAuthors.MinimumSize = New Size(0, 105)
             lstAuthors.Margin = New Padding(0)
 
@@ -2600,6 +2602,9 @@ Namespace Forms
                 )
 
             Next
+
+            ' Scrolls sideways to the very end of its widest row (#313).
+            DialogScaling.FitListExtent(lstAuthors)
 
             If _workingManuscript.Authors.Count = 0 Then
 

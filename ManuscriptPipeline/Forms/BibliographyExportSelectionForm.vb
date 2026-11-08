@@ -123,7 +123,7 @@ Namespace Forms
             lstManuscripts.HorizontalScrollbar = True
             ' Measured again when the text grows (Populate, #313).
             AddHandler lstManuscripts.FontChanged,
-                Sub(sender, e) DialogScaling.FitCheckedListExtent(lstManuscripts)
+                Sub(sender, e) DialogScaling.FitListExtent(lstManuscripts)
             ' No label precedes the list (#137).
             lstManuscripts.AccessibleName = "Manuscripts to export"
 
@@ -182,7 +182,7 @@ Namespace Forms
             Next
 
             ' Scrolls sideways to the very end of its widest row (#313).
-            DialogScaling.FitCheckedListExtent(lstManuscripts)
+            DialogScaling.FitListExtent(lstManuscripts)
         End Sub
 
         Private Sub ConfirmExport(

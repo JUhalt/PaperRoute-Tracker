@@ -417,10 +417,10 @@ Namespace Forms
 
 
         ' How far the affiliations scroll sideways: to the end of the widest
-        ' row as the list draws it (DialogScaling.FitCheckedListExtent, #313).
+        ' row as the list draws it (DialogScaling.FitListExtent, #313).
         Private Sub FitAffiliationsExtent()
 
-            DialogScaling.FitCheckedListExtent(lstAffiliations)
+            DialogScaling.FitListExtent(lstAffiliations)
 
         End Sub
 

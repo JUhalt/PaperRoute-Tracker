@@ -241,6 +241,8 @@ Namespace Forms
             lstItems.Margin = New Padding(0, 3, 0, 3)
             lstItems.IntegralHeight = False
             lstItems.HorizontalScrollbar = True
+            ' Measured again when the text grows (#313).
+            AddHandler lstItems.FontChanged, Sub(sender, e) DialogScaling.FitListExtent(lstItems)
             ' Not the summary WinForms finds before it (#137).
             lstItems.AccessibleName = "Readiness requirements"
 
@@ -573,6 +575,8 @@ Namespace Forms
 
             _displayedItems.Clear()
             lstItems.Items.Clear()
+            ' The old rows' reach goes with them, even when none follow (#313).
+            DialogScaling.FitListExtent(lstItems)
 
             Dim profile As ManuscriptReadiness =
                 GetSelectedProfile()
@@ -621,6 +625,9 @@ Namespace Forms
                 )
 
             Next
+
+            ' Scrolls sideways to the very end of its widest row (#313).
+            DialogScaling.FitListExtent(lstItems)
 
             Dim summary As ReadinessSummary =
                 SubmissionReadinessService.GetSummary(

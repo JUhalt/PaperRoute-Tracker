@@ -367,7 +367,7 @@ Namespace Forms
 
             ' Measured again when the text grows (#313).
             AddHandler lstItems.FontChanged,
-                Sub(sender, e) DialogScaling.FitCheckedListExtent(lstItems)
+                Sub(sender, e) DialogScaling.FitListExtent(lstItems)
 
             ' Neither the list nor the preview has a label (#137).
             lstItems.AccessibleName =
@@ -524,7 +524,7 @@ Namespace Forms
             End Try
 
             ' Scrolls sideways to the very end of its widest row (#313).
-            DialogScaling.FitCheckedListExtent(lstItems)
+            DialogScaling.FitListExtent(lstItems)
 
             RefreshPreview()
 
