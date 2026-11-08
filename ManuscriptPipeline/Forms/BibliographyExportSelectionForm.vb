@@ -121,6 +121,9 @@ Namespace Forms
             lstManuscripts.Dock = DockStyle.Fill
             lstManuscripts.CheckOnClick = True
             lstManuscripts.HorizontalScrollbar = True
+            ' Measured again when the text grows (Populate, #313).
+            AddHandler lstManuscripts.FontChanged,
+                Sub(sender, e) DialogScaling.FitCheckedListExtent(lstManuscripts)
             ' No label precedes the list (#137).
             lstManuscripts.AccessibleName = "Manuscripts to export"
 
@@ -177,6 +180,9 @@ Namespace Forms
 
                 lstManuscripts.SetItemChecked(index, True)
             Next
+
+            ' Scrolls sideways to the very end of its widest row (#313).
+            DialogScaling.FitCheckedListExtent(lstManuscripts)
         End Sub
 
         Private Sub ConfirmExport(

@@ -75,6 +75,9 @@ Namespace Forms
                     Dim index As Integer = lstManuscripts.Items.Add(ReminderService.SafeManuscriptTitle(manuscript))
                     lstManuscripts.SetItemChecked(index, manuscript.Location = ManuscriptLocation.Pipeline)
                 Next
+                ' Scrolls sideways to the very end of its widest row (#313).
+                DialogScaling.FitCheckedListExtent(lstManuscripts)
+                AddHandler lstManuscripts.FontChanged, Sub(sender, e) DialogScaling.FitCheckedListExtent(lstManuscripts)
                 AddHandler lstManuscripts.ItemCheck, Sub(sender, e) SchedulePreview()
                 side.Controls.Add(lstManuscripts, 0, 1)
 

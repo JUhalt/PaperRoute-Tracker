@@ -108,6 +108,9 @@ Namespace Forms
             lstRecords.Dock = DockStyle.Fill
             lstRecords.CheckOnClick = True
             lstRecords.HorizontalScrollbar = True
+            ' Measured again when the text grows (PopulateRecords, #313).
+            AddHandler lstRecords.FontChanged,
+                Sub(sender, e) DialogScaling.FitCheckedListExtent(lstRecords)
             ' Neither the list nor its details have a label (#137).
             lstRecords.AccessibleName = "Records to import"
 
@@ -226,6 +229,9 @@ Namespace Forms
                     String.IsNullOrWhiteSpace(duplicateReason)
                 )
             Next
+
+            ' Scrolls sideways to the very end of its widest row (#313).
+            DialogScaling.FitCheckedListExtent(lstRecords)
 
             If lstRecords.Items.Count > 0 Then
                 lstRecords.SelectedIndex = 0

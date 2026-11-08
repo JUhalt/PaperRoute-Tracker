@@ -47,6 +47,15 @@ Namespace Forms
                 .Padding = New Padding(24)
             }
 
+            ' The one column is the width inside the padding. Left to size
+            ' itself, it took the heading's width, and the heading's 13-point
+            ' bold text is measured at the display's DPI before the window
+            ' scales: at a real 150% the column ran 19 pixels past the padding
+            ' and the scaling made that 28, so the box and the buttons stood 12
+            ' and 16 pixels from the right edge and 40 from the left (rc.2's
+            ' C3, #313).
+            root.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
+
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 48))
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 72))
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 34))

@@ -365,6 +365,10 @@ Namespace Forms
             lstItems.HorizontalScrollbar =
                 True
 
+            ' Measured again when the text grows (#313).
+            AddHandler lstItems.FontChanged,
+                Sub(sender, e) DialogScaling.FitCheckedListExtent(lstItems)
+
             ' Neither the list nor the preview has a label (#137).
             lstItems.AccessibleName =
                 "Manuscripts to export"
@@ -518,6 +522,9 @@ Namespace Forms
                 lstItems.EndUpdate()
 
             End Try
+
+            ' Scrolls sideways to the very end of its widest row (#313).
+            DialogScaling.FitCheckedListExtent(lstItems)
 
             RefreshPreview()
 

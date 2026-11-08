@@ -22,7 +22,8 @@ Imports ManuscriptPipeline.Services
 ' which Simulate cannot do faithfully for a window scaled by hand; it
 ' failed on 88a191e. The tests marked #313, from v1.0's C3 at a real 150%,
 ' failed on ca985fa, the first release candidate; the main window's search
-' fields are among them.
+' fields are among them. The two from rc.2's C3, Fill Blanks' rows and
+' Delete Manuscript's margins, failed on 5c95d5b, the second.
 <TestClass>
 <DoNotParallelize>
 Public Class DialogPolishTests
@@ -1959,13 +1960,15 @@ Public Class DialogPolishTests
     '
     ' The simulation shows what the real display showed because the cut is
     ' two lengths in pixels, the warning's box and its wrapped text's
-    ' height, and both are the same here. The box: Windows Forms scales
-    ' nothing in a window without base dimensions, and this one keeps the
-    ' client size it set (the 150% evidence recorded 520x300 at 144 DPI);
-    ' the simulation scales only a window whose source asks for it. The
-    ' box's width is its column's, which the heading above it, sized to its
-    ' text, widens past the window's padding at 150%, in the simulation as
-    ' at the display. The text: 10 points at 144 DPI and the simulation's 15
+    ' height, and both are the same here. The box: on ca985fa Windows Forms
+    ' scaled nothing in the window, which had no base dimensions and kept
+    ' the client size it set (the 150% evidence recorded 520x300 at 144
+    ' DPI), and the simulation scales only a window whose source asks for
+    ' it. The box's width was its column's, which the heading above it,
+    ' sized to its text, widened past the window's padding at 150%, in the
+    ' simulation as at the display; since rc.3 the column is the width
+    ' inside the padding (DeleteManuscriptKeepsEvenMarginsAt96To144Dpi).
+    ' The text: 10 points at 144 DPI and the simulation's 15
     ' points at the host's 96 are the same 20-pixel GDI font, with the same
     ' widths, line height and word breaks, and 10 points at 120 and 12.5 at
     ' 96 the same 17-pixel one. Nothing in it is drawn by Windows' theme at
@@ -2218,6 +2221,296 @@ Public Class DialogPolishTests
         library.Authors.Add(New AuthorRecord With {.GivenName = "Dana", .FamilyName = "Whitfield", .IsMe = True})
         Return library
     End Function
+
+
+    ' Every row of Fill Blanks from Crossref, its DOI too, is whole or can be
+    ' scrolled to its end (rc.2's C3 at 150%, #313). Windows Forms does not
+    ' scale that window either, so at a real 150% it kept its 760x540 and
+    ' its list about 720 pixels while its text grew by half, and "DEMO
+    ' Measurement invariance of a short grit scale across four countries
+    ' · DOI 10.5555/demo.grit" was cut at the list's right frame after
+    ' "10.555", with no ellipsis and no scroll bar, so it read as a whole
+    ' DOI. rc.1's review graded it minor; rc.2's found it the same cut as
+    ' the affiliations above. Each row, C3's, a wider one with an "&" and a
+    ' short one, is judged as the affiliations are: drawn as the app draws
+    ' it in a twin list three times as wide, its last column of ink is how
+    ' wide its row needs to be, and the list is that wide or shows its
+    ' horizontal scroll bar and scrolls at least that far. The "&" row is
+    ' the widest, so the extent is its: Windows Forms' own extent reads "&"
+    ' as a mnemonic and stops short of it. As with the affiliations, the
+    ' simulation draws the 96-DPI check box, 13 pixels, where a real 150%
+    ' draws 20; the shared measurement counts the box at the list's DPI,
+    ' and the hand check at a real 150% is the check for that. On 5c95d5b,
+    ' the second release candidate, C3's row needed 806 pixels at 144 DPI
+    ' in a list 722 wide that did not scroll.
+    <TestMethod>
+    Public Sub FillBlanksRowsAreWholeOrScrollToTheirEndAt96To144Dpi()
+
+        Dim judged As Integer = 0
+        Dim scrolled As New List(Of String)()
+        Dim found As New List(Of String)()
+
+        Dim failures As List(Of String) =
+            AtEachDpi(
+                {("FillBlanksForm", GetType(FillBlanksForm), Function() CType(New FillBlanksForm(ManuscriptsToScroll(), New NothingToLookUp(), Function() True), Form))},
+                Sub(name, shown, dpi)
+
+                    Dim list As CheckedListBox =
+                        ViewCatalog.Descendants(shown).OfType(Of CheckedListBox)().Single(Function(candidate) candidate.AccessibleName = "Manuscripts with a DOI")
+
+                    Dim extent As Integer =
+                        CInt(SendMessage(list.Handle, LB_GETHORIZONTALEXTENT, IntPtr.Zero, IntPtr.Zero))
+
+                    Dim bar As Boolean =
+                        HasStyle(list, WS_HSCROLL)
+
+                    ' The app draws text with GDI; a test host starts with GDI+.
+                    Using twin As New CheckedListBox With {
+                        .Font = list.Font, .UseCompatibleTextRendering = False, .ForeColor = list.ForeColor, .BackColor = list.BackColor,
+                        .BorderStyle = BorderStyle.None, .IntegralHeight = False,
+                        .Size = New Size(3 * list.Width, (list.Items.Count + 1) * list.ItemHeight)
+                    }
+
+                        For Each row As Object In list.Items
+                            twin.Items.Add(row)
+                        Next
+
+                        shown.Controls.Add(twin)
+                        Application.DoEvents()
+
+                        For index As Integer = 0 To twin.Items.Count - 1
+
+                            Dim needs As Integer = LastInkColumn(twin, twin.GetItemRectangle(index)) + 1
+                            Dim line As String = $"{name} at {dpi} DPI: '{twin.GetItemText(twin.Items(index))}' needs {needs} pixels in a list {list.ClientSize.Width} wide"
+
+                            judged += 1
+
+                            If needs <= list.ClientSize.Width Then
+                                Continue For
+                            End If
+
+                            scrolled.Add(line)
+
+                            If Not bar OrElse extent < needs Then
+                                found.Add($"{line}, which scrolls sideways to {extent} (scroll bar shown: {bar}).")
+                            End If
+
+                        Next
+
+                        shown.Controls.Remove(twin)
+
+                    End Using
+
+                End Sub)
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        Assert.AreEqual(3 * Dpis.Length, judged, "Each row was judged at each DPI.")
+        Assert.IsTrue(scrolled.Any(Function(entry) entry.StartsWith("FillBlanksForm at 144 DPI: 'DEMO Measurement invariance of a short grit scale across four countries", StringComparison.Ordinal)), "The case is real: at 144 DPI C3's row is wider than its list. " & String.Join("; ", scrolled))
+        Assert.IsTrue(scrolled.Any(Function(entry) entry.StartsWith("FillBlanksForm at 144 DPI: 'Attention & memory", StringComparison.Ordinal)), "The case is real: at 144 DPI the row with an ""&"" is wider than its list. " & String.Join("; ", scrolled))
+
+    End Sub
+
+
+    ' C3's manuscript, whose DOI was cut, a wider one whose title has an
+    ' "&", and a short one.
+    Private Shared Function ManuscriptsToScroll() As List(Of Manuscript)
+        Dim library As New List(Of Manuscript)()
+        For Each row In {
+            ("DEMO Measurement invariance of a short grit scale across four countries", "10.5555/demo.grit"),
+            ("Attention & memory in bilingual readers across four countries: a registered report", "10.5555/demo.attention"),
+            ("A short title", "10.5555/demo.short")
+        }
+            Dim manuscript As New Manuscript With {.Title = row.Item1}
+            manuscript.Metadata.Doi = row.Item2
+            library.Add(manuscript)
+        Next
+        Return library
+    End Function
+
+
+    ' A Crossref that is never asked: these tests only build the window.
+    Private NotInheritable Class NothingToLookUp
+        Implements IPublicationSource
+
+        Public Function LookupDoiAsync(doi As String, cancellationToken As Threading.CancellationToken) As Threading.Tasks.Task(Of CrossrefMetadataSuggestion) Implements IPublicationSource.LookupDoiAsync
+            Return Threading.Tasks.Task.FromResult(Of CrossrefMetadataSuggestion)(Nothing)
+        End Function
+
+        Public Function SearchTitleAsync(title As String, cancellationToken As Threading.CancellationToken) As Threading.Tasks.Task(Of List(Of CrossrefMetadataSuggestion)) Implements IPublicationSource.SearchTitleAsync
+            Return Threading.Tasks.Task.FromResult(New List(Of CrossrefMetadataSuggestion)())
+        End Function
+
+        Public Function OrcidWorksAsync(orcid As String, cancellationToken As Threading.CancellationToken) As Threading.Tasks.Task(Of List(Of OrcidWorkSuggestion)) Implements IPublicationSource.OrcidWorksAsync
+            Return Threading.Tasks.Task.FromResult(New List(Of OrcidWorkSuggestion)())
+        End Function
+
+    End Class
+
+
+    ' Delete Manuscript keeps the same margin on its right as on its left, at
+    ' 96 to 144 DPI (rc.2's C3, #313). rc.2 put the window under
+    ' DialogScaling, and at a real 150% its warning was whole, but its one
+    ' column, left to size itself, took the width of its heading, whose
+    ' 13-point bold text is measured at the display's DPI before the window
+    ' scales: the column ran past the padding, and the scaling made that 28
+    ' pixels, so the confirmation box and the buttons stood 12 and 16 pixels
+    ' from the right edge and 40 from the left. At 125% the heading fit and
+    ' the margins were even. At each DPI the column is no wider than the
+    ' window inside its padding, and the confirmation box is as far from the
+    ' right edge as from the left. On 5c95d5b the column was wider than that
+    ' at 144 DPI.
+    <TestMethod>
+    Public Sub DeleteManuscriptKeepsEvenMarginsAt96To144Dpi()
+
+        Dim judged As New List(Of Integer)()
+        Dim found As New List(Of String)()
+        Dim headingOverPadding As Boolean = False
+
+        Dim failures As List(Of String) =
+            AtEachDpi(
+                {("DeleteManuscriptForm", GetType(DeleteManuscriptForm), Function() ViewCatalog.Dialogs(GetType(DeleteManuscriptForm))(String.Empty))},
+                Sub(name, shown, dpi)
+
+                    Dim root As TableLayoutPanel =
+                        shown.Controls.OfType(Of TableLayoutPanel)().Single()
+
+                    Dim confirm As TextBox =
+                        ViewCatalog.Descendants(root).OfType(Of TextBox)().Single()
+
+                    Dim inside As Integer =
+                        root.ClientSize.Width - root.Padding.Horizontal
+
+                    Dim column As Integer =
+                        root.GetColumnWidths()(0)
+
+                    Dim left As Integer = confirm.Left
+                    Dim right As Integer = root.ClientSize.Width - confirm.Right
+
+                    ' The case is real at 144: the heading, measured at the
+                    ' display's size, is wider than the window inside its
+                    ' padding before it scales, so a column left to size
+                    ' itself would run past the padding.
+                    If dpi = 144 Then
+                        Dim heading As Label = root.Controls.OfType(Of Label)().First(Function(item) item.Text.StartsWith("Permanently remove", StringComparison.Ordinal))
+                        Dim unscaled As Integer = CInt(Math.Floor(inside * 96.0 / dpi))
+                        headingOverPadding = heading.PreferredWidth + heading.Margin.Horizontal > unscaled
+                    End If
+
+                    judged.Add(dpi)
+
+                    If column > inside Then
+                        found.Add($"{name} at {dpi} DPI: its column is {column} pixels wide, {column - inside} past the {inside} inside its padding.")
+                    End If
+
+                    If Math.Abs(left - right) > 1 Then
+                        found.Add($"{name} at {dpi} DPI: the confirmation box stands {left} pixels from the left edge and {right} from the right.")
+                    End If
+
+                End Sub)
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        CollectionAssert.AreEqual(Dpis, judged.ToArray(), "The margins were judged at each DPI.")
+        Assert.IsTrue(headingOverPadding, "The case is real: at 144 DPI the heading is wider than the window inside its padding before it scales.")
+
+    End Sub
+
+
+    ' Every checked list that scrolls sideways reaches the very end of its
+    ' widest row, at 96 to 144 DPI (#313, decision 26). Six lists besides
+    ' Fill Blanks and the affiliations showed a horizontal scroll bar but
+    ' left the extent to Windows Forms, which reads "&" as a mnemonic and
+    ' counts a 13-pixel check box: a row with an "&" stopped 8 or more
+    ' pixels short of its end at any DPI, and any long row a few pixels
+    ' short at a real 150%. Each list now measures its rows with
+    ' DialogScaling.FitCheckedListExtent when they are added and again when
+    ' its font changes. Here each window is shown as the catalog builds it,
+    ' each list is given one more row, an "&" in it and wider than the
+    ' list, and then a slightly larger font, as a window's text grows; each
+    ' row is drawn as the app draws it in a twin list, as the affiliations
+    ' are judged, and the list shows its scroll bar and scrolls at least as
+    ' far as its widest row needs. On 5c95d5b, Fill Blanks' list did not
+    ' scroll at all, and the lists of Bibliography export and import, ORCID
+    ' lookup and Publication & CV Export stopped 25 to 104 pixels short of
+    ' the added row. Publication Check's and the report's reached it here:
+    ' they fall short at a real 150% by the larger check box Windows draws
+    ' there, which this simulation does not draw (E4.7 checks it by hand).
+    <TestMethod>
+    Public Sub EveryScrollingCheckedListReachesTheEndOfItsWidestRowAt96To144Dpi()
+
+        Dim judged As New HashSet(Of String)(StringComparer.Ordinal)
+        Dim found As New List(Of String)()
+
+        Dim views As (Name As String, View As Type, Build As Func(Of Form))() =
+            New Type() {
+                GetType(FillBlanksForm), GetType(ManuscriptAuthorForm), GetType(PublicationCheckForm),
+                GetType(BibliographyExportSelectionForm), GetType(BibliographyImportForm), GetType(OrcidLookupForm),
+                GetType(PublicationExportForm), GetType(ReportForm)
+            }.Select(Function(view) (view.Name, view, CType(Function() ViewCatalog.Dialogs(view)(String.Empty), Func(Of Form)))).ToArray()
+
+        Dim failures As List(Of String) =
+            AtEachDpi(
+                views,
+                Sub(name, shown, dpi)
+
+                    For Each list As CheckedListBox In ViewCatalog.Descendants(shown).OfType(Of CheckedListBox)().Where(Function(candidate) candidate.HorizontalScrollbar)
+
+                        ' One more row, with an "&", wider than the list.
+                        Dim row As String = "Department of Psychology & Brain Sciences"
+                        Do While TextRenderer.MeasureText(row, list.Font).Width <= list.ClientSize.Width
+                            row &= " & Cognition"
+                        Loop
+                        list.Items.Add(row)
+
+                        ' The text grows, as when the display's scale changes.
+                        list.Font = New Font(list.Font.FontFamily, list.Font.SizeInPoints + 0.5F, list.Font.Style, GraphicsUnit.Point)
+                        Application.DoEvents()
+
+                        Dim extent As Integer =
+                            CInt(SendMessage(list.Handle, LB_GETHORIZONTALEXTENT, IntPtr.Zero, IntPtr.Zero))
+
+                        Dim bar As Boolean =
+                            HasStyle(list, WS_HSCROLL)
+
+                        ' The app draws text with GDI; a test host starts with GDI+.
+                        Using twin As New CheckedListBox With {
+                            .Font = list.Font, .UseCompatibleTextRendering = False, .ForeColor = list.ForeColor, .BackColor = list.BackColor,
+                            .BorderStyle = BorderStyle.None, .IntegralHeight = False,
+                            .Size = New Size(3 * Math.Max(list.Width, TextRenderer.MeasureText(row, list.Font).Width), (list.Items.Count + 1) * list.ItemHeight)
+                        }
+
+                            For Each item As Object In list.Items
+                                twin.Items.Add(list.GetItemText(item))
+                            Next
+
+                            shown.Controls.Add(twin)
+                            Application.DoEvents()
+
+                            Dim widest As Integer = 0
+                            For index As Integer = 0 To twin.Items.Count - 1
+                                widest = Math.Max(widest, LastInkColumn(twin, twin.GetItemRectangle(index)) + 1)
+                            Next
+
+                            shown.Controls.Remove(twin)
+
+                            judged.Add($"{name}: {list.AccessibleName}")
+
+                            If Not bar OrElse extent < widest Then
+                                found.Add($"{name} at {dpi} DPI: '{list.AccessibleName}' needs {widest} pixels for its widest row in a list {list.ClientSize.Width} wide, and scrolls sideways to {extent} (scroll bar shown: {bar}).")
+                            End If
+
+                        End Using
+
+                    Next
+
+                End Sub)
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        Assert.AreEqual(views.Length, judged.Count, "One scrolling checked list in each window was judged: " & String.Join("; ", judged))
+
+    End Sub
 
 
     ' The last column of the control's picture with ink in the rows of the
