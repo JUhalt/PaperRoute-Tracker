@@ -1061,3 +1061,51 @@ The other reported rows read 0 to 75 ms. They are the first paints of Published,
   - It is over its 250 in every run: 262, 323, 737, 358 and now 498. It is report-only, as PR #305 left it.
   - [#147](https://github.com/JUhalt/PaperRoute-Tracker/issues/147)'s E10.1 measured 8.6 s here on v0.9.2. E10, on the maintainer's PC, measures the installed rc.
 - **The idle slice was over budget, report-only, as it has been since part C:** 78 against 30. On the example library it read 63. That library runs first and carries the process's first-time costs.
+
+## 2026-11-08: v1.0.0-rc.3's release commit, 4f1b9b8 (B3)
+
+rc.3 replaces rc.1 (decisions 25 to 27 on [#313](https://github.com/JUhalt/PaperRoute-Tracker/issues/313)). Its app code is rc.2's plus [PR #326](https://github.com/JUhalt/PaperRoute-Tracker/pull/326) and [PR #328](https://github.com/JUhalt/PaperRoute-Tracker/pull/328). Those change two things:
+- the horizontal reach of the lists that scroll sideways (`DialogScaling.FitListExtent`, run when a list's rows or font change);
+- Delete Manuscript's column.
+
+None of these is on a surface this test times. B3 runs on the release commit, so it ran again: once, on B1's fresh worktree of 4f1b9b8, in Release, right after B1. The Release build ran first, unsampled, and then the tests with `--no-build`, the host sampled every 2 s.
+
+Both tests passed: `EveryActionIsMeasuredOnBothLibraries` and `PageSwitchesWithMotionOnGrowByNoMoreThanTheFade`.
+
+### Host during this run
+
+The run lasted from 00:01 to 00:03. The host was sampled 48 times:
+- CPU 10 to 40%, mean 22;
+- no test host other than this run's own;
+- no VM running: the 150% VM's state was saved before B1, leaving only VirtualBox's two services;
+- at least 23.1 GB of memory free;
+- the desktop unlocked but untouched: no input for at least 5,783 s (96 minutes). The maintainer kept the PC unlocked overnight so the E VM could start later, and stayed hands-off.
+
+**Why the VM was saved.** An earlier B3 run that evening, on 011a0e7 (rc.3's app code), had the 150% VM running. It read warm startup at 1,799 ms against the 1,500 budget. With the VM saved, a second run read 898 ms and passed. The running VM took about 1.4 cores, and with it up the host had 8.6 GB free instead of 25.
+
+### Numbers
+
+**Every enforced row held, with motion off and with motion on.** On the 500 library, the rows with the least room:
+- warm startup, 1,095 of 1,500;
+- the watch row, 68 of 250;
+- versions and details after the manuscript page's first paint, 69 of 250.
+
+| Action | 4f1b9b8 | 5c95d5b | Budget ms | Held |
+|---|---:|---:|---:|---|
+| Warm startup to an interactive Board | 1,095 | 1,266 | 1500 | enforced |
+| Board: the rest of the shown shelf, shown in idle slices (the watch row) | 68 (4,006) | 78 (5,070) | 250 | enforced |
+| Idle work from startup: its longest step, against the idle slice | 68 | 78 | 30 | reported, over |
+| Board: its paint after Library to Board | 29 | 500 | 250 | reported |
+| Manuscript page: its first paint | 16 | 445 | 250 | reported |
+| Find Journals: click to first paint | 153 | 271 | 250 | reported |
+| Backup | 61 (13,573) | 47 (17,197) | 250 | reported |
+| Restore: replace the library (the window then restarts) | 47 (18,484) | 47 (31,333) | 250 | reported |
+| Close the window: its teardown after `FormClosed`, the window hidden first | 571 | 498 | 250 | reported, over |
+
+### What the run shows
+
+- **The watch row held**, at 68 ms of its 250.
+- **The two paint rows near half a second on rc.2 read 29 and 16 ms here.** Nothing on those paths changed between the commits. This is the host's painting wait that moves between runs ("Library to Board: where its spikes came from", above), absent this time.
+- **Find Journals' first paint read 153 ms**, under its 250 again. It had read 271 on rc.2. Its code is unchanged since 674bf37.
+- **The close's teardown read 571 ms.** It is over its 250 in every run, as before, and report-only, as PR #305 left it. E10 measures the installed rc.
+- **The idle slice was over budget, report-only, as it has been since part C:** 68 against 30.
