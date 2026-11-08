@@ -319,6 +319,9 @@ Namespace Forms
             lstWorks.Dock = DockStyle.Fill
             lstWorks.CheckOnClick = True
             lstWorks.HorizontalScrollbar = True
+            ' Measured again when the text grows (#313).
+            AddHandler lstWorks.FontChanged,
+                Sub(sender, e) DialogScaling.FitCheckedListExtent(lstWorks)
             ' After a check box, so no label names it (#137).
             lstWorks.AccessibleName = "Works to import"
 
@@ -580,6 +583,9 @@ Namespace Forms
                 )
 
             Next
+
+            ' Scrolls sideways to the very end of its widest row (#313).
+            DialogScaling.FitCheckedListExtent(lstWorks)
 
             btnSelectAll.Enabled =
                 lstWorks.Items.Count > 0

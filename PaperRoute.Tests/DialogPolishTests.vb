@@ -1960,13 +1960,15 @@ Public Class DialogPolishTests
     '
     ' The simulation shows what the real display showed because the cut is
     ' two lengths in pixels, the warning's box and its wrapped text's
-    ' height, and both are the same here. The box: Windows Forms scales
-    ' nothing in a window without base dimensions, and this one keeps the
-    ' client size it set (the 150% evidence recorded 520x300 at 144 DPI);
-    ' the simulation scales only a window whose source asks for it. The
-    ' box's width is its column's, which the heading above it, sized to its
-    ' text, widens past the window's padding at 150%, in the simulation as
-    ' at the display. The text: 10 points at 144 DPI and the simulation's 15
+    ' height, and both are the same here. The box: on ca985fa Windows Forms
+    ' scaled nothing in the window, which had no base dimensions and kept
+    ' the client size it set (the 150% evidence recorded 520x300 at 144
+    ' DPI), and the simulation scales only a window whose source asks for
+    ' it. The box's width was its column's, which the heading above it,
+    ' sized to its text, widened past the window's padding at 150%, in the
+    ' simulation as at the display; since rc.3 the column is the width
+    ' inside the padding (DeleteManuscriptKeepsEvenMarginsAt96To144Dpi).
+    ' The text: 10 points at 144 DPI and the simulation's 15
     ' points at the host's 96 are the same 20-pixel GDI font, with the same
     ' widths, line height and word breaks, and 10 points at 120 and 12.5 at
     ' 96 the same 17-pixel one. Nothing in it is drawn by Windows' theme at
@@ -2229,13 +2231,18 @@ Public Class DialogPolishTests
     ' · DOI 10.5555/demo.grit" was cut at the list's right frame after
     ' "10.555", with no ellipsis and no scroll bar, so it read as a whole
     ' DOI. rc.1's review graded it minor; rc.2's found it the same cut as
-    ' the affiliations above. Each row, C3's, one with an "&" and a short
-    ' one, is judged as the affiliations are: drawn as the app draws it in a
-    ' twin list three times as wide, its last column of ink is how wide its
-    ' row needs to be, and the list is that wide or shows its horizontal
-    ' scroll bar and scrolls at least that far. On 5c95d5b, the second
-    ' release candidate, C3's row needed more than its list at 144 DPI, and
-    ' the list did not scroll.
+    ' the affiliations above. Each row, C3's, a wider one with an "&" and a
+    ' short one, is judged as the affiliations are: drawn as the app draws
+    ' it in a twin list three times as wide, its last column of ink is how
+    ' wide its row needs to be, and the list is that wide or shows its
+    ' horizontal scroll bar and scrolls at least that far. The "&" row is
+    ' the widest, so the extent is its: Windows Forms' own extent reads "&"
+    ' as a mnemonic and stops short of it. As with the affiliations, the
+    ' simulation draws the 96-DPI check box, 13 pixels, where a real 150%
+    ' draws 20; the shared measurement counts the box at the list's DPI,
+    ' and the hand check at a real 150% is the check for that. On 5c95d5b,
+    ' the second release candidate, C3's row needed 806 pixels at 144 DPI
+    ' in a list 722 wide that did not scroll.
     <TestMethod>
     Public Sub FillBlanksRowsAreWholeOrScrollToTheirEndAt96To144Dpi()
 
@@ -2300,17 +2307,18 @@ Public Class DialogPolishTests
         Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
         Assert.AreEqual(3 * Dpis.Length, judged, "Each row was judged at each DPI.")
         Assert.IsTrue(scrolled.Any(Function(entry) entry.StartsWith("FillBlanksForm at 144 DPI: 'DEMO Measurement invariance of a short grit scale across four countries", StringComparison.Ordinal)), "The case is real: at 144 DPI C3's row is wider than its list. " & String.Join("; ", scrolled))
+        Assert.IsTrue(scrolled.Any(Function(entry) entry.StartsWith("FillBlanksForm at 144 DPI: 'Attention & memory", StringComparison.Ordinal)), "The case is real: at 144 DPI the row with an ""&"" is wider than its list. " & String.Join("; ", scrolled))
 
     End Sub
 
 
-    ' C3's manuscript, whose DOI was cut, one whose title has an "&", and a
-    ' short one.
+    ' C3's manuscript, whose DOI was cut, a wider one whose title has an
+    ' "&", and a short one.
     Private Shared Function ManuscriptsToScroll() As List(Of Manuscript)
         Dim library As New List(Of Manuscript)()
         For Each row In {
             ("DEMO Measurement invariance of a short grit scale across four countries", "10.5555/demo.grit"),
-            ("Attention & memory in bilingual readers: a registered report", "10.5555/demo.attention"),
+            ("Attention & memory in bilingual readers across four countries: a registered report", "10.5555/demo.attention"),
             ("A short title", "10.5555/demo.short")
         }
             Dim manuscript As New Manuscript With {.Title = row.Item1}
@@ -2357,6 +2365,7 @@ Public Class DialogPolishTests
 
         Dim judged As New List(Of Integer)()
         Dim found As New List(Of String)()
+        Dim headingOverPadding As Boolean = False
 
         Dim failures As List(Of String) =
             AtEachDpi(
@@ -2378,6 +2387,16 @@ Public Class DialogPolishTests
                     Dim left As Integer = confirm.Left
                     Dim right As Integer = root.ClientSize.Width - confirm.Right
 
+                    ' The case is real at 144: the heading, measured at the
+                    ' display's size, is wider than the window inside its
+                    ' padding before it scales, so a column left to size
+                    ' itself would run past the padding.
+                    If dpi = 144 Then
+                        Dim heading As Label = root.Controls.OfType(Of Label)().First(Function(item) item.Text.StartsWith("Permanently remove", StringComparison.Ordinal))
+                        Dim unscaled As Integer = CInt(Math.Floor(inside * 96.0 / dpi))
+                        headingOverPadding = heading.PreferredWidth + heading.Margin.Horizontal > unscaled
+                    End If
+
                     judged.Add(dpi)
 
                     If column > inside Then
@@ -2393,6 +2412,103 @@ Public Class DialogPolishTests
         Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
         Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
         CollectionAssert.AreEqual(Dpis, judged.ToArray(), "The margins were judged at each DPI.")
+        Assert.IsTrue(headingOverPadding, "The case is real: at 144 DPI the heading is wider than the window inside its padding before it scales.")
+
+    End Sub
+
+
+    ' Every checked list that scrolls sideways reaches the very end of its
+    ' widest row, at 96 to 144 DPI (#313, decision 26). Six lists besides
+    ' Fill Blanks and the affiliations showed a horizontal scroll bar but
+    ' left the extent to Windows Forms, which reads "&" as a mnemonic and
+    ' counts a 13-pixel check box: a row with an "&" stopped 8 or more
+    ' pixels short of its end at any DPI, and any long row a few pixels
+    ' short at a real 150%. Each list now measures its rows with
+    ' DialogScaling.FitCheckedListExtent when they are added and again when
+    ' its font changes. Here each window is shown as the catalog builds it,
+    ' each list is given one more row, an "&" in it and wider than the
+    ' list, and then a slightly larger font, as a window's text grows; each
+    ' row is drawn as the app draws it in a twin list, as the affiliations
+    ' are judged, and the list shows its scroll bar and scrolls at least as
+    ' far as its widest row needs. On 5c95d5b, Fill Blanks' list did not
+    ' scroll at all, and the lists of Bibliography export and import, ORCID
+    ' lookup and Publication & CV Export stopped 25 to 104 pixels short of
+    ' the added row. Publication Check's and the report's reached it here:
+    ' they fall short at a real 150% by the larger check box Windows draws
+    ' there, which this simulation does not draw (E4.7 checks it by hand).
+    <TestMethod>
+    Public Sub EveryScrollingCheckedListReachesTheEndOfItsWidestRowAt96To144Dpi()
+
+        Dim judged As New HashSet(Of String)(StringComparer.Ordinal)
+        Dim found As New List(Of String)()
+
+        Dim views As (Name As String, View As Type, Build As Func(Of Form))() =
+            New Type() {
+                GetType(FillBlanksForm), GetType(ManuscriptAuthorForm), GetType(PublicationCheckForm),
+                GetType(BibliographyExportSelectionForm), GetType(BibliographyImportForm), GetType(OrcidLookupForm),
+                GetType(PublicationExportForm), GetType(ReportForm)
+            }.Select(Function(view) (view.Name, view, CType(Function() ViewCatalog.Dialogs(view)(String.Empty), Func(Of Form)))).ToArray()
+
+        Dim failures As List(Of String) =
+            AtEachDpi(
+                views,
+                Sub(name, shown, dpi)
+
+                    For Each list As CheckedListBox In ViewCatalog.Descendants(shown).OfType(Of CheckedListBox)().Where(Function(candidate) candidate.HorizontalScrollbar)
+
+                        ' One more row, with an "&", wider than the list.
+                        Dim row As String = "Department of Psychology & Brain Sciences"
+                        Do While TextRenderer.MeasureText(row, list.Font).Width <= list.ClientSize.Width
+                            row &= " & Cognition"
+                        Loop
+                        list.Items.Add(row)
+
+                        ' The text grows, as when the display's scale changes.
+                        list.Font = New Font(list.Font.FontFamily, list.Font.SizeInPoints + 0.5F, list.Font.Style, GraphicsUnit.Point)
+                        Application.DoEvents()
+
+                        Dim extent As Integer =
+                            CInt(SendMessage(list.Handle, LB_GETHORIZONTALEXTENT, IntPtr.Zero, IntPtr.Zero))
+
+                        Dim bar As Boolean =
+                            HasStyle(list, WS_HSCROLL)
+
+                        ' The app draws text with GDI; a test host starts with GDI+.
+                        Using twin As New CheckedListBox With {
+                            .Font = list.Font, .UseCompatibleTextRendering = False, .ForeColor = list.ForeColor, .BackColor = list.BackColor,
+                            .BorderStyle = BorderStyle.None, .IntegralHeight = False,
+                            .Size = New Size(3 * Math.Max(list.Width, TextRenderer.MeasureText(row, list.Font).Width), (list.Items.Count + 1) * list.ItemHeight)
+                        }
+
+                            For Each item As Object In list.Items
+                                twin.Items.Add(list.GetItemText(item))
+                            Next
+
+                            shown.Controls.Add(twin)
+                            Application.DoEvents()
+
+                            Dim widest As Integer = 0
+                            For index As Integer = 0 To twin.Items.Count - 1
+                                widest = Math.Max(widest, LastInkColumn(twin, twin.GetItemRectangle(index)) + 1)
+                            Next
+
+                            shown.Controls.Remove(twin)
+
+                            judged.Add($"{name}: {list.AccessibleName}")
+
+                            If Not bar OrElse extent < widest Then
+                                found.Add($"{name} at {dpi} DPI: '{list.AccessibleName}' needs {widest} pixels for its widest row in a list {list.ClientSize.Width} wide, and scrolls sideways to {extent} (scroll bar shown: {bar}).")
+                            End If
+
+                        End Using
+
+                    Next
+
+                End Sub)
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        Assert.AreEqual(views.Length, judged.Count, "One scrolling checked list in each window was judged: " & String.Join("; ", judged))
 
     End Sub
 
