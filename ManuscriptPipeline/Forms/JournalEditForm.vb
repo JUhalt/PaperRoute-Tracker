@@ -408,6 +408,10 @@ Namespace Forms
             lstChecklist.HorizontalScrollbar =
                 True
 
+            ' Measured again when the text grows (#313).
+            AddHandler lstChecklist.FontChanged,
+                Sub(sender, e) DialogScaling.FitListExtent(lstChecklist)
+
             ' Not the count WinForms finds before it (#137).
             lstChecklist.AccessibleName =
                 "Checklist requirements"
@@ -661,6 +665,9 @@ Namespace Forms
                 lstChecklist.EndUpdate()
 
             End Try
+
+            ' Scrolls sideways to the very end of its widest row (#313).
+            DialogScaling.FitListExtent(lstChecklist)
 
             If _workingChecklist.Count > 0 Then
 

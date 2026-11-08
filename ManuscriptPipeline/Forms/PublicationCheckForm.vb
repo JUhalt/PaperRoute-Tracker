@@ -165,8 +165,8 @@ Namespace Forms
                 lstManuscripts.SetItemChecked(index, If(requested.Count > 0, requested.Contains(manuscript.Id), PublicationMatchService.IsSuggested(manuscript)))
             Next
             ' Scrolls sideways to the very end of its widest row (#313).
-            DialogScaling.FitCheckedListExtent(lstManuscripts)
-            AddHandler lstManuscripts.FontChanged, Sub(sender, e) DialogScaling.FitCheckedListExtent(lstManuscripts)
+            DialogScaling.FitListExtent(lstManuscripts)
+            AddHandler lstManuscripts.FontChanged, Sub(sender, e) DialogScaling.FitListExtent(lstManuscripts)
             AddHandler lstManuscripts.ItemCheck, Sub(sender, e) BeginInvokeIfReady(AddressOf UpdateSelection)
             layout.Controls.Add(lstManuscripts, 0, 0)
 

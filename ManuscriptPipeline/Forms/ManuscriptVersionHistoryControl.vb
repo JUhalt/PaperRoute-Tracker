@@ -231,6 +231,10 @@ Namespace Forms
             lstVersions.HorizontalScrollbar =
                 True
 
+            ' Measured again when the text grows (#313).
+            AddHandler lstVersions.FontChanged,
+                Sub(sender, e) DialogScaling.FitListExtent(lstVersions)
+
             AddHandler lstVersions.SelectedIndexChanged,
                 AddressOf VersionSelectionChanged
 
@@ -382,6 +386,9 @@ Namespace Forms
                 lstVersions.EndUpdate()
 
             End Try
+
+            ' Scrolls sideways to the very end of its widest row (#313).
+            DialogScaling.FitListExtent(lstVersions)
 
             If _displayedVersions.Count = 0 Then
 

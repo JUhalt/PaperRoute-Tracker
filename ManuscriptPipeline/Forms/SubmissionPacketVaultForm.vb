@@ -291,6 +291,8 @@ Namespace Forms
                 DockStyle.Fill
             lstPackets.IntegralHeight = False
             lstPackets.HorizontalScrollbar = True
+            ' Measured again when the text grows (#313).
+            AddHandler lstPackets.FontChanged, Sub(sender, e) DialogScaling.FitListExtent(lstPackets)
             ' Its own name, not "Show all packets", the link WinForms finds
             ' before it (#137).
             lstPackets.AccessibleName = "Submission packets"
@@ -441,6 +443,8 @@ Namespace Forms
                 DockStyle.Fill
             lstFiles.IntegralHeight = False
             lstFiles.HorizontalScrollbar = True
+            ' Measured again when the text grows (#313).
+            AddHandler lstFiles.FontChanged, Sub(sender, e) DialogScaling.FitListExtent(lstFiles)
 
             AddHandler lstFiles.SelectedIndexChanged,
                 AddressOf FileSelectionChanged
@@ -616,6 +620,9 @@ Namespace Forms
 
             End If
 
+            ' Scrolls sideways to the very end of its widest row (#313).
+            DialogScaling.FitListExtent(lstPackets)
+
             If _displayedPackets.Count > 0 Then
 
                 Dim selectedIndex As Integer =
@@ -762,6 +769,8 @@ Namespace Forms
 
             _displayedFiles.Clear()
             lstFiles.Items.Clear()
+            ' The old rows' reach goes with them, even when none follow (#313).
+            DialogScaling.FitListExtent(lstFiles)
 
             Dim packet As SubmissionPacket =
                 GetSelectedPacket()
@@ -813,6 +822,9 @@ Namespace Forms
                 )
 
             Next
+
+            ' Scrolls sideways to the very end of its widest row (#313).
+            DialogScaling.FitListExtent(lstFiles)
 
             If _displayedFiles.Count > 0 Then
 

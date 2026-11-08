@@ -159,17 +159,18 @@ Namespace Services
         End Function
 
 
-        ' Lets a checked list scroll sideways to the end of its widest row,
-        ' as wide as the list draws it: the check box and the gaps beside it
-        ' at the list's DPI, then the text with TextRenderer's padding
-        ' (#313). Windows Forms' own extent counts a 13-pixel check box until
-        ' the list has drawn one, 20 pixels at 150%, and measures "&" as a
-        ' mnemonic, so it stopped short of a row's end: a pixel short of C3's
-        ' affiliation at a real 150%, and 8 or more short of one with an "&"
-        ' at any DPI where it scrolls. Call it once the rows are in, and
-        ' again when the list's font changes.
-        Public Shared Sub FitCheckedListExtent(
-            list As CheckedListBox
+        ' Lets a list scroll sideways to the end of its widest row, as wide
+        ' as the list draws it: in a checked list the check box at the list's
+        ' DPI, then the gaps, then the text with TextRenderer's padding
+        ' (#313). Windows Forms' own extent measures "&" as a mnemonic, in
+        ' every list, and in a checked list counts a 13-pixel check box until
+        ' the list has drawn one, 20 pixels at 150%; so it stopped short of a
+        ' row's end: a pixel short of C3's affiliation at a real 150%, and 8
+        ' or more short of a row with an "&" at any DPI where it scrolls.
+        ' Call it once the rows are in, and again when the list's font
+        ' changes.
+        Public Shared Sub FitListExtent(
+            list As ListBox
         )
 
             If list Is Nothing Then
@@ -183,7 +184,7 @@ Namespace Services
                 CInt(Math.Round(listDpi / 96.0))
 
             Dim glyph As Integer =
-                CInt(Math.Round(13 * listDpi / 96.0))
+                If(TypeOf list Is CheckedListBox, CInt(Math.Round(13 * listDpi / 96.0)), 0)
 
             Dim widest As Integer = 0
 

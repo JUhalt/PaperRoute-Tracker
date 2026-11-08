@@ -76,8 +76,8 @@ Namespace Forms
                     lstManuscripts.SetItemChecked(index, manuscript.Location = ManuscriptLocation.Pipeline)
                 Next
                 ' Scrolls sideways to the very end of its widest row (#313).
-                DialogScaling.FitCheckedListExtent(lstManuscripts)
-                AddHandler lstManuscripts.FontChanged, Sub(sender, e) DialogScaling.FitCheckedListExtent(lstManuscripts)
+                DialogScaling.FitListExtent(lstManuscripts)
+                AddHandler lstManuscripts.FontChanged, Sub(sender, e) DialogScaling.FitListExtent(lstManuscripts)
                 AddHandler lstManuscripts.ItemCheck, Sub(sender, e) SchedulePreview()
                 side.Controls.Add(lstManuscripts, 0, 1)
 
