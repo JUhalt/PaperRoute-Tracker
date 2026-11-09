@@ -159,10 +159,21 @@ Namespace Services
         End Function
 
 
-        ' Lets a list scroll sideways to the end of its widest row, as wide
-        ' as the list draws it: in a checked list the check box at the list's
-        ' DPI, then the gaps, then the text with TextRenderer's padding
-        ' (#313). Windows Forms' own extent measures "&" as a mnemonic, in
+        ' Lets a list scroll sideways to the end of its widest row, a few
+        ' pixels past it, as wide as the list draws it: in a checked list the
+        ' check box at the list's DPI, the gaps and the pixel past them, then
+        ' the text, measured with TextRenderer, GDI, with its padding (#313).
+        ' Windows draws a plain list's rows with GDI. A checked list draws
+        ' its own, with the process's default engine, which in PaperRoute is
+        ' GDI+: Program.Main starts the app, not the VB template's Main, so
+        ' nothing calls SetCompatibleTextRenderingDefault(False). GDI+ draws
+        ' a long row about 1.5% wider than GDI measures it, more than the
+        ' padding once a row is about 1,000 pixels wide, and at a real 150%
+        ' the extent stopped 9 to 11 pixels short of the row's end: Fill
+        ' Blanks' DOI read "10.5555/zzz-cert.0" with its "3" out of reach
+        ' (E4.7). So a checked list fitted here is set to draw with GDI, as
+        ' its rows are measured; a checked list that scrolls sideways comes
+        ' here. Windows Forms' own extent measures "&" as a mnemonic, in
         ' every list, and in a checked list counts a 13-pixel check box until
         ' the list has drawn one, 20 pixels at 150%; so it stopped short of a
         ' row's end: a pixel short of C3's affiliation at a real 150%, and 8
@@ -183,8 +194,22 @@ Namespace Services
             Dim gap As Integer =
                 CInt(Math.Round(listDpi / 96.0))
 
+            Dim checkedList As CheckedListBox =
+                TryCast(list, CheckedListBox)
+
+            ' A checked list draws its rows with GDI, the engine that measures
+            ' them below, not with the process default (see above).
+            If checkedList IsNot Nothing Then
+                checkedList.UseCompatibleTextRendering = False
+            End If
+
             Dim glyph As Integer =
-                If(TypeOf list Is CheckedListBox, CInt(Math.Round(13 * listDpi / 96.0)), 0)
+                If(checkedList IsNot Nothing, CInt(Math.Round(13 * listDpi / 96.0)), 0)
+
+            ' A checked list's text starts a pixel past the box and the gaps
+            ' (CheckedListBox's BORDER_SIZE).
+            Dim border As Integer =
+                If(checkedList IsNot Nothing, 1, 0)
 
             Dim widest As Integer = 0
 
@@ -207,7 +232,7 @@ Namespace Services
 
             ' Never 0, which hands the extent back to Windows Forms.
             list.HorizontalExtent =
-                Math.Max(1, glyph + 2 * gap + widest)
+                Math.Max(1, glyph + 2 * gap + border + widest)
 
         End Sub
 
