@@ -1109,3 +1109,45 @@ The run lasted from 00:01 to 00:03. The host was sampled 48 times:
 - **Find Journals' first paint read 153 ms**, under its 250 again. It had read 271 on rc.2. Its code is unchanged since 674bf37.
 - **The close's teardown read 571 ms.** It is over its 250 in every run, as before, and report-only, as PR #305 left it. E10 measures the installed rc.
 - **The idle slice was over budget, report-only, as it has been since part C:** 68 against 30.
+
+## 2026-11-13: v1.0.0-rc.4's release commit, 36a8aad (B3)
+
+rc.4 replaces rc.3 (decisions 9 and 10 on [#313](https://github.com/JUhalt/PaperRoute-Tracker/issues/313)). Its app code is rc.3's plus [PR #331](https://github.com/JUhalt/PaperRoute-Tracker/pull/331), in `DialogScaling.FitListExtent` alone: the eight checked lists it fits draw their rows with GDI, and a plain list's row that holds a tab is measured at the list's own tab stops. None of this is on a surface this test times. B3 runs on the release commit, so it ran again, on B1's fresh worktree of 36a8aad, in Release, after B1: the Release build first, unsampled, then the tests with `--no-build`, the host sampled every 2 s.
+
+It ran twice. **The first run (13:29 to 13:31) is not the record:** the host was in use, CPU averaging 29% and reaching 94%, and the rows of two windows rc.4 does not change ran up to six times rc.3's figures (Find Journals' results 565 ms, the close's teardown 1,091 ms). **The second run (13:37 to 13:39) is the record.** Both tests passed in each run: `EveryActionIsMeasuredOnBothLibraries` and `PageSwitchesWithMotionOnGrowByNoMoreThanTheFade`.
+
+### Host during the second run
+
+The host was sampled 60 times:
+- CPU 11 to 48%, mean 27;
+- no test host other than this run's own;
+- no VM running, only VirtualBox's two services;
+- at least 15.9 GB of memory free;
+- the desktop unlocked and in use earlier in the hour: the maintainer was using the PC during B1. This run's idle sampler gave no usable figure (its baseline was off by weeks on this host), so no idle time is stated.
+
+### Numbers
+
+**Every enforced row held, with motion off and with motion on.** On the 500 library, the rows with the least room:
+- warm startup, 591 of 1,500;
+- the watch row, 92 of 250.
+
+| Action | 36a8aad | 4f1b9b8 | Budget ms | Held |
+|---|---:|---:|---:|---|
+| Warm startup to an interactive Board | 591 | 1,095 | 1500 | enforced |
+| Board: the rest of the shown shelf, shown in idle slices (the watch row) | 92 (5,488) | 68 (4,006) | 250 | enforced |
+| Idle work from startup: its longest step, against the idle slice | 92 | 68 | 30 | reported, over |
+| Board: its paint after Library to Board | 33 | 29 | 250 | reported |
+| Manuscript page: its first paint | 18 | 16 | 250 | reported |
+| Board to a manuscript page (the kept page, a Pipeline manuscript with three shortlisted journals and tags) | 114 | 33 | 100 | reported, over |
+| Find Journals: click to first paint | 160 | 153 | 250 | reported |
+| Backup | 50 (19,875) | 61 (13,573) | 250 | reported |
+| Restore: replace the library (the window then restarts) | 51 (25,380) | 47 (18,484) | 250 | reported |
+| Close the window: its teardown after `FormClosed`, the window hidden first | 190 | 571 | 250 | reported |
+
+### What the run shows
+
+- **Warm startup read 591 ms**, against 1,095 on rc.3.
+- **The watch row held**, at 92 ms of its 250.
+- **The close's teardown read 190 ms**, under its 250 for the first time in this record. Every earlier run here was over (262, 323, 737, 358, then 498 on rc.2 and 571 on rc.3), and this day's first run read 1,091, so it moves with the host. E10 measures the installed rc on the maintainer's PC.
+- **Two reported page-switch rows read just over 100 ms:** the kept manuscript page on the 500 library, 114 (33 on rc.3, 70 in this day's first run), and the first manuscript page on the example library, 104 (98 on rc.3). Nothing on those paths changed between the commits, and the readings move between runs on the same build: report-only, as before.
+- **The idle slice was over budget, report-only, as it has been since part C:** 92 against 30.
