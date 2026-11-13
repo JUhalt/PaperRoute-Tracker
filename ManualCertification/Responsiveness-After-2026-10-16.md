@@ -887,11 +887,12 @@ The full record, with the VM's attempt, is in the v0.9.2 certification evidence,
 
 **How it differs from #147's pass**
 - **The build.** The installed v1.0.0-rc.4, release commit 36a8aad, driven from outside as before. Its `PaperRouteTracker.dll` was 2D806837…AFC6E (ProductVersion 1.0.0-rc.4+36a8aad) before and after the run.
-- **The machine.** The same PC: i5-1334U, 12 logical processors, Windows build 26300, 1920x1200 at 125%. Windows' load figure averaged 28% again (87% at most), with OneDrive on about 1 core throughout (2 at most). No R jobs and no VM ran.
+- **The machine.** The same PC: i5-1334U, 12 logical processors, Windows build 26300, 1920x1200 at 125%. Windows' load figure averaged 28% again (87% at most). OneDrive used about 1 core from the first restore on (2 at most). No R jobs and no VM ran.
 - **The profile.** The development profile again, so the managed folder was `Documents\PaperRoute Dev Library`, in OneDrive.
 - **More of it.**
   - Eight restores instead of three: the 0.9.1 backup of the 500 library four times and rc.4's own backups three times, all from the main window, then one from the window PaperRoute shows when it cannot read its library (both library files cut in half first, as in E2.21).
-  - Four backups, and nine timed closes in five cases.
+  - Four backups.
+  - Eighteen closes: the nine planned (five plain closes and four cases) and nine repeats.
 - **What the columns mean.** As in #147's table, with two additions.
   - The probe's gap between round trips was about 120 ms on this host.
   - For a close, *UI ms* is the longest round trip while the window was still up. A round trip that ends after the window has gone counts only its part before then.
@@ -917,44 +918,49 @@ The full record, with the VM's attempt, is in the v0.9.2 certification evidence,
 
 **E10.2: six more restores and three more backups**
 
-| Restore | Backup restored | Inspect: wall ms (UI ms) | Replace: wall ms (UI ms) | Restart: wall ms (UI ms) | Waits for a held folder |
+| Restore | Backup restored | Inspect: wall ms (UI ms) | Replace: wall ms (UI ms) | Restart: wall ms (UI ms) | Waits seen in the Documents listing |
 |---|---|---:|---:|---:|---:|
-| 3 | 0.9.1, 500 library | 8872 (206) | 50721 (7) | 3253 (93) | 0 ms |
-| 4 | rc.4's own | 7684 (115) | 59931 (2) | 4041 (341) | 0 ms |
-| 5 | 0.9.1, 500 library | 10873 (147) | 55387 (1) | 4024 (175) | 0 ms |
-| 6 | rc.4's own | 8116 (27) | 53016 (0) | 3269 (285) | 0 ms |
-| 7 | 0.9.1, 500 library | 6826 (5) | 44724 (1) | 4664 (260) | 0 ms |
-| 8, from the startup window | rc.4's own | 8912 (—) | 41869 (—) | 4414 (204) | 0 ms |
+| 3 | 0.9.1, 500 library | 8872 (206) | 50721 (7) | 3253 (93) | none |
+| 4 | rc.4's own | 7684 (115) | 59931 (2) | 4041 (341) | none |
+| 5 | 0.9.1, 500 library | 10873 (147) | 55387 (1) | 4024 (175) | none |
+| 6 | rc.4's own | 8116 (27) | 53016 (0) | 3269 (285) | none |
+| 7 | 0.9.1, 500 library | 6826 (5) | 44724 (1) | 4664 (260) | none |
+| 8, from the startup window | rc.4's own | 8912 (—) | 41869 (—) | 4414 (204) | none |
 
 The other three backups took 27897, 36030 and 26807 ms, with round trips of at most 101, 58 and 26 ms. The probe times only the main window, so the startup window's inspect and replace have no UI ms. Its status line, read every 100 ms, showed "Reading the backup..." and then "Restoring the backup...".
 
 **The closes**
 
-| Close | Window gone after, ms | Process gone after, ms | UI ms while the window was up | Longest round trip over the whole close, ms |
-|---|---:|---:|---:|---:|
-| The window the first restore's restart opened | 86 | 285 | 20 | 31 |
-| A freshly loaded window | 89 | 439 | 0 | 68 |
-| A freshly loaded window | 87 | 279 | 0 | 5 |
-| After the fourth backup | 82 | 282 | 0 | 23 |
-| The window the startup window's restore opened | 94 | 286 | 0 | 40 |
-| Nothing filtered | 68 | 261 | 0 | 18 |
-| A Board search that matches nothing | 80 | 388 | 0 | 0 |
-| Filtered by stage (Submitted, 25 cards) | 18 | 453 | 0 | 1 |
-| Published, then the File Drawer shown | 71 | 391 | 1 | 17 |
+Each close posts the close message to the main window and then looks every 50 ms for the window to be hidden or destroyed, and for the process to end.
+
+| Close | Tries | Window gone after, ms | Process gone after, ms | Probe round trips while the window was up |
+|---|---:|---:|---:|---|
+| The window the first restore's restart opened | 1 | 86 | 285 | one, 20 ms |
+| The window of the cold start, then a freshly loaded one | 2 | 83, 89 | 275, 439 | none; then one of 0 ms, 9 ms after the close mark |
+| The window the second restore's restart opened, then a freshly loaded one | 2 | 71, 87 | 264, 279 | none; then one of 0 ms, 8 ms after the close mark |
+| After the fourth backup | 1 | 82 | 282 | one, 0 ms |
+| The window the startup window's restore opened | 1 | 94 | 286 | one, 0 ms |
+| Nothing filtered | 1 | 68 | 261 | one of 0 ms, 3 ms after the close mark |
+| A Board search that matches nothing | 1 | 80 | 388 | one, 0 ms |
+| Filtered by stage (Submitted, 25 cards) | 8 | 18 to 83 | 453 to 684 | none; in one try a 0 ms round trip ended at the close mark |
+| Published, then the File Drawer shown | 1 | 71 | 391 | one, 1 ms |
 
 **What the pass found**
 - **Every restore completed: eight of eight, with no Restore Error.** In #147's pass, one of three failed on a folder OneDrive held ([#295](https://github.com/JUhalt/PaperRoute-Tracker/issues/295)).
   - Each restore made one staging folder; each after the first also made one rollback folder. Every one was named after the managed folder (`PaperRoute Dev Library.restore-staging-…`, `…restore-rollback-…`), and none was left behind.
-  - **No restore waited for a held folder.** The Documents listing, read every 100 ms, never showed a staging or rollback folder go and come back. A wait before the swap's first move would leave no mark there, so the listing shows only that OneDrive held nothing the swap moved later.
-- **Closing takes under half a second.** The window went 18–94 ms after the close message, and the process 0.26–0.45 s after. The longest round trip while a window was up was 20 ms. #147 measured 18–30 s with the window up ([#300](https://github.com/JUhalt/PaperRoute-Tracker/issues/300)).
+  - **The Documents listing showed no wait for a held folder.** Read about every 100 ms, it never showed a staging or rollback folder go and come back. It has two limits. A wait before the swap's first move leaves no mark in it. And in the second restore one gap between readings was 310 ms, longer than the swap's shortest wait (250 ms).
+- **A closing window is gone in under a tenth of a second.** In all eighteen closes the window was hidden or destroyed 18–94 ms after the close mark, and the process ended 0.26–0.68 s after it. No visible window can have been frozen for longer than it was up; #147 measured 18–30 s with the window up ([#300](https://github.com/JUhalt/PaperRoute-Tracker/issues/300)).
+- **The probe says little about these closes,** because its gap between round trips (about 120 ms) is longer than the time a window stays up.
+  - Five closes had a round trip that began while the window was up: 0, 0, 0, 1 and 20 ms.
+  - Four had one within 9 ms of the close mark. The mark is written just before the message is posted, so these may have ended before it.
+  - Nine had none, seven of them tries of the stage-filter close. That close's eighth try is one of the four: its 0 ms round trip ended in the close mark's own millisecond, which is the only reason the helper counts it.
 - **The restarts no longer freeze the old window.** From OK to a loaded window took 3.3–4.7 s, with round trips of at most 341 ms. #147's took 24.5–38.5 s, with stalls of 4.3 and 8.6 s.
-- **The starts and restarts stay over the 1.5 s warm-startup budget,** at 1.8–2.3 s for a start of the 500 library (#147: 3.4 s warm, 9.9 s cold). As in #147's pass, they are wall times from a click or an OK, so they include the process's start, which the in-process test's row does not.
+- **The starts and restarts stay over the 1.5 s warm-startup budget.** The sixteen starts of the 500 library took 1.8–4.7 s, with a median of 2.1 s (#147: 3.4 s warm, 9.9 s cold). They are wall times from starting the program (#147's were from a click), and the restarts from an OK, so they include the process's start, which the in-process test's row does not.
 - **Backups and inspections keep the UI thread answering.**
   - Backups took 27–36 s, with round trips of at most 101 ms (#147: 41.5 s and 961 ms).
   - Inspections took 4.1–10.9 s, with at most 206 ms (#147: 885 ms).
 - **Outside the timed steps, setting the Board's stage filter held the UI thread longest.** Each of the eight times the stage case chose Submitted (the list opened, Down three times, Enter), round trips of 0.30–0.53 s came, two in a row in seven of the eight. Typing a Board search that matches nothing held it for 384 ms once. The in-process test has no row for either.
 - **OneDrive uploaded none of the 2,297 managed files in the 41 minutes after the first restore,** and made no conflict copies. No file was online-only at any check.
-- **The stage-filter close took eight tries to time.** Seven tries ran the case's setup and the close in one step. In each, the close message came 6–89 ms after a probe round trip, and the window was gone 61–83 ms after the close message, before the next round trip, so those tries do not count. Run as three steps (load, set up, close), the close was timed at once: the window was gone after 18 ms, with 0 ms while it was up. Two other closes needed a second try for the same reason.
 
 The full record is in the v1.0 certification evidence: `E-results.md`, under E10, with every timed step in `E10-pc\E10-pc-analysis.csv`.
 
