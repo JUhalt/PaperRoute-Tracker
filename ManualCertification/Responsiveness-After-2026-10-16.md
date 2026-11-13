@@ -931,7 +931,7 @@ The other three backups took 27897, 36030 and 26807 ms, with round trips of at m
 
 **The closes**
 
-Each close posts the close message to the main window and then looks every 50 ms for the window to be hidden or destroyed, and for the process to end. The last column is the probe's bound on a stall: the longest time between two answered round trips while the window was up.
+Each close posts the close message to the main window and then looks every 50 ms for the window to be hidden or destroyed, and for the process to end; the two times are when that look first saw the change. The last column is the probe's bound on a stall: the longest time between the stamps of two answered round trips while the window was up.
 
 | Close | Tries | Window gone after, ms | Process gone after, ms | Longest time between two answered round trips, ms |
 |---|---:|---:|---:|---:|
@@ -945,14 +945,15 @@ Each close posts the close message to the main window and then looks every 50 ms
 | Filtered by stage (Submitted, 25 cards) | 8 | 18 to 83 | 453 to 684 | 116 to 184 |
 | Published, then the File Drawer shown | 1 | 71 | 391 | 158 |
 
-In seventeen of the eighteen closes the UI thread answered a round trip after the window had gone. In the search case the process ended first; its last answer came 12 ms before the window went.
+In seventeen of the eighteen closes an answered round trip is stamped after the window-gone mark. In the search case the window was destroyed before the probe's next round trip; its last answered one is stamped 12 ms before that mark.
 
 **What the pass found**
 - **Every restore completed: eight of eight, with no Restore Error.** In #147's pass, one of three failed on a folder OneDrive held ([#295](https://github.com/JUhalt/PaperRoute-Tracker/issues/295)).
   - Each restore made one staging folder; each after the first also made one rollback folder. Every one was named after the managed folder (`PaperRoute Dev Library.restore-staging-…`, `…restore-rollback-…`), and none was left behind.
   - **The Documents listing showed no wait for a held folder.** Read about every 100 ms, it never showed a staging or rollback folder go and come back. It has two limits. A wait before the swap's first move leaves no mark in it. And in the second restore one gap between readings was 310 ms, longer than the swap's shortest wait (250 ms).
-- **A closing window is gone in under a tenth of a second, and the UI thread keeps answering.** In all eighteen closes the window was hidden or destroyed 18–94 ms after the close mark, and the process ended 0.26–0.68 s after it. The probe's answered round trips bracket every close: at most 184 ms passed between two answers while a window was up, so no stall was longer than that. #147 measured 18–30 s with the window up ([#300](https://github.com/JUhalt/PaperRoute-Tracker/issues/300)).
-- **Few round trips fell inside a close,** because the probe's gap between round trips (about 120 ms) is longer than the time a window stays up. So the closes are judged by the bracket above, not by a round trip's own length.
+- **A closing window is gone in under a tenth of a second, and the UI thread keeps answering.** In all eighteen closes the window was seen hidden or destroyed 18–94 ms after the close mark, and the process gone 0.26–0.68 s after it. The probe's answered round trips bracket every close: the stamps of two answers while a window was up were at most 184 ms apart. A row is stamped just after its round trip and a count of windows, so allowing for that the UI thread went at most about a quarter of a second without answering. #147 measured 18–30 s with the window up ([#300](https://github.com/JUhalt/PaperRoute-Tracker/issues/300)).
+- **What the bracket covers.** An answered round trip shows that the UI thread dispatched a sent message. So the bracket bounds a thread that stops pumping messages, as #300's did; a thread blocked in a wait that still pumps would answer too.
+- **Few round trips fell inside a close,** because the probe's gap between round trips (about 120 ms) is longer than the time a window stays up. The run's helper counts a close only when one did, and it refused nine of the eighteen. This record judges every close by the bracket instead.
   - Five closes had a round trip that began while the window was up: 0, 0, 0, 1 and 20 ms.
   - Four had one within 9 ms of the close mark. The mark is written just before the message is posted, so these may have ended before it.
   - Nine had none, seven of them tries of the stage-filter close. That close's eighth try is one of the four: its 0 ms round trip ended in the close mark's own millisecond.
