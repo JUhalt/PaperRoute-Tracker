@@ -931,29 +931,31 @@ The other three backups took 27897, 36030 and 26807 ms, with round trips of at m
 
 **The closes**
 
-Each close posts the close message to the main window and then looks every 50 ms for the window to be hidden or destroyed, and for the process to end.
+Each close posts the close message to the main window and then looks every 50 ms for the window to be hidden or destroyed, and for the process to end. The last column is the probe's bound on a stall: the longest time between two answered round trips while the window was up.
 
-| Close | Tries | Window gone after, ms | Process gone after, ms | Probe round trips while the window was up |
-|---|---:|---:|---:|---|
-| The window the first restore's restart opened | 1 | 86 | 285 | one, 20 ms |
-| The window of the cold start, then a freshly loaded one | 2 | 83, 89 | 275, 439 | none; then one of 0 ms, 9 ms after the close mark |
-| The window the second restore's restart opened, then a freshly loaded one | 2 | 71, 87 | 264, 279 | none; then one of 0 ms, 8 ms after the close mark |
-| After the fourth backup | 1 | 82 | 282 | one, 0 ms |
-| The window the startup window's restore opened | 1 | 94 | 286 | one, 0 ms |
-| Nothing filtered | 1 | 68 | 261 | one of 0 ms, 3 ms after the close mark |
-| A Board search that matches nothing | 1 | 80 | 388 | one, 0 ms |
-| Filtered by stage (Submitted, 25 cards) | 8 | 18 to 83 | 453 to 684 | none; in one try a 0 ms round trip ended at the close mark |
-| Published, then the File Drawer shown | 1 | 71 | 391 | one, 1 ms |
+| Close | Tries | Window gone after, ms | Process gone after, ms | Longest time between two answered round trips, ms |
+|---|---:|---:|---:|---:|
+| The window the first restore's restart opened | 1 | 86 | 285 | 167 |
+| The window of the cold start, then a freshly loaded one | 2 | 83, 89 | 275, 439 | 136, 172 |
+| The window the second restore's restart opened, then a freshly loaded one | 2 | 71, 87 | 264, 279 | 141, 139 |
+| After the fourth backup | 1 | 82 | 282 | 164 |
+| The window the startup window's restore opened | 1 | 94 | 286 | 170 |
+| Nothing filtered | 1 | 68 | 261 | 161 |
+| A Board search that matches nothing | 1 | 80 | 388 | 144 |
+| Filtered by stage (Submitted, 25 cards) | 8 | 18 to 83 | 453 to 684 | 116 to 184 |
+| Published, then the File Drawer shown | 1 | 71 | 391 | 158 |
+
+In seventeen of the eighteen closes the UI thread answered a round trip after the window had gone. In the search case the process ended first; its last answer came 12 ms before the window went.
 
 **What the pass found**
 - **Every restore completed: eight of eight, with no Restore Error.** In #147's pass, one of three failed on a folder OneDrive held ([#295](https://github.com/JUhalt/PaperRoute-Tracker/issues/295)).
   - Each restore made one staging folder; each after the first also made one rollback folder. Every one was named after the managed folder (`PaperRoute Dev Library.restore-staging-…`, `…restore-rollback-…`), and none was left behind.
   - **The Documents listing showed no wait for a held folder.** Read about every 100 ms, it never showed a staging or rollback folder go and come back. It has two limits. A wait before the swap's first move leaves no mark in it. And in the second restore one gap between readings was 310 ms, longer than the swap's shortest wait (250 ms).
-- **A closing window is gone in under a tenth of a second.** In all eighteen closes the window was hidden or destroyed 18–94 ms after the close mark, and the process ended 0.26–0.68 s after it. No visible window can have been frozen for longer than it was up; #147 measured 18–30 s with the window up ([#300](https://github.com/JUhalt/PaperRoute-Tracker/issues/300)).
-- **The probe says little about these closes,** because its gap between round trips (about 120 ms) is longer than the time a window stays up.
+- **A closing window is gone in under a tenth of a second, and the UI thread keeps answering.** In all eighteen closes the window was hidden or destroyed 18–94 ms after the close mark, and the process ended 0.26–0.68 s after it. The probe's answered round trips bracket every close: at most 184 ms passed between two answers while a window was up, so no stall was longer than that. #147 measured 18–30 s with the window up ([#300](https://github.com/JUhalt/PaperRoute-Tracker/issues/300)).
+- **Few round trips fell inside a close,** because the probe's gap between round trips (about 120 ms) is longer than the time a window stays up. So the closes are judged by the bracket above, not by a round trip's own length.
   - Five closes had a round trip that began while the window was up: 0, 0, 0, 1 and 20 ms.
   - Four had one within 9 ms of the close mark. The mark is written just before the message is posted, so these may have ended before it.
-  - Nine had none, seven of them tries of the stage-filter close. That close's eighth try is one of the four: its 0 ms round trip ended in the close mark's own millisecond, which is the only reason the helper counts it.
+  - Nine had none, seven of them tries of the stage-filter close. That close's eighth try is one of the four: its 0 ms round trip ended in the close mark's own millisecond.
 - **The restarts no longer freeze the old window.** From OK to a loaded window took 3.3–4.7 s, with round trips of at most 341 ms. #147's took 24.5–38.5 s, with stalls of 4.3 and 8.6 s.
 - **The starts and restarts stay over the 1.5 s warm-startup budget.** The sixteen starts of the 500 library took 1.8–4.7 s, with a median of 2.1 s (#147: 3.4 s warm, 9.9 s cold). They are wall times from starting the program (#147's were from a click), and the restarts from an OK, so they include the process's start, which the in-process test's row does not.
 - **Backups and inspections keep the UI thread answering.**
