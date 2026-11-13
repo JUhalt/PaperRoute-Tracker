@@ -2142,7 +2142,9 @@ Public Class DialogPolishTests
     ' box at its DPI, as Journal candidate does, and the hand check at a
     ' real 150% is the check for that. On ca985fa C3's affiliation needed
     ' 503 pixels at 144 DPI in a list 481 wide that did not scroll, and the
-    ' one with an "&" 572 at 120.
+    ' one with an "&" 572 at 120. On 4f1b9b8, rc.3, drawn with the list's
+    ' own GDI+, the one with an "&" needed 663 at 144, and the list scrolled
+    ' to 657 (E4.7).
     <TestMethod>
     Public Sub ManuscriptAuthorAffiliationsAreWholeOrScrollToTheirEndAt96To144Dpi()
 
@@ -2164,9 +2166,13 @@ Public Class DialogPolishTests
                     Dim bar As Boolean =
                         HasStyle(list, WS_HSCROLL)
 
-                    ' The app draws text with GDI; a test host starts with GDI+.
+                    ' Drawn with the list's own engine: a checked list draws
+                    ' with GDI+, the process default here and in the app,
+                    ' unless it is told to draw with GDI, as FitListExtent
+                    ' tells the lists it fits (E4.7).
                     Using twin As New CheckedListBox With {
-                        .Font = list.Font, .UseCompatibleTextRendering = False, .ForeColor = list.ForeColor, .BackColor = list.BackColor,
+                        .Font = list.Font, .UseCompatibleTextRendering = list.UseCompatibleTextRendering, .UseTabStops = list.UseTabStops,
+                        .ForeColor = list.ForeColor, .BackColor = list.BackColor,
                         .BorderStyle = BorderStyle.None, .IntegralHeight = False,
                         .Size = New Size(3 * list.Width, (list.Items.Count + 1) * list.ItemHeight)
                     }
@@ -2242,7 +2248,9 @@ Public Class DialogPolishTests
     ' draws 20; the shared measurement counts the box at the list's DPI,
     ' and the hand check at a real 150% is the check for that. On 5c95d5b,
     ' the second release candidate, C3's row needed 806 pixels at 144 DPI
-    ' in a list 722 wide that did not scroll.
+    ' in a list 722 wide that did not scroll. On 4f1b9b8, rc.3, drawn with
+    ' the list's own GDI+, the row with an "&" needed 774 at 120, and the
+    ' list scrolled to 771 (E4.7).
     <TestMethod>
     Public Sub FillBlanksRowsAreWholeOrScrollToTheirEndAt96To144Dpi()
 
@@ -2264,9 +2272,10 @@ Public Class DialogPolishTests
                     Dim bar As Boolean =
                         HasStyle(list, WS_HSCROLL)
 
-                    ' The app draws text with GDI; a test host starts with GDI+.
+                    ' Drawn with the list's own engine, as the affiliations are.
                     Using twin As New CheckedListBox With {
-                        .Font = list.Font, .UseCompatibleTextRendering = False, .ForeColor = list.ForeColor, .BackColor = list.BackColor,
+                        .Font = list.Font, .UseCompatibleTextRendering = list.UseCompatibleTextRendering, .UseTabStops = list.UseTabStops,
+                        .ForeColor = list.ForeColor, .BackColor = list.BackColor,
                         .BorderStyle = BorderStyle.None, .IntegralHeight = False,
                         .Size = New Size(3 * list.Width, (list.Items.Count + 1) * list.ItemHeight)
                     }
@@ -2426,21 +2435,24 @@ Public Class DialogPolishTests
     ' checked list any long row a few pixels short at a real 150%. Each
     ' list now measures its rows with DialogScaling.FitListExtent when they
     ' change and again when its font changes. Here each window is shown as
-    ' the catalog builds it, each list is given one more row, an "&" in it
-    ' and wider than the list, and then a slightly larger font, as a
-    ' window's text grows; each row is drawn as the app draws it in a twin
-    ' list of the same kind, as the affiliations are judged, and the list
-    ' shows its scroll bar and scrolls at least as far as its widest row
-    ' needs. On 5c95d5b, Fill Blanks' list did not scroll at all, and the
-    ' lists of Bibliography export and import, ORCID lookup and Publication
-    ' & CV Export stopped 25 to 104 pixels short of the added row.
-    ' Publication Check's and the report's reached it here: they fall short
-    ' at a real 150% by the larger check box Windows draws there, which this
-    ' simulation does not draw (E4.7 checks it by hand). On a6911c5, which
-    ' fitted the checked lists, Edit Manuscript's authors and versions and
-    ' Edit Journal's checklist stopped 4 to 141 pixels short of the added
-    ' row; Submission Readiness's list and the packet vault's two reached it
-    ' here, and are fitted the same way.
+    ' the catalog builds it, each list is given two more rows, one with an
+    ' "&" and wider than the list and E4.7's Fill Blanks row, and then a
+    ' slightly larger font, as a window's text grows; each row is drawn in
+    ' a twin list of the same kind with the list's own text engine, as the
+    ' affiliations are judged, and the list shows its scroll bar and
+    ' scrolls 2 pixels past its widest row's last ink. A fitted checked
+    ' list draws with GDI, the engine FitListExtent measures with (E4.7,
+    ' see the test above). On 5c95d5b, Fill Blanks' list did not scroll at
+    ' all, and the lists of Bibliography export and import, ORCID lookup
+    ' and Publication & CV Export stopped 25 to 104 pixels short of the
+    ' added row. On a6911c5, which fitted the checked lists, Edit
+    ' Manuscript's authors and versions and Edit Journal's checklist
+    ' stopped 4 to 141 pixels short of the added row; Submission
+    ' Readiness's list and the packet vault's two reached it here, and are
+    ' fitted the same way. On 4f1b9b8, rc.3, each of the eight checked
+    ' lists drew with GDI+, the process default here and in the app, and
+    ' each fell 6 to 19 pixels short of clearing its widest row at one of
+    ' the three DPIs.
     <TestMethod>
     Public Sub EveryListThatScrollsSidewaysReachesTheEndOfItsWidestRowAt96To144Dpi()
 
@@ -2464,12 +2476,16 @@ Public Class DialogPolishTests
 
                     For Each list As ListBox In ViewCatalog.Descendants(shown).OfType(Of ListBox)().Where(Function(candidate) candidate.HorizontalScrollbar).ToList()
 
-                        ' One more row, with an "&", wider than the list.
+                        ' One more row, with an "&", wider than the list, and
+                        ' E4.7's Fill Blanks row, long enough that GDI+
+                        ' outgrew TextRenderer's padding.
                         Dim row As String = "Department of Psychology & Brain Sciences"
                         Do While TextRenderer.MeasureText(row, list.Font).Width <= list.ClientSize.Width
                             row &= " & Cognition"
                         Loop
+                        Dim fillBlanksRow As String = CheckedRowsToScroll()(0).Text
                         list.Items.Add(row)
+                        list.Items.Add(fillBlanksRow)
 
                         ' The text grows, as when the display's scale changes.
                         list.Font = New Font(list.Font.FontFamily, list.Font.SizeInPoints + 0.5F, list.Font.Style, GraphicsUnit.Point)
@@ -2481,16 +2497,23 @@ Public Class DialogPolishTests
                         Dim bar As Boolean =
                             HasStyle(list, WS_HSCROLL)
 
-                        ' A twin of the same kind. The app draws text with GDI;
-                        ' a test host starts a checked list with GDI+.
-                        Using twin As ListBox = If(TypeOf list Is CheckedListBox, New CheckedListBox With {.UseCompatibleTextRendering = False}, New ListBox())
+                        Dim checkedList As CheckedListBox =
+                            TryCast(list, CheckedListBox)
 
+                        ' A twin of the same kind, drawing with the list's own
+                        ' engine: Windows draws a plain list with GDI, and a
+                        ' checked list draws its own rows with GDI+, the
+                        ' process default here and in the app, unless it is
+                        ' told to draw with GDI.
+                        Using twin As ListBox = If(checkedList IsNot Nothing, New CheckedListBox With {.UseCompatibleTextRendering = checkedList.UseCompatibleTextRendering}, New ListBox())
+
+                            twin.UseTabStops = list.UseTabStops
                             twin.Font = list.Font
                             twin.ForeColor = list.ForeColor
                             twin.BackColor = list.BackColor
                             twin.BorderStyle = BorderStyle.None
                             twin.IntegralHeight = False
-                            twin.Size = New Size(3 * Math.Max(list.Width, TextRenderer.MeasureText(row, list.Font).Width), (list.Items.Count + 1) * list.ItemHeight)
+                            twin.Size = New Size(3 * Math.Max(list.Width, Math.Max(TextRenderer.MeasureText(row, list.Font).Width, TextRenderer.MeasureText(fillBlanksRow, list.Font).Width)), (list.Items.Count + 1) * list.ItemHeight)
 
                             For Each item As Object In list.Items
                                 twin.Items.Add(list.GetItemText(item))
@@ -2510,8 +2533,14 @@ Public Class DialogPolishTests
                             Dim what As String = $"{name} list {ordinal} ({list.GetType().Name}, '{list.AccessibleName}')"
                             judged.Add(what)
 
-                            If Not bar OrElse extent < widest Then
-                                found.Add($"{what} at {dpi} DPI needs {widest} pixels for its widest row in a list {list.ClientSize.Width} wide, and scrolls sideways to {extent} (scroll bar shown: {bar}).")
+                            ' FitListExtent measures with TextRenderer, so a
+                            ' checked list it fits draws with GDI, on any runner.
+                            If checkedList IsNot Nothing AndAlso checkedList.UseCompatibleTextRendering Then
+                                found.Add($"{what} at {dpi} DPI draws its rows with GDI+, and its extent is measured with GDI.")
+                            End If
+
+                            If Not bar OrElse extent < widest + 2 Then
+                                found.Add($"{what} at {dpi} DPI needs {widest} pixels for its widest row, and 2 more to clear it, in a list {list.ClientSize.Width} wide, and scrolls sideways to {extent} (scroll bar shown: {bar}).")
                             End If
 
                         End Using
@@ -2531,10 +2560,297 @@ Public Class DialogPolishTests
     End Sub
 
 
+    ' A checked list that scrolls sideways reaches the end of its widest
+    ' row as the list itself draws it, a few pixels clear, at 12 to 18
+    ' pixel text (E4.7, #313). In a real 150% session, v1.0.0-rc.3's Fill
+    ' Blanks from Crossref stopped at "...DOI 10.5555/zzz-cert.0", its "0"
+    ' against the frame and its "3" out of reach, and Check for
+    ' Publications at "... · Dra", while the sweep above passed.
+    ' FitListExtent measured each row with TextRenderer, GDI, but a checked
+    ' list draws its rows with the process's default engine, which in
+    ' PaperRoute is GDI+: Program.Main starts the app, not the VB template's
+    ' Main, so nothing calls SetCompatibleTextRenderingDefault(False). GDI+
+    ' draws a long row about 1.5% wider than GDI measures it, more than
+    ' TextRenderer's padding once a row is about 1,000 pixels wide. The
+    ' sweep's twins forced GDI, and its rows were shorter, so it compared
+    ' GDI with GDI. Here each of E4.7's two rows, as its window builds it,
+    ' is the only row of a checked list left to the engine the app leaves
+    ' it, at 9, 11.25 and 13.5 points: the 12, 15 and 18 pixels of 100%,
+    ' 125% and 150%. Fitted, the list is drawn by its own hand wider than
+    ' the row, and its extent clears the row's last ink by 2 pixels; and in
+    ' a framed list 722 pixels wide, scrolled fully right as E4.7 scrolls
+    ' it (WM_HSCROLL SB_RIGHT), the row's last ink is 2 pixels or more
+    ' inside the frame. On 4f1b9b8, rc.3, the extents fell 11 to 22 pixels
+    ' short of that, and scrolled fully right the last ink stood 0 or 1
+    ' pixel from the frame. Fitted to draw with GDI, the rows clear by 4 to
+    ' 8 pixels.
+    <TestMethod>
+    Public Sub FitListExtentReachesTheEndOfACheckedListsRowAsTheListDrawsItAt12To18Pixels()
+
+        Dim found As New List(Of String)()
+        Dim judged As New List(Of String)()
+        Dim fillBlanksNeedsAt18 As Integer = 0
+
+        StaRunner.Run(
+            Sub()
+
+                ' The premise: a checked list starts with GDI+ here, as in
+                ' the app, which starts in Program.Main and so never calls
+                ' SetCompatibleTextRenderingDefault(False).
+                Using fresh As New CheckedListBox()
+                    Assert.IsTrue(fresh.UseCompatibleTextRendering, "A new checked list starts with GDI+ here, as in the app.")
+                End Using
+                Assert.AreEqual("ManuscriptPipeline.Program", GetType(DialogScaling).Assembly.EntryPoint.DeclaringType.FullName, "The app starts in Program.Main, not in the VB template's Main.")
+
+                Using host As New Form With {.StartPosition = FormStartPosition.Manual, .Location = New Point(-5000, -5000), .Size = New Size(3200, 400), .ShowInTaskbar = False}
+
+                    host.Show()
+                    Application.DoEvents()
+
+                    For Each row In CheckedRowsToScroll()
+                        For Each points As Single In {9.0F, 11.25F, 13.5F}
+
+                            Using font As New Font(Control.DefaultFont.FontFamily, points)
+
+                                Dim what As String = $"The {row.Window} row at {points} pt ({font.Height}-pixel line)"
+
+                                ' Wider than its row, so it does not scroll.
+                                Using wide As CheckedListBox = CheckedListOf(row.Text, font, 3000, BorderStyle.None)
+
+                                    host.Controls.Add(wide)
+                                    DialogScaling.FitListExtent(wide)
+                                    Application.DoEvents()
+
+                                    Dim extent As Integer =
+                                        CInt(SendMessage(wide.Handle, LB_GETHORIZONTALEXTENT, IntPtr.Zero, IntPtr.Zero))
+
+                                    Dim needs As Integer =
+                                        LastInkColumn(wide, wide.GetItemRectangle(0)) + 1
+
+                                    judged.Add($"{what}, drawn with {If(wide.UseCompatibleTextRendering, "GDI+", "GDI")}: needs {needs} pixels and scrolls to {extent}, {extent - needs} clear")
+
+                                    If row.Window = "Fill Blanks" AndAlso points = 13.5F Then
+                                        fillBlanksNeedsAt18 = needs
+                                    End If
+
+                                    If extent < needs + 2 Then
+                                        found.Add($"{what}: the list draws it {needs} pixels wide, with {If(wide.UseCompatibleTextRendering, "GDI+", "GDI")}, and scrolls sideways to {extent}, {needs + 2 - extent} short of 2 pixels clear.")
+                                    End If
+
+                                    host.Controls.Remove(wide)
+
+                                End Using
+
+                                ' E4.7's own step: scrolled fully right.
+                                Using framed As CheckedListBox = CheckedListOf(row.Text, font, 722, BorderStyle.FixedSingle)
+
+                                    host.Controls.Add(framed)
+                                    DialogScaling.FitListExtent(framed)
+                                    Application.DoEvents()
+                                    SendMessage(framed.Handle, WM_HSCROLL, New IntPtr(SB_RIGHT), IntPtr.Zero)
+                                    Application.DoEvents()
+
+                                    ' The client area in the list's picture, inside the frame.
+                                    Dim client As Rectangle = framed.RectangleToScreen(framed.ClientRectangle)
+                                    Dim origin As Point = host.PointToScreen(framed.Location)
+                                    client.Offset(-origin.X, -origin.Y)
+
+                                    Dim rows As Rectangle = framed.GetItemRectangle(0)
+                                    rows.Offset(0, client.Top)
+
+                                    Dim last As Integer =
+                                        LastInkColumn(framed, rows, client.Left, client.Right)
+
+                                    judged(judged.Count - 1) &= $"; scrolled fully right in a framed list {client.Width} wide, {client.Right - 1 - last} clear of the frame"
+
+                                    If last < client.Left Then
+                                        found.Add($"{what}: scrolled fully right in a framed list {client.Width} wide, it shows no ink.")
+                                    ElseIf client.Right - 1 - last < 2 Then
+                                        found.Add($"{what}: scrolled fully right in a framed list {client.Width} wide, its last ink is {client.Right - 1 - last} pixel(s) clear of the frame.")
+                                    End If
+
+                                    host.Controls.Remove(framed)
+
+                                End Using
+
+                            End Using
+
+                        Next
+                    Next
+
+                End Using
+
+            End Sub)
+
+        Console.WriteLine(String.Join(Environment.NewLine, judged))
+
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        Assert.AreEqual(6, judged.Count, "Each row was judged at each size: " & String.Join("; ", judged))
+        Assert.IsTrue(fillBlanksNeedsAt18 > 1100, "The case is real: at 18 pixels Fill Blanks' row is as long as E4.7's. " & String.Join("; ", judged))
+
+    End Sub
+
+
+    ' A row with tabs reaches its end too, in each kind of list FitListExtent
+    ' fits, at 12 to 18 pixel text (#313). Windows draws a plain list's rows
+    ' and sets its tab stops 8 of the font's average characters apart, as
+    ' GetTabbedTextExtent reckons them; TextRenderer reckons its own, and in
+    ' Segoe UI 9, the text of 100%, the list's stand 56 pixels apart and
+    ' TextRenderer's 48. A fitted checked list draws its rows with
+    ' TextRenderer's stops. Here a row of six one-letter fields and a long
+    ' one, separated by tabs as text pasted from a table is, is the only row
+    ' of each kind of list at 9, 11.25 and 13.5 points, and is judged as
+    ' E4.7's rows are above: 2 pixels clear of the row's last ink, and
+    ' scrolled fully right in a framed list 722 pixels wide, 2 pixels or
+    ' more inside the frame. On f77a99b the plain list's extent fell 39
+    ' pixels short of the row at 9 points, and scrolled fully right its
+    ' last ink was cut by the frame.
+    <TestMethod>
+    Public Sub FitListExtentReachesTheEndOfARowWithTabsInEachKindOfListAt12To18Pixels()
+
+        Dim found As New List(Of String)()
+        Dim judged As New List(Of String)()
+        Dim plainNeedsAt12 As Integer = 0
+        Dim measuredAt12 As Integer = 0
+
+        Dim row As String =
+            String.Join(ControlChars.Tab, {"1", "a", "i", "A", "I", "x", "Cover letter addressed to the handling editor & signed by the corresponding author on behalf of every author of the manuscript"})
+
+        StaRunner.Run(
+            Sub()
+
+                Using host As New Form With {.StartPosition = FormStartPosition.Manual, .Location = New Point(-5000, -5000), .Size = New Size(3200, 400), .ShowInTaskbar = False}
+
+                    host.Show()
+                    Application.DoEvents()
+
+                    For Each points As Single In {9.0F, 11.25F, 13.5F}
+
+                        Using font As New Font(Control.DefaultFont.FontFamily, points)
+
+                            For Each kind As Type In {GetType(ListBox), GetType(CheckedListBox)}
+
+                                Dim what As String = $"The row with tabs in a {kind.Name} at {points} pt ({font.Height}-pixel line)"
+
+                                ' Wider than its row, so it does not scroll.
+                                Using wide As ListBox = ListOf(kind, row, font, 3000, BorderStyle.None)
+
+                                    host.Controls.Add(wide)
+                                    DialogScaling.FitListExtent(wide)
+                                    Application.DoEvents()
+
+                                    Dim extent As Integer =
+                                        CInt(SendMessage(wide.Handle, LB_GETHORIZONTALEXTENT, IntPtr.Zero, IntPtr.Zero))
+
+                                    Dim needs As Integer =
+                                        LastInkColumn(wide, wide.GetItemRectangle(0)) + 1
+
+                                    judged.Add($"{what}: needs {needs} pixels and scrolls to {extent}, {extent - needs} clear")
+
+                                    If kind Is GetType(ListBox) AndAlso points = 9.0F Then
+                                        plainNeedsAt12 = needs
+                                        measuredAt12 = TextRenderer.MeasureText(row, font, New Size(Integer.MaxValue, Integer.MaxValue), TextFormatFlags.NoPrefix Or TextFormatFlags.ExpandTabs).Width
+                                    End If
+
+                                    If extent < needs + 2 Then
+                                        found.Add($"{what}: the list draws it {needs} pixels wide and scrolls sideways to {extent}, {needs + 2 - extent} short of 2 pixels clear.")
+                                    End If
+
+                                    host.Controls.Remove(wide)
+
+                                End Using
+
+                                ' E4.7's own step: scrolled fully right.
+                                Using framed As ListBox = ListOf(kind, row, font, 722, BorderStyle.FixedSingle)
+
+                                    host.Controls.Add(framed)
+                                    DialogScaling.FitListExtent(framed)
+                                    Application.DoEvents()
+                                    SendMessage(framed.Handle, WM_HSCROLL, New IntPtr(SB_RIGHT), IntPtr.Zero)
+                                    Application.DoEvents()
+
+                                    ' The client area in the list's picture, inside the frame.
+                                    Dim client As Rectangle = framed.RectangleToScreen(framed.ClientRectangle)
+                                    Dim origin As Point = host.PointToScreen(framed.Location)
+                                    client.Offset(-origin.X, -origin.Y)
+
+                                    Dim rows As Rectangle = framed.GetItemRectangle(0)
+                                    rows.Offset(0, client.Top)
+
+                                    Dim last As Integer =
+                                        LastInkColumn(framed, rows, client.Left, client.Right)
+
+                                    judged(judged.Count - 1) &= $"; scrolled fully right in a framed list {client.Width} wide, {client.Right - 1 - last} clear of the frame"
+
+                                    If last < client.Left Then
+                                        found.Add($"{what}: scrolled fully right in a framed list {client.Width} wide, it shows no ink.")
+                                    ElseIf client.Right - 1 - last < 2 Then
+                                        found.Add($"{what}: scrolled fully right in a framed list {client.Width} wide, its last ink is {client.Right - 1 - last} pixel(s) clear of the frame.")
+                                    End If
+
+                                    host.Controls.Remove(framed)
+
+                                End Using
+
+                            Next
+
+                        End Using
+
+                    Next
+
+                End Using
+
+            End Sub)
+
+        Console.WriteLine(String.Join(Environment.NewLine, judged))
+
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        Assert.AreEqual(6, judged.Count, "Each kind of list was judged at each size: " & String.Join("; ", judged))
+        Assert.IsTrue(plainNeedsAt12 > measuredAt12 + 2, $"The case is real: at 12 pixels a plain list draws the row {plainNeedsAt12} pixels wide, wider than the {measuredAt12} TextRenderer measures with its own tab stops and padding. " & String.Join("; ", judged))
+
+    End Sub
+
+
+    ' E4.7's two rows, as their windows build them: Fill Blanks' title and
+    ' DOI, and Check for Publications' title and stage.
+    Private Shared Function CheckedRowsToScroll() As (Window As String, Text As String)()
+        Dim dot As String = "  " & ChrW(&HB7) & "  "
+        Return {
+            ("Fill Blanks", "ZZZ-CERT-v0.9.2-03 Published with a deliberately long ending so that its row runs past the edge of the list at 150 percent" & dot & "DOI " & "10.5555/zzz-cert.03"),
+            ("Check for Publications", String.Join(dot, {"ZZZ-CERT-v1.0-E4.7 A deliberately long manuscript title so that its row runs past the edge of every list at one hundred and fifty percent", "Draft"}))
+        }
+    End Function
+
+
+    ' A checked list of the one row, in the font, the given width, with
+    ' room below its row, left to the text engine the app leaves it.
+    Private Shared Function CheckedListOf(row As String, font As Font, width As Integer, border As BorderStyle) As CheckedListBox
+        Return CType(ListOf(GetType(CheckedListBox), row, font, width, border), CheckedListBox)
+    End Function
+
+
+    ' The same for a list of the given kind.
+    Private Shared Function ListOf(kind As Type, row As String, font As Font, width As Integer, border As BorderStyle) As ListBox
+        Dim list As ListBox = CType(Activator.CreateInstance(kind), ListBox)
+        list.Font = font
+        list.BorderStyle = border
+        list.IntegralHeight = False
+        list.Size = New Size(width, 4 * list.ItemHeight + SystemInformation.HorizontalScrollBarHeight)
+        list.Items.Add(row)
+        Return list
+    End Function
+
+
     ' The last column of the control's picture with ink in the rows of the
     ' given rectangle: a pixel that differs clearly from its back color, as
     ' LastInkRow reads ink; -1 for none.
     Private Shared Function LastInkColumn(control As Control, rows As Rectangle) As Integer
+        Return LastInkColumn(control, rows, 0, control.Width)
+    End Function
+
+
+    ' The same, between the given columns, the right one excluded.
+    Private Shared Function LastInkColumn(control As Control, rows As Rectangle, left As Integer, right As Integer) As Integer
 
         Using picture As New Bitmap(control.Width, control.Height, PixelFormat.Format32bppArgb)
 
@@ -2550,7 +2866,7 @@ Public Class DialogPolishTests
             Dim top As Integer = Math.Max(0, rows.Top)
             Dim bottom As Integer = Math.Min(picture.Height, rows.Bottom)
 
-            For x As Integer = picture.Width - 1 To 0 Step -1
+            For x As Integer = Math.Min(picture.Width, right) - 1 To Math.Max(0, left) Step -1
                 For y As Integer = top To bottom - 1
                     Dim pixel As Color = Color.FromArgb(pixels(y * stride + x))
                     If Math.Abs(CInt(pixel.R) - back.R) + Math.Abs(CInt(pixel.G) - back.G) + Math.Abs(CInt(pixel.B) - back.B) > 96 Then
@@ -2704,6 +3020,8 @@ Public Class DialogPolishTests
     End Function
 
     Private Const LB_GETHORIZONTALEXTENT As Integer = &H193
+    Private Const WM_HSCROLL As Integer = &H114
+    Private Const SB_RIGHT As Integer = 7
 
     <DllImport("user32.dll")>
     Private Shared Function SendMessage(window As IntPtr, message As Integer, wParam As IntPtr, lParam As IntPtr) As IntPtr

@@ -2,6 +2,7 @@
 Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.Linq
+Imports System.Runtime.InteropServices
 Imports System.Windows.Forms
 
 Namespace Services
@@ -159,16 +160,32 @@ Namespace Services
         End Function
 
 
-        ' Lets a list scroll sideways to the end of its widest row, as wide
-        ' as the list draws it: in a checked list the check box at the list's
-        ' DPI, then the gaps, then the text with TextRenderer's padding
-        ' (#313). Windows Forms' own extent measures "&" as a mnemonic, in
-        ' every list, and in a checked list counts a 13-pixel check box until
-        ' the list has drawn one, 20 pixels at 150%; so it stopped short of a
-        ' row's end: a pixel short of C3's affiliation at a real 150%, and 8
-        ' or more short of a row with an "&" at any DPI where it scrolls.
-        ' Call it once the rows are in, and again when the list's font
-        ' changes.
+        ' Lets a list scroll sideways to the end of its widest row, a few
+        ' pixels past it, as wide as the list draws it: in a checked list the
+        ' check box at the list's DPI, the gaps and the pixel past them, then
+        ' the text, measured with TextRenderer, GDI, with its padding (#313).
+        ' Windows draws a plain list's rows with GDI. A checked list draws
+        ' its own, with the process's default engine, which in PaperRoute is
+        ' GDI+: Program.Main starts the app, not the VB template's Main, so
+        ' nothing calls SetCompatibleTextRenderingDefault(False). GDI+ draws
+        ' a long row about 1.5% wider than GDI measures it, more than the
+        ' padding once a row is about 1,000 pixels wide, and at a real 150%
+        ' the extent stopped 9 to 11 pixels short of the row's end: Fill
+        ' Blanks' DOI read "10.5555/zzz-cert.0" with its "3" out of reach
+        ' (E4.7). So a checked list fitted here is set to draw with GDI, as
+        ' its rows are measured; a checked list that scrolls sideways comes
+        ' here. A plain list sets its own tab stops, 8 of the font's average
+        ' characters apart as GetTabbedTextExtent reckons them, which in
+        ' Segoe UI 9 at 100% stand 56 pixels apart where TextRenderer's
+        ' stand 48: a row with one tab ran 7 pixels past its extent, and one
+        ' with more tabs further; so a plain list's row with a tab is
+        ' measured as the list lays it out. Windows Forms' own extent
+        ' measures "&" as a mnemonic, in every list, and in a checked list
+        ' counts a 13-pixel check box until the list has drawn one, 20
+        ' pixels at 150%; so it stopped short of a row's end: a pixel short
+        ' of C3's affiliation at a real 150%, and 8 or more short of a row
+        ' with an "&" at any DPI where it scrolls. Call it once the rows are
+        ' in, and again when the list's font changes.
         Public Shared Sub FitListExtent(
             list As ListBox
         )
@@ -183,23 +200,55 @@ Namespace Services
             Dim gap As Integer =
                 CInt(Math.Round(listDpi / 96.0))
 
+            Dim checkedList As CheckedListBox =
+                TryCast(list, CheckedListBox)
+
+            ' A checked list draws its rows with GDI, the engine that measures
+            ' them below, not with the process default (see above).
+            If checkedList IsNot Nothing Then
+                checkedList.UseCompatibleTextRendering = False
+            End If
+
             Dim glyph As Integer =
-                If(TypeOf list Is CheckedListBox, CInt(Math.Round(13 * listDpi / 96.0)), 0)
+                If(checkedList IsNot Nothing, CInt(Math.Round(13 * listDpi / 96.0)), 0)
+
+            ' A checked list's text starts a pixel past the box and the gaps
+            ' (CheckedListBox's BORDER_SIZE).
+            Dim border As Integer =
+                If(checkedList IsNot Nothing, 1, 0)
 
             Dim widest As Integer = 0
 
             For Each item As Object In list.Items
 
+                Dim text As String =
+                    list.GetItemText(item)
+
+                Dim width As Integer =
+                    TextRenderer.MeasureText(
+                        text,
+                        list.Font,
+                        New Size(Integer.MaxValue, Integer.MaxValue),
+                        TextFormatFlags.NoPrefix Or TextFormatFlags.ExpandTabs
+                    ).Width
+
+                ' A plain list's tab stops are its own (see above).
+                If checkedList Is Nothing AndAlso list.UseTabStops AndAlso text.Contains(ControlChars.Tab) Then
+                    width +=
+                        Math.Max(
+                            0,
+                            TabbedTextWidth(text, list.Font) -
+                                TextRenderer.MeasureText(
+                                    text,
+                                    list.Font,
+                                    New Size(Integer.MaxValue, Integer.MaxValue),
+                                    TextFormatFlags.NoPrefix Or TextFormatFlags.ExpandTabs Or TextFormatFlags.NoPadding
+                                ).Width
+                        )
+                End If
+
                 widest =
-                    Math.Max(
-                        widest,
-                        TextRenderer.MeasureText(
-                            list.GetItemText(item),
-                            list.Font,
-                            New Size(Integer.MaxValue, Integer.MaxValue),
-                            TextFormatFlags.NoPrefix Or TextFormatFlags.ExpandTabs
-                        ).Width
-                    )
+                    Math.Max(widest, width)
 
             Next
 
@@ -207,9 +256,63 @@ Namespace Services
 
             ' Never 0, which hands the extent back to Windows Forms.
             list.HorizontalExtent =
-                Math.Max(1, glyph + 2 * gap + widest)
+                Math.Max(1, glyph + 2 * gap + border + widest)
 
         End Sub
+
+
+        ' A row's width as a plain list lays it out: with Windows' own tab
+        ' stops, in the list's font, on the screen.
+        Private Shared Function TabbedTextWidth(
+            text As String,
+            font As Font
+        ) As Integer
+
+            Dim fontHandle As IntPtr =
+                font.ToHfont()
+
+            Try
+
+                Using screen As Graphics = Graphics.FromHwnd(IntPtr.Zero)
+
+                    Dim dc As IntPtr =
+                        screen.GetHdc()
+
+                    Try
+
+                        Dim previous As IntPtr =
+                            SelectObject(dc, fontHandle)
+
+                        Try
+                            Return CInt(GetTabbedTextExtent(dc, text, text.Length, 0, Nothing) And &HFFFFUI)
+                        Finally
+                            SelectObject(dc, previous)
+                        End Try
+
+                    Finally
+                        screen.ReleaseHdc(dc)
+                    End Try
+
+                End Using
+
+            Finally
+                DeleteObject(fontHandle)
+            End Try
+
+        End Function
+
+
+        <DllImport("user32.dll", EntryPoint:="GetTabbedTextExtentW", CharSet:=CharSet.Unicode)>
+        Private Shared Function GetTabbedTextExtent(dc As IntPtr, text As String, count As Integer, tabCount As Integer, tabStops As Integer()) As UInteger
+        End Function
+
+        <DllImport("gdi32.dll")>
+        Private Shared Function SelectObject(dc As IntPtr, item As IntPtr) As IntPtr
+        End Function
+
+        <DllImport("gdi32.dll")>
+        Private Shared Function DeleteObject(item As IntPtr) As Boolean
+        End Function
 
     End Class
 
