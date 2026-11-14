@@ -406,6 +406,308 @@ Public Class RepositoryDocsTests
     End Sub
 
 
+    ' #343: WinGet knows an installed PaperRoute by the Apps entry that
+    ' Velopack's Setup writes. Its key is release.yml's --packId, its name
+    ' --packTitle and its publisher --packAuthors. Each manifest version
+    ' in packaging\winget names the same three, so a rename on either side
+    ' fails here instead of in "winget upgrade".
+    <TestMethod>
+    Public Sub TheWinGetManifestMatchesTheVelopackPackMetadata()
+
+        Dim workflow As String =
+            ReadDocument(
+                Path.Combine(".github", "workflows", "release.yml")
+            )
+
+        Dim packId As String =
+            PackOption(workflow, "packId")
+
+        Dim packTitle As String =
+            PackOption(workflow, "packTitle")
+
+        Dim packAuthors As String =
+            PackOption(workflow, "packAuthors")
+
+        For Each version As String In WinGetManifestVersions()
+
+            For Each manifestFile As String In WinGetManifestFiles
+
+                Assert.AreEqual(
+                    packId,
+                    ManifestValue(
+                        ReadWinGetManifest(version, manifestFile),
+                        "PackageIdentifier"
+                    ),
+                    version & "\" & manifestFile & " is for release.yml's --packId."
+                )
+
+            Next
+
+            Dim installer As String =
+                ReadWinGetManifest(version, WinGetManifestFiles(1))
+
+            Dim locale As String =
+                ReadWinGetManifest(version, WinGetManifestFiles(2))
+
+            Assert.AreEqual(
+                packId,
+                ManifestValue(installer, "ProductCode"),
+                version & ": the installer's ProductCode is the Apps entry's key, --packId."
+            )
+
+            Assert.AreEqual(
+                packTitle,
+                ManifestValue(locale, "PackageName"),
+                version & ": PackageName is the Apps entry's name, --packTitle."
+            )
+
+            Assert.AreEqual(
+                packAuthors,
+                ManifestValue(locale, "Publisher"),
+                version & ": Publisher is the Apps entry's publisher, --packAuthors."
+            )
+
+        Next
+
+    End Sub
+
+
+    ' #343: each manifest version folder is wholly for that version's
+    ' Stable Setup, as the release publishes it, so a copy made for the
+    ' next version cannot keep the last one's URL, links or hash. Each
+    ' release builds its own Setup, so no two versions share a hash; a
+    ' wrong new hash can't be caught offline: only its form is checked.
+    <TestMethod>
+    Public Sub TheWinGetManifestPointsAtThatVersionsStableSetup()
+
+        Dim manifestTypes As String() =
+            {"version", "installer", "defaultLocale"}
+
+        Dim hashes As New Dictionary(Of String, String)(StringComparer.OrdinalIgnoreCase)
+
+        For Each version As String In WinGetManifestVersions()
+
+            Dim manifestVersion As String =
+                ManifestValue(
+                    ReadWinGetManifest(version, WinGetManifestFiles(0)),
+                    "ManifestVersion"
+                )
+
+            For index As Integer = 0 To WinGetManifestFiles.Length - 1
+
+                Dim manifest As String =
+                    ReadWinGetManifest(version, WinGetManifestFiles(index))
+
+                Dim name As String =
+                    version & "\" & WinGetManifestFiles(index)
+
+                Assert.AreEqual(
+                    version,
+                    ManifestValue(manifest, "PackageVersion"),
+                    name & " carries its folder's version."
+                )
+
+                Assert.AreEqual(
+                    manifestVersion,
+                    ManifestValue(manifest, "ManifestVersion"),
+                    name & " has the same ManifestVersion as the version file."
+                )
+
+                Assert.AreEqual(
+                    manifestTypes(index),
+                    ManifestValue(manifest, "ManifestType"),
+                    name & " has its ManifestType."
+                )
+
+            Next
+
+            Dim installer As String =
+                ReadWinGetManifest(version, WinGetManifestFiles(1))
+
+            Assert.AreEqual(
+                "https://github.com/JUhalt/PaperRoute-Tracker/releases/download/v" & version & "/JUhalt.PaperRouteTracker-stable-Setup.exe",
+                ManifestValue(installer, "InstallerUrl"),
+                version & ": InstallerUrl is that release's Stable Setup."
+            )
+
+            Dim hash As String =
+                ManifestValue(installer, "InstallerSha256")
+
+            Assert.IsTrue(
+                Regex.IsMatch(hash, "^[0-9A-F]{64}$"),
+                version & ": InstallerSha256 is 64 upper-case hex digits: " & hash
+            )
+
+            Assert.IsFalse(
+                hashes.ContainsKey(hash),
+                version & ": InstallerSha256 is " & If(hashes.ContainsKey(hash), hashes(hash), "") & "'s too; each release's Setup has its own hash."
+            )
+
+            hashes(hash) = version
+
+            For Each expected As KeyValuePair(Of String, String) In {
+                New KeyValuePair(Of String, String)("InstallerType", "exe"),
+                New KeyValuePair(Of String, String)("Scope", "user"),
+                New KeyValuePair(Of String, String)("Silent", "--silent"),
+                New KeyValuePair(Of String, String)("SilentWithProgress", "--silent")
+            }
+
+                Assert.AreEqual(
+                    expected.Value,
+                    ManifestValue(installer, expected.Key),
+                    version & ": the installer's " & expected.Key & "."
+                )
+
+            Next
+
+            Dim locale As String =
+                ReadWinGetManifest(version, WinGetManifestFiles(2))
+
+            For Each key As String In {"PrivacyUrl", "LicenseUrl", "DocumentUrl"}
+
+                StringAssert.Contains(
+                    ManifestValue(locale, key),
+                    "/blob/v" & version & "/",
+                    version & ": " & key & " points at that version's tag."
+                )
+
+            Next
+
+            Assert.AreEqual(
+                "https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v" & version,
+                ManifestValue(locale, "ReleaseNotesUrl"),
+                version & ": ReleaseNotesUrl is that version's release."
+            )
+
+        Next
+
+    End Sub
+
+
+    ' The three files of a WinGet manifest version, in the order the tests
+    ' use: the version file, the installer and the default locale.
+    Private Shared ReadOnly WinGetManifestFiles As String() = {
+        "JUhalt.PaperRouteTracker.yaml",
+        "JUhalt.PaperRouteTracker.installer.yaml",
+        "JUhalt.PaperRouteTracker.locale.en-US.yaml"
+    }
+
+
+    ' The folder that holds one folder per manifest version, on the path
+    ' microsoft/winget-pkgs uses.
+    Private Shared ReadOnly WinGetPackageFolder As String =
+        Path.Combine("packaging", "winget", "manifests", "j", "JUhalt", "PaperRouteTracker")
+
+
+    ' The versions packaging\winget has a manifest for: at least one.
+    Private Shared Function WinGetManifestVersions() As String()
+
+        Dim folder As String =
+            Path.Combine(
+                AssistantCoreTests.RepositoryRoot(),
+                WinGetPackageFolder
+            )
+
+        Assert.IsTrue(
+            Directory.Exists(folder),
+            "The repository has " & WinGetPackageFolder & "."
+        )
+
+        Dim versions As String() =
+            Directory.GetDirectories(
+                folder
+            ).Select(
+                Function(versionFolder) Path.GetFileName(versionFolder)
+            ).ToArray()
+
+        Assert.IsTrue(
+            versions.Length > 0,
+            WinGetPackageFolder & " has a version folder."
+        )
+
+        Return versions
+
+    End Function
+
+
+    ' One file of a WinGet manifest version.
+    Private Shared Function ReadWinGetManifest(
+        version As String,
+        manifestFile As String
+    ) As String
+
+        Return ReadDocument(
+            Path.Combine(
+                WinGetPackageFolder,
+                version,
+                manifestFile
+            )
+        )
+
+    End Function
+
+
+    ' A WinGet manifest's value for a key: the first line that, after its
+    ' indent and any list dash, starts with the key and a colon. The
+    ' manifests are flat, and no key appears twice in one file, so no YAML
+    ' reader is needed. Quotes around a value are taken off.
+    Private Shared Function ManifestValue(
+        manifest As String,
+        key As String
+    ) As String
+
+        Dim entry As String =
+            manifest.Split(
+                ChrW(10)
+            ).Select(
+                Function(line) line.TrimStart(" "c, "-"c)
+            ).FirstOrDefault(
+                Function(line) line.StartsWith(
+                    key & ":",
+                    StringComparison.Ordinal
+                )
+            )
+
+        Assert.IsNotNull(
+            entry,
+            "The manifest has a value for " & key & "."
+        )
+
+        Return entry.Substring(
+            key.Length + 1
+        ).Trim().Trim(
+            "'"c,
+            """"c
+        )
+
+    End Function
+
+
+    ' The value release.yml's vpk pack step gives an option, without its
+    ' quotes.
+    Private Shared Function PackOption(
+        workflow As String,
+        name As String
+    ) As String
+
+        Dim found As Match =
+            Regex.Match(
+                workflow,
+                "--" & name & " +(""[^""]*""|\S+)"
+            )
+
+        Assert.IsTrue(
+            found.Success,
+            "release.yml's pack step sets --" & name & "."
+        )
+
+        Return found.Groups(1).Value.Trim(
+            """"c
+        )
+
+    End Function
+
+
     ' A file in the repository, with its line endings made plain.
     Private Shared Function ReadDocument(
         relativePath As String
