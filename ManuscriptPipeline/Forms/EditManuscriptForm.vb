@@ -22,8 +22,19 @@ Namespace Forms
             Public Original As Manuscript
             Public Working As Manuscript
             Public All As List(Of Manuscript) = New List(Of Manuscript)()
+
+            ' The main window's own list of records, of which All is a copy,
+            ' or Nothing when the form was given none (#353).
+            Public Live As List(Of Manuscript) = Nothing
+
             Public AuthorLibrary As AuthorLibraryData = New AuthorLibraryData()
             Public AuthorLibraryDirty As Boolean = False
+
+            ' The people and affiliations the author library held on disk
+            ' when it was last read or saved. Any others in it are the
+            ' page's own, made since and not saved yet (#354).
+            Public AuthorIdsOnDisk As New HashSet(Of Guid)()
+            Public AffiliationIdsOnDisk As New HashSet(Of Guid)()
 
             ' The working copy as last loaded or saved; unsaved changes are
             ' any difference from it.
@@ -160,6 +171,11 @@ Namespace Forms
         ' A line for the main window's status bar, such as what Find Journals
         ' added (#88).
         Friend Event StatusMessage As EventHandler(Of String)
+
+        ' Raised when Authors & Affiliations, opened from the page, imported
+        ' ORCID works into the main window's records and saved them (#353),
+        ' so the Board can show them.
+        Friend Event ManuscriptsImported As EventHandler
 
         Private ReadOnly txtTitle As New TextBox()
         Private ReadOnly txtTargetJournal As New TextBox()
@@ -365,10 +381,13 @@ Namespace Forms
                     .Original = manuscript,
                     .Working = CloneManuscript(If(workingCopy, manuscript)),
                     .All = If(allManuscripts Is Nothing, New List(Of Manuscript) From {manuscript}, allManuscripts.ToList()),
+                    .Live = TryCast(allManuscripts, List(Of Manuscript)),
                     .AuthorLibrary = _authorRepository.Load(),
                     .PartsDeferred = deferParts
                 },
                 recovered:=workingCopy IsNot Nothing)
+
+            RememberAuthorLibraryOnDisk()
 
         End Sub
 
@@ -387,7 +406,10 @@ Namespace Forms
                 New RecordState With {
                     .Working = New Manuscript(),
                     .All = If(allManuscripts?.ToList(), _record.All),
+                    .Live = If(TryCast(allManuscripts, List(Of Manuscript)), _record.Live),
                     .AuthorLibrary = _record.AuthorLibrary,
+                    .AuthorIdsOnDisk = _record.AuthorIdsOnDisk,
+                    .AffiliationIdsOnDisk = _record.AffiliationIdsOnDisk,
                     .PartsDeferred = True
                 },
                 recovered:=False)
@@ -2785,6 +2807,111 @@ Namespace Forms
         End Sub
 
 
+        ' Reads the reusable author library again, as a window opened from
+        ' the page (Submission Readiness, Authors & Affiliations, Journal,
+        ' Preprint & Links) may have changed it on disk (#354). What the
+        ' page added and has not saved is carried over: the people and
+        ' affiliations a Crossref lookup created, and the tag colours chosen
+        ' here. Save still writes them and Discard still drops them; nothing
+        ' is written now. Only records the page made itself are carried. One
+        ' that was on disk when the library was last read or saved, and is
+        ' gone now, was deleted or merged in Authors & Affiliations, and
+        ' stays gone. Everything else on disk wins, edits made there
+        ' included. The tag editor is bound to the library read, so a colour
+        ' chosen afterwards is saved too; binding keeps a tag being typed.
+        Private Sub ReloadAuthorLibrary()
+
+            Dim onDisk As AuthorLibraryData =
+                _authorRepository.Load()
+
+            Dim authorIds As New HashSet(Of Guid)(
+                onDisk.Authors.Where(Function(item) item IsNot Nothing).Select(Function(item) item.Id)
+            )
+
+            Dim affiliationIds As New HashSet(Of Guid)(
+                onDisk.Affiliations.Where(Function(item) item IsNot Nothing).Select(Function(item) item.Id)
+            )
+
+            Dim unsaved As AuthorLibraryData =
+                _authorLibrary
+
+            If _authorLibraryDirty AndAlso unsaved IsNot Nothing Then
+
+                For Each author As AuthorRecord In If(unsaved.Authors, New List(Of AuthorRecord)())
+
+                    If author IsNot Nothing AndAlso
+                       Not authorIds.Contains(author.Id) AndAlso
+                       Not _record.AuthorIdsOnDisk.Contains(author.Id) Then
+
+                        onDisk.Authors.Add(
+                            author
+                        )
+
+                    End If
+
+                Next
+
+                For Each affiliation As AffiliationRecord In If(unsaved.Affiliations, New List(Of AffiliationRecord)())
+
+                    If affiliation IsNot Nothing AndAlso
+                       Not affiliationIds.Contains(affiliation.Id) AndAlso
+                       Not _record.AffiliationIdsOnDisk.Contains(affiliation.Id) Then
+
+                        onDisk.Affiliations.Add(
+                            affiliation
+                        )
+
+                    End If
+
+                Next
+
+                For Each entry As TagColor In If(unsaved.TagColors, New List(Of TagColor)())
+
+                    If entry IsNot Nothing Then
+
+                        WorkTypeService.SetColor(
+                            onDisk,
+                            entry.Tag,
+                            entry.Color
+                        )
+
+                    End If
+
+                Next
+
+            End If
+
+            _authorLibrary =
+                onDisk
+
+            ' What is carried over stays the page's own for the next read.
+            _record.AuthorIdsOnDisk =
+                authorIds
+
+            _record.AffiliationIdsOnDisk =
+                affiliationIds
+
+            tagEditor.Bind(_workingManuscript.Tags, _authorLibrary, WorkTypeService.AllTags(_allManuscripts))
+
+        End Sub
+
+
+        ' The people and affiliations the library as read or saved holds.
+        Private Sub RememberAuthorLibraryOnDisk()
+
+            _record.AuthorIdsOnDisk =
+                New HashSet(Of Guid)(
+                    If(_authorLibrary?.Authors, New List(Of AuthorRecord)()).Where(Function(item) item IsNot Nothing).Select(Function(item) item.Id)
+                )
+
+            _record.AffiliationIdsOnDisk =
+                New HashSet(Of Guid)(
+                    If(_authorLibrary?.Affiliations, New List(Of AffiliationRecord)()).Where(Function(item) item IsNot Nothing).Select(Function(item) item.Id)
+                )
+
+        End Sub
+
+
         Private Sub ManageAuthorLibrary(
             sender As Object,
             e As EventArgs
@@ -2825,8 +2952,20 @@ Namespace Forms
 
             End If
 
+            ' The snapshot, with the working copy, is for the usage counts
+            ' only. ORCID works the window imports go into, and are saved
+            ' with, the main window's own records, which hold the saved
+            ' manuscript and never this page's unsaved working copy (#353).
+            Dim importTarget As List(Of Manuscript) =
+                If(_record.Live, _allManuscripts)
+
+            Dim idsBefore As New HashSet(Of Guid)(
+                importTarget.Where(Function(item) item IsNot Nothing).Select(Function(item) item.Id)
+            )
+
             Using dialog As New AuthorLibraryForm(
-                usageSnapshot
+                usageSnapshot,
+                importTarget
             )
 
                 dialog.ShowDialog(
@@ -2835,8 +2974,25 @@ Namespace Forms
 
             End Using
 
-            _authorLibrary =
-                _authorRepository.Load()
+            Dim imported As List(Of Manuscript) =
+                importTarget.Where(Function(item) item IsNot Nothing AndAlso Not idsBefore.Contains(item.Id)).ToList()
+
+            If imported.Count > 0 Then
+
+                ' The page's copy of the records gets them too.
+                Dim held As New HashSet(Of Guid)(
+                    _allManuscripts.Where(Function(item) item IsNot Nothing).Select(Function(item) item.Id)
+                )
+
+                _allManuscripts.AddRange(
+                    imported.Where(Function(item) Not held.Contains(item.Id))
+                )
+
+                RaiseEvent ManuscriptsImported(Me, EventArgs.Empty)
+
+            End If
+
+            ReloadAuthorLibrary()
 
             RefreshAuthorsList()
 
@@ -3890,8 +4046,7 @@ Namespace Forms
                     txtTargetJournal.Text =
                         _workingManuscript.TargetJournal
 
-                    _authorLibrary =
-                        _authorRepository.Load()
+                    ReloadAuthorLibrary()
 
                     RefreshJournalNotes()
 
@@ -4304,6 +4459,8 @@ Namespace Forms
 
                 _authorLibraryDirty =
                     False
+
+                RememberAuthorLibraryOnDisk()
 
             End If
 

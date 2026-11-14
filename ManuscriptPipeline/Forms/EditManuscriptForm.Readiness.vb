@@ -167,8 +167,7 @@ Namespace Forms
             e As EventArgs
         )
 
-            _authorLibrary =
-                _authorRepository.Load()
+            ReloadAuthorLibrary()
 
             RunSubmissionWorkflow(New SubmissionWorkflowRequest With {.Target = SubmissionWorkflowTarget.Readiness})
 
