@@ -169,11 +169,16 @@ Public Class BoardFillTests
                             End If
                         End Sub
 
+                    ' What WinForms read as the tab was entered, which
+                    ' decides whether it checks itself (#340).
+                    Dim atEntry As String = "never entered"
+                    AddHandler board.ShelfTab("tabPublished").Enter, Sub(sender, e) atEntry = HostInput.Describe()
+
                     board.ActiveControl = board.ShelfTab("tabPipeline")
                     PostKey(board.ShelfTab("tabPipeline"), Keys.Right)
                     Application.DoEvents()
 
-                    Assert.IsTrue(board.ShelfTab("tabPublished").Checked, "Right moves to the Published tab.")
+                    Assert.IsTrue(board.ShelfTab("tabPublished").Checked, "Right moves to the Published tab. As it was entered: " & atEntry & ".")
                     Assert.IsTrue(published.Visible)
                     Dim total As Integer = library.Manuscripts.Where(Function(item) item.Location = ManuscriptLocation.Published).Count()
                     Assert.AreEqual(total, Cards(published).Count, "The shelf is built when shown.")
@@ -186,6 +191,44 @@ Public Class BoardFillTests
 
                     board.WaitForBoardFill()
                     Assert.IsTrue(Cards(published).All(Function(card) card.Visible))
+
+                    board.Close()
+                End Using
+            End Sub,
+            TimeSpan.FromMinutes(5))
+
+    End Sub
+
+
+    ' A guard, not a reproduction of #340: with the left button marked down
+    ' in this thread's key state, as a button held on the host would read
+    ' there, Right still moves to the Published tab and shows its shelf,
+    ' because PostKey releases the button first. A RadioButton reached by
+    ' an arrow key with a button down does not check itself. This shows
+    ' that the test no longer depends on that state; it does not show how
+    ' the person's input reached the test's thread on the host.
+    <TestMethod>
+    Public Sub RightOntoAShelfTabSwitchesTheShelfWithAButtonLeftDown()
+
+        StaRunner.Run(
+            Sub()
+                Dim library As LargeLibraryFixture.SyntheticLibrary = LargeLibraryFixture.Create(Path.Combine(_root, "library"), 12)
+
+                Using board As New LibraryBoard(library, Path.Combine(_root, "settings"))
+
+                    board.Start()
+                    board.WaitForBoardFill()
+
+                    Dim atEntry As String = "never entered"
+                    AddHandler board.ShelfTab("tabPublished").Enter, Sub(sender, e) atEntry = HostInput.Describe()
+
+                    board.ActiveControl = board.ShelfTab("tabPipeline")
+                    HostInput.MarkDown(Keys.LButton)
+                    PostKey(board.ShelfTab("tabPipeline"), Keys.Right)
+                    Application.DoEvents()
+
+                    Assert.IsTrue(board.ShelfTab("tabPublished").Checked, "Right moves to the Published tab. As it was entered: " & atEntry & ".")
+                    Assert.IsTrue(board.Shelf("publishedPanel").Visible, "The Published shelf shows.")
 
                     board.Close()
                 End Using
@@ -536,7 +579,11 @@ Public Class BoardFillTests
     End Sub
 
 
+    ' With the mouse buttons, Tab and modifiers released in this thread's
+    ' key state first, as WinForms reads them while it handles the key
+    ' (HostInput, #340).
     Private Shared Sub PostKey(target As Control, key As Keys)
+        HostInput.HoldOnly()
         PostMessage(target.Handle, &H100UI, New IntPtr(CInt(key)), New IntPtr(1))
     End Sub
 

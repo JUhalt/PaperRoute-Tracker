@@ -98,9 +98,6 @@ Public Class KeyboardAccessTests
     Private Const WM_KEYUP As UInteger =
         &H101
 
-    Private Const VK_SHIFT As Integer =
-        &H10
-
     Private Const WM_UPDATEUISTATE As UInteger =
         &H128
 
@@ -583,12 +580,27 @@ Public Class KeyboardAccessTests
                         Dim after As New List(Of String)()
                         Dim previous As LinkLabel = Nothing
 
+                        ' Where each Tab went, and the first key state after
+                        ' a Tab that was not all released, for the failure
+                        ' message (#318).
+                        Dim stops As New List(Of String)()
+                        Dim firstHeld As String = Nothing
+
                         For count As Integer = 0 To 60
 
                             Press(board, Keys.Tab)
 
+                            Dim seen As String =
+                                HostInput.Describe()
+
+                            If firstHeld Is Nothing AndAlso seen <> HostInput.AllReleased Then
+                                firstHeld = "after Tab " & (count + 1) & ", " & seen
+                            End If
+
                             Dim active As Control =
                                 DeepestActiveControl(board)
+
+                            stops.Add(Describe(active))
 
                             If previous IsNot Nothing Then
                                 after.Add(If(active?.AccessibleName, "(nothing)"))
@@ -609,7 +621,9 @@ Public Class KeyboardAccessTests
                         CollectionAssert.AreEqual(
                             titles,
                             reached,
-                            "Tab reaches each card's title once, in card order: " & String.Join(" | ", reached.Select(Function(link) link.Text))
+                            "Tab reaches each card's title once, in card order: " & String.Join(" | ", reached.Select(Function(link) link.Text)) &
+                            ". Key state: " & If(firstHeld, HostInput.AllReleased & " after every Tab") &
+                            ". Tab went to: " & String.Join(" > ", stops) & "."
                         )
 
                         CollectionAssert.AreEqual(
@@ -657,6 +671,99 @@ Public Class KeyboardAccessTests
                             library.Single(Function(item) item.Title = titles(1).Text).Id,
                             DirectCast(GetType(Form1).GetField("currentManuscriptId", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(board), Guid),
                             "It opens that card's manuscript."
+                        )
+
+                        board.Close()
+
+                    End Using
+
+                End Sub
+            )
+
+        Finally
+
+            StorageEnvironment.RootOverride =
+                Nothing
+
+            DeleteTemporaryRoot(
+                root
+            )
+
+        End Try
+
+    End Sub
+
+
+    ' A guard, not a reproduction of #318: with Ctrl or Alt marked down in
+    ' this thread's key state before every Tab, as a key held on the host
+    ' would read there, Tab still reaches the three titles in card order,
+    ' because Press releases the key first. With Ctrl or Alt in its key
+    ' data, a container ignores Tab. This shows that the Tab round no
+    ' longer depends on that state; it does not show how the person's
+    ' input reached the test's thread on the host.
+    <TestMethod>
+    <DataRow(Keys.ControlKey)>
+    <DataRow(Keys.Menu)>
+    Public Sub TabRoundTheBoardReachesTheTitlesWithAModifierLeftDown(modifier As Keys)
+
+        Dim library As List(Of Manuscript) =
+            CreateRepresentativeLibrary()
+
+        library.Add(New Manuscript With {.Title = "Second Pipeline Study", .CurrentStage = PaperStage.Draft, .Location = ManuscriptLocation.Pipeline})
+        library.Add(New Manuscript With {.Title = "Third Pipeline Study", .CurrentStage = PaperStage.Revision, .Location = ManuscriptLocation.Pipeline})
+
+        Dim root As String =
+            CreateTemporaryRoot()
+
+        StorageEnvironment.RootOverride =
+            root
+
+        Try
+
+            StaRunner.Run(
+                Sub()
+
+                    Using board As Form1 = ViewCatalog.BoardOf(library)
+
+                        Dim titles As List(Of LinkLabel) =
+                            ViewCatalog.Descendants(board).OfType(Of RoundedPanel)().
+                                Where(Function(card) card.Visible AndAlso card.ContextMenuStrip IsNot Nothing).
+                                Select(Function(card) card.Controls.OfType(Of LinkLabel)().Single(Function(link) link.Text = card.AccessibleName)).
+                                ToList()
+
+                        Assert.AreEqual(3, titles.Count, "The Pipeline shows three cards.")
+
+                        board.ActiveControl =
+                            ViewCatalog.Descendants(board).OfType(Of TextBox)().First(Function(box) box.Visible)
+
+                        Dim reached As New List(Of LinkLabel)()
+                        Dim stops As New List(Of String)()
+
+                        For count As Integer = 0 To 60
+
+                            HostInput.MarkDown(modifier)
+                            Press(board, Keys.Tab)
+
+                            Dim active As Control =
+                                DeepestActiveControl(board)
+
+                            stops.Add(Describe(active))
+
+                            Dim title As LinkLabel =
+                                TryCast(active, LinkLabel)
+
+                            If title IsNot Nothing AndAlso titles.Contains(title) Then
+                                If reached.Contains(title) Then Exit For
+                                reached.Add(title)
+                            End If
+
+                        Next
+
+                        CollectionAssert.AreEqual(
+                            titles,
+                            reached,
+                            "Tab reaches each card's title once, in card order, with " & modifier.ToString() & " marked down before each Tab: " &
+                            String.Join(" | ", reached.Select(Function(link) link.Text)) & ". Tab went to: " & String.Join(" > ", stops) & "."
                         )
 
                         board.Close()
@@ -2473,13 +2580,15 @@ Public Class KeyboardAccessTests
     End Function
 
 
-    ' Posts the key to the focused control and lets the form handle it.
+    ' Posts the key to the focused control, with only the modifiers held
+    ' given held (see Post), and lets the form handle it.
     Private Shared Sub Press(
         form As Form,
-        key As Keys
+        key As Keys,
+        Optional held As Keys = Keys.None
     )
 
-        Post(form, key)
+        Post(form, key, held)
         Application.DoEvents()
 
     End Sub
@@ -2495,7 +2604,9 @@ Public Class KeyboardAccessTests
         Dim target As Control =
             If(DeepestActiveControl(form), form)
 
-        ' Bit 29 of the key data: Alt is held.
+        ' Bit 29 of the key data: Alt is held. The key state is released
+        ' as for any other key (HostInput, #318).
+        HostInput.HoldOnly()
         PostMessage(target.Handle, WM_SYSCHAR, New IntPtr(AscW(key)), New IntPtr(1 << 29))
         Application.DoEvents()
 
@@ -2566,34 +2677,29 @@ Public Class KeyboardAccessTests
         key As Keys
     )
 
-        Dim state(255) As Byte
-        GetKeyboardState(state)
-
-        Dim before As Byte =
-            state(VK_SHIFT)
-
-        state(VK_SHIFT) = CByte(before Or &H80)
-        SetKeyboardState(state)
-
         Try
-            Press(form, key)
+            Press(form, key, Keys.Shift)
         Finally
-            GetKeyboardState(state)
-            state(VK_SHIFT) = before
-            SetKeyboardState(state)
+            HostInput.HoldOnly()
         End Try
 
     End Sub
 
 
+    ' Posts the key to the focused control. WinForms reads the mouse
+    ' buttons, Tab and modifiers from this thread's key state as it
+    ' handles the key, so they are released first and only the modifiers
+    ' in held are held (HostInput, #318).
     Private Shared Sub Post(
         form As Form,
-        key As Keys
+        key As Keys,
+        Optional held As Keys = Keys.None
     )
 
         Dim target As Control =
             If(DeepestActiveControl(form), form)
 
+        HostInput.HoldOnly(held)
         PostMessage(target.Handle, WM_KEYDOWN, New IntPtr(CInt(key)), New IntPtr(1))
 
     End Sub
@@ -2635,19 +2741,11 @@ Public Class KeyboardAccessTests
     End Function
 
     <DllImport("user32.dll")>
-    Private Shared Function GetKeyboardState(state As Byte()) As Boolean
-    End Function
-
-    <DllImport("user32.dll")>
     Private Shared Function GetFocus() As IntPtr
     End Function
 
     <DllImport("user32.dll")>
     Private Shared Function IsWindowVisible(handle As IntPtr) As Boolean
-    End Function
-
-    <DllImport("user32.dll")>
-    Private Shared Function SetKeyboardState(state As Byte()) As Boolean
     End Function
 
     <DllImport("user32.dll")>
