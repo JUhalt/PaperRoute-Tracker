@@ -167,12 +167,15 @@ Namespace Services
         ' Windows draws a plain list's rows with GDI. A checked list draws
         ' its own, with the process's default engine, which in PaperRoute is
         ' GDI+: Program.Main starts the app, not the VB template's Main, so
-        ' nothing calls SetCompatibleTextRenderingDefault(False). GDI+ draws
-        ' a long row about 1.5% wider than GDI measures it, more than the
-        ' padding once a row is about 1,000 pixels wide, and at a real 150%
-        ' the extent stopped 9 to 11 pixels short of the row's end: Fill
-        ' Blanks' DOI read "10.5555/zzz-cert.0" with its "3" out of reach
-        ' (E4.7). So a checked list fitted here is set to draw with GDI, as
+        ' nothing calls SetCompatibleTextRenderingDefault(False) (see the
+        ' comment there, #333). The two engines give a long row different
+        ' widths, in either direction: on rc.3 at a real 100%, GDI+ drew
+        ' Fill Blanks' and Check for Publications' rows wider than GDI
+        ' measured them, four and three characters out of reach, and three
+        ' other lists' rows narrower, with 26 to 36 pixels of spare scroll.
+        ' At a real 150% the extent stopped 9 to 11 pixels short of the
+        ' row's end: Fill Blanks' DOI read "10.5555/zzz-cert.0" with its
+        ' "3" out of reach (E4.7). So a checked list fitted here is set to draw with GDI, as
         ' its rows are measured; a checked list that scrolls sideways comes
         ' here. A plain list sets its own tab stops, 8 of the font's average
         ' characters apart as GetTabbedTextExtent reckons them, which in
@@ -204,7 +207,8 @@ Namespace Services
                 TryCast(list, CheckedListBox)
 
             ' A checked list draws its rows with GDI, the engine that measures
-            ' them below, not with the process default (see above).
+            ' them below, not with the process default (see above). A checked
+            ' list that is not fitted here keeps GDI+ (#333).
             If checkedList IsNot Nothing Then
                 checkedList.UseCompatibleTextRendering = False
             End If

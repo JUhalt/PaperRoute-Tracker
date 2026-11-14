@@ -917,7 +917,9 @@ Public Class DarkThemeLegibilityTests
                     row.Controls.Add(inRow)
                     Dim specimens As ButtonBase() = {wrapped, rightAligned, choice, remove, edit, onCard, inRow}
                     For Each specimen As ButtonBase In specimens
-                        ' The app draws text with GDI; a test host starts with GDI+.
+                        ' Judges the GDI picture. The app draws buttons, check
+                        ' boxes and radio buttons with GDI+, as a test host
+                        ' does (see #333).
                         specimen.UseCompatibleTextRendering = False
                     Next
                     form.Controls.AddRange(New Control() {wrapped, rightAligned, choice, remove, edit, card})
@@ -1184,7 +1186,8 @@ Public Class DarkThemeLegibilityTests
     ' WinForms gives a disabled caption on a dark surface.
     Private Shared Sub AssertMutedCaption(control As ButtonBase)
 
-        ' The app draws text with GDI; a test host starts with GDI+.
+        ' Judges the GDI picture. The app draws this control's caption with
+        ' GDI+, as a test host does (see #333).
         control.UseCompatibleTextRendering = False
 
         Using image As Bitmap = Picture(control)

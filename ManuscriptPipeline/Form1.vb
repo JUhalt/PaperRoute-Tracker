@@ -57,6 +57,17 @@ Public Class Form1
     Private uiInitialized As Boolean = False
     Private suppressBoardFilterEvents As Boolean = False
 
+    ' A stage or sort chosen in an open list waits for the list to close
+    ' (#338): the arrow keys change the choice at every step, and each
+    ' render took cards off the shelves and put others on. The close is
+    ' handled once its messages are done (boardFilterFlushPosted), as
+    ' Windows does not fix whether the choice or the close comes first.
+    ' boardFilterShown is the stage and sort the shelves were last rendered
+    ' with, so a list closed on the choice it opened with renders nothing.
+    Private boardFilterChangePending As Boolean = False
+    Private boardFilterFlushPosted As Boolean = False
+    Private boardFilterShown As (Stage As Integer, Sort As Integer) = (-1, -1)
+
     ' A save failed since the last good one (#113): closing would lose the
     ' changes it did not write, so the status line and the manuscript page's
     ' Unsaved changes bar say so until a save succeeds.
@@ -557,6 +568,8 @@ Public Class Form1
         AddHandler txtBoardSearch.TextChanged, AddressOf BoardSearchTextChanged
         AddHandler cboStageFilter.SelectedIndexChanged, AddressOf BoardFilterChanged
         AddHandler cboBoardSort.SelectedIndexChanged, AddressOf BoardFilterChanged
+        AddHandler cboStageFilter.DropDownClosed, AddressOf BoardFilterListClosed
+        AddHandler cboBoardSort.DropDownClosed, AddressOf BoardFilterListClosed
         AddHandler btnClearBoardFilters.Click, AddressOf ClearBoardFilters
 
         ConfigureFlowPanel(pipelinePanel)
@@ -1914,8 +1927,83 @@ Public Class Form1
             Return
         End If
 
+        ' A step through an open list, or a choice that comes after its
+        ' close, waits for the close to be handled (#338). A step on a
+        ' closed box, by an arrow key or the mouse wheel, renders at once.
+        Dim box As ComboBox = TryCast(sender, ComboBox)
+
+        If box IsNot Nothing AndAlso (boardFilterFlushPosted OrElse BoardFilterListOpen(box)) Then
+            boardFilterChangePending = True
+            Return
+        End If
+
         boardSearchDebounceTimer.Stop()
-        RenderManuscripts()
+        RenderBoardFilterChange()
+
+    End Sub
+
+
+    ' Overridable so tests can step through an open list without dropping
+    ' one, which would take the mouse.
+    Protected Overridable Function BoardFilterListOpen(
+        box As ComboBox
+    ) As Boolean
+
+        Return box.DroppedDown
+
+    End Function
+
+
+    Private Sub BoardFilterListClosed(
+        sender As Object,
+        e As EventArgs
+    )
+
+        If boardFilterFlushPosted OrElse IsDisposed OrElse Not IsHandleCreated Then
+            Return
+        End If
+
+        boardFilterFlushPosted = True
+        BeginInvoke(New Action(AddressOf FlushBoardFilterChange))
+
+    End Sub
+
+
+    ' The choice made in the list just closed, rendered once. A list
+    ' closed by Esc or a click away may hand back the choice it opened
+    ' with, which the shelves already show.
+    Private Sub FlushBoardFilterChange()
+
+        boardFilterFlushPosted = False
+
+        If IsDisposed OrElse Not boardFilterChangePending Then
+            Return
+        End If
+
+        boardFilterChangePending = False
+
+        If boardFilterShown.Equals((cboStageFilter.SelectedIndex, cboBoardSort.SelectedIndex)) Then
+            Return
+        End If
+
+        boardSearchDebounceTimer.Stop()
+        RenderBoardFilterChange()
+
+    End Sub
+
+
+    ' A filter's render holds the shelves' drawing, as a shelf switch does
+    ' (ShowShelf, #133): the cards it puts on a shelf shown are otherwise
+    ' drawn there and then, one by one, before the render returns (#338).
+    ' The shelves paint once, whole, when it has. With focus inside them
+    ' the render may take away the card it is on, and focus moves on as
+    ' the card goes, which a held host would refuse (RedrawHold), so then
+    ' it is not held.
+    Private Sub RenderBoardFilterChange()
+
+        Using New RedrawHold(If(shelfHost.ContainsFocus, Nothing, shelfHost))
+            RenderManuscripts()
+        End Using
 
     End Sub
 
@@ -1948,7 +2036,7 @@ Public Class Form1
 
         End Try
 
-        RenderManuscripts()
+        RenderBoardFilterChange()
 
     End Sub
 
@@ -2586,6 +2674,8 @@ Public Class Form1
 
         RefreshStageFilterItems()
         RefreshAttentionDashboard()
+
+        boardFilterShown = (cboStageFilter.SelectedIndex, cboBoardSort.SelectedIndex)
 
         Me.SuspendLayout()
         pipelinePanel.SuspendLayout()
