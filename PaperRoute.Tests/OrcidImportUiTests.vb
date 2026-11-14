@@ -502,6 +502,32 @@ Public Class OrcidImportUiTests
             End Sub)
     End Sub
 
+    ' A person the page's working copy still names is refused from the
+    ' page, but the refusal does not tell the researcher to save the page:
+    ' saving it would not let the delete through.
+    <TestMethod>
+    Public Sub ARefusalFromThePageThatSavingWouldNotChangeDoesNotSayToSave()
+        StaRunner.Run(
+            Sub()
+                Dim seeded As (Author As AuthorRecord, Affiliation As AffiliationRecord) = SeedAffiliatedLibrary()
+
+                Using board As LibraryBoard = StartBoard(),
+                      dialogs As New ManuscriptPageTests.DialogWatcher("Delete Author")
+                    board.Open(board.Library.Single())
+
+                    Assert.AreEqual(1, DeleteFromThePage(board.Editor, "lstAuthors", "DeleteSelectedAuthor",
+                        Function(item) DirectCast(item, AuthorRecord).Id = seeded.Author.Id))
+
+                    CollectionAssert.AreEqual({"Author Is In Use"}, dialogs.Closed, "Delete was refused, and nothing else was shown.")
+                    Assert.IsFalse(dialogs.Messages(0).Contains("counts as saved"), "The refusal does not say to save the page: " & dialogs.Messages(0))
+                    Assert.IsTrue(New AuthorLibraryRepository().Load().Authors.Any(Function(item) item.Id = seeded.Author.Id), "The person stays on disk.")
+
+                    board.SetPrompt(Function(title) System.Windows.Forms.DialogResult.No)
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
     ' An import whose author library cannot be read imports nothing and
     ' writes nothing: the read says what failed, and the damaged file is
     ' left as it is, not replaced by the main window's copy.

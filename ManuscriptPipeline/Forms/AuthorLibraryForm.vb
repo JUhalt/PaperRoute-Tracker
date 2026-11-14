@@ -1083,13 +1083,19 @@ Namespace Forms
         End Sub
 
 
+        ' Set by CountUsage: whether the saved copy of the open manuscript
+        ' used the record more than the page's working copy did.
+        Private _savedCopyRaisedCount As Boolean
+
         ' Added to the In Use messages from the manuscript page: usage counts
         ' the open manuscript as saved (CountUsage), so a person or an
         ' affiliation removed on the page but not saved is still in use, and
-        ' what the researcher must do is save the page.
+        ' what the researcher must do is save the page. Only when the saved
+        ' copy raised the last count: a refusal from the working copy or
+        ' from other manuscripts is not helped by saving the page.
         Private Function PageInUseNote() As String
 
-            If _importTarget Is _manuscripts Then
+            If _importTarget Is _manuscripts OrElse Not _savedCopyRaisedCount Then
                 Return String.Empty
             End If
 
@@ -1140,6 +1146,8 @@ Namespace Forms
             usesIn As Func(Of Manuscript, Integer)
         ) As Integer
 
+            _savedCopyRaisedCount = False
+
             Dim saved As New Dictionary(Of Guid, Manuscript)()
 
             If _importTarget IsNot _manuscripts Then
@@ -1172,7 +1180,13 @@ Namespace Forms
                 If saved.TryGetValue(manuscript.Id, savedCopy) AndAlso
                    savedCopy IsNot manuscript Then
 
-                    uses = Math.Max(uses, usesIn(savedCopy))
+                    Dim savedUses As Integer =
+                        usesIn(savedCopy)
+
+                    If savedUses > uses Then
+                        uses = savedUses
+                        _savedCopyRaisedCount = True
+                    End If
 
                 End If
 
