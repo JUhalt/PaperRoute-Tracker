@@ -445,6 +445,50 @@ You can save labeled web links such as:
 
 For safety, PaperRoute opens only valid `http://` or `https://` URLs.
 
+For a study kept on OSF, see **If your studies were on OSF**.
+
+---
+
+## If your studies were on OSF
+
+The Center for Open Science (COS), which runs OSF, is changing what OSF does. If you kept a study's plan, materials, or data in an OSF project beside a manuscript, this section says what changes and what PaperRoute 1.0 can hold for you now.
+
+### What changes on OSF
+
+- From November 16, 2026, no new OSF projects or components can be created ([COS: OSF is changing](https://www.cos.io/osf-changes)).
+- On February 19, 2027, every OSF project, public or private, becomes read-only ([COS: OSF is changing](https://www.cos.io/osf-changes); [OSF Support: projects transition](https://help.osf.io/article/727-osf-projects-transition)). Its files, wiki, and metadata can then no longer be edited. COS's FAQ says in places that projects can be changed until February 18, so finish your edits by then ([OSF FAQ](https://help.osf.io/article/725-faqs)).
+- Public projects stay online, and their links and DOIs keep working. A finished public project can stay where it is ([COS: OSF is changing](https://www.cos.io/osf-changes); [COS webinar slides](https://www.cos.io/hubfs/Emails/Webinar%20Resources/OSF%20Transition%20Webinar.pdf)).
+- COS expects to remove private projects later, and says it intends to give 12 months' notice first ([COS: OSF is changing](https://www.cos.io/osf-changes); [COS webinar slides](https://www.cos.io/hubfs/Emails/Webinar%20Resources/OSF%20Transition%20Webinar.pdf)).
+- From February 19, 2027, no new view-only link can be made for a project. Existing view-only links keep working while a private project remains on OSF, read-only ([OSF Support: projects transition](https://help.osf.io/article/727-osf-projects-transition); [OSF FAQ](https://help.osf.io/article/725-faqs)).
+- OSF registrations and preprints are not affected, so you can still preregister a study on OSF ([OSF Support: details of the transition](https://help.osf.io/article/759-details-of-osf-projects-transition); [OSF Support: registrations](https://help.osf.io/article/770-registrations)).
+- OSF is no longer a home for new data, materials, or code. COS suggests your institution's repository, or a general repository such as Dataverse, Figshare, Zenodo, or Dryad ([COS: transition use cases](https://www.cos.io/osf-transition-use-cases); [OSF Support: choosing a repository](https://help.osf.io/article/735-choosing-a-repository)).
+
+### What PaperRoute 1.0 holds for a study
+
+PaperRoute 1.0 tracks manuscripts. It has no record for a study, but a manuscript can hold the study's links and the files that went to a journal with it.
+
+- **Links.** On the manuscript page's **Overview** tab, choose **Journal, Preprint & Links...**. Under **Related Web Links**, choose **Add Link** for each place the study lives: the OSF project, the preregistration, the data deposit, the materials. You choose the label, and the list shows it beside the URL, so a label such as `OSF Project (read-only)` or `Data (Zenodo)` tells the links apart. **Notes** holds the rest, such as the day you downloaded the project. Choose **Save & Close**, then **Save** on the manuscript page.
+- **A preprint.** Enter its DOI or URL under **Preprint** in the same window.
+- **Files.** A Version History entry, a packet file, or a correspondence item can be a managed copy: PaperRoute keeps the file in your PaperRoute Library folder, and **Backup Library...** includes it. Files sent to a journal with the manuscript, such as a supplement or a data availability statement, belong in that submission's packet (see **Submission Readiness and Packets**). A packet file can be any kind of file.
+- **A copy to share.** **Export Packet...** makes one .zip of a packet's files, with a checksum for each and RO-Crate metadata (see **Export a packet**). You can upload it to a repository as ordinary files. PaperRoute does not send it anywhere.
+- **A reminder.** On the **Deadlines** page, **Add Reminder** sets a dated reminder for a manuscript, such as "Download the OSF project" on February 18, 2027.
+
+PaperRoute 1.0 has no place for a whole study's data. Keep it in a folder you back up, or in a repository, and record its link on the manuscript.
+
+### Before February 19, 2027
+
+1. Add the link of each OSF project behind a manuscript to that manuscript, if it is not there yet.
+2. Download each project you want to keep, private projects first. OSF's guide to [downloading files from OSF projects](https://help.osf.io/article/736-download-osf-content) shows how. A project's .zip holds only its own files: download each component and each storage add-on separately, and copy the wiki yourself.
+3. Move ongoing work, such as data still being collected or materials still changing, to a repository. Add its link beside the OSF link, and keep the OSF link for the record.
+4. If a manuscript under review links to a private OSF project through a view-only link, ask the journal how to replace that link.
+5. Choose **Settings > Backup Library...**. A backup holds PaperRoute's managed copies, but only the paths of files linked from elsewhere; keep those originals yourself.
+
+A registration already on OSF needs nothing: COS says registrations are not affected ([OSF Support: details of the transition](https://help.osf.io/article/759-details-of-osf-projects-transition)).
+
+### Later
+
+PaperRoute's roadmap plans to add studies, with their preregistration, materials, and data, in v1.2 (Open Science Studies). Plans can change and no date is set, so the steps above are the ones to take now.
+
 ---
 
 ## Journal Facts and Metrics
@@ -1186,6 +1230,8 @@ The File Drawer is reversible; it is not deletion.
 4. Use a label such as `OSF Project`.
 5. Enter the `https://` URL.
 6. Save.
+
+For what is changing on OSF, see **If your studies were on OSF**.
 
 ## How do I save a preprint?
 

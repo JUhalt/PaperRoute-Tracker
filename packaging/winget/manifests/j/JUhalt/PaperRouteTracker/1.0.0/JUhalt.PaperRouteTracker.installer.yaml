@@ -1,0 +1,26 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
+
+PackageIdentifier: JUhalt.PaperRouteTracker
+PackageVersion: 1.0.0
+Platform:
+- Windows.Desktop
+InstallerType: exe
+Scope: user
+InstallModes:
+- interactive
+- silent
+- silentWithProgress
+InstallerSwitches:
+  Silent: --silent
+  SilentWithProgress: --silent
+UpgradeBehavior: install
+ProductCode: JUhalt.PaperRouteTracker
+ReleaseDate: 2026-11-14
+InstallationMetadata:
+  DefaultInstallLocation: '%LocalAppData%\JUhalt.PaperRouteTracker'
+Installers:
+- Architecture: x64
+  InstallerUrl: https://github.com/JUhalt/PaperRoute-Tracker/releases/download/v1.0.0/JUhalt.PaperRouteTracker-stable-Setup.exe
+  InstallerSha256: DD6BD6383DDAF8AA671FFA7B747A743DAE0E3F9AB878F48CE4929F5AE2B756E2
+ManifestType: installer
+ManifestVersion: 1.12.0

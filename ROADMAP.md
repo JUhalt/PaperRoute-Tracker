@@ -58,7 +58,8 @@ Targets are directional rather than promises. Data integrity, migrations, backup
 | **v0.9.1** | Packet File Safety ✅ | Does a save ever delete a file the library did not ask it to? |
 | **v0.9.2** | 1.0 Hardening ✅ | Is the entire workflow polished, resilient, and certifiable? |
 | **v1.0** | Trusted Research Workflow ✅ | Would I trust this with my real publication pipeline? |
-| **v1.1** | **macOS and Linux — next** | Can PaperRoute be the same calm, trustworthy app on every desktop? |
+| **v1.0.1** | **Certification Follow-ups — next** | What did 1.0's certification note that should not wait for the new interface? |
+| **v1.1** | macOS and Linux | Can PaperRoute be the same calm, trustworthy app on every desktop? |
 | **v1.2** | Open Science Studies | What did I plan before I saw the data, and where can others check what I shared? |
 
 On September 26, 2026, the train was re-sequenced so the interface can catch up with the depth of the data model: v0.6 became **Workspace UI**, Deadline Center moved to v0.7, Route Analytics & Reports moved to v0.8, and optional AI assistance became a proposal for after 1.0. Deadlines and Analytics arrive as pages in the new workspace rather than as additional dialogs.
@@ -395,6 +396,26 @@ Systematic burn-down before 1.0:
 - portable project-sharing decision ([#155](https://github.com/JUhalt/PaperRoute-Tracker/issues/155))
 - installer trust/signing decision ([#152](https://github.com/JUhalt/PaperRoute-Tracker/issues/152), with the application in [#216](https://github.com/JUhalt/PaperRoute-Tracker/issues/216))
 
+---
+
+## COMPLETE — v1.0 Trusted Research Workflow
+
+**Release-readiness tracker:** [#44](https://github.com/JUhalt/PaperRoute-Tracker/issues/44), in [milestone 12](https://github.com/JUhalt/PaperRoute-Tracker/milestone/12), closed on November 14, 2026. 1.0 was certified by the standing procedure in [Release-Certification.md](ManualCertification/Release-Certification.md) ([#146](https://github.com/JUhalt/PaperRoute-Tracker/issues/146), [PR #171](https://github.com/JUhalt/PaperRoute-Tracker/pull/171)), and v0.9.2's certification ([#147](https://github.com/JUhalt/PaperRoute-Tracker/issues/147)) was the rehearsal for the 1.0 record. 1.0 was published with the maintainer's sign-off on #44 ([sign-off](https://github.com/JUhalt/PaperRoute-Tracker/issues/44#issue-5428452568)).
+
+PaperRoute v1.0.0 was released on November 14, 2026 from [PR #337](https://github.com/JUhalt/PaperRoute-Tracker/pull/337), with the code of the v1.0.0-rc.4 Preview ([PR #332](https://github.com/JUhalt/PaperRoute-Tracker/pull/332)), the last of its Preview candidates. It keeps the Schema 9 library of v0.9.0. Captures at a real 150% found windows that cut text, six on rc.1 and one more on rc.2, which was not published. rc.3's installed check at 150% then found two of its checked lists stopping a character or two short of a long row's end, which rc.4 fixes in all eight. Certification is recorded in [#313](https://github.com/JUhalt/PaperRoute-Tracker/issues/313), from one ordered checklist, [v1.0-Certification-Checklist.md](ManualCertification/v1.0-Certification-Checklist.md): the rc on Preview first, then Stable v1.0.0 with the rc's code.
+
+Besides the readiness record, the milestone held what v0.9.2's certification left for 1.0: the dialog polish its C3 review noted ([#266](https://github.com/JUhalt/PaperRoute-Tracker/issues/266)) and the hint it found cut at 150% ([#278](https://github.com/JUhalt/PaperRoute-Tracker/issues/278)); the on-screen fade test's setup ([#268](https://github.com/JUhalt/PaperRoute-Tracker/issues/268)); pinning the .NET SDK so the release bundles the runtime the candidate tested ([#269](https://github.com/JUhalt/PaperRoute-Tracker/issues/269)); Narrator with page fades on ([#276](https://github.com/JUhalt/PaperRoute-Tracker/issues/276)), which #213 and #142 waited on; a restore into OneDrive ([#295](https://github.com/JUhalt/PaperRoute-Tracker/issues/295)); closing on a large library ([#300](https://github.com/JUhalt/PaperRoute-Tracker/issues/300)); what a Preview install is offered ([#274](https://github.com/JUhalt/PaperRoute-Tracker/issues/274)); starting fresh ([#296](https://github.com/JUhalt/PaperRoute-Tracker/issues/296)); and the candidate's display-scaling mode ([#302](https://github.com/JUhalt/PaperRoute-Tracker/issues/302)). v0.9.2's certification, [#147](https://github.com/JUhalt/PaperRoute-Tracker/issues/147), closed on November 1, 2026, after its installed checks closed #92, #93 and #152. 1.0's certification, [#313](https://github.com/JUhalt/PaperRoute-Tracker/issues/313), closed #276 and #213 (C6 and the maintainer's short Narrator check on rc.3), #142 (C1, C2 and that check), #268 (C1) and #266 (C3 and C4) on their records. #266's Notes placeholder, which WinForms draws, is carried to [#334](https://github.com/JUhalt/PaperRoute-Tracker/issues/334), the v1.1 display polish issue, with its reason on #44 ([reason](https://github.com/JUhalt/PaperRoute-Tracker/issues/44#issuecomment-6878740040)).
+
+PaperRoute 1.0 is not defined by feature count.
+
+> **I trust this application with my research workflow.**
+
+The 1.0 bar includes stable migrations, reliable installer/updater behavior, curated regression coverage, recovery tooling, proven backup/restore, an accessible keyboard-complete UI, transparent local analytics, coherent manuscript/submission/decision/revision/version relationships, clear privacy boundaries, and fully certified release artifacts.
+
+For 1.0, accessible means what [#156](https://github.com/JUhalt/PaperRoute-Tracker/issues/156) decided and the User Guide's [Accessibility](docs/USER_GUIDE.md#accessibility) section says was tested: keyboard-complete, with every input named for screen readers and Esc pressing each dialog's Cancel or Close, all enforced by tests, a recorded Narrator pass, and Windows contrast themes supported.
+
+PaperRoute does not trade trustworthiness for cadence.
+
 ## Decisions and deferrals
 
 Each decision 1.0 needed, and each default adopted without a decision issue, with its date and the issue that does the work. [#43](https://github.com/JUhalt/PaperRoute-Tracker/issues/43) records the same.
@@ -455,23 +476,22 @@ What 1.0 knowingly leaves as it is, cited by [#44](https://github.com/JUhalt/Pap
 
 ---
 
-## COMPLETE — v1.0 Trusted Research Workflow
+# v1.0.1 Certification Follow-ups
 
-**Release-readiness tracker:** [#44](https://github.com/JUhalt/PaperRoute-Tracker/issues/44), in [milestone 12](https://github.com/JUhalt/PaperRoute-Tracker/milestone/12), closed on November 14, 2026. 1.0 was certified by the standing procedure in [Release-Certification.md](ManualCertification/Release-Certification.md) ([#146](https://github.com/JUhalt/PaperRoute-Tracker/issues/146), [PR #171](https://github.com/JUhalt/PaperRoute-Tracker/pull/171)), and v0.9.2's certification ([#147](https://github.com/JUhalt/PaperRoute-Tracker/issues/147)) was the rehearsal for the 1.0 record. 1.0 was published with the maintainer's sign-off on #44 ([sign-off](https://github.com/JUhalt/PaperRoute-Tracker/issues/44#issue-5428452568)).
+Milestone: **[v1.0.1 — Certification Follow-ups](https://github.com/JUhalt/PaperRoute-Tracker/milestone/17)**
 
-PaperRoute v1.0.0 was released on November 14, 2026 from [PR #337](https://github.com/JUhalt/PaperRoute-Tracker/pull/337), with the code of the v1.0.0-rc.4 Preview ([PR #332](https://github.com/JUhalt/PaperRoute-Tracker/pull/332)), the last of its Preview candidates. It keeps the Schema 9 library of v0.9.0. Captures at a real 150% found windows that cut text, six on rc.1 and one more on rc.2, which was not published. rc.3's installed check at 150% then found two of its checked lists stopping a character or two short of a long row's end, which rc.4 fixes in all eight. Certification is recorded in [#313](https://github.com/JUhalt/PaperRoute-Tracker/issues/313), from one ordered checklist, [v1.0-Certification-Checklist.md](ManualCertification/v1.0-Certification-Checklist.md): the rc on Preview first, then Stable v1.0.0 with the rc's code.
+A small release on the Windows Forms app, with no new windows and the Schema 9 library kept. It takes what 1.0's certification noted and what should not wait for the new interface. The maintainer approved its scope on November 14, 2026, the day 1.0 was released. It goes beyond the default in [#160](https://github.com/JUhalt/PaperRoute-Tracker/issues/160) that 1.0.x takes data-safety fixes only. A Preview candidate, v1.0.1-rc.1, comes before Stable. It has no date, and it is published only with the maintainer's approval.
 
-Besides the readiness record, the milestone held what v0.9.2's certification left for 1.0: the dialog polish its C3 review noted ([#266](https://github.com/JUhalt/PaperRoute-Tracker/issues/266)) and the hint it found cut at 150% ([#278](https://github.com/JUhalt/PaperRoute-Tracker/issues/278)); the on-screen fade test's setup ([#268](https://github.com/JUhalt/PaperRoute-Tracker/issues/268)); pinning the .NET SDK so the release bundles the runtime the candidate tested ([#269](https://github.com/JUhalt/PaperRoute-Tracker/issues/269)); Narrator with page fades on ([#276](https://github.com/JUhalt/PaperRoute-Tracker/issues/276)), which #213 and #142 waited on; a restore into OneDrive ([#295](https://github.com/JUhalt/PaperRoute-Tracker/issues/295)); closing on a large library ([#300](https://github.com/JUhalt/PaperRoute-Tracker/issues/300)); what a Preview install is offered ([#274](https://github.com/JUhalt/PaperRoute-Tracker/issues/274)); starting fresh ([#296](https://github.com/JUhalt/PaperRoute-Tracker/issues/296)); and the candidate's display-scaling mode ([#302](https://github.com/JUhalt/PaperRoute-Tracker/issues/302)). v0.9.2's certification, [#147](https://github.com/JUhalt/PaperRoute-Tracker/issues/147), closed on November 1, 2026, after its installed checks closed #92, #93 and #152. 1.0's certification, [#313](https://github.com/JUhalt/PaperRoute-Tracker/issues/313), closed #276 and #213 (C6 and the maintainer's short Narrator check on rc.3), #142 (C1, C2 and that check), #268 (C1) and #266 (C3 and C4) on their records. #266's Notes placeholder, which WinForms draws, is carried to [#334](https://github.com/JUhalt/PaperRoute-Tracker/issues/334), the v1.1 display polish issue, with its reason on #44 ([reason](https://github.com/JUhalt/PaperRoute-Tracker/issues/44#issuecomment-6878740040)).
+Its issues are:
+- the Board's stage filter, which re-renders at each step through its list on a large library ([#338](https://github.com/JUhalt/PaperRoute-Tracker/issues/338));
+- the first online request after a connection has gone stale ([#339](https://github.com/JUhalt/PaperRoute-Tracker/issues/339));
+- two keyboard tests made independent of whoever is using the PC ([#340](https://github.com/JUhalt/PaperRoute-Tracker/issues/340), [#318](https://github.com/JUhalt/PaperRoute-Tracker/issues/318)), and a test that each sideways-scrolling list re-measures when its rows change ([#329](https://github.com/JUhalt/PaperRoute-Tracker/issues/329));
+- a record in the code of the two text engines, with the choice between them left to v1.1 (part of [#333](https://github.com/JUhalt/PaperRoute-Tracker/issues/333));
+- running the official RO-Crate validator once on a golden export ([#159](https://github.com/JUhalt/PaperRoute-Tracker/issues/159));
+- a WinGet manifest, the first of the routes named after SignPath's decline ([#343](https://github.com/JUhalt/PaperRoute-Tracker/issues/343), with [#216](https://github.com/JUhalt/PaperRoute-Tracker/issues/216));
+- a User Guide section for researchers whose studies were on OSF ([#344](https://github.com/JUhalt/PaperRoute-Tracker/issues/344)).
 
-PaperRoute 1.0 is not defined by feature count.
-
-> **I trust this application with my research workflow.**
-
-The 1.0 bar includes stable migrations, reliable installer/updater behavior, curated regression coverage, recovery tooling, proven backup/restore, an accessible keyboard-complete UI, transparent local analytics, coherent manuscript/submission/decision/revision/version relationships, clear privacy boundaries, and fully certified release artifacts.
-
-For 1.0, accessible means what [#156](https://github.com/JUhalt/PaperRoute-Tracker/issues/156) decided and the User Guide's [Accessibility](docs/USER_GUIDE.md#accessibility) section says was tested: keyboard-complete, with every input named for screen readers and Esc pressing each dialog's Cancel or Close, all enforced by tests, a recorded Narrator pass, and Windows contrast themes supported.
-
-PaperRoute does not trade trustworthiness for cadence.
+Offering Stable releases on the Preview channel ([#158](https://github.com/JUhalt/PaperRoute-Tracker/issues/158)) was in the list at first. It moved to v1.1's first Preview the same day: it rewrites the check every install runs, and its working case can only be seen on published releases.
 
 ---
 
@@ -481,15 +501,17 @@ Milestone: **[v1.1 — macOS and Linux](https://github.com/JUhalt/PaperRoute-Tra
 
 One cross-platform interface on Avalonia, whose GPU compositor brings the motion and effects a WinForms app cannot, with the models, services, storage, migrations, and tests carried over; the fewer, calmer surfaces pass that goes with a rewritten interface; and Velopack packaging on three platforms. The migration is decided and planned there, not before 1.0, and 1.0.x on WinForms stays the Stable line until the Avalonia build replaces it.
 
+On November 14, 2026, the day 1.0 was released, the maintainer kept the order, v1.1 before v1.2, and set how v1.1 starts ([decisions](https://github.com/JUhalt/PaperRoute-Tracker/issues/160#issuecomment-6880580068)). The inventory and target map of [#161](https://github.com/JUhalt/PaperRoute-Tracker/issues/161) come first. The models and services then move into their own library, merged only after v1.0.1 is out, so the patch release does not carry the move. In December a one-week trial port of the Board, not merged, grounds the estimate, and the order is looked at again then. Windows and Linux come first; macOS follows as v1.1.x, since it needs Apple's developer programme and a Mac to test on.
+
 Its issues are:
 - deciding and planning the Avalonia migration ([#160](https://github.com/JUhalt/PaperRoute-Tracker/issues/160));
 - composition-grade motion and effects ([#162](https://github.com/JUhalt/PaperRoute-Tracker/issues/162));
 - the fewer, calmer surfaces pass ([#161](https://github.com/JUhalt/PaperRoute-Tracker/issues/161));
 - date precision and "unknown date" markers, Schema 10 ([#157](https://github.com/JUhalt/PaperRoute-Tracker/issues/157));
-- offering Stable releases to people on the Preview channel ([#158](https://github.com/JUhalt/PaperRoute-Tracker/issues/158));
-- running the official RO-Crate validator once on a golden export ([#159](https://github.com/JUhalt/PaperRoute-Tracker/issues/159));
+- offering Stable releases to people on the Preview channel, in v1.1's first Preview ([#158](https://github.com/JUhalt/PaperRoute-Tracker/issues/158));
+- what 1.0's certification noted and v1.0.1 leaves: the display polish ([#334](https://github.com/JUhalt/PaperRoute-Tracker/issues/334)) and the choice between the two text engines ([#333](https://github.com/JUhalt/PaperRoute-Tracker/issues/333));
 - a **Settings > Start Fresh...** command that sets the library aside and begins empty, with a backup and an undo ([#297](https://github.com/JUhalt/PaperRoute-Tracker/issues/297));
-- code signing after SignPath's decline: WinGet, a Microsoft Store (MSIX) build, or a new application once the project has external references ([#216](https://github.com/JUhalt/PaperRoute-Tracker/issues/216)).
+- code signing after SignPath's decline: WinGet, whose manifest v1.0.1 prepares ([#343](https://github.com/JUhalt/PaperRoute-Tracker/issues/343)), a Microsoft Store (MSIX) build, or a new application once the project has external references ([#216](https://github.com/JUhalt/PaperRoute-Tracker/issues/216)).
 
 ---
 
