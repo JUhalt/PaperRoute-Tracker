@@ -62,6 +62,18 @@ Partial Public Class Form1
                 Return
             End If
 
+            ' The import matches people against the author library and saves
+            ' it, so it reads it from disk first. The window's copy can be
+            ' older than the file: Authors & Affiliations, opened from the
+            ' manuscript page, saves as it goes, and a page left with nothing
+            ' to save does not read the library again. Saved from that copy,
+            ' the people, ORCID iDs and affiliations saved there were lost,
+            ' and a person saved there was created again. A library that
+            ' cannot be read imports nothing; reading it says why.
+            If Not LoadAuthorLibrary() Then
+                Return
+            End If
+
             Using dialog As New BibliographyImportForm(
                 parsed,
                 manuscripts

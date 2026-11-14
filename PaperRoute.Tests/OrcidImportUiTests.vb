@@ -461,6 +461,36 @@ Public Class OrcidImportUiTests
         DeleteFromThePageAfterAnUnsavedRemove("lstAffiliations", "DeleteSelectedAffiliation", "Delete Affiliation", "Affiliation Is In Use")
     End Sub
 
+    ' An import whose author library cannot be read imports nothing and
+    ' writes nothing: the read says what failed, and the damaged file is
+    ' left as it is, not replaced by the main window's copy.
+    <TestMethod>
+    Public Sub ABibliographyImportWhoseAuthorLibraryCannotBeReadImportsNothing()
+        StaRunner.Run(
+            Sub()
+                SeedLinkedLibrary()
+
+                Using board As LibraryBoard = StartBoard(),
+                      dialogs As New ManuscriptPageTests.DialogWatcher()
+                    Dim authors As New AuthorLibraryRepository()
+                    File.WriteAllText(authors.DataFilePath, "{ not json")
+                    If File.Exists(authors.BackupFilePath) Then File.Delete(authors.BackupFilePath)
+                    Dim authorsBefore As Byte() = File.ReadAllBytes(authors.DataFilePath)
+                    Dim manuscriptsBefore As Byte() = File.ReadAllBytes(New ManuscriptRepository().DataFilePath)
+
+                    ImportOneBibRecord(board, "Whitfield, Dana")
+
+                    Assert.AreEqual(1, board.StartupFailures.Count, "Reading the author library said what failed.")
+                    Assert.IsFalse(dialogs.Closed.Contains("Import Complete"), "Nothing says the import completed: " & String.Join(", ", dialogs.Closed))
+                    CollectionAssert.AreEqual(authorsBefore, File.ReadAllBytes(authors.DataFilePath), "The author library file is left as it was.")
+                    CollectionAssert.AreEqual(manuscriptsBefore, File.ReadAllBytes(New ManuscriptRepository().DataFilePath), "manuscripts.json is left as it was.")
+                    Assert.AreEqual(1, board.Library.Count, "Nothing was imported.")
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
     ' One author with one affiliation on disk, and a manuscript naming the
     ' author with that affiliation. On the page: Remove takes the author
     ' off; then Manage Library, Delete on the one item of the list named,
