@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
+
+PackageIdentifier: JUhalt.PaperRouteTracker
+PackageVersion: 1.0.0
+PackageLocale: en-US
+Publisher: Joshua Uhalt
+PublisherUrl: https://github.com/JUhalt
+PublisherSupportUrl: https://github.com/JUhalt/PaperRoute-Tracker/issues
+PrivacyUrl: https://github.com/JUhalt/PaperRoute-Tracker/blob/v1.0.0/PRIVACY.md
+Author: Joshua Uhalt
+PackageName: PaperRoute Tracker
+PackageUrl: https://github.com/JUhalt/PaperRoute-Tracker
+License: GPL-3.0-only
+LicenseUrl: https://github.com/JUhalt/PaperRoute-Tracker/blob/v1.0.0/LICENSE.txt
+Copyright: Copyright © Joshua Uhalt 2026
+ShortDescription: Local-first, privacy-focused app for tracking academic manuscripts from draft through submission, revision, and publication.
+Moniker: paperroute
+Tags:
+- academic
+- manuscripts
+- publishing
+- research
+- local-first
+ReleaseNotesUrl: https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v1.0.0
+Documentations:
+- DocumentLabel: User Guide
+  DocumentUrl: https://github.com/JUhalt/PaperRoute-Tracker/blob/v1.0.0/docs/USER_GUIDE.md
+ManifestType: defaultLocale
+ManifestVersion: 1.12.0
