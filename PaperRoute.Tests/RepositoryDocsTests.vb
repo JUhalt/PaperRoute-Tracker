@@ -474,13 +474,16 @@ Public Class RepositoryDocsTests
 
     ' #343: each manifest version folder is wholly for that version's
     ' Stable Setup, as the release publishes it, so a copy made for the
-    ' next version cannot keep the last one's URL or links. The hash can't
-    ' be checked offline: only its form is.
+    ' next version cannot keep the last one's URL, links or hash. Each
+    ' release builds its own Setup, so no two versions share a hash; a
+    ' wrong new hash can't be caught offline: only its form is checked.
     <TestMethod>
     Public Sub TheWinGetManifestPointsAtThatVersionsStableSetup()
 
         Dim manifestTypes As String() =
             {"version", "installer", "defaultLocale"}
+
+        Dim hashes As New Dictionary(Of String, String)(StringComparer.OrdinalIgnoreCase)
 
         For Each version As String In WinGetManifestVersions()
 
@@ -534,6 +537,13 @@ Public Class RepositoryDocsTests
                 Regex.IsMatch(hash, "^[0-9A-F]{64}$"),
                 version & ": InstallerSha256 is 64 upper-case hex digits: " & hash
             )
+
+            Assert.IsFalse(
+                hashes.ContainsKey(hash),
+                version & ": InstallerSha256 is " & If(hashes.ContainsKey(hash), hashes(hash), "") & "'s too; each release's Setup has its own hash."
+            )
+
+            hashes(hash) = version
 
             For Each expected As KeyValuePair(Of String, String) In {
                 New KeyValuePair(Of String, String)("InstallerType", "exe"),

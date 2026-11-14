@@ -13,7 +13,7 @@ This copy is a record. PaperRoute is not in WinGet's community catalog: nothing 
 ## How the files are checked
 
 - `winget validate --manifest packaging\winget\manifests\j\JUhalt\PaperRouteTracker\1.0.0` gave "Manifest validation succeeded." with winget v1.29.380 on November 14, 2026. It checks the files against the schema; it does not download Setup or check its hash.
-- Two tests in `PaperRoute.Tests\RepositoryDocsTests.vb` run with the suite. `TheWinGetManifestMatchesTheVelopackPackMetadata` checks the package name, publisher and product code against `release.yml`. `TheWinGetManifestPointsAtThatVersionsStableSetup` checks that each folder's files carry the folder's version, that the installer URL is that release's Stable Setup, that the links point at that version's tag, and the installer type, scope and switches. They can check only the hash's form, not its value.
+- Two tests in `PaperRoute.Tests\RepositoryDocsTests.vb` run with the suite. `TheWinGetManifestMatchesTheVelopackPackMetadata` checks the package name, publisher and product code against `release.yml`. `TheWinGetManifestPointsAtThatVersionsStableSetup` checks that each folder's files carry the folder's version, that the installer URL is that release's Stable Setup, that the links point at that version's tag, and the installer type, scope and switches. They check the hash's form and that no two versions share a hash, but not its value.
 - Installing from the manifest (`winget install --manifest <folder>`, after `winget settings --enable LocalManifestFiles`) has not been tried yet. It belongs in the certification VM, not on a working PC.
 
 ## The next version
@@ -28,7 +28,7 @@ Submitting is the maintainer's own step: a public pull request to `microsoft/win
 
 ## Not yet known
 
-PaperRoute updates itself, and `winget upgrade` would also update it, by running the newer Setup with `--silent`. What is not yet known:
+PaperRoute updates itself. Once WinGet recognizes an install as this package, `winget upgrade` would also update it, by running the newer Setup with `--silent`. What is not yet known:
 
 - whether WinGet recognizes a PaperRoute installed by downloading Setup, or one that has updated itself, as this package; that can be tried only once the package is in the catalog;
 - what happens to an open PaperRoute when `winget upgrade` or `winget install` runs Setup over it: Velopack is expected to close it without asking, and whether unsaved edits are kept has not been checked;
