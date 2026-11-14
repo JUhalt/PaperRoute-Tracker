@@ -895,7 +895,8 @@ Namespace Forms
                     "' is used by " &
                     usageCount.ToString() &
                     If(usageCount = 1, " manuscript. Remove the author from that manuscript", " manuscripts. Remove the author from those manuscripts") &
-                    " before deleting the reusable author record.",
+                    " before deleting the reusable author record." &
+                    PageInUseNote(),
                     "Author Is In Use",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information
@@ -1043,7 +1044,8 @@ Namespace Forms
                     "' is used by " &
                     usageCount.ToString() &
                     If(usageCount = 1, " manuscript author. Remove that affiliation assignment", " manuscript authors. Remove those affiliation assignments") &
-                    " before deleting it.",
+                    " before deleting it." &
+                    PageInUseNote(),
                     "Affiliation Is In Use",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information
@@ -1079,6 +1081,23 @@ Namespace Forms
             RefreshLists()
 
         End Sub
+
+
+        ' Added to the In Use messages from the manuscript page: usage counts
+        ' the open manuscript as saved (CountUsage), so a person or an
+        ' affiliation removed on the page but not saved is still in use, and
+        ' what the researcher must do is save the page.
+        Private Function PageInUseNote() As String
+
+            If _importTarget Is _manuscripts Then
+                Return String.Empty
+            End If
+
+            Return Environment.NewLine &
+                Environment.NewLine &
+                "The manuscript open on the page counts as saved until you save its changes."
+
+        End Function
 
 
         ' The manuscripts usage is counted over: those given and, from the

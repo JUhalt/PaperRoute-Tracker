@@ -536,7 +536,8 @@ Public Class OrcidImportUiTests
     ' author with that affiliation. On the page: Remove takes the author
     ' off; then Manage Library, Delete on the one item of the list named,
     ' answered Yes; then Discard. The person and the affiliation are on
-    ' disk still, Delete was refused, and the page names no missing person.
+    ' disk still, Delete was refused with a message that says the page's
+    ' changes must be saved first, and the page names no missing person.
     Private Sub DeleteFromThePageAfterAnUnsavedRemove(listField As String, deleteMethod As String, deleteTitle As String, inUseTitle As String)
         StaRunner.Run(
             Sub()
@@ -558,8 +559,11 @@ Public Class OrcidImportUiTests
                     If Not saved.Affiliations.Any(Function(item) item.Id = seeded.Affiliation.Id) Then
                         failures.Add("(2) After Discard the saved manuscript names an affiliation no longer in the author library.")
                     End If
-                    If Not dialogs.Closed.Contains(inUseTitle) Then
+                    Dim refusal As Integer = dialogs.Closed.IndexOf(inUseTitle)
+                    If refusal < 0 Then
                         failures.Add("(3) Delete was not refused; the dialogs were: " & String.Join(", ", dialogs.Closed))
+                    ElseIf Not dialogs.Messages(refusal).Contains("The manuscript open on the page counts as saved until you save its changes.") Then
+                        failures.Add("(5) The refusal does not say the page's changes must be saved first: " & dialogs.Messages(refusal))
                     End If
                     Dim shown As List(Of String) = AuthorsShown(board.Editor)
                     If shown.Count <> 1 OrElse shown.Any(Function(text) text.Contains("[Missing author record]")) Then
