@@ -441,6 +441,300 @@ Public Class UserGuideServiceTests
     End Sub
 
 
+    ' #344: every bullet under "What changes on OSF" states an OSF fact,
+    ' and each links to COS's own page. No link in the section goes
+    ' anywhere but COS's two sites, so no third party stands in for COS.
+    <TestMethod>
+    Public Sub IfYourStudiesWereOnOsf_LinksEachOsfFactToCos()
+
+        Dim section As String =
+            SectionText(
+                ReadGuide(),
+                OsfHeading
+            )
+
+        Dim start As Integer =
+            section.IndexOf(
+                vbLf & "### What changes on OSF" & vbLf,
+                StringComparison.Ordinal
+            )
+
+        Assert.IsTrue(
+            start >= 0,
+            "The section has a What changes on OSF part."
+        )
+
+        Dim finish As Integer =
+            section.IndexOf(
+                vbLf & "### ",
+                start + 1,
+                StringComparison.Ordinal
+            )
+
+        Dim facts As List(Of String) =
+            section.Substring(
+                start,
+                If(finish < 0, section.Length, finish) - start
+            ).Split(
+                ChrW(10)
+            ).Where(
+                Function(line) line.StartsWith(
+                    "- ",
+                    StringComparison.Ordinal
+                )
+            ).ToList()
+
+        ' The check has teeth: it reads the bullets, not none.
+        Assert.IsTrue(
+            facts.Count >= 6,
+            "The OSF facts are read: " & facts.Count.ToString()
+        )
+
+        For Each fact As String In facts
+
+            Assert.IsTrue(
+                Regex.IsMatch(
+                    fact,
+                    "\]\(https://(www\.cos\.io|help\.osf\.io)/"
+                ),
+                "The fact links to COS's own page: " & fact
+            )
+
+        Next
+
+        Dim links As List(Of String) =
+            Regex.Matches(
+                section,
+                "https?://[^)\s]+"
+            ).Select(
+                Function(found) found.Value
+            ).ToList()
+
+        For Each link As String In links
+
+            Assert.IsTrue(
+                link.StartsWith("https://www.cos.io/", StringComparison.Ordinal) OrElse
+                link.StartsWith("https://help.osf.io/", StringComparison.Ordinal),
+                "The section links only to COS: " & link
+            )
+
+        Next
+
+    End Sub
+
+
+    ' #344: a sentence on v1.2 says what the roadmap plans, and neither it
+    ' nor any sentence under "### Later" promises anything: no "will", no
+    ' month, no year.
+    <TestMethod>
+    Public Sub IfYourStudiesWereOnOsf_PromisesNoLaterReleaseOrDate()
+
+        Dim section As String =
+            SectionText(
+                ReadGuide(),
+                OsfHeading
+            )
+
+        Const SentenceBreak As String = "(?<=[.!?])\s+|\n"
+
+        Dim namesV12 As List(Of String) =
+            Regex.Split(
+                section,
+                SentenceBreak
+            ).Where(
+                Function(sentence) sentence.Contains("v1.2", StringComparison.Ordinal) OrElse
+                                   sentence.Contains("Open Science Studies", StringComparison.Ordinal)
+            ).ToList()
+
+        Assert.IsTrue(
+            namesV12.Count >= 1,
+            "The section has a sentence on v1.2."
+        )
+
+        For Each sentence As String In namesV12
+
+            StringAssert.Contains(
+                sentence,
+                "plan",
+                "The sentence says what is planned: " & sentence
+            )
+
+        Next
+
+        Dim laterStart As Integer =
+            section.IndexOf(
+                vbLf & "### Later" & vbLf,
+                StringComparison.Ordinal
+            )
+
+        Assert.IsTrue(
+            laterStart >= 0,
+            "The section has a Later part."
+        )
+
+        Dim checkedSentences As List(Of String) =
+            namesV12.Concat(
+                Regex.Split(
+                    section.Substring(laterStart),
+                    SentenceBreak
+                ).Where(
+                    Function(sentence) sentence.Trim().Length > 0
+                )
+            ).ToList()
+
+        For Each sentence As String In checkedSentences
+
+            Assert.IsFalse(
+                Regex.IsMatch(
+                    sentence,
+                    "\bwill\b",
+                    RegexOptions.IgnoreCase
+                ),
+                "The sentence promises nothing: " & sentence
+            )
+
+            Assert.IsFalse(
+                Regex.IsMatch(
+                    sentence,
+                    "\b(January|February|March|April|May|June|July|August|September|October|November|December)\b"
+                ),
+                "The sentence names no month: " & sentence
+            )
+
+            Assert.IsFalse(
+                Regex.IsMatch(
+                    sentence,
+                    "\b\d{4}\b"
+                ),
+                "The sentence names no year: " & sentence
+            )
+
+        Next
+
+    End Sub
+
+
+    ' #344: each caption the section names in bold is still in the app's
+    ' source, so a renamed control fails here until the guide follows. A
+    ' literal's && is the & the control shows. The Deadlines button reads
+    ' "+ Add Reminder"; its accessible name is "Add Reminder".
+    <TestMethod>
+    Public Sub IfYourStudiesWereOnOsf_NamesOnlyControlsTheAppHas()
+
+        Dim section As String =
+            SectionText(
+                ReadGuide(),
+                OsfHeading
+            )
+
+        Dim app As String =
+            Path.Combine(
+                AssistantCoreTests.RepositoryRoot(),
+                "ManuscriptPipeline"
+            )
+
+        For Each control In {
+            (Source:="Forms\EditManuscriptForm.vb", Literal:="Overview"),
+            (Source:="Forms\EditManuscriptForm.vb", Literal:="Journal, Preprint && Links..."),
+            (Source:="Forms\ManuscriptLinksForm.vb", Literal:="Related Web Links"),
+            (Source:="Forms\ManuscriptLinksForm.vb", Literal:="Add Link"),
+            (Source:="Forms\ManuscriptLinksForm.vb", Literal:="Preprint"),
+            (Source:="Forms\ManuscriptLinksForm.vb", Literal:="Save && Close"),
+            (Source:="Forms\ExternalLinkEditForm.vb", Literal:="Notes"),
+            (Source:="Form1.Deadlines.vb", Literal:="Add Reminder"),
+            (Source:="Forms\SubmissionPacketVaultForm.vb", Literal:="Export Packet..."),
+            (Source:="Form1.Shell.vb", Literal:="Backup Library...")
+        }
+
+            StringAssert.Contains(
+                File.ReadAllText(
+                    Path.Combine(
+                        app,
+                        control.Source
+                    )
+                ),
+                """" & control.Literal & """",
+                control.Source & " still has the control: " & control.Literal
+            )
+
+            StringAssert.Contains(
+                section,
+                "**" & control.Literal.Replace("&&", "&") & "**",
+                "The section names the control: " & control.Literal
+            )
+
+        Next
+
+    End Sub
+
+
+    ' #344: Help, built from the shipped guide, opens at the section, and
+    ' its COS links reach Help as URLs.
+    <TestMethod>
+    Public Sub HelpOpensAtIfYourStudiesWereOnOsf()
+
+        RunOnSta(
+            Sub()
+
+                Using help As New HelpForm(OsfHeading)
+
+                    ViewCatalog.ShowOffscreen(
+                        help
+                    )
+
+                    System.Windows.Forms.Application.DoEvents()
+
+                    ' The heading on a line of its own, not a pointer line
+                    ' that mentions it.
+                    StringAssert.StartsWith(
+                        help.GuideText.Substring(
+                            help.GuideSelectionStart
+                        ),
+                        OsfHeading & ChrW(10),
+                        "Help opens at the section heading."
+                    )
+
+                    Assert.AreEqual(
+                        ChrW(10),
+                        help.GuideText(
+                            help.GuideSelectionStart - 1
+                        ),
+                        "The heading starts a line."
+                    )
+
+                    StringAssert.Contains(
+                        help.GuideText,
+                        "https://www.cos.io/osf-changes",
+                        "The section's COS links reach Help."
+                    )
+
+                    help.Close()
+
+                End Using
+
+            End Sub
+        )
+
+    End Sub
+
+
+    Private Const OsfHeading As String =
+        "If your studies were on OSF"
+
+
+    ' The shipped guide, with Unix line ends.
+    Private Shared Function ReadGuide() As String
+
+        Return File.ReadAllText(
+            UserGuideService.GuideFilePath()
+        ).Replace(
+            vbCrLf,
+            vbLf
+        )
+
+    End Function
+
+
     ' One "## " section of the guide, heading to the next "## ".
     Private Shared Function SectionText(
         guide As String,
