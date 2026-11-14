@@ -3125,6 +3125,9 @@ Public Class ManuscriptPageTests
         Private ReadOnly _answerYes As String
 
         Public ReadOnly Closed As New List(Of String)()
+        ' The text of each dialog in Closed, at the same index; empty for a
+        ' dialog that is not a message box.
+        Public ReadOnly Messages As New List(Of String)()
 
         Public Sub New(Optional answerYes As String = Nothing)
             _answerYes = answerYes
@@ -3141,6 +3144,10 @@ Public Class ManuscriptPageTests
                         Dim title As New System.Text.StringBuilder(256)
                         GetWindowText(handle, title, title.Capacity)
                         Closed.Add(title.ToString())
+                        Dim message As New System.Text.StringBuilder(2048)
+                        Dim textControl As IntPtr = GetDlgItem(handle, MessageBoxTextId)
+                        If textControl <> IntPtr.Zero Then GetWindowText(textControl, message, message.Capacity)
+                        Messages.Add(message.ToString())
                         If _answerYes IsNot Nothing AndAlso title.ToString() = _answerYes Then
                             PostMessage(handle, WM_COMMAND, New IntPtr(IDYES), IntPtr.Zero)
                         Else
@@ -3246,6 +3253,12 @@ Public Class ManuscriptPageTests
     Private Const WM_CLOSE As UInteger = &H10
     Private Const WM_COMMAND As UInteger = &H111
     Private Const IDYES As Integer = 6
+    ' The id of a message box's text control.
+    Private Const MessageBoxTextId As Integer = &HFFFF
+
+    <System.Runtime.InteropServices.DllImport("user32.dll")>
+    Private Shared Function GetDlgItem(dialog As IntPtr, itemId As Integer) As IntPtr
+    End Function
 
     <System.Runtime.InteropServices.DllImport("user32.dll")>
     Private Shared Function PostMessage(handle As IntPtr, message As UInteger, wParam As IntPtr, lParam As IntPtr) As Boolean
