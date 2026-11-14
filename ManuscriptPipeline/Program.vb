@@ -15,15 +15,19 @@ Friend Module Program
     ' Velopack runs first and a second launch can exit before storage is
     ' touched. The template's Main is the only place that calls
     ' Application.SetCompatibleTextRenderingDefault(False), so the app
-    ' draws its text with two engines (#333). Labels, buttons, check boxes,
-    ' radio buttons and checked lists draw theirs with GDI+, the process
-    ' default. Windows draws text boxes, plain lists and drop-downs itself,
-    ' with GDI. The checked lists DialogScaling.FitListExtent fits are set
-    ' to GDI, the engine their rows are measured with (#313, PR #331). The
-    ' split is kept for 1.x: one engine for the whole app would change how
-    ' every label and button draws and every window would need certifying
-    ' again. DialogPolishTests.RecordOfTheTextEngineSplitAsItIsToday
-    ' records it, so a change here is seen.
+    ' draws its text with two engines (#333). The labels, buttons, check
+    ' boxes, radio buttons and checked lists that Windows Forms paints draw
+    ' theirs with GDI+, the process default. The controls PaperRoute paints
+    ' itself (ActionButton, ShelfTabButton, FilterChip, EmptyHint, the rail
+    ' items and the owner-drawn lists) draw theirs with TextRenderer, GDI.
+    ' Windows draws text boxes, plain lists and drop-downs itself, with
+    ' GDI. The checked lists DialogScaling.FitListExtent fits are set to
+    ' GDI, the engine their rows are measured with (#313, PR #331). The
+    ' split stays as 1.0 shipped it; whether to draw with one engine is
+    ' left to v1.1 (#333), since that would change how every label and
+    ' button draws and every window would need certifying again.
+    ' DialogPolishTests.RecordOfTheTextEngineSplitAsItIsToday records it,
+    ' so a change here is seen.
     <STAThread>
     Public Sub Main(
         args As String()

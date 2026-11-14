@@ -605,9 +605,11 @@ Public Class DialogPolishTests
     ' Sets every label, button, check box and radio button in the window to
     ' draw with GDI, so a test judges the GDI picture, which sizes a label
     ' or a check box a few pixels shorter than GDI+. Despite this helper's
-    ' name, the app draws these controls with GDI+, as a test host does
-    ' (see #333 and Program.Main). Judging them with GDI+ instead is left
-    ' to v1.1.
+    ' name, the app draws these controls with GDI+, as a test host does,
+    ' except the ones PaperRoute paints itself, such as an ActionButton,
+    ' which paint their text with GDI whatever this sets (see #333 and
+    ' Program.Main). Judging them with GDI+
+    ' instead is left to v1.1.
     Private Shared Sub DrawTextAsTheAppDoes(shown As Form)
 
         For Each control As Control In ViewCatalog.Descendants(shown).Where(Function(item) TypeOf item Is Label OrElse TypeOf item Is ButtonBase)
@@ -2852,9 +2854,8 @@ Public Class DialogPolishTests
     ' PaperRoute is GDI+: Program.Main starts the app, not the VB template's
     ' Main, so nothing calls SetCompatibleTextRenderingDefault(False). The
     ' two engines give a long row different widths, in either direction
-    ' (#333): GDI+ drew these two rows wider than GDI measured them, more
-    ' than TextRenderer's padding once a row is about 1,000 pixels wide,
-    ' and drew three other lists' rows narrower, on rc.3 at a real 100%. The
+    ' (#333): GDI+ drew these two rows wider than GDI measured them, and
+    ' drew three other lists' rows narrower, on rc.3 at a real 100%. The
     ' sweep's twins forced GDI, and its rows were shorter, so it compared
     ' GDI with GDI. Here each of E4.7's two rows, as its window builds it,
     ' is the only row of a checked list left to the engine the app leaves
@@ -2982,11 +2983,15 @@ Public Class DialogPolishTests
     ' picture of a control the app draws with GDI+, and correct them with
     ' this. The app starts in Program.Main, and the only code in the app
     ' that calls Application.SetCompatibleTextRenderingDefault is the VB
-    ' template's Main, which never runs. So, as on a
-    ' test host, which does not call it either, a label, button, check box,
-    ' radio button and checked list start with GDI+; a text box, plain list
-    ' and drop-down have no engine to choose, as Windows draws their text,
-    ' with GDI; and a checked list FitListExtent fits ends with GDI.
+    ' template's Main, which nothing in the app calls, and the only code
+    ' that sets a control's UseCompatibleTextRendering is FitListExtent.
+    ' So, as on a test host, which does not call it either, a label,
+    ' button, check box, radio button and checked list that Windows Forms
+    ' paints start with GDI+; a text box, plain list and drop-down have no
+    ' engine to choose, as Windows draws their text, with GDI; and a
+    ' checked list FitListExtent fits ends with GDI. The controls
+    ' PaperRoute paints itself, which draw with TextRenderer, are not
+    ' recorded here.
     <TestMethod>
     Public Sub RecordOfTheTextEngineSplitAsItIsToday()
 
@@ -3006,6 +3011,22 @@ Public Class DialogPolishTests
         ' The VB template's Main, which the compiler still builds into the
         ' app, calls it; that Main never runs.
         Assert.AreEqual("ManuscriptPipeline.My.MyApplication.Main", described, "Only the VB template's Main, which never runs, sets the text engine.")
+
+        ' Nothing in the app runs the template's Main, which would set GDI
+        ' for every control Windows Forms paints.
+        Dim templateMainCallers As List(Of MethodBase) =
+            CallersOf(Function(called) called.DeclaringType?.FullName = "ManuscriptPipeline.My.MyApplication" AndAlso called.Name = "Main", app)
+
+        Assert.AreEqual(0, templateMainCallers.Count, "Nothing runs the template's Main: " & String.Join("; ", templateMainCallers.Select(Function(method) method.DeclaringType?.FullName & "." & method.Name)))
+
+        ' The only code in the app that sets a control's engine is
+        ' FitListExtent's.
+        Dim engineSetters As String =
+            String.Join("; ", CallersOf(Function(called) called.Name = "set_UseCompatibleTextRendering", app).Select(Function(method) method.DeclaringType?.FullName & "." & method.Name))
+
+        Console.WriteLine("Code in the app that sets UseCompatibleTextRendering: " & If(engineSetters.Length = 0, "none", engineSetters))
+
+        Assert.AreEqual(GetType(DialogScaling).FullName & "." & NameOf(DialogScaling.FitListExtent), engineSetters, "Only FitListExtent sets a control's text engine.")
 
         StaRunner.Run(
             Sub()
@@ -3033,9 +3054,18 @@ Public Class DialogPolishTests
     End Sub
 
 
-    ' The methods of the assembly whose code calls the target: each call or
-    ' callvirt in their IL, resolved to the method its token names.
+    ' The methods of the assembly whose code calls the target.
     Private Shared Function CallersOf(target As MethodInfo, assembly As Assembly) As List(Of MethodBase)
+
+        Return CallersOf(Function(called) called.Equals(target), assembly)
+
+    End Function
+
+
+    ' The methods of the assembly whose code calls a method that matches:
+    ' each call or callvirt in their IL, resolved to the method its token
+    ' names.
+    Private Shared Function CallersOf(matches As Func(Of MethodBase, Boolean), assembly As Assembly) As List(Of MethodBase)
 
         Const Declared As BindingFlags =
             BindingFlags.Public Or BindingFlags.NonPublic Or BindingFlags.Instance Or BindingFlags.Static Or BindingFlags.DeclaredOnly
@@ -3089,7 +3119,7 @@ Public Class DialogPolishTests
                     Catch ex As Exception
                     End Try
 
-                    If called IsNot Nothing AndAlso called.Equals(target) Then
+                    If called IsNot Nothing AndAlso matches(called) Then
                         callers.Add(method)
                         Exit For
                     End If
