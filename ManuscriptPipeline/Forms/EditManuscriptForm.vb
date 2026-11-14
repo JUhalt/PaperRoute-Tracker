@@ -30,6 +30,12 @@ Namespace Forms
             Public AuthorLibrary As AuthorLibraryData = New AuthorLibraryData()
             Public AuthorLibraryDirty As Boolean = False
 
+            ' The people and affiliations the author library held on disk
+            ' when it was last read or saved. Any others in it are the
+            ' page's own, made since and not saved yet (#354).
+            Public AuthorIdsOnDisk As New HashSet(Of Guid)()
+            Public AffiliationIdsOnDisk As New HashSet(Of Guid)()
+
             ' The working copy as last loaded or saved; unsaved changes are
             ' any difference from it.
             Public Baseline As String = String.Empty
@@ -381,6 +387,8 @@ Namespace Forms
                 },
                 recovered:=workingCopy IsNot Nothing)
 
+            RememberAuthorLibraryOnDisk()
+
         End Sub
 
 
@@ -400,6 +408,8 @@ Namespace Forms
                     .All = If(allManuscripts?.ToList(), _record.All),
                     .Live = If(TryCast(allManuscripts, List(Of Manuscript)), _record.Live),
                     .AuthorLibrary = _record.AuthorLibrary,
+                    .AuthorIdsOnDisk = _record.AuthorIdsOnDisk,
+                    .AffiliationIdsOnDisk = _record.AffiliationIdsOnDisk,
                     .PartsDeferred = True
                 },
                 recovered:=False)
@@ -2797,6 +2807,111 @@ Namespace Forms
         End Sub
 
 
+        ' Reads the reusable author library again, as a window opened from
+        ' the page (Submission Readiness, Authors & Affiliations, Journal,
+        ' Preprint & Links) may have changed it on disk (#354). What the
+        ' page added and has not saved is carried over: the people and
+        ' affiliations a Crossref lookup created, and the tag colours chosen
+        ' here. Save still writes them and Discard still drops them; nothing
+        ' is written now. Only records the page made itself are carried. One
+        ' that was on disk when the library was last read or saved, and is
+        ' gone now, was deleted or merged in Authors & Affiliations, and
+        ' stays gone. Everything else on disk wins, edits made there
+        ' included. The tag editor is bound to the library read, so a colour
+        ' chosen afterwards is saved too; binding keeps a tag being typed.
+        Private Sub ReloadAuthorLibrary()
+
+            Dim onDisk As AuthorLibraryData =
+                _authorRepository.Load()
+
+            Dim authorIds As New HashSet(Of Guid)(
+                onDisk.Authors.Where(Function(item) item IsNot Nothing).Select(Function(item) item.Id)
+            )
+
+            Dim affiliationIds As New HashSet(Of Guid)(
+                onDisk.Affiliations.Where(Function(item) item IsNot Nothing).Select(Function(item) item.Id)
+            )
+
+            Dim unsaved As AuthorLibraryData =
+                _authorLibrary
+
+            If _authorLibraryDirty AndAlso unsaved IsNot Nothing Then
+
+                For Each author As AuthorRecord In If(unsaved.Authors, New List(Of AuthorRecord)())
+
+                    If author IsNot Nothing AndAlso
+                       Not authorIds.Contains(author.Id) AndAlso
+                       Not _record.AuthorIdsOnDisk.Contains(author.Id) Then
+
+                        onDisk.Authors.Add(
+                            author
+                        )
+
+                    End If
+
+                Next
+
+                For Each affiliation As AffiliationRecord In If(unsaved.Affiliations, New List(Of AffiliationRecord)())
+
+                    If affiliation IsNot Nothing AndAlso
+                       Not affiliationIds.Contains(affiliation.Id) AndAlso
+                       Not _record.AffiliationIdsOnDisk.Contains(affiliation.Id) Then
+
+                        onDisk.Affiliations.Add(
+                            affiliation
+                        )
+
+                    End If
+
+                Next
+
+                For Each entry As TagColor In If(unsaved.TagColors, New List(Of TagColor)())
+
+                    If entry IsNot Nothing Then
+
+                        WorkTypeService.SetColor(
+                            onDisk,
+                            entry.Tag,
+                            entry.Color
+                        )
+
+                    End If
+
+                Next
+
+            End If
+
+            _authorLibrary =
+                onDisk
+
+            ' What is carried over stays the page's own for the next read.
+            _record.AuthorIdsOnDisk =
+                authorIds
+
+            _record.AffiliationIdsOnDisk =
+                affiliationIds
+
+            tagEditor.Bind(_workingManuscript.Tags, _authorLibrary, WorkTypeService.AllTags(_allManuscripts))
+
+        End Sub
+
+
+        ' The people and affiliations the library as read or saved holds.
+        Private Sub RememberAuthorLibraryOnDisk()
+
+            _record.AuthorIdsOnDisk =
+                New HashSet(Of Guid)(
+                    If(_authorLibrary?.Authors, New List(Of AuthorRecord)()).Where(Function(item) item IsNot Nothing).Select(Function(item) item.Id)
+                )
+
+            _record.AffiliationIdsOnDisk =
+                New HashSet(Of Guid)(
+                    If(_authorLibrary?.Affiliations, New List(Of AffiliationRecord)()).Where(Function(item) item IsNot Nothing).Select(Function(item) item.Id)
+                )
+
+        End Sub
+
+
         Private Sub ManageAuthorLibrary(
             sender As Object,
             e As EventArgs
@@ -2877,8 +2992,7 @@ Namespace Forms
 
             End If
 
-            _authorLibrary =
-                _authorRepository.Load()
+            ReloadAuthorLibrary()
 
             RefreshAuthorsList()
 
@@ -3932,8 +4046,7 @@ Namespace Forms
                     txtTargetJournal.Text =
                         _workingManuscript.TargetJournal
 
-                    _authorLibrary =
-                        _authorRepository.Load()
+                    ReloadAuthorLibrary()
 
                     RefreshJournalNotes()
 
@@ -4346,6 +4459,8 @@ Namespace Forms
 
                 _authorLibraryDirty =
                     False
+
+                RememberAuthorLibraryOnDisk()
 
             End If
 

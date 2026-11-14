@@ -2281,9 +2281,9 @@ Public Class ManuscriptPageTests
     ' The people a Crossref lookup adds to the reusable author library wait
     ' in the page's copy of it until Save writes them. Opening Submission
     ' Readiness in between must not drop them: Save then has to write every
-    ' person the manuscript names. Probe for v1.0.1 ("crossref-authors"):
-    ' Submission Readiness, Manage Library and Journal, Preprint & Links each
-    ' read the library from disk again, and Save wrote the copy read.
+    ' person the manuscript names (#354): Submission Readiness, Manage
+    ' Library and Journal, Preprint & Links each read the library from disk
+    ' again, and Save wrote the copy read.
     <TestMethod>
     Public Sub PeopleACrossrefLookupAddedAreSavedAfterSubmissionReadinessIsOpened()
         RunOnStaThread(
@@ -2372,6 +2372,288 @@ Public Class ManuscriptPageTests
                     OnlineAccess.ResetForTests()
                 End Try
             End Sub)
+    End Sub
+
+    ' The same through Manage Library, closed (#354): the Authors tab names
+    ' everyone at once, and Save writes the people and the affiliation the
+    ' lookup created.
+    <TestMethod>
+    Public Sub PeopleACrossrefLookupAddedAreSavedAfterManageLibraryIsClosed()
+        WithCrossrefPeopleUnsaved(
+            New AuthorLibraryData(),
+            Sub(board, manuscript, disk, root)
+                CloseManageLibrary(board.Editor)
+                Dim authorsList As ListBox = DirectCast(GetType(EditManuscriptForm).GetField("lstAuthors", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(board.Editor), ListBox)
+                Dim shown As List(Of String) = authorsList.Items.Cast(Of Object)().Select(Function(item) authorsList.GetItemText(item)).ToList()
+                Assert.AreEqual(2, shown.Count, "The Authors tab lists both people.")
+                Assert.IsFalse(shown.Any(Function(text) text.Contains("[Missing author record]")), "No one is missing: " & String.Join(" | ", shown))
+
+                SavePage(board)
+                AssertEveryoneIsOnDisk(manuscript, disk)
+            End Sub)
+    End Sub
+
+    ' The same through Journal, Preprint & Links closed with OK (#354),
+    ' while a person already in the library was edited on disk: Save keeps
+    ' that edit and adds the looked-up people.
+    <TestMethod>
+    Public Sub PeopleACrossrefLookupAddedAreSavedAfterJournalLinksAndADiskEditIsKept()
+        Dim seed As New AuthorLibraryData()
+        Dim existing As New AuthorRecord With {.GivenName = "Disk", .FamilyName = "Person"}
+        seed.Authors.Add(existing)
+        WithCrossrefPeopleUnsaved(
+            seed,
+            Sub(board, manuscript, disk, root)
+                Dim opened As Integer = 0
+                Using links As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of ManuscriptLinksForm)(
+                    Sub(dialog)
+                        opened += 1
+                        Dim onDisk As AuthorLibraryData = disk.Load()
+                        onDisk.Authors.Single(Function(person) person.Id = existing.Id).FamilyName = "Edited"
+                        disk.Save(onDisk)
+                        dialog.DialogResult = DialogResult.OK
+                    End Sub)
+                    GetType(EditManuscriptForm).GetMethod("OpenJournalLinks", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(board.Editor, New Object() {Nothing, EventArgs.Empty})
+                    Application.DoEvents()
+                End Using
+                Assert.AreEqual(1, opened, "Journal, Preprint & Links opened once.")
+
+                SavePage(board)
+                AssertEveryoneIsOnDisk(manuscript, disk)
+                Assert.AreEqual("Edited", disk.Load().Authors.Single(Function(person) person.Id = existing.Id).FamilyName, "The edit made on disk meanwhile is kept.")
+            End Sub)
+    End Sub
+
+    ' A lookup, Submission Readiness, then Discard (#354): neither file
+    ' changes, and the page's library holds only what is on disk.
+    <TestMethod>
+    Public Sub ACrossrefLookupThenSubmissionReadinessThenDiscardWritesNothing()
+        Dim seed As New AuthorLibraryData()
+        seed.Authors.Add(New AuthorRecord With {.GivenName = "Disk", .FamilyName = "Person"})
+        WithCrossrefPeopleUnsaved(
+            seed,
+            Sub(board, manuscript, disk, root)
+                board.UseRepository(root)
+                Assert.IsTrue(board.SaveNow(), "The library is on disk.")
+                Dim manuscriptsFile As String = Path.Combine(root, "data", "manuscripts.json")
+                Dim manuscriptsBefore As Byte() = File.ReadAllBytes(manuscriptsFile)
+                Dim authorsBefore As Byte() = File.ReadAllBytes(disk.DataFilePath)
+
+                CloseSubmissionReadiness(board.Editor)
+                board.Discard()
+
+                CollectionAssert.AreEqual(authorsBefore, File.ReadAllBytes(disk.DataFilePath), "The author library on disk is unchanged.")
+                CollectionAssert.AreEqual(manuscriptsBefore, File.ReadAllBytes(manuscriptsFile), "manuscripts.json is unchanged.")
+                Assert.AreEqual(1, PageLibrary(board.Editor).Authors.Count, "The page's library holds only the person on disk.")
+                Assert.IsFalse(CBool(GetType(EditManuscriptForm).GetProperty("_authorLibraryDirty", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(board.Editor)), "Nothing is left to save.")
+            End Sub)
+    End Sub
+
+    ' A person deleted in Authors & Affiliations while the page holds
+    ' unsaved looked-up people (#354) stays deleted: the reload carries over
+    ' only the people the page made, not everyone missing from disk.
+    <TestMethod>
+    Public Sub APersonDeletedInManageLibraryIsNotBroughtBackByTheReload()
+        Dim seed As New AuthorLibraryData()
+        Dim gone As New AuthorRecord With {.GivenName = "Gone", .FamilyName = "Person"}
+        seed.Authors.Add(gone)
+        WithCrossrefPeopleUnsaved(
+            seed,
+            Sub(board, manuscript, disk, root)
+                ' The window deletes the person and saves, as Delete does.
+                CloseManageLibrary(board.Editor,
+                    Sub()
+                        Dim onDisk As AuthorLibraryData = disk.Load()
+                        onDisk.Authors.RemoveAll(Function(person) person.Id = gone.Id)
+                        disk.Save(onDisk)
+                    End Sub)
+                Assert.IsFalse(PageLibrary(board.Editor).Authors.Any(Function(person) person.Id = gone.Id), "The page's library does not bring the deleted person back.")
+
+                SavePage(board)
+                AssertEveryoneIsOnDisk(manuscript, disk)
+                Assert.IsFalse(disk.Load().Authors.Any(Function(person) person.Id = gone.Id), "Save does not write the deleted person back.")
+            End Sub)
+    End Sub
+
+    ' A tag colour chosen on the page survives Submission Readiness, and
+    ' one chosen after it is the one saved (#354): the tag editor works on
+    ' the library read again.
+    <TestMethod>
+    Public Sub ATagColourChosenOnThePageSurvivesSubmissionReadinessAndIsSaved()
+        RunOnStaThread(
+            Sub()
+                Using board As New PageBoard()
+                    Dim manuscript As Manuscript = Sample("Tagged manuscript")
+                    manuscript.Tags = New List(Of String) From {"teaching"}
+                    board.Prepare(manuscript)
+                    board.Open(manuscript)
+                    Dim disk As New AuthorLibraryRepository(board.AuthorDirectory)
+
+                    Using dialogs As New DialogWatcher()
+                        ChooseTagColour(board.Editor, "teaching", TagPalette.Violet)
+                        CloseSubmissionReadiness(board.Editor)
+                        Assert.AreEqual(TagPalette.Violet, WorkTypeService.ColorOf("teaching", PageLibrary(board.Editor)), "The colour chosen survives the reload.")
+                        ChooseTagColour(board.Editor, "teaching", TagPalette.Orange)
+
+                        Assert.IsTrue(board.SaveManuscriptPage(), "The page saved.")
+                        CollectionAssert.AreEqual(New List(Of String)(), dialogs.Closed, "No message box opened.")
+                    End Using
+
+                    Dim saved As TagColor = disk.Load().TagColors.SingleOrDefault(Function(entry) entry.Tag = "teaching")
+                    Assert.IsNotNull(saved, "The tag's colour is saved.")
+                    Assert.AreEqual(TagPalette.Orange, saved.Color, "The colour chosen last is saved.")
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    ' The page shows a manuscript with the scripted DOI; DOI & Crossref
+    ' Metadata has added two new people to it and to the page's author
+    ' library (the second with a new affiliation), and nothing is saved.
+    ' The author library starts as seed; Authors & Affiliations, which reads
+    ' its own files, reads them under a root of the test's own.
+    Private Shared Sub WithCrossrefPeopleUnsaved(seed As AuthorLibraryData, steps As Action(Of PageBoard, Manuscript, AuthorLibraryRepository, String))
+        RunOnStaThread(
+            Sub()
+                Dim network As New CrossrefWork("Example Institute")
+                Dim root As String = Path.Combine(Path.GetTempPath(), "PaperRoute-PageTests-" & Guid.NewGuid().ToString("N"))
+                StorageEnvironment.RootOverride = Path.Combine(root, "storage")
+                OnlineAccess.ResetForTests()
+                OnlineAccess.InnerHandlerFactory = Function() network
+                Try
+                    Using board As New PageBoard()
+                        Directory.CreateDirectory(board.AuthorDirectory)
+                        Dim disk As New AuthorLibraryRepository(board.AuthorDirectory)
+                        disk.Save(seed)
+                        Dim seededPeople As Integer = seed.Authors.Count
+
+                        Dim manuscript As Manuscript = Sample("Looked-up manuscript")
+                        manuscript.Metadata = New ManuscriptMetadata With {.Doi = CrossrefWork.Doi}
+                        board.Prepare(manuscript)
+                        board.Open(manuscript)
+
+                        Using dialogs As New DialogWatcher()
+                            ApplyCrossrefAuthors(board.Editor)
+                            Assert.AreEqual(1, network.Requests, "One scripted Crossref request.")
+                            Dim working As Manuscript = DirectCast(GetType(EditManuscriptForm).GetProperty("_workingManuscript", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(board.Editor), Manuscript)
+                            Assert.AreEqual(2, working.Authors.Count, "The lookup put both people on the manuscript.")
+                            Assert.AreEqual(seededPeople + 2, PageLibrary(board.Editor).Authors.Count, "The lookup added both people to the page's library.")
+                            Assert.AreEqual(1, PageLibrary(board.Editor).Affiliations.Count, "The lookup added the affiliation to the page's library.")
+                            Assert.AreEqual(seededPeople, disk.Load().Authors.Count, "Nothing is on disk before Save.")
+
+                            steps(board, manuscript, disk, root)
+
+                            CollectionAssert.AreEqual(New List(Of String)(), dialogs.Closed, "No message box opened.")
+                        End Using
+
+                        board.SetPrompt(Function(title) DialogResult.No)
+                        board.Close()
+                    End Using
+                Finally
+                    OnlineAccess.ResetForTests()
+                    StorageEnvironment.RootOverride = Nothing
+                    Try
+                        Directory.Delete(root, True)
+                    Catch
+                    End Try
+                End Try
+            End Sub)
+    End Sub
+
+    ' DOI & Crossref Metadata: Look Up, then Apply Selected with the authors
+    ' box ticked.
+    Private Shared Sub ApplyCrossrefAuthors(editor As EditManuscriptForm)
+        Dim flags As BindingFlags = BindingFlags.Instance Or BindingFlags.NonPublic
+        Dim lookups As Integer = 0
+        Using lookup As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of CrossrefLookupForm)(
+            Sub(dialog)
+                lookups += 1
+                Dim field As Func(Of String, Object) = Function(name) GetType(CrossrefLookupForm).GetField(name, flags).GetValue(dialog)
+                DirectCast(field("btnLookup"), Button).PerformClick()
+                Dim apply As Button = DirectCast(field("btnApply"), Button)
+                Dim waited As Diagnostics.Stopwatch = Diagnostics.Stopwatch.StartNew()
+                While (field("_suggestion") Is Nothing OrElse Not apply.Enabled) AndAlso waited.Elapsed < TimeSpan.FromSeconds(10)
+                    Application.DoEvents()
+                    Thread.Sleep(1)
+                End While
+                If field("_suggestion") Is Nothing OrElse Not apply.Enabled Then
+                    dialog.DialogResult = DialogResult.Cancel
+                    Return
+                End If
+                DirectCast(field("chkAuthors"), CheckBox).Checked = True
+                apply.PerformClick()
+            End Sub)
+            GetType(EditManuscriptForm).GetMethod("OpenCrossrefMetadata", flags).Invoke(editor, New Object() {Nothing, EventArgs.Empty})
+            Application.DoEvents()
+        End Using
+        Assert.AreEqual(1, lookups, "DOI & Crossref Metadata opened once.")
+        Assert.IsTrue(CBool(GetType(EditManuscriptForm).GetProperty("_authorLibraryDirty", flags).GetValue(editor)), "The page marks its author library changed.")
+    End Sub
+
+    ' Manage Library (its Click handler); in the window, during runs, and
+    ' the window is closed.
+    Private Shared Sub CloseManageLibrary(editor As EditManuscriptForm, Optional during As Action = Nothing)
+        Dim opened As Integer = 0
+        Using answer As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of AuthorLibraryForm)(
+            Sub(dialog)
+                opened += 1
+                during?.Invoke()
+                dialog.Close()
+            End Sub)
+            GetType(EditManuscriptForm).GetMethod("ManageAuthorLibrary", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(editor, New Object() {Nothing, EventArgs.Empty})
+            Application.DoEvents()
+        End Using
+        Assert.AreEqual(1, opened, "Authors & Affiliations opened once.")
+    End Sub
+
+    ' Submission Readiness, opened and closed with Cancel.
+    Private Shared Sub CloseSubmissionReadiness(editor As EditManuscriptForm)
+        Dim opened As Integer = 0
+        Using readiness As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of ManuscriptReadinessForm)(
+            Sub(dialog)
+                opened += 1
+                dialog.DialogResult = DialogResult.Cancel
+            End Sub)
+            GetType(EditManuscriptForm).GetMethod("OpenSubmissionReadiness", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(editor, New Object() {Nothing, EventArgs.Empty})
+            Application.DoEvents()
+        End Using
+        Assert.AreEqual(1, opened, "Submission Readiness opened once.")
+    End Sub
+
+    ' Ctrl+S, once.
+    Private Shared Sub SavePage(board As PageBoard)
+        board.PressCommandKey(Keys.Control Or Keys.S)
+        Assert.AreEqual(1, board.SaveCount, "The page saved.")
+    End Sub
+
+    ' Every person and affiliation the saved manuscript names is in the
+    ' author library on disk, and the affiliation the lookup made is among
+    ' them.
+    Private Shared Sub AssertEveryoneIsOnDisk(manuscript As Manuscript, disk As AuthorLibraryRepository)
+        Assert.AreEqual(2, manuscript.Authors.Count, "The saved manuscript names both looked-up people.")
+        Dim saved As AuthorLibraryData = disk.Load()
+        For Each link As ManuscriptAuthor In manuscript.Authors
+            Assert.IsTrue(saved.Authors.Any(Function(person) person.Id = link.AuthorId),
+                "Every person the saved manuscript names is on disk. Missing id " & link.AuthorId.ToString() & "; on disk: " & String.Join(", ", saved.Authors.Select(Function(person) person.DisplayName)) & ".")
+            For Each affiliationId As Guid In link.AffiliationIds
+                Assert.IsTrue(saved.Affiliations.Any(Function(affiliation) affiliation.Id = affiliationId), "Every affiliation the saved manuscript names is on disk. Missing id " & affiliationId.ToString() & ".")
+            Next
+        Next
+        Assert.AreEqual(1, manuscript.Authors.Sum(Function(link) link.AffiliationIds.Count), "The looked-up affiliation is on the manuscript.")
+    End Sub
+
+    ' The page's copy of the reusable author library.
+    Private Shared Function PageLibrary(editor As EditManuscriptForm) As AuthorLibraryData
+        Return DirectCast(GetType(EditManuscriptForm).GetProperty("_authorLibrary", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(editor), AuthorLibraryData)
+    End Function
+
+    ' A colour from a tag chip's menu on the page.
+    Private Shared Sub ChooseTagColour(editor As EditManuscriptForm, tag As String, colour As TagPalette)
+        Dim chip As TagChipButton = Descendants(editor).OfType(Of TagChipButton)().Single(Function(item) item.TagText = tag)
+        Dim colours As ToolStripMenuItem = chip.ContextMenuStrip.Items.OfType(Of ToolStripMenuItem)().Single(Function(item) item.Text = "Color")
+        colours.DropDownItems.OfType(Of ToolStripMenuItem)().Single(Function(item) item.Text = colour.ToString()).PerformClick()
+        Application.DoEvents()
     End Sub
 
     Private Shared Function MenuItem(card As Control, text As String) As ToolStripItem
@@ -2476,19 +2758,27 @@ Public Class ManuscriptPageTests
     End Class
 
     ' Crossref's answer for one DOI: a work with two authors, neither of
-    ' them in the reusable library.
+    ' them in the reusable library; given an affiliation, the second
+    ' author has it.
     Private NotInheritable Class CrossrefWork
         Inherits Net.Http.HttpMessageHandler
 
-        Public Const Doi As String = "10.5555/paperroute.probe"
+        Public Const Doi As String = "10.5555/paperroute.crossref"
 
         Public Requests As Integer
 
+        Private ReadOnly _affiliation As String
+
+        Public Sub New(Optional affiliation As String = Nothing)
+            _affiliation = affiliation
+        End Sub
+
         Protected Overrides Function SendAsync(request As Net.Http.HttpRequestMessage, cancellationToken As CancellationToken) As Task(Of Net.Http.HttpResponseMessage)
             Interlocked.Increment(Requests)
+            Dim affiliation As String = If(_affiliation Is Nothing, String.Empty, ", ""affiliation"": [{""name"": """ & _affiliation & """}]")
             Dim body As String =
                 "{""message"": {""DOI"": """ & Doi & """, ""title"": [""Looked-up manuscript""], " &
-                """author"": [{""given"": ""Ada"", ""family"": ""Lookup""}, {""given"": ""Grace"", ""family"": ""Crossref""}]}}"
+                """author"": [{""given"": ""Ada"", ""family"": ""Lookup""}, {""given"": ""Grace"", ""family"": ""Crossref""" & affiliation & "}]}}"
             Return Task.FromResult(New Net.Http.HttpResponseMessage(Net.HttpStatusCode.OK) With {.Content = New Net.Http.StringContent(body), .RequestMessage = request})
         End Function
     End Class
@@ -2500,6 +2790,13 @@ Public Class ManuscriptPageTests
             Path.Combine(Path.GetTempPath(), "PaperRoute-PageTests-" & Guid.NewGuid().ToString("N"))
 
         Public SaveCount As Integer
+
+        ' Where the page's reusable author library is read and written.
+        Public ReadOnly Property AuthorDirectory As String
+            Get
+                Return _authorDirectory
+            End Get
+        End Property
 
         ' Saves are written only after UseRepository pointed them at a
         ' throwaway directory.
