@@ -215,9 +215,10 @@ Public Class OrcidImportUiTests
     ' The same import, then the page's Save (#353): the file holds the
     ' page's edit and the work, and a second save, which moves the first
     ' file to manuscripts.bak, still keeps the work. The window opened from
-    ' the page still counts the page's unsaved authors: the author just
-    ' removed there is used by no manuscript until the import, and then by
-    ' the work imported for them, so Delete Author refuses.
+    ' the page counts the open manuscript as saved as well as unsaved: the
+    ' author just removed there is still named by the saved manuscript,
+    ' which Discard would keep, and after the import by the work imported
+    ' for them too, so Delete Author refuses.
     <TestMethod>
     Public Sub AnOrcidImportFromTheManuscriptPageThenSaveKeepsTheEditAndTheWorks()
         StaRunner.Run(
@@ -237,8 +238,8 @@ Public Class OrcidImportUiTests
                         Sub(dialog) usage = countUsage(dialog),
                         Sub(dialog) usageAfter = countUsage(dialog)))
                     CollectionAssert.AreEqual({"ORCID Import Complete"}, dialogs.Closed, "The import went through.")
-                    Assert.AreEqual(0, usage, "Usage counts read the page's working copy, where the author was removed.")
-                    Assert.AreEqual(1, usageAfter, "After the import the work imported for the author counts, so the author cannot be deleted.")
+                    Assert.AreEqual(1, usage, "The saved manuscript still names the author removed, unsaved, on the page.")
+                    Assert.AreEqual(2, usageAfter, "After the import the work imported for the author counts too.")
                     Assert.IsTrue(PageRecords(board.Editor).Any(Function(item) item.Title = WorkTitle), "The page's copy of the records holds the work.")
 
                     Assert.IsTrue(board.SaveManuscriptPage(), "The page saved.")
@@ -383,6 +384,307 @@ Public Class OrcidImportUiTests
                 End Using
             End Sub)
     End Sub
+
+    ' Authors & Affiliations, opened from the manuscript page, saves the
+    ' author library at once: here an ORCID iD and affiliation, and a new
+    ' person, through the window's own saves. The page is then left with
+    ' nothing to save, and Import BibTeX / RIS... imports a record naming
+    ' that new person. The import must keep what the window saved and name
+    ' the person it saved, not write back the main window's copy of the
+    ' library as read before the page opened.
+    <TestMethod>
+    Public Sub ABibliographyImportAfterLeavingTheManuscriptPageKeepsWhatManageLibrarySaved()
+        StaRunner.Run(
+            Sub()
+                Dim author As AuthorRecord = SeedLinkedLibrary()
+                Dim added As New AuthorRecord With {.GivenName = "Dana", .FamilyName = "Whitfield"}
+
+                Using board As LibraryBoard = StartBoard(),
+                      dialogs As New ManuscriptPageTests.DialogWatcher()
+                    board.Open(board.Library.Single())
+
+                    Dim idOnly As New OrcidApplyOptions With {.AddAffiliations = True, .SelectedWorkPutCodes = New List(Of Long)()}
+                    Assert.AreEqual(1, ImportFromThePage(board.Editor, idOnly, afterImport:=
+                        Sub(dialog)
+                            LibraryOf(dialog).Authors.Add(added)
+                            GetType(AuthorLibraryForm).GetMethod("SaveLibrary", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(dialog, Nothing)
+                        End Sub))
+                    Dim afterWindow As AuthorLibraryData = New AuthorLibraryRepository().Load()
+                    Assert.AreEqual(OrcidId, afterWindow.Authors.Single(Function(item) item.Id = author.Id).Orcid, "Authors & Affiliations saved the iD.")
+                    Assert.IsTrue(afterWindow.Authors.Any(Function(item) item.Id = added.Id), "Authors & Affiliations saved the new person.")
+                    Assert.AreEqual(1, afterWindow.Affiliations.Count, "Authors & Affiliations saved the affiliation.")
+
+                    LeaveThePageWithNothingToSave(board)
+                    ImportOneBibRecord(board, "Whitfield, Dana")
+                    CollectionAssert.Contains(dialogs.Closed, "Import Complete", "The import went through: " & String.Join(", ", dialogs.Closed))
+
+                    Dim failures As New List(Of String)()
+                    Dim saved As AuthorLibraryData = New AuthorLibraryRepository().Load()
+                    Dim local As AuthorRecord = saved.Authors.SingleOrDefault(Function(item) item.Id = author.Id)
+                    If local Is Nothing OrElse local.Orcid <> OrcidId Then
+                        failures.Add("(1) After the import the author library on disk has lost the ORCID iD saved from the page.")
+                    End If
+                    If saved.Affiliations.Count <> 1 Then
+                        failures.Add("(2) After the import the author library on disk has " & saved.Affiliations.Count.ToString() & " affiliations, not the 1 saved from the page.")
+                    End If
+                    If Not saved.Authors.Any(Function(item) item.Id = added.Id) Then
+                        failures.Add("(3) After the import the person added from the page is gone from disk.")
+                    End If
+                    Dim whitfields As Integer = saved.Authors.Where(Function(item) item.FamilyName = "Whitfield").Count()
+                    If whitfields <> 1 Then
+                        failures.Add("(4) The author library on disk has " & whitfields.ToString() & " people named Whitfield, not 1.")
+                    End If
+                    Dim importedStudy As Manuscript = New ManuscriptRepository().Load().Single(Function(item) item.Title = BibTitle)
+                    If Not importedStudy.Authors.Any(Function(link) link.AuthorId = added.Id) Then
+                        failures.Add("(5) The imported record does not name the person the page's window saved.")
+                    End If
+
+                    board.Close()
+                    Assert.AreEqual(0, failures.Count, String.Join(Environment.NewLine, failures))
+                End Using
+            End Sub)
+    End Sub
+
+    ' Opened from the manuscript page after an unsaved Remove on its
+    ' Authors tab, Authors & Affiliations must not delete the person the
+    ' saved manuscript still names: the page's edits can still be
+    ' discarded, and the saved manuscript would then name a person who is
+    ' gone, shown as [Missing author record].
+    <TestMethod>
+    Public Sub APersonTheSavedManuscriptNamesCannotBeDeletedFromThePageAfterAnUnsavedRemove()
+        DeleteFromThePageAfterAnUnsavedRemove("lstAuthors", "DeleteSelectedAuthor", "Delete Author", "Author Is In Use")
+    End Sub
+
+    ' The same for the affiliation that person's assignment on the saved
+    ' manuscript names.
+    <TestMethod>
+    Public Sub AnAffiliationTheSavedManuscriptNamesCannotBeDeletedFromThePageAfterAnUnsavedRemove()
+        DeleteFromThePageAfterAnUnsavedRemove("lstAffiliations", "DeleteSelectedAffiliation", "Delete Affiliation", "Affiliation Is In Use")
+    End Sub
+
+    ' What the page route must still allow: a person neither the saved
+    ' manuscript nor the page names is deleted, and saved at once; the
+    ' person and the affiliation both of them name count once, not twice.
+    <TestMethod>
+    Public Sub APersonNoVersionOfTheOpenManuscriptNamesCanStillBeDeletedFromThePage()
+        StaRunner.Run(
+            Sub()
+                Dim seeded As (Author As AuthorRecord, Affiliation As AffiliationRecord) = SeedAffiliatedLibrary()
+                Dim authors As New AuthorLibraryRepository()
+                Dim library As AuthorLibraryData = authors.Load()
+                Dim unused As New AuthorRecord With {.GivenName = "Unused", .FamilyName = "Person"}
+                library.Authors.Add(unused)
+                authors.Save(library)
+
+                Using board As LibraryBoard = StartBoard(),
+                      dialogs As New ManuscriptPageTests.DialogWatcher("Delete Author")
+                    board.Open(board.Library.Single())
+
+                    Dim authorUsage As Integer = -1
+                    Dim affiliationUsage As Integer = -1
+                    Assert.AreEqual(1, DeleteFromThePage(board.Editor, "lstAuthors", "DeleteSelectedAuthor",
+                        Function(item) DirectCast(item, AuthorRecord).Id = unused.Id,
+                        Sub(dialog)
+                            authorUsage = CInt(GetType(AuthorLibraryForm).GetMethod("CountAuthorUsage", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(dialog, New Object() {seeded.Author.Id}))
+                            affiliationUsage = CInt(GetType(AuthorLibraryForm).GetMethod("CountAffiliationUsage", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(dialog, New Object() {seeded.Affiliation.Id}))
+                        End Sub))
+
+                    CollectionAssert.AreEqual({"Delete Author"}, dialogs.Closed, "Delete was asked and answered Yes, and nothing else was shown.")
+                    Dim saved As AuthorLibraryData = New AuthorLibraryRepository().Load()
+                    Assert.IsFalse(saved.Authors.Any(Function(item) item.Id = unused.Id), "The unused person is deleted on disk.")
+                    Assert.IsTrue(saved.Authors.Any(Function(item) item.Id = seeded.Author.Id), "The person the manuscript names stays.")
+                    Assert.AreEqual(1, authorUsage, "The person named by both the saved manuscript and the page counts once.")
+                    Assert.AreEqual(1, affiliationUsage, "The affiliation assigned on both counts once.")
+
+                    board.SetPrompt(Function(title) System.Windows.Forms.DialogResult.No)
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    ' A person the page's working copy still names is refused from the
+    ' page, but the refusal does not tell the researcher to save the page:
+    ' saving it would not let the delete through.
+    <TestMethod>
+    Public Sub ARefusalFromThePageThatSavingWouldNotChangeDoesNotSayToSave()
+        StaRunner.Run(
+            Sub()
+                Dim seeded As (Author As AuthorRecord, Affiliation As AffiliationRecord) = SeedAffiliatedLibrary()
+
+                Using board As LibraryBoard = StartBoard(),
+                      dialogs As New ManuscriptPageTests.DialogWatcher("Delete Author")
+                    board.Open(board.Library.Single())
+
+                    Assert.AreEqual(1, DeleteFromThePage(board.Editor, "lstAuthors", "DeleteSelectedAuthor",
+                        Function(item) DirectCast(item, AuthorRecord).Id = seeded.Author.Id))
+
+                    CollectionAssert.AreEqual({"Author Is In Use"}, dialogs.Closed, "Delete was refused, and nothing else was shown.")
+                    Assert.IsFalse(dialogs.Messages(0).Contains("counts as saved"), "The refusal does not say to save the page: " & dialogs.Messages(0))
+                    Assert.IsTrue(New AuthorLibraryRepository().Load().Authors.Any(Function(item) item.Id = seeded.Author.Id), "The person stays on disk.")
+
+                    board.SetPrompt(Function(title) System.Windows.Forms.DialogResult.No)
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    ' An import whose author library cannot be read imports nothing and
+    ' writes nothing: the read says what failed, and the damaged file is
+    ' left as it is, not replaced by the main window's copy.
+    <TestMethod>
+    Public Sub ABibliographyImportWhoseAuthorLibraryCannotBeReadImportsNothing()
+        StaRunner.Run(
+            Sub()
+                SeedLinkedLibrary()
+
+                Using board As LibraryBoard = StartBoard(),
+                      dialogs As New ManuscriptPageTests.DialogWatcher()
+                    Dim authors As New AuthorLibraryRepository()
+                    File.WriteAllText(authors.DataFilePath, "{ not json")
+                    If File.Exists(authors.BackupFilePath) Then File.Delete(authors.BackupFilePath)
+                    Dim authorsBefore As Byte() = File.ReadAllBytes(authors.DataFilePath)
+                    Dim manuscriptsBefore As Byte() = File.ReadAllBytes(New ManuscriptRepository().DataFilePath)
+
+                    ImportOneBibRecord(board, "Whitfield, Dana")
+
+                    Assert.AreEqual(1, board.StartupFailures.Count, "Reading the author library said what failed.")
+                    Assert.IsFalse(dialogs.Closed.Contains("Import Complete"), "Nothing says the import completed: " & String.Join(", ", dialogs.Closed))
+                    CollectionAssert.AreEqual(authorsBefore, File.ReadAllBytes(authors.DataFilePath), "The author library file is left as it was.")
+                    CollectionAssert.AreEqual(manuscriptsBefore, File.ReadAllBytes(New ManuscriptRepository().DataFilePath), "manuscripts.json is left as it was.")
+                    Assert.AreEqual(1, board.Library.Count, "Nothing was imported.")
+
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    ' One author with one affiliation on disk, and a manuscript naming the
+    ' author with that affiliation. On the page: Remove takes the author
+    ' off; then Manage Library, Delete on the one item of the list named,
+    ' answered Yes; then Discard. The person and the affiliation are on
+    ' disk still, Delete was refused with a message that says the page's
+    ' changes must be saved first, and the page names no missing person.
+    Private Sub DeleteFromThePageAfterAnUnsavedRemove(listField As String, deleteMethod As String, deleteTitle As String, inUseTitle As String)
+        StaRunner.Run(
+            Sub()
+                Dim seeded As (Author As AuthorRecord, Affiliation As AffiliationRecord) = SeedAffiliatedLibrary()
+
+                Using board As LibraryBoard = StartBoard(),
+                      dialogs As New ManuscriptPageTests.DialogWatcher(deleteTitle)
+                    board.Open(board.Library.Single())
+                    RemoveTheOnlyAuthor(board.Editor)
+
+                    Assert.AreEqual(1, DeleteFromThePage(board.Editor, listField, deleteMethod, Function(item) True))
+                    board.Discard()
+
+                    Dim failures As New List(Of String)()
+                    Dim saved As AuthorLibraryData = New AuthorLibraryRepository().Load()
+                    If Not saved.Authors.Any(Function(item) item.Id = seeded.Author.Id) Then
+                        failures.Add("(1) After Discard the saved manuscript names a person no longer in the author library.")
+                    End If
+                    If Not saved.Affiliations.Any(Function(item) item.Id = seeded.Affiliation.Id) Then
+                        failures.Add("(2) After Discard the saved manuscript names an affiliation no longer in the author library.")
+                    End If
+                    Dim refusal As Integer = dialogs.Closed.IndexOf(inUseTitle)
+                    If refusal < 0 Then
+                        failures.Add("(3) Delete was not refused; the dialogs were: " & String.Join(", ", dialogs.Closed))
+                    ElseIf Not dialogs.Messages(refusal).Contains("The manuscript open on the page counts as saved until you save its changes.") Then
+                        failures.Add("(5) The refusal does not say the page's changes must be saved first: " & dialogs.Messages(refusal))
+                    End If
+                    Dim shown As List(Of String) = AuthorsShown(board.Editor)
+                    If shown.Count <> 1 OrElse shown.Any(Function(text) text.Contains("[Missing author record]")) Then
+                        failures.Add("(4) After Discard the page's Authors tab shows: " & String.Join(" | ", shown))
+                    End If
+
+                    board.SetPrompt(Function(title) System.Windows.Forms.DialogResult.No)
+                    board.Close()
+                    Assert.AreEqual(0, failures.Count, String.Join(Environment.NewLine, failures))
+                End Using
+            End Sub)
+    End Sub
+
+    Private Const BibTitle As String = "A later imported study"
+
+    ' Leaves the manuscript page for Import & Export, as the rail does;
+    ' nothing on the page is left to save, so nothing is asked.
+    Private Shared Sub LeaveThePageWithNothingToSave(board As LibraryBoard)
+        Dim asked As Integer = 0
+        board.SetPrompt(
+            Function(title)
+                asked += 1
+                Return System.Windows.Forms.DialogResult.No
+            End Function)
+        board.NavigateTo(Form1.WorkspacePage.ImportExport)
+        System.Windows.Forms.Application.DoEvents()
+        Assert.AreEqual(0, asked, "Nothing on the page was left to save.")
+        Assert.AreEqual("ImportExport", board.PageName)
+    End Sub
+
+    ' Import BibTeX / RIS... with a file of one record by the author given;
+    ' the review window is answered Import Selected.
+    Private Sub ImportOneBibRecord(board As LibraryBoard, bibAuthor As String)
+        Dim bibPath As String = Path.Combine(_root, "one-record.bib")
+        File.WriteAllText(bibPath, "@article{later2026, title={" & BibTitle & "}, author={" & bibAuthor & "}, journal={Fictional Journal of Methods}, year={2026}}")
+        Using answer As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of BibliographyImportForm)(
+            Sub(dialog) DirectCast(dialog.AcceptButton, System.Windows.Forms.Button).PerformClick())
+            board.ImportBibliographyFile(bibPath)
+        End Using
+        System.Windows.Forms.Application.DoEvents()
+    End Sub
+
+    ' Manage Library on the page (its Click handler); in the window it
+    ' opens, inspect runs first, then the first item of the list named that
+    ' pick accepts is selected and the Delete method named runs, and the
+    ' window is closed. Returns how many times the window opened.
+    Private Shared Function DeleteFromThePage(editor As EditManuscriptForm, listField As String, deleteMethod As String, pick As Func(Of Object, Boolean), Optional inspect As Action(Of AuthorLibraryForm) = Nothing) As Integer
+        Dim opened As Integer = 0
+        Using answer As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of AuthorLibraryForm)(
+            Sub(dialog)
+                opened += 1
+                inspect?.Invoke(dialog)
+                Dim list As System.Windows.Forms.ListBox = DirectCast(GetType(AuthorLibraryForm).GetField(listField, BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(dialog), System.Windows.Forms.ListBox)
+                Dim index As Integer = list.Items.Cast(Of Object)().ToList().FindIndex(Function(item) pick(item))
+                If index >= 0 Then
+                    list.SelectedIndex = index
+                    GetType(AuthorLibraryForm).GetMethod(deleteMethod, BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(dialog, New Object() {Nothing, EventArgs.Empty})
+                End If
+                dialog.Close()
+            End Sub)
+            GetType(EditManuscriptForm).GetMethod("ManageAuthorLibrary", BindingFlags.Instance Or BindingFlags.NonPublic).
+                Invoke(editor, New Object() {Nothing, EventArgs.Empty})
+        End Using
+        System.Windows.Forms.Application.DoEvents()
+        Return opened
+    End Function
+
+    ' What the page's Authors tab lists.
+    Private Shared Function AuthorsShown(editor As EditManuscriptForm) As List(Of String)
+        Dim authorsList As System.Windows.Forms.ListBox =
+            DirectCast(GetType(EditManuscriptForm).GetField("lstAuthors", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(editor), System.Windows.Forms.ListBox)
+        Return authorsList.Items.Cast(Of Object)().Select(Function(item) authorsList.GetItemText(item)).ToList()
+    End Function
+
+    ' One author with one affiliation on disk, and one manuscript that
+    ' names that author with that affiliation.
+    Private Shared Function SeedAffiliatedLibrary() As (Author As AuthorRecord, Affiliation As AffiliationRecord)
+        Dim library As New AuthorLibraryData()
+        Dim author As New AuthorRecord With {.GivenName = "Local", .FamilyName = "Author"}
+        Dim affiliation As New AffiliationRecord With {.Institution = "Seeded University", .Country = "USA"}
+        library.Authors.Add(author)
+        library.Affiliations.Add(affiliation)
+        Dim authors As New AuthorLibraryRepository()
+        authors.Save(library)
+        Dim manuscripts As New ManuscriptRepository()
+        manuscripts.Save(New List(Of Manuscript) From {
+            New Manuscript With {
+                .Title = ExistingTitle,
+                .Authors = New List(Of ManuscriptAuthor) From {
+                    New ManuscriptAuthor With {.AuthorId = author.Id, .AffiliationIds = New List(Of Guid) From {affiliation.Id}}
+                }
+            }
+        })
+        Return (author, affiliation)
+    End Function
 
     ' One author on disk, and one manuscript that names that author.
     Private Shared Function SeedLinkedLibrary() As AuthorRecord
