@@ -688,8 +688,9 @@ Namespace Forms
         ' was typed in Target journal and chosen in Current stage where the
         ' step did not change them. A step that only puts the saved target
         ' back, as re-applying an active submission or its decision does,
-        ' keeps the typed one, unless a submission was added or one's journal
-        ' changed; so does the removal of the last submission, unless the
+        ' keeps the typed one, unless the step moved the stage (a new
+        ' revision or acceptance decision) or a submission was added or one's
+        ' journal changed; so does the removal of the last submission, unless the
         ' typed journal is the removed one's. A target the step set itself,
         ' and a Current stage it changed, win. Only the working copy and the
         ' boxes change.
@@ -707,7 +708,8 @@ Namespace Forms
 
                 Dim keep As Boolean = False
 
-                If String.Equals(target, before.TargetBefore, StringComparison.CurrentCultureIgnoreCase) Then
+                If _workingManuscript.CurrentStage = before.StageBefore AndAlso
+                   String.Equals(target, before.TargetBefore, StringComparison.CurrentCultureIgnoreCase) Then
 
                     keep =
                         SubmissionJournalsKept(before)
@@ -4697,14 +4699,19 @@ Namespace Forms
 
         ' The linked journal once the target journal text is applied: kept
         ' while the text is unchanged or is still the linked journal's name,
-        ' cleared otherwise. Save and the recovery draft (#123) agree on it.
+        ' cleared otherwise, unless the text is the saved target journal,
+        ' which keeps the saved link. Save and the recovery draft (#123)
+        ' agree on it.
         Private Function TargetJournalIdFor(
             manuscript As Manuscript,
             journalText As String
         ) As Guid?
 
-            If Not manuscript.TargetJournalId.HasValue OrElse
-               String.Equals(
+            If Not manuscript.TargetJournalId.HasValue Then
+                Return SavedTargetJournalIdFor(journalText)
+            End If
+
+            If String.Equals(
                    If(manuscript.TargetJournal, String.Empty).Trim(),
                    journalText,
                    StringComparison.CurrentCultureIgnoreCase
@@ -4731,11 +4738,35 @@ Namespace Forms
                    StringComparison.CurrentCultureIgnoreCase
                ) Then
 
-                Return Nothing
+                Return SavedTargetJournalIdFor(journalText)
 
             End If
 
             Return manuscript.TargetJournalId
+
+        End Function
+
+
+        ' The saved manuscript's link while the text is its saved target
+        ' journal again: a typed journal carried into the working copy for a
+        ' window cleared the link, and typing the saved journal back keeps it.
+        Private Function SavedTargetJournalIdFor(
+            journalText As String
+        ) As Guid?
+
+            If _originalManuscript IsNot Nothing AndAlso
+               _originalManuscript.TargetJournalId.HasValue AndAlso
+               String.Equals(
+                   If(_originalManuscript.TargetJournal, String.Empty).Trim(),
+                   journalText,
+                   StringComparison.CurrentCultureIgnoreCase
+               ) Then
+
+                Return _originalManuscript.TargetJournalId
+
+            End If
+
+            Return Nothing
 
         End Function
 

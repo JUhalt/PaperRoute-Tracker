@@ -262,6 +262,131 @@ Partial Public Class ManuscriptPageTests
             End Sub)
     End Sub
 
+    ' A journal typed and carried into a window clears the Journal Library
+    ' link in the working copy; typing the saved journal back keeps the
+    ' saved link at Save.
+    <TestMethod>
+    Public Sub TypedBackSavedTargetJournalKeepsItsLibraryLink()
+        Dim linkedId As Guid = Guid.NewGuid()
+        Dim linked As Manuscript = Sample("Linked manuscript")
+        linked.TargetJournalId = linkedId
+        WithTypedFieldsPage(
+            linked,
+            Sub(board, manuscript, dialogs)
+                board.Field("Target journal").Text = "Typed Journal"
+                AnswerJournalLinks(board.Editor, Sub(dialog) dialog.DialogResult = DialogResult.Cancel)
+                board.Field("Target journal").Text = "A fictional journal"
+
+                Assert.IsTrue(board.SaveManuscriptPage(), "The page saved.")
+                Assert.AreEqual("A fictional journal", manuscript.TargetJournal)
+                Assert.AreEqual(CType(linkedId, Guid?), manuscript.TargetJournalId, "Save keeps the saved Journal Library link.")
+            End Sub)
+    End Sub
+
+    ' A new revision decision at the active submission's journal moves the
+    ' stage and sets the target journal to that journal, over what was typed.
+    <TestMethod>
+    Public Sub TypedTargetJournalGivesWayToANewRevisionDecision()
+        WithTypedFieldsPage(
+            SubmittedToFirstJournal(),
+            Sub(board, manuscript, dialogs)
+                Dim flags As BindingFlags = BindingFlags.Instance Or BindingFlags.NonPublic
+                board.Field("Target journal").Text = "Typed Journal"
+                Dim stage As ComboBox = DirectCast(GetType(EditManuscriptForm).GetField("cmbStage", flags).GetValue(board.Editor), ComboBox)
+                stage.SelectedItem = PaperStage.Revision
+
+                Dim opened As Integer = 0
+                Using answer As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of AddDecisionForm)(
+                    Sub(dialog)
+                        opened += 1
+                        Dim decision As ComboBox = DirectCast(GetType(AddDecisionForm).GetField("cmbDecision", flags).GetValue(dialog), ComboBox)
+                        decision.SelectedItem = decision.Items.Cast(Of Object)().Single(Function(item) CType(item.GetType().GetProperty("Value").GetValue(item), EditorialDecision) = EditorialDecision.MajorRevision)
+                        GetType(AddDecisionForm).GetMethod("SaveDecision", flags).Invoke(dialog, New Object() {Nothing, EventArgs.Empty})
+                    End Sub)
+                    GetType(EditManuscriptForm).GetMethod("OpenRevisionDeadlineEditor", flags).Invoke(board.Editor, New Object() {Nothing, EventArgs.Empty})
+                    Application.DoEvents()
+                End Using
+
+                Assert.AreEqual(1, opened, "The decision window opened once.")
+                Assert.AreEqual("First Journal", board.Field("Target journal").Text, "The decision's journal is the target.")
+                Assert.IsTrue(board.SaveManuscriptPage(), "The page saved.")
+                Assert.AreEqual("First Journal", manuscript.TargetJournal, "Save writes the decision's journal.")
+                Assert.AreEqual(PaperStage.Revision, manuscript.CurrentStage)
+            End Sub)
+    End Sub
+
+    ' A new, later submission to the saved target's journal sets the target
+    ' journal to it, over what was typed.
+    <TestMethod>
+    Public Sub TypedTargetJournalGivesWayToANewSubmissionToTheSavedJournal()
+        WithTypedFieldsPage(
+            SubmittedToFirstJournal(),
+            Sub(board, manuscript, dialogs)
+                board.Field("Target journal").Text = "Typed Journal"
+                AddOneSubmission(board.Editor, "First Journal", New DateTime(2026, 2, 1))
+
+                Assert.AreEqual("First Journal", board.Field("Target journal").Text, "The new submission's journal is the target.")
+                Assert.IsTrue(board.SaveManuscriptPage(), "The page saved.")
+                Assert.AreEqual("First Journal", manuscript.TargetJournal, "Save writes the new submission's journal.")
+                Assert.AreEqual(2, manuscript.Submissions.Count)
+            End Sub)
+    End Sub
+
+    ' A backdated submission leaves the target as it is: the typed target
+    ' journal stays in the box and Save writes it.
+    <TestMethod>
+    Public Sub TypedTargetJournalSurvivesABackdatedSubmission()
+        WithTypedFieldsPage(
+            SubmittedToFirstJournal(),
+            Sub(board, manuscript, dialogs)
+                board.Field("Target journal").Text = "Typed Journal"
+                AddOneSubmission(board.Editor, "Earlier Journal", New DateTime(2025, 11, 3))
+
+                Assert.AreEqual("Typed Journal", board.Field("Target journal").Text, "The typed target journal is still in the box.")
+                Assert.IsTrue(board.SaveManuscriptPage(), "The page saved.")
+                Assert.AreEqual("Typed Journal", manuscript.TargetJournal, "Save writes the typed target journal.")
+                Assert.AreEqual(2, manuscript.Submissions.Count)
+            End Sub)
+    End Sub
+
+    ' A target journal changed in Journal, Preprint & Links wins over the
+    ' typed one, in the box and at Save.
+    <TestMethod>
+    Public Sub TypedTargetJournalGivesWayToAJournalChangedInLinks()
+        WithTypedFieldsPage(
+            Sample("Linked manuscript"),
+            Sub(board, manuscript, dialogs)
+                board.Field("Target journal").Text = "Typed Journal"
+                AnswerJournalLinks(board.Editor,
+                    Sub(dialog)
+                        LinksBox(dialog, "txtTargetJournal").Text = "Links Journal"
+                        GetType(ManuscriptLinksForm).GetMethod("SaveChanges", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(dialog, New Object() {Nothing, EventArgs.Empty})
+                    End Sub)
+
+                Assert.AreEqual("Links Journal", board.Field("Target journal").Text, "The journal from the window is in the box.")
+                Assert.IsTrue(board.SaveManuscriptPage(), "The page saved.")
+                Assert.AreEqual("Links Journal", manuscript.TargetJournal, "Save writes the journal from the window.")
+            End Sub)
+    End Sub
+
+    ' Add submission (its Click handler): the window gets journal and
+    ' submitted, then Save Submission.
+    Private Shared Sub AddOneSubmission(editor As EditManuscriptForm, journal As String, submitted As DateTime)
+        Dim flags As BindingFlags = BindingFlags.Instance Or BindingFlags.NonPublic
+        Dim opened As Integer = 0
+        Using answer As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of AddSubmissionForm)(
+            Sub(dialog)
+                opened += 1
+                DirectCast(GetType(AddSubmissionForm).GetField("txtJournal", flags).GetValue(dialog), TextBox).Text = journal
+                DirectCast(GetType(AddSubmissionForm).GetField("dtpSubmitted", flags).GetValue(dialog), DateTimePicker).Value = submitted
+                GetType(AddSubmissionForm).GetMethod("SaveSubmission", flags).Invoke(dialog, New Object() {Nothing, EventArgs.Empty})
+            End Sub)
+            GetType(EditManuscriptForm).GetMethod("AddSubmission", flags).Invoke(editor, New Object() {Nothing, EventArgs.Empty})
+            Application.DoEvents()
+        End Using
+        Assert.AreEqual(1, opened, "The submission window opened once.")
+    End Sub
+
     ' Submitted to First Journal on the day it entered the stage.
     Private Shared Function SubmittedToFirstJournal() As Manuscript
         Dim manuscript As Manuscript = Sample("Submitted manuscript")
