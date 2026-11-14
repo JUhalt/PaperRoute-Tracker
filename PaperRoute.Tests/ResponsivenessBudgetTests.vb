@@ -404,10 +404,14 @@ Public Class ResponsivenessBudgetTests
             ' the open list stepped three times read 988 to 2,227 ms before
             ' it rendered once, when the list closes, and 392 to 583 after;
             ' one change to Submitted read 555 to 768 ms before its render
-            ' held the shelves' drawing and 199 to 401 after. The change back
-            ' to All stages read 2,685 to 7,680 ms either way. It also puts
-            ' back the cards of the hidden Published and File Drawer shelves;
-            ' how its time splits was not measured.
+            ' held the shelves' drawing and 199 to 401 after. Its paint, now
+            ' done once after the render, read 2 to 4 ms before and 12 to 16
+            ' after. The change back to All stages read 5,006 to 7,680 ms
+            ' before and 2,685 to 6,254 after, which overlap, so no gain is
+            ' shown; its paint read 2 to 6 ms before and 19 to 46 after. It
+            ' also puts back the cards of the hidden Published and File
+            ' Drawer shelves; how its time splits was not measured, and the
+            ' outside probe has not seen it on the real window.
             ' The rows are reported, not enforced, until several runs on a
             ' quiet host show where they sit. The fill each change queues is
             ' let finish outside the timed steps. Each change is checked to

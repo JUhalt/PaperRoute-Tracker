@@ -286,7 +286,11 @@ Public Class BoardFilterTests
                     Application.DoEvents()
                     Assert.AreSame(clear, DeepestActiveControl(board), "Clear has the keyboard.")
 
-                    PressSpace(clear)
+                    Dim shelves As Control = board.Part(Of Panel)("shelfHost")
+                    Using watch As New SentMessageWatch()
+                        PressSpace(clear)
+                        Assert.AreEqual(2, watch.Count(shelves, WM_SETREDRAW), "Clear's render held the shelves' drawing while the keyboard moved into them.")
+                    End Using
                     board.WaitForBoardFill()
                     Application.DoEvents()
 
