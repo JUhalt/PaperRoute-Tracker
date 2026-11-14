@@ -58,7 +58,8 @@ Targets are directional rather than promises. Data integrity, migrations, backup
 | **v0.9.1** | Packet File Safety ✅ | Does a save ever delete a file the library did not ask it to? |
 | **v0.9.2** | 1.0 Hardening ✅ | Is the entire workflow polished, resilient, and certifiable? |
 | **v1.0** | Trusted Research Workflow ✅ | Would I trust this with my real publication pipeline? |
-| **v1.1** | **macOS and Linux — next** | Can PaperRoute be the same calm, trustworthy app on every desktop? |
+| **v1.0.1** | **Certification Follow-ups — next** | What did 1.0's certification note that should not wait for the new interface? |
+| **v1.1** | macOS and Linux | Can PaperRoute be the same calm, trustworthy app on every desktop? |
 | **v1.2** | Open Science Studies | What did I plan before I saw the data, and where can others check what I shared? |
 
 On September 26, 2026, the train was re-sequenced so the interface can catch up with the depth of the data model: v0.6 became **Workspace UI**, Deadline Center moved to v0.7, Route Analytics & Reports moved to v0.8, and optional AI assistance became a proposal for after 1.0. Deadlines and Analytics arrive as pages in the new workspace rather than as additional dialogs.
@@ -475,21 +476,42 @@ What 1.0 knowingly leaves as it is, cited by [#44](https://github.com/JUhalt/Pap
 
 ---
 
+# v1.0.1 Certification Follow-ups
+
+Milestone: **[v1.0.1 — Certification Follow-ups](https://github.com/JUhalt/PaperRoute-Tracker/milestone/17)**
+
+A small release on the Windows Forms app, with no new windows and the Schema 9 library kept. It takes what 1.0's certification noted and what should not wait for the new interface. The maintainer approved its scope on November 14, 2026, the day 1.0 was released. It goes beyond the default in [#160](https://github.com/JUhalt/PaperRoute-Tracker/issues/160) that 1.0.x takes data-safety fixes only. A Preview candidate, v1.0.1-rc.1, comes before Stable. It has no date, and it is published only with the maintainer's approval.
+
+Its issues are:
+- the Board's stage filter, which re-renders at each step through its list on a large library ([#338](https://github.com/JUhalt/PaperRoute-Tracker/issues/338));
+- the first online request after a connection has gone stale ([#339](https://github.com/JUhalt/PaperRoute-Tracker/issues/339));
+- two keyboard tests made independent of whoever is using the PC ([#340](https://github.com/JUhalt/PaperRoute-Tracker/issues/340), [#318](https://github.com/JUhalt/PaperRoute-Tracker/issues/318)), and a test that each sideways-scrolling list re-measures when its rows change ([#329](https://github.com/JUhalt/PaperRoute-Tracker/issues/329));
+- a record in the code of the two text engines, with the choice between them left to v1.1 (part of [#333](https://github.com/JUhalt/PaperRoute-Tracker/issues/333));
+- running the official RO-Crate validator once on a golden export ([#159](https://github.com/JUhalt/PaperRoute-Tracker/issues/159));
+- a WinGet manifest, the first of the routes named after SignPath's decline ([#343](https://github.com/JUhalt/PaperRoute-Tracker/issues/343), with [#216](https://github.com/JUhalt/PaperRoute-Tracker/issues/216));
+- a User Guide section for researchers whose studies were on OSF ([#344](https://github.com/JUhalt/PaperRoute-Tracker/issues/344)).
+
+Offering Stable releases on the Preview channel ([#158](https://github.com/JUhalt/PaperRoute-Tracker/issues/158)) was in the list at first. It moved to v1.1's first Preview the same day: it rewrites the check every install runs, and its working case can only be seen on published releases.
+
+---
+
 # v1.1 macOS and Linux
 
 Milestone: **[v1.1 — macOS and Linux](https://github.com/JUhalt/PaperRoute-Tracker/milestone/15)**
 
 One cross-platform interface on Avalonia, whose GPU compositor brings the motion and effects a WinForms app cannot, with the models, services, storage, migrations, and tests carried over; the fewer, calmer surfaces pass that goes with a rewritten interface; and Velopack packaging on three platforms. The migration is decided and planned there, not before 1.0, and 1.0.x on WinForms stays the Stable line until the Avalonia build replaces it.
 
+On November 14, 2026, the day 1.0 was released, the maintainer kept the order, v1.1 before v1.2, and set how v1.1 starts ([decisions](https://github.com/JUhalt/PaperRoute-Tracker/issues/160#issuecomment-6880580068)). The inventory and target map of [#161](https://github.com/JUhalt/PaperRoute-Tracker/issues/161) come first. The models and services then move into their own library, merged only after v1.0.1 is out, so the patch release does not carry the move. In December a one-week trial port of the Board, not merged, grounds the estimate, and the order is looked at again then. Windows and Linux come first; macOS follows as v1.1.x, since it needs Apple's developer programme and a Mac to test on.
+
 Its issues are:
 - deciding and planning the Avalonia migration ([#160](https://github.com/JUhalt/PaperRoute-Tracker/issues/160));
 - composition-grade motion and effects ([#162](https://github.com/JUhalt/PaperRoute-Tracker/issues/162));
 - the fewer, calmer surfaces pass ([#161](https://github.com/JUhalt/PaperRoute-Tracker/issues/161));
 - date precision and "unknown date" markers, Schema 10 ([#157](https://github.com/JUhalt/PaperRoute-Tracker/issues/157));
-- offering Stable releases to people on the Preview channel ([#158](https://github.com/JUhalt/PaperRoute-Tracker/issues/158));
-- running the official RO-Crate validator once on a golden export ([#159](https://github.com/JUhalt/PaperRoute-Tracker/issues/159));
+- offering Stable releases to people on the Preview channel, in v1.1's first Preview ([#158](https://github.com/JUhalt/PaperRoute-Tracker/issues/158));
+- what 1.0's certification noted and v1.0.1 leaves: the display polish ([#334](https://github.com/JUhalt/PaperRoute-Tracker/issues/334)) and the choice between the two text engines ([#333](https://github.com/JUhalt/PaperRoute-Tracker/issues/333));
 - a **Settings > Start Fresh...** command that sets the library aside and begins empty, with a backup and an undo ([#297](https://github.com/JUhalt/PaperRoute-Tracker/issues/297));
-- code signing after SignPath's decline: WinGet, a Microsoft Store (MSIX) build, or a new application once the project has external references ([#216](https://github.com/JUhalt/PaperRoute-Tracker/issues/216)).
+- code signing after SignPath's decline: WinGet, whose manifest v1.0.1 prepares ([#343](https://github.com/JUhalt/PaperRoute-Tracker/issues/343)), a Microsoft Store (MSIX) build, or a new application once the project has external references ([#216](https://github.com/JUhalt/PaperRoute-Tracker/issues/216)).
 
 ---
 
