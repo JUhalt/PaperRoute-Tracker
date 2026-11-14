@@ -400,6 +400,14 @@ Public Class ResponsivenessBudgetTests
             ' at each one, by an outside probe. Stepping through the open list
             ' with the arrow keys rendered the Board at every step. Each change
             ' is followed by its paint in a row of its own, as after a switch.
+            ' In three Release runs each with no other test host, 2026-11-14,
+            ' the open list stepped three times read 988 to 2,227 ms before
+            ' it rendered once, when the list closes, and 392 to 583 after;
+            ' one change to Submitted read 555 to 768 ms before its render
+            ' held the shelves' drawing and 199 to 401 after. The change back
+            ' to All stages read 2,685 to 7,680 ms either way. It also puts
+            ' back the cards of the hidden Published and File Drawer shelves;
+            ' how its time splits was not measured.
             ' The rows are reported, not enforced, until several runs on a
             ' quiet host show where they sit. The fill each change queues is
             ' let finish outside the timed steps. Each change is checked to
