@@ -215,9 +215,10 @@ Public Class OrcidImportUiTests
     ' The same import, then the page's Save (#353): the file holds the
     ' page's edit and the work, and a second save, which moves the first
     ' file to manuscripts.bak, still keeps the work. The window opened from
-    ' the page still counts the page's unsaved authors: the author just
-    ' removed there is used by no manuscript until the import, and then by
-    ' the work imported for them, so Delete Author refuses.
+    ' the page counts the open manuscript as saved as well as unsaved: the
+    ' author just removed there is still named by the saved manuscript,
+    ' which Discard would keep, and after the import by the work imported
+    ' for them too, so Delete Author refuses.
     <TestMethod>
     Public Sub AnOrcidImportFromTheManuscriptPageThenSaveKeepsTheEditAndTheWorks()
         StaRunner.Run(
@@ -237,8 +238,8 @@ Public Class OrcidImportUiTests
                         Sub(dialog) usage = countUsage(dialog),
                         Sub(dialog) usageAfter = countUsage(dialog)))
                     CollectionAssert.AreEqual({"ORCID Import Complete"}, dialogs.Closed, "The import went through.")
-                    Assert.AreEqual(0, usage, "Usage counts read the page's working copy, where the author was removed.")
-                    Assert.AreEqual(1, usageAfter, "After the import the work imported for the author counts, so the author cannot be deleted.")
+                    Assert.AreEqual(1, usage, "The saved manuscript still names the author removed, unsaved, on the page.")
+                    Assert.AreEqual(2, usageAfter, "After the import the work imported for the author counts too.")
                     Assert.IsTrue(PageRecords(board.Editor).Any(Function(item) item.Title = WorkTitle), "The page's copy of the records holds the work.")
 
                     Assert.IsTrue(board.SaveManuscriptPage(), "The page saved.")
@@ -459,6 +460,46 @@ Public Class OrcidImportUiTests
     <TestMethod>
     Public Sub AnAffiliationTheSavedManuscriptNamesCannotBeDeletedFromThePageAfterAnUnsavedRemove()
         DeleteFromThePageAfterAnUnsavedRemove("lstAffiliations", "DeleteSelectedAffiliation", "Delete Affiliation", "Affiliation Is In Use")
+    End Sub
+
+    ' What the page route must still allow: a person neither the saved
+    ' manuscript nor the page names is deleted, and saved at once; the
+    ' person and the affiliation both of them name count once, not twice.
+    <TestMethod>
+    Public Sub APersonNoVersionOfTheOpenManuscriptNamesCanStillBeDeletedFromThePage()
+        StaRunner.Run(
+            Sub()
+                Dim seeded As (Author As AuthorRecord, Affiliation As AffiliationRecord) = SeedAffiliatedLibrary()
+                Dim authors As New AuthorLibraryRepository()
+                Dim library As AuthorLibraryData = authors.Load()
+                Dim unused As New AuthorRecord With {.GivenName = "Unused", .FamilyName = "Person"}
+                library.Authors.Add(unused)
+                authors.Save(library)
+
+                Using board As LibraryBoard = StartBoard(),
+                      dialogs As New ManuscriptPageTests.DialogWatcher("Delete Author")
+                    board.Open(board.Library.Single())
+
+                    Dim authorUsage As Integer = -1
+                    Dim affiliationUsage As Integer = -1
+                    Assert.AreEqual(1, DeleteFromThePage(board.Editor, "lstAuthors", "DeleteSelectedAuthor",
+                        Function(item) DirectCast(item, AuthorRecord).Id = unused.Id,
+                        Sub(dialog)
+                            authorUsage = CInt(GetType(AuthorLibraryForm).GetMethod("CountAuthorUsage", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(dialog, New Object() {seeded.Author.Id}))
+                            affiliationUsage = CInt(GetType(AuthorLibraryForm).GetMethod("CountAffiliationUsage", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(dialog, New Object() {seeded.Affiliation.Id}))
+                        End Sub))
+
+                    CollectionAssert.AreEqual({"Delete Author"}, dialogs.Closed, "Delete was asked and answered Yes, and nothing else was shown.")
+                    Dim saved As AuthorLibraryData = New AuthorLibraryRepository().Load()
+                    Assert.IsFalse(saved.Authors.Any(Function(item) item.Id = unused.Id), "The unused person is deleted on disk.")
+                    Assert.IsTrue(saved.Authors.Any(Function(item) item.Id = seeded.Author.Id), "The person the manuscript names stays.")
+                    Assert.AreEqual(1, authorUsage, "The person named by both the saved manuscript and the page counts once.")
+                    Assert.AreEqual(1, affiliationUsage, "The affiliation assigned on both counts once.")
+
+                    board.SetPrompt(Function(title) System.Windows.Forms.DialogResult.No)
+                    board.Close()
+                End Using
+            End Sub)
     End Sub
 
     ' An import whose author library cannot be read imports nothing and

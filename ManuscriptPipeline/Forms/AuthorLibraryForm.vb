@@ -1108,9 +1108,32 @@ Namespace Forms
         End Function
 
 
-        Private Function CountAuthorUsage(
-            authorId As Guid
+        ' Adds up usesIn over the manuscripts usage is counted over. From
+        ' the manuscript page, the open manuscript is there as the page's
+        ' unsaved working copy, while the import target holds it as saved:
+        ' it counts as whichever of the two uses the record more. The saved
+        ' record is what is on disk until the page's Save, and the page's
+        ' edits can still be discarded, so a person or an affiliation
+        ' removed on the page but not saved is still in use. Counted on the
+        ' working copy alone, it could be deleted here, at once, and after
+        ' Discard the saved manuscript named a record that was gone.
+        Private Function CountUsage(
+            usesIn As Func(Of Manuscript, Integer)
         ) As Integer
+
+            Dim saved As New Dictionary(Of Guid, Manuscript)()
+
+            If _importTarget IsNot _manuscripts Then
+
+                For Each item As Manuscript In _importTarget
+
+                    If item IsNot Nothing AndAlso Not saved.ContainsKey(item.Id) Then
+                        saved.Add(item.Id, item)
+                    End If
+
+                Next
+
+            End If
 
             Dim count As Integer =
                 0
@@ -1118,20 +1141,23 @@ Namespace Forms
             For Each manuscript As Manuscript In
                 UsageManuscripts()
 
-                If manuscript.Authors Is Nothing Then
+                If manuscript Is Nothing Then
                     Continue For
                 End If
 
-                If manuscript.Authors.Any(
-                    Function(item)
-                        Return item IsNot Nothing AndAlso
-                            item.AuthorId = authorId
-                    End Function
-                ) Then
+                Dim uses As Integer =
+                    usesIn(manuscript)
 
-                    count += 1
+                Dim savedCopy As Manuscript = Nothing
+
+                If saved.TryGetValue(manuscript.Id, savedCopy) AndAlso
+                   savedCopy IsNot manuscript Then
+
+                    uses = Math.Max(uses, usesIn(savedCopy))
 
                 End If
+
+                count += uses
 
             Next
 
@@ -1140,43 +1166,48 @@ Namespace Forms
         End Function
 
 
+        ' The manuscripts that name the person: 1 or 0 for each.
+        Private Function CountAuthorUsage(
+            authorId As Guid
+        ) As Integer
+
+            Return CountUsage(
+                Function(manuscript)
+                    If manuscript.Authors IsNot Nothing AndAlso
+                       manuscript.Authors.Any(
+                           Function(item)
+                               Return item IsNot Nothing AndAlso
+                                   item.AuthorId = authorId
+                           End Function
+                       ) Then
+                        Return 1
+                    End If
+                    Return 0
+                End Function
+            )
+
+        End Function
+
+
+        ' The manuscript authors assigned the affiliation.
         Private Function CountAffiliationUsage(
             affiliationId As Guid
         ) As Integer
 
-            Dim count As Integer =
-                0
-
-            For Each manuscript As Manuscript In
-                UsageManuscripts()
-
-                If manuscript.Authors Is Nothing Then
-                    Continue For
-                End If
-
-                For Each authorLink As ManuscriptAuthor In
-                    manuscript.Authors
-
-                    If authorLink Is Nothing OrElse
-                       authorLink.AffiliationIds Is Nothing Then
-
-                        Continue For
-
+            Return CountUsage(
+                Function(manuscript)
+                    If manuscript.Authors Is Nothing Then
+                        Return 0
                     End If
-
-                    If authorLink.AffiliationIds.Contains(
-                        affiliationId
-                    ) Then
-
-                        count += 1
-
-                    End If
-
-                Next
-
-            Next
-
-            Return count
+                    Return manuscript.Authors.Where(
+                        Function(authorLink)
+                            Return authorLink IsNot Nothing AndAlso
+                                authorLink.AffiliationIds IsNot Nothing AndAlso
+                                authorLink.AffiliationIds.Contains(affiliationId)
+                        End Function
+                    ).Count()
+                End Function
+            )
 
         End Function
 
