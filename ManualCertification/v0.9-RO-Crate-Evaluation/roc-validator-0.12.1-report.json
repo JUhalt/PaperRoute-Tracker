@@ -1,0 +1,405 @@
+{
+    "meta": {
+        "generated_by": "rocrate-validator",
+        "version": "0.12.1"
+    },
+    "validation_settings": {
+        "rocrate_uri": "<crate>",
+        "rocrate_relative_root_path": null,
+        "profiles_path": "<venv>\\Lib\\site-packages\\rocrate_validator\\profiles",
+        "extra_profiles_path": null,
+        "profile_identifier": "ro-crate-1.3",
+        "enable_profile_inheritance": true,
+        "abort_on_first": false,
+        "disable_inherited_profiles_issue_reporting": false,
+        "requirement_severity": "RECOMMENDED",
+        "allow_requirement_check_override": true,
+        "validate_profile_checks": true,
+        "disable_check_for_duplicates": false,
+        "skip_checks": [],
+        "metadata_only": false,
+        "verbose": false,
+        "cache_max_age": -1,
+        "cache_path": "<home>\\.cache\\rocrate-validator\\http_cache",
+        "offline": false,
+        "no_cache": false,
+        "creation_time": false,
+        "enforce_availability": false,
+        "skip_availability_check": false,
+        "profile_identifiers": [
+            "ro-crate-1.3"
+        ]
+    },
+    "passed": false,
+    "skipped_checks": 6,
+    "skipped_check_details": [
+        {
+            "identifier": "ro-crate-1.3_9.1",
+            "profile": "ro-crate-1.3",
+            "requirement": "Root Data Entity: `cite-as` downloadability",
+            "name": "Root Data Entity: `cite-as` MUST reference a downloadable item",
+            "severity": "REQUIRED",
+            "message": "availability check is disabled or not applicable",
+            "category": "configured",
+            "source_identifier": "ro-crate-1.2_9.1",
+            "source_profile": "ro-crate-1.2"
+        },
+        {
+            "identifier": "ro-crate-1.3_21.1",
+            "profile": "ro-crate-1.3",
+            "requirement": "Detached RO-Crate: data entities MUST be web-based",
+            "name": "Detached RO-Crate: data entities MUST be web-based",
+            "severity": "REQUIRED",
+            "message": "RO-Crate is attached",
+            "category": "returned",
+            "source_identifier": "ro-crate-1.2_21.1",
+            "source_profile": "ro-crate-1.2"
+        },
+        {
+            "identifier": "ro-crate-1.3_22.1",
+            "profile": "ro-crate-1.3",
+            "requirement": "Web-based Data Entity: REQUIRED availability",
+            "name": "Web-based Data Entity: REQUIRED resource availability",
+            "severity": "REQUIRED",
+            "message": "availability check is disabled or not requested",
+            "category": "configured",
+            "source_identifier": "ro-crate-1.2_22.1",
+            "source_profile": "ro-crate-1.2"
+        },
+        {
+            "identifier": "ro-crate-1.3_50.1",
+            "profile": "ro-crate-1.3",
+            "requirement": "Root Data Entity: RECOMMENDED identifier",
+            "name": "Root Data Entity: RECOMMENDED identifier",
+            "severity": "RECOMMENDED",
+            "message": "RO-Crate is attached",
+            "category": "returned",
+            "source_identifier": "ro-crate-1.2_50.1",
+            "source_profile": "ro-crate-1.2"
+        },
+        {
+            "identifier": "ro-crate-1.3_52.1",
+            "profile": "ro-crate-1.3",
+            "requirement": "Root Data Entity: use cite-as for resolvable identifiers",
+            "name": "Root Data Entity: use cite-as for resolvable identifiers",
+            "severity": "RECOMMENDED",
+            "message": "RO-Crate is attached",
+            "category": "returned",
+            "source_identifier": "ro-crate-1.2_52.1",
+            "source_profile": "ro-crate-1.2"
+        },
+        {
+            "identifier": "ro-crate-1.3_70.1",
+            "profile": "ro-crate-1.3",
+            "requirement": "Referenced RO-Crate: Signposting cite-as refinement for sdDatePublished",
+            "name": "Referenced RO-Crate: `sdDatePublished` SHOULD be present when Signposting cite-as is not declared",
+            "severity": "RECOMMENDED",
+            "message": "availability check is disabled or not applicable",
+            "category": "configured",
+            "source_identifier": "ro-crate-1.2_70.1",
+            "source_profile": "ro-crate-1.2"
+        }
+    ],
+    "issues": [
+        {
+            "severity": "RECOMMENDED",
+            "message": "The Root Data Entity SHOULD have a `publisher` property (Organization or Person)",
+            "violatingEntity": "./",
+            "violatingProperty": "http://schema.org/publisher",
+            "violatingPropertyValue": null,
+            "check": {
+                "identifier": "ro-crate-1.3_56.1",
+                "label": "RECOMMENDED 56.1",
+                "order": 1,
+                "name": "Root Data Entity: RECOMMENDED `publisher` property",
+                "description": "Check if the Root Data Entity has a `publisher` property.\n            The RO-Crate specification recommends that the Root Data Entity includes\n            a publisher (Organization or Person) to describe who is responsible for\n            making the RO-Crate available.",
+                "severity": "RECOMMENDED",
+                "depends_on": [],
+                "requirement": {
+                    "identifier": "ro-crate-1.2_56",
+                    "name": "Root Data Entity: recommended publisher",
+                    "description": "The Root Data Entity SHOULD have a `publisher` property\n        referencing an Organization or Person (as per schema.org).",
+                    "order": 56,
+                    "profile": {
+                        "identifier": "ro-crate-1.2",
+                        "uri": "https://w3id.org/ro/crate/1.2",
+                        "name": "RO-Crate Metadata Specification 1.2",
+                        "description": "RO-Crate Metadata Specification."
+                    }
+                },
+                "source_identifier": "ro-crate-1.2_56.1",
+                "source_profile": "ro-crate-1.2",
+                "profile": "ro-crate-1.3"
+            }
+        },
+        {
+            "severity": "RECOMMENDED",
+            "message": "A License entity SHOULD have an absolute HTTP(S) URL as its @id (e.g., an SPDX license URI such as https://spdx.org/licenses/MIT.html)",
+            "violatingEntity": "./#rights-not-stated",
+            "violatingProperty": null,
+            "violatingPropertyValue": "file://<crate>/#rights-not-stated",
+            "check": {
+                "identifier": "ro-crate-1.3_85.0",
+                "label": "SHOULD 85.0",
+                "order": 0,
+                "name": "License entity: SHOULD have absolute URL @id",
+                "description": "A License entity SHOULD be identified by an absolute HTTP(S) URL,\n        for example an SPDX license URI (https://spdx.org/licenses/).\n        (RO-Crate 1.2, Contextual Entities \u2014 License)",
+                "severity": "RECOMMENDED",
+                "depends_on": [],
+                "requirement": {
+                    "identifier": "ro-crate-1.2_85",
+                    "name": "License entity: SHOULD have absolute URL @id",
+                    "description": "A License entity SHOULD be identified by an absolute HTTP(S) URL,\n        for example an SPDX license URI (https://spdx.org/licenses/).\n        (RO-Crate 1.2, Contextual Entities \u2014 License)",
+                    "order": 85,
+                    "profile": {
+                        "identifier": "ro-crate-1.2",
+                        "uri": "https://w3id.org/ro/crate/1.2",
+                        "name": "RO-Crate Metadata Specification 1.2",
+                        "description": "RO-Crate Metadata Specification."
+                    }
+                },
+                "source_identifier": "ro-crate-1.2_85.0",
+                "source_profile": "ro-crate-1.2",
+                "profile": "ro-crate-1.3"
+            }
+        },
+        {
+            "severity": "RECOMMENDED",
+            "message": "The organization SHOULD have a URL.",
+            "violatingEntity": "./#org-2",
+            "violatingProperty": "http://schema.org/url",
+            "violatingPropertyValue": null,
+            "check": {
+                "identifier": "ro-crate-1.3_86.2",
+                "label": "SHOULD 86.2",
+                "order": 2,
+                "name": "Organization: RECOMMENDED url property",
+                "description": "Check if the `organization` has a URL.",
+                "severity": "RECOMMENDED",
+                "depends_on": [],
+                "requirement": {
+                    "identifier": "ro-crate-1.2_86",
+                    "name": "Organization: RECOMMENDED properties",
+                    "description": "The recommended properties for an `Organization` are `name` and `url`.",
+                    "order": 86,
+                    "profile": {
+                        "identifier": "ro-crate-1.2",
+                        "uri": "https://w3id.org/ro/crate/1.2",
+                        "name": "RO-Crate Metadata Specification 1.2",
+                        "description": "RO-Crate Metadata Specification."
+                    }
+                },
+                "source_identifier": "ro-crate-1.2_86.2",
+                "source_profile": "ro-crate-1.2",
+                "profile": "ro-crate-1.3"
+            }
+        },
+        {
+            "severity": "RECOMMENDED",
+            "message": "The organization SHOULD have a URL.",
+            "violatingEntity": "./#org-1",
+            "violatingProperty": "http://schema.org/url",
+            "violatingPropertyValue": null,
+            "check": {
+                "identifier": "ro-crate-1.3_86.2",
+                "label": "SHOULD 86.2",
+                "order": 2,
+                "name": "Organization: RECOMMENDED url property",
+                "description": "Check if the `organization` has a URL.",
+                "severity": "RECOMMENDED",
+                "depends_on": [],
+                "requirement": {
+                    "identifier": "ro-crate-1.2_86",
+                    "name": "Organization: RECOMMENDED properties",
+                    "description": "The recommended properties for an `Organization` are `name` and `url`.",
+                    "order": 86,
+                    "profile": {
+                        "identifier": "ro-crate-1.2",
+                        "uri": "https://w3id.org/ro/crate/1.2",
+                        "name": "RO-Crate Metadata Specification 1.2",
+                        "description": "RO-Crate Metadata Specification."
+                    }
+                },
+                "source_identifier": "ro-crate-1.2_86.2",
+                "source_profile": "ro-crate-1.2",
+                "profile": "ro-crate-1.3"
+            }
+        },
+        {
+            "severity": "RECOMMENDED",
+            "message": "An Organization entity SHOULD have a ROR identifier as its @id (e.g., https://ror.org/03f0f6041)",
+            "violatingEntity": "./#org-2",
+            "violatingProperty": null,
+            "violatingPropertyValue": "file://<crate>/#org-2",
+            "check": {
+                "identifier": "ro-crate-1.3_89.0",
+                "label": "SHOULD 89.0",
+                "order": 0,
+                "name": "Organization: SHOULD have ROR identifier",
+                "description": "An Organization entity SHOULD use a ROR (Research Organization Registry) identifier\n        as its @id, if possible.\n        (RO-Crate 1.2, Contextual Entities \u2014 Organizations as values; Metadata \u2014 Recommended Identifiers)",
+                "severity": "RECOMMENDED",
+                "depends_on": [],
+                "requirement": {
+                    "identifier": "ro-crate-1.2_89",
+                    "name": "Organization: SHOULD have ROR identifier",
+                    "description": "An Organization entity SHOULD use a ROR (Research Organization Registry) identifier\n        as its @id, if possible.\n        (RO-Crate 1.2, Contextual Entities \u2014 Organizations as values; Metadata \u2014 Recommended Identifiers)",
+                    "order": 89,
+                    "profile": {
+                        "identifier": "ro-crate-1.2",
+                        "uri": "https://w3id.org/ro/crate/1.2",
+                        "name": "RO-Crate Metadata Specification 1.2",
+                        "description": "RO-Crate Metadata Specification."
+                    }
+                },
+                "source_identifier": "ro-crate-1.2_89.0",
+                "source_profile": "ro-crate-1.2",
+                "profile": "ro-crate-1.3"
+            }
+        },
+        {
+            "severity": "RECOMMENDED",
+            "message": "An Organization entity SHOULD have a ROR identifier as its @id (e.g., https://ror.org/03f0f6041)",
+            "violatingEntity": "./#org-1",
+            "violatingProperty": null,
+            "violatingPropertyValue": "file://<crate>/#org-1",
+            "check": {
+                "identifier": "ro-crate-1.3_89.0",
+                "label": "SHOULD 89.0",
+                "order": 0,
+                "name": "Organization: SHOULD have ROR identifier",
+                "description": "An Organization entity SHOULD use a ROR (Research Organization Registry) identifier\n        as its @id, if possible.\n        (RO-Crate 1.2, Contextual Entities \u2014 Organizations as values; Metadata \u2014 Recommended Identifiers)",
+                "severity": "RECOMMENDED",
+                "depends_on": [],
+                "requirement": {
+                    "identifier": "ro-crate-1.2_89",
+                    "name": "Organization: SHOULD have ROR identifier",
+                    "description": "An Organization entity SHOULD use a ROR (Research Organization Registry) identifier\n        as its @id, if possible.\n        (RO-Crate 1.2, Contextual Entities \u2014 Organizations as values; Metadata \u2014 Recommended Identifiers)",
+                    "order": 89,
+                    "profile": {
+                        "identifier": "ro-crate-1.2",
+                        "uri": "https://w3id.org/ro/crate/1.2",
+                        "name": "RO-Crate Metadata Specification 1.2",
+                        "description": "RO-Crate Metadata Specification."
+                    }
+                },
+                "source_identifier": "ro-crate-1.2_89.0",
+                "source_profile": "ro-crate-1.2",
+                "profile": "ro-crate-1.3"
+            }
+        },
+        {
+            "severity": "RECOMMENDED",
+            "message": "An Organization's contactPoint SHOULD reference a ContactPoint contextual entity",
+            "violatingEntity": "./#org-2",
+            "violatingProperty": "http://schema.org/contactPoint",
+            "violatingPropertyValue": null,
+            "check": {
+                "identifier": "ro-crate-1.3_90.1",
+                "label": "RECOMMENDED 90.1",
+                "order": 1,
+                "name": "Organization: RECOMMENDED contactPoint references ContactPoint entity",
+                "description": "Check if the Organization has a contactPoint referencing a ContactPoint entity.",
+                "severity": "RECOMMENDED",
+                "depends_on": [],
+                "requirement": {
+                    "identifier": "ro-crate-1.2_90",
+                    "name": "Organization: SHOULD have contactPoint referencing ContactPoint",
+                    "description": "An Organization SHOULD have a contactPoint property referencing a ContactPoint contextual entity.\n        (RO-Crate 1.2, Contextual Entities \u2014 Contact Information)",
+                    "order": 90,
+                    "profile": {
+                        "identifier": "ro-crate-1.2",
+                        "uri": "https://w3id.org/ro/crate/1.2",
+                        "name": "RO-Crate Metadata Specification 1.2",
+                        "description": "RO-Crate Metadata Specification."
+                    }
+                },
+                "source_identifier": "ro-crate-1.2_90.1",
+                "source_profile": "ro-crate-1.2",
+                "profile": "ro-crate-1.3"
+            }
+        },
+        {
+            "severity": "RECOMMENDED",
+            "message": "An Organization's contactPoint SHOULD reference a ContactPoint contextual entity",
+            "violatingEntity": "./#org-1",
+            "violatingProperty": "http://schema.org/contactPoint",
+            "violatingPropertyValue": null,
+            "check": {
+                "identifier": "ro-crate-1.3_90.1",
+                "label": "RECOMMENDED 90.1",
+                "order": 1,
+                "name": "Organization: RECOMMENDED contactPoint references ContactPoint entity",
+                "description": "Check if the Organization has a contactPoint referencing a ContactPoint entity.",
+                "severity": "RECOMMENDED",
+                "depends_on": [],
+                "requirement": {
+                    "identifier": "ro-crate-1.2_90",
+                    "name": "Organization: SHOULD have contactPoint referencing ContactPoint",
+                    "description": "An Organization SHOULD have a contactPoint property referencing a ContactPoint contextual entity.\n        (RO-Crate 1.2, Contextual Entities \u2014 Contact Information)",
+                    "order": 90,
+                    "profile": {
+                        "identifier": "ro-crate-1.2",
+                        "uri": "https://w3id.org/ro/crate/1.2",
+                        "name": "RO-Crate Metadata Specification 1.2",
+                        "description": "RO-Crate Metadata Specification."
+                    }
+                },
+                "source_identifier": "ro-crate-1.2_90.1",
+                "source_profile": "ro-crate-1.2",
+                "profile": "ro-crate-1.3"
+            }
+        },
+        {
+            "severity": "RECOMMENDED",
+            "message": "A Person entity SHOULD have an ORCID identifier as its @id (e.g., https://orcid.org/0000-0001-2345-6789)",
+            "violatingEntity": "./#author-2",
+            "violatingProperty": null,
+            "violatingPropertyValue": "file://<crate>/#author-2",
+            "check": {
+                "identifier": "ro-crate-1.3_91.0",
+                "label": "SHOULD 91.0",
+                "order": 0,
+                "name": "Person: SHOULD have ORCID identifier",
+                "description": "A Person entity SHOULD use an ORCID identifier as its @id.\n        (RO-Crate 1.2, Contextual Entities \u2014 People)",
+                "severity": "RECOMMENDED",
+                "depends_on": [],
+                "requirement": {
+                    "identifier": "ro-crate-1.2_91",
+                    "name": "Person: SHOULD have ORCID identifier",
+                    "description": "A Person entity SHOULD use an ORCID identifier as its @id.\n        (RO-Crate 1.2, Contextual Entities \u2014 People)",
+                    "order": 91,
+                    "profile": {
+                        "identifier": "ro-crate-1.2",
+                        "uri": "https://w3id.org/ro/crate/1.2",
+                        "name": "RO-Crate Metadata Specification 1.2",
+                        "description": "RO-Crate Metadata Specification."
+                    }
+                },
+                "source_identifier": "ro-crate-1.2_91.0",
+                "source_profile": "ro-crate-1.2",
+                "profile": "ro-crate-1.3"
+            }
+        }
+    ],
+    "statistics": {
+        "started_at": "2026-11-14T17:04:37.185598+00:00",
+        "finished_at": "2026-11-14T17:04:55.062991+00:00",
+        "duration": 17.877393,
+        "profiles": [
+            "ro-crate-1.2",
+            "ro-crate-1.3"
+        ],
+        "total_requirements": 92,
+        "total_passed_requirements": 92,
+        "total_failed_requirements": 0,
+        "total_checks": 172,
+        "total_passed_checks": 160,
+        "total_failed_checks": 6,
+        "total_skipped_checks": 6,
+        "total_checks_by_severity": {
+            "REQUIRED": 66,
+            "RECOMMENDED": 106,
+            "OPTIONAL": 0
+        }
+    }
+}
