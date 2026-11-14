@@ -523,35 +523,66 @@ Public Class UserGuideServiceTests
     End Sub
 
 
-    ' #344: the one sentence on v1.2 says what the roadmap plans and
-    ' promises nothing: no "will", no month, no year.
+    ' #344: a sentence on v1.2 says what the roadmap plans, and neither it
+    ' nor any sentence under "### Later" promises anything: no "will", no
+    ' month, no year.
     <TestMethod>
     Public Sub IfYourStudiesWereOnOsf_PromisesNoLaterReleaseOrDate()
 
-        Dim later As List(Of String) =
+        Dim section As String =
+            SectionText(
+                ReadGuide(),
+                OsfHeading
+            )
+
+        Const SentenceBreak As String = "(?<=[.!?])\s+|\n"
+
+        Dim namesV12 As List(Of String) =
             Regex.Split(
-                SectionText(
-                    ReadGuide(),
-                    OsfHeading
-                ),
-                "(?<=[.!?])\s+|\n"
+                section,
+                SentenceBreak
             ).Where(
                 Function(sentence) sentence.Contains("v1.2", StringComparison.Ordinal) OrElse
                                    sentence.Contains("Open Science Studies", StringComparison.Ordinal)
             ).ToList()
 
         Assert.IsTrue(
-            later.Count >= 1,
+            namesV12.Count >= 1,
             "The section has a sentence on v1.2."
         )
 
-        For Each sentence As String In later
+        For Each sentence As String In namesV12
 
             StringAssert.Contains(
                 sentence,
                 "plan",
                 "The sentence says what is planned: " & sentence
             )
+
+        Next
+
+        Dim laterStart As Integer =
+            section.IndexOf(
+                vbLf & "### Later" & vbLf,
+                StringComparison.Ordinal
+            )
+
+        Assert.IsTrue(
+            laterStart >= 0,
+            "The section has a Later part."
+        )
+
+        Dim checkedSentences As List(Of String) =
+            namesV12.Concat(
+                Regex.Split(
+                    section.Substring(laterStart),
+                    SentenceBreak
+                ).Where(
+                    Function(sentence) sentence.Trim().Length > 0
+                )
+            ).ToList()
+
+        For Each sentence As String In checkedSentences
 
             Assert.IsFalse(
                 Regex.IsMatch(
@@ -653,12 +684,22 @@ Public Class UserGuideServiceTests
 
                     System.Windows.Forms.Application.DoEvents()
 
+                    ' The heading on a line of its own, not a pointer line
+                    ' that mentions it.
                     StringAssert.StartsWith(
                         help.GuideText.Substring(
                             help.GuideSelectionStart
                         ),
-                        OsfHeading,
-                        "Help opens at the section."
+                        OsfHeading & ChrW(10),
+                        "Help opens at the section heading."
+                    )
+
+                    Assert.AreEqual(
+                        ChrW(10),
+                        help.GuideText(
+                            help.GuideSelectionStart - 1
+                        ),
+                        "The heading starts a line."
                     )
 
                     StringAssert.Contains(

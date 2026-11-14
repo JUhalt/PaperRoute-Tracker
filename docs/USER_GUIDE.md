@@ -465,7 +465,7 @@ The Center for Open Science (COS), which runs OSF, is changing what OSF does. If
 
 ### What PaperRoute 1.0 holds for a study
 
-PaperRoute 1.0 tracks manuscripts. It has no record for a study yet, but a manuscript can hold the study's links and the files that went to a journal with it.
+PaperRoute 1.0 tracks manuscripts. It has no record for a study, but a manuscript can hold the study's links and the files that went to a journal with it.
 
 - **Links.** On the manuscript page's **Overview** tab, choose **Journal, Preprint & Links...**. Under **Related Web Links**, choose **Add Link** for each place the study lives: the OSF project, the preregistration, the data deposit, the materials. You choose the label, and the list shows it beside the URL, so a label such as `OSF Project (read-only)` or `Data (Zenodo)` tells the links apart. **Notes** holds the rest, such as the day you downloaded the project. Choose **Save & Close**, then **Save** on the manuscript page.
 - **A preprint.** Enter its DOI or URL under **Preprint** in the same window.
@@ -478,7 +478,7 @@ PaperRoute 1.0 has no place for a whole study's data. Keep it in a folder you ba
 ### Before February 19, 2027
 
 1. Add the link of each OSF project behind a manuscript to that manuscript, if it is not there yet.
-2. Download each project you want to keep, private projects first. OSF's guide to [downloading files from OSF projects](https://help.osf.io/article/736-download-osf-content) shows how, including a whole project as one .zip file.
+2. Download each project you want to keep, private projects first. OSF's guide to [downloading files from OSF projects](https://help.osf.io/article/736-download-osf-content) shows how. A project's .zip holds only its own files: download each component and each storage add-on separately, and copy the wiki yourself.
 3. Move ongoing work, such as data still being collected or materials still changing, to a repository. Add its link beside the OSF link, and keep the OSF link for the record.
 4. If a manuscript under review links to a private OSF project through a view-only link, ask the journal how to replace that link.
 5. Choose **Settings > Backup Library...**. A backup holds PaperRoute's managed copies, but only the paths of files linked from elsewhere; keep those originals yourself.
