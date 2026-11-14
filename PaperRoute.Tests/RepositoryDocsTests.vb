@@ -376,7 +376,7 @@ Public Class RepositoryDocsTests
                 ReadDocument(
                     "ROADMAP.md"
                 ),
-                "# v1.0 Trusted Research Workflow"
+                "## COMPLETE — v1.0 Trusted Research Workflow"
             )
 
         Assert.IsFalse(

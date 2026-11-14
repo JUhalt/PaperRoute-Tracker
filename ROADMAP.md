@@ -455,7 +455,7 @@ What 1.0 knowingly leaves as it is, for [#44](https://github.com/JUhalt/PaperRou
 
 ---
 
-# v1.0 Trusted Research Workflow
+## COMPLETE — v1.0 Trusted Research Workflow
 
 **Release-readiness tracker:** [#44](https://github.com/JUhalt/PaperRoute-Tracker/issues/44), in [milestone 12](https://github.com/JUhalt/PaperRoute-Tracker/milestone/12), due November 16, 2026. 1.0 is certified by the standing procedure in [Release-Certification.md](ManualCertification/Release-Certification.md) ([#146](https://github.com/JUhalt/PaperRoute-Tracker/issues/146), [PR #171](https://github.com/JUhalt/PaperRoute-Tracker/pull/171)), and v0.9.2's certification ([#147](https://github.com/JUhalt/PaperRoute-Tracker/issues/147)) is the rehearsal for the 1.0 record. 1.0 is published only with the maintainer's sign-off on #44.
 
