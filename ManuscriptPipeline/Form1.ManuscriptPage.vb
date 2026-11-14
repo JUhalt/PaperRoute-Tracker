@@ -189,7 +189,7 @@ Partial Public Class Form1
             manuscriptPageSaveHint.Text = SaveBarHint
             manuscriptPageSaveBar.Visible = False
 
-            editor.LoadRecord(manuscript, manuscripts, pendingRecoveredCopy, deferParts:=True)
+            editor.LoadRecord(manuscript, manuscripts, pendingRecoveredCopy, deferParts:=True, recoveredLibrary:=pendingRecoveredLibrary)
 
         Catch
             ' A load that failed part way leaves the page hidden and laid

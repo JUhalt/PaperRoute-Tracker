@@ -1,4 +1,5 @@
 Imports System
+Imports System.Collections.Generic
 Imports System.IO
 Imports System.Text.Json
 Imports System.Text.Json.Serialization
@@ -16,6 +17,25 @@ Namespace Services
         Public Property WrittenAtUtc As DateTime
         Public Property Reason As String = String.Empty
         Public Property Manuscript As Manuscript
+
+        ' The people, affiliations and tag colours the page added to the
+        ' author library and had not saved (#361). Nothing when the page
+        ' changed nothing in the library; it is then left out of the file,
+        ' so such a draft has the shape v0.9.2 to v1.0.0 wrote. A draft
+        ' without it (v0.9.2, v1.0.0) means nothing there was unsaved. Older
+        ' builds skip the key, since no UnmappedMemberHandling is set.
+        <JsonIgnore(Condition:=JsonIgnoreCondition.WhenWritingNull)>
+        Public Property UnsavedLibrary As RecoveryDraftLibrary = Nothing
+
+    End Class
+
+
+    ' The author-library records a recovery draft carries (#361).
+    Public Class RecoveryDraftLibrary
+
+        Public Property Authors As List(Of AuthorRecord) = New List(Of AuthorRecord)()
+        Public Property Affiliations As List(Of AffiliationRecord) = New List(Of AffiliationRecord)()
+        Public Property TagColors As List(Of TagColor) = New List(Of TagColor)()
 
     End Class
 
