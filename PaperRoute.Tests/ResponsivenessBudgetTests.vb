@@ -394,6 +394,46 @@ Public Class ResponsivenessBudgetTests
 
             rows.Add(Time(library, "Board render (RenderManuscripts)", UiThread, Sub() board.Render(), enforced:=enforce))
 
+            ' The Board's stage filter (#338). The row above changes no card;
+            ' a filter change takes cards off the shelves and puts others on,
+            ' and on v1.0.0-rc.4 the window's round trips read 0.30 to 0.53 s
+            ' at each one, by an outside probe. Stepping through the open list
+            ' with the arrow keys rendered the Board at every step. Each change
+            ' is followed by its paint in a row of its own, as after a switch.
+            ' The rows are reported, not enforced, until several runs on a
+            ' quiet host show where they sit. The fill each change queues is
+            ' let finish outside the timed steps. Each change is checked to
+            ' have changed the Pipeline shelf, so no row can pass on a change
+            ' that did nothing.
+            Dim pipelineCount As Integer = library.Manuscripts.Where(Function(item) item.Location = ManuscriptLocation.Pipeline).Count()
+            Dim submittedCount As Integer = library.Manuscripts.Where(Function(item) item.Location = ManuscriptLocation.Pipeline AndAlso item.CurrentStage = PaperStage.Submitted).Count()
+            Dim assertShelf As Action(Of Integer, String) =
+                Sub(expected, context)
+                    board.WaitForBoardFill()
+                    Assert.AreEqual(expected, board.ShelfManuscripts("pipelinePanel").Count, "The Pipeline shelf's cards " & context & ".")
+                End Sub
+            If enforce Then Assert.IsTrue(submittedCount > 0 AndAlso submittedCount < pipelineCount, "The 500 library has Submitted manuscripts on its Pipeline shelf, and others.")
+            assertShelf(pipelineCount, "before the stage filter rows")
+            board.PaintNow()
+            rows.Add(Time(library, "Board: stage filter All stages to Submitted (one committed change)", UiThread, Sub() board.ChooseStage(3)))
+            rows.Add(Time(library, "Board: its paint after the stage filter change", UiThread, Sub() board.PaintNow()))
+            assertShelf(submittedCount, "with Submitted chosen")
+            board.PaintNow()
+            rows.Add(Time(library, "Board: stage filter back to All stages", UiThread, Sub() board.ChooseStage(0)))
+            rows.Add(Time(library, "Board: its paint after the stage filter goes back to All stages", UiThread, Sub() board.PaintNow()))
+            assertShelf(pipelineCount, "with All stages chosen again")
+            board.PaintNow()
+            rows.Add(Time(library, "Board: the open stage list stepped Idea, Draft, Submitted, then closed (and its messages processed)", UiThread,
+                          Sub()
+                              board.StepOpenList("cboStageFilter", 1, 2, 3)
+                              board.CloseList("cboStageFilter")
+                              Application.DoEvents()
+                          End Sub))
+            assertShelf(submittedCount, "with Submitted chosen from the open list")
+            board.ChooseStage(0)
+            assertShelf(pipelineCount, "after the stage filter rows")
+            board.PaintNow()
+
             ' A save that changes a card the Board shows with its windows: the
             ' card is replaced on its shelf, the others left in place (#133).
             board.Open(pipelineSubject)
