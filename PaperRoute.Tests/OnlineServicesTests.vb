@@ -194,6 +194,196 @@ Public Class OnlineServicesTests
 
 
     ' ---------------------------------------------------------------
+    ' A dead connection (#339): after a computer or virtual machine
+    ' resumes, the first request can go out on a pooled connection the
+    ' network has forgotten. The gate sends a read once more.
+    ' ---------------------------------------------------------------
+
+    <TestMethod>
+    Public Sub AGetThatFailsOnADeadConnectionIsSentOnceMore()
+        Dim mark As New HttpRequestOptionsKey(Of String)("PaperRoute.Tests.Mark")
+        Dim calls As Integer = 0
+        Dim secondTry As String = Nothing
+        Dim network As ScriptedNetwork = UseNetwork(
+            Function(request)
+                calls += 1
+                If calls = 1 Then Throw DeadConnection()
+                Dim value As String = Nothing
+                request.Options.TryGetValue(mark, value)
+                secondTry = String.Join(" ", request.Method.Method, request.Version.ToString(), request.VersionPolicy.ToString(), request.Headers.Accept.ToString(), value)
+                Return Ok("{}")
+            End Function)
+
+        Using lookup As New HttpRequestMessage(HttpMethod.Get, "https://api.crossref.org/works/10.5555/x") With {.Version = HttpVersion.Version20, .VersionPolicy = HttpVersionPolicy.RequestVersionOrLower}
+            lookup.Headers.Accept.ParseAdd("application/json")
+            lookup.Headers.TryAddWithoutValidation("Authorization", "Bearer should-not-leave")
+            lookup.Options.Set(mark, "kept")
+            Using response As HttpResponseMessage = OnlineAccess.ClientFor(OnlineServiceCatalog.Crossref).SendAsync(lookup).GetAwaiter().GetResult()
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode)
+            End Using
+        End Using
+
+        Assert.AreEqual(2, network.Requests.Count, "Sent once more after the dead connection.")
+        For Each sent As SentRequest In network.Requests
+            Assert.AreEqual("https://api.crossref.org/works/10.5555/x", sent.Uri.AbsoluteUri)
+            Assert.AreEqual(OnlineAccess.UserAgent(), sent.UserAgent, "The gate prepared both tries.")
+            Assert.IsNull(sent.Authorization, "No key, and nothing a caller set, goes to Crossref on either try.")
+        Next
+        Assert.AreEqual("GET 2.0 RequestVersionOrLower application/json kept", secondTry, "The second try is the same request: version, headers and options.")
+    End Sub
+
+    <TestMethod>
+    Public Sub AGetThatFailsTwiceSaysCouldntReachAfterExactlyTwoTries()
+        Dim network As ScriptedNetwork = UseNetwork(
+            Function(request)
+                Throw DeadConnection()
+            End Function)
+
+        Dim failure As HttpRequestException = Assert.ThrowsExactly(Of HttpRequestException)(
+            Sub() OnlineAccess.ClientFor(OnlineServiceCatalog.Crossref).GetAsync("https://api.crossref.org/works/10.5555/x").GetAwaiter().GetResult().Dispose())
+
+        Assert.AreEqual(2, network.Requests.Count, "Two tries, never three.")
+        Assert.AreEqual("PaperRoute couldn't reach Crossref. Check your internet connection, then try again.", OnlineAccess.Describe(failure, "Crossref"))
+    End Sub
+
+    <TestMethod>
+    Public Sub ARequestWithContentIsNeverSentTwice()
+        ' The first may have arrived: the researcher's text never goes twice.
+        Dim network As ScriptedNetwork = UseNetwork(
+            Function(request)
+                Throw DeadConnection()
+            End Function)
+
+        For Each method As HttpMethod In {HttpMethod.Post, HttpMethod.Get}
+            network.Requests.Clear()
+            Using withContent As New HttpRequestMessage(method, "https://api.crossref.org/works") With {.Content = New StringContent("{}")}
+                Assert.ThrowsExactly(Of HttpRequestException)(Sub() OnlineAccess.ClientFor(OnlineServiceCatalog.Crossref).SendAsync(withContent).GetAwaiter().GetResult().Dispose())
+            End Using
+            Assert.AreEqual(1, network.Requests.Count, method.Method & " with content")
+        Next
+
+        ' A compatible server on this computer, and Claude.
+        Dim draft As AssistantRequest = AssistantService.BuildResponseRequest("Reviewer 1", "Clarify the sample.", "")
+        network.Requests.Clear()
+        OnlineAccess.Configure(AssistantCoreTests.CompatibleSettings("http://localhost:11434/v1"))
+        Dim compatible As HttpRequestException = Assert.ThrowsExactly(Of HttpRequestException)(
+            Sub() AssistantService.CurrentProvider().CompleteAsync(draft, CancellationToken.None).GetAwaiter().GetResult())
+        Assert.IsNull(compatible.StatusCode)
+        Assert.AreEqual("http://localhost:11434/v1/chat/completions", network.Requests.Single().Uri.AbsoluteUri)
+
+        network.Requests.Clear()
+        OnlineAccess.Configure(AssistantCoreTests.ClaudeSettings())
+        OnlineAccess.KeyStore().Save(ProtectedKeyStore.Anthropic, "sk-ant-test-key-0001")
+        Dim claude As HttpRequestException = Assert.ThrowsExactly(Of HttpRequestException)(
+            Sub() AssistantService.CurrentProvider().CompleteAsync(draft, CancellationToken.None).GetAwaiter().GetResult())
+        Assert.IsNull(claude.StatusCode)
+        Assert.AreEqual("https://api.anthropic.com/v1/messages", network.Requests.Single().Uri.AbsoluteUri)
+    End Sub
+
+    <TestMethod>
+    Public Sub AnHttpAnswerOrATimeoutIsNotRetried()
+        Const Address As String = "https://api.crossref.org/works/10.5555/x"
+        Dim network As ScriptedNetwork = UseNetwork()
+
+        For Each status As Integer In {500, 429, 404}
+            network.Requests.Clear()
+            Dim code As HttpStatusCode = CType(status, HttpStatusCode)
+            network.Respond = Function(request) New HttpResponseMessage(code)
+            Using response As HttpResponseMessage = OnlineAccess.ClientFor(OnlineServiceCatalog.Crossref).GetAsync(Address).GetAwaiter().GetResult()
+                Assert.AreEqual(code, response.StatusCode)
+            End Using
+            Assert.AreEqual(1, network.Requests.Count, "HTTP " & status.ToString())
+        Next
+
+        For Each failure As Exception In {CType(New TaskCanceledException("x", New TimeoutException()), Exception),
+                                          New HttpRequestException(HttpRequestError.NameResolutionError, "No such host is known."),
+                                          New HttpRequestException("x", Nothing, HttpStatusCode.BadGateway),
+                                          New OnlineServiceBusyException("Crossref", Nothing, False)}
+            network.Requests.Clear()
+            Dim thrown As Exception = failure
+            network.Respond = Function(request)
+                                  Throw thrown
+                              End Function
+            Assert.IsNotNull(FailureOf(Sub() OnlineAccess.ClientFor(OnlineServiceCatalog.Crossref).GetAsync(Address).GetAwaiter().GetResult().Dispose()))
+            Assert.AreEqual(1, network.Requests.Count, failure.GetType().Name & ": " & failure.Message)
+        Next
+
+        ' Nor a request the caller cancelled while it failed.
+        network.Requests.Clear()
+        Using cancel As New CancellationTokenSource()
+            network.Respond = Function(request)
+                                  cancel.Cancel()
+                                  Throw DeadConnection()
+                              End Function
+            Assert.IsNotNull(FailureOf(Sub() OnlineAccess.ClientFor(OnlineServiceCatalog.Crossref).GetAsync(Address, cancel.Token).GetAwaiter().GetResult().Dispose()))
+        End Using
+        Assert.AreEqual(1, network.Requests.Count, "Cancelled")
+    End Sub
+
+    <TestMethod>
+    Public Sub WorkOfflineTurnedOnBetweenTheTwoTriesStopsTheSecond()
+        Const Address As String = "https://api.crossref.org/works/10.5555/x"
+        Dim network As ScriptedNetwork = UseNetwork(
+            Function(request)
+                OnlineAccess.Configure(New OnlineServicesSettings With {.WorkOffline = True})
+                Throw DeadConnection()
+            End Function)
+
+        Assert.AreEqual(OnlineBlockReason.WorkOffline, Refused(OnlineServiceCatalog.Crossref, Address).Reason)
+        Assert.AreEqual(1, network.Requests.Count, "The gate is checked again before the second try.")
+
+        OnlineAccess.Configure(New OnlineServicesSettings())
+        network.Requests.Clear()
+        network.Respond = Function(request)
+                              OnlineAccess.Configure(New OnlineServicesSettings With {.TurnedOff = New List(Of String) From {OnlineServiceCatalog.Crossref}})
+                              Throw DeadConnection()
+                          End Function
+        Assert.AreEqual(OnlineBlockReason.ServiceOff, Refused(OnlineServiceCatalog.Crossref, Address).Reason)
+        Assert.AreEqual(1, network.Requests.Count)
+    End Sub
+
+    <TestMethod>
+    Public Sub TheRetryKeepsTheOpenAlexKeyOnOpenAlexOnly()
+        OnlineAccess.KeyStore().Save(ProtectedKeyStore.OpenAlex, "openalex-test-key-123")
+        Dim calls As Integer = 0
+        Dim network As ScriptedNetwork = UseNetwork(
+            Function(request)
+                calls += 1
+                If calls Mod 2 = 1 Then Throw DeadConnection()
+                Return Ok("{}")
+            End Function)
+
+        OnlineAccess.ClientFor(OnlineServiceCatalog.Citations).GetAsync("https://api.openalex.org/works?filter=doi:10.5555/x").GetAwaiter().GetResult().Dispose()
+        CollectionAssert.AreEqual({"Bearer openalex-test-key-123", "Bearer openalex-test-key-123"}, network.Requests.Select(Function(item) item.Authorization).ToList(), "The key on both tries to OpenAlex.")
+
+        network.Requests.Clear()
+        OnlineAccess.ClientFor(OnlineServiceCatalog.Crossref).GetAsync("https://api.crossref.org/works/10.5555/x").GetAwaiter().GetResult().Dispose()
+        Assert.AreEqual(2, network.Requests.Count)
+        Assert.IsTrue(network.Requests.All(Function(item) item.Authorization Is Nothing), "No key on either try to Crossref.")
+    End Sub
+
+    <TestMethod>
+    Public Sub TheUpdateCheckSurvivesOneDeadConnection()
+        ' The case #339 saw: Check for Updates after a virtual machine resumed.
+        Dim calls As Integer = 0
+        Dim network As ScriptedNetwork = UseNetwork(
+            Function(request)
+                calls += 1
+                If calls = 1 Then Throw DeadConnection()
+                Return Ok("[]")
+            End Function)
+
+        Const Releases As String = "https://api.github.com/repos/JUhalt/PaperRoute-Tracker/releases"
+        Dim body As String = New GatedDownloader().DownloadString(Releases, Nothing, 1).GetAwaiter().GetResult()
+
+        Assert.AreEqual("[]", body)
+        ' Velopack asks again on its own after a failure, but with the address
+        ' lowercased; the gate's second try sends the same address.
+        CollectionAssert.AreEqual({Releases, Releases}, network.Requests.Select(Function(item) item.Uri.AbsoluteUri).ToList())
+    End Sub
+
+
+    ' ---------------------------------------------------------------
     ' Features behind the gate
     ' ---------------------------------------------------------------
 
@@ -615,6 +805,21 @@ Public Class OnlineServicesTests
         Dim network As New ScriptedNetwork With {.Respond = If(respond, Function(request) Ok("{}"))}
         OnlineAccess.InnerHandlerFactory = Function() network
         Return network
+    End Function
+
+    ' What a request on a connection the network has forgotten fails with:
+    ' no answer, no status.
+    Private Shared Function DeadConnection() As HttpRequestException
+        Return New HttpRequestException(HttpRequestError.ConnectionError, "An existing connection was forcibly closed by the remote host.", New IOException("reset"))
+    End Function
+
+    Private Shared Function FailureOf(action As Action) As Exception
+        Try
+            action()
+        Catch ex As Exception
+            Return ex
+        End Try
+        Return Nothing
     End Function
 
     Private Shared Function Ok(body As String) As HttpResponseMessage

@@ -579,22 +579,25 @@ Namespace Services
             Dim current As HttpRequestMessage = request
 
             For hop As Integer = 0 To MaxRedirects
-                If _trial Is Nothing Then
-                    OnlineAccess.Check(_serviceId)
-                    OnlineAccess.CheckHost(service, current.RequestUri)
-                Else
-                    OnlineAccess.CheckTrial(_serviceId)
-                    OnlineAccess.CheckHost(service, current.RequestUri, _trial.Connection.Endpoint)
-                End If
-                Prepare(_serviceId, current, _trial)
+                Admit(service, current)
 
-                ' A request to this computer never goes through a proxy, so
-                ' "nothing leaves this computer" holds whatever proxy is set.
-                Dim direct As HttpMessageInvoker = If(current.RequestUri.IsLoopback, OnlineAccess.LoopbackInvoker(), Nothing)
-                Dim response As HttpResponseMessage =
-                    If(direct IsNot Nothing,
-                       Await direct.SendAsync(current, cancellationToken).ConfigureAwait(False),
-                       Await MyBase.SendAsync(current, cancellationToken).ConfigureAwait(False))
+                Dim response As HttpResponseMessage = Nothing
+                Dim deadConnection As Boolean = False
+                Try
+                    response = Await SendOnceAsync(current, cancellationToken).ConfigureAwait(False)
+                Catch ex As HttpRequestException When MaySendAgain(current, ex, cancellationToken)
+                    deadConnection = True
+                End Try
+                If deadConnection Then
+                    ' Once more, on a new message, after the gate again: Work
+                    ' offline or a service switched off in between still holds.
+                    Dim again As HttpRequestMessage = CopyForSecondTry(current)
+                    If current IsNot request Then current.Dispose()
+                    current = again
+                    Admit(service, current)
+                    response = Await SendOnceAsync(current, cancellationToken).ConfigureAwait(False)
+                End If
+
                 Dim location As Uri = response.Headers.Location
                 If Not IsRedirect(response.StatusCode) OrElse location Is Nothing OrElse hop = MaxRedirects OrElse
                    (current.Method <> HttpMethod.Get AndAlso current.Method <> HttpMethod.Head) Then
@@ -615,6 +618,63 @@ Namespace Services
 
             Throw New InvalidOperationException("Too many redirects.")
 
+        End Function
+
+        Private Sub Admit(service As OnlineService, current As HttpRequestMessage)
+            If _trial Is Nothing Then
+                OnlineAccess.Check(_serviceId)
+                OnlineAccess.CheckHost(service, current.RequestUri)
+            Else
+                OnlineAccess.CheckTrial(_serviceId)
+                OnlineAccess.CheckHost(service, current.RequestUri, _trial.Connection.Endpoint)
+            End If
+            Prepare(_serviceId, current, _trial)
+        End Sub
+
+        Private Function SendOnceAsync(current As HttpRequestMessage, cancellationToken As CancellationToken) As Task(Of HttpResponseMessage)
+            ' A request to this computer never goes through a proxy, so
+            ' "nothing leaves this computer" holds whatever proxy is set.
+            Dim direct As HttpMessageInvoker = If(current.RequestUri.IsLoopback, OnlineAccess.LoopbackInvoker(), Nothing)
+            Return If(direct IsNot Nothing, direct.SendAsync(current, cancellationToken), MyBase.SendAsync(current, cancellationToken))
+        End Function
+
+        ' One more try for a read that failed below HTTP, with no answer at
+        ' all (#339). After a computer or virtual machine resumes, the shared
+        ' pool can still hold connections the network has forgotten; the first
+        ' request fails on one, and a second try gets a new connection.
+        ' A request with content, such as an AI assistant's text to a paid
+        ' service, is never sent twice here: the first may have arrived.
+        ' An answer (any status), a refusal by the gate, a time-out, a
+        ' cancellation, or a name that didn't resolve is not tried again.
+        ' Only the send is covered: once the headers are in, the response is
+        ' handed back, so a failure while its body is read (a large update
+        ' download, say) is not retried here. Don't widen this to cover it.
+        Private Shared Function MaySendAgain(current As HttpRequestMessage, failure As HttpRequestException, cancellationToken As CancellationToken) As Boolean
+            If current.Content IsNot Nothing Then Return False
+            If current.Method <> HttpMethod.Get AndAlso current.Method <> HttpMethod.Head Then Return False
+            If TypeOf failure Is OnlineServiceBusyException OrElse failure.StatusCode.HasValue Then Return False
+            If failure.HttpRequestError = HttpRequestError.NameResolutionError Then Return False
+            Return Not cancellationToken.IsCancellationRequested
+        End Function
+
+        ' The same request for the second try. Headers follow the redirect
+        ' rule (no key; Prepare adds it back for its own host), and the HTTP
+        ' version and options are kept so the second try is sent as the first.
+        Private Shared Function CopyForSecondTry(current As HttpRequestMessage) As HttpRequestMessage
+            Dim again As New HttpRequestMessage(current.Method, current.RequestUri) With {
+                .Version = current.Version,
+                .VersionPolicy = current.VersionPolicy
+            }
+            For Each header As KeyValuePair(Of String, IEnumerable(Of String)) In current.Headers
+                If Not SecretHeaders.Contains(header.Key) Then
+                    again.Headers.TryAddWithoutValidation(header.Key, header.Value)
+                End If
+            Next
+            Dim options As IDictionary(Of String, Object) = again.Options
+            For Each item As KeyValuePair(Of String, Object) In CType(current.Options, IDictionary(Of String, Object))
+                options(item.Key) = item.Value
+            Next
+            Return again
         End Function
 
         ' Headers that carry a key: never copied to a redirect, and set only here.
