@@ -115,6 +115,103 @@ Public Class OrcidImportUiTests
             End Sub)
     End Sub
 
+    ' ORCID... from Manage Library on the manuscript page's Authors tab
+    ' (orcid-import-save probe). The page's working copy is the page's
+    ' alone until its own Save: an unsaved author removal is not written by
+    ' the import, Discard leaves the disk as it was, and the works imported
+    ' reach the main window's library, so the page's Save keeps them. Every
+    ' check is made and the failures reported together.
+    <TestMethod>
+    Public Sub AnOrcidImportFromTheManuscriptPageKeepsTheWorkingCopyUnsavedAndTheWorks()
+        StaRunner.Run(
+            Sub()
+                Dim library As New AuthorLibraryData()
+                Dim author As New AuthorRecord With {.GivenName = "Local", .FamilyName = "Author"}
+                library.Authors.Add(author)
+                Dim seededAuthors As New AuthorLibraryRepository()
+                seededAuthors.Save(library)
+                Dim seededManuscripts As New ManuscriptRepository()
+                seededManuscripts.Save(New List(Of Manuscript) From {
+                    New Manuscript With {
+                        .Title = ExistingTitle,
+                        .Authors = New List(Of ManuscriptAuthor) From {New ManuscriptAuthor With {.AuthorId = author.Id}}
+                    }
+                })
+
+                ' The board reads and writes the same files as the window it
+                ' opens, under the override.
+                Dim files As New LargeLibraryFixture.SyntheticLibrary With {
+                    .Name = "orcid-import-save",
+                    .ManagedDirectory = Path.Combine(_root, "managed"),
+                    .Repository = New ManuscriptRepository(),
+                    .AuthorRepository = New AuthorLibraryRepository()
+                }
+
+                Dim failures As New List(Of String)()
+
+                Using board As New LibraryBoard(files, Path.Combine(_root, "settings")),
+                      dialogs As New ManuscriptPageTests.DialogWatcher()
+                    board.Start()
+                    board.Open(board.Library.Single())
+
+                    ' An unsaved edit on the Authors tab: Remove takes the one
+                    ' author out of the page's working copy.
+                    Dim authorsList As System.Windows.Forms.ListBox =
+                        DirectCast(GetType(EditManuscriptForm).GetField("lstAuthors", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(board.Editor), System.Windows.Forms.ListBox)
+                    Assert.AreEqual(1, authorsList.Items.Count, "The page lists the manuscript's one author.")
+                    authorsList.SelectedIndex = 0
+                    GetType(EditManuscriptForm).GetMethod("RemoveStructuredAuthor", BindingFlags.Instance Or BindingFlags.NonPublic).
+                        Invoke(board.Editor, New Object() {Nothing, EventArgs.Empty})
+                    Assert.AreEqual(0, authorsList.Items.Count, "Remove took the author off the page.")
+
+                    ' Manage Library (its Click handler), then ORCID... with one
+                    ' work chosen, as OpenSelectedAuthorOrcid applies it.
+                    Dim imported As Integer = 0
+                    Using answer As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of AuthorLibraryForm)(
+                        Sub(dialog)
+                            dialog.ApplyOrcidChanges(LibraryOf(dialog).Authors.Single(), CreateProfile(), CreateOptions())
+                            imported += 1
+                            dialog.Close()
+                        End Sub)
+                        GetType(EditManuscriptForm).GetMethod("ManageAuthorLibrary", BindingFlags.Instance Or BindingFlags.NonPublic).
+                            Invoke(board.Editor, New Object() {Nothing, EventArgs.Empty})
+                    End Using
+                    System.Windows.Forms.Application.DoEvents()
+
+                    Assert.AreEqual(1, imported, "Manage Library opened Authors & Affiliations and the import ran.")
+                    CollectionAssert.AreEqual({"ORCID Import Complete"}, dialogs.Closed, "The import went through.")
+
+                    Dim afterImport As Manuscript = New ManuscriptRepository().Load().Single(Function(item) item.Title = ExistingTitle)
+                    If afterImport.Authors.Count <> 1 Then
+                        failures.Add("(1) After the import, before Save, the manuscript on disk has " & afterImport.Authors.Count.ToString() & " authors, not 1: the page's unsaved removal was written.")
+                    End If
+                    If Not board.Library.Any(Function(item) item.Title = WorkTitle) Then
+                        failures.Add("(2a) After the import the main window's library does not hold the imported work (" & board.Library.Count.ToString() & " manuscripts).")
+                    End If
+
+                    ' Discard drops the page's edits.
+                    board.Discard()
+                    Dim afterDiscard As Manuscript = New ManuscriptRepository().Load().Single(Function(item) item.Title = ExistingTitle)
+                    If afterDiscard.Authors.Count <> 1 Then
+                        failures.Add("(1b) After Discard the manuscript on disk has " & afterDiscard.Authors.Count.ToString() & " authors, not 1: the discarded removal stays on disk.")
+                    End If
+
+                    ' The page's Save writes the main window's library.
+                    Dim saved As Boolean = board.SaveManuscriptPage()
+                    Assert.IsTrue(saved, "The page saved.")
+                    Dim afterSave As List(Of Manuscript) = New ManuscriptRepository().Load()
+                    If Not afterSave.Any(Function(item) item.Title = WorkTitle) Then
+                        failures.Add("(2) After the page's Save the imported work is gone from disk: " & String.Join(" | ", afterSave.Select(Function(item) item.Title)))
+                    End If
+
+                    board.SetPrompt(Function(title) System.Windows.Forms.DialogResult.No)
+                    board.Close()
+                End Using
+
+                Assert.AreEqual(0, failures.Count, String.Join(Environment.NewLine, failures))
+            End Sub)
+    End Sub
+
     ' One author and one manuscript on disk, and the live list read back
     ' from it, as the window holds it.
     Private Shared Function Seed() As List(Of Manuscript)
