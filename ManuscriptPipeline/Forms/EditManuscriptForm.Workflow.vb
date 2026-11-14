@@ -58,6 +58,8 @@ Namespace Forms
             Using dialog As New AddSubmissionForm(packet.JournalName, packet.JournalId,
                                                   If(journal Is Nothing, String.Empty, journal.SubmissionPortalUrl))
                 If dialog.ShowDialog(Me) <> DialogResult.OK OrElse dialog.CreatedSubmission Is Nothing Then Return returnToPacket
+                ' The target journal box is refreshed from the working copy below.
+                ApplyTypedFields()
                 Try
                     SubmissionPacketWorkflowService.RecordSubmissionForPacket(_workingManuscript, packet.Id, dialog.CreatedSubmission)
                 Catch ex As Exception When TypeOf ex Is InvalidOperationException OrElse

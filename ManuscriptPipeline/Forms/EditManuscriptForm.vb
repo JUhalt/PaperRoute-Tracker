@@ -608,6 +608,48 @@ Namespace Forms
         End Function
 
 
+        ' Puts what is typed in the Overview's Title and Target journal boxes
+        ' into the working copy, as Save does, before a window or a workflow
+        ' edit that is handed the working copy or refreshes those boxes from
+        ' it: otherwise the old value comes back into the box and Save writes
+        ' it. A workflow step that sets the target journal itself still does,
+        ' over what was typed. Only the working copy changes: it then differs
+        ' from the baseline, so the page still shows unsaved changes, and
+        ' Discard still returns to the saved manuscript. An empty title box is
+        ' left out, for Save to refuse, and a box that matches the working
+        ' copy once trimmed changes nothing.
+        Private Sub ApplyTypedFields()
+
+            Dim titleText As String =
+                txtTitle.Text.Trim()
+
+            If titleText.Length > 0 AndAlso
+               Not String.Equals(titleText, If(_workingManuscript.Title, String.Empty).Trim(), StringComparison.Ordinal) Then
+
+                _workingManuscript.Title =
+                    titleText
+
+            End If
+
+            Dim journalText As String =
+                txtTargetJournal.Text.Trim()
+
+            If Not String.Equals(journalText, If(_workingManuscript.TargetJournal, String.Empty).Trim(), StringComparison.Ordinal) Then
+
+                _workingManuscript.TargetJournalId =
+                    TargetJournalIdFor(
+                        _workingManuscript,
+                        journalText
+                    )
+
+                _workingManuscript.TargetJournal =
+                    journalText
+
+            End If
+
+        End Sub
+
+
         Private Sub RefreshJournalNotes()
 
             Dim journal As JournalRecord = Nothing
@@ -2464,6 +2506,9 @@ Namespace Forms
                     _workingManuscript
                 )
 
+            ' The decision below refreshes the target journal box.
+            ApplyTypedFields()
+
             If latestSubmission Is Nothing Then
 
                 MessageBox.Show(
@@ -2566,6 +2611,10 @@ Namespace Forms
             sender As Object,
             e As EventArgs
         )
+
+            ' The lookup works on the working copy and the title box is
+            ' refreshed from it afterwards.
+            ApplyTypedFields()
 
             Using dialog As New CrossrefLookupForm(
                 _workingManuscript,
@@ -3704,6 +3753,10 @@ Namespace Forms
                     DialogResult.OK AndAlso
                    dialog.CreatedSubmission IsNot Nothing Then
 
+                    ' A backdated submission leaves the target as it is,
+                    ' and the box is refreshed below.
+                    ApplyTypedFields()
+
                     _workingManuscript.Submissions.Add(
                         dialog.CreatedSubmission
                     )
@@ -3803,6 +3856,10 @@ Namespace Forms
                     Return
                 End Try
 
+                ' The reconcile below may keep the target; the box is
+                ' refreshed from the working copy either way.
+                ApplyTypedFields()
+
                 For i As Integer = 0 To _workingManuscript.Submissions.Count - 1
 
                     If _workingManuscript.Submissions(i).Id =
@@ -3900,6 +3957,10 @@ Namespace Forms
                 Return
 
             End If
+
+            ' The removal clears only a target that is this submission's
+            ' journal; the box is refreshed from the working copy.
+            ApplyTypedFields()
 
             _workingManuscript.Submissions.Remove(
                 selected
@@ -4034,6 +4095,10 @@ Namespace Forms
             sender As Object,
             e As EventArgs
         )
+
+            ' The window shows the working copy's target journal, writes its
+            ' own back on OK, and the box is refreshed from it.
+            ApplyTypedFields()
 
             Using dialog As New ManuscriptLinksForm(
                 _workingManuscript,
@@ -4330,8 +4395,8 @@ Namespace Forms
         ' Validates the fields, applies them and any stage change to the working
         ' copy, saves new reusable authors, and copies the working copy to the
         ' manuscript being edited. The caller saves the library. Returns False,
-        ' changing nothing, when a field needs attention or a stage change was
-        ' not completed.
+        ' changing nothing saved, when a field needs attention or a stage
+        ' change was not completed.
         Friend Function CommitChanges() As Boolean
 
             If String.IsNullOrWhiteSpace(
@@ -4366,6 +4431,10 @@ Namespace Forms
                 )
 
             If oldStage <> newStage Then
+
+                ' The stage workflow can refresh the target journal box
+                ' before it is read below, and this Save can still stop.
+                ApplyTypedFields()
 
                 If Not EnsureWorkflowForRequestedStage(
                     newStage
