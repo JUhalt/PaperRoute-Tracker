@@ -2278,6 +2278,102 @@ Public Class ManuscriptPageTests
             End Sub)
     End Sub
 
+    ' The people a Crossref lookup adds to the reusable author library wait
+    ' in the page's copy of it until Save writes them. Opening Submission
+    ' Readiness in between must not drop them: Save then has to write every
+    ' person the manuscript names. Probe for v1.0.1 ("crossref-authors"):
+    ' Submission Readiness, Manage Library and Journal, Preprint & Links each
+    ' read the library from disk again, and Save wrote the copy read.
+    <TestMethod>
+    Public Sub PeopleACrossrefLookupAddedAreSavedAfterSubmissionReadinessIsOpened()
+        RunOnStaThread(
+            Sub()
+                Dim network As New CrossrefWork()
+                OnlineAccess.ResetForTests()
+                OnlineAccess.InnerHandlerFactory = Function() network
+                Try
+                    Using board As New PageBoard()
+                        Dim manuscript As Manuscript = Sample("Looked-up manuscript")
+                        manuscript.Metadata = New ManuscriptMetadata With {.Doi = CrossrefWork.Doi}
+                        board.Prepare(manuscript)
+                        board.Open(manuscript)
+
+                        Dim editor As EditManuscriptForm = board.Editor
+                        Dim flags As BindingFlags = BindingFlags.Instance Or BindingFlags.NonPublic
+                        Dim repository As AuthorLibraryRepository = DirectCast(GetType(EditManuscriptForm).GetField("_authorRepository", flags).GetValue(editor), AuthorLibraryRepository)
+                        Dim disk As New AuthorLibraryRepository(Path.GetDirectoryName(repository.DataFilePath))
+                        Dim working As Manuscript = DirectCast(GetType(EditManuscriptForm).GetProperty("_workingManuscript", flags).GetValue(editor), Manuscript)
+
+                        Using dialogs As New DialogWatcher()
+
+                            ' DOI & Crossref Metadata: Look Up, then Apply Selected
+                            ' with the authors box ticked.
+                            Dim lookups As Integer = 0
+                            Using lookup As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of CrossrefLookupForm)(
+                                Sub(dialog)
+                                    lookups += 1
+                                    Dim field As Func(Of String, Object) = Function(name) GetType(CrossrefLookupForm).GetField(name, flags).GetValue(dialog)
+                                    DirectCast(field("btnLookup"), Button).PerformClick()
+                                    Dim apply As Button = DirectCast(field("btnApply"), Button)
+                                    Dim waited As Diagnostics.Stopwatch = Diagnostics.Stopwatch.StartNew()
+                                    While (field("_suggestion") Is Nothing OrElse Not apply.Enabled) AndAlso waited.Elapsed < TimeSpan.FromSeconds(10)
+                                        Application.DoEvents()
+                                        Thread.Sleep(1)
+                                    End While
+                                    If field("_suggestion") Is Nothing OrElse Not apply.Enabled Then
+                                        dialog.DialogResult = DialogResult.Cancel
+                                        Return
+                                    End If
+                                    DirectCast(field("chkAuthors"), CheckBox).Checked = True
+                                    apply.PerformClick()
+                                End Sub)
+                                GetType(EditManuscriptForm).GetMethod("OpenCrossrefMetadata", flags).Invoke(editor, New Object() {Nothing, EventArgs.Empty})
+                                Application.DoEvents()
+                            End Using
+
+                            Assert.AreEqual(1, lookups, "DOI & Crossref Metadata opened once.")
+                            Assert.AreEqual(1, network.Requests, "One scripted Crossref request.")
+                            CollectionAssert.AreEqual(New List(Of String)(), dialogs.Closed, "No message box opened.")
+                            Assert.AreEqual(2, working.Authors.Count, "The lookup put both people on the manuscript.")
+                            Dim inMemory As AuthorLibraryData = DirectCast(GetType(EditManuscriptForm).GetProperty("_authorLibrary", flags).GetValue(editor), AuthorLibraryData)
+                            Assert.IsTrue(working.Authors.All(Function(link) inMemory.Authors.Any(Function(person) person.Id = link.AuthorId)), "The lookup added both people to the page's author library.")
+                            Assert.IsTrue(CBool(GetType(EditManuscriptForm).GetProperty("_authorLibraryDirty", flags).GetValue(editor)), "The page marks its author library changed.")
+                            Assert.AreEqual(0, disk.Load().Authors.Count, "Nothing is on disk before Save.")
+
+                            ' Submission Readiness, opened and closed.
+                            Dim readinessOpened As Integer = 0
+                            Using readiness As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of ManuscriptReadinessForm)(
+                                Sub(dialog)
+                                    readinessOpened += 1
+                                    dialog.DialogResult = DialogResult.Cancel
+                                End Sub)
+                                GetType(EditManuscriptForm).GetMethod("OpenSubmissionReadiness", flags).Invoke(editor, New Object() {Nothing, EventArgs.Empty})
+                                Application.DoEvents()
+                            End Using
+                            Assert.AreEqual(1, readinessOpened, "Submission Readiness opened once.")
+
+                            board.PressCommandKey(Keys.Control Or Keys.S)
+                            Assert.AreEqual(1, board.SaveCount, "The page saved.")
+                            CollectionAssert.AreEqual(New List(Of String)(), dialogs.Closed, "No message box opened.")
+                        End Using
+
+                        Assert.AreEqual(2, manuscript.Authors.Count, "The saved manuscript names both looked-up people.")
+                        Dim saved As AuthorLibraryData = disk.Load()
+                        For Each link As ManuscriptAuthor In manuscript.Authors
+                            Assert.IsTrue(
+                                saved.Authors.Any(Function(person) person.Id = link.AuthorId),
+                                "Every person the saved manuscript names is in the author library on disk. Missing id " & link.AuthorId.ToString() &
+                                "; on disk: " & saved.Authors.Count.ToString() & " people (" & String.Join(", ", saved.Authors.Select(Function(person) person.DisplayName)) & ").")
+                        Next
+
+                        board.Close()
+                    End Using
+                Finally
+                    OnlineAccess.ResetForTests()
+                End Try
+            End Sub)
+    End Sub
+
     Private Shared Function MenuItem(card As Control, text As String) As ToolStripItem
         Return card.ContextMenuStrip.Items.Cast(Of ToolStripItem)().SingleOrDefault(Function(item) item.Text = text)
     End Function
@@ -2376,6 +2472,24 @@ Public Class ManuscriptPageTests
         Protected Overrides Function SendAsync(request As Net.Http.HttpRequestMessage, cancellationToken As CancellationToken) As Task(Of Net.Http.HttpResponseMessage)
             Interlocked.Increment(Requests)
             Throw New InvalidOperationException("No request was expected.")
+        End Function
+    End Class
+
+    ' Crossref's answer for one DOI: a work with two authors, neither of
+    ' them in the reusable library.
+    Private NotInheritable Class CrossrefWork
+        Inherits Net.Http.HttpMessageHandler
+
+        Public Const Doi As String = "10.5555/paperroute.probe"
+
+        Public Requests As Integer
+
+        Protected Overrides Function SendAsync(request As Net.Http.HttpRequestMessage, cancellationToken As CancellationToken) As Task(Of Net.Http.HttpResponseMessage)
+            Interlocked.Increment(Requests)
+            Dim body As String =
+                "{""message"": {""DOI"": """ & Doi & """, ""title"": [""Looked-up manuscript""], " &
+                """author"": [{""given"": ""Ada"", ""family"": ""Lookup""}, {""given"": ""Grace"", ""family"": ""Crossref""}]}}"
+            Return Task.FromResult(New Net.Http.HttpResponseMessage(Net.HttpStatusCode.OK) With {.Content = New Net.Http.StringContent(body), .RequestMessage = request})
         End Function
     End Class
 
