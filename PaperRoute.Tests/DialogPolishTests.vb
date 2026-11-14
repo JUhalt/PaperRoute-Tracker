@@ -2560,6 +2560,268 @@ Public Class DialogPolishTests
     End Sub
 
 
+    ' Every list that refills its rows measures them again, whether the new
+    ' rows are wider or there are none (#329). Once FitListExtent has set a
+    ' list's extent, Windows Forms keeps it, so a refresh that lost its
+    ' call would leave the old range: a wider row could not be scrolled to
+    ' its end, and an emptied list would still scroll sideways. The sweep
+    ' above adds rows and then changes the font, so only the FontChanged
+    ' re-measure runs there. Here each list, measured once as its window
+    ' filled it, is refilled the way its window refills it, at 96 DPI and
+    ' with no font change, which would re-measure and hide a missing call:
+    ' the packet vault's packets through Show all packets and its files by
+    ' choosing a packet and then none, Submission Readiness's requirements
+    ' by choosing a profile and then none, and Edit Manuscript's version
+    ' history through its public RefreshVersions. Edit Manuscript's authors
+    ' and Edit Journal's checklist have no such path a test can drive
+    ' without a dialog, so their own refreshes are called directly. Only
+    ' deleting a packet, which asks first, empties the packet list, so that
+    ' list is judged as it widens only.
+    <TestMethod>
+    Public Sub EveryListThatScrollsSidewaysIsMeasuredAgainWhenItsRowsChange()
+
+        Dim found As New List(Of String)()
+        Dim judged As New List(Of String)()
+
+        ' The vault opens scoped to one readiness profile, which shows only
+        ' the newer packet, and it has no files; the older packet, outside
+        ' the scope, has a wide label and a wide file.
+        Dim scoped As Guid = Guid.NewGuid()
+        Dim vaultManuscript As New Manuscript With {.Title = "Active Study"}
+        vaultManuscript.SubmissionPackets.Add(New SubmissionPacket With {.Label = "Round one packet", .ReadinessProfileId = scoped, .CreatedAtUtc = DateTime.UtcNow})
+        Dim widePacket As New SubmissionPacket With {.Label = WideRow(), .CreatedAtUtc = DateTime.UtcNow.AddDays(-1)}
+        widePacket.Files.Add(New SubmissionPacketFile With {.Label = WideRow()})
+        widePacket.Files.Add(New SubmissionPacketFile With {.Label = "Cover letter"})
+        vaultManuscript.SubmissionPackets.Add(widePacket)
+
+        ViewCatalog.ShowAndClose(
+            "Submission Packet Vault",
+            Function() New SubmissionPacketVaultForm(vaultManuscript, New SubmissionWorkflowRequest With {.ReadinessProfileId = scoped}),
+            Sub(name, shown)
+
+                Dim vault As SubmissionPacketVaultForm = DirectCast(shown, SubmissionPacketVaultForm)
+                Dim packets As ListBox = PrivateMember(Of ListBox)(vault, "lstPackets")
+                Dim files As ListBox = PrivateMember(Of ListBox)(vault, "lstFiles")
+
+                Assert.AreEqual(1, packets.Items.Count, "The vault opens on the scoped packet alone.")
+                ExpectMeasured("The packet vault's packets", packets, found)
+                ExpectMeasured("The packet vault's files", files, found)
+
+                vault.ShowAllWorkflowPackets()
+                JudgeWidened("The packet vault's packets, after Show all packets", packets, found, judged)
+
+                packets.SelectedIndex = Enumerable.Range(0, packets.Items.Count).First(Function(index) packets.GetItemText(packets.Items(index)).StartsWith(WideRow(), StringComparison.Ordinal))
+                JudgeWidened("The packet vault's files, after the packet with a wide file is chosen", files, found, judged)
+
+                packets.SelectedIndex = -1
+                JudgeEmptied("The packet vault's files, after no packet is chosen", files, found, judged)
+
+            End Sub
+        )
+
+        ' Profiles are listed by journal name, so the window opens on the
+        ' one with short requirements.
+        Dim readinessManuscript As New Manuscript With {.Title = "Active Study"}
+        Dim shortProfile As New ManuscriptReadiness With {.JournalName = "A Fictional Journal"}
+        shortProfile.Items.Add(New ReadinessItemState With {.Title = "Title page"})
+        Dim wideProfile As New ManuscriptReadiness With {.JournalName = "B Fictional Journal"}
+        wideProfile.Items.Add(New ReadinessItemState With {.Title = WideRow()})
+        readinessManuscript.ReadinessProfiles.Add(shortProfile)
+        readinessManuscript.ReadinessProfiles.Add(wideProfile)
+
+        ViewCatalog.ShowAndClose(
+            "Submission Readiness",
+            Function() New ManuscriptReadinessForm(readinessManuscript, New AuthorLibraryData()),
+            Sub(name, shown)
+
+                Dim profiles As ComboBox = PrivateMember(Of ComboBox)(shown, "cmbProfiles")
+                Dim requirements As ListBox = ViewCatalog.Descendants(shown).OfType(Of ListBox)().Single(Function(box) box.AccessibleName = "Readiness requirements")
+
+                Assert.AreEqual("A Fictional Journal", profiles.Text, "The window opens on the profile with short requirements.")
+                ExpectMeasured("Submission Readiness's requirements", requirements, found)
+
+                profiles.SelectedIndex = profiles.FindStringExact("B Fictional Journal")
+                JudgeWidened("Submission Readiness's requirements, after the profile with a wide one is chosen", requirements, found, judged)
+
+                profiles.SelectedIndex = -1
+                JudgeEmptied("Submission Readiness's requirements, after no profile is chosen", requirements, found, judged)
+
+            End Sub
+        )
+
+        ' The version history is the editor's control, built on the
+        ' editor's working copy, which it refreshes from.
+        ViewCatalog.ShowAndClose(
+            "Edit Manuscript",
+            Function() ViewCatalog.Dialogs(GetType(EditManuscriptForm))(String.Empty),
+            Sub(name, shown)
+
+                Dim authors As ListBox = PrivateMember(Of ListBox)(shown, "lstAuthors")
+                Dim historyControl As ManuscriptVersionHistoryControl = ViewCatalog.Descendants(shown).OfType(Of ManuscriptVersionHistoryControl)().Single()
+                Dim versions As ListBox = PrivateMember(Of ListBox)(historyControl, "lstVersions")
+                Dim working As Manuscript = PrivateMember(Of Manuscript)(shown, "_workingManuscript")
+                Dim library As AuthorLibraryData = PrivateMember(Of AuthorLibraryData)(shown, "_authorLibrary")
+                Dim refresh As MethodInfo = GetType(EditManuscriptForm).GetMethod("RefreshAuthorsList", BindingFlags.Instance Or BindingFlags.NonPublic)
+                ExpectMeasured("Edit Manuscript's version history", versions, found)
+
+                ShowListsTab(versions)
+                working.Versions.Add(New ManuscriptVersion With {.Label = WideRow()})
+                historyControl.RefreshVersions()
+                JudgeWidened("The version history, after a version with a wide label is added", versions, found, judged)
+
+                working.Versions.Clear()
+                working.CurrentVersionId = Nothing
+                historyControl.RefreshVersions()
+                JudgeEmptied("The version history, after its versions are removed", versions, found, judged)
+
+                ExpectMeasured("Edit Manuscript's authors", authors, found)
+                ShowListsTab(authors)
+
+                Dim author As New AuthorRecord With {.DisplayNameOverride = WideRow()}
+                library.Authors.Add(author)
+                working.Authors.Add(New ManuscriptAuthor With {.AuthorId = author.Id})
+                refresh.Invoke(shown, Nothing)
+                JudgeWidened("Edit Manuscript's authors, after an author with a wide name is added", authors, found, judged)
+
+                working.Authors.Clear()
+                refresh.Invoke(shown, Nothing)
+                JudgeEmptied("Edit Manuscript's authors, after its authors are removed", authors, found, judged)
+
+            End Sub
+        )
+
+        Dim journal As New JournalRecord With {.Name = "Fictional Journal"}
+        journal.ReadinessChecklistTemplate.Add(New JournalChecklistTemplateItem With {.Title = "Cover letter"})
+
+        ViewCatalog.ShowAndClose(
+            "Edit Journal",
+            Function() New JournalEditForm(journal),
+            Sub(name, shown)
+
+                Dim checklist As ListBox = ViewCatalog.Descendants(shown).OfType(Of ListBox)().Single(Function(box) box.AccessibleName = "Checklist requirements")
+                Dim working As List(Of JournalChecklistTemplateItem) = PrivateMember(Of List(Of JournalChecklistTemplateItem))(shown, "_workingChecklist")
+                Dim refresh As MethodInfo = GetType(JournalEditForm).GetMethod("RefreshChecklist", BindingFlags.Instance Or BindingFlags.NonPublic)
+                ExpectMeasured("Edit Journal's checklist", checklist, found)
+                ShowListsTab(checklist)
+
+                working.Add(New JournalChecklistTemplateItem With {.Title = WideRow()})
+                refresh.Invoke(shown, New Object() {-1})
+                JudgeWidened("Edit Journal's checklist, after a wide requirement is added", checklist, found, judged)
+
+                working.Clear()
+                refresh.Invoke(shown, New Object() {-1})
+                JudgeEmptied("Edit Journal's checklist, after its requirements are removed", checklist, found, judged)
+
+            End Sub
+        )
+
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        ' Eleven steps over six lists: the packet list widens only, and the
+        ' other five widen and then empty.
+        Assert.AreEqual(11, judged.Count, "Every step was judged: " & String.Join("; ", judged))
+
+    End Sub
+
+
+    ' The list was measured as its window filled it, so Windows Forms keeps
+    ' the extent it was given rather than sizing the list itself, and a
+    ' stale extent would last.
+    Private Shared Sub ExpectMeasured(what As String, list As ListBox, found As List(Of String))
+
+        If list.HorizontalExtent = 0 Then
+            found.Add($"{what}: its window filled it without measuring it, so Windows Forms still sizes its extent itself.")
+        End If
+
+    End Sub
+
+
+    ' A row with an "&", far wider than any of these lists at 96 DPI.
+    Private Shared Function WideRow() As String
+        Return "Department of Psychology & Brain Sciences" & String.Concat(Enumerable.Repeat(" & Cognition", 16))
+    End Function
+
+
+    ' After a refill with a row wider than the list, the list shows its
+    ' scroll bar and scrolls to that row's end and the 2-pixel gap at 96
+    ' DPI, its "&"s measured as text, not as mnemonics.
+    Private Shared Sub JudgeWidened(what As String, list As ListBox, found As List(Of String), judged As List(Of String))
+
+        Application.DoEvents()
+        judged.Add(what)
+
+        Dim widest As Integer =
+            list.Items.Cast(Of Object)().Select(Function(item) TextRenderer.MeasureText(list.GetItemText(item), list.Font, New Size(Integer.MaxValue, Integer.MaxValue), TextFormatFlags.NoPrefix).Width).DefaultIfEmpty(0).Max()
+
+        Dim extent As Integer =
+            CInt(SendMessage(list.Handle, LB_GETHORIZONTALEXTENT, IntPtr.Zero, IntPtr.Zero))
+
+        Dim bar As Boolean =
+            HasStyle(list, WS_HSCROLL)
+
+        If widest <= list.ClientSize.Width Then
+            found.Add($"{what}: the case is not real, as its widest row ({widest}) fits the list ({list.ClientSize.Width}).")
+        ElseIf Not bar OrElse extent < widest + 2 Then
+            found.Add($"{what}: it needs {widest} pixels for its widest row, and 2 more to clear it, in a list {list.ClientSize.Width} wide, and scrolls sideways to {extent} (scroll bar shown: {bar}).")
+        End If
+
+    End Sub
+
+
+    ' After a refill with no rows, the list scrolls no wider than itself.
+    Private Shared Sub JudgeEmptied(what As String, list As ListBox, found As List(Of String), judged As List(Of String))
+
+        Application.DoEvents()
+        judged.Add(what)
+
+        Dim extent As Integer =
+            CInt(SendMessage(list.Handle, LB_GETHORIZONTALEXTENT, IntPtr.Zero, IntPtr.Zero))
+
+        If list.Items.Count <> 0 Then
+            found.Add($"{what}: the case is not real, as {list.Items.Count} rows are left.")
+        ElseIf extent > list.ClientSize.Width Then
+            found.Add($"{what}: with no rows, it still scrolls sideways to {extent} in a list {list.ClientSize.Width} wide.")
+        End If
+
+    End Sub
+
+
+    ' Selects each TabControl page the list sits on, as opening that tab
+    ' would. The editor's pages are not TabControl pages, so its lists are
+    ' judged at whatever width they have; each case still checks that its
+    ' wide row is wider than the list.
+    Private Shared Sub ShowListsTab(list As Control)
+
+        Dim parent As Control = list.Parent
+
+        Do While parent IsNot Nothing
+            Dim page As TabPage = TryCast(parent, TabPage)
+            If page IsNot Nothing AndAlso TypeOf page.Parent Is TabControl Then
+                DirectCast(page.Parent, TabControl).SelectedTab = page
+            End If
+            parent = parent.Parent
+        Loop
+
+        Application.DoEvents()
+
+    End Sub
+
+
+    ' A window's private field or property, read by name.
+    Private Shared Function PrivateMember(Of T)(owner As Object, name As String) As T
+
+        Const flags As BindingFlags = BindingFlags.Instance Or BindingFlags.NonPublic
+
+        Dim field As FieldInfo = owner.GetType().GetField(name, flags)
+
+        If field IsNot Nothing Then
+            Return DirectCast(field.GetValue(owner), T)
+        End If
+
+        Return DirectCast(owner.GetType().GetProperty(name, flags).GetValue(owner), T)
+
+    End Function
+
+
     ' A checked list that scrolls sideways reaches the end of its widest
     ' row as the list itself draws it, a few pixels clear, at 12 to 18
     ' pixel text (E4.7, #313). In a real 150% session, v1.0.0-rc.3's Fill
