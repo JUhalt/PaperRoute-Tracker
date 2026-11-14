@@ -891,6 +891,9 @@ Partial Public Class Form1
         InPlace.WhenAttached(editor, Sub() editor.Visible = True)
         AddHandler editor.DeleteConfirmed, AddressOf ManuscriptDeleteConfirmed
         AddHandler editor.StatusMessage, Sub(sender, message) lblStatus.Text = message
+        ' ORCID works imported from the page are in the library's records
+        ' and on disk (#353); the Board shows them when it is shown again.
+        AddHandler editor.ManuscriptsImported, Sub(sender, e) RenderManuscripts()
 
         frame.Controls.Add(crumb, 0, 0)
         frame.Controls.Add(header, 0, 1)

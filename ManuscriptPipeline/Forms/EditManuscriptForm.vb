@@ -22,6 +22,11 @@ Namespace Forms
             Public Original As Manuscript
             Public Working As Manuscript
             Public All As List(Of Manuscript) = New List(Of Manuscript)()
+
+            ' The main window's own list of records, of which All is a copy,
+            ' or Nothing when the form was given none (#353).
+            Public Live As List(Of Manuscript) = Nothing
+
             Public AuthorLibrary As AuthorLibraryData = New AuthorLibraryData()
             Public AuthorLibraryDirty As Boolean = False
 
@@ -160,6 +165,11 @@ Namespace Forms
         ' A line for the main window's status bar, such as what Find Journals
         ' added (#88).
         Friend Event StatusMessage As EventHandler(Of String)
+
+        ' Raised when Authors & Affiliations, opened from the page, imported
+        ' ORCID works into the main window's records and saved them (#353),
+        ' so the Board can show them.
+        Friend Event ManuscriptsImported As EventHandler
 
         Private ReadOnly txtTitle As New TextBox()
         Private ReadOnly txtTargetJournal As New TextBox()
@@ -365,6 +375,7 @@ Namespace Forms
                     .Original = manuscript,
                     .Working = CloneManuscript(If(workingCopy, manuscript)),
                     .All = If(allManuscripts Is Nothing, New List(Of Manuscript) From {manuscript}, allManuscripts.ToList()),
+                    .Live = TryCast(allManuscripts, List(Of Manuscript)),
                     .AuthorLibrary = _authorRepository.Load(),
                     .PartsDeferred = deferParts
                 },
@@ -387,6 +398,7 @@ Namespace Forms
                 New RecordState With {
                     .Working = New Manuscript(),
                     .All = If(allManuscripts?.ToList(), _record.All),
+                    .Live = If(TryCast(allManuscripts, List(Of Manuscript)), _record.Live),
                     .AuthorLibrary = _record.AuthorLibrary,
                     .PartsDeferred = True
                 },
@@ -2825,8 +2837,20 @@ Namespace Forms
 
             End If
 
+            ' The snapshot, with the working copy, is for the usage counts
+            ' only. ORCID works the window imports go into, and are saved
+            ' with, the main window's own records, which hold the saved
+            ' manuscript and never this page's unsaved working copy (#353).
+            Dim importTarget As List(Of Manuscript) =
+                If(_record.Live, _allManuscripts)
+
+            Dim idsBefore As New HashSet(Of Guid)(
+                importTarget.Where(Function(item) item IsNot Nothing).Select(Function(item) item.Id)
+            )
+
             Using dialog As New AuthorLibraryForm(
-                usageSnapshot
+                usageSnapshot,
+                importTarget
             )
 
                 dialog.ShowDialog(
@@ -2834,6 +2858,24 @@ Namespace Forms
                 )
 
             End Using
+
+            Dim imported As List(Of Manuscript) =
+                importTarget.Where(Function(item) item IsNot Nothing AndAlso Not idsBefore.Contains(item.Id)).ToList()
+
+            If imported.Count > 0 Then
+
+                ' The page's copy of the records gets them too.
+                Dim held As New HashSet(Of Guid)(
+                    _allManuscripts.Where(Function(item) item IsNot Nothing).Select(Function(item) item.Id)
+                )
+
+                _allManuscripts.AddRange(
+                    imported.Where(Function(item) Not held.Contains(item.Id))
+                )
+
+                RaiseEvent ManuscriptsImported(Me, EventArgs.Empty)
+
+            End If
 
             _authorLibrary =
                 _authorRepository.Load()

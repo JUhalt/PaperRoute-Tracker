@@ -16,6 +16,11 @@ Namespace Forms
         Private ReadOnly _manuscriptRepository As New ManuscriptRepository()
         Private ReadOnly _manuscripts As List(Of Manuscript)
 
+        ' The list ORCID works are imported into and saved from: the
+        ' manuscripts given, or the main window's own list when the
+        ' manuscript page gives its usage snapshot (#353).
+        Private ReadOnly _importTarget As List(Of Manuscript)
+
         Private _library As AuthorLibraryData
 
         Private ReadOnly lstAuthors As New ListBox()
@@ -28,9 +33,10 @@ Namespace Forms
 
             If TypeOf manuscripts Is List(Of Manuscript) Then
 
-                ' Form1 passes its live manuscript list. Preserve that list
-                ' reference so user-approved ORCID work imports appear on
-                ' the board immediately when this dialog closes.
+                ' The Library page passes the main window's live list.
+                ' Preserve that list reference so user-approved ORCID work
+                ' imports appear on the board immediately when this dialog
+                ' closes.
                 _manuscripts =
                     DirectCast(
                         manuscripts,
@@ -48,6 +54,9 @@ Namespace Forms
 
             End If
 
+            _importTarget =
+                _manuscripts
+
             _library =
                 _repository.Load()
 
@@ -56,6 +65,28 @@ Namespace Forms
             EmptyHint.Attach(lstAffiliations, "No affiliations yet. Add Affiliation records an institution once, for every author who shares it.")
             UiPolish.ApplyDialog(Me)
             RefreshLists()
+
+        End Sub
+
+
+        ' From the manuscript page (#353): the usage counts read its
+        ' snapshot, which holds its unsaved working copy, while ORCID works
+        ' go into, and are saved with, importTarget, the main window's own
+        ' list. Saving the snapshot wrote the working copy to disk before
+        ' the page's Save, and the works went into a list no one kept.
+        Friend Sub New(
+            usage As IEnumerable(Of Manuscript),
+            importTarget As List(Of Manuscript)
+        )
+
+            Me.New(usage)
+
+            If importTarget IsNot Nothing Then
+
+                _importTarget =
+                    importTarget
+
+            End If
 
         End Sub
 
@@ -650,7 +681,9 @@ Namespace Forms
 
             Dim existingManuscriptIds As New HashSet(Of Guid)()
 
-            For Each existingManuscript As Manuscript In _manuscripts
+            ' Works are imported into, saved from and, on failure, taken
+            ' back out of the import target, not the usage list (#353).
+            For Each existingManuscript As Manuscript In _importTarget
 
                 If existingManuscript IsNot Nothing Then
 
@@ -688,7 +721,7 @@ Namespace Forms
                     OrcidApplyService.Apply(
                         selected,
                         _library,
-                        _manuscripts,
+                        _importTarget,
                         suggestion,
                         options
                     )
@@ -696,7 +729,7 @@ Namespace Forms
                 If result.ManuscriptsImported > 0 Then
 
                     _manuscriptRepository.Save(
-                        _manuscripts
+                        _importTarget
                     )
 
                     worksSaved =
@@ -716,7 +749,7 @@ Namespace Forms
                 ' names and affiliations) is read back.
                 If worksSaved = 0 Then
 
-                    _manuscripts.RemoveAll(
+                    _importTarget.RemoveAll(
                         Function(item) item IsNot Nothing AndAlso
                                        Not existingManuscriptIds.Contains(item.Id)
                     )
