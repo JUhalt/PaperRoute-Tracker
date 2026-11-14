@@ -175,6 +175,58 @@ Friend NotInheritable Class LibraryBoard
     End Sub
 
 
+    ' A stage picked in the Board's stage filter with its list closed, as
+    ' the mouse wheel or an arrow key on the closed box picks one (#338).
+    Public Sub ChooseStage(index As Integer)
+        Part(Of ComboBox)("cboStageFilter").SelectedIndex = index
+    End Sub
+
+
+    ' Steps through a Board filter's open list, one item at a time, as the
+    ' arrow keys do, without the list's own window: a dropped list takes
+    ' the mouse, which a person at the PC may be using (#338).
+    ' The window is told the list is open (BoardFilterListOpen) until
+    ' CloseList.
+    Public Sub StepOpenList(boxName As String, ParamArray indices As Integer())
+        Dim box As ComboBox = Part(Of ComboBox)(boxName)
+        _filterListOpen = True
+        For Each index As Integer In indices
+            box.SelectedIndex = index
+        Next
+    End Sub
+
+
+    ' The list closes, as Enter, Esc or a click away closes it. What the
+    ' window does then is left to the caller's next pump of messages.
+    Public Sub CloseList(boxName As String)
+        _filterListOpen = False
+        GetType(ComboBox).GetMethod("OnDropDownClosed", BindingFlags.Instance Or BindingFlags.NonPublic).
+            Invoke(Part(Of ComboBox)(boxName), New Object() {EventArgs.Empty})
+    End Sub
+
+    Private _filterListOpen As Boolean = False
+
+    Protected Overrides Function BoardFilterListOpen(box As ComboBox) As Boolean
+        Return _filterListOpen OrElse MyBase.BoardFilterListOpen(box)
+    End Function
+
+
+    ' A render's mark: the attention snapshots every render makes anew.
+    Public ReadOnly Property RenderMark As Object
+        Get
+            Return GetField("currentAttentionSnapshots")
+        End Get
+    End Property
+
+
+    ' The records a shelf's cards stand for, in the shelf's order.
+    Public Function ShelfManuscripts(name As String) As List(Of Manuscript)
+        Return Shelf(name).Controls.OfType(Of ManuscriptPipeline.Controls.RoundedPanel)().
+            Select(Function(card) DirectCast(card.Tag.GetType().GetProperty("Manuscript").GetValue(card.Tag), Manuscript)).
+            ToList()
+    End Function
+
+
     ' Processes messages until the Board has shown every card of the shown
     ' shelf, as it does in slices while the window idles (#133).
     Public Sub WaitForBoardFill()
