@@ -598,7 +598,8 @@ Public Class DashboardShelfLayoutTests
 
                         Dim card As Control = board.Shelves.First().Controls(0)
                         Dim route As Label = card.Controls.OfType(Of Label)().Single(Function(label) Not TypeOf label Is LinkLabel AndAlso label.AutoEllipsis AndAlso label.TextAlign = ContentAlignment.MiddleLeft)
-                        ' The app draws text with GDI; a test host starts with GDI+.
+                        ' Judges the GDI picture. The app draws this label with
+                        ' GDI+, as a test host does (see #333).
                         route.UseCompatibleTextRendering = False
 
                         route.Text = "2nd journal"

@@ -211,6 +211,12 @@ Namespace Forms
 
             Dim heading As New Label With {.Text = "&Keywords to search for", .AutoSize = True, .Margin = New Padding(0, 0, 0, 4)}
 
+            ' DialogScaling.FitListExtent does not fit this checked list, and
+            ' it has no horizontal scroll bar, so it never scrolls sideways
+            ' and draws its keywords with GDI+, the process default (#333,
+            ' see Program.Main). A keyword is at most
+            ' JournalSuggestionService.MaximumKeywordLength (80) characters.
+            ' Fitting it would switch it to GDI, which changes how it draws.
             clbKeywords.Dock = DockStyle.Fill
             clbKeywords.CheckOnClick = True
             clbKeywords.IntegralHeight = False
