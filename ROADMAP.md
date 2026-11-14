@@ -58,7 +58,7 @@ Targets are directional rather than promises. Data integrity, migrations, backup
 | **v0.9.1** | Packet File Safety ✅ | Does a save ever delete a file the library did not ask it to? |
 | **v0.9.2** | 1.0 Hardening ✅ | Is the entire workflow polished, resilient, and certifiable? |
 | **v1.0** | Trusted Research Workflow ✅ | Would I trust this with my real publication pipeline? |
-| **v1.0.1** | **Certification Follow-ups — next** | What did 1.0's certification note that should not wait for the new interface? |
+| **v1.0.1** | **Certification Follow-ups — Preview** | What did 1.0's certification note that should not wait for the new interface? |
 | **v1.1** | macOS and Linux | Can PaperRoute be the same calm, trustworthy app on every desktop? |
 | **v1.2** | Open Science Studies | What did I plan before I saw the data, and where can others check what I shared? |
 
@@ -482,7 +482,11 @@ Milestone: **[v1.0.1 — Certification Follow-ups](https://github.com/JUhalt/Pap
 
 A small release on the Windows Forms app, with no new windows and the Schema 9 library kept. It takes what 1.0's certification noted and what should not wait for the new interface. The maintainer approved its scope on November 14, 2026, the day 1.0 was released. It goes beyond the default in [#160](https://github.com/JUhalt/PaperRoute-Tracker/issues/160) that 1.0.x takes data-safety fixes only. A Preview candidate, v1.0.1-rc.1, comes before Stable. It has no date, and it is published only with the maintainer's approval.
 
+Status: v1.0.1-rc.1 is the Preview candidate; v1.0.0 is the current Stable release. Certification and release are tracked in [#352](https://github.com/JUhalt/PaperRoute-Tracker/issues/352), from one ordered checklist, [v1.0.1-Certification-Checklist.md](ManualCertification/v1.0.1-Certification-Checklist.md): the rc on Preview first, then Stable v1.0.1 with the rc's code.
+
 Its issues are:
+- two ways the manuscript page could lose author data, both present since v0.2.0, found on November 14, 2026 while the windows were inventoried for [#161](https://github.com/JUhalt/PaperRoute-Tracker/issues/161): works from an ORCID import started on the manuscript page, which also wrote the page's unsaved author changes to disk ([#353](https://github.com/JUhalt/PaperRoute-Tracker/issues/353)), and people a Crossref lookup added, lost when Submission Readiness, Manage Library or Journal, Preprint & Links was opened before Save ([#354](https://github.com/JUhalt/PaperRoute-Tracker/issues/354)); both fixed by [PR #355](https://github.com/JUhalt/PaperRoute-Tracker/pull/355);
+- two more ways to lose author data, found by the sweep that followed: people saved from the page's Manage Library and then overwritten by a BibTeX or RIS import, since v0.6.0 ([#359](https://github.com/JUhalt/PaperRoute-Tracker/issues/359)), and a person or affiliation deleted from the page while the saved manuscript still named it, since v0.2.0 ([#360](https://github.com/JUhalt/PaperRoute-Tracker/issues/360)); both fixed by [PR #363](https://github.com/JUhalt/PaperRoute-Tracker/pull/363);
 - the Board's stage filter, which re-renders at each step through its list on a large library ([#338](https://github.com/JUhalt/PaperRoute-Tracker/issues/338));
 - the first online request after a connection has gone stale ([#339](https://github.com/JUhalt/PaperRoute-Tracker/issues/339));
 - two keyboard tests made independent of whoever is using the PC ([#340](https://github.com/JUhalt/PaperRoute-Tracker/issues/340), [#318](https://github.com/JUhalt/PaperRoute-Tracker/issues/318)), and a test that each sideways-scrolling list re-measures when its rows change ([#329](https://github.com/JUhalt/PaperRoute-Tracker/issues/329));
@@ -492,6 +496,8 @@ Its issues are:
 - a User Guide section for researchers whose studies were on OSF ([#344](https://github.com/JUhalt/PaperRoute-Tracker/issues/344)).
 
 Offering Stable releases on the Preview channel ([#158](https://github.com/JUhalt/PaperRoute-Tracker/issues/158)) was in the list at first. It moved to v1.1's first Preview the same day: it rewrites the check every install runs, and its working case can only be seen on published releases.
+
+The sweep also found that a typed title or target journal, or a chosen stage, could be replaced by the saved value on the manuscript page before Save, since v0.2.0 ([#358](https://github.com/JUhalt/PaperRoute-Tracker/issues/358)). Nothing stored is lost; the text can be typed again. Its fix was held out of v1.0.1 the same day: it changed three times in one day, and it now touches the function Save uses to link a journal. It is a known limit of v1.0.1, with [#361](https://github.com/JUhalt/PaperRoute-Tracker/issues/361) and [#339](https://github.com/JUhalt/PaperRoute-Tracker/issues/339), and is listed under v1.1.
 
 ---
 
@@ -510,6 +516,8 @@ Its issues are:
 - date precision and "unknown date" markers, Schema 10 ([#157](https://github.com/JUhalt/PaperRoute-Tracker/issues/157));
 - offering Stable releases to people on the Preview channel, in v1.1's first Preview ([#158](https://github.com/JUhalt/PaperRoute-Tracker/issues/158));
 - what 1.0's certification noted and v1.0.1 leaves: the display polish ([#334](https://github.com/JUhalt/PaperRoute-Tracker/issues/334)) and the choice between the two text engines ([#333](https://github.com/JUhalt/PaperRoute-Tracker/issues/333));
+- a recovered draft that keeps the people a Crossref lookup added before the session ended, a known limit of v1.0.1 present since v0.9.2 ([#361](https://github.com/JUhalt/PaperRoute-Tracker/issues/361));
+- a typed title or target journal, or a chosen stage, kept on the manuscript page until Save, a known limit of v1.0.1 present since v0.2.0, whose fix was held from v1.0.1 ([#358](https://github.com/JUhalt/PaperRoute-Tracker/issues/358));
 - a **Settings > Start Fresh...** command that sets the library aside and begins empty, with a backup and an undo ([#297](https://github.com/JUhalt/PaperRoute-Tracker/issues/297));
 - code signing after SignPath's decline: WinGet, whose manifest v1.0.1 prepares ([#343](https://github.com/JUhalt/PaperRoute-Tracker/issues/343)), a Microsoft Store (MSIX) build, or a new application once the project has external references ([#216](https://github.com/JUhalt/PaperRoute-Tracker/issues/216)).
 

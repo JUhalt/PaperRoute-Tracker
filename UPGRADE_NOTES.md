@@ -25,6 +25,12 @@ PaperRoute upgrades are designed not to overwrite the manuscript database, setti
 
 Use **Settings → Backup Library...** to create a portable backup. In v0.5 and earlier, it is **Data → Backup Library...**.
 
+## Moving from v1.0.0 to v1.0.1
+
+PaperRoute v1.0.1 — Certification Follow-ups — is a patch for v1.0.0 on the same app, with no new windows. It fixes four ways to lose people or affiliations in the author library, or to have unsaved edits written early, each present since v0.6.0 or earlier: an ORCID import started on the manuscript page, which wrote the page's unsaved author changes to disk and lost the works it imported; people a Crossref lookup added before Save; people saved from the page's Manage Library and then overwritten by a BibTeX or RIS import; and a person deleted from the page while the saved manuscript still named them. The v1.0.1-rc.1 release notes say who was affected and how to get the data back. A typed title, target journal or stage that the manuscript page can replace with the saved value before Save, since v0.2.0, is not fixed in v1.0.1; nothing stored is lost, and the text can be typed again ([#358](https://github.com/JUhalt/PaperRoute-Tracker/issues/358)). **v1.0.1-rc.1 is a Preview; v1.0.0 remains the current Stable release.** It uses the same **Schema 9** library as v0.9.0 to v1.0.0 and migrates no data, and v1.0.0 can still open a library that v1.0.1 has used.
+
+Updating from v1.0.0 or v0.9.2 asks about unsaved edits first. To be offered the Preview, choose **Preview** under **Settings → Preferences... → Update channel**, and choose **Stable** again once v1.0.1 is out: while the channel is Preview, the Stable release is not offered. Setup is still not code-signed, so your browser and Windows may warn before a new install; the User Guide's **Installing** section explains the warnings.
+
 ## Moving from v0.9.2 to v1.0
 
 PaperRoute v1.0 — Trusted Research Workflow — is the release the project asks you to trust with your real publication pipeline, and adds no new workflow to v0.9.2. **v1.0.0 is the current Stable release.** It uses the same **Schema 9** library as v0.9.0, v0.9.1 and v0.9.2 and migrates no data, and v0.9.2 can still open a library that v1.0 has used. Restore a backup made by v1.0 with v0.9.2 or later. The next library upgrade, Schema 10, is planned for v1.1.
