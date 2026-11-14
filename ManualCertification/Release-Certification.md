@@ -8,6 +8,8 @@ For v0.9.2, these steps, the gates on #147 and what each merged pull request lef
 
 For 1.0, the list is [v1.0-Certification-Checklist.md](v1.0-Certification-Checklist.md): v0.9.2's, copied and added to, for v1.0.0-rc.1 on Preview and then Stable v1.0.0 with the rc's code. Its results are posted to #313.
 
+For 1.0.1, the list is [v1.0.1-Certification-Checklist.md](v1.0.1-Certification-Checklist.md): for v1.0.1-rc.1 on Preview and then Stable v1.0.1 with the rc's code, scoped by what changed since v1.0.0, with the lines 1.0.1 does not touch carried over from #313's. Its results are posted to #352.
+
 ## 1. Mismatched-library gate
 
 Standing from v0.9.1. Take a managed folder fuller than the library beside it: first an empty `manuscripts.json`, then an older one that names fewer manuscripts than the folder holds. Open each in the candidate, save once, and compare the managed tree before and after. It must be byte-identical: hash every file. A save that deletes, moves or rewrites anything in it fails the release.

@@ -58,7 +58,7 @@ Targets are directional rather than promises. Data integrity, migrations, backup
 | **v0.9.1** | Packet File Safety ✅ | Does a save ever delete a file the library did not ask it to? |
 | **v0.9.2** | 1.0 Hardening ✅ | Is the entire workflow polished, resilient, and certifiable? |
 | **v1.0** | Trusted Research Workflow ✅ | Would I trust this with my real publication pipeline? |
-| **v1.0.1** | **Certification Follow-ups — next** | What did 1.0's certification note that should not wait for the new interface? |
+| **v1.0.1** | **Certification Follow-ups — Preview** | What did 1.0's certification note that should not wait for the new interface? |
 | **v1.1** | macOS and Linux | Can PaperRoute be the same calm, trustworthy app on every desktop? |
 | **v1.2** | Open Science Studies | What did I plan before I saw the data, and where can others check what I shared? |
 
@@ -482,7 +482,10 @@ Milestone: **[v1.0.1 — Certification Follow-ups](https://github.com/JUhalt/Pap
 
 A small release on the Windows Forms app, with no new windows and the Schema 9 library kept. It takes what 1.0's certification noted and what should not wait for the new interface. The maintainer approved its scope on November 14, 2026, the day 1.0 was released. It goes beyond the default in [#160](https://github.com/JUhalt/PaperRoute-Tracker/issues/160) that 1.0.x takes data-safety fixes only. A Preview candidate, v1.0.1-rc.1, comes before Stable. It has no date, and it is published only with the maintainer's approval.
 
+Status: v1.0.1-rc.1 is the Preview candidate; v1.0.0 is the current Stable release. Certification and release are tracked in [#352](https://github.com/JUhalt/PaperRoute-Tracker/issues/352), from one ordered checklist, [v1.0.1-Certification-Checklist.md](ManualCertification/v1.0.1-Certification-Checklist.md): the rc on Preview first, then Stable v1.0.1 with the rc's code.
+
 Its issues are:
+- two ways the manuscript page could lose author data, both present since v0.2.0, found on November 14, 2026 while the windows were inventoried for [#161](https://github.com/JUhalt/PaperRoute-Tracker/issues/161): works from an ORCID import started on the manuscript page, which also wrote the page's unsaved author changes to disk ([#353](https://github.com/JUhalt/PaperRoute-Tracker/issues/353)), and people a Crossref lookup added, lost when Submission Readiness, Manage Library or Journal, Preprint & Links was opened before Save ([#354](https://github.com/JUhalt/PaperRoute-Tracker/issues/354));
 - the Board's stage filter, which re-renders at each step through its list on a large library ([#338](https://github.com/JUhalt/PaperRoute-Tracker/issues/338));
 - the first online request after a connection has gone stale ([#339](https://github.com/JUhalt/PaperRoute-Tracker/issues/339));
 - two keyboard tests made independent of whoever is using the PC ([#340](https://github.com/JUhalt/PaperRoute-Tracker/issues/340), [#318](https://github.com/JUhalt/PaperRoute-Tracker/issues/318)), and a test that each sideways-scrolling list re-measures when its rows change ([#329](https://github.com/JUhalt/PaperRoute-Tracker/issues/329));
