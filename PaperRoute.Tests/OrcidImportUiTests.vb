@@ -216,7 +216,8 @@ Public Class OrcidImportUiTests
     ' page's edit and the work, and a second save, which moves the first
     ' file to manuscripts.bak, still keeps the work. The window opened from
     ' the page still counts the page's unsaved authors: the author just
-    ' removed there is used by no manuscript.
+    ' removed there is used by no manuscript until the import, and then by
+    ' the work imported for them, so Delete Author refuses.
     <TestMethod>
     Public Sub AnOrcidImportFromTheManuscriptPageThenSaveKeepsTheEditAndTheWorks()
         StaRunner.Run(
@@ -228,11 +229,16 @@ Public Class OrcidImportUiTests
                     board.Open(board.Library.Single())
                     RemoveTheOnlyAuthor(board.Editor)
 
+                    Dim countUsage As Func(Of AuthorLibraryForm, Integer) =
+                        Function(dialog) CInt(GetType(AuthorLibraryForm).GetMethod("CountAuthorUsage", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(dialog, New Object() {author.Id}))
                     Dim usage As Integer = -1
+                    Dim usageAfter As Integer = -1
                     Assert.AreEqual(1, ImportFromThePage(board.Editor, CreateOptions(),
-                        Sub(dialog) usage = CInt(GetType(AuthorLibraryForm).GetMethod("CountAuthorUsage", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(dialog, New Object() {author.Id}))))
+                        Sub(dialog) usage = countUsage(dialog),
+                        Sub(dialog) usageAfter = countUsage(dialog)))
                     CollectionAssert.AreEqual({"ORCID Import Complete"}, dialogs.Closed, "The import went through.")
                     Assert.AreEqual(0, usage, "Usage counts read the page's working copy, where the author was removed.")
+                    Assert.AreEqual(1, usageAfter, "After the import the work imported for the author counts, so the author cannot be deleted.")
                     Assert.IsTrue(PageRecords(board.Editor).Any(Function(item) item.Title = WorkTitle), "The page's copy of the records holds the work.")
 
                     Assert.IsTrue(board.SaveManuscriptPage(), "The page saved.")
@@ -271,6 +277,44 @@ Public Class OrcidImportUiTests
                     CollectionAssert.AreEqual(before, File.ReadAllBytes(manuscriptsFile), "manuscripts.json is byte for byte as it was.")
                     Assert.AreEqual(OrcidId, New AuthorLibraryRepository().Load().Authors.Single().Orcid, "The iD is saved in the author library.")
                     Assert.AreEqual(1, board.Library.Count, "No work was imported.")
+
+                    board.SetPrompt(Function(title) System.Windows.Forms.DialogResult.No)
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+    ' An import from the page whose works save fails (#353, #243): the works
+    ' come back out of the main window's list, which the import went into,
+    ' the page's copy never gets them, nothing tells the main window, and
+    ' manuscripts.json is as it was; the page's Save then writes no work.
+    <TestMethod>
+    Public Sub AnOrcidImportFromTheManuscriptPageWhoseSaveFailsChangesNothing()
+        StaRunner.Run(
+            Sub()
+                SeedLinkedLibrary()
+                Dim manuscriptsFile As String = New ManuscriptRepository().DataFilePath
+                Dim before As Byte() = File.ReadAllBytes(manuscriptsFile)
+
+                Using board As LibraryBoard = StartBoard(),
+                      dialogs As New ManuscriptPageTests.DialogWatcher()
+                    board.Open(board.Library.Single())
+                    Dim raised As Integer = 0
+                    AddHandler board.Editor.ManuscriptsImported, Sub(sender, e) raised += 1
+
+                    Dim blocker As String = Path.Combine(Path.GetDirectoryName(manuscriptsFile), "manuscripts.tmp")
+                    Directory.CreateDirectory(blocker)
+                    Assert.AreEqual(1, ImportFromThePage(board.Editor, CreateOptions()))
+                    Directory.Delete(blocker)
+
+                    CollectionAssert.AreEqual({"ORCID Import Error"}, dialogs.Closed, "The import failed.")
+                    Assert.AreEqual(1, board.Library.Count, "The work comes back out of the main window's list.")
+                    Assert.IsFalse(PageRecords(board.Editor).Any(Function(item) item.Title = WorkTitle), "The page's copy of the records never gets the work.")
+                    Assert.AreEqual(0, raised, "The main window is not told of an import.")
+                    CollectionAssert.AreEqual(before, File.ReadAllBytes(manuscriptsFile), "manuscripts.json is byte for byte as it was.")
+
+                    Assert.IsTrue(board.SaveManuscriptPage(), "The page saved.")
+                    Assert.IsFalse(New ManuscriptRepository().Load().Any(Function(item) item.Title = WorkTitle), "The page's Save writes no work.")
 
                     board.SetPrompt(Function(title) System.Windows.Forms.DialogResult.No)
                     board.Close()
@@ -384,12 +428,13 @@ Public Class OrcidImportUiTests
     ' Manage Library on the page (its Click handler); in the window it
     ' opens, inspect runs first, then ORCID... is applied to the one author
     ' with the options given. Returns how many times it was applied.
-    Private Shared Function ImportFromThePage(editor As EditManuscriptForm, options As OrcidApplyOptions, Optional inspect As Action(Of AuthorLibraryForm) = Nothing) As Integer
+    Private Shared Function ImportFromThePage(editor As EditManuscriptForm, options As OrcidApplyOptions, Optional inspect As Action(Of AuthorLibraryForm) = Nothing, Optional afterImport As Action(Of AuthorLibraryForm) = Nothing) As Integer
         Dim applied As Integer = 0
         Using answer As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of AuthorLibraryForm)(
             Sub(dialog)
                 inspect?.Invoke(dialog)
                 dialog.ApplyOrcidChanges(LibraryOf(dialog).Authors.Single(), CreateProfile(), options)
+                afterImport?.Invoke(dialog)
                 applied += 1
                 dialog.Close()
             End Sub)

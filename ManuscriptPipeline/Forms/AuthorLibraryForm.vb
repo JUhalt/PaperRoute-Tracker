@@ -1081,6 +1081,33 @@ Namespace Forms
         End Sub
 
 
+        ' The manuscripts usage is counted over: those given and, from the
+        ' manuscript page, the works imported meanwhile into the import
+        ' target, which those given do not hold (#353). Each work names the
+        ' author it was imported for, so that author cannot be deleted.
+        Private Function UsageManuscripts() As List(Of Manuscript)
+
+            If _importTarget Is _manuscripts Then
+                Return _manuscripts
+            End If
+
+            Dim held As New HashSet(Of Guid)(
+                _manuscripts.Where(Function(item) item IsNot Nothing).Select(Function(item) item.Id)
+            )
+
+            Dim usage As New List(Of Manuscript)(
+                _manuscripts
+            )
+
+            usage.AddRange(
+                _importTarget.Where(Function(item) item IsNot Nothing AndAlso Not held.Contains(item.Id))
+            )
+
+            Return usage
+
+        End Function
+
+
         Private Function CountAuthorUsage(
             authorId As Guid
         ) As Integer
@@ -1089,7 +1116,7 @@ Namespace Forms
                 0
 
             For Each manuscript As Manuscript In
-                _manuscripts
+                UsageManuscripts()
 
                 If manuscript.Authors Is Nothing Then
                     Continue For
@@ -1121,7 +1148,7 @@ Namespace Forms
                 0
 
             For Each manuscript As Manuscript In
-                _manuscripts
+                UsageManuscripts()
 
                 If manuscript.Authors Is Nothing Then
                     Continue For

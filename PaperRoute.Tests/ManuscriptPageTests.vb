@@ -2449,29 +2449,54 @@ Public Class ManuscriptPageTests
             End Sub)
     End Sub
 
-    ' A person deleted in Authors & Affiliations while the page holds
-    ' unsaved looked-up people (#354) stays deleted: the reload carries over
-    ' only the people the page made, not everyone missing from disk.
+    ' A person and an affiliation deleted in Authors & Affiliations while
+    ' the page holds unsaved looked-up people (#354) stay deleted: the
+    ' reload carries over only the records the page made, not everything
+    ' missing from disk.
     <TestMethod>
     Public Sub APersonDeletedInManageLibraryIsNotBroughtBackByTheReload()
         Dim seed As New AuthorLibraryData()
         Dim gone As New AuthorRecord With {.GivenName = "Gone", .FamilyName = "Person"}
         seed.Authors.Add(gone)
+        Dim goneAffiliation As New AffiliationRecord With {.Institution = "Gone University", .Country = "USA"}
+        seed.Affiliations.Add(goneAffiliation)
         WithCrossrefPeopleUnsaved(
             seed,
             Sub(board, manuscript, disk, root)
-                ' The window deletes the person and saves, as Delete does.
+                ' The window deletes the person and the affiliation and
+                ' saves, as Delete does.
                 CloseManageLibrary(board.Editor,
                     Sub()
                         Dim onDisk As AuthorLibraryData = disk.Load()
                         onDisk.Authors.RemoveAll(Function(person) person.Id = gone.Id)
+                        onDisk.Affiliations.RemoveAll(Function(affiliation) affiliation.Id = goneAffiliation.Id)
                         disk.Save(onDisk)
                     End Sub)
                 Assert.IsFalse(PageLibrary(board.Editor).Authors.Any(Function(person) person.Id = gone.Id), "The page's library does not bring the deleted person back.")
+                Assert.IsFalse(PageLibrary(board.Editor).Affiliations.Any(Function(affiliation) affiliation.Id = goneAffiliation.Id), "The page's library does not bring the deleted affiliation back.")
 
                 SavePage(board)
                 AssertEveryoneIsOnDisk(manuscript, disk)
                 Assert.IsFalse(disk.Load().Authors.Any(Function(person) person.Id = gone.Id), "Save does not write the deleted person back.")
+                Assert.IsFalse(disk.Load().Affiliations.Any(Function(affiliation) affiliation.Id = goneAffiliation.Id), "Save does not write the deleted affiliation back.")
+            End Sub)
+    End Sub
+
+    ' Two reloads before Save, Submission Readiness then Manage Library
+    ' (#354): what the first carried over is still the page's own at the
+    ' second, so Save writes everyone.
+    <TestMethod>
+    Public Sub PeopleACrossrefLookupAddedAreSavedAfterTwoReloads()
+        WithCrossrefPeopleUnsaved(
+            New AuthorLibraryData(),
+            Sub(board, manuscript, disk, root)
+                CloseSubmissionReadiness(board.Editor)
+                CloseManageLibrary(board.Editor)
+                Assert.AreEqual(2, PageLibrary(board.Editor).Authors.Count, "Both looked-up people survive two reloads.")
+                Assert.AreEqual(1, PageLibrary(board.Editor).Affiliations.Count, "The looked-up affiliation survives two reloads.")
+
+                SavePage(board)
+                AssertEveryoneIsOnDisk(manuscript, disk)
             End Sub)
     End Sub
 
@@ -2527,6 +2552,7 @@ Public Class ManuscriptPageTests
                         Dim disk As New AuthorLibraryRepository(board.AuthorDirectory)
                         disk.Save(seed)
                         Dim seededPeople As Integer = seed.Authors.Count
+                        Dim seededAffiliations As Integer = seed.Affiliations.Count
 
                         Dim manuscript As Manuscript = Sample("Looked-up manuscript")
                         manuscript.Metadata = New ManuscriptMetadata With {.Doi = CrossrefWork.Doi}
@@ -2539,7 +2565,7 @@ Public Class ManuscriptPageTests
                             Dim working As Manuscript = DirectCast(GetType(EditManuscriptForm).GetProperty("_workingManuscript", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(board.Editor), Manuscript)
                             Assert.AreEqual(2, working.Authors.Count, "The lookup put both people on the manuscript.")
                             Assert.AreEqual(seededPeople + 2, PageLibrary(board.Editor).Authors.Count, "The lookup added both people to the page's library.")
-                            Assert.AreEqual(1, PageLibrary(board.Editor).Affiliations.Count, "The lookup added the affiliation to the page's library.")
+                            Assert.AreEqual(seededAffiliations + 1, PageLibrary(board.Editor).Affiliations.Count, "The lookup added the affiliation to the page's library.")
                             Assert.AreEqual(seededPeople, disk.Load().Authors.Count, "Nothing is on disk before Save.")
 
                             steps(board, manuscript, disk, root)
