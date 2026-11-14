@@ -27,7 +27,7 @@ Use **Settings → Backup Library...** to create a portable backup. In v0.5 and 
 
 ## Moving from v1.0.0 to v1.0.1
 
-PaperRoute v1.0.1 — Certification Follow-ups — is a patch for v1.0.0 on the same app, with no new windows. It fixes two ways the manuscript page could lose author data, both present since v0.2.0: works from an ORCID import started on the manuscript page, and people a Crossref lookup added before Save. The v1.0.1-rc.1 release notes say who was affected and how to get the data back. **v1.0.1-rc.1 is a Preview; v1.0.0 remains the current Stable release.** It uses the same **Schema 9** library as v0.9.0 to v1.0.0 and migrates no data, and v1.0.0 can still open a library that v1.0.1 has used.
+PaperRoute v1.0.1 — Certification Follow-ups — is a patch for v1.0.0 on the same app, with no new windows. It fixes two ways the manuscript page could lose author data, both present since v0.2.0: works from an ORCID import started on the manuscript page, and people a Crossref lookup added before Save. _PENDING The v1.0.1-rc.1 release notes say who was affected and how to get the data back. **v1.0.1-rc.1 is a Preview; v1.0.0 remains the current Stable release.** It uses the same **Schema 9** library as v0.9.0 to v1.0.0 and migrates no data, and v1.0.0 can still open a library that v1.0.1 has used.
 
 Updating from v1.0.0 or v0.9.2 asks about unsaved edits first. To be offered the Preview, choose **Preview** under **Settings → Preferences... → Update channel**, and choose **Stable** again once v1.0.1 is out: while the channel is Preview, the Stable release is not offered. Setup is still not code-signed, so your browser and Windows may warn before a new install; the User Guide's **Installing** section explains the warnings.
 
