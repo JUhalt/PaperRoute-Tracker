@@ -214,7 +214,7 @@ Public Class OnlineServicesTests
                 Return Ok("{}")
             End Function)
 
-        Using lookup As New HttpRequestMessage(HttpMethod.Get, "https://api.crossref.org/works/10.5555/x") With {.Version = HttpVersion.Version20, .VersionPolicy = HttpVersionPolicy.RequestVersionOrLower}
+        Using lookup As New HttpRequestMessage(HttpMethod.Get, "https://api.crossref.org/works/10.5555/x") With {.Version = HttpVersion.Version20, .VersionPolicy = HttpVersionPolicy.RequestVersionOrHigher}
             lookup.Headers.Accept.ParseAdd("application/json")
             lookup.Headers.TryAddWithoutValidation("Authorization", "Bearer should-not-leave")
             lookup.Options.Set(mark, "kept")
@@ -226,10 +226,10 @@ Public Class OnlineServicesTests
         Assert.AreEqual(2, network.Requests.Count, "Sent once more after the dead connection.")
         For Each sent As SentRequest In network.Requests
             Assert.AreEqual("https://api.crossref.org/works/10.5555/x", sent.Uri.AbsoluteUri)
-            Assert.AreEqual(OnlineAccess.UserAgent(), sent.UserAgent, "The gate prepared both tries.")
+            Assert.AreEqual(OnlineAccess.UserAgent(), sent.UserAgent, "Both tries identify PaperRoute.")
             Assert.IsNull(sent.Authorization, "No key, and nothing a caller set, goes to Crossref on either try.")
         Next
-        Assert.AreEqual("GET 2.0 RequestVersionOrLower application/json kept", secondTry, "The second try is the same request: version, headers and options.")
+        Assert.AreEqual("GET 2.0 RequestVersionOrHigher application/json kept", secondTry, "The second try is the same request: version, headers and options.")
     End Sub
 
     <TestMethod>
@@ -244,6 +244,13 @@ Public Class OnlineServicesTests
 
         Assert.AreEqual(2, network.Requests.Count, "Two tries, never three.")
         Assert.AreEqual("PaperRoute couldn't reach Crossref. Check your internet connection, then try again.", OnlineAccess.Describe(failure, "Crossref"))
+
+        ' HEAD is a read too: two tries.
+        network.Requests.Clear()
+        Using probe As New HttpRequestMessage(HttpMethod.Head, "https://api.crossref.org/works/10.5555/x")
+            Assert.ThrowsExactly(Of HttpRequestException)(Sub() OnlineAccess.ClientFor(OnlineServiceCatalog.Crossref).SendAsync(probe).GetAwaiter().GetResult().Dispose())
+        End Using
+        Assert.AreEqual(2, network.Requests.Count, "HEAD is sent once more.")
     End Sub
 
     <TestMethod>
@@ -260,6 +267,15 @@ Public Class OnlineServicesTests
                 Assert.ThrowsExactly(Of HttpRequestException)(Sub() OnlineAccess.ClientFor(OnlineServiceCatalog.Crossref).SendAsync(withContent).GetAwaiter().GetResult().Dispose())
             End Using
             Assert.AreEqual(1, network.Requests.Count, method.Method & " with content")
+        Next
+
+        ' Only GET and HEAD are tried again, even without content.
+        For Each method As HttpMethod In {HttpMethod.Post, HttpMethod.Delete}
+            network.Requests.Clear()
+            Using bare As New HttpRequestMessage(method, "https://api.crossref.org/works")
+                Assert.ThrowsExactly(Of HttpRequestException)(Sub() OnlineAccess.ClientFor(OnlineServiceCatalog.Crossref).SendAsync(bare).GetAwaiter().GetResult().Dispose())
+            End Using
+            Assert.AreEqual(1, network.Requests.Count, method.Method & " without content")
         Next
 
         ' A compatible server on this computer, and Claude.
