@@ -439,8 +439,9 @@ Public Class DialogPolishTests
     ' text is within 2 pixels of its field's middle: the first box, list or
     ' date in the field's cell, else its first check box, else its first
     ' button, each of which centres its text, else the middle of the first
-    ' line of the label there. The text is drawn as the app draws it. On
-    ' e40f42c each of those was 3 or 4 pixels off at 96 DPI; the author's
+    ' line of the label there. The text is drawn with GDI
+    ' (DrawTextAsTheAppDoes); the app draws labels, buttons and check boxes
+    ' with GDI+, see #333. On e40f42c each of those was 3 or 4 pixels off at 96 DPI; the author's
     ' Identity and the cover letter's other rows, measured with them, were
     ' already on their fields' line.
     <TestMethod>
@@ -511,8 +512,9 @@ Public Class DialogPolishTests
     ' journal and Starting stage wrapped onto a second line, which their
     ' rows, with each label at its row's top (#258), cut. Each window
     ' LabelledWindows names is built as at each display
-    ' (ScalingMeasurementTests.AtDisplayDpi) and draws its text as the app
-    ' does, with GDI, which measures it at that display's DPI. Every label
+    ' (ScalingMeasurementTests.AtDisplayDpi) and draws its text with GDI,
+    ' which measures it at that display's DPI; the app draws its labels
+    ' with GDI+, so this judges the GDI picture (see #333). Every label
     ' it shows has the width and height its text needs at its width, inside
     ' its parent, and so does the help beside a label. On 88a191e Add
     ' Manuscript's two labels were cut at 144 DPI, 48 pixels tall of the 56
@@ -600,8 +602,12 @@ Public Class DialogPolishTests
     End Function
 
 
-    ' The app draws text with GDI; a test host starts with GDI+, which
-    ' sizes a label or a check box a few pixels taller.
+    ' Sets every label, button, check box and radio button in the window to
+    ' draw with GDI, so a test judges the GDI picture, which sizes a label
+    ' or a check box a few pixels shorter than GDI+. Despite this helper's
+    ' name, the app draws these controls with GDI+, as a test host does
+    ' (see #333 and Program.Main). Judging them with GDI+ instead is left
+    ' to v1.1.
     Private Shared Sub DrawTextAsTheAppDoes(shown As Form)
 
         For Each control As Control In ViewCatalog.Descendants(shown).Where(Function(item) TypeOf item Is Label OrElse TypeOf item Is ButtonBase)
@@ -679,7 +685,8 @@ Public Class DialogPolishTests
     ' rows, about 11 pixels above the middle of the buttons beside them at
     ' 125%, like superscripts, and Bibliography import's "Import records
     ' with publication metadata as Published" about 5 above. At each DPI,
-    ' its text drawn as the app draws it, each one that shares its row
+    ' its text drawn with GDI (the app draws a check box's and a button's
+    ' with GDI+, see #333), each one that shares its row
     ' with a button has its middle within 2 pixels of the nearest such
     ' button's. On e40f42c the icons were 11.5 pixels off at 96 DPI and the
     ' check box 4.5.
@@ -772,10 +779,12 @@ Public Class DialogPolishTests
     ' the box's glyph, 24 pixels at 96 DPI where the box keeps 19 beside
     ' its text, so "Its articles are indexed and archived in services you
     ' use" was given two lines for the one it drew, which left a gap in the
-    ' list. At each DPI, its text drawn as the app draws it, and at each of
-    ' 20 widths a pixel apart down from the window's own, each box draws
-    ' its last line where a twin as wide and three lines taller draws it,
-    ' so none of its lines is cut, and leaves less than a line below it.
+    ' list. At each DPI, its text drawn with GDI, and at each of 20 widths
+    ' a pixel apart down from the window's own, each box draws its last
+    ' line where a twin as wide and three lines taller, also drawn with
+    ' GDI, draws it, so none of its lines is cut, and leaves less than a
+    ' line below it. This judges the GDI picture; the app draws these check
+    ' boxes with GDI+ (see #333).
     ' On e40f42c that question was given two lines for one at 120 DPI, at
     ' 10 of the 20 widths.
     <TestMethod>
@@ -795,8 +804,8 @@ Public Class DialogPolishTests
                     Dim boxes As List(Of CheckBox) = DirectCast(shown, JournalCandidateForm).CheckBoxes
                     Dim widest As Integer = shown.Width
 
-                    ' Every list laid out again with the text as the app
-                    ' draws it, as each width below does for the one it
+                    ' Every list laid out again with the text drawn with
+                    ' GDI, as each width below does for the one it
                     ' changes.
                     shown.Width = widest + 40
                     Application.DoEvents()
@@ -812,6 +821,8 @@ Public Class DialogPolishTests
                             Dim drawn As Integer = LastInkRow(box)
                             Dim whole As Integer
 
+                            ' The twin draws with GDI, as the box does here; in
+                            ' the app the box draws with GDI+ (see #333).
                             Using twin As New CheckBox With {
                                 .Text = box.Text, .Font = box.Font, .AutoSize = False, .CheckAlign = box.CheckAlign, .TextAlign = box.TextAlign,
                                 .UseMnemonic = False, .UseCompatibleTextRendering = False, .ForeColor = box.ForeColor, .BackColor = box.BackColor,
@@ -866,6 +877,8 @@ Public Class DialogPolishTests
                             Dim drawn As Integer = LastInkRow(box)
                             Dim whole As Integer
 
+                            ' The twin draws with GDI, as the box does here; in
+                            ' the app the box draws with GDI+ (see #333).
                             Using twin As New CheckBox With {
                                 .Text = box.Text, .Font = box.Font, .AutoSize = False, .CheckAlign = box.CheckAlign, .TextAlign = box.TextAlign,
                                 .UseMnemonic = False, .UseCompatibleTextRendering = False, .ForeColor = box.ForeColor, .BackColor = box.BackColor,
@@ -932,8 +945,9 @@ Public Class DialogPolishTests
 
     ' Publication export keeps Select All beside Select None (#266): at
     ' its default width at 125% its toolbar wrapped between them, Select
-    ' None alone on a second line. At each DPI, its text drawn as the app
-    ' draws it, and at each width from the window's own down to its least,
+    ' None alone on a second line. At each DPI, its text drawn with GDI
+    ' (the app draws its buttons with GDI+, see #333), and at each width
+    ' from the window's own down to its least,
     ' 10 pixels apart, Select None is on Select All's line, just after it.
     ' On e40f42c they were apart at its default width at 96 and 120 DPI.
     <TestMethod>
@@ -1166,8 +1180,9 @@ Public Class DialogPolishTests
     '
     ' The chips' captions are a guard, which cannot fail before the change:
     ' C3 saw them sit high at 125%, 6 pixels above and 11 below, in boxes
-    ' about 5 pixels taller than their text. Drawn here as the app draws
-    ' text, with GDI, each chip is as tall as its caption and its padding,
+    ' about 5 pixels taller than their text. Drawn here with GDI (InkGaps;
+    ' the app draws these labels with GDI+, see #333), each chip is as tall
+    ' as its caption and its padding,
     ' and its ink is within 2 pixels of the middle at each DPI; the captions
     ' are now centred in their boxes, which changes nothing in a box that
     ' tight, and the taller box C3 saw is left to its capture.
@@ -1229,7 +1244,8 @@ Public Class DialogPolishTests
     ' pixels that differ clearly from its back color.
     Private Shared Function InkGaps(label As Label) As (Above As Integer, Below As Integer)
 
-        ' The app draws text with GDI; a test host starts with GDI+.
+        ' Judges the GDI picture. The app draws a label with GDI+, as a
+        ' test host does (see #333).
         label.UseCompatibleTextRendering = False
 
         Using image As New Bitmap(label.Width, label.Height, PixelFormat.Format32bppArgb)
@@ -1952,8 +1968,8 @@ Public Class DialogPolishTests
     ' decisions,..." lost "notes, and file references." At 125% the three
     ' lines just fit. The window is shown as the catalog builds it, with
     ' C3's title, the display simulated as the sweep simulates it, and its
-    ' text drawn as the app draws it, with GDI; the warning has the height
-    ' its text needs at its width. At 96 DPI, where nothing is simulated, it
+    ' text drawn with GDI (the app draws the warning with GDI+, see #333);
+    ' the warning has the height its text needs at its width. At 96 DPI, where nothing is simulated, it
     ' keeps its 466x72 box in a 520x300 window, so the window at 100% is as
     ' it was. The sweep cannot see this cut: it does not judge a label two
     ' lines tall.
@@ -2033,8 +2049,9 @@ Public Class DialogPolishTests
     ' grown for the DPI and, since it keeps its outer size, the larger
     ' frame taken from its client area, 628x544 at 144 DPI, the client area
     ' display-evidence.json gives at the real 150% display, with the same
-    ' label bounds. Its text is drawn as a test host and the display
-    ' evidence tool draw it, with GDI+, and as the app draws it, with GDI.
+    ' label bounds. Its text is drawn with GDI+, as a test host, the
+    ' display evidence tool and the app draw its labels (see #333), and
+    ' with GDI.
     ' The sweep's cells read "ok" either way: a box a sibling covers is
     ' inside its parents' clip, and a wrapped label is not judged. At 96
     ' and 120 DPI the label column keeps its 170 pixels, so the window at
@@ -2052,6 +2069,8 @@ Public Class DialogPolishTests
 
         For Each dpi As Integer In Dpis
 
+            ' asTheApp marks the GDI pass, named before #333 found that the
+            ' app draws labels and buttons with GDI+, as the other pass does.
             For Each asTheApp As Boolean In {False, True}
 
                 Dim at As Integer = dpi
@@ -2831,9 +2850,11 @@ Public Class DialogPolishTests
     ' FitListExtent measured each row with TextRenderer, GDI, but a checked
     ' list draws its rows with the process's default engine, which in
     ' PaperRoute is GDI+: Program.Main starts the app, not the VB template's
-    ' Main, so nothing calls SetCompatibleTextRenderingDefault(False). GDI+
-    ' draws a long row about 1.5% wider than GDI measures it, more than
-    ' TextRenderer's padding once a row is about 1,000 pixels wide. The
+    ' Main, so nothing calls SetCompatibleTextRenderingDefault(False). The
+    ' two engines give a long row different widths, in either direction
+    ' (#333): GDI+ drew these two rows wider than GDI measured them, more
+    ' than TextRenderer's padding once a row is about 1,000 pixels wide,
+    ' and drew three other lists' rows narrower, on rc.3 at a real 100%. The
     ' sweep's twins forced GDI, and its rows were shorter, so it compared
     ' GDI with GDI. Here each of E4.7's two rows, as its window builds it,
     ' is the only row of a checked list left to the engine the app leaves
@@ -2951,6 +2972,137 @@ Public Class DialogPolishTests
         Assert.IsTrue(fillBlanksNeedsAt18 > 1100, "The case is real: at 18 pixels Fill Blanks' row is as long as E4.7's. " & String.Join("; ", judged))
 
     End Sub
+
+
+    ' A record, not a requirement: which engine draws each kind of
+    ' control's text in PaperRoute as 1.0 shipped it, as the comments at
+    ' Program.Main and DialogScaling.FitListExtent write it down (#333).
+    ' A failure here means the split has changed and the record is out of
+    ' date: read those comments again, and the tests that judge the GDI
+    ' picture of a control the app draws with GDI+, and correct them with
+    ' this. The app starts in Program.Main, and the only code in the app
+    ' that calls Application.SetCompatibleTextRenderingDefault is the VB
+    ' template's Main, which never runs. So, as on a
+    ' test host, which does not call it either, a label, button, check box,
+    ' radio button and checked list start with GDI+; a text box, plain list
+    ' and drop-down have no engine to choose, as Windows draws their text,
+    ' with GDI; and a checked list FitListExtent fits ends with GDI.
+    <TestMethod>
+    Public Sub RecordOfTheTextEngineSplitAsItIsToday()
+
+        Dim app As Assembly = GetType(DialogScaling).Assembly
+        Dim entry As MethodInfo = app.EntryPoint
+
+        Assert.AreEqual("ManuscriptPipeline.Program.Main", entry.DeclaringType.FullName & "." & entry.Name, "The app starts in Program.Main, not in the VB template's Main.")
+
+        Dim callers As List(Of MethodBase) =
+            CallersOf(GetType(Application).GetMethod(NameOf(Application.SetCompatibleTextRenderingDefault)), app)
+
+        Dim described As String =
+            String.Join("; ", callers.Select(Function(method) method.DeclaringType.FullName & "." & method.Name))
+
+        Console.WriteLine("Callers of SetCompatibleTextRenderingDefault in the app: " & If(described.Length = 0, "none", described))
+
+        ' The VB template's Main, which the compiler still builds into the
+        ' app, calls it; that Main never runs.
+        Assert.AreEqual("ManuscriptPipeline.My.MyApplication.Main", described, "Only the VB template's Main, which never runs, sets the text engine.")
+
+        StaRunner.Run(
+            Sub()
+
+                For Each kind As Type In {GetType(Label), GetType(Button), GetType(CheckBox), GetType(RadioButton), GetType(CheckedListBox)}
+                    Using control As Control = DirectCast(Activator.CreateInstance(kind), Control)
+                        Dim engine As PropertyInfo = kind.GetProperty("UseCompatibleTextRendering", BindingFlags.Public Or BindingFlags.Instance)
+                        Assert.IsNotNull(engine, $"A {kind.Name} can choose its engine.")
+                        Assert.IsTrue(CBool(engine.GetValue(control)), $"A new {kind.Name} draws its text with GDI+, the process default.")
+                    End Using
+                Next
+
+                For Each kind As Type In {GetType(TextBox), GetType(ListBox), GetType(ComboBox)}
+                    Assert.IsNull(kind.GetProperty("UseCompatibleTextRendering", BindingFlags.Public Or BindingFlags.Instance), $"Windows draws a {kind.Name}'s text, with GDI; it has no engine to choose.")
+                Next
+
+                Using fitted As New CheckedListBox()
+                    fitted.Items.Add("A row")
+                    DialogScaling.FitListExtent(fitted)
+                    Assert.IsFalse(fitted.UseCompatibleTextRendering, "A checked list FitListExtent fits draws its rows with GDI.")
+                End Using
+
+            End Sub)
+
+    End Sub
+
+
+    ' The methods of the assembly whose code calls the target: each call or
+    ' callvirt in their IL, resolved to the method its token names.
+    Private Shared Function CallersOf(target As MethodInfo, assembly As Assembly) As List(Of MethodBase)
+
+        Const Declared As BindingFlags =
+            BindingFlags.Public Or BindingFlags.NonPublic Or BindingFlags.Instance Or BindingFlags.Static Or BindingFlags.DeclaredOnly
+
+        Dim kinds As Type()
+
+        Try
+            kinds = assembly.GetTypes()
+        Catch ex As ReflectionTypeLoadException
+            kinds = ex.Types.Where(Function(item) item IsNot Nothing).ToArray()
+        End Try
+
+        Dim callers As New List(Of MethodBase)()
+
+        For Each kind As Type In kinds
+
+            For Each method As MethodBase In kind.GetMethods(Declared).Cast(Of MethodBase)().Concat(kind.GetConstructors(Declared))
+
+                Dim body As MethodBody = method.GetMethodBody()
+
+                If body Is Nothing Then
+                    Continue For
+                End If
+
+                Dim il As Byte() = body.GetILAsByteArray()
+
+                For index As Integer = 0 To il.Length - 5
+
+                    ' call (0x28) or callvirt (0x6F), then a MethodDef or
+                    ' MemberRef token.
+                    If il(index) <> &H28 AndAlso il(index) <> &H6F Then
+                        Continue For
+                    End If
+
+                    Dim token As Integer = BitConverter.ToInt32(il, index + 1)
+                    Dim table As Integer = (token >> 24) And &HFF
+
+                    If table <> &H6 AndAlso table <> &HA Then
+                        Continue For
+                    End If
+
+                    ' The byte may be an operand, not an opcode, so its
+                    ' "token" may name nothing.
+                    Dim called As MethodBase = Nothing
+
+                    Try
+                        called = kind.Module.ResolveMethod(
+                            token,
+                            If(kind.IsGenericType, kind.GetGenericArguments(), Nothing),
+                            If(method.IsGenericMethod, method.GetGenericArguments(), Nothing))
+                    Catch ex As Exception
+                    End Try
+
+                    If called IsNot Nothing AndAlso called.Equals(target) Then
+                        callers.Add(method)
+                        Exit For
+                    End If
+
+                Next
+
+            Next
+
+        Next
+
+        Return callers
+
+    End Function
 
 
     ' A row with tabs reaches its end too, in each kind of list FitListExtent
