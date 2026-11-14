@@ -200,6 +200,89 @@ Partial Public Class ManuscriptPageTests
             End Sub)
     End Sub
 
+    ' An edit of the active submission that leaves its journal alone puts
+    ' the saved target back in the working copy; the typed target journal
+    ' stays in the box and Save writes it.
+    <TestMethod>
+    Public Sub TypedTargetJournalSurvivesAnEditThatKeepsTheActiveSubmissionsJournal()
+        WithTypedFieldsPage(
+            SubmittedToFirstJournal(),
+            Sub(board, manuscript, dialogs)
+                board.Field("Target journal").Text = "Typed Journal"
+                EditFirstSubmission(board.Editor, Nothing)
+
+                Assert.AreEqual("Typed Journal", board.Field("Target journal").Text, "The typed target journal is still in the box.")
+                Assert.AreEqual("First Journal", manuscript.TargetJournal, "Nothing is saved before Save.")
+
+                Assert.IsTrue(board.SaveManuscriptPage(), "The page saved.")
+                Assert.AreEqual("Typed Journal", manuscript.TargetJournal, "Save writes the typed target journal.")
+                Assert.AreEqual(PaperStage.Submitted, manuscript.CurrentStage, "The stage is unchanged.")
+            End Sub)
+    End Sub
+
+    ' Deleting the last submission clears the target it set, not a target
+    ' journal typed since; Save writes the typed one with the Draft stage.
+    <TestMethod>
+    Public Sub TypedTargetJournalSurvivesDeletingTheLastSubmission()
+        WithTypedFieldsPage(
+            SubmittedToFirstJournal(),
+            Sub(board, manuscript, dialogs)
+                board.Field("Target journal").Text = "Typed Journal"
+                DeleteFirstSubmission(board.Editor)
+
+                CollectionAssert.AreEqual({"Delete Journal Submission"}, dialogs.Closed, "Delete asked once.")
+                Assert.AreEqual("Typed Journal", board.Field("Target journal").Text, "The typed target journal is still in the box.")
+                Assert.AreEqual("First Journal", manuscript.TargetJournal, "Nothing is saved before Save.")
+
+                Assert.IsTrue(board.SaveManuscriptPage(), "The page saved.")
+                Assert.AreEqual("Typed Journal", manuscript.TargetJournal, "Save writes the typed target journal.")
+                Assert.AreEqual(PaperStage.Draft, manuscript.CurrentStage, "The removal took the stage back to Draft.")
+                Assert.AreEqual(0, manuscript.Submissions.Count)
+            End Sub,
+            answerYes:="Delete Journal Submission")
+    End Sub
+
+    ' A Current stage chosen but not saved stays chosen after a submission
+    ' edit that leaves the stage alone, and Save moves to it.
+    <TestMethod>
+    Public Sub ChosenStageSurvivesEditingASubmission()
+        WithTypedFieldsPage(
+            SubmittedToFirstJournal(),
+            Sub(board, manuscript, dialogs)
+                Dim stage As ComboBox = DirectCast(GetType(EditManuscriptForm).GetField("cmbStage", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(board.Editor), ComboBox)
+                stage.SelectedItem = PaperStage.UnderReview
+                EditFirstSubmission(board.Editor, Nothing)
+
+                Assert.AreEqual(PaperStage.UnderReview, CType(stage.SelectedItem, PaperStage), "The chosen stage is still chosen.")
+                Assert.IsTrue(board.Editor.HasUnsavedChanges(), "The chosen stage is unsaved.")
+                Assert.AreEqual(PaperStage.Submitted, manuscript.CurrentStage, "Nothing is saved before Save.")
+
+                Assert.IsTrue(board.SaveManuscriptPage(), "The page saved.")
+                Assert.AreEqual(PaperStage.UnderReview, manuscript.CurrentStage, "Save moves to the chosen stage.")
+            End Sub)
+    End Sub
+
+    ' Submitted to First Journal on the day it entered the stage.
+    Private Shared Function SubmittedToFirstJournal() As Manuscript
+        Dim manuscript As Manuscript = Sample("Submitted manuscript")
+        manuscript.CurrentStage = PaperStage.Submitted
+        manuscript.StageEnteredDate = New DateTime(2026, 1, 5)
+        manuscript.TargetJournal = "First Journal"
+        manuscript.Submissions.Add(New JournalSubmission With {.JournalName = "First Journal", .SubmittedDate = New DateTime(2026, 1, 5)})
+        Return manuscript
+    End Function
+
+    ' The first submission selected and deleted (its Delete handler); the
+    ' watcher answers the question.
+    Private Shared Sub DeleteFirstSubmission(editor As EditManuscriptForm)
+        Dim flags As BindingFlags = BindingFlags.Instance Or BindingFlags.NonPublic
+        Dim list As ListBox = DirectCast(GetType(EditManuscriptForm).GetField("lstSubmissions", flags).GetValue(editor), ListBox)
+        list.SelectedIndex = 0
+        Application.DoEvents()
+        GetType(EditManuscriptForm).GetMethod("DeleteSelectedSubmission", flags).Invoke(editor, New Object() {Nothing, EventArgs.Empty})
+        Application.DoEvents()
+    End Sub
+
     ' The page for one manuscript under a storage root of the test's own,
     ' with the scripted network (none unless given) and a watcher that
     ' closes message boxes, answering Yes to the one titled answerYes. Any

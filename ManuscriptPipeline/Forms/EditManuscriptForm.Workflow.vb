@@ -59,7 +59,7 @@ Namespace Forms
                                                   If(journal Is Nothing, String.Empty, journal.SubmissionPortalUrl))
                 If dialog.ShowDialog(Me) <> DialogResult.OK OrElse dialog.CreatedSubmission Is Nothing Then Return returnToPacket
                 ' The target journal box is refreshed from the working copy below.
-                ApplyTypedFields()
+                Dim typed As TypedFieldsBefore = ApplyTypedFields()
                 Try
                     SubmissionPacketWorkflowService.RecordSubmissionForPacket(_workingManuscript, packet.Id, dialog.CreatedSubmission)
                 Catch ex As Exception When TypeOf ex Is InvalidOperationException OrElse
@@ -68,6 +68,7 @@ Namespace Forms
                     Return returnToPacket
                 End Try
                 RefreshLifecycleControls()
+                KeepTypedFields(typed)
                 RefreshSubmissionList()
                 Return New SubmissionWorkflowRequest With {
                     .Target = SubmissionWorkflowTarget.Submission,

@@ -612,13 +612,27 @@ Namespace Forms
         ' into the working copy, as Save does, before a window or a workflow
         ' edit that is handed the working copy or refreshes those boxes from
         ' it: otherwise the old value comes back into the box and Save writes
-        ' it. A workflow step that sets the target journal itself still does,
-        ' over what was typed. Only the working copy changes: it then differs
-        ' from the baseline, so the page still shows unsaved changes, and
-        ' Discard still returns to the saved manuscript. An empty title box is
-        ' left out, for Save to refuse, and a box that matches the working
-        ' copy once trimmed changes nothing.
-        Private Sub ApplyTypedFields()
+        ' it. After a workflow step, KeepTypedFields is given what this
+        ' returns. Only the working copy changes: it then differs from the
+        ' baseline, so the page still shows unsaved changes, and Discard
+        ' still returns to the saved manuscript. An empty title box is left
+        ' out, for Save to refuse, and a box that matches the working copy
+        ' once trimmed changes nothing.
+        Private Function ApplyTypedFields() As TypedFieldsBefore
+
+            Dim before As New TypedFieldsBefore With {
+                .TargetBefore = If(_workingManuscript.TargetJournal, String.Empty).Trim(),
+                .StageBefore = _workingManuscript.CurrentStage,
+                .PendingStage = cmbStage.SelectedItem
+            }
+
+            If _workingManuscript.Submissions IsNot Nothing Then
+                For Each submission As JournalSubmission In _workingManuscript.Submissions
+                    If submission IsNot Nothing Then
+                        before.Journals(submission.Id) = If(submission.JournalName, String.Empty).Trim()
+                    End If
+                Next
+            End If
 
             Dim titleText As String =
                 txtTitle.Text.Trim()
@@ -647,7 +661,129 @@ Namespace Forms
 
             End If
 
+            before.TypedTarget =
+                If(_workingManuscript.TargetJournal, String.Empty).Trim()
+
+            before.TypedTargetId =
+                _workingManuscript.TargetJournalId
+
+            Return before
+
+        End Function
+
+
+        ' The working copy's target journal and stage, the Current stage
+        ' chosen, and each submission's journal, before ApplyTypedFields.
+        Private NotInheritable Class TypedFieldsBefore
+            Friend TargetBefore As String
+            Friend TypedTarget As String
+            Friend TypedTargetId As Guid?
+            Friend StageBefore As PaperStage
+            Friend PendingStage As Object
+            Friend ReadOnly Journals As New Dictionary(Of Guid, String)()
+        End Class
+
+
+        ' After a workflow step and RefreshLifecycleControls: puts back what
+        ' was typed in Target journal and chosen in Current stage where the
+        ' step did not change them. A step that only puts the saved target
+        ' back, as re-applying an active submission or its decision does,
+        ' keeps the typed one, unless a submission was added or one's journal
+        ' changed; so does the removal of the last submission, unless the
+        ' typed journal is the removed one's. A target the step set itself,
+        ' and a Current stage it changed, win. Only the working copy and the
+        ' boxes change.
+        Private Sub KeepTypedFields(
+            before As TypedFieldsBefore,
+            Optional removed As JournalSubmission = Nothing,
+            Optional keepStage As Boolean = True
+        )
+
+            Dim target As String =
+                If(_workingManuscript.TargetJournal, String.Empty).Trim()
+
+            If Not String.Equals(target, before.TypedTarget, StringComparison.Ordinal) AndAlso
+               Not String.Equals(before.TypedTarget, before.TargetBefore, StringComparison.Ordinal) Then
+
+                Dim keep As Boolean = False
+
+                If String.Equals(target, before.TargetBefore, StringComparison.CurrentCultureIgnoreCase) Then
+
+                    keep =
+                        SubmissionJournalsKept(before)
+
+                ElseIf removed IsNot Nothing AndAlso
+                       target.Length = 0 AndAlso
+                       (_workingManuscript.Submissions Is Nothing OrElse _workingManuscript.Submissions.Count = 0) Then
+
+                    keep =
+                        Not String.Equals(
+                            before.TypedTarget,
+                            If(removed.JournalName, String.Empty).Trim(),
+                            StringComparison.CurrentCultureIgnoreCase
+                        )
+
+                End If
+
+                If keep Then
+
+                    _workingManuscript.TargetJournal =
+                        before.TypedTarget
+
+                    _workingManuscript.TargetJournalId =
+                        before.TypedTargetId
+
+                    txtTargetJournal.Text =
+                        before.TypedTarget
+
+                End If
+
+            End If
+
+            If keepStage AndAlso
+               before.PendingStage IsNot Nothing AndAlso
+               _workingManuscript.CurrentStage = before.StageBefore AndAlso
+               CType(before.PendingStage, PaperStage) <> _workingManuscript.CurrentStage Then
+
+                cmbStage.SelectedItem =
+                    before.PendingStage
+
+            End If
+
         End Sub
+
+
+        ' True when no submission was added and none has another journal.
+        Private Function SubmissionJournalsKept(
+            before As TypedFieldsBefore
+        ) As Boolean
+
+            If _workingManuscript.Submissions Is Nothing Then
+                Return True
+            End If
+
+            For Each submission As JournalSubmission In _workingManuscript.Submissions
+
+                If submission Is Nothing Then Continue For
+
+                Dim journalBefore As String = Nothing
+
+                If Not before.Journals.TryGetValue(submission.Id, journalBefore) OrElse
+                   Not String.Equals(
+                       journalBefore,
+                       If(submission.JournalName, String.Empty).Trim(),
+                       StringComparison.CurrentCultureIgnoreCase
+                   ) Then
+
+                    Return False
+
+                End If
+
+            Next
+
+            Return True
+
+        End Function
 
 
         Private Sub RefreshJournalNotes()
@@ -2507,7 +2643,8 @@ Namespace Forms
                 )
 
             ' The decision below refreshes the target journal box.
-            ApplyTypedFields()
+            Dim typed As TypedFieldsBefore =
+                ApplyTypedFields()
 
             If latestSubmission Is Nothing Then
 
@@ -2597,6 +2734,7 @@ Namespace Forms
             End If
 
             RefreshLifecycleControls()
+            KeepTypedFields(typed)
             RefreshSubmissionList()
             RefreshRevisionDeadlineDisplay()
 
@@ -3755,7 +3893,8 @@ Namespace Forms
 
                     ' A backdated submission leaves the target as it is,
                     ' and the box is refreshed below.
-                    ApplyTypedFields()
+                    Dim typed As TypedFieldsBefore =
+                        ApplyTypedFields()
 
                     _workingManuscript.Submissions.Add(
                         dialog.CreatedSubmission
@@ -3767,6 +3906,7 @@ Namespace Forms
                     )
 
                     RefreshLifecycleControls()
+                    KeepTypedFields(typed)
                     RefreshSubmissionList()
 
                     lstSubmissions.SelectedIndex =
@@ -3856,9 +3996,11 @@ Namespace Forms
                     Return
                 End Try
 
-                ' The reconcile below may keep the target; the box is
-                ' refreshed from the working copy either way.
-                ApplyTypedFields()
+                ' The reconcile below may set the target again from the
+                ' active submission; the box is refreshed from the working
+                ' copy either way.
+                Dim typed As TypedFieldsBefore =
+                    ApplyTypedFields()
 
                 For i As Integer = 0 To _workingManuscript.Submissions.Count - 1
 
@@ -3881,6 +4023,7 @@ Namespace Forms
                     )
 
                 RefreshLifecycleControls()
+                KeepTypedFields(typed)
                 RefreshSubmissionList()
 
                 For i As Integer = 0 To _displayedSubmissions.Count - 1
@@ -3958,9 +4101,11 @@ Namespace Forms
 
             End If
 
-            ' The removal clears only a target that is this submission's
-            ' journal; the box is refreshed from the working copy.
-            ApplyTypedFields()
+            ' The removal may set the target to the latest remaining
+            ' submission's journal, or clear it when none is left; the box
+            ' is refreshed from the working copy.
+            Dim typed As TypedFieldsBefore =
+                ApplyTypedFields()
 
             _workingManuscript.Submissions.Remove(
                 selected
@@ -3973,6 +4118,7 @@ Namespace Forms
                 )
 
             RefreshLifecycleControls()
+            KeepTypedFields(typed, removed:=selected)
             RefreshSubmissionList()
 
         End Sub
@@ -4434,11 +4580,17 @@ Namespace Forms
 
                 ' The stage workflow can refresh the target journal box
                 ' before it is read below, and this Save can still stop.
-                ApplyTypedFields()
+                Dim typed As TypedFieldsBefore =
+                    ApplyTypedFields()
 
-                If Not EnsureWorkflowForRequestedStage(
-                    newStage
-                ) Then
+                Dim completed As Boolean =
+                    EnsureWorkflowForRequestedStage(
+                        newStage
+                    )
+
+                KeepTypedFields(typed, keepStage:=False)
+
+                If Not completed Then
 
                     cmbStage.SelectedItem =
                         _workingManuscript.CurrentStage
