@@ -962,7 +962,7 @@ In seventeen of the eighteen closes an answered round trip is stamped after the 
 - **Backups and inspections keep the UI thread answering.**
   - Backups took 27–36 s, with round trips of at most 101 ms (#147: 41.5 s and 961 ms).
   - Inspections took 4.1–10.9 s, with at most 206 ms (#147: 885 ms).
-- **Outside the timed steps, setting the Board's stage filter held the UI thread longest.** Each of the eight times the stage case chose Submitted (the list opened, Down three times, Enter), round trips of 0.30–0.53 s came, two in a row in seven of the eight. Typing a Board search that matches nothing held it for 384 ms once. The in-process test has no row for either.
+- **Outside the timed steps, setting the Board's stage filter held the UI thread longest.** Each of the eight times the stage case chose Submitted (the list opened, Down three times, Enter), round trips of 0.30–0.53 s came, two in a row in seven of the eight. Typing a Board search that matches nothing held it for 384 ms once. The in-process test has no row for either; [#338](https://github.com/JUhalt/PaperRoute-Tracker/issues/338) tracks the stage filter for v1.1.
 - **OneDrive uploaded none of the 2,297 managed files in the 41 minutes after the first restore,** and made no conflict copies. No file was online-only at any check.
 
 The full record is in the v1.0 certification evidence: `E-results.md`, under E10, with every timed step in `E10-pc\E10-pc-analysis.csv`.
