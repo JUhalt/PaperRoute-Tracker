@@ -13,7 +13,9 @@ Imports ManuscriptPipeline.Services
 ' a temporary root. Everything is fictional. A run with the same size is the
 ' same library every time, so before and after measurements compare like
 ' with like. The example library (ExampleLibraryService) is the small case.
-Friend NotInheritable Class LargeLibraryFixture
+' Public, in PaperRoute.TestFixtures, so the WinForms tests and the new
+' interface's tests (v1.1) time the same library.
+Public NotInheritable Class LargeLibraryFixture
 
     Private Sub New()
     End Sub
@@ -68,7 +70,7 @@ Friend NotInheritable Class LargeLibraryFixture
 
 
     ' The library on disk, with the repositories that read it.
-    Friend NotInheritable Class SyntheticLibrary
+    Public NotInheritable Class SyntheticLibrary
 
         Public Property Name As String = String.Empty
         Public Property ManagedDirectory As String = String.Empty
