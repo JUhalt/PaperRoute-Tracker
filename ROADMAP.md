@@ -510,6 +510,8 @@ One cross-platform interface on Avalonia, whose GPU compositor brings the motion
 
 On November 14, 2026, the day 1.0 was released, the maintainer kept the order, v1.1 before v1.2, and set how v1.1 starts ([decisions](https://github.com/JUhalt/PaperRoute-Tracker/issues/160#issuecomment-6880580068)). The inventory and target map of [#161](https://github.com/JUhalt/PaperRoute-Tracker/issues/161) come first. The models and services then move into their own library, merged only after v1.0.1 is out, so the patch release does not carry the move. In December a one-week trial port of the Board, not merged, grounds the estimate, and the order is looked at again then. Windows and Linux come first; macOS follows as v1.1.x, since it needs Apple's developer programme and a Mac to test on.
 
+On November 14, 2026, the plan that #160 asks for was written: [Avalonia Migration Plan](docs/design/Avalonia-Migration-Plan.md), with its [inventory of Windows-only APIs](docs/design/Windows-Only-API-Inventory.md) in Models and Services, made by a checked-in script. It recommends a C# interface over the existing VB models and services, moved first into their own library; parity proved against the view catalog and #161's target map; per-platform release jobs and certification; and an estimate of about 43 to 77 weeks for Windows and Linux, to be rescaled by the December trial port. It is a proposal: nothing in it is decided until the maintainer signs it off on [#160](https://github.com/JUhalt/PaperRoute-Tracker/issues/160).
+
 Its issues are:
 - deciding and planning the Avalonia migration ([#160](https://github.com/JUhalt/PaperRoute-Tracker/issues/160));
 - composition-grade motion and effects ([#162](https://github.com/JUhalt/PaperRoute-Tracker/issues/162));
