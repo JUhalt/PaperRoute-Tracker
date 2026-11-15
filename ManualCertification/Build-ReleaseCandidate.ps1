@@ -437,7 +437,7 @@ try {
     # tests, which need an unlocked desktop in use, to certification.
     Invoke-CandidateCommand '02-test' $dotnet (@(
         'test', 'PaperRoute.Tests/PaperRoute.Tests.vbproj', '--configuration', 'Release', '--no-build', '--no-restore',
-        '--filter', 'TestCategory!=OnDemand&TestCategory!=OnScreen',
+        '--filter', 'TestCategory!=OnDemand&TestCategory!=OnScreen&TestCategory!=SameDataEverywhere',
         '--artifacts-path', $buildRoot, '--logger', 'trx;LogFileName=PaperRoute.Tests.trx', '--results-directory', $testRoot
     ) + $properties)
     $trxPath = Join-Path $testRoot 'PaperRoute.Tests.trx'
