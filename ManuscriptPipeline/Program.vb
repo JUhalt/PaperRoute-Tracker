@@ -48,7 +48,7 @@ Friend Module Program
         ' (#120): a crash anywhere in the process, and a faulted task nobody
         ' awaited, which gets a report only. After the example session is
         ' configured, so its reports go to the disposable session too.
-        Dim errorReports As New ErrorReportService()
+        Dim errorReports As New ErrorReportService(AddressOf UpdateService.CurrentVersionText)
 
         AddHandler AppDomain.CurrentDomain.UnhandledException,
             AddressOf errorReports.OnUnhandledException
