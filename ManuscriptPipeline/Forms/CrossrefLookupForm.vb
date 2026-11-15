@@ -874,6 +874,10 @@ Namespace Forms
             _authorLibraryChanged =
                 result.AuthorLibraryChanged
 
+            _titleApplied =
+                options.ApplyTitle AndAlso
+                Not String.IsNullOrWhiteSpace(_suggestion.Title)
+
             Me.DialogResult =
                 DialogResult.OK
 
@@ -885,6 +889,18 @@ Namespace Forms
         Public ReadOnly Property LibraryChanged As Boolean
             Get
                 Return _authorLibraryChanged
+            End Get
+        End Property
+
+
+        ' True when Apply Selected set the manuscript's title from Crossref,
+        ' even to the title it had: the manuscript page then shows it over a
+        ' typed one (#358).
+        Private _titleApplied As Boolean
+
+        Public ReadOnly Property TitleApplied As Boolean
+            Get
+                Return _titleApplied
             End Get
         End Property
 
