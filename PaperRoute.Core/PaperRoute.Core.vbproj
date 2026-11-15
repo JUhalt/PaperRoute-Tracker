@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <!-- The app's version, written here too: the manifests and the User-Agent read it from this assembly once the services move (v1.1). Keep these three equal to ManuscriptPipeline.vbproj, where the release workflow reads them. -->
-    <Version>1.0.1-rc.1</Version>
+    <Version>1.0.1</Version>
     <AssemblyVersion>1.0.1.0</AssemblyVersion>
     <FileVersion>1.0.1.0</FileVersion>
     <AssemblyName>PaperRoute.Core</AssemblyName>
