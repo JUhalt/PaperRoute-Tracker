@@ -2533,6 +2533,452 @@ Public Class ManuscriptPageTests
             End Sub)
     End Sub
 
+    ' Probe (v1.0.1, recovery draft): the people and affiliation a Crossref
+    ' lookup created wait in the page's author library until Save. When the
+    ' session ends before Save, the recovery draft (#123) holds only the
+    ' manuscript. The next start opens the draft as unsaved changes; the
+    ' Authors tab, and Save, must still have everyone the manuscript names.
+    ' Session one writes the draft as a shutdown does; its window is then
+    ' closed with No (which removes the draft it wrote) and the draft's bytes
+    ' are put back, as a session that ended without closing leaves them.
+    ' Session two is a fresh window on the same files.
+    <TestMethod>
+    Public Sub ARecoveredDraftKeepsThePeopleACrossrefLookupAddedBeforeTheSessionEnded()
+        RunOnStaThread(
+            Sub()
+                Dim network As New CrossrefWork("Example Institute")
+                Dim root As String = Path.Combine(Path.GetTempPath(), "PaperRoute-PageTests-" & Guid.NewGuid().ToString("N"))
+                Dim dataDirectory As String = Path.Combine(root, "data")
+                Dim draftPath As String = Path.Combine(dataDirectory, "recovery", RecoveryDraftStore.FileName)
+                Dim authorDirectory As String = Nothing
+                StorageEnvironment.RootOverride = Path.Combine(root, "storage")
+                OnlineAccess.ResetForTests()
+                OnlineAccess.InnerHandlerFactory = Function() network
+                Try
+                    Dim manuscript As Manuscript = Sample("Looked-up manuscript")
+                    manuscript.Metadata = New ManuscriptMetadata With {.Doi = CrossrefWork.Doi}
+                    Dim draftBytes As Byte()
+
+                    ' Session one: the lookup, then the session ends unsaved.
+                    Using first As New PageBoard()
+                        authorDirectory = first.AuthorDirectory
+                        Directory.CreateDirectory(authorDirectory)
+                        Call New AuthorLibraryRepository(authorDirectory).Save(New AuthorLibraryData())
+                        first.UseRepository(root)
+                        first.Prepare(manuscript)
+                        Assert.IsTrue(first.SaveNow(), "The library is on disk.")
+                        first.Open(manuscript)
+
+                        Using dialogs As New DialogWatcher()
+                            ApplyCrossrefAuthors(first.Editor)
+                            Assert.AreEqual(2, PageLibrary(first.Editor).Authors.Count, "The lookup added both people to the page's library.")
+                            Assert.IsTrue(first.WriteRecoveryDraft("Windows was shutting down"), "The draft is written.")
+                            CollectionAssert.AreEqual(New List(Of String)(), dialogs.Closed, "No message box opened.")
+                        End Using
+
+                        draftBytes = File.ReadAllBytes(draftPath)
+                        Assert.AreEqual(0, New AuthorLibraryRepository(authorDirectory).Load().Authors.Count, "The looked-up people never reached authors.json.")
+                        first.SetPrompt(Function(title) DialogResult.No)
+                        first.Close()
+                    End Using
+
+                    Directory.CreateDirectory(Path.GetDirectoryName(draftPath))
+                    File.WriteAllBytes(draftPath, draftBytes)
+
+                    ' Session two: the next start offers the draft; Yes, then Save.
+                    ' Its author library is the one session one left: empty. (The
+                    ' board removes its own author folder when disposed.)
+                    Using second As New PageBoard()
+                        authorDirectory = second.AuthorDirectory
+                        Directory.CreateDirectory(authorDirectory)
+                        Dim disk As New AuthorLibraryRepository(authorDirectory)
+                        disk.Save(New AuthorLibraryData())
+                        second.UseRepository(root)
+                        second.Prepare(New ManuscriptRepository(dataDirectory, Path.Combine(root, "library")).Load().ToArray())
+                        Dim authorsBefore As Byte() = File.ReadAllBytes(disk.DataFilePath)
+                        Dim manuscriptsBefore As Byte() = File.ReadAllBytes(Path.Combine(dataDirectory, "manuscripts.json"))
+                        Dim offered As Integer = 0
+                        second.recoveryDraftPrompt = Function(title)
+                                                         offered += 1
+                                                         Return DialogResult.Yes
+                                                     End Function
+                        Dim shown As List(Of String)
+
+                        Using dialogs As New DialogWatcher()
+                            GetType(Form1).GetMethod("OfferRecoveryDraft", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(second, Array.Empty(Of Object)())
+                            Application.DoEvents()
+                            Assert.AreEqual(1, offered, "The draft is offered once.")
+                            Assert.AreEqual("Manuscript", second.PageName, "Yes opens the manuscript page.")
+                            Assert.IsFalse(File.Exists(draftPath), "The draft file goes once it is opened.")
+                            CollectionAssert.AreEqual(authorsBefore, File.ReadAllBytes(disk.DataFilePath), "Recovery itself writes nothing to authors.json.")
+                            CollectionAssert.AreEqual(manuscriptsBefore, File.ReadAllBytes(Path.Combine(dataDirectory, "manuscripts.json")), "Recovery itself writes nothing to manuscripts.json.")
+
+                            Dim authorsList As ListBox = DirectCast(GetType(EditManuscriptForm).GetField("lstAuthors", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(second.Editor), ListBox)
+                            shown = authorsList.Items.Cast(Of Object)().Select(Function(item) authorsList.GetItemText(item)).ToList()
+
+                            second.PressCommandKey(Keys.Control Or Keys.S)
+                            Assert.AreEqual(1, second.SaveCount, "The page saved.")
+                            CollectionAssert.AreEqual(New List(Of String)(), dialogs.Closed, "No message box opened.")
+                        End Using
+
+                        Dim saved As Manuscript = New ManuscriptRepository(dataDirectory, Path.Combine(root, "library")).Load().Single()
+                        Assert.AreEqual(2, saved.Authors.Count, "The saved manuscript names both looked-up people.")
+                        Dim library As AuthorLibraryData = disk.Load()
+                        For Each link As ManuscriptAuthor In saved.Authors
+                            Assert.IsTrue(library.Authors.Any(Function(person) person.Id = link.AuthorId),
+                                "Every person the saved manuscript names is in authors.json. Missing id " & link.AuthorId.ToString() &
+                                "; on disk: " & library.Authors.Count.ToString() & " people. The Authors tab showed before Save: " & String.Join(" | ", shown))
+                            For Each affiliationId As Guid In link.AffiliationIds
+                                Assert.IsTrue(library.Affiliations.Any(Function(affiliation) affiliation.Id = affiliationId), "Every affiliation the saved manuscript names is in authors.json. Missing id " & affiliationId.ToString() & ".")
+                            Next
+                        Next
+                        Assert.IsFalse(shown.Any(Function(text) text.Contains("[Missing author record]")), "The recovered page names everyone: " & String.Join(" | ", shown))
+
+                        second.SetPrompt(Function(title) DialogResult.No)
+                        second.Close()
+                    End Using
+                Finally
+                    OnlineAccess.ResetForTests()
+                    StorageEnvironment.RootOverride = Nothing
+                    For Each folder As String In {root, authorDirectory}
+                        Try
+                            If folder IsNot Nothing Then Directory.Delete(folder, True)
+                        Catch
+                        End Try
+                    Next
+                End Try
+            End Sub)
+    End Sub
+
+    ' A recovered draft's people, then Discard (#361): neither file changes,
+    ' and the page holds only what is on disk with nothing left to save.
+    <TestMethod>
+    Public Sub DiscardAfterOpeningARecoveredDraftWritesNoneOfItsPeople()
+        WithRecoverySessions(
+            Sub(root)
+                Dim library As AuthorLibraryData = LookupThenSessionEnds(root, New AuthorLibraryData())
+                Dim left As AuthorLibraryData = RunRecoverySession(root, library, Nothing,
+                    Sub(board, disk)
+                        Dim authorsBefore As Byte() = File.ReadAllBytes(disk.DataFilePath)
+                        Dim manuscriptsBefore As Byte() = File.ReadAllBytes(ManuscriptsFile(root))
+                        Assert.AreEqual(1, OfferDraft(board, DialogResult.Yes), "The draft is offered once.")
+                        Assert.AreEqual(2, PageLibrary(board.Editor).Authors.Count, "The recovered page holds both people.")
+
+                        board.Discard()
+
+                        CollectionAssert.AreEqual(authorsBefore, File.ReadAllBytes(disk.DataFilePath), "authors.json is unchanged.")
+                        CollectionAssert.AreEqual(manuscriptsBefore, File.ReadAllBytes(ManuscriptsFile(root)), "manuscripts.json is unchanged.")
+                        Assert.AreEqual(0, PageLibrary(board.Editor).Authors.Count, "The page's library holds only what is on disk: no one.")
+                        Assert.AreEqual(0, PageLibrary(board.Editor).Affiliations.Count, "No affiliation either.")
+                        Assert.IsFalse(LibraryDirty(board.Editor), "Nothing is left to save in the library.")
+                        Assert.IsFalse(board.Editor.HasUnsavedChanges(), "Closing now has nothing to ask about.")
+                    End Sub)
+                Assert.AreEqual(0, left.Authors.Count, "No one reached authors.json.")
+            End Sub)
+    End Sub
+
+    ' No to the offer (#361): the draft goes, both files are byte-identical
+    ' and the page is not opened.
+    <TestMethod>
+    Public Sub NoToARecoveredDraftWithPeopleWritesNothing()
+        WithRecoverySessions(
+            Sub(root)
+                Dim library As AuthorLibraryData = LookupThenSessionEnds(root, New AuthorLibraryData())
+                RunRecoverySession(root, library, Nothing,
+                    Sub(board, disk)
+                        Dim authorsBefore As Byte() = File.ReadAllBytes(disk.DataFilePath)
+                        Dim manuscriptsBefore As Byte() = File.ReadAllBytes(ManuscriptsFile(root))
+
+                        Assert.AreEqual(1, OfferDraft(board, DialogResult.No), "The draft is offered once.")
+
+                        Assert.IsFalse(File.Exists(RecoveryDraftFile(root)), "No discards the draft.")
+                        Assert.AreEqual("Board", board.PageName, "The page is not opened.")
+                        CollectionAssert.AreEqual(authorsBefore, File.ReadAllBytes(disk.DataFilePath), "authors.json is unchanged.")
+                        CollectionAssert.AreEqual(manuscriptsBefore, File.ReadAllBytes(ManuscriptsFile(root)), "manuscripts.json is unchanged.")
+                    End Sub)
+            End Sub)
+    End Sub
+
+    ' A second session ends before Save too (#361): its draft carries the
+    ' people again, and a third session that opens it and saves writes them.
+    <TestMethod>
+    Public Sub ARecoveredDraftsPeopleSurviveASecondSessionEndingBeforeSave()
+        WithRecoverySessions(
+            Sub(root)
+                Dim library As AuthorLibraryData = LookupThenSessionEnds(root, New AuthorLibraryData())
+                library = RunRecoverySession(root, library, Nothing,
+                    Sub(board, disk)
+                        Assert.AreEqual(1, OfferDraft(board, DialogResult.Yes), "The draft is offered once.")
+                        Assert.IsTrue(board.WriteRecoveryDraft("Windows was shutting down"), "The second draft is written.")
+                        Dim again As RecoveryDraft = New RecoveryDraftStore(Path.Combine(root, "data")).Read()
+                        Assert.IsNotNull(again?.UnsavedLibrary, "The second draft carries the library records.")
+                        Assert.AreEqual(2, again.UnsavedLibrary.Authors.Count, "It carries both people.")
+                        Assert.AreEqual(1, again.UnsavedLibrary.Affiliations.Count, "It carries the affiliation.")
+                    End Sub)
+                Assert.AreEqual(0, library.Authors.Count, "Nothing reached authors.json in the second session.")
+                Assert.IsTrue(File.Exists(RecoveryDraftFile(root)), "The second session left its draft.")
+
+                RunRecoverySession(root, library, Nothing,
+                    Sub(board, disk)
+                        Assert.AreEqual(1, OfferDraft(board, DialogResult.Yes), "The second draft is offered once.")
+                        SavePage(board)
+                        AssertEveryoneIsOnDisk(SavedManuscript(root), disk)
+                        Assert.AreEqual(2, disk.Load().Authors.Count, "authors.json holds both people.")
+                        Assert.AreEqual(1, disk.Load().Affiliations.Count, "authors.json holds the affiliation.")
+                    End Sub)
+            End Sub)
+    End Sub
+
+    ' A person the draft carries is on disk by the next start under the same
+    ' id and another name (#361): the disk's record wins, on the Authors tab
+    ' and at Save, and no second record with that id is written.
+    <TestMethod>
+    Public Sub APersonAlreadyOnDiskUnderTheDraftsIdKeepsTheDiskRecord()
+        WithRecoverySessions(
+            Sub(root)
+                Dim library As AuthorLibraryData = LookupThenSessionEnds(root, New AuthorLibraryData())
+                Dim carried As AuthorRecord = New RecoveryDraftStore(Path.Combine(root, "data")).Read().UnsavedLibrary.Authors(0)
+                Dim onDisk As New AuthorRecord With {.Id = carried.Id, .GivenName = "Disk", .FamilyName = "Kept"}
+                library.Authors.Add(onDisk)
+
+                RunRecoverySession(root, library, Nothing,
+                    Sub(board, disk)
+                        Assert.AreEqual(1, OfferDraft(board, DialogResult.Yes), "The draft is offered once.")
+                        Dim shown As List(Of String) = AuthorsShown(board.Editor)
+                        Assert.IsTrue(shown.Any(Function(text) text.Contains(onDisk.DisplayName)), "The Authors tab shows the disk's name: " & String.Join(" | ", shown))
+                        Assert.IsFalse(shown.Any(Function(text) text.Contains(carried.DisplayName)), "The draft's name for that id is not shown: " & String.Join(" | ", shown))
+                        Assert.AreEqual(1, PageLibrary(board.Editor).Authors.Where(Function(person) person.Id = carried.Id).Count(), "The page holds one record with that id.")
+
+                        SavePage(board)
+                        Dim saved As AuthorLibraryData = disk.Load()
+                        Assert.AreEqual(2, saved.Authors.Count, "authors.json holds exactly the two people.")
+                        Assert.AreEqual("Kept", saved.Authors.Single(Function(person) person.Id = carried.Id).FamilyName, "The record with that id keeps the disk's name.")
+                        AssertEveryoneIsOnDisk(SavedManuscript(root), disk)
+                    End Sub)
+            End Sub)
+    End Sub
+
+    ' Authors & Affiliations after a recovered draft is opened (#361, #354):
+    ' its reload keeps the draft's people as the page's own, and Save
+    ' writes them.
+    <TestMethod>
+    Public Sub ARecoveredDraftsPeopleSurviveManageLibraryAndAreSaved()
+        WithRecoverySessions(
+            Sub(root)
+                Dim library As AuthorLibraryData = LookupThenSessionEnds(root, New AuthorLibraryData())
+                RunRecoverySession(root, library, Nothing,
+                    Sub(board, disk)
+                        Assert.AreEqual(1, OfferDraft(board, DialogResult.Yes), "The draft is offered once.")
+                        CloseManageLibrary(board.Editor)
+                        Assert.AreEqual(2, PageLibrary(board.Editor).Authors.Count, "Both people survive the reload.")
+                        Assert.AreEqual(1, PageLibrary(board.Editor).Affiliations.Count, "The affiliation survives the reload.")
+
+                        SavePage(board)
+                        AssertEveryoneIsOnDisk(SavedManuscript(root), disk)
+                    End Sub)
+            End Sub)
+    End Sub
+
+    ' The page is reused (#361): a recovered draft opened and discarded,
+    ' then another manuscript edited; that manuscript's draft carries no
+    ' library records and names none of the first draft's people.
+    <TestMethod>
+    Public Sub AnotherManuscriptsDraftAfterADiscardedRecoveryCarriesNoneOfItsPeople()
+        WithRecoverySessions(
+            Sub(root)
+                Dim library As AuthorLibraryData = LookupThenSessionEnds(root, New AuthorLibraryData(), others:={Sample("Second manuscript")})
+                RunRecoverySession(root, library, Nothing,
+                    Sub(board, disk)
+                        Assert.AreEqual(1, OfferDraft(board, DialogResult.Yes), "The draft is offered once.")
+                        board.Discard()
+                        board.Open(board.Library.Single(Function(item) item.Title = "Second manuscript"))
+                        board.Field("Title").Text = "Second manuscript, edited"
+
+                        Assert.IsTrue(board.WriteRecoveryDraft("Windows was shutting down"), "The draft is written.")
+
+                        Dim json As String = File.ReadAllText(RecoveryDraftFile(root))
+                        Assert.IsFalse(json.Contains("UnsavedLibrary"), "The draft carries no library records.")
+                        Assert.IsFalse(json.Contains("""Lookup""") OrElse json.Contains("""Crossref"""), "The draft names none of the first draft's people.")
+                        StringAssert.Contains(json, "Second manuscript, edited")
+                        Dim draft As RecoveryDraft = New RecoveryDraftStore(Path.Combine(root, "data")).Read()
+                        Assert.IsNull(draft.UnsavedLibrary, "The draft reads with no library records.")
+                        Assert.AreEqual(0, draft.Manuscript.Authors.Count, "The second manuscript names no one.")
+                    End Sub)
+            End Sub)
+    End Sub
+
+    ' With a person already on disk (#361), the draft carries only what the
+    ' lookup added: the two new people and the new affiliation.
+    <TestMethod>
+    Public Sub ADraftCarriesOnlyThePeopleThePageAdded()
+        WithRecoverySessions(
+            Sub(root)
+                Dim seed As New AuthorLibraryData()
+                Dim existing As New AuthorRecord With {.GivenName = "Disk", .FamilyName = "Person"}
+                Dim existingAffiliation As New AffiliationRecord With {.Institution = "Disk University", .Country = "USA"}
+                seed.Authors.Add(existing)
+                seed.Affiliations.Add(existingAffiliation)
+
+                LookupThenSessionEnds(root, seed)
+
+                Dim draft As RecoveryDraft = New RecoveryDraftStore(Path.Combine(root, "data")).Read()
+                Assert.IsNotNull(draft?.UnsavedLibrary, "The draft carries library records.")
+                CollectionAssert.AreEquivalent(New List(Of String) From {"Lookup", "Crossref"}, draft.UnsavedLibrary.Authors.Select(Function(person) person.FamilyName).ToList(), "Only the two looked-up people.")
+                Assert.AreEqual(1, draft.UnsavedLibrary.Affiliations.Count, "Only the looked-up affiliation.")
+                Assert.AreEqual("Example Institute", draft.UnsavedLibrary.Affiliations(0).Institution)
+                Assert.IsFalse(draft.UnsavedLibrary.Authors.Any(Function(person) person.Id = existing.Id), "Not the person on disk.")
+                Assert.IsFalse(draft.UnsavedLibrary.Affiliations.Any(Function(affiliation) affiliation.Id = existingAffiliation.Id), "Not the affiliation on disk.")
+            End Sub)
+    End Sub
+
+    ' A tag colour chosen on the page before the session ended (#361) is
+    ' saved after recovery and Save.
+    <TestMethod>
+    Public Sub ATagColourChosenBeforeTheSessionEndedIsSavedAfterRecovery()
+        WithRecoverySessions(
+            Sub(root)
+                Dim manuscript As Manuscript = Sample("Tagged manuscript")
+                manuscript.Tags = New List(Of String) From {"teaching"}
+                Dim library As AuthorLibraryData = RunRecoverySession(root, New AuthorLibraryData(), {manuscript},
+                    Sub(board, disk)
+                        board.Open(manuscript)
+                        ChooseTagColour(board.Editor, "teaching", TagPalette.Violet)
+                        Assert.IsTrue(board.WriteRecoveryDraft("Windows was shutting down"), "The draft is written.")
+                    End Sub)
+                Assert.AreEqual(0, library.TagColors.Count, "The colour never reached authors.json.")
+
+                RunRecoverySession(root, library, Nothing,
+                    Sub(board, disk)
+                        Assert.AreEqual(1, OfferDraft(board, DialogResult.Yes), "The draft is offered once.")
+                        SavePage(board)
+                        Dim saved As TagColor = disk.Load().TagColors.SingleOrDefault(Function(entry) entry.Tag = "teaching")
+                        Assert.IsNotNull(saved, "The tag's colour is saved.")
+                        Assert.AreEqual(TagPalette.Violet, saved.Color, "The colour chosen before the session ended is saved.")
+                    End Sub)
+            End Sub)
+    End Sub
+
+    ' Sessions of the main window on files of the test's own under root,
+    ' with Crossref answered by the scripted work (#361).
+    Private Shared Sub WithRecoverySessions(steps As Action(Of String))
+        RunOnStaThread(
+            Sub()
+                Dim network As New CrossrefWork("Example Institute")
+                Dim root As String = Path.Combine(Path.GetTempPath(), "PaperRoute-PageTests-" & Guid.NewGuid().ToString("N"))
+                StorageEnvironment.RootOverride = Path.Combine(root, "storage")
+                OnlineAccess.ResetForTests()
+                OnlineAccess.InnerHandlerFactory = Function() network
+                Try
+                    steps(root)
+                Finally
+                    OnlineAccess.ResetForTests()
+                    StorageEnvironment.RootOverride = Nothing
+                    Try
+                        Directory.Delete(root, True)
+                    Catch
+                    End Try
+                End Try
+            End Sub)
+    End Sub
+
+    ' One session of the main window on the files under root. Its author
+    ' library starts as the one given; its manuscripts are those given,
+    ' saved first, or else what manuscripts.json holds. The steps run with
+    ' no message box allowed. A draft on disk when they end is put back
+    ' after the window closes (its close removes a draft it wrote), as a
+    ' session that ended without closing leaves it. Returns the author
+    ' library on disk as the session left it.
+    Private Shared Function RunRecoverySession(root As String, library As AuthorLibraryData, records As Manuscript(), steps As Action(Of PageBoard, AuthorLibraryRepository)) As AuthorLibraryData
+        Dim dataDirectory As String = Path.Combine(root, "data")
+        Dim draftPath As String = RecoveryDraftFile(root)
+        Dim draftBytes As Byte() = Nothing
+        Dim left As AuthorLibraryData
+        Using board As New PageBoard()
+            Directory.CreateDirectory(board.AuthorDirectory)
+            Dim disk As New AuthorLibraryRepository(board.AuthorDirectory)
+            disk.Save(library)
+            board.UseRepository(root)
+            If records IsNot Nothing Then
+                board.Prepare(records)
+                Assert.IsTrue(board.SaveNow(), "The library is on disk.")
+            Else
+                board.Prepare(New ManuscriptRepository(dataDirectory, Path.Combine(root, "library")).Load().ToArray())
+            End If
+
+            Using dialogs As New DialogWatcher()
+                steps(board, disk)
+                CollectionAssert.AreEqual(New List(Of String)(), dialogs.Closed, "No message box opened.")
+            End Using
+
+            If File.Exists(draftPath) Then draftBytes = File.ReadAllBytes(draftPath)
+            left = disk.Load()
+            board.SetPrompt(Function(title) DialogResult.No)
+            board.Close()
+        End Using
+        If draftBytes IsNot Nothing AndAlso Not File.Exists(draftPath) Then
+            Directory.CreateDirectory(Path.GetDirectoryName(draftPath))
+            File.WriteAllBytes(draftPath, draftBytes)
+        End If
+        Return left
+    End Function
+
+    ' Session one: a manuscript with the scripted DOI (and any others) is
+    ' saved, the page looks its people up, and the session ends unsaved
+    ' with a recovery draft. Returns the author library it left on disk.
+    Private Shared Function LookupThenSessionEnds(root As String, seed As AuthorLibraryData, Optional others As Manuscript() = Nothing) As AuthorLibraryData
+        Dim manuscript As Manuscript = Sample("Looked-up manuscript")
+        manuscript.Metadata = New ManuscriptMetadata With {.Doi = CrossrefWork.Doi}
+        Dim records As New List(Of Manuscript) From {manuscript}
+        If others IsNot Nothing Then records.AddRange(others)
+        Dim seededPeople As Integer = seed.Authors.Count
+        Dim left As AuthorLibraryData = RunRecoverySession(root, seed, records.ToArray(),
+            Sub(board, disk)
+                board.Open(manuscript)
+                ApplyCrossrefAuthors(board.Editor)
+                Assert.AreEqual(seededPeople + 2, PageLibrary(board.Editor).Authors.Count, "The lookup added both people to the page's library.")
+                Assert.IsTrue(board.WriteRecoveryDraft("Windows was shutting down"), "The draft is written.")
+            End Sub)
+        Assert.AreEqual(seededPeople, left.Authors.Count, "The looked-up people never reached authors.json.")
+        Assert.IsTrue(File.Exists(RecoveryDraftFile(root)), "The draft is on disk for the next start.")
+        Return left
+    End Function
+
+    ' The next start's offer of the draft on disk, answered as given.
+    ' Returns how many times it asked.
+    Private Shared Function OfferDraft(board As PageBoard, answer As DialogResult) As Integer
+        Dim offered As Integer = 0
+        board.recoveryDraftPrompt = Function(title)
+                                        offered += 1
+                                        Return answer
+                                    End Function
+        GetType(Form1).GetMethod("OfferRecoveryDraft", BindingFlags.Instance Or BindingFlags.NonPublic).Invoke(board, Array.Empty(Of Object)())
+        Application.DoEvents()
+        Return offered
+    End Function
+
+    Private Shared Function RecoveryDraftFile(root As String) As String
+        Return Path.Combine(root, "data", "recovery", RecoveryDraftStore.FileName)
+    End Function
+
+    Private Shared Function ManuscriptsFile(root As String) As String
+        Return Path.Combine(root, "data", "manuscripts.json")
+    End Function
+
+    ' The looked-up manuscript as manuscripts.json holds it.
+    Private Shared Function SavedManuscript(root As String) As Manuscript
+        Return New ManuscriptRepository(Path.Combine(root, "data"), Path.Combine(root, "library")).Load().Single(Function(item) item.Title = "Looked-up manuscript")
+    End Function
+
+    ' The Authors tab's rows as shown.
+    Private Shared Function AuthorsShown(editor As EditManuscriptForm) As List(Of String)
+        Dim authorsList As ListBox = DirectCast(GetType(EditManuscriptForm).GetField("lstAuthors", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(editor), ListBox)
+        Return authorsList.Items.Cast(Of Object)().Select(Function(item) authorsList.GetItemText(item)).ToList()
+    End Function
+
+    Private Shared Function LibraryDirty(editor As EditManuscriptForm) As Boolean
+        Return CBool(GetType(EditManuscriptForm).GetProperty("_authorLibraryDirty", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(editor))
+    End Function
+
     ' The page shows a manuscript with the scripted DOI; DOI & Crossref
     ' Metadata has added two new people to it and to the page's author
     ' library (the second with a new affiliation), and nothing is saved.

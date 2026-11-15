@@ -363,31 +363,60 @@ Namespace Forms
 
         ' Loads a manuscript: a working copy of it, or of the recovered draft
         ' given (#123), the library's records, and the reusable author
-        ' library read afresh, as a form built for it would. Whatever the
-        ' manuscript before left on the form goes first, and the form shows
-        ' its Overview from the top with nothing to undo. With deferParts the
-        ' Versions tab and the selected submission's details wait for
-        ' EnsureDeferredParts, which the page calls once it has painted, or
-        ' which anything that needs them calls first.
+        ' library read afresh, as a form built for it would, with the
+        ' recovered draft's own unsaved library records put in (#361).
+        ' Whatever the manuscript before left on the form goes first, and the
+        ' form shows its Overview from the top with nothing to undo. With
+        ' deferParts the Versions tab and the selected submission's details
+        ' wait for EnsureDeferredParts, which the page calls once it has
+        ' painted, or which anything that needs them calls first.
         Friend Sub LoadRecord(
             manuscript As Manuscript,
             allManuscripts As IEnumerable(Of Manuscript),
             Optional workingCopy As Manuscript = Nothing,
-            Optional deferParts As Boolean = False
+            Optional deferParts As Boolean = False,
+            Optional recoveredLibrary As RecoveryDraftLibrary = Nothing
         )
 
+            Dim library As AuthorLibraryData =
+                _authorRepository.Load()
+
+            ' The people and affiliations on disk, taken from the library as
+            ' read and before a draft's records go in, so those stay the
+            ' page's own until Save writes them.
+            Dim authorIds As New HashSet(Of Guid)(
+                If(library.Authors, New List(Of AuthorRecord)()).Where(Function(item) item IsNot Nothing).Select(Function(item) item.Id)
+            )
+
+            Dim affiliationIds As New HashSet(Of Guid)(
+                If(library.Affiliations, New List(Of AffiliationRecord)()).Where(Function(item) item IsNot Nothing).Select(Function(item) item.Id)
+            )
+
+            ' A draft's library records go in only with the draft's working copy.
+            Dim carried As Boolean =
+                workingCopy IsNot Nothing AndAlso
+                CarryRecoveredRecords(
+                    library,
+                    recoveredLibrary,
+                    authorIds,
+                    affiliationIds
+                )
+
+            ' The id sets are set here rather than read back from the library
+            ' after Bind: Bind shows the library and adds nothing to it.
             Bind(
                 New RecordState With {
                     .Original = manuscript,
                     .Working = CloneManuscript(If(workingCopy, manuscript)),
                     .All = If(allManuscripts Is Nothing, New List(Of Manuscript) From {manuscript}, allManuscripts.ToList()),
                     .Live = TryCast(allManuscripts, List(Of Manuscript)),
-                    .AuthorLibrary = _authorRepository.Load(),
+                    .AuthorLibrary = library,
+                    .AuthorLibraryDirty = carried,
+                    .AuthorIdsOnDisk = authorIds,
+                    .AffiliationIdsOnDisk = affiliationIds,
                     .PartsDeferred = deferParts
                 },
                 recovered:=workingCopy IsNot Nothing)
-
-            RememberAuthorLibraryOnDisk()
 
         End Sub
 
@@ -2910,6 +2939,113 @@ Namespace Forms
                 )
 
         End Sub
+
+
+        ' What the page added to the author library and has not saved, for a
+        ' recovery draft (#361); Nothing while the library is unchanged. The
+        ' people and affiliations are those ReloadAuthorLibrary carries over
+        ' (#354): the ones not on disk when the library was last read or
+        ' saved. The tag colours go too, as ReloadAuthorLibrary carries them.
+        Friend Function RecoveryLibrary() As RecoveryDraftLibrary
+
+            If Not _authorLibraryDirty OrElse _authorLibrary Is Nothing Then
+                Return Nothing
+            End If
+
+            Return New RecoveryDraftLibrary With {
+                .Authors =
+                    If(_authorLibrary.Authors, New List(Of AuthorRecord)()).
+                        Where(Function(item) item IsNot Nothing AndAlso Not _record.AuthorIdsOnDisk.Contains(item.Id)).
+                        ToList(),
+                .Affiliations =
+                    If(_authorLibrary.Affiliations, New List(Of AffiliationRecord)()).
+                        Where(Function(item) item IsNot Nothing AndAlso Not _record.AffiliationIdsOnDisk.Contains(item.Id)).
+                        ToList(),
+                .TagColors =
+                    If(_authorLibrary.TagColors, New List(Of TagColor)()).
+                        Where(Function(item) item IsNot Nothing).
+                        ToList()
+            }
+
+        End Function
+
+
+        ' Puts a recovered draft's records into the library just read
+        ' (#361), leaving out any that is Nothing, has no id, is on disk
+        ' already (the disk's record wins) or repeats one put in. The tag
+        ' colours are set over the disk's, as ReloadAuthorLibrary sets them.
+        ' True when the draft carried a library at all. The id sets are not
+        ' changed: the records put in stay the page's own until Save.
+        Private Shared Function CarryRecoveredRecords(
+            library As AuthorLibraryData,
+            recovered As RecoveryDraftLibrary,
+            authorIds As HashSet(Of Guid),
+            affiliationIds As HashSet(Of Guid)
+        ) As Boolean
+
+            If recovered Is Nothing Then
+                Return False
+            End If
+
+            If library.Authors Is Nothing Then
+                library.Authors = New List(Of AuthorRecord)()
+            End If
+
+            If library.Affiliations Is Nothing Then
+                library.Affiliations = New List(Of AffiliationRecord)()
+            End If
+
+            Dim addedAuthors As New HashSet(Of Guid)()
+
+            For Each author As AuthorRecord In If(recovered.Authors, New List(Of AuthorRecord)())
+
+                If author IsNot Nothing AndAlso
+                   author.Id <> Guid.Empty AndAlso
+                   Not authorIds.Contains(author.Id) AndAlso
+                   addedAuthors.Add(author.Id) Then
+
+                    library.Authors.Add(
+                        author
+                    )
+
+                End If
+
+            Next
+
+            Dim addedAffiliations As New HashSet(Of Guid)()
+
+            For Each affiliation As AffiliationRecord In If(recovered.Affiliations, New List(Of AffiliationRecord)())
+
+                If affiliation IsNot Nothing AndAlso
+                   affiliation.Id <> Guid.Empty AndAlso
+                   Not affiliationIds.Contains(affiliation.Id) AndAlso
+                   addedAffiliations.Add(affiliation.Id) Then
+
+                    library.Affiliations.Add(
+                        affiliation
+                    )
+
+                End If
+
+            Next
+
+            For Each entry As TagColor In If(recovered.TagColors, New List(Of TagColor)())
+
+                If entry IsNot Nothing Then
+
+                    WorkTypeService.SetColor(
+                        library,
+                        entry.Tag,
+                        entry.Color
+                    )
+
+                End If
+
+            Next
+
+            Return True
+
+        End Function
 
 
         Private Sub ManageAuthorLibrary(

@@ -4,6 +4,8 @@ Imports System.Drawing
 Imports System.IO
 Imports System.Linq
 Imports System.Reflection
+Imports System.Text.Json
+Imports System.Text.Json.Serialization
 Imports System.Windows.Forms
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
 Imports ManuscriptPipeline
@@ -394,6 +396,223 @@ Public Class RecoveryDraftTests
     End Sub
 
 
+    ' A draft's library records with one id twice, one with no id and one
+    ' missing (#361): opening it adds the one person once, and Save writes
+    ' only that person.
+    <TestMethod>
+    Public Sub ADraftsRepeatedEmptyAndMissingPeopleAddOnlyOneRecord()
+        Dim person As New AuthorRecord With {.GivenName = "Carried", .FamilyName = "Person"}
+        Dim repeated As New AuthorRecord With {.Id = person.Id, .GivenName = "Carried", .FamilyName = "Twice"}
+        Dim noId As New AuthorRecord With {.Id = Guid.Empty, .GivenName = "No", .FamilyName = "Id"}
+        LeaveADraft("Edited before the crash", New RecoveryDraftLibrary With {.Authors = New List(Of AuthorRecord) From {person, repeated, noId, Nothing}})
+        Assert.AreEqual(4, New RecoveryDraftStore(_dataDirectory).Read().UnsavedLibrary.Authors.Count, "The draft holds all four entries.")
+
+        RunOnStaThread(
+            Sub()
+                Using board As New DraftBoard(_dataDirectory, _managedDirectory)
+                    board.Prepare()
+                    board.SetDraftPrompt(Function(title) DialogResult.Yes)
+                    board.Offer()
+
+                    Assert.AreEqual("Manuscript", board.PageName, "Accepting opens the manuscript page.")
+                    Dim people As List(Of AuthorRecord) = PageLibrary(board.Editor).Authors
+                    Assert.AreEqual(1, people.Count, "One record is added.")
+                    Assert.AreEqual(person.Id, people(0).Id)
+                    Assert.AreEqual("Person", people(0).FamilyName, "The first record with the id is the one added.")
+                    Assert.IsTrue(LibraryDirty(board.Editor), "The added record waits for Save.")
+
+                    board.PressCommandKey(Keys.Control Or Keys.S)
+                    Assert.IsFalse(board.Editor.HasUnsavedChanges())
+                    board.Close()
+                End Using
+            End Sub)
+
+        Dim saved As AuthorLibraryData = AuthorStore.Load()
+        Assert.AreEqual(1, saved.Authors.Count, "Save writes the one person.")
+        Assert.AreEqual(person.Id, saved.Authors(0).Id)
+    End Sub
+
+
+    ' A page that changed nothing in the author library writes a draft with
+    ' exactly v1.0.0's four keys (#361).
+    <TestMethod>
+    Public Sub ADraftWithoutLibraryChangesHasTheKeysV100Wrote()
+        RunOnStaThread(
+            Sub()
+                Using board As New DraftBoard(_dataDirectory, _managedDirectory)
+                    board.Prepare()
+                    board.Open(board.Library(0))
+                    board.Field("Title").Text = "Edited before the shutdown"
+                    Assert.IsTrue(board.WriteDraft("Windows was shutting down"), "The draft is written.")
+
+                    Dim json As String = File.ReadAllText(DraftPath)
+                    Assert.IsFalse(json.Contains("UnsavedLibrary"), "No library records are written.")
+                    Using document As JsonDocument = JsonDocument.Parse(json)
+                        CollectionAssert.AreEqual(
+                            New List(Of String) From {"ManuscriptId", "WrittenAtUtc", "Reason", "Manuscript"},
+                            document.RootElement.EnumerateObject().Select(Function(item) item.Name).ToList(),
+                            "The draft has v1.0.0's keys and no others.")
+                    End Using
+
+                    board.SetPrompt(Function(title) DialogResult.No)
+                    board.Close()
+                End Using
+            End Sub)
+    End Sub
+
+
+    ' The library records survive the store's Write and Read (#361), the
+    ' ORCID check time in UTC included.
+    <TestMethod>
+    Public Sub ADraftsLibraryRecordsSurviveWriteAndRead()
+        Dim checkedAt As New DateTime(2026, 11, 1, 12, 34, 56, DateTimeKind.Utc)
+        Dim affiliation As New AffiliationRecord With {.Institution = "Example Institute", .Department = "Physics", .City = "Springfield", .Region = "IL", .Country = "USA", .Notes = "Lab"}
+        Dim person As New AuthorRecord With {
+            .GivenName = "Ada", .MiddleName = "B", .FamilyName = "Lookup", .Suffix = "Jr", .DisplayNameOverride = "A. Lookup",
+            .Orcid = "0000-0002-1825-0097", .OrcidLastCheckedUtc = checkedAt, .Notes = "Found by Crossref"}
+        LeaveADraft("Edited", New RecoveryDraftLibrary With {
+            .Authors = New List(Of AuthorRecord) From {person},
+            .Affiliations = New List(Of AffiliationRecord) From {affiliation},
+            .TagColors = New List(Of TagColor) From {New TagColor With {.Tag = "teaching", .Color = TagPalette.Violet}}})
+
+        Dim read As RecoveryDraftLibrary = New RecoveryDraftStore(_dataDirectory).Read().UnsavedLibrary
+
+        Assert.IsNotNull(read)
+        Dim author As AuthorRecord = read.Authors.Single()
+        Assert.AreEqual(person.Id, author.Id)
+        Assert.AreEqual("Ada", author.GivenName)
+        Assert.AreEqual("B", author.MiddleName)
+        Assert.AreEqual("Lookup", author.FamilyName)
+        Assert.AreEqual("Jr", author.Suffix)
+        Assert.AreEqual("A. Lookup", author.DisplayNameOverride)
+        Assert.AreEqual("0000-0002-1825-0097", author.Orcid)
+        Assert.AreEqual(checkedAt, author.OrcidLastCheckedUtc.Value, "The check time is kept.")
+        Assert.AreEqual(DateTimeKind.Utc, author.OrcidLastCheckedUtc.Value.Kind, "The check time stays in UTC.")
+        Assert.AreEqual("Found by Crossref", author.Notes)
+        Dim place As AffiliationRecord = read.Affiliations.Single()
+        Assert.AreEqual(affiliation.Id, place.Id)
+        Assert.AreEqual("Example Institute", place.Institution)
+        Assert.AreEqual("Physics", place.Department)
+        Assert.AreEqual("Springfield", place.City)
+        Assert.AreEqual("IL", place.Region)
+        Assert.AreEqual("USA", place.Country)
+        Assert.AreEqual("Lab", place.Notes)
+        Dim colour As TagColor = read.TagColors.Single()
+        Assert.AreEqual("teaching", colour.Tag)
+        Assert.AreEqual(TagPalette.Violet, colour.Color)
+    End Sub
+
+
+    ' A draft as v1.0.0 wrote it (#361): written here through v1.0.0's own
+    ' four-property class and options. It reads with no library records,
+    ' opens, and Save leaves authors.json byte-identical.
+    <TestMethod>
+    Public Sub AV100DraftOpensAndSaveLeavesTheAuthorLibraryAlone()
+        Dim seed As New AuthorLibraryData()
+        seed.Authors.Add(New AuthorRecord With {.GivenName = "Disk", .FamilyName = "Person"})
+        AuthorStore.Save(seed)
+        Dim authorsBefore As Byte() = File.ReadAllBytes(AuthorStore.DataFilePath)
+
+        Dim edited As Manuscript = New ManuscriptRepository(_dataDirectory, _managedDirectory).Load().Single()
+        edited.Title = "Edited under v1.0.0"
+        Directory.CreateDirectory(Path.GetDirectoryName(DraftPath))
+        Using stream As New FileStream(DraftPath, FileMode.Create, FileAccess.Write)
+            CalendarDateJson.Write(
+                stream,
+                JsonSerializer.Serialize(
+                    New V100RecoveryDraft With {.ManuscriptId = edited.Id, .WrittenAtUtc = DateTime.UtcNow, .Reason = "Windows was shutting down", .Manuscript = edited},
+                    V100Options()))
+        End Using
+
+        Dim read As RecoveryDraft = New RecoveryDraftStore(_dataDirectory).Read()
+        Assert.IsNotNull(read, "The v1.0.0 draft reads.")
+        Assert.IsNull(read.UnsavedLibrary, "It carries no library records.")
+
+        RunOnStaThread(
+            Sub()
+                Using board As New DraftBoard(_dataDirectory, _managedDirectory)
+                    board.Prepare()
+                    board.SetDraftPrompt(Function(title) DialogResult.Yes)
+                    board.Offer()
+
+                    Assert.AreEqual("Edited under v1.0.0", board.Field("Title").Text, "The recovered copy opens.")
+                    Assert.AreEqual(1, PageLibrary(board.Editor).Authors.Count, "The page's library is the one on disk.")
+                    Assert.IsFalse(LibraryDirty(board.Editor), "Nothing in the library waits for Save.")
+
+                    board.PressCommandKey(Keys.Control Or Keys.S)
+                    Assert.IsFalse(board.Editor.HasUnsavedChanges())
+                    board.Close()
+                End Using
+            End Sub)
+
+        Assert.AreEqual("Edited under v1.0.0", New ManuscriptRepository(_dataDirectory, _managedDirectory).Load().Single().Title, "Save writes the recovered changes.")
+        CollectionAssert.AreEqual(authorsBefore, File.ReadAllBytes(AuthorStore.DataFilePath), "authors.json is byte-identical.")
+    End Sub
+
+
+    ' Library records whose lists are JSON null (#361), as a hand-edited
+    ' file could hold: the draft reads and opens without an error and adds
+    ' nothing.
+    <TestMethod>
+    Public Sub ADraftWithNullLibraryListsOpensAndAddsNothing()
+        Dim seed As New AuthorLibraryData()
+        seed.Authors.Add(New AuthorRecord With {.GivenName = "Disk", .FamilyName = "Person"})
+        seed.Affiliations.Add(New AffiliationRecord With {.Institution = "Disk University"})
+        AuthorStore.Save(seed)
+        LeaveADraft("Edited before the crash")
+        Dim json As String = File.ReadAllText(DraftPath)
+        Dim opening As Integer = json.IndexOf("{"c)
+        File.WriteAllText(DraftPath, json.Substring(0, opening + 1) & """UnsavedLibrary"": {""Authors"": null, ""Affiliations"": null, ""TagColors"": null}," & json.Substring(opening + 1))
+
+        Dim read As RecoveryDraft = New RecoveryDraftStore(_dataDirectory).Read()
+        Assert.IsNotNull(read?.UnsavedLibrary, "The draft reads with its library records.")
+        Assert.IsNull(read.UnsavedLibrary.Authors, "The lists are null as written.")
+
+        RunOnStaThread(
+            Sub()
+                Using board As New DraftBoard(_dataDirectory, _managedDirectory)
+                    board.Prepare()
+                    board.SetDraftPrompt(Function(title) DialogResult.Yes)
+                    board.Offer()
+
+                    Assert.AreEqual("Manuscript", board.PageName, "Accepting opens the manuscript page.")
+                    Assert.AreEqual(1, PageLibrary(board.Editor).Authors.Count, "No person is added.")
+                    Assert.AreEqual(1, PageLibrary(board.Editor).Affiliations.Count, "No affiliation is added.")
+
+                    board.PressCommandKey(Keys.Control Or Keys.S)
+                    Assert.IsFalse(board.Editor.HasUnsavedChanges())
+                    board.Close()
+                End Using
+            End Sub)
+
+        Assert.AreEqual(1, AuthorStore.Load().Authors.Count, "authors.json holds the one person.")
+        Assert.AreEqual(1, AuthorStore.Load().Affiliations.Count, "authors.json holds the one affiliation.")
+    End Sub
+
+
+    ' v1.0.0 reading a 1.0.1 draft that carries library records (#361):
+    ' the unknown key is skipped and the manuscript is intact, so v1.0.0
+    ' recovers the manuscript and loses only the people.
+    <TestMethod>
+    Public Sub V100ReadsADraftWithLibraryRecords()
+        LeaveADraft("Edited before the crash", New RecoveryDraftLibrary With {
+            .Authors = New List(Of AuthorRecord) From {New AuthorRecord With {.GivenName = "Ada", .FamilyName = "Lookup"}}})
+        StringAssert.Contains(File.ReadAllText(DraftPath), "UnsavedLibrary")
+        Dim expected As RecoveryDraft = New RecoveryDraftStore(_dataDirectory).Read()
+
+        Dim old As V100RecoveryDraft
+        Using stream As Stream = File.OpenRead(DraftPath)
+            old = JsonSerializer.Deserialize(Of V100RecoveryDraft)(CalendarDateJson.Read(stream), V100Options())
+        End Using
+
+        Assert.IsNotNull(old)
+        Assert.AreEqual(expected.ManuscriptId, old.ManuscriptId)
+        Assert.IsNotNull(old.Manuscript)
+        Assert.AreEqual(expected.Manuscript.Id, old.Manuscript.Id)
+        Assert.AreEqual("Edited before the crash", old.Manuscript.Title)
+    End Sub
+
+
     ' Guard: the window tests call OfferRecoveryDraft directly, so the one
     ' call that wires it into startup, after the board is rendered, is
     ' checked in the source, as the online gate's wiring is. It fails only
@@ -411,7 +630,7 @@ Public Class RecoveryDraftTests
     ' A session edited the one manuscript and ended without asking, so its
     ' draft is on disk. Written through the store: a session's own close
     ' removes the draft it wrote.
-    Private Sub LeaveADraft(editedTitle As String)
+    Private Sub LeaveADraft(editedTitle As String, Optional library As RecoveryDraftLibrary = Nothing)
         Dim edited As Manuscript = New ManuscriptRepository(_dataDirectory, _managedDirectory).Load().Single()
         edited.Title = editedTitle
 
@@ -420,9 +639,51 @@ Public Class RecoveryDraftTests
                 .ManuscriptId = edited.Id,
                 .WrittenAtUtc = DateTime.UtcNow,
                 .Reason = "test",
-                .Manuscript = edited
+                .Manuscript = edited,
+                .UnsavedLibrary = library
             })
     End Sub
+
+
+    ' The author library the window's page reads and saves.
+    Private ReadOnly Property AuthorStore As AuthorLibraryRepository
+        Get
+            Return New AuthorLibraryRepository(_dataDirectory)
+        End Get
+    End Property
+
+
+    ' The page's copy of the reusable author library.
+    Private Shared Function PageLibrary(editor As EditManuscriptForm) As AuthorLibraryData
+        Return DirectCast(GetType(EditManuscriptForm).GetProperty("_authorLibrary", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(editor), AuthorLibraryData)
+    End Function
+
+
+    Private Shared Function LibraryDirty(editor As EditManuscriptForm) As Boolean
+        Return CBool(GetType(EditManuscriptForm).GetProperty("_authorLibraryDirty", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(editor))
+    End Function
+
+
+    ' The draft as v1.0.0 declared it: four properties, read and written
+    ' with v1.0.0's options. RecoveryDraftStore was unchanged from v1.0.0
+    ' until #361 added UnsavedLibrary.
+    Public NotInheritable Class V100RecoveryDraft
+        Public Property ManuscriptId As Guid
+        Public Property WrittenAtUtc As DateTime
+        Public Property Reason As String = String.Empty
+        Public Property Manuscript As Manuscript
+    End Class
+
+
+    Private Shared Function V100Options() As JsonSerializerOptions
+        Dim options As New JsonSerializerOptions With {
+            .WriteIndented = True,
+            .IgnoreReadOnlyProperties = True,
+            .PropertyNameCaseInsensitive = True
+        }
+        options.Converters.Add(New JsonStringEnumConverter())
+        Return options
+    End Function
 
 
     Private ReadOnly Property ManuscriptsPath As String

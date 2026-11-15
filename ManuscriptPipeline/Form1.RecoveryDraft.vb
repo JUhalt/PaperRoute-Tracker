@@ -7,8 +7,10 @@ Imports ManuscriptPipeline.Services
 ' A recovery draft of the open manuscript page (#123). When PaperRoute
 ' closes without being able to ask about unsaved changes, the page's
 ' working copy is written to data\recovery; the next start offers to open
-' the manuscript with it as unsaved changes, or to discard it. Nothing here
-' changes manuscripts.json: that still takes Save.
+' the manuscript with it as unsaved changes, or to discard it. The people,
+' affiliations and tag colours the page added to the author library and
+' had not saved go with it (#361). Nothing here changes manuscripts.json
+' or the author library on disk: that still takes Save.
 Partial Public Class Form1
 
     ' Asks whether to open a recovered draft; Yes opens it, anything else
@@ -17,6 +19,9 @@ Partial Public Class Form1
 
     ' The recovered copy the page being built opens with, if any.
     Private pendingRecoveredCopy As Manuscript = Nothing
+
+    ' And the author-library records that draft carried (#361), if any.
+    Private pendingRecoveredLibrary As RecoveryDraftLibrary = Nothing
 
     ' Set when this session wrote the draft on disk, so the session can
     ' remove it once its edits are saved or closed away; a draft an earlier
@@ -52,7 +57,8 @@ Partial Public Class Form1
                     .ManuscriptId = currentManuscriptId,
                     .WrittenAtUtc = DateTime.UtcNow,
                     .Reason = If(reason, String.Empty),
-                    .Manuscript = manuscriptEditor.RecoveryCopy()
+                    .Manuscript = manuscriptEditor.RecoveryCopy(),
+                    .UnsavedLibrary = manuscriptEditor.RecoveryLibrary()
                 }
             )
 
@@ -125,11 +131,13 @@ Partial Public Class Form1
             ' The page's working copy stands in for this saved manuscript.
             draft.Manuscript.Id = saved.Id
             pendingRecoveredCopy = draft.Manuscript
+            pendingRecoveredLibrary = draft.UnsavedLibrary
 
             Try
                 OpenManuscript(saved)
             Finally
                 pendingRecoveredCopy = Nothing
+                pendingRecoveredLibrary = Nothing
             End Try
 
         End If
