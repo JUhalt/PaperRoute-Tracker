@@ -45,7 +45,7 @@ Namespace My
             e As UnhandledExceptionEventArgs
         ) Handles Me.UnhandledException
 
-            Dim reports As New ErrorReportService()
+            Dim reports As New ErrorReportService(AddressOf UpdateService.CurrentVersionText)
 
             reports.Write(
                 e.Exception,

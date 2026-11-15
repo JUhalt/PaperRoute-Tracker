@@ -217,7 +217,7 @@ Public Class WorkflowThemeKeyboardSmokeTests
                                     g.Clear(UiTheme.CardBackground())
                                     TagChipPainter.Draw(g, New Rectangle(Point.Empty, chipSize), "teaching", palette, font)
                                 End Using
-                                CheckOutline(missing, $"A {palette} tag", picture, WorkTypeService.Foreground(palette, False))
+                                CheckOutline(missing, $"A {palette} tag", picture, TagChipPainter.Foreground(palette, False))
                             End Using
                         End Using
                     Next
@@ -1030,8 +1030,8 @@ Public Class WorkflowThemeKeyboardSmokeTests
         add("SelectedRowBackground(HoverBackground)", Function() UiTheme.SelectedRowBackground(UiTheme.HoverBackground()))
         add("SelectedRowBackground(AccentMutedBackground)", Function() UiTheme.SelectedRowBackground(UiTheme.AccentMutedBackground()))
         For Each palette As TagPalette In [Enum].GetValues(GetType(TagPalette))
-            add($"Tag.Background({palette})", Function() WorkTypeService.Background(palette, UiTheme.IsDark()))
-            add($"Tag.Foreground({palette})", Function() WorkTypeService.Foreground(palette, UiTheme.IsDark()))
+            add($"Tag.Background({palette})", Function() TagChipPainter.Background(palette, UiTheme.IsDark()))
+            add($"Tag.Foreground({palette})", Function() TagChipPainter.Foreground(palette, UiTheme.IsDark()))
         Next
         For Each kind As RouteSegmentKind In [Enum].GetValues(GetType(RouteSegmentKind))
             add($"Route.Fill({kind})", Function() RouteMapStyle.Fill(kind))

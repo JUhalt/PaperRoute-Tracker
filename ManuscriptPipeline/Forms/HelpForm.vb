@@ -233,7 +233,7 @@ Namespace Forms
                     Try
 
                         UrlSafetyService.OpenInBrowser(
-                            UserGuideService.GitHubGuideUrl
+                            UpdateService.GitHubGuideUrl
                         )
 
                     Catch ex As Exception

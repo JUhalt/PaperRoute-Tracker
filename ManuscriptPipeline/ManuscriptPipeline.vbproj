@@ -29,9 +29,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Anthropic" Version="13.3.0" />
+    <!-- Form1 reads workbooks with ClosedXML directly; the services that use it are in PaperRoute.Core, which references it too. -->
     <PackageReference Include="ClosedXML" Version="0.105.1" />
     <PackageReference Include="Velopack" Version="1.2.161" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PaperRoute.Core\PaperRoute.Core.vbproj" />
   </ItemGroup>
 
   <ItemGroup>
