@@ -455,6 +455,76 @@ Partial Public Class ManuscriptPageTests
             End Sub)
     End Sub
 
+    ' A library journal picked in Journal, Preprint & Links is an explicit
+    ' choice, like a shortlist pick: it goes into the box over the typed
+    ' journal even when its name is the saved one, and Save keeps its link,
+    ' as in v1.0.0.
+    <TestMethod>
+    Public Sub TypedTargetJournalGivesWayToALibraryJournalPickedInLinks()
+        Dim journal As New JournalRecord With {.Name = "Library Journal"}
+        Dim unlinked As Manuscript = Sample("Unlinked manuscript")
+        unlinked.TargetJournal = "Library Journal"
+        WithTypedFieldsPage(
+            unlinked,
+            Sub(board, manuscript, dialogs)
+                board.Field("Target journal").Text = "Typed Journal"
+                AnswerJournalLinks(board.Editor,
+                    Sub(dialog)
+                        PickFirstLibraryJournal(dialog)
+                        InvokeLinks(dialog, "SaveChanges")
+                    End Sub)
+
+                Assert.AreEqual("Library Journal", board.Field("Target journal").Text, "The picked journal is in the box.")
+                Assert.IsTrue(board.SaveManuscriptPage(), "The page saved.")
+                Assert.AreEqual("Library Journal", manuscript.TargetJournal, "Save writes the picked journal.")
+                Assert.AreEqual(journal.Id, manuscript.TargetJournalId, "Save keeps the picked journal's link.")
+            End Sub,
+            seed:=Sub(board) SeedJournals(board, True, journal))
+    End Sub
+
+    ' Clear Library Link, then OK, changes the link but not the name: the
+    ' typed target journal stays in the box and Save writes it, unlinked.
+    <TestMethod>
+    Public Sub TypedTargetJournalSurvivesClearLibraryLink()
+        Dim journal As New JournalRecord With {.Name = "Linked Journal"}
+        WithTypedFieldsPage(
+            LinkedTo(journal),
+            Sub(board, manuscript, dialogs)
+                board.Field("Target journal").Text = "Typed Journal"
+                AnswerJournalLinks(board.Editor,
+                    Sub(dialog)
+                        InvokeLinks(dialog, "ClearJournalLink")
+                        InvokeLinks(dialog, "SaveChanges")
+                    End Sub)
+
+                Assert.AreEqual("Typed Journal", board.Field("Target journal").Text, "The typed target journal is still in the box.")
+                Assert.IsTrue(board.SaveManuscriptPage(), "The page saved.")
+                Assert.AreEqual("Typed Journal", manuscript.TargetJournal, "Save writes the typed target journal.")
+                Assert.IsNull(manuscript.TargetJournalId, "Save writes no link.")
+            End Sub,
+            seed:=Sub(board) SeedJournals(board, True, journal))
+    End Sub
+
+    ' With nothing typed, a rejection in the inline pane clears the working
+    ' target and a later step shows that in the box, so Save writes no
+    ' target, as in v1.0.0. The page does not take the pane's change as
+    ' already shown.
+    <TestMethod>
+    Public Sub StepAfterAnInlineRejectionShowsTheClearedTarget()
+        WithTypedFieldsPage(
+            SubmittedToFirstJournal(),
+            Sub(board, manuscript, dialogs)
+                AddInlineDecision(board, EditorialDecision.Rejected)
+                Assert.AreEqual("First Journal", board.Field("Target journal").Text, "The pane leaves the box alone.")
+
+                EditFirstSubmission(board.Editor, Nothing)
+
+                Assert.AreEqual(String.Empty, board.Field("Target journal").Text, "The step shows the cleared target.")
+                Assert.IsTrue(board.SaveManuscriptPage(), "The page saved.")
+                Assert.IsTrue(String.IsNullOrEmpty(manuscript.TargetJournal), "Save writes no target.")
+            End Sub)
+    End Sub
+
     ' Clear Library Link in Journal, Preprint & Links, then OK: the name
     ' stays and the link goes. Save and the recovery draft keep it gone.
     <TestMethod>
@@ -882,6 +952,22 @@ Partial Public Class ManuscriptPageTests
             Dim window As New AuthorLibraryRepository()
             window.Save(library)
         End If
+    End Sub
+
+    ' Choose from Library (its Click handler in Journal, Preprint & Links):
+    ' the first journal in the picker chosen.
+    Private Shared Sub PickFirstLibraryJournal(links As ManuscriptLinksForm)
+        Dim flags As BindingFlags = BindingFlags.Instance Or BindingFlags.NonPublic
+        Dim opened As Integer = 0
+        Using picker As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of JournalPickerForm)(
+            Sub(window)
+                opened += 1
+                DirectCast(GetType(JournalPickerForm).GetField("lstJournals", flags).GetValue(window), ListBox).SelectedIndex = 0
+                GetType(JournalPickerForm).GetMethod("ChooseSelected", flags).Invoke(window, New Object() {Nothing, EventArgs.Empty})
+            End Sub)
+            InvokeLinks(links, "ChooseJournal")
+        End Using
+        Assert.AreEqual(1, opened, "The journal picker opened once.")
     End Sub
 
     Private Shared Sub InvokeLinks(dialog As ManuscriptLinksForm, name As String)

@@ -4085,6 +4085,9 @@ Namespace Forms
             e As EventArgs
         )
 
+            Dim linkBefore As Guid? =
+                _workingManuscript.TargetJournalId
+
             Using dialog As New ManuscriptLinksForm(
                 _workingManuscript,
                 _allManuscripts
@@ -4093,9 +4096,19 @@ Namespace Forms
                 If dialog.ShowDialog(Me) =
                    DialogResult.OK Then
 
-                    ' Only a target journal changed in the window replaces
-                    ' one typed on the Overview (#358).
-                    RefreshTargetJournalBox()
+                    ' The window links a different library record only when
+                    ' the researcher picked one there. That is an explicit
+                    ' choice, like a shortlist pick, so it goes into the box
+                    ' even when its name is unchanged. Otherwise only a
+                    ' target journal changed in the window replaces one
+                    ' typed on the Overview; clearing or losing the link
+                    ' leaves the box alone (#358).
+                    If _workingManuscript.TargetJournalId.HasValue AndAlso
+                       Not Nullable.Equals(linkBefore, _workingManuscript.TargetJournalId) Then
+                        ShowTargetJournal()
+                    Else
+                        RefreshTargetJournalBox()
+                    End If
 
                     ReloadAuthorLibrary()
 
