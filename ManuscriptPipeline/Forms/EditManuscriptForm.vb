@@ -4520,10 +4520,18 @@ Namespace Forms
             _baseline =
                 Snapshot()
 
-            ' The boxes now hold what was saved (#358).
+            ' The Title and Target journal boxes now hold what was saved
+            ' (#358). The stage box may not: a submission or decision Save
+            ' recorded for the chosen stage can have put its own stage there
+            ' (Submitted, say, for Under Review). Then the remembered stage
+            ' stays the one the box shows, so the next step puts the saved
+            ' stage back in the box, as v1.0.0 does at every step.
             _record.ShownTitle = If(_workingManuscript.Title, String.Empty)
             _record.ShownTargetJournal = If(_workingManuscript.TargetJournal, String.Empty)
-            _record.ShownStage = _workingManuscript.CurrentStage
+            If cmbStage.SelectedItem IsNot Nothing AndAlso
+               CType(cmbStage.SelectedItem, PaperStage) = _workingManuscript.CurrentStage Then
+                _record.ShownStage = _workingManuscript.CurrentStage
+            End If
 
             Return True
 

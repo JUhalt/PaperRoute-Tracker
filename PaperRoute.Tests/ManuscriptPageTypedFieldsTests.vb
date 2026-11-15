@@ -710,6 +710,95 @@ Partial Public Class ManuscriptPageTests
             answerYes:="Delete Editorial Decision")
     End Sub
 
+    ' Under Review chosen on a draft: Save records the submission it needs,
+    ' whose step puts Submitted in the stage box, and then saves Under
+    ' Review while the box still shows Submitted. A later edit that changes
+    ' nothing shows the saved stage again, as in v1.0.0, so the next Save
+    ' keeps Under Review. The draft entered its stage before the submission
+    ' date, so recording it moves the stage; Save then dates Under Review
+    ' today, so the later edit leaves the stage alone.
+    <TestMethod>
+    Public Sub StageSavedThroughARecordedSubmissionIsShownAgainAfterAStep()
+        Dim draft As Manuscript = Sample("Draft manuscript")
+        draft.StageEnteredDate = New DateTime(2025, 10, 1)
+        WithTypedFieldsPage(
+            draft,
+            Sub(board, manuscript, dialogs)
+                Dim flags As BindingFlags = BindingFlags.Instance Or BindingFlags.NonPublic
+                Dim stage As ComboBox = StageBox(board)
+                stage.SelectedItem = PaperStage.UnderReview
+
+                Dim opened As Integer = 0
+                Using answer As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of AddSubmissionForm)(
+                    Sub(dialog)
+                        opened += 1
+                        DirectCast(GetType(AddSubmissionForm).GetField("dtpSubmitted", flags).GetValue(dialog), DateTimePicker).Value = New DateTime(2025, 11, 3)
+                        GetType(AddSubmissionForm).GetMethod("SaveSubmission", flags).Invoke(dialog, New Object() {Nothing, EventArgs.Empty})
+                    End Sub)
+                    Assert.IsTrue(board.SaveManuscriptPage(), "Save recorded the submission and completed.")
+                End Using
+                Assert.AreEqual(1, opened, "The submission window opened once.")
+                CollectionAssert.AreEqual({"Submission Details Required"}, dialogs.Closed, "Save asked to record the submission, and nothing else.")
+                Assert.AreEqual(PaperStage.UnderReview, manuscript.CurrentStage, "Save wrote the chosen stage.")
+
+                EditFirstSubmission(board.Editor, Nothing)
+
+                Assert.AreEqual(PaperStage.UnderReview, CType(stage.SelectedItem, PaperStage), "The step shows the saved stage again.")
+                Assert.IsTrue(board.SaveManuscriptPage(), "The page saved.")
+                Assert.AreEqual(PaperStage.UnderReview, manuscript.CurrentStage, "The next Save keeps Under Review.")
+                Assert.IsFalse(manuscript.History.Any(Function(item) item.Note = "Stage changed from UnderReview to Submitted."), "No stage change the researcher did not choose.")
+            End Sub,
+            answerYes:="Submission Details Required")
+    End Sub
+
+    ' In Press chosen with a submission under way: Save opens the latest
+    ' submission, an Accepted decision puts Accepted in the stage box, and
+    ' Save then saves In Press while the box still shows Accepted. A later
+    ' edit that changes nothing shows the saved stage again, as in v1.0.0,
+    ' so the next Save keeps In Press.
+    <TestMethod>
+    Public Sub StageSavedThroughARecordedDecisionIsShownAgainAfterAStep()
+        WithTypedFieldsPage(
+            SubmittedToFirstJournal(),
+            Sub(board, manuscript, dialogs)
+                Dim flags As BindingFlags = BindingFlags.Instance Or BindingFlags.NonPublic
+                Dim stage As ComboBox = StageBox(board)
+                stage.SelectedItem = PaperStage.InPress
+
+                Dim detailsOpened As Integer = 0
+                Dim decisionsOpened As Integer = 0
+                Using decisionAnswer As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of AddDecisionForm)(
+                        Sub(dialog)
+                            decisionsOpened += 1
+                            Dim decision As ComboBox = DirectCast(GetType(AddDecisionForm).GetField("cmbDecision", flags).GetValue(dialog), ComboBox)
+                            decision.SelectedItem = decision.Items.Cast(Of Object)().Single(Function(item) CType(item.GetType().GetProperty("Value").GetValue(item), EditorialDecision) = EditorialDecision.Accepted)
+                            DirectCast(GetType(AddDecisionForm).GetField("dtpDecisionDate", flags).GetValue(dialog), DateTimePicker).Value = New DateTime(2026, 1, 10)
+                            GetType(AddDecisionForm).GetMethod("SaveDecision", flags).Invoke(dialog, New Object() {Nothing, EventArgs.Empty})
+                        End Sub),
+                      detailsAnswer As New SubmissionWorkflowConsistencyTests.ModalAnswer(Of SubmissionDetailsForm)(
+                        Sub(dialog)
+                            If Not dialog.TopLevel Then Return
+                            detailsOpened += 1
+                            GetType(SubmissionDetailsForm).GetMethod("AddDecision", flags).Invoke(dialog, New Object() {Nothing, EventArgs.Empty})
+                            dialog.DialogResult = DialogResult.OK
+                        End Sub)
+                    Assert.IsTrue(board.SaveManuscriptPage(), "Save recorded the decision and completed.")
+                End Using
+                Assert.AreEqual(1, detailsOpened, "The latest submission opened once.")
+                Assert.AreEqual(1, decisionsOpened, "The decision window opened once.")
+                CollectionAssert.AreEqual({"Editorial Decision Required"}, dialogs.Closed, "Save asked to open the submission, and nothing else.")
+                Assert.AreEqual(PaperStage.InPress, manuscript.CurrentStage, "Save wrote the chosen stage.")
+
+                EditFirstSubmission(board.Editor, Nothing)
+
+                Assert.AreEqual(PaperStage.InPress, CType(stage.SelectedItem, PaperStage), "The step shows the saved stage again.")
+                Assert.IsTrue(board.SaveManuscriptPage(), "The page saved.")
+                Assert.AreEqual(PaperStage.InPress, manuscript.CurrentStage, "The next Save keeps In Press.")
+                Assert.IsFalse(manuscript.History.Any(Function(item) item.Note = "Stage changed from InPress to Accepted."), "No stage change the researcher did not choose.")
+            End Sub,
+            answerYes:="Editorial Decision Required")
+    End Sub
+
     ' The Current stage box on the Overview.
     Private Shared Function StageBox(board As PageBoard) As ComboBox
         Return DirectCast(GetType(EditManuscriptForm).GetField("cmbStage", BindingFlags.Instance Or BindingFlags.NonPublic).GetValue(board.Editor), ComboBox)
