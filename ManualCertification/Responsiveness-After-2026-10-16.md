@@ -1237,3 +1237,61 @@ The host was sampled 60 times:
 - **The close's teardown read 190 ms**, under its 250 for the first time in this record. Every earlier run here was over (262, 323, 737, 358, then 498 on rc.2 and 571 on rc.3), and this day's first run read 1,091, so it moves with the host. E10 measures the installed rc on the maintainer's PC.
 - **Two reported page-switch rows read just over 100 ms:** the kept manuscript page on the 500 library, 114 (33 on rc.3, 70 in this day's first run), and the first manuscript page on the example library, 104 (98 on rc.3). Nothing on those paths changed between the commits, and the readings move between runs on the same build: report-only, as before.
 - **The idle slice was over budget, report-only, as it has been since part C:** 92 against 30.
+
+## 2026-11-14: v1.0.1-rc.1's release commit, d67c312 (B3)
+
+v1.0.1-rc.1 is a patch on v1.0.0's code ([#352](https://github.com/JUhalt/PaperRoute-Tracker/issues/352)). One of its changes is on a surface this test times: [PR #356](https://github.com/JUhalt/PaperRoute-Tracker/pull/356) (#338) renders the Board once for a stage or sort choice, when the open list closes, with the shelves' drawing held, and added five report-only rows for it. B3 runs on the release commit, so it ran on a fresh worktree of d67c312, in Release, after B1 and right after the tag: the Release build first (21:59:24 to 21:59:47), then the tests with `--no-build` (21:59:48 to 22:01:55), the host sampled every 2 s from the start of the build.
+
+Both tests passed: `EveryActionIsMeasuredOnBothLibraries` and `PageSwitchesWithMotionOnGrowByNoMoreThanTheFade`. It ran once.
+
+### Host during this run
+
+The host was sampled 76 times, 12 during the build and 64 during the tests:
+- CPU 14 to 99%, mean 33; the 99% came during the build, and during the tests CPU was 14 to 51%, mean 29;
+- no test host other than this run's own;
+- two VirtualBox processes in every sample;
+- at least 24,208 MB of memory free;
+- no keyboard or mouse input for at least 6,933 s (115 minutes): the PC was left alone through B1 and this run.
+
+### Numbers
+
+**Every enforced row held, with motion off and with motion on.** On the 500 library, the rows with the least room:
+- warm startup, 1,058 of 1,500;
+- the watch row, 74 of 250;
+- versions and details after the manuscript page's first paint, 80 of 250.
+
+| Action | d67c312 | 36a8aad | Budget ms | Held |
+|---|---:|---:|---:|---|
+| Warm startup to an interactive Board | 1,058 | 591 | 1500 | enforced |
+| Board: the rest of the shown shelf, shown in idle slices (the watch row) | 74 (4,166) | 92 (5,488) | 250 | enforced |
+| Idle work from startup: its longest step, against the idle slice | 74 | 92 | 30 | reported, over |
+| Board: its paint after Library to Board | 39 | 33 | 250 | reported |
+| Manuscript page: its first paint | 20 | 18 | 250 | reported |
+| Board to a manuscript page (the kept page, a Pipeline manuscript with three shortlisted journals and tags) | 64 | 114 | 100 | reported |
+| Find Journals: click to first paint | 163 | 160 | 250 | reported |
+| Backup | 36 (16,181) | 50 (19,875) | 250 | reported |
+| Restore: replace the library (the window then restarts) | 48 (24,330) | 51 (25,380) | 250 | reported |
+| Close the window: its teardown after `FormClosed`, the window hidden first | 544 | 190 | 250 | reported, over |
+
+**#338's five rows, report-only**, on the 500 library, beside PR #356's ranges (in-process, Release, three quiet runs each; the before measured on the unchanged app code). They are compared, not judged.
+
+| Action | d67c312 | PR #356 after | PR #356 before | Example library |
+|---|---:|---:|---:|---:|
+| Board: the open stage list stepped Idea, Draft, Submitted, then closed | 314 | 392 to 583 | 988 to 2,227 | 22 |
+| Board: stage filter All stages to Submitted (one committed change) | 367 | 199 to 401 | 555 to 768 | 29 |
+| Board: its paint after the stage filter change | 13 | 12 to 16 | 2 to 4 | 2 |
+| Board: stage filter back to All stages | 4,230 | 2,685 to 6,254 | 5,006 to 7,680 | 19 |
+| Board: its paint after the stage filter goes back to All stages | 17 | not given | not given | 9 |
+
+With motion on, 20 of the 500 library's 22 switches faded; the other two are manuscript opens, which are cuts, and none was a cut because the picture was not ready.
+
+### What the run shows
+
+- **The two rows the notes give read inside or under PR #356's after ranges:** the open list stepped three times and closed, 314 ms (after 392 to 583, before 988 to 2,227); one change to Submitted, 367 ms (after 199 to 401, before 555 to 768).
+- **The change back to All stages read 4,230 ms.** That is inside PR #356's after range and under its before range, and the two ranges overlap: PR #356 showed no gain for it, and the notes claim none. The row comes from an off-screen test window. C3's timing of the same change on the real app with a 500-manuscript library was not run, so #338 stays open at v1.0.1 with that reason (F1).
+- **The change's paint read 13 ms**, inside PR #356's after range of 12 to 16 ms: the drawing now happens once, after the render.
+- **The close's teardown read 544 ms**, over its 250, report-only, as PR #305 left it; it read 190 on rc.4 and moves with the host.
+- **One reported page-switch row read just over 100 ms:** the first manuscript page on the example library, 107 (104 on rc.4). Nothing on that path changed in 1.0.1: report-only, as before.
+- **The idle slice was over budget, report-only, as it has been since part C:** 74 against 30.
+
+Evidence: `B3-budget-d67c312-build.txt`, `B3-budget-d67c312-console.txt`, `B3-host-samples-d67c312.csv` in `TestResults\v101-certification-evidence`; [#352, B3](https://github.com/JUhalt/PaperRoute-Tracker/issues/352#issuecomment-6888295917).
