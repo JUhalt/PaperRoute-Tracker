@@ -51,6 +51,16 @@ Namespace Forms
             Public VersionHistory As ManuscriptVersionHistoryControl = Nothing
             Public PartsDeferred As Boolean = False
 
+            ' The working copy's title, target journal and stage as the
+            ' Overview's boxes last took them, at load, at a rewrite, or at
+            ' Save (#358). A refresh after a window or a workflow step
+            ' rewrites a box only when the working copy's value differs from
+            ' this, that is, when the step changed it; otherwise what was
+            ' typed or chosen in the box stays for Save.
+            Public ShownTitle As String = String.Empty
+            Public ShownTargetJournal As String = String.Empty
+            Public ShownStage As PaperStage? = Nothing
+
         End Class
 
         ' No manuscript until the first is loaded: a working copy of nothing.
@@ -2090,6 +2100,8 @@ Namespace Forms
         Private Sub MakeShortlistTarget(candidate As JournalCandidate)
             JournalShortlistService.MakeTarget(_workingManuscript, candidate)
             txtTargetJournal.Text = candidate.JournalName
+            ' What the box now shows, so a later step keeps it (#358).
+            _record.ShownTargetJournal = If(_workingManuscript.TargetJournal, String.Empty)
             RefreshJournalNotes()
             RefreshShortlist()
         End Sub
@@ -2277,14 +2289,9 @@ Namespace Forms
                     _workingManuscript
                 )
 
-            txtTitle.Text =
-                _workingManuscript.Title
-
-            txtTargetJournal.Text =
-                _workingManuscript.TargetJournal
-
-            cmbStage.SelectedItem =
-                _workingManuscript.CurrentStage
+            ShowTitle()
+            ShowTargetJournal()
+            ShowStage()
 
             InPlace.SetShown(
                 fileDrawerGroup,
@@ -2324,13 +2331,52 @@ Namespace Forms
 
 
 
+        ' The working copy's title, target journal or stage put in its box
+        ' and remembered as what the box last took (#358).
+        Private Sub ShowTitle()
+            txtTitle.Text = _workingManuscript.Title
+            _record.ShownTitle = If(_workingManuscript.Title, String.Empty)
+        End Sub
+
+        Private Sub ShowTargetJournal()
+            txtTargetJournal.Text = _workingManuscript.TargetJournal
+            _record.ShownTargetJournal = If(_workingManuscript.TargetJournal, String.Empty)
+        End Sub
+
+        Private Sub ShowStage()
+            cmbStage.SelectedItem = _workingManuscript.CurrentStage
+            _record.ShownStage = _workingManuscript.CurrentStage
+        End Sub
+
+
+        ' After a window or a workflow step: a box is rewritten only when the
+        ' step changed that field of the working copy, and then the step's
+        ' value wins. Otherwise the box keeps what the researcher typed or
+        ' chose, which the working copy never holds before Save (#358).
+        Private Sub RefreshTitleBox()
+            If Not String.Equals(If(_workingManuscript.Title, String.Empty), _record.ShownTitle, StringComparison.Ordinal) Then
+                ShowTitle()
+            End If
+        End Sub
+
+        Private Sub RefreshTargetJournalBox()
+            If Not String.Equals(If(_workingManuscript.TargetJournal, String.Empty), _record.ShownTargetJournal, StringComparison.Ordinal) Then
+                ShowTargetJournal()
+            End If
+        End Sub
+
+        Private Sub RefreshStageBox()
+            If Not _record.ShownStage.HasValue OrElse
+               _record.ShownStage.Value <> _workingManuscript.CurrentStage Then
+                ShowStage()
+            End If
+        End Sub
+
+
         Private Sub RefreshLifecycleControls()
 
-            txtTargetJournal.Text =
-                _workingManuscript.TargetJournal
-
-            cmbStage.SelectedItem =
-                _workingManuscript.CurrentStage
+            RefreshTargetJournalBox()
+            RefreshStageBox()
 
             ' A submission or a decision can take the manuscript out of the
             ' File Drawer (#207); its group goes with it, so Save does not
@@ -2586,10 +2632,15 @@ Namespace Forms
 
                 End If
 
-            End Using
+                ' Title ticked asks for Crossref's title, even when it is
+                ' the one saved; unticked leaves a typed title alone (#358).
+                If dialog.TitleApplied Then
+                    ShowTitle()
+                Else
+                    RefreshTitleBox()
+                End If
 
-            txtTitle.Text =
-                _workingManuscript.Title
+            End Using
 
             RefreshAuthorsList()
 
@@ -3533,10 +3584,9 @@ Namespace Forms
             e As EventArgs
         )
 
-            If cmbStage.SelectedItem Is Nothing OrElse
-               CType(cmbStage.SelectedItem, PaperStage) <> _workingManuscript.CurrentStage Then
-                cmbStage.SelectedItem = _workingManuscript.CurrentStage
-            End If
+            ' Only a stage the edit changed replaces one chosen and not
+            ' saved (#358).
+            RefreshStageBox()
 
             RefreshRevisionDeadlineDisplay()
 
@@ -4043,8 +4093,9 @@ Namespace Forms
                 If dialog.ShowDialog(Me) =
                    DialogResult.OK Then
 
-                    txtTargetJournal.Text =
-                        _workingManuscript.TargetJournal
+                    ' Only a target journal changed in the window replaces
+                    ' one typed on the Overview (#358).
+                    RefreshTargetJournalBox()
 
                     ReloadAuthorLibrary()
 
@@ -4468,6 +4519,11 @@ Namespace Forms
 
             _baseline =
                 Snapshot()
+
+            ' The boxes now hold what was saved (#358).
+            _record.ShownTitle = If(_workingManuscript.Title, String.Empty)
+            _record.ShownTargetJournal = If(_workingManuscript.TargetJournal, String.Empty)
+            _record.ShownStage = _workingManuscript.CurrentStage
 
             Return True
 
