@@ -87,9 +87,11 @@ Public Class ExternalLinkSafetyTests
     Public Sub TheShellIsReachedOnlyThroughTheTwoOpenersAndDiagnostics()
 
         Dim root As String = Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManuscriptPipeline")
+        ' And the app's code that moved into its core library (v1.1).
+        Dim core As String = Path.Combine(AssistantCoreTests.RepositoryRoot(), "PaperRoute.Core")
         Dim found As New List(Of String)()
 
-        For Each source As String In Directory.GetFiles(root, "*.vb", SearchOption.AllDirectories)
+        For Each source As String In {root, core}.SelectMany(Function(folder) Directory.GetFiles(folder, "*.vb", SearchOption.AllDirectories))
 
             If source.Contains(Path.DirectorySeparatorChar & "obj" & Path.DirectorySeparatorChar) OrElse
                source.Contains(Path.DirectorySeparatorChar & "bin" & Path.DirectorySeparatorChar) Then Continue For

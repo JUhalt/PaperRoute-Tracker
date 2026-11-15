@@ -64,7 +64,7 @@ Public Class VersionSourceTests
         Dim app As Assembly =
             GetType(Global.ManuscriptPipeline.Form1).Assembly
 
-        For Each owner As Assembly In {app, GetType(PacketExportService).Assembly, GetType(OnlineAccess).Assembly}
+        For Each owner As Assembly In {app, GetType(PacketExportService).Assembly, GetType(OnlineAccess).Assembly, GetType(Global.ManuscriptPipeline.Models.Manuscript).Assembly}
 
             Assert.AreEqual(
                 assemblyVersion,

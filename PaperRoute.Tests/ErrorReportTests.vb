@@ -224,9 +224,16 @@ Public Class ErrorReportTests
                 "ManuscriptPipeline"
             )
 
+        ' And the app's code that moved into its core library (v1.1).
+        Dim core As String =
+            Path.Combine(
+                AssistantCoreTests.RepositoryRoot(),
+                "PaperRoute.Core"
+            )
+
         Dim constructions As Integer = 0
 
-        For Each source As String In Directory.GetFiles(app, "*.vb", SearchOption.AllDirectories)
+        For Each source As String In {app, core}.SelectMany(Function(folder) Directory.GetFiles(folder, "*.vb", SearchOption.AllDirectories))
 
             If source.Contains(Path.DirectorySeparatorChar & "obj" & Path.DirectorySeparatorChar) OrElse
                source.Contains(Path.DirectorySeparatorChar & "bin" & Path.DirectorySeparatorChar) Then

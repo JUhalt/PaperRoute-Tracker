@@ -459,7 +459,8 @@ Public Class OnlineServicesTests
     <TestMethod>
     Public Sub EveryRequestInTheAppGoesThroughTheGate()
         Dim root As String = RepositoryRoot()
-        Dim sources As String() = Directory.GetFiles(Path.Combine(root, "ManuscriptPipeline"), "*.vb", SearchOption.AllDirectories).
+        ' The app and the code of it that moved into its core library (v1.1).
+        Dim sources As String() = {"ManuscriptPipeline", "PaperRoute.Core"}.SelectMany(Function(folder) Directory.GetFiles(Path.Combine(root, folder), "*.vb", SearchOption.AllDirectories)).
             Where(Function(file) Not file.Contains(Path.DirectorySeparatorChar & "obj" & Path.DirectorySeparatorChar) AndAlso
                                  Not file.Contains(Path.DirectorySeparatorChar & "bin" & Path.DirectorySeparatorChar)).ToArray()
         Assert.IsTrue(sources.Length > 50)
