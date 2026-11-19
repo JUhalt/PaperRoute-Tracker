@@ -722,7 +722,8 @@ Namespace Services
             }
 
             Dim options As New JsonSerializerOptions With {
-                .WriteIndented = True
+                .WriteIndented = True,
+                .NewLine = StoredText.NewLine
             }
 
             ' Flushed and swapped in, keeping the old marker as the backup:
@@ -965,7 +966,8 @@ Namespace Services
             }
 
             Dim options As New JsonSerializerOptions With {
-                .WriteIndented = True
+                .WriteIndented = True,
+                .NewLine = StoredText.NewLine
             }
 
             ' A new marker, with no previous one to keep (#125).
@@ -1231,6 +1233,7 @@ Namespace Services
 
             Dim options As New JsonSerializerOptions With {
                 .WriteIndented = True,
+                .NewLine = StoredText.NewLine,
                 .IgnoreReadOnlyProperties = True,
                 .PropertyNameCaseInsensitive = True
             }
@@ -1390,7 +1393,8 @@ Namespace Services
                 }
 
                 Dim options As New JsonSerializerOptions With {
-                    .WriteIndented = True
+                    .WriteIndented = True,
+                    .NewLine = StoredText.NewLine
                 }
 
                 File.WriteAllText(

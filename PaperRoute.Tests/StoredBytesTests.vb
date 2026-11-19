@@ -1,7 +1,9 @@
 Imports System
 Imports System.Collections.Generic
 Imports System.IO
+Imports System.IO.Compression
 Imports System.Linq
+Imports System.Text.RegularExpressions
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
@@ -41,7 +43,8 @@ Public Class StoredBytesTests
         ' Saved twice, so the first save becomes manuscripts.bak.
         Dim repository As New ManuscriptRepository(dataDirectory, managedRoot)
         repository.Save(New List(Of Manuscript) From {Sample("First title")})
-        repository.Save(New List(Of Manuscript) From {Sample("Second title")})
+        Dim saved As New List(Of Manuscript) From {Sample("Second title")}
+        repository.Save(saved)
 
         Dim library As New AuthorLibraryData()
         library.Authors.Add(New AuthorRecord With {.GivenName = "Ada", .FamilyName = "Example"})
@@ -66,7 +69,21 @@ Public Class StoredBytesTests
                 .Manuscript = Sample("Unsaved title")
             })
 
+        ' A portable backup holds two files of its own: backup.json and
+        ' backup-info.txt.
+        Dim backupPath As String = Path.Combine(_root, "backup.zip")
+        Call New PortableBackupService(managedRoot).CreateBackup(backupPath, saved, repository)
+        Dim extracted As String = Path.Combine(_root, "backup-entries")
+        Directory.CreateDirectory(extracted)
+        Using archive As ZipArchive = ZipFile.OpenRead(backupPath)
+            For Each name As String In {BackupManifest.FileName, "backup-info.txt"}
+                archive.Entries.Single(Function(entry) entry.FullName = name).ExtractToFile(Path.Combine(extracted, name))
+            Next
+        End Using
+
         For Each written As String In {
+            Path.Combine(extracted, BackupManifest.FileName),
+            Path.Combine(extracted, "backup-info.txt"),
             Path.Combine(dataDirectory, "manuscripts.json"),
             Path.Combine(dataDirectory, "manuscripts.bak"),
             Path.Combine(dataDirectory, "authors.json"),
@@ -77,6 +94,101 @@ Public Class StoredBytesTests
         }
             AssertEveryLineEndsWithCrLf(written)
         Next
+
+    End Sub
+
+
+    ' The writers set StoredText.NewLine (core stage 2, step 3): on Windows
+    ' it is the line break they wrote before, so no stored byte changes.
+    <TestMethod>
+    Public Sub StoredLineBreakIsWhatWindowsWritesToday()
+
+        Assert.AreEqual(vbCrLf, ManuscriptPipeline.StoredText.NewLine)
+
+        If OperatingSystem.IsWindows() Then
+            Assert.AreEqual(Environment.NewLine, ManuscriptPipeline.StoredText.NewLine)
+        End If
+
+    End Sub
+
+
+    ' On Windows the serializer's default line break is already CR LF, so no
+    ' byte test there can tell a writer that sets StoredText.NewLine from one
+    ' that does not. This reads the code instead, on every system: each
+    ' indented JSON options initialiser in PaperRoute.Core sets it.
+    <TestMethod>
+    Public Sub EveryIndentedJsonWriterSetsTheStoredLineBreak()
+
+        Dim core As String = Path.Combine(AssistantCoreTests.RepositoryRoot(), "PaperRoute.Core")
+        Dim writers As Integer = 0
+        Dim missing As New List(Of String)()
+
+        For Each source As String In Directory.GetFiles(core, "*.vb", SearchOption.AllDirectories)
+
+            If source.Contains(Path.DirectorySeparatorChar & "obj" & Path.DirectorySeparatorChar) OrElse
+               source.Contains(Path.DirectorySeparatorChar & "bin" & Path.DirectorySeparatorChar) Then Continue For
+
+            ' Comments dropped and white space removed, so an initialiser
+            ' reads the same however its lines are laid out.
+            Dim code As String = Regex.Replace(
+                String.Join(vbLf, File.ReadAllLines(source).Where(Function(line) Not line.TrimStart().StartsWith("'"c))),
+                "\s+", "")
+
+            Dim indented As Integer = 0
+            For Each initialiser As Match In Regex.Matches(code, "NewJsonSerializerOptionsWith\{[^}]*\}")
+
+                If Not initialiser.Value.Contains(".WriteIndented=True") Then Continue For
+                indented += 1
+
+                ' The one indented initialiser that only reads: its options
+                ' never write a file.
+                If code.Substring(0, initialiser.Index).EndsWith("PrivateSharedFunctionCreateJsonOptions()AsJsonSerializerOptionsDimoptionsAs") AndAlso
+                   Path.GetFileName(source) = "Schema5MigrationService.vb" Then Continue For
+
+                writers += 1
+                If Not initialiser.Value.Contains(".NewLine=StoredText.NewLine") Then
+                    missing.Add(Path.GetFileName(source) & ": " & initialiser.Value)
+                End If
+
+            Next
+
+            ' Indentation switched on anywhere else would escape the check.
+            Assert.AreEqual(
+                indented,
+                Regex.Matches(code, "WriteIndented=True").Count,
+                Path.GetFileName(source) & " sets WriteIndented outside a New JsonSerializerOptions With {...} initialiser.")
+
+        Next
+
+        Assert.AreEqual(0, missing.Count, "Without .NewLine = StoredText.NewLine: " & String.Join(" | ", missing))
+        Assert.IsTrue(writers >= 14, "Found " & writers.ToString() & " indented JSON writers; PaperRoute.Core has 14.")
+
+    End Sub
+
+
+    ' The stored text built line by line (design 5.1 row 2) uses
+    ' StoredText.NewLine, not the system's line break.
+    <TestMethod>
+    Public Sub StoredTextIsNotBuiltWithTheSystemLineBreak()
+
+        Dim services As String = Path.Combine(AssistantCoreTests.RepositoryRoot(), "PaperRoute.Core", "Services")
+
+        For Each name As String In {"TitlePageParserService.vb", "FlexibleExcelImporter.vb", "PortableBackupService.vb"}
+            Dim code As String = String.Join(vbLf, File.ReadAllLines(Path.Combine(services, name)).Where(Function(line) Not line.TrimStart().StartsWith("'"c)))
+            Assert.IsFalse(code.Contains("Environment.NewLine"), name & " builds stored text with Environment.NewLine.")
+        Next
+
+    End Sub
+
+
+    ' RIS detection (design 5.1 row 3) finds a record after a CR LF on every
+    ' system, as Windows does today.
+    <TestMethod>
+    Public Sub RisAfterAPreambleIsRecognisedAfterCrLf()
+
+        Dim sample As String = "Exported from a reference manager" & vbCrLf & "TY  - JOUR" & vbCrLf & "ER  - " & vbCrLf
+
+        Assert.AreEqual(BibliographyFormat.Ris, BibliographyExchangeService.DetectFormat("references.txt", sample))
 
     End Sub
 

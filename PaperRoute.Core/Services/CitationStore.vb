@@ -20,6 +20,7 @@ Namespace Services
 
         Private Shared ReadOnly Options As New JsonSerializerOptions With {
             .WriteIndented = True,
+            .NewLine = StoredText.NewLine,
             .PropertyNameCaseInsensitive = True
         }
 
