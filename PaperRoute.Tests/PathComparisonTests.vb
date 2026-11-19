@@ -49,7 +49,9 @@ Public Class PathComparisonTests
             ("removed", "removed2"),
             ("/home/a/PaperRoute Library/x.docx", "/home/a/paperroute library/X.docx"),
             ("", ""),
-            ("C:\straße\a.docx", "C:\STRASSE\a.docx")
+            ("C:\straße\a.docx", "C:\STRASSE\a.docx"),
+            ("C:\x\a?b*.docx", "c:\X\A?B*.DOCX"),
+            ("C:\x\b:c.docx", "C:\x\B:C.docx")
         }
     End Function
 

@@ -51,7 +51,10 @@ Public Class StoredPathTests
             "C:\",
             "C:draft.docx",
             "C:\folder\",
-            "C:\folder\name with spaces .docx"
+            "C:\folder\name with spaces .docx",
+            "C:\docs\b:c_ab12cd34.docx",
+            "C:\docs\a?b*_ab12cd34.docx",
+            "/home/a/x/a:b|c_ab12cd34.docx"
         }
     End Function
 
@@ -93,7 +96,7 @@ Public Class StoredPathTests
                     item.IndexOfAny({"\"c, "/"c}) >= 0 AndAlso
                     Not item.EndsWith("\", StringComparison.Ordinal) AndAlso
                     item <> "\\server\share")
-            Assert.AreEqual(11, underAFolder.Count())
+            Assert.AreEqual(14, underAFolder.Count())
             For Each stored As String In underAFolder
                 Assert.AreEqual(Path.GetFileName(stored), StoredPath.LastSegment(stored), stored)
             Next
