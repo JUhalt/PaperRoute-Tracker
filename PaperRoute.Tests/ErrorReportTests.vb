@@ -36,8 +36,11 @@ Public Class ErrorReportTests
         _logs =
             ErrorReportService.DefaultDirectory()
 
+        ' As the app constructs it.
         _reports =
-            New ErrorReportService()
+            New ErrorReportService(
+                AddressOf UpdateService.CurrentVersionText
+            )
 
     End Sub
 
@@ -164,6 +167,105 @@ Public Class ErrorReportTests
         Assert.AreEqual(
             reportPath,
             _reports.LastReportPath()
+        )
+
+    End Sub
+
+
+    ' The "Version:" line is the app's version text, passed in by the app
+    ' (the service has no version of its own), read when the report is
+    ' written; and everywhere the app makes the service it passes
+    ' UpdateService.CurrentVersionText, the line the report always had.
+    <TestMethod>
+    Public Sub TheVersionLine_IsTheAppsVersionText()
+
+        Dim calls As Integer = 0
+
+        Dim reports As New ErrorReportService(
+            Function()
+                calls += 1
+                Return "9.8.7-test"
+            End Function
+        )
+
+        Assert.AreEqual(
+            0,
+            calls,
+            "The version is read when a report is written."
+        )
+
+        Dim text As String =
+            File.ReadAllText(
+                reports.Write(
+                    New InvalidOperationException("Version check."),
+                    "test"
+                )
+            )
+
+        StringAssert.Contains(
+            text,
+            Environment.NewLine & "Version: 9.8.7-test" & Environment.NewLine
+        )
+
+        Assert.AreEqual(
+            1,
+            calls
+        )
+
+        Assert.ThrowsExactly(Of ArgumentNullException)(
+            Sub()
+                Dim missing As New ErrorReportService(Nothing)
+            End Sub
+        )
+
+        Dim app As String =
+            Path.Combine(
+                AssistantCoreTests.RepositoryRoot(),
+                "ManuscriptPipeline"
+            )
+
+        ' And the app's code that moved into its core library (v1.1).
+        Dim core As String =
+            Path.Combine(
+                AssistantCoreTests.RepositoryRoot(),
+                "PaperRoute.Core"
+            )
+
+        Dim constructions As Integer = 0
+
+        For Each source As String In {app, core}.SelectMany(Function(folder) Directory.GetFiles(folder, "*.vb", SearchOption.AllDirectories))
+
+            If source.Contains(Path.DirectorySeparatorChar & "obj" & Path.DirectorySeparatorChar) OrElse
+               source.Contains(Path.DirectorySeparatorChar & "bin" & Path.DirectorySeparatorChar) Then
+                Continue For
+            End If
+
+            Dim code As String =
+                File.ReadAllText(source)
+
+            Dim index As Integer =
+                code.IndexOf("New ErrorReportService(", StringComparison.Ordinal)
+
+            While index >= 0
+
+                constructions += 1
+
+                StringAssert.StartsWith(
+                    code.Substring(index),
+                    "New ErrorReportService(AddressOf UpdateService.CurrentVersionText)",
+                    Path.GetFileName(source) & " passes the app's version text."
+                )
+
+                index =
+                    code.IndexOf("New ErrorReportService(", index + 1, StringComparison.Ordinal)
+
+            End While
+
+        Next
+
+        Assert.IsTrue(
+            constructions >= 3,
+            "Program, ApplicationEvents and DiagnosticsForm make the service; found " & constructions.ToString() & "."
         )
 
     End Sub

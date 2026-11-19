@@ -1,6 +1,5 @@
 Imports System
 Imports System.Collections.Generic
-Imports System.Drawing
 Imports System.IO
 Imports System.Linq
 Imports System.Text.RegularExpressions
@@ -149,38 +148,6 @@ Namespace Services
             library.TagColors.RemoveAll(Function(entry) entry Is Nothing OrElse String.Equals(entry.Tag, value, StringComparison.CurrentCultureIgnoreCase))
             library.TagColors.Add(New TagColor With {.Tag = value, .Color = color})
         End Sub
-
-
-        ' Background and text colors with at least 4.5:1 contrast in both themes.
-        ' Under a contrast theme every tag is in the window's own colors (#138).
-        Public Shared Function Background(color As TagPalette, dark As Boolean) As Color
-            If UiTheme.IsHighContrast() Then Return SystemColors.Window
-            Select Case color
-                Case TagPalette.Blue : Return If(dark, Drawing.Color.FromArgb(30, 58, 138), Drawing.Color.FromArgb(219, 234, 254))
-                Case TagPalette.Violet : Return If(dark, Drawing.Color.FromArgb(76, 29, 149), Drawing.Color.FromArgb(237, 233, 254))
-                Case TagPalette.Rose : Return If(dark, Drawing.Color.FromArgb(136, 19, 55), Drawing.Color.FromArgb(255, 228, 230))
-                Case TagPalette.Amber : Return If(dark, Drawing.Color.FromArgb(120, 53, 15), Drawing.Color.FromArgb(254, 243, 199))
-                Case TagPalette.Green : Return If(dark, Drawing.Color.FromArgb(20, 83, 45), Drawing.Color.FromArgb(220, 252, 231))
-                Case TagPalette.Slate : Return If(dark, Drawing.Color.FromArgb(51, 65, 85), Drawing.Color.FromArgb(226, 232, 240))
-                Case TagPalette.Orange : Return If(dark, Drawing.Color.FromArgb(124, 45, 18), Drawing.Color.FromArgb(255, 237, 213))
-                Case Else : Return If(dark, Drawing.Color.FromArgb(19, 78, 74), Drawing.Color.FromArgb(204, 251, 241))
-            End Select
-        End Function
-
-
-        Public Shared Function Foreground(color As TagPalette, dark As Boolean) As Color
-            If UiTheme.IsHighContrast() Then Return SystemColors.WindowText
-            Select Case color
-                Case TagPalette.Blue : Return If(dark, Drawing.Color.FromArgb(191, 219, 254), Drawing.Color.FromArgb(30, 64, 175))
-                Case TagPalette.Violet : Return If(dark, Drawing.Color.FromArgb(221, 214, 254), Drawing.Color.FromArgb(91, 33, 182))
-                Case TagPalette.Rose : Return If(dark, Drawing.Color.FromArgb(254, 205, 211), Drawing.Color.FromArgb(159, 18, 57))
-                Case TagPalette.Amber : Return If(dark, Drawing.Color.FromArgb(253, 230, 138), Drawing.Color.FromArgb(146, 64, 14))
-                Case TagPalette.Green : Return If(dark, Drawing.Color.FromArgb(187, 247, 208), Drawing.Color.FromArgb(22, 101, 52))
-                Case TagPalette.Slate : Return If(dark, Drawing.Color.FromArgb(226, 232, 240), Drawing.Color.FromArgb(51, 65, 85))
-                Case TagPalette.Orange : Return If(dark, Drawing.Color.FromArgb(254, 215, 170), Drawing.Color.FromArgb(154, 52, 18))
-                Case Else : Return If(dark, Drawing.Color.FromArgb(153, 246, 228), Drawing.Color.FromArgb(17, 94, 89))
-            End Select
-        End Function
 
 
         ' ---------------------------------------------------------------

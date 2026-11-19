@@ -89,7 +89,7 @@ Public Class StorageFileTests
     Public Sub StorageServices_WriteLiveFilesOnlyThroughTheAtomicWriter()
 
         Dim services As String =
-            Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManuscriptPipeline", "Services")
+            Path.Combine(AssistantCoreTests.RepositoryRoot(), "PaperRoute.Core", "Services")
 
         Dim allowed As New Dictionary(Of String, String()) From {
             {"StorageMigrationService.vb", {"dataPath,", "receiptPath,"}}

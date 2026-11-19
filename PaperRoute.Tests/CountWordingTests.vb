@@ -29,9 +29,9 @@ Public Class CountWordingTests
         ("Form1.vb", "Waiting "),
         ("Form1.vb", " rejections; consider filing"),
         ("Form1.Insights.vb", " days drawn. "),
-        ("Services\RouteAnalyticsService.vb", " days to a first decision"),
-        ("Services\JournalFactsService.vb", " weeks from submission to publication"),
-        ("Services\CitationsService.vb", " DOIs in OpenAlex ("),
+        ("..\PaperRoute.Core\Services\RouteAnalyticsService.vb", " days to a first decision"),
+        ("..\PaperRoute.Core\Services\JournalFactsService.vb", " weeks from submission to publication"),
+        ("..\PaperRoute.Core\Services\CitationsService.vb", " DOIs in OpenAlex ("),
         ("Forms\EditManuscriptForm.vb", "them."),
         ("Forms\SubmissionDetailsForm.vb", "NO   — Link to the files in their current location")
     }
