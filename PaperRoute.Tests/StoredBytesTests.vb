@@ -81,6 +81,20 @@ Public Class StoredBytesTests
     End Sub
 
 
+    ' The writers set StoredText.NewLine (core stage 2, step 3): on Windows
+    ' it is the line break they wrote before, so no stored byte changes.
+    <TestMethod>
+    Public Sub StoredLineBreakIsWhatWindowsWritesToday()
+
+        Assert.AreEqual(vbCrLf, ManuscriptPipeline.StoredText.NewLine)
+
+        If OperatingSystem.IsWindows() Then
+            Assert.AreEqual(Environment.NewLine, ManuscriptPipeline.StoredText.NewLine)
+        End If
+
+    End Sub
+
+
     Private Shared Sub AssertEveryLineEndsWithCrLf(filePath As String)
 
         Assert.IsTrue(File.Exists(filePath), "PaperRoute wrote " & filePath & ".")

@@ -318,7 +318,8 @@ Namespace Services
                     JsonSerializer.Serialize(
                         manifest,
                         New JsonSerializerOptions With {
-                            .WriteIndented = True
+                            .WriteIndented = True,
+                            .NewLine = StoredText.NewLine
                         }
                     )
                 )
