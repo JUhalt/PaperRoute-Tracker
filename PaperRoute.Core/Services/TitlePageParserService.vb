@@ -406,7 +406,7 @@ Namespace Services
             flush()
 
             If paragraphs.Count > 0 Then
-                result.AbstractText = String.Join(Environment.NewLine & Environment.NewLine, paragraphs)
+                result.AbstractText = String.Join(StoredText.NewLine & StoredText.NewLine, paragraphs)
             End If
 
         End Sub
@@ -1069,7 +1069,7 @@ Namespace Services
         Private Shared Function CleanLatexParagraphs(value As String) As String
 
             Return String.Join(
-                Environment.NewLine & Environment.NewLine,
+                StoredText.NewLine & StoredText.NewLine,
                 SplitParagraphs(value).
                     Select(Function(paragraph) CleanLatex(paragraph)).
                     Where(Function(paragraph) paragraph.Length > 0))
