@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="PaperRoute.Core/PaperRoute.Core.vbproj" />
+  <Project Path="PaperRoute.Desktop.Tests/PaperRoute.Desktop.Tests.csproj" />
+  <Project Path="PaperRoute.Desktop/PaperRoute.Desktop.csproj" />
+  <Project Path="PaperRoute.TestFixtures/PaperRoute.TestFixtures.vbproj" />
+  <Project Path="PaperRoute.ViewModels/PaperRoute.ViewModels.csproj" />
+</Solution>
