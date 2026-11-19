@@ -520,7 +520,7 @@ Namespace Services
                    String.Equals(
                        Path.GetFileName(sourceSubdirectory),
                        excludedSubdirectory,
-                       StringComparison.OrdinalIgnoreCase
+                       PathComparison.Comparison
                    ) Then
 
                     Continue For

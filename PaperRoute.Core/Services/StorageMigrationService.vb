@@ -1142,7 +1142,7 @@ Namespace Services
 
                         If fullPath.StartsWith(
                             legacyRoot,
-                            StringComparison.OrdinalIgnoreCase
+                            PathComparison.Comparison
                         ) Then
 
                             Dim relativePath As String =
