@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Test data shared by PaperRoute.Tests and, from v1.1, the new interface's tests: the 500-manuscript library (LargeLibraryFixture) and the Board's sort orders it gives today (SortOrders). No tests here, and nothing the app ships references it. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Library</OutputType>
+    <AssemblyName>PaperRoute.TestFixtures</AssemblyName>
+    <RootNamespace>PaperRoute.TestFixtures</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PaperRoute.Core\PaperRoute.Core.vbproj" />
+  </ItemGroup>
+
+</Project>

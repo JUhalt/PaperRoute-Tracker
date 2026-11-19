@@ -16,6 +16,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ManuscriptPipeline\ManuscriptPipeline.vbproj" />
+    <ProjectReference Include="..\PaperRoute.TestFixtures\PaperRoute.TestFixtures.vbproj" />
+  </ItemGroup>
+
+  <!-- LargeLibraryFixture moved to PaperRoute.TestFixtures (v1.1); the tests name it as before. -->
+  <ItemGroup>
+    <Import Include="PaperRoute.TestFixtures" />
   </ItemGroup>
 
   <ItemGroup>
