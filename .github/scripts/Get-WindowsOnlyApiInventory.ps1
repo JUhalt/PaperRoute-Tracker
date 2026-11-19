@@ -1,12 +1,13 @@
 #Requires -Version 7.0
 <#
 .SYNOPSIS
-    Inventories the Windows-only APIs used by PaperRoute's Models and Services
-    (issue #160, "What stays").
+    Inventories the Windows-only APIs used by the PaperRoute.Core library
+    (issue #160, "What stays"; core stage 2, step 0).
 
 .DESCRIPTION
-    Reads ManuscriptPipeline\Models\**\*.vb and ManuscriptPipeline\Services\**\*.vb
-    under -Root and prints one row per hit: file, line, category, sub-category,
+    Reads every PaperRoute.Core\**\*.vb under -Root except those under
+    PaperRoute.Core\bin and PaperRoute.Core\obj, so a folder added to the core
+    later is covered with no change here, and prints one row per hit: file, line, category, sub-category,
     status, pattern and the matched text. Then prints a per-category, per-pattern
     and per-file summary, and the project's NuGet packages with their platform
     support.
@@ -45,14 +46,22 @@
     back 12 lines to soften this). Types reached only through type inference
     (Dim x = SomeCall()) are not seen unless their members are named.
 
+    The script throws when it finds fewer than 160 .vb files in the core, so a
+    moved or renamed folder cannot make the report pass by scanning nothing.
+
 .PARAMETER Root
-    The repository root (the folder that holds ManuscriptPipeline\).
+    The repository root (the folder that holds ManuscriptPipeline\ and
+    PaperRoute.Core\). The Forms and Controls of ManuscriptPipeline\ are read
+    only to learn the app's UI type names.
 
 .PARAMETER AsMarkdown
     Print the summary tables as Markdown instead of the plain row listing.
 
 .PARAMETER AsCsv
     Also write every row to this CSV path (UTF-8, no BOM).
+
+.PARAMETER FailOnWindowsOnly
+    After the report, exit with code 1 when any windows-only row was found.
 
 .EXAMPLE
     pwsh -File Get-WindowsOnlyApiInventory.ps1 -Root C:\src\repo -AsMarkdown -AsCsv inventory.csv
@@ -61,7 +70,8 @@
 param(
     [Parameter(Mandatory)] [string] $Root,
     [switch] $AsMarkdown,
-    [string] $AsCsv
+    [string] $AsCsv,
+    [switch] $FailOnWindowsOnly
 )
 
 Set-StrictMode -Version Latest
@@ -104,14 +114,23 @@ function Static([string[]] $names) {
 $typeDecl = Rx '^(?<indent>\s*)(?:(?:Public|Private|Friend|Protected|Partial|NotInheritable|MustInherit|Shadows|Shared)\s+)*(?:Class|Module|Structure|Enum|Interface)\s+(?<name>\w+)'
 $uiFiles = @(Get-ChildItem -LiteralPath (Join-Path $project 'Forms'), (Join-Path $project 'Controls') -Recurse -Filter *.vb) +
            @(Get-ChildItem -LiteralPath $project -Filter *.vb)
-$coreDirs = @((Join-Path $project 'Models'), (Join-Path $project 'Services'))
+$coreRoot = Join-Path $Root 'PaperRoute.Core'
+if (-not (Test-Path -LiteralPath (Join-Path $coreRoot 'PaperRoute.Core.vbproj'))) {
+    throw "No PaperRoute.Core\PaperRoute.Core.vbproj under $Root."
+}
 # Ordinal sort of the relative paths, independent of the culture of the machine.
 $coreList = [System.Collections.Generic.List[object]]::new()
-foreach ($f in (Get-ChildItem -LiteralPath $coreDirs -Recurse -Filter *.vb)) {
+foreach ($f in (Get-ChildItem -LiteralPath $coreRoot -Recurse -Filter *.vb)) {
+    $top = $f.FullName.Substring($coreRoot.Length + 1).Split([char[]] @('\', '/'))[0]
+    if ($top -in @('bin', 'obj')) { continue }
     $coreList.Add([pscustomobject]@{ Rel = $f.FullName.Substring($Root.Length + 1); File = $f })
 }
 $coreList.Sort([System.Comparison[object]] { param($a, $b) [string]::CompareOrdinal($a.Rel, $b.Rel) })
 $coreFiles = @($coreList)
+$minimumCoreFiles = 160
+if ($coreFiles.Count -lt $minimumCoreFiles) {
+    throw "Only $($coreFiles.Count) .vb files found under $coreRoot (at least $minimumCoreFiles expected); the scan would not cover the core."
+}
 
 function DeclaredTypes($files, [int] $maxIndent) {
     $names = [System.Collections.Generic.SortedSet[string]]::new([StringComparer]::Ordinal)
@@ -466,6 +485,10 @@ $globalImports = @($vbproj.SelectNodes('//ItemGroup/Import') | ForEach-Object { 
 
 $filesWithBlocking = @($fileSummary | Where-Object { $_.WindowsOnly + $_.NeedsReading -gt 0 })
 $filesClean = @($fileSummary | Where-Object { $_.WindowsOnly + $_.NeedsReading -eq 0 })
+$windowsOnlyFiles = @($fileSummary | Where-Object { $_.WindowsOnly -gt 0 })
+$windowsOnlyCount = Count-By $rows { $_.Status -eq 'windows-only' }
+$windowsOnlyLine = "Windows-only rows: $windowsOnlyCount in $($windowsOnlyFiles.Count) files" +
+    $(if ($windowsOnlyFiles.Count -gt 0) { ' (' + (($windowsOnlyFiles | ForEach-Object { "$([IO.Path]::GetFileName($_.File)) $($_.WindowsOnly)" }) -join ', ') + ')' })
 
 if ($AsMarkdown) {
     function Md-Cell([object] $v) { ([string]$v).Replace('|', '\|') }
@@ -474,14 +497,16 @@ if ($AsMarkdown) {
         '|' + (($cols | ForEach-Object { '---' }) -join '|') + '|'
         foreach ($i in $items) { '| ' + (($cols | ForEach-Object { Md-Cell $i.$_ }) -join ' | ') + ' |' }
     }
-    '# Windows-only API inventory: Models and Services'
+    '# Windows-only API inventory: PaperRoute.Core'
     ''
-    "Generated by ``Get-WindowsOnlyApiInventory.ps1`` over ``$($coreFiles.Count)`` files ($totalLines lines) in ``ManuscriptPipeline\Models`` and ``ManuscriptPipeline\Services``."
+    "Generated by ``Get-WindowsOnlyApiInventory.ps1`` over ``$($coreFiles.Count)`` files ($totalLines lines) in ``PaperRoute.Core`` (not ``bin`` or ``obj``)."
     $giText = ($globalImports | ForEach-Object { '`' + $_ + '`' }) -join ', '
-    "Project: TargetFramework ``$tfm``, UseWindowsForms ``$useWf``, project-wide imports: $giText."
+    "App project (``ManuscriptPipeline.vbproj``, which references the core): TargetFramework ``$tfm``, UseWindowsForms ``$useWf``, project-wide imports: $giText."
     'The project-wide imports mean a file can use System.Drawing and System.Windows.Forms types with no Imports line of its own; the patterns therefore match the type names, not only the Imports.'
     ''
     "Rows: **$($rows.Count)** (windows-only $(Count-By $rows { $_.Status -eq 'windows-only' }), needs-reading $(Count-By $rows { $_.Status -eq 'needs-reading' }), portable-note $(Count-By $rows { $_.Status -eq 'portable-note' })). Files with a windows-only or needs-reading row: **$($filesWithBlocking.Count)**; files with none: **$($filesClean.Count)**."
+    ''
+    $windowsOnlyLine
     ''
     '## By category'
     ''
@@ -499,7 +524,7 @@ if ($AsMarkdown) {
     ''
     (($filesClean | ForEach-Object { [IO.Path]::GetFileName($_.File) }) -join ', ')
     ''
-    '## NuGet packages'
+    '## NuGet packages of the app project'
     ''
     Md-Table $packages @('Package', 'Version', 'Platforms', 'Note')
     ''
@@ -515,4 +540,10 @@ else {
     $fileSummary | Where-Object Rows -GT 0 | Format-Table File, Lines, Rows, WindowsOnly, NeedsReading, PortableNote, Categories -AutoSize | Out-String -Width 400
     $packages | Format-Table -AutoSize -Wrap | Out-String -Width 300
     "Files scanned: $($coreFiles.Count); lines: $totalLines; rows: $($rows.Count); files with windows-only or needs-reading rows: $($filesWithBlocking.Count)"
+    $windowsOnlyLine
+}
+
+if ($FailOnWindowsOnly -and $windowsOnlyCount -gt 0) {
+    [Console]::Error.WriteLine("The core still uses a Windows-only API: $windowsOnlyLine.")
+    exit 1
 }

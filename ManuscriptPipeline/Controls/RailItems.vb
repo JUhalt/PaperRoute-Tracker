@@ -171,13 +171,20 @@ Namespace Controls
                         g.DrawLine(pen, p(11, 13.5F), p(11, 4.5F))
                         g.DrawLines(pen, {p(8.5F, 7), p(11, 4.5F), p(13.5F, 7)})
                     Case RailGlyph.Settings
-                        g.DrawEllipse(pen, r(5.8F, 5.8F, 4.4F, 4.4F))
+                        ' A cog: eight flat-topped teeth around a hole. Each tooth is
+                        ' 18 degrees across the top, its flanks 4.5 degrees wide.
+                        Dim at As Func(Of Double, Double, PointF) =
+                            Function(radius, degrees) p(CSng(8 + radius * Math.Cos(degrees * Math.PI / 180.0)), CSng(8 + radius * Math.Sin(degrees * Math.PI / 180.0)))
+                        Dim outline As New List(Of PointF)
                         For index As Integer = 0 To 7
-                            Dim angle As Double = index * Math.PI / 4.0
-                            g.DrawLine(pen,
-                                p(CSng(8 + 4.4 * Math.Cos(angle)), CSng(8 + 4.4 * Math.Sin(angle))),
-                                p(CSng(8 + 6.2 * Math.Cos(angle)), CSng(8 + 6.2 * Math.Sin(angle))))
+                            Dim middle As Double = -90.0 + index * 45.0
+                            outline.Add(at(4.7, middle - 13.5))
+                            outline.Add(at(6.4, middle - 9.0))
+                            outline.Add(at(6.4, middle + 9.0))
+                            outline.Add(at(4.7, middle + 13.5))
                         Next
+                        g.DrawPolygon(pen, outline.ToArray())
+                        g.DrawEllipse(pen, r(6.1F, 6.1F, 3.8F, 3.8F))
                     Case RailGlyph.Deadlines
                         g.DrawRectangle(pen, Rectangle.Round(r(2, 3, 12, 11)))
                         g.DrawLine(pen, p(2, 6.5F), p(14, 6.5F))

@@ -505,7 +505,7 @@ One week, on a throwaway branch, not merged: the Board with its cards on the exa
 
 ## Appendix A: the Windows-only API inventory
 
-**What.** `.github/scripts/Get-WindowsOnlyApiInventory.ps1` (PowerShell 7) reads every `.vb` file in `ManuscriptPipeline/Models` and `ManuscriptPipeline/Services` and reports one row per Windows-only or doubtful API use, with the suggested replacement, then summaries by category, pattern and file, and the packages. It only reads files: no build, no `dotnet`. Two runs give identical output. Its limits are in the script's header (it reads one line at a time; types reached only through inference are missed).
+**What.** `.github/scripts/Get-WindowsOnlyApiInventory.ps1` (PowerShell 7) reads every `.vb` file under `PaperRoute.Core` (at `d67c312`, before the core-library split moved them there, these were `ManuscriptPipeline/Models` and `ManuscriptPipeline/Services`) and reports one row per Windows-only or doubtful API use, with the suggested replacement, then summaries by category, pattern and file, and the packages. It only reads files: no build, no `dotnet`. Two runs give identical output. Its limits are in the script's header (it reads one line at a time; types reached only through inference are missed).
 
 **Why `.github/scripts`.** That folder holds the repository's checks over the source and the release assets that need no installed app (`Verify-ReleaseAssets.ps1`, `Set-RunnerDisplay.ps1`), and the stage 2 build issue is expected to run this script in CI as a gate. `ManualCertification` holds scripts that build candidates, drive virtual machines or capture installed windows, which this script does not.
 

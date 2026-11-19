@@ -62,6 +62,33 @@ Namespace Services
         End Function
 
 
+        ' The guide of the running version, from its release tag, so an
+        ' installed release opens its own guide and not whatever master says
+        ' that day (#129). A copy Setup did not install, from Visual Studio
+        ' or a developer build, opens master's.
+        Public Shared ReadOnly Property GitHubGuideUrl As String
+            Get
+
+                Return UserGuideService.GitHubGuideUrlFor(
+                    CurrentVersionText(),
+                    developmentBuild:=Not IsInstalledBuild(
+                        Models.AppUpdateChannel.Stable
+                    )
+                )
+
+            End Get
+        End Property
+
+
+        ' The section the startup window points to (#119), in the guide of
+        ' the running version (#129).
+        Public Shared ReadOnly Property RecoveringYourLibraryUrl As String
+            Get
+                Return GitHubGuideUrl & "#recovering-your-library"
+            End Get
+        End Property
+
+
         ' Applying an update ends PaperRoute at once (#132). A save, backup or
         ' restore processes the window's messages while it runs, so a download
         ' can finish during one; the update waits until that work has ended.

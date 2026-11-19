@@ -745,7 +745,7 @@ Public Class AssistantCoreTests
         Assert.IsTrue(compatible.ConfiguredHost)
         Assert.AreEqual(0, compatible.Hosts.Count)
         StringAssert.Contains(compatible.Contacts, "http only on this computer")
-        Dim source As String = File.ReadAllText(Path.Combine(RepositoryRoot(), "ManuscriptPipeline", "Services", "AssistantProviders.vb"))
+        Dim source As String = File.ReadAllText(Path.Combine(RepositoryRoot(), "PaperRoute.Core", "Services", "AssistantProviders.vb"))
         StringAssert.Contains(source, ".HttpClient = http,", "The SDK always gets the gate's client.")
         StringAssert.Contains(source, "OnlineAccess.CreateClient(OnlineServiceCatalog.AssistantClaude", "...from the gate.")
         StringAssert.Contains(source, ".MaxRetries = 0", "...and never resends the text by itself.")

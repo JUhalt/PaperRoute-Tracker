@@ -20,26 +20,41 @@ Namespace Services
 
         Private ReadOnly _directory As String
 
+        ' The app's version text for the "Version:" line, from the app
+        ' (UpdateService.CurrentVersionText), read when a report is written.
+        Private ReadOnly _versionText As Func(Of String)
 
-        Public Sub New()
+
+        Public Sub New(
+            versionText As Func(Of String)
+        )
 
             Me.New(
-                DefaultDirectory()
+                DefaultDirectory(),
+                versionText
             )
 
         End Sub
 
 
         Private Sub New(
-            directory As String
+            directory As String,
+            versionText As Func(Of String)
         )
 
             If String.IsNullOrWhiteSpace(directory) Then
                 Throw New ArgumentException("A report directory is required.", NameOf(directory))
             End If
 
+            If versionText Is Nothing Then
+                Throw New ArgumentNullException(NameOf(versionText))
+            End If
+
             _directory =
                 Path.GetFullPath(directory)
+
+            _versionText =
+                versionText
 
         End Sub
 
@@ -74,7 +89,7 @@ Namespace Services
 
                 File.WriteAllText(
                     reportPath,
-                    Compose(exception, where),
+                    Compose(exception, where, _versionText),
                     New UTF8Encoding(False)
                 )
 
@@ -128,7 +143,8 @@ Namespace Services
 
         Private Shared Function Compose(
             exception As Exception,
-            where As String
+            where As String,
+            versionText As Func(Of String)
         ) As String
 
             Dim builder As New StringBuilder()
@@ -137,7 +153,7 @@ Namespace Services
             builder.AppendLine("=======================")
             builder.AppendLine()
             builder.AppendLine("Time: " & DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"))
-            builder.AppendLine("Version: " & UpdateService.CurrentVersionText())
+            builder.AppendLine("Version: " & versionText())
             builder.AppendLine("Windows: " & RuntimeInformation.OSDescription)
             builder.AppendLine("Runtime: " & RuntimeInformation.FrameworkDescription)
             builder.AppendLine("Where: " & If(String.IsNullOrWhiteSpace(where), "unknown", where))

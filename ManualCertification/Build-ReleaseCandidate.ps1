@@ -90,6 +90,16 @@ foreach ($pair in @(@('Version', $Version), @('AssemblyVersion', $numericVersion
         throw "Project $($pair[0]) must explicitly equal '$($pair[1])' before packaging."
     }
 }
+# The app's model and services are in PaperRoute.Core.dll from v1.1, and the
+# manifests and the User-Agent read the version there: its project writes the
+# same three versions explicitly.
+$coreProject = Read-SafeXml (Join-Path $repoRoot 'PaperRoute.Core/PaperRoute.Core.vbproj')
+foreach ($pair in @(@('Version', $Version), @('AssemblyVersion', $numericVersion), @('FileVersion', $numericVersion))) {
+    $nodes = @($coreProject.SelectNodes("/Project/PropertyGroup/$($pair[0])"))
+    if ($nodes.Count -ne 1 -or $nodes[0].InnerText -cne $pair[1]) {
+        throw "PaperRoute.Core $($pair[0]) must explicitly equal the app's '$($pair[1])' before packaging."
+    }
+}
 # The Velopack library the app references and the vpk that packs it are one
 # version, as release.yml requires; 1.2.161 from 1.0 (#179).
 $velopackVersion = '1.2.161'
@@ -366,18 +376,23 @@ function Assert-NoticesNameRuntime([string] $NoticesPath, [string] $RuntimeVersi
     }
 }
 
-function Assert-ArchivePayload([string] $Path, [string] $ExpectedDllHash, [switch] $CheckNuspec) {
+function Assert-ArchivePayload([string] $Path, [string] $ExpectedDllHash, [string] $ExpectedCoreDllHash, [switch] $CheckNuspec) {
     $archive = [IO.Compression.ZipFile]::OpenRead($Path)
     try {
         $dllEntries = @($archive.Entries | Where-Object { $_.Name -ceq 'PaperRouteTracker.dll' })
         $exeEntries = @($archive.Entries | Where-Object { $_.Name -ceq 'PaperRouteTracker.exe' })
-        if ($dllEntries.Count -ne 1 -or $exeEntries.Count -lt 1) {
+        $coreEntries = @($archive.Entries | Where-Object { $_.Name -ceq 'PaperRoute.Core.dll' })
+        if ($dllEntries.Count -ne 1 -or $exeEntries.Count -lt 1 -or $coreEntries.Count -ne 1) {
             throw "'$Path' does not contain an unambiguous PaperRoute payload."
         }
         $stream = $dllEntries[0].Open()
         try { $dllHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($stream)).ToLowerInvariant() }
         finally { $stream.Dispose() }
         if ($dllHash -cne $ExpectedDllHash) { throw "The application DLL in '$Path' differs from the published DLL." }
+        $coreStream = $coreEntries[0].Open()
+        try { $coreDllHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($coreStream)).ToLowerInvariant() }
+        finally { $coreStream.Dispose() }
+        if ($coreDllHash -cne $ExpectedCoreDllHash) { throw "PaperRoute.Core.dll in '$Path' differs from the published one." }
         foreach ($legalName in @('LICENSE.txt', 'NOTICE.md', 'THIRD-PARTY-NOTICES.txt')) {
             $legalEntries = @($archive.Entries | Where-Object { $_.Name -ceq $legalName })
             if ($legalEntries.Count -ne 1) { throw "'$Path' must contain exactly one '$legalName'." }
@@ -405,7 +420,7 @@ function Assert-ArchivePayload([string] $Path, [string] $ExpectedDllHash, [switc
                 throw "Package identity/version mismatch in '$Path'."
             }
         }
-        return [ordered]@{ FileName = [IO.Path]::GetFileName($Path); PayloadDllSha256 = $dllHash }
+        return [ordered]@{ FileName = [IO.Path]::GetFileName($Path); PayloadDllSha256 = $dllHash; PayloadCoreDllSha256 = $coreDllHash }
     }
     finally { $archive.Dispose() }
 }
@@ -422,7 +437,7 @@ try {
     # tests, which need an unlocked desktop in use, to certification.
     Invoke-CandidateCommand '02-test' $dotnet (@(
         'test', 'PaperRoute.Tests/PaperRoute.Tests.vbproj', '--configuration', 'Release', '--no-build', '--no-restore',
-        '--filter', 'TestCategory!=OnDemand&TestCategory!=OnScreen',
+        '--filter', 'TestCategory!=OnDemand&TestCategory!=OnScreen&TestCategory!=SameDataEverywhere',
         '--artifacts-path', $buildRoot, '--logger', 'trx;LogFileName=PaperRoute.Tests.trx', '--results-directory', $testRoot
     ) + $properties)
     $trxPath = Join-Path $testRoot 'PaperRoute.Tests.trx'
@@ -439,7 +454,7 @@ try {
     ) + $properties)
 
     foreach ($required in @('PaperRouteTracker.exe', 'PaperRouteTracker.dll', 'PaperRouteTracker.deps.json',
-        'PaperRouteTracker.runtimeconfig.json', 'coreclr.dll', 'hostfxr.dll', 'System.Windows.Forms.dll',
+        'PaperRouteTracker.runtimeconfig.json', 'PaperRoute.Core.dll', 'coreclr.dll', 'hostfxr.dll', 'System.Windows.Forms.dll',
         'docs/USER_GUIDE.md', 'LICENSE.txt', 'NOTICE.md', 'THIRD-PARTY-NOTICES.txt')) {
         if (-not (Test-Path -LiteralPath (Join-Path $publishRoot $required) -PathType Leaf)) {
             throw "The self-contained publish payload is missing '$required'."
@@ -456,6 +471,14 @@ try {
         throw "Published binary versions do not match '$Version' / '$numericVersion'."
     }
     $dllHash = Get-Sha256 $dllPath
+    $coreDllPath = Join-Path $publishRoot 'PaperRoute.Core.dll'
+    $coreVersionInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo($coreDllPath)
+    $coreAssemblyVersion = [Reflection.AssemblyName]::GetAssemblyName($coreDllPath).Version.ToString()
+    if (($coreVersionInfo.ProductVersion -split '\+')[0] -cne $Version -or
+        $coreVersionInfo.FileVersion -cne $numericVersion -or $coreAssemblyVersion -cne $numericVersion) {
+        throw "Published PaperRoute.Core.dll versions do not match '$Version' / '$numericVersion'."
+    }
+    $coreDllHash = Get-Sha256 $coreDllPath
     Invoke-CandidateCommand '04-package' $dnx @(
         'vpk', '--version', $velopackVersion, 'pack', '--packId', $packId, '--packVersion', $Version,
         '--packDir', $publishRoot, '--mainExe', 'PaperRouteTracker.exe', '--packTitle', 'PaperRoute Tracker',
@@ -472,7 +495,7 @@ try {
     if ($packages.Count -ne 1 -or $installers.Count -ne 1 -or $portable.Count -ne 0 -or $installers[0].Length -le 0) {
         throw 'Expected exactly one full package and one installer, and no portable ZIP, in the fresh release directory.'
     }
-    $packageProof = Assert-ArchivePayload $packages[0].FullName $dllHash -CheckNuspec
+    $packageProof = Assert-ArchivePayload $packages[0].FullName $dllHash $coreDllHash -CheckNuspec
     $feedPath = Join-Path $releaseRoot "releases.$channel.json"
     $feed = Get-Content -LiteralPath $feedPath -Raw | ConvertFrom-Json
     $fullAsset = @($feed.Assets | Where-Object { $_.FileName -ceq $packages[0].Name })
@@ -510,6 +533,7 @@ try {
         TestsPassed = [int] $counters.GetAttribute('passed'); TestReport = 'tests/PaperRoute.Tests.trx'
         ProductVersion = $versionInfo.ProductVersion; AssemblyVersion = $assemblyVersion
         FileVersion = $versionInfo.FileVersion; PublishedDllSha256 = $dllHash
+        PublishedCoreDllSha256 = $coreDllHash
         ReleaseNotesSha256 = (Get-Sha256 $releaseNotes)
         Package = $packageProof; Assets = $assetProof
         ChecksumFileSha256 = (Get-Sha256 $checksumPath); InstallerSignatureStatus = $signature.Status.ToString()

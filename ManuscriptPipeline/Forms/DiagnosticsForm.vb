@@ -269,7 +269,7 @@ Namespace Forms
         Private Shared Function LastErrorReportText() As String
 
             Dim reportPath As String =
-                New ErrorReportService().LastReportPath()
+                New ErrorReportService(AddressOf UpdateService.CurrentVersionText).LastReportPath()
 
             Return If(reportPath.Length = 0, "None", reportPath)
 

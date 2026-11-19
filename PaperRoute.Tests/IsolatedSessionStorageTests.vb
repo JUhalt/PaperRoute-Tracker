@@ -353,11 +353,17 @@ Public Class IsolatedSessionStorageTests
 
     ' A fresh collectible assembly context exercises the real process-wide seam
     ' without configuring or resetting the test host's ordinary application copy.
+    ' The app and its core library both load into it from the app's folder, so
+    ' neither shares statics with the test host's copies; Form1 comes from the app.
     Private NotInheritable Class IsolatedStorageAssembly
         Implements IDisposable
 
-        Private ReadOnly _context As New AssemblyLoadContext("PaperRoute isolated storage " & Guid.NewGuid().ToString("N"), True)
-        Private ReadOnly _assembly As Assembly = _context.LoadFromAssemblyPath(GetType(StorageEnvironment).Assembly.Location)
+        Private Shared ReadOnly AppFolder As String = Path.GetDirectoryName(GetType(Global.ManuscriptPipeline.Form1).Assembly.Location)
+        Private ReadOnly _context As New SiblingLoadContext("PaperRoute isolated storage " & Guid.NewGuid().ToString("N"), AppFolder)
+        Private ReadOnly _assemblies As Assembly() = {
+            _context.LoadFromAssemblyPath(GetType(Global.ManuscriptPipeline.Form1).Assembly.Location),
+            _context.LoadFromAssemblyName(New AssemblyName("PaperRoute.Core"))
+        }
         Public ReadOnly Property Root As String = Path.Combine(Path.GetTempPath(), "PaperRoute-Isolation-Test-" & Guid.NewGuid().ToString("N"))
 
         Public Sub Configure(rootDirectory As String)
@@ -369,14 +375,23 @@ Public Class IsolatedSessionStorageTests
         End Function
 
         Public Function Create(typeName As String) As Object
-            Return Activator.CreateInstance(_assembly.GetType("ManuscriptPipeline." & typeName, True))
+            Return Activator.CreateInstance(FindType("ManuscriptPipeline." & typeName))
         End Function
 
         Public Function CallStatic(typeName As String, methodName As String, ParamArray arguments As Object()) As Object
-            Dim method As MethodInfo = _assembly.GetType("ManuscriptPipeline.Services." & typeName, True).
+            Dim method As MethodInfo = FindType("ManuscriptPipeline.Services." & typeName).
                 GetMethods(BindingFlags.Public Or BindingFlags.NonPublic Or BindingFlags.Static).
                 Single(Function(item) item.Name = methodName AndAlso item.GetParameters().Length = arguments.Length)
             Return Invoke(method, Nothing, arguments)
+        End Function
+
+        ' The app first, then the core library, both from this context.
+        Private Function FindType(fullName As String) As Type
+            For Each owner As Assembly In _assemblies
+                Dim found As Type = owner.GetType(fullName, False)
+                If found IsNot Nothing Then Return found
+            Next
+            Throw New TypeLoadException(fullName & " is in neither the app nor its core library.")
         End Function
 
         Public Function CallInstance(target As Object, methodName As String, ParamArray arguments As Object()) As Object
@@ -402,6 +417,29 @@ Public Class IsolatedSessionStorageTests
                 DeleteTemporaryRoot(normalized)
             End If
         End Sub
+
+    End Class
+
+    ' Resolves the app and its core library from the app's folder into this
+    ' context; everything else (the framework, the packages) comes from the
+    ' default context, as before.
+    Private NotInheritable Class SiblingLoadContext
+        Inherits AssemblyLoadContext
+
+        Private Shared ReadOnly Siblings As String() = {"PaperRouteTracker", "PaperRoute.Core"}
+        Private ReadOnly _folder As String
+
+        Public Sub New(name As String, folder As String)
+            MyBase.New(name, True)
+            _folder = folder
+        End Sub
+
+        Protected Overrides Function Load(assemblyName As AssemblyName) As Assembly
+            If Siblings.Contains(assemblyName.Name, StringComparer.OrdinalIgnoreCase) Then
+                Return LoadFromAssemblyPath(Path.Combine(_folder, assemblyName.Name & ".dll"))
+            End If
+            Return Nothing
+        End Function
 
     End Class
 

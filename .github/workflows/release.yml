@@ -92,6 +92,17 @@ jobs:
                   throw "Project $($pair[0]) must explicitly equal '$($pair[1])'; a tag must not mask stale source metadata."
               }
           }
+          # The model and services are in PaperRoute.Core.dll from v1.1, and
+          # the manifests and the User-Agent read the version there.
+          $coreProject = [xml]::new()
+          $coreProject.XmlResolver = $null
+          $coreProject.Load((Join-Path $env:GITHUB_WORKSPACE 'PaperRoute.Core/PaperRoute.Core.vbproj'))
+          foreach ($pair in @(@('Version', $version), @('AssemblyVersion', $numericVersion), @('FileVersion', $numericVersion))) {
+              $nodes = @($coreProject.SelectNodes("/Project/PropertyGroup/$($pair[0])"))
+              if ($nodes.Count -ne 1 -or $nodes[0].InnerText -cne $pair[1]) {
+                  throw "PaperRoute.Core $($pair[0]) must explicitly equal the app's '$($pair[1])'; a tag must not mask stale source metadata."
+              }
+          }
           $runtime = @($project.SelectNodes('/Project/ItemGroup/PackageReference[@Include="Velopack"]'))
           if ($runtime.Count -ne 1 -or $runtime[0].GetAttribute('Version') -cne '1.2.161') {
               throw 'The runtime and release packager must both use Velopack 1.2.161.'
@@ -232,6 +243,17 @@ jobs:
           $assemblyVersion = [Reflection.AssemblyName]::GetAssemblyName($publishedDll).Version.ToString()
           if ($assemblyVersion -cne $numeric -or $versionInfo.FileVersion -cne $numeric) {
               throw "Assembly/FileVersion must both equal '$numeric'."
+          }
+          $publishedCore = Join-Path "$env:GITHUB_WORKSPACE/publish/win-x64" 'PaperRoute.Core.dll'
+          if (-not (Test-Path -LiteralPath $publishedCore -PathType Leaf)) {
+              throw "Published PaperRoute.Core.dll was not found at '$publishedCore'."
+          }
+          $coreInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($publishedCore)
+          $coreAssemblyVersion = [Reflection.AssemblyName]::GetAssemblyName($publishedCore).Version.ToString()
+          Write-Host "Core version:      $($coreInfo.ProductVersion)"
+          if (($coreInfo.ProductVersion -split '\+')[0] -cne $expected -or
+              $coreAssemblyVersion -cne $numeric -or $coreInfo.FileVersion -cne $numeric) {
+              throw "PaperRoute.Core.dll must report '$expected' and Assembly/FileVersion '$numeric'."
           }
           foreach ($relativePath in @('docs/USER_GUIDE.md', 'LICENSE.txt', 'NOTICE.md', 'THIRD-PARTY-NOTICES.txt')) {
               $source = Join-Path $env:GITHUB_WORKSPACE $relativePath

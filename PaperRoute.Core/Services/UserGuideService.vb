@@ -11,37 +11,14 @@ Namespace Services
         Private Const GitHubGuideUrlFormat As String =
             "https://github.com/JUhalt/PaperRoute-Tracker/blob/{0}/docs/USER_GUIDE.md"
 
-        ' The section the startup window points to (#119), in the guide of
-        ' the running version (#129).
-        Public Shared ReadOnly Property RecoveringYourLibraryUrl As String
-            Get
-                Return GitHubGuideUrl & "#recovering-your-library"
-            End Get
-        End Property
-
 
         Private Sub New()
         End Sub
 
 
-        ' The guide of the running version, from its release tag, so an
-        ' installed release opens its own guide and not whatever master says
-        ' that day (#129). A copy Setup did not install, from Visual Studio
-        ' or a developer build, opens master's.
-        Public Shared ReadOnly Property GitHubGuideUrl As String
-            Get
-
-                Return GitHubGuideUrlFor(
-                    UpdateService.CurrentVersionText(),
-                    developmentBuild:=Not UpdateService.IsInstalledBuild(
-                        Models.AppUpdateChannel.Stable
-                    )
-                )
-
-            End Get
-        End Property
-
-
+        ' The guide's link for a version; the running version's link, which
+        ' needs the app's version and installed flag, is
+        ' UpdateService.GitHubGuideUrl.
         Friend Shared Function GitHubGuideUrlFor(
             version As String,
             developmentBuild As Boolean

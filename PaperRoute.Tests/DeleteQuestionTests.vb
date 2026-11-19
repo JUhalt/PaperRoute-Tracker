@@ -117,7 +117,11 @@ Public Class DeleteQuestionTests
         Dim app As String =
             Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManuscriptPipeline")
 
-        Return Directory.GetFiles(app, "*.vb", SearchOption.AllDirectories).
+        ' The app's code that moved into its core library (v1.1) is swept too.
+        Dim core As String =
+            Path.Combine(AssistantCoreTests.RepositoryRoot(), "PaperRoute.Core")
+
+        Return {app, core}.SelectMany(Function(folder) Directory.GetFiles(folder, "*.vb", SearchOption.AllDirectories)).
             Where(Function(source) Not source.Contains("\obj\", StringComparison.OrdinalIgnoreCase) AndAlso Not source.Contains("\bin\", StringComparison.OrdinalIgnoreCase)).
             ToList()
 
