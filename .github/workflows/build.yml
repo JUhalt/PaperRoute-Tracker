@@ -62,6 +62,14 @@ jobs:
         shell: pwsh
         run: ./ManualCertification/Test-ReleaseAssetVerifier.ps1 -RunName ci
 
+      # Report only until core stage 2 makes it strict with -FailOnWindowsOnly.
+      - name: Inventory Windows-only APIs in the core
+        shell: pwsh
+        run: |
+          $report = @(./.github/scripts/Get-WindowsOnlyApiInventory.ps1 -Root .)
+          $report | Write-Host
+          $report | Where-Object { $_ -like 'Files scanned:*' -or $_ -like 'Windows-only rows:*' } | ForEach-Object { "Core inventory: $_" } >> $env:GITHUB_STEP_SUMMARY
+
       - name: Build Release
         run: dotnet build ManuscriptPipeline.slnx --configuration Release --no-restore
 
