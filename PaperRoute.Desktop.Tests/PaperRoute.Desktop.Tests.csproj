@@ -29,6 +29,8 @@
   <ItemGroup>
     <!-- The orders today's WinForms Board gives the 500 library (V8), from the one checked-in copy. -->
     <None Include="..\PaperRoute.TestFixtures\SortOrders\board-sort-orders-500.json" Link="SortOrders\board-sort-orders-500.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Every core member the trial's compiled code may reference, each with its reason (lock 3 from the other side, CoreSurfaceTests). -->
+    <None Update="CoreSurface\allowed-core-references.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

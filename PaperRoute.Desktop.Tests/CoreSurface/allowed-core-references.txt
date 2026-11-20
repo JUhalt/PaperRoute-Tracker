@@ -1,0 +1,55 @@
+# Every reference the Board trial's compiled code (PaperRoute.ViewModels.dll, PaperRoute.Desktop.dll) makes into PaperRoute.Core.
+# Checked by PaperRoute.Desktop.Tests\CoreSurface\CoreSurfaceTests.cs: a reference not listed here fails, and so does a line nothing references.
+# Lock 3 of the trial design (d1 1.3) from the other side: BannedSymbols.txt names what is forbidden; this names what is allowed.
+#
+# One line per symbol, sorted (ordinal), "<documentation ID>;<reason>":
+#   T:<type>   the whole type, every member allowed; only for a type that holds data in memory and touches no file, folder,
+#              network, registry, process or key store. The reason starts "in memory only: " and says what was read.
+#   M:/F:<member>  one method (property and event accessors included) or field of any other type. The reason says what it is
+#              and why it cannot change a library on disk, or, for the few that write, what confines the write to the isolated session.
+# A type named only in the parameters of a listed member (ManagedLibraryService) needs no line of its own: naming it runs none of its code.
+# Before adding a line: read the member in PaperRoute.Core, and add it only if it cannot write outside the isolated session.
+F:ManuscriptPipeline.Services.StorageEnvironment.DefaultRootUses;a counter of default-root answers, read by --self-check (rule S2); reading a field touches nothing
+M:ManuscriptPipeline.Services.AppSettingsService.#ctor(System.String);keeps the settings folder DiskLibrarySession gives it (inside the temporary folder) and builds JSON options; no I/O
+M:ManuscriptPipeline.Services.AppSettingsService.Load;reads settings.json or settings.bak (File.Exists, File.ReadAllText) and normalizes the copy in memory; writes nothing (Save is banned)
+M:ManuscriptPipeline.Services.AuthorLibraryRepository.#ctor(System.String,System.Func{System.String,System.IO.Stream});keeps the data folder and file paths and an open-for-read delegate; no I/O
+M:ManuscriptPipeline.Services.AuthorLibraryRepository.Load;WRITES: creates the data folder and, after a damaged authors.json, copies authors.bak back and moves the damaged file into data\recovery; every write stays inside the folder given, which DiskLibrarySession admits only inside the temporary folder (the example session or a test's library)
+M:ManuscriptPipeline.Services.AuthorLibrarySearchIndex.#ctor(ManuscriptPipeline.Models.AuthorLibraryData);indexes author names from the in-memory author library; no I/O
+M:ManuscriptPipeline.Services.AuthorLibrarySearchIndex.BuildSearchText(ManuscriptPipeline.Models.Manuscript);builds a search string from a manuscript in memory; no I/O
+M:ManuscriptPipeline.Services.DeadlineService.CountDueNow(System.Collections.Generic.IEnumerable{ManuscriptPipeline.Models.Manuscript},System.DateTime);counts due reminders (ReminderService.BuildOccurrences) over manuscripts in memory; no I/O in either file
+M:ManuscriptPipeline.Services.ExampleLibraryService.Create(System.DateTime);builds the fictional example library in memory (new objects only); no I/O
+M:ManuscriptPipeline.Services.ExampleLibraryService.EndSession;WRITES: deletes the example's own session folder, the new <temp>\PaperRoute-Example-<guid> that StartSession created, and nothing when no session started
+M:ManuscriptPipeline.Services.ExampleLibraryService.Seed(System.DateTime,ManuscriptPipeline.Models.OnlineServicesSettings);WRITES: saves the example's four files; also banned (RS0030), called once from TrialStartup.SeedExample under a #pragma; throws unless the example session is active, so every default root it resolves lies in the session folder
+M:ManuscriptPipeline.Services.ExampleLibraryService.StartSession;WRITES: creates a new <temp>\PaperRoute-Example-<guid> folder and makes it the isolated session (lock 1); refuses a folder that exists, is not a direct child of the temporary folder, or comes after any root was resolved
+M:ManuscriptPipeline.Services.ManuscriptAttentionService.Evaluate(ManuscriptPipeline.Models.Manuscript,System.DateTime,System.Int32,System.Int32,System.Int32);computes the attention snapshot of a manuscript in memory; no I/O in the file
+M:ManuscriptPipeline.Services.ManuscriptRepository.#ctor(System.String,System.String,ManuscriptPipeline.Services.ManagedLibraryService,System.Func{System.String,System.IO.Stream});keeps the paths and, for the non-blank managed folder DiskLibrarySession always gives, a ManagedLibraryService over it (its constructor only stores the path); no I/O
+M:ManuscriptPipeline.Services.ManuscriptRepository.Load;WRITES: creates the data folder, after a damaged manuscripts.json copies manuscripts.bak back and moves the damaged file into data\recovery, and recovers staged version deletions in the managed folder; every write stays inside the two folders given, which DiskLibrarySession admits only inside the temporary folder (the example session or a test's library)
+M:ManuscriptPipeline.Services.ManuscriptRepository.get_LastLoadRecoveredFromBackup;returns a flag set by the last load; no I/O
+M:ManuscriptPipeline.Services.ManuscriptRepository.get_LastManagedLibraryRecoveryWarning;returns a text set by the last load; no I/O
+M:ManuscriptPipeline.Services.ManuscriptStageSummaryService.CountByStage(System.Collections.Generic.IEnumerable{ManuscriptPipeline.Models.Manuscript});counts manuscripts by stage in memory; no I/O
+M:ManuscriptPipeline.Services.RouteSummaryService.Describe(ManuscriptPipeline.Models.Manuscript);builds the route dots and text from a manuscript in memory; no I/O in the file or in what it calls
+M:ManuscriptPipeline.Services.StageClockService.Describe(ManuscriptPipeline.Models.Manuscript,System.DateTime);builds the stage-clock text in memory; no I/O
+M:ManuscriptPipeline.Services.StorageEnvironment.DataFolderName;returns a folder name (reads PAPERROUTE_DEV_STORAGE and Debugger.IsAttached); no file access, writes nothing
+M:ManuscriptPipeline.Services.StorageEnvironment.LegacyDataFolderName;returns a folder name (reads PAPERROUTE_DEV_STORAGE and Debugger.IsAttached); no file access, writes nothing
+M:ManuscriptPipeline.Services.StorageEnvironment.LegacyManagedLibraryFolderName;returns a folder name (reads PAPERROUTE_DEV_STORAGE and Debugger.IsAttached); no file access, writes nothing
+M:ManuscriptPipeline.Services.StorageEnvironment.ManagedLibraryFolderName;returns a folder name (reads PAPERROUTE_DEV_STORAGE and Debugger.IsAttached); no file access, writes nothing
+M:ManuscriptPipeline.Services.StorageEnvironment.get_IsIsolatedSession;returns whether an isolated session is set; no I/O
+M:ManuscriptPipeline.Services.StorageMigrationService.CurrentDataRoot;returns a path string (Path.Combine through StorageEnvironment.ResolveStorageRoot); creates nothing; inside the session once StartSession ran
+M:ManuscriptPipeline.Services.StorageMigrationService.CurrentManagedLibraryRoot;returns a path string (Path.Combine through StorageEnvironment.ResolveStorageRoot); creates nothing; inside the session once StartSession ran
+M:ManuscriptPipeline.Services.StorageMigrationService.LegacyDataRoot;returns a path string (Path.Combine through StorageEnvironment.ResolveStorageRoot); creates nothing; read by --self-check only
+M:ManuscriptPipeline.Services.StorageMigrationService.LegacyManagedLibraryRoot;returns a path string (Path.Combine through StorageEnvironment.ResolveStorageRoot); creates nothing; read by --self-check only
+M:ManuscriptPipeline.Services.WorkTypeService.ColorOf(System.String,ManuscriptPipeline.Models.AuthorLibraryData);picks a tag's color from the in-memory library or a hash of its name; no I/O
+M:ManuscriptPipeline.Services.WorkTypeService.DisplayName(ManuscriptPipeline.Models.WorkType);maps a work type to its name; no I/O
+T:ManuscriptPipeline.Models.AppSettings;in memory only: twelve auto-properties with defaults (thresholds, appearance, update channel, OnlineServices); no methods, no I/O (Models\AppSettings.vb)
+T:ManuscriptPipeline.Models.AttentionFilter;in memory only: an enum of six values (Models\AttentionFilter.vb)
+T:ManuscriptPipeline.Models.AuthorLibraryData;in memory only: four list properties (authors, affiliations, journals, tag colors); no methods, no I/O (Models\AuthorLibraryData.vb)
+T:ManuscriptPipeline.Models.Manuscript;in memory only: auto-properties and lists, plus SubmissionCount and RejectionCount, which count in memory; no I/O (Models\Manuscript.vb)
+T:ManuscriptPipeline.Models.ManuscriptLocation;in memory only: an enum of three values (Models\ManuscriptLocation.vb)
+T:ManuscriptPipeline.Models.OnlineServicesSettings;in memory only: three auto-properties (WorkOffline, TurnedOff, Assistant); no methods, no I/O (Models\OnlineServicesSettings.vb)
+T:ManuscriptPipeline.Models.PaperStage;in memory only: an enum of eight stages (Models\PaperStage.vb)
+T:ManuscriptPipeline.Models.TagPalette;in memory only: an enum of eight colors (Models\TagColor.vb)
+T:ManuscriptPipeline.Models.WorkType;in memory only: an enum of nine work types (Models\WorkType.vb)
+T:ManuscriptPipeline.Services.ManuscriptAttentionSnapshot;in memory only: auto-properties with defaults, no methods, no I/O (Services\ManuscriptAttentionService.vb)
+T:ManuscriptPipeline.Services.RouteDotState;in memory only: an enum of three values (Services\RouteSummaryService.vb)
+T:ManuscriptPipeline.Services.RouteSummary;in memory only: a constructor that stores Dots and Text, and their two getters; no I/O (Services\RouteSummaryService.vb)
+T:ManuscriptPipeline.Services.StorageFileInUseException;in memory only: an IOException subclass whose one constructor builds its message (Path.GetFileName is string work); caught, never thrown, by the trial (Services\StorageFile.vb)
