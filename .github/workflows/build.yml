@@ -244,9 +244,9 @@ jobs:
         shell: pwsh
         # Headless tests (Avalonia.Headless with Skia): no desktop needed.
         # Every test must pass, none skipped or inconclusive; tests marked
-        # Manual are run by hand only. The view tests' pictures (nine PNGs,
-        # under a megabyte in all) go into TestResults/pictures, which the
-        # upload below carries.
+        # Manual are run by hand only. The view tests' pictures (PNGs, a few
+        # megabytes in all) go into TestResults/pictures, which the upload
+        # below carries.
         env:
           PAPERROUTE_TRIAL_PICTURES: ${{ github.workspace }}/TestResults/pictures
         run: |
@@ -269,6 +269,82 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: PaperRoute-trial-results
+          path: TestResults/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # The same trial on Ubuntu: the first sign of whether the Avalonia
+  # interface builds and its headless tests pass off Windows (the trial's
+  # question 5). The build must succeed. The tests are report-only: those
+  # that do not pass yet are listed in the step summary and raise a warning,
+  # as findings for the trial's report, and do not fail a pull request.
+  trial-linux:
+    name: Avalonia Board trial (Linux, report-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Avalonia.BuildServices reports build telemetry unless this is set.
+      AVALONIA_TELEMETRY_OPTOUT: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Restore dependencies
+        run: dotnet restore PaperRoute.Desktop.slnx
+
+      - name: Build Release
+        run: dotnet build PaperRoute.Desktop.slnx --configuration Release --no-restore
+
+      - name: Run trial tests
+        shell: pwsh
+        env:
+          PAPERROUTE_TRIAL_PICTURES: ${{ github.workspace }}/TestResults/pictures
+          TZ: Etc/UTC
+          LANG: en_US.UTF-8
+        run: |
+          dotnet test PaperRoute.Desktop.Tests/PaperRoute.Desktop.Tests.csproj --configuration Release --no-build --blame-hang-timeout 5m `
+              --filter 'TestCategory!=Manual' `
+              --logger 'trx;LogFileName=PaperRoute.Desktop.Tests.trx' --results-directory "$env:GITHUB_WORKSPACE/TestResults"
+          $exitCode = $LASTEXITCODE
+          $path = Join-Path $env:GITHUB_WORKSPACE 'TestResults/PaperRoute.Desktop.Tests.trx'
+          $counters = $null
+          if (Test-Path -LiteralPath $path) {
+              $trx = [xml]::new()
+              $trx.XmlResolver = $null
+              $trx.Load($path)
+              $counters = $trx.SelectSingleNode('//*[local-name()="ResultSummary"]/*[local-name()="Counters"]')
+          }
+          if ($null -eq $counters -or [int] $counters.GetAttribute('total') -lt 1) {
+              throw "The trial tests produced no results on Linux (dotnet test exit code $exitCode)."
+          }
+          $total = [int] $counters.GetAttribute('total')
+          $notPassed = $total - [int] $counters.GetAttribute('passed')
+          "Board trial on Linux: $($counters.GetAttribute('passed')) of $total tests passed." >> $env:GITHUB_STEP_SUMMARY
+          if ($notPassed -gt 0) {
+              $names = @($trx.SelectNodes('//*[local-name()="UnitTestResult"][not(@outcome="Passed")]') |
+                  ForEach-Object { "$($_.GetAttribute('outcome')): $($_.GetAttribute('testName'))" } | Sort-Object)
+              '' >> $env:GITHUB_STEP_SUMMARY
+              "Not passing on Linux ($($names.Count)):" >> $env:GITHUB_STEP_SUMMARY
+              '' >> $env:GITHUB_STEP_SUMMARY
+              $names | ForEach-Object { "- ``$_``" } >> $env:GITHUB_STEP_SUMMARY
+              "::warning title=Board trial on Linux (report-only)::$notPassed of $total trial tests do not pass on Linux yet. They are listed in this job's summary and in the PaperRoute-trial-linux-results artifact."
+          }
+          # Report-only: the result has been judged above. Left as it is, the
+          # runner would end this step with dotnet test's exit code and fail
+          # the job.
+          $global:LASTEXITCODE = 0
+
+      - name: Upload trial test results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: PaperRoute-trial-linux-results
           path: TestResults/
           if-no-files-found: ignore
           retention-days: 14

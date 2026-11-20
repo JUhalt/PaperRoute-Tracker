@@ -17,8 +17,9 @@ namespace PaperRoute.Desktop.Styles;
 //     only the warning and danger chips.
 //
 // Light and Dark each have their own dictionary, so the derived brushes follow a
-// theme change through DynamicResource without running again. A high-contrast
-// dictionary made at run time (step 11) runs AddDerived itself.
+// theme change through DynamicResource without running again. The contrast
+// dictionaries made at run time (ContrastTheme, step 11) take the same derived
+// colours from DerivedColors.
 public static class ThemeTokens
 {
     public const string AccentHoverBrush = nameof(AccentHoverBrush);
@@ -122,8 +123,15 @@ public static class ThemeTokens
         return (byte)(int)MathF.Round(value, MidpointRounding.ToEven);
     }
 
+    // Never dark under a contrast theme, even a dark one, as today
+    // (UiTheme.vb:64-69).
     private static bool IsDark(ThemeVariant variant)
     {
+        if (ContrastTheme.IsContrast(variant))
+        {
+            return false;
+        }
+
         for (ThemeVariant? current = variant; current is not null; current = current.InheritVariant)
         {
             if (current == ThemeVariant.Dark)

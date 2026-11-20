@@ -6,7 +6,9 @@ namespace PaperRoute.ViewModels.Session;
 // core: ExampleLibraryService.StartSession points every storage root the
 // process can resolve into a new <temp>\PaperRoute-Example-<guid> folder, so no
 // default constructor anywhere in the process can reach %LOCALAPPDATA%\PaperRoute
-// or the user's Documents library. End deletes that folder.
+// or the user's Documents library. End deletes that folder. StartSnapshot
+// (step 11b) does the same with a new <temp>\PaperRoute-Trial-<guid> folder
+// and loads a copy of a library folder a person named (ReadOnlySnapshot).
 //
 // No in-process test calls this class (d1 6.1): a session can be set once per
 // process, and only before any root is resolved. The tests run it through
@@ -17,8 +19,12 @@ public static class TrialStartup
 
     private const string ExampleFolderPrefix = "PaperRoute-Example-";
 
+    // A snapshot's session folder (d1 1.3 lock 1): <temp>\PaperRoute-Trial-<guid>.
+    public const string SnapshotFolderPrefix = "PaperRoute-Trial-";
+
     private static readonly Lock s_gate = new();
     private static string? s_sessionRoot;
+    private static LibraryKind s_kind;
     private static bool s_ended;
 
     // The session folder, once StartExample has run.
@@ -51,6 +57,7 @@ public static class TrialStartup
             string dataRoot = StorageMigrationService.CurrentDataRoot();
             s_sessionRoot = Path.GetDirectoryName(dataRoot)
                 ?? throw new InvalidOperationException("The example session has no folder.");
+            s_kind = LibraryKind.Example;
 
             DateTime day = today.Date;
             return new DiskLibrarySession(
@@ -59,12 +66,57 @@ public static class TrialStartup
                 dataRoot,
                 LibraryKind.Example,
                 day,
-                prepare: () => SeedExample(day));
+                prepare: () => SeedExample(day),
+                snapshot: null);
         }
     }
 
-    // Ends the session: the example's folder is deleted. Safe to call twice,
-    // and before a start.
+    // Starts a read-only snapshot of the library in sourceFolder (d1 3.1,
+    // step 11b): refuses the folder first (ReadOnlySnapshot.RefusalFor, which
+    // reads nothing in a default storage folder), then sets a new
+    // <temp>\PaperRoute-Trial-<guid> as the isolated session, synchronously.
+    // The copy is made later, off the interface thread, at the start of the
+    // session's LoadAsync, into the session's data root; the session reads
+    // only that copy. Throws SnapshotRefusedException, with no session
+    // started, for a refused folder.
+    public static ILibrarySession StartSnapshot(string sourceFolder, DateTime today)
+    {
+        lock (s_gate)
+        {
+            if (s_sessionRoot is not null)
+            {
+                throw new InvalidOperationException("The trial's storage session has already started.");
+            }
+
+            string? refusal = ReadOnlySnapshot.RefusalFor(sourceFolder);
+            if (refusal is not null)
+            {
+                throw new SnapshotRefusedException(refusal);
+            }
+
+            var snapshot = new LibrarySnapshot(sourceFolder);
+            string root = Path.Combine(Path.GetTempPath(), SnapshotFolderPrefix + Guid.NewGuid().ToString("N"));
+
+            // Lock 1. It throws if any storage root was resolved before it.
+            StorageEnvironment.ConfigureIsolatedSessionRoot(root);
+            s_sessionRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+            s_kind = LibraryKind.Snapshot;
+
+            string dataRoot = StorageMigrationService.CurrentDataRoot();
+            string session = s_sessionRoot;
+            return new DiskLibrarySession(
+                Path.Combine(dataRoot, ReadOnlySnapshot.DataFolderName),
+                StorageMigrationService.CurrentManagedLibraryRoot(),
+                dataRoot,
+                LibraryKind.Snapshot,
+                today.Date,
+                prepare: () => snapshot.Took(ReadOnlySnapshot.Copy(snapshot.SourceFolder, dataRoot, session)),
+                snapshot: snapshot);
+        }
+    }
+
+    // Ends the session: the example's folder is deleted, or the snapshot's.
+    // Safe to call twice, and before a start.
     public static void End()
     {
         lock (s_gate)
@@ -75,12 +127,49 @@ public static class TrialStartup
             }
 
             s_ended = true;
-            ExampleLibraryService.EndSession();
+            if (s_kind == LibraryKind.Example)
+            {
+                ExampleLibraryService.EndSession();
+            }
+            else
+            {
+                DeleteSnapshotFolder(s_sessionRoot);
+            }
+        }
+    }
+
+    // Deletes only a direct child of the temporary folder named
+    // PaperRoute-Trial-; one it cannot delete is left for Windows'
+    // temporary-file clean-up, as ExampleLibraryService.EndSession does.
+    private static void DeleteSnapshotFolder(string root)
+    {
+        string temporary = Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.GetTempPath()));
+        if (!string.Equals(Path.GetDirectoryName(root), temporary, StringComparison.OrdinalIgnoreCase) ||
+            !Path.GetFileName(root).StartsWith(SnapshotFolderPrefix, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        try
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+        catch (IOException)
+        {
+            // Left for Windows' temporary-file clean-up.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Left for Windows' temporary-file clean-up.
         }
     }
 
     // Rule S2 (d1 6.2): true only if the session is isolated, its folder is a
-    // PaperRoute-Example- child of the temporary folder, every root the core
+    // PaperRoute-Example- (or, for a snapshot, PaperRoute-Trial-) child of the
+    // temporary folder, every root the core
     // can resolve lies inside it and none inside a default location, and no
     // default root has been resolved. Writes one line per check.
     public static bool SelfCheck(TextWriter output)
@@ -102,7 +191,7 @@ public static class TrialStartup
         string temporary = Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.GetTempPath()));
         bool rootPlaced =
             string.Equals(Path.GetDirectoryName(root), temporary, StringComparison.OrdinalIgnoreCase) &&
-            Path.GetFileName(root).StartsWith(ExampleFolderPrefix, StringComparison.Ordinal) &&
+            Path.GetFileName(root).StartsWith(s_kind == LibraryKind.Example ? ExampleFolderPrefix : SnapshotFolderPrefix, StringComparison.Ordinal) &&
             Directory.Exists(root);
         passed &= Report(output, rootPlaced, "session root", root);
 
@@ -127,7 +216,8 @@ public static class TrialStartup
     }
 
     // The "--self-check" mode (d1 1.3 Modes): with no window, loads the
-    // session StartExample returned, checks the example arrived whole, renders
+    // session StartExample or StartSnapshot returned, checks the example
+    // arrived whole (or the snapshot's copy, CheckSnapshot), renders
     // its Board and runs each filter on it (BoardSelfCheck), runs SelfCheck,
     // ends the session and checks its folder is gone. Returns the process
     // exit code: 0 when every check passed, else 1.
@@ -146,10 +236,18 @@ public static class TrialStartup
             // No synchronization context here, so blocking cannot deadlock.
             session.LoadAsync(CancellationToken.None).GetAwaiter().GetResult();
 
-            int expected = ExampleLibraryService.Create(session.Today).Manuscripts.Count;
             int loaded = session.Manuscripts.Count;
-            passed &= Report(output, loaded > 0 && loaded == expected, "example library",
-                $"loaded {loaded} manuscript(s); the example holds {expected}");
+            if (session.Kind == LibraryKind.Example)
+            {
+                int expected = ExampleLibraryService.Create(session.Today).Manuscripts.Count;
+                passed &= Report(output, loaded > 0 && loaded == expected, "example library",
+                    $"loaded {loaded} manuscript(s); the example holds {expected}");
+            }
+            else
+            {
+                passed &= CheckSnapshot(session, root, output);
+            }
+
             passed &= Report(output, session.StartupNotice == DiskLibrarySession.LoadedText(loaded), "startup notice",
                 session.StartupNotice);
 
@@ -174,6 +272,52 @@ public static class TrialStartup
         output.WriteLine(passed ? "self-check passed" : "self-check failed");
         output.Flush();
         return passed ? 0 : 1;
+    }
+
+    // Rule S1's in-session half (d1 6.2): the copy was made, whole, into the
+    // session's data root and nowhere else; the library loaded is the copy's,
+    // counted by shelf; and the copier refuses a destination outside the
+    // session, creating nothing there. The source's own files are hashed by
+    // the test that starts this process, before and after.
+    private static bool CheckSnapshot(ILibrarySession session, string? root, TextWriter output)
+    {
+        SnapshotCopy? copy = session.Snapshot?.Copy;
+        if (copy is null || root is null)
+        {
+            return Report(output, false, "snapshot copy", "no copy was made");
+        }
+
+        string dataRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(StorageMigrationService.CurrentDataRoot()));
+        bool placed = string.Equals(copy.DestinationFolder, dataRoot, StringComparison.OrdinalIgnoreCase) &&
+            IsInside(copy.DestinationFolder, root) &&
+            !string.Equals(copy.DestinationFolder, copy.SourceFolder, StringComparison.OrdinalIgnoreCase);
+        bool whole = copy.Skipped.Count == 0 && copy.Copied.Count > 0 &&
+            copy.Copied.All(name => File.Exists(Path.Combine(copy.DestinationFolder, name)));
+        bool passed = Report(output, placed && whole, "snapshot copy",
+            $"copied {copy.Copied.Count} file(s) ({string.Join(", ", copy.Copied)}) from {copy.SourceFolder} into {copy.DestinationFolder}; " +
+            (copy.Skipped.Count == 0 ? "skipped none" : "skipped " + string.Join(", ", copy.Skipped)));
+
+        IReadOnlyList<Manuscript> library = session.Manuscripts;
+        string shelves = string.Join(", ",
+            new[] { ManuscriptLocation.Pipeline, ManuscriptLocation.Published, ManuscriptLocation.FileDrawer }
+                .Select(location => $"{location} {library.Count(manuscript => manuscript.Location == location)}"));
+        passed &= Report(output, library.Count > 0, "snapshot library", $"loaded {library.Count} manuscript(s) from the copy: {shelves}");
+
+        string outside = Path.Combine(Path.GetTempPath(), "PaperRoute-TrialOutside-" + Guid.NewGuid().ToString("N"));
+        string refusal;
+        try
+        {
+            ReadOnlySnapshot.Copy(copy.SourceFolder, outside, root);
+            refusal = "(the copier accepted it)";
+        }
+        catch (SnapshotRefusedException ex)
+        {
+            refusal = ex.Message;
+        }
+
+        bool refused = refusal.StartsWith("The snapshot writes only inside", StringComparison.Ordinal) && !Directory.Exists(outside);
+        passed &= Report(output, refused, "snapshot destination refused", refusal);
+        return passed;
     }
 
     private static void SeedExample(DateTime today)
