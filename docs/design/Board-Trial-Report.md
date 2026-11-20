@@ -168,9 +168,9 @@ What it needed:
 - Pictures go to a folder named by `PAPERROUTE_TRIAL_PICTURES`, because MSTest does not tell a test where `--results-directory` points.
 - `.axaml` files are linked as `Content`, because Avalonia's build removes every `None` item named `*.axaml`.
 
-Pass mark of design 6.1: the Release run and CI pass; all four checks of run 44703237752 passed. **Not measured:** ten local runs in a row with no flake, and a Debug run of all 181 tests (the last Debug run, of 178 tests, was on 5c6f608). The harness hours are not separate from the other trailers.
+Pass mark of design 6.1: met. The Release run and CI pass; all four checks of run 44703237752 passed. Ten full local Release runs in a row passed, 181 of 181 each time (the development PC, quiet, 2026-11-20 04:15 to 04:43, 161 to 176 seconds a run, the tree of 44d62e0), and so did one Debug run of the same 181 tests (04:43 to 04:46). The harness hours are not separate from the other trailers.
 
-**The enforced budget rows can fail on a busy PC.** Locally in Release they are held at the budget with no multiplier, as today's `ResponsivenessBudgetTests` are. On 2026-11-20, two full local runs on the quiet development PC passed (03:25 and 03:30). Two later full runs, made while other agent work was using the PC, each failed one enforced row: back to All stages at 257 ms against 250 (the run that ended at 04:03), and the open list at 329 ms against 250 (the run that ended at 04:08). Each time the budget tests passed when run alone a minute later. Those two runs were on core stage 2 branches merged with master, so they also had a different core. A third full run, on the branch that holds all of core stage 2 and made once the other work had ended, passed all 181 (it ended at 04:11). So the cause was the busy PC, not the core. CI holds the rows at three times the budget and passed with room (section 4.1).
+**The enforced budget rows can fail on a busy PC.** Locally in Release they are held at the budget with no multiplier, as today's `ResponsivenessBudgetTests` are. On 2026-11-20, every full local run on the quiet development PC passed (two at 03:25 and 03:30, and the ten above). Two full runs made between them, while other agent work was using the PC, each failed one enforced row: back to All stages at 257 ms against 250 (the run that ended at 04:03), and the open list at 329 ms against 250 (the run that ended at 04:08). Each time the budget tests passed when run alone a minute later. Those two runs were on core stage 2 branches merged with master, so they also had a different core. A third full run, on the branch that holds all of core stage 2 and made once the other work had ended, passed all 181 (it ended at 04:11). So the cause was the busy PC, not the core. CI holds the rows at three times the budget and passed with room (section 4.1).
 
 ### 3.4 The working-copy spike
 
@@ -477,7 +477,7 @@ For the maintainer: please choose an option for each item below.
 9. **The two #383 rule departures** (zero-count chip, missing target journal). Recommendation: accept. They match today's app, which the port is meant to keep.
 10. **Contrast for Fluent's menus, scroll bars, tooltips and focus visuals.** Options: size control themes in unit 0; accept Fluent's palette there. Recommendation: size them in unit 0, as design section 9 foresaw; the real-theme look (section 5.3) will show how bad they are.
 11. **The VB spike's place.** It is a folder outside the repository, not a scratch branch. Options: leave it; put it on a scratch branch for the record.
-12. **The MSTest pass mark, and the budget rows on a busy PC.** Options: run ten local runs and a Debug run before calling question 3 closed; accept CI's green runs. Recommendation: run them once on a quiet PC; it is cheap and closes the mark. An agent can run them; no person is needed. Separately: two full local runs failed one enforced budget row each while the PC was busy (section 3.3). Options: accept it, as today's Windows Forms budget tests behave the same way; or give the enforced rows a local margin. Recommendation: accept it, and say in the test's failure message that the PC must be quiet.
+12. **The budget rows on a busy PC.** The MSTest pass mark itself is met (ten local runs in a row and a Debug run, section 3.3). But two full local runs failed one enforced budget row each while the PC was busy. Options: accept it, as today's Windows Forms budget tests behave the same way; or give the enforced rows a local margin. Recommendation: accept it, and say in the test's failure message that the PC must be quiet.
 
 ## 11. Not done, and not checked
 
@@ -491,7 +491,6 @@ Not done:
 
 Not checked or not measured:
 - the maintainer's hours (none logged), the orchestrating session's hours, CI time, and the hours of 17c56e4;
-- ten local test runs with no flake, and a Debug run of the 181 tests;
 - the Windows Forms app in a real window, or on 2026-11-20;
 - whether Avalonia reports a Windows contrast theme, and whether Input-priority probe ticks match `WM_TIMER`;
 - the Ubuntu count of 132 for run 44681774261, taken from the notes.
