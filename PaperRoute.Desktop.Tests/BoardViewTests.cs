@@ -1000,7 +1000,7 @@ internal sealed class BoardWindow : IDisposable
     // The app's own shell (App.CreateShell: the DispatcherTimer search wait
     // and the posted flush), over a library loaded already: the Board renders
     // once here, as the load's LibraryChanged would.
-    public static BoardWindow Show(ILibrarySession session, ThemeVariant? variant = null, double width = 1280)
+    public static BoardWindow Show(ILibrarySession session, ThemeVariant? variant = null, double width = 1280, double height = 800)
     {
         ShellViewModel shell = App.CreateShell(session);
         shell.Board.Render();
@@ -1009,7 +1009,7 @@ internal sealed class BoardWindow : IDisposable
             ((IInteractions)shell).Notice(session.StartupNotice);
         }
 
-        var window = new MainWindow { DataContext = shell, Width = width, Height = 800 };
+        var window = new MainWindow { DataContext = shell, Width = width, Height = height };
         if (variant is not null)
         {
             window.RequestedThemeVariant = variant;

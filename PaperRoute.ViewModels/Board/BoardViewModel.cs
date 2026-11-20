@@ -1,3 +1,4 @@
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using PaperRoute.ViewModels.Session;
@@ -10,10 +11,11 @@ namespace PaperRoute.ViewModels.Board;
 // again from the session's library, as today, and the 28 places that render
 // today become LibraryChanged and the filter changes here.
 //
-// Not here yet (later steps of d1 section 8): the card commands that give
-// notices (open, route) and the tag-strip search (step 9), and the view's own
-// state (columns, realized shelves). Step 8's view brings the notices of the
-// controls it shows: View in Deadlines and the welcome's links (d1 1.2).
+// The cards' commands (step 9) are here, as d1 3.3 lists them: opening a card
+// and viewing its route give the trial's notices (d1 1.2), and the tag strip
+// puts a card's first tag in the search. Step 8's view brings the notices of
+// the controls it shows: View in Deadlines and the welcome's links. A shelf
+// is realized (its cards made by the view) when it is first shown (d1 4.4).
 public sealed partial class BoardViewModel : ObservableObject
 {
     // Form1.vb boardSearchDebounceTimer (:79-81).
@@ -122,12 +124,24 @@ public sealed partial class BoardViewModel : ObservableObject
             new ShelfViewModel(ManuscriptLocation.FileDrawer),
         ];
 
+        // The shelf shown at start; the others are made when first shown.
+        SelectedShelf.IsRealized = true;
+
         _session.LibraryChanged += OnLibraryChanged;
     }
 
     // View in Deadlines opens Deadlines today (Form1.vb:507); in the trial it
     // gives a notice (d1 1.2).
     public const string DeadlinesNotice = "Deadlines is not part of the trial.";
+
+    // Opening a card and viewing its route (d1 1.2), with the card's title.
+    public const string OpenNoticeFormat = "Opening a manuscript is not part of the trial: {0}.";
+
+    public const string RouteNoticeFormat = "Viewing the route is not part of the trial: {0}.";
+
+    // Raised when a card is opened (its body, its title, Enter or bare Space
+    // on the title); today the manuscript page opens (Form1.vb:3352-3372).
+    public event EventHandler<CardViewModel>? OpenRequested;
 
     // The end of every notice a control the trial leaves out gives.
     public const string NotInTrialSuffix = " is not part of the trial.";
@@ -299,6 +313,45 @@ public sealed partial class BoardViewModel : ObservableObject
     // View in Deadlines (d1 1.2).
     [RelayCommand]
     private void ViewDeadlines() => Interactions?.Notice(DeadlinesNotice);
+
+    // A card opened (d1 1.2): OpenRequested, and the notice. Nothing else.
+    [RelayCommand]
+    private void OpenCard(CardViewModel? card)
+    {
+        if (card is null)
+        {
+            return;
+        }
+
+        OpenRequested?.Invoke(this, card);
+        Interactions?.Notice(string.Format(CultureInfo.CurrentCulture, OpenNoticeFormat, card.Title));
+    }
+
+    // "View route →" (d1 1.2): the notice only.
+    [RelayCommand]
+    private void ViewRoute(CardViewModel? card)
+    {
+        if (card is not null)
+        {
+            Interactions?.Notice(string.Format(CultureInfo.CurrentCulture, RouteNoticeFormat, card.Title));
+        }
+    }
+
+    // The tag strip (Form1.vb:3285-3289): the card's first tag goes in the
+    // search box, whichever chip was clicked; the search's wait then renders,
+    // as a typed search does. A card with no tags has no strip.
+    [RelayCommand]
+    private void ApplyFirstTag(CardViewModel? card)
+    {
+        if (card?.FirstTag is { } tag)
+        {
+            SearchText = tag;
+        }
+    }
+
+    // The shelf shown is made when first shown (d1 4.4), as today's shelves
+    // are built when first shown (Form1.BoardFill.vb:195).
+    partial void OnSelectedShelfIndexChanged(int value) => SelectedShelf.IsRealized = true;
 
     // The welcome's buttons and links (d1 1.2): "<subject> is not part of the
     // trial." The view names the subject: "Import & Export", "The Library".
@@ -507,7 +560,7 @@ public sealed partial class BoardViewModel : ObservableObject
             return kept;
         }
 
-        var card = new CardViewModel(facts, slot, _session.AuthorLibrary);
+        var card = new CardViewModel(this, facts, slot, _session.AuthorLibrary);
         _cards[slot] = card;
         return card;
     }

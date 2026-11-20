@@ -20,6 +20,7 @@
                    underlined while hovered (LinkLabel, Form1.vb:495-503);
                    with card-title, a card's title: 14 px bold PrimaryText,
                    AccentBrush while pressed (Form1.vb:3239-3255)
+    card-title-text  the title's text, two 18 px lines tall, ellipsis
     route-dot      10 px dots: closed a MutedText disc 1 px inside, current an
                    AccentMuted fill in an AccentBrush ring, accepted an
                    AccentBrush disc (Controls\RouteDots.vb:59-91)
@@ -148,6 +149,19 @@
   </Style>
   <Style Selector="Button.link.card-title:pressed /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <!-- The title's text: two lines tall whatever its length, cut short with an ellipsis, so every card keeps one height (Form1.vb:3150, 3246). -->
+  <Style Selector="TextBlock.card-title-text">
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="MaxLines" Value="2" />
+    <Setter Property="LineHeight" Value="18" />
+    <Setter Property="Height" Value="36" />
+  </Style>
+
+  <!-- A card menu's Delete... (Form1.vb:3545); off in the trial, so Fluent's disabled ink shows over it. -->
+  <Style Selector="MenuItem.danger">
+    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
   </Style>
 
   <!-- Route dots. -->
