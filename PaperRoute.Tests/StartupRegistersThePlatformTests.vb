@@ -18,8 +18,10 @@ Imports ManuscriptPipeline.Services
 <DoNotParallelize>
 Public Class StartupRegistersThePlatformTests
 
+    ' Named at step 8 for the key protector; it checks the launcher (step 10)
+    ' and the file identity (step 11) too, under the name it has always had.
     <TestMethod>
-    Public Sub AfterRegisterTheKeyProtectorIsDpapiAndTheLauncherIsTheShell()
+    Public Sub AfterRegisterTheKeyProtectorIsDpapi()
 
         ' PlatformSetup has registered them before the first test.
         Assert.IsInstanceOfType(PlatformServices.Secrets, GetType(DpapiSecretProtector))
