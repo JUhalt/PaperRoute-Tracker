@@ -38,6 +38,11 @@ Friend Module Program
         ' existing VB application framework continues as usual.
         VelopackApp.Build().Run()
 
+        ' Then the Windows parts the core asks for (core stage 2): stored
+        ' keys through DPAPI. Before anything that could read a key, so a
+        ' stored key never reads as missing (StartupRegistersThePlatformTests).
+        WindowsPlatform.Register()
+
         ' The example library for teaching (#83) opens in its own disposable
         ' session, configured before any storage folder is resolved, so the
         ' user's library is never opened.

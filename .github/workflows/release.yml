@@ -280,6 +280,13 @@ jobs:
               $coreAssemblyVersion -cne $numeric -or $coreInfo.FileVersion -cne $numeric) {
               throw "PaperRoute.Core.dll must report '$expected' and Assembly/FileVersion '$numeric'."
           }
+          # The Windows implementations the core asks for (stored keys) are in
+          # PaperRoute.Platform.dll from v1.1. Nothing reads its version, so
+          # it is checked for presence only.
+          $publishedPlatform = Join-Path "$env:GITHUB_WORKSPACE/publish/win-x64" 'PaperRoute.Platform.dll'
+          if (-not (Test-Path -LiteralPath $publishedPlatform -PathType Leaf)) {
+              throw "Published PaperRoute.Platform.dll was not found at '$publishedPlatform'."
+          }
           foreach ($relativePath in @('docs/USER_GUIDE.md', 'LICENSE.txt', 'NOTICE.md', 'THIRD-PARTY-NOTICES.txt')) {
               $source = Join-Path $env:GITHUB_WORKSPACE $relativePath
               $payload = Join-Path "$env:GITHUB_WORKSPACE/publish/win-x64" $relativePath
