@@ -95,8 +95,10 @@
                  AutomationProperties.LiveSetting="Polite" />
     </Border>
 
-    <!-- The Board's place. Its view comes in step 8 of d1 section 8. -->
-    <Panel x:Name="BoardHost" AutomationProperties.AutomationId="BoardHost" />
+    <!-- The page: the Board, the trial's one page (d1 4.1). -->
+    <Panel x:Name="BoardHost" AutomationProperties.AutomationId="BoardHost">
+      <local:BoardView x:Name="BoardView" DataContext="{Binding Board}" />
+    </Panel>
 
   </DockPanel>
 </Window>

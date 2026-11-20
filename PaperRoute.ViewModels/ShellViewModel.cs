@@ -54,6 +54,7 @@ public sealed partial class ShellViewModel : ObservableObject, IInteractions
         ArgumentNullException.ThrowIfNull(board);
         _session = session;
         Board = board;
+        Board.Interactions = this;
 
         // Today's order and names (Form1.Shell.vb:230-237); only the Board has a command.
         RailPages =
