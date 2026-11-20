@@ -32,6 +32,11 @@ public sealed partial class ChipViewModel : ObservableObject
     // The tone at rest; while active the chip is drawn in the accent.
     public ChipTone Tone { get; }
 
+    // The tone as the view's style classes read it ("warning", "danger").
+    public bool IsWarning => Tone == ChipTone.Warning;
+
+    public bool IsDanger => Tone == ChipTone.Danger;
+
     // The chip's accessible description (FilterChip.vb:66).
     public string HelpText => BoardRules.ChipHelpText(IsActive);
 

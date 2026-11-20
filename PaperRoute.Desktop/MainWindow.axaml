@@ -1,10 +1,104 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:PaperRoute.ViewModels"
+        xmlns:local="using:PaperRoute.Desktop"
         x:Class="PaperRoute.Desktop.MainWindow"
         x:DataType="vm:ShellViewModel"
-        Title="PaperRoute Board trial"
-        Width="1280" Height="800">
-  <!-- The notice strip alone until the shell view (d1 8, step 7). -->
-  <TextBlock x:Name="NoticeText" Margin="16" Text="{Binding Notice}" />
+        Title="{Binding WindowTitle, FallbackValue='PaperRoute Board Trial'}"
+        Width="1280" Height="800"
+        Background="{DynamicResource BoardBackgroundBrush}">
+  <!--
+    The shell (d1 4.1, step 7), laid out as today's window is (Form1.vb:336-371,
+    647-674): the example banner across the top, the rail down the left, and
+    to its right the page with the status line (the notice strip) under it.
+    Ctrl+1, Ctrl+NumPad1 and F1 are bound in MainWindow.axaml.cs.
+  -->
+  <DockPanel>
+
+    <Border x:Name="Banner" DockPanel.Dock="Top" Classes="banner"
+            AutomationProperties.AutomationId="Banner"
+            AutomationProperties.Name="{Binding BannerName}"
+            AutomationProperties.LandmarkType="Banner">
+      <TextBlock x:Name="BannerText" Margin="0,4" Text="{Binding BannerText}" />
+    </Border>
+
+    <Border x:Name="Rail" DockPanel.Dock="Left" Classes="rail-column">
+      <DockPanel>
+
+        <!-- Brand: the logo, the name, the tagline and the library summary (Form1.Shell.vb:139-213). -->
+        <Grid DockPanel.Dock="Top" Margin="0,0,0,18" ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto">
+          <Image Grid.RowSpan="3" Width="30" Height="30" Margin="5,0,8,0" VerticalAlignment="Center"
+                 Source="/Assets/PaperRoute.png"
+                 AutomationProperties.Name="PaperRoute logo" />
+          <TextBlock Grid.Column="1" Classes="rail-brand" Text="PaperRoute" />
+          <TextBlock Grid.Column="1" Grid.Row="1" Margin="0,1,0,0" Classes="rail-tagline" Text="{Binding Tagline}" />
+          <TextBlock x:Name="RailSummary" Grid.Column="1" Grid.Row="2" Margin="0,2,0,0" Classes="rail-summary"
+                     Text="{Binding RailSummary}" IsVisible="{Binding RailSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </Grid>
+
+        <!-- Commands at the foot: Online, Settings, Help, under a rule (Form1.Shell.vb:255-301). -->
+        <StackPanel DockPanel.Dock="Bottom">
+          <Border Classes="rail-rule" />
+          <ItemsControl x:Name="RailCommands" ItemsSource="{Binding RailCommands}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:RailItemViewModel">
+                <Button Classes="rail"
+                        Command="{Binding Command}"
+                        IsEnabled="{Binding IsEnabled}"
+                        ToolTip.Tip="{Binding ToolTip}"
+                        AutomationProperties.AutomationId="{Binding AutomationId}"
+                        AutomationProperties.Name="{Binding AccessibleName}"
+                        AutomationProperties.HelpText="{Binding HelpText}">
+                  <DockPanel>
+                    <Path Classes="rail-glyph" Data="{Binding Glyph, Converter={x:Static local:RailGlyphs.ToGeometry}}" />
+                    <TextBlock Classes="rail-label" Text="{Binding Label}" />
+                  </DockPanel>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+
+        <!-- Pages: one radio group, as today's RailButtons are (Controls\RailItems.vb:231-234). -->
+        <ItemsControl x:Name="RailPages" ItemsSource="{Binding RailPages}"
+                      AutomationProperties.Name="Pages"
+                      AutomationProperties.LandmarkType="Navigation">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:RailItemViewModel">
+              <RadioButton Classes="rail" GroupName="RailPages"
+                           Command="{Binding Command}"
+                           IsEnabled="{Binding IsEnabled}"
+                           IsChecked="{Binding IsSelected, Mode=OneWay}"
+                           ToolTip.Tip="{Binding ToolTip}"
+                           AutomationProperties.AutomationId="{Binding AutomationId}"
+                           AutomationProperties.Name="{Binding AccessibleName}"
+                           AutomationProperties.HelpText="{Binding HelpText}">
+                <DockPanel>
+                  <Path DockPanel.Dock="Left" Classes="rail-glyph" Data="{Binding Glyph, Converter={x:Static local:RailGlyphs.ToGeometry}}" />
+                  <Border DockPanel.Dock="Right" Classes="pill warning count rail-badge" IsVisible="{Binding HasCount}">
+                    <TextBlock Text="{Binding CountText}" />
+                  </Border>
+                  <TextBlock Classes="rail-label" Text="{Binding Label}" />
+                </DockPanel>
+              </RadioButton>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+      </DockPanel>
+    </Border>
+
+    <!-- The status line under the page (Form1.vb:42-43, 647-664): read out as it changes, without taking focus. -->
+    <Border x:Name="NoticeStrip" DockPanel.Dock="Bottom" Classes="notice-strip">
+      <TextBlock x:Name="NoticeText" Text="{Binding Notice}" TextTrimming="CharacterEllipsis"
+                 AutomationProperties.AutomationId="Notice"
+                 AutomationProperties.LiveSetting="Polite" />
+    </Border>
+
+    <!-- The page: the Board, the trial's one page (d1 4.1). -->
+    <Panel x:Name="BoardHost" AutomationProperties.AutomationId="BoardHost">
+      <local:BoardView x:Name="BoardView" DataContext="{Binding Board}" />
+    </Panel>
+
+  </DockPanel>
 </Window>

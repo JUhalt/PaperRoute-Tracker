@@ -83,7 +83,7 @@ Public Class DialogScalingTests
     Public Sub TheConvertedWindowsUseTheRuleAlone()
 
         Dim folder As String =
-            Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManuscriptPipeline", "Forms")
+            Path.Combine(TestRepository.Root(), "ManuscriptPipeline", "Forms")
 
         Assert.IsTrue(ScalingMeasurementTests.Converted.Length >= 14, "The converted windows are listed: " & ScalingMeasurementTests.Converted.Length)
 
@@ -130,7 +130,7 @@ Public Class DialogScalingTests
         Assert.AreEqual(HighDpiMode.SystemAware, New ProbeApplication().DefaultHighDpiMode(), "The framework's default, which the installed build ran with.")
 
         Dim app As String =
-            Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManuscriptPipeline")
+            Path.Combine(TestRepository.Root(), "ManuscriptPipeline")
 
         StringAssert.Contains(
             Code(Path.Combine(app, "ApplicationEvents.vb")),
@@ -237,7 +237,7 @@ Public Class DialogScalingTests
     Private Shared Function CandidateHighDpiMode(build As String, forms As String) As (ExitCode As Integer, Output As String)
 
         Dim script As String =
-            Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManualCertification", "Build-ReleaseCandidate.ps1")
+            Path.Combine(TestRepository.Root(), "ManualCertification", "Build-ReleaseCandidate.ps1")
 
         Dim command As String =
             "Set-StrictMode -Version Latest; $ErrorActionPreference = 'Stop'; try { " &

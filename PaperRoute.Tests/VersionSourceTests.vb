@@ -91,7 +91,7 @@ Public Class VersionSourceTests
         Dim project As XDocument =
             XDocument.Load(
                 Path.Combine(
-                    AssistantCoreTests.RepositoryRoot(),
+                    TestRepository.Root(),
                     "ManuscriptPipeline",
                     "ManuscriptPipeline.vbproj"
                 )

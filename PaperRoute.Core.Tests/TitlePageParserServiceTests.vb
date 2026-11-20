@@ -69,7 +69,7 @@ Public Class TitlePageParserServiceTests
 
         Assert.AreEqual(
             "Anchoring is among the most replicated effects in judgment research, yet few studies test it with practicing clinicians." &
-            Environment.NewLine & Environment.NewLine &
+            ManuscriptPipeline.StoredText.NewLine & ManuscriptPipeline.StoredText.NewLine &
             "We ran a preregistered replication with 412 nurses and physicians.",
             result.AbstractText)
         CollectionAssert.AreEqual({"anchoring", "clinical judgment", "replication"}, result.Keywords)
@@ -183,7 +183,7 @@ Public Class TitlePageParserServiceTests
 
         Assert.AreEqual(
             "Anchoring is among the most replicated effects in judgment research." &
-            Environment.NewLine & Environment.NewLine &
+            ManuscriptPipeline.StoredText.NewLine & ManuscriptPipeline.StoredText.NewLine &
             "We ran a preregistered replication with 412 nurses and physicians.",
             result.AbstractText)
         CollectionAssert.AreEqual({"anchoring", "clinical judgment", "replication"}, result.Keywords)

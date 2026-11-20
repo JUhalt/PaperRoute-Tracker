@@ -9,16 +9,18 @@ using PaperRoute.ViewModels.Session;
 namespace PaperRoute.Desktop.Tests.Board;
 
 // V8 (d1 6.2): the order the trial's Board gives the 500-manuscript library
-// under the five sorts the checked-in file holds (0, 1, 2, 5, 6) equals the order
-// today's Windows Forms Board gives it, as PaperRoute.Tests'
-// BoardSortOrderTests.TheFiveDateFreeSortsGiveTheCheckedInOrders read it
-// and checked it in (PaperRoute.TestFixtures\SortOrders\
-// board-sort-orders-500.json).
+// under all seven sorts (0 to 6), which the checked-in file holds, equals the
+// order today's Windows Forms Board gives it, as PaperRoute.Tests'
+// BoardSortOrderTests.TheSevenSortsGiveTheCheckedInOrders read it and
+// checked it in (PaperRoute.TestFixtures\SortOrders\
+// board-sort-orders-500.json). None of the seven depends on the date.
 //
 // Pins Form1.vb GetVisibleManuscripts (:2215-2290) with
-// CompareTitleAscending, CompareTitleDescending, CompareStageDateDescending
-// and CompareStageDateAscending (:2293-2372), and the library order for
-// "Current order".
+// CompareTitleAscending, CompareTitleDescending, CompareRejectionsDescending,
+// CompareRejectionsAscending, CompareStageDateDescending and
+// CompareStageDateAscending (:2293-2372), and the library order for
+// "Current order". Every card is checked by position, so the order of equal
+// keys (List.Sort is not stable) is pinned as well.
 //
 // The fixture gives every manuscript a new Id each run, so the file names a
 // manuscript by its position in the library's order (0-based; position n is
@@ -30,12 +32,10 @@ namespace PaperRoute.Desktop.Tests.Board;
 // reverse. The title comparer itself (CurrentCultureIgnoreCase) is pinned
 // by BoardRuleTests V8b_TheTitleSortsIgnoreCaseInTheCurrentCulture.
 //
-// The two rejection sorts (Most and Fewest rejections) are not in the file
-// (PR A's generator left indices 3 and 4 out), although their key, the
-// snapshot's RejectionCount, depends on no date. Their comparison on
-// distinct counts is pinned by BoardRuleTests
-// V2_TheRejectionSortsOrderByTheSnapshotsRejectionCount; their order on
-// equal counts (List.Sort, unstable above 16 items) is not pinned.
+// The two rejection sorts (Most and Fewest rejections) compare the attention
+// snapshot's RejectionCount, which counts every rejection decision with no
+// date (PaperRoute.Core ManuscriptAttentionService.vb:66-97), so their order
+// on the 500 library, equal counts included, is in the file too.
 [TestClass]
 public sealed class BoardSortOrderTests : StorageCheckedTests
 {
@@ -76,7 +76,7 @@ public sealed class BoardSortOrderTests : StorageCheckedTests
     }
 
     [TestMethod]
-    public async Task V8_TheFiveDateFreeSortsGiveTodaysOrderOnThe500Library()
+    public async Task V8_TheSevenSortsGiveTodaysOrderOnThe500Library()
     {
         // The library written by the shared fixture into this test's own
         // folder and read back through the trial's session, as today's Board
@@ -101,7 +101,7 @@ public sealed class BoardSortOrderTests : StorageCheckedTests
         using JsonDocument expected = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "SortOrders", OrdersFile)));
         Assert.AreEqual(ManuscriptCount, expected.RootElement.GetProperty("manuscripts").GetInt32());
         List<JsonElement> sorts = expected.RootElement.GetProperty("sorts").EnumerateArray().ToList();
-        CollectionAssert.AreEqual(new[] { 0, 1, 2, 5, 6 }, sorts.Select(sort => sort.GetProperty("index").GetInt32()).ToArray());
+        CollectionAssert.AreEqual(new[] { 0, 1, 2, 3, 4, 5, 6 }, sorts.Select(sort => sort.GetProperty("index").GetInt32()).ToArray());
 
         foreach (JsonElement sort in sorts)
         {

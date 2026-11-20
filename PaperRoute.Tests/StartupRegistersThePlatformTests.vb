@@ -95,7 +95,7 @@ Public Class StartupRegistersThePlatformTests
 
         Assert.AreEqual("WindowsPlatform.Register()", setup(0))
         StringAssert.Contains(
-            File.ReadAllText(Path.Combine(AssistantCoreTests.RepositoryRoot(), "PaperRoute.Tests", "PlatformSetup.vb")),
+            File.ReadAllText(Path.Combine(TestRepository.Root(), "PaperRoute.Tests", "PlatformSetup.vb")),
             "<AssemblyInitialize>")
 
     End Sub
@@ -106,7 +106,7 @@ Public Class StartupRegistersThePlatformTests
     <TestMethod>
     Public Sub TheCoreNeverReferencesThePlatform()
 
-        Dim root As String = AssistantCoreTests.RepositoryRoot()
+        Dim root As String = TestRepository.Root()
         Dim core As XDocument = XDocument.Load(Path.Combine(root, "PaperRoute.Core", "PaperRoute.Core.vbproj"))
         Dim platform As XDocument = XDocument.Load(Path.Combine(root, "PaperRoute.Platform", "PaperRoute.Platform.vbproj"))
 
@@ -131,7 +131,7 @@ Public Class StartupRegistersThePlatformTests
     ' to the end of the file, without blank lines and whole-line comments.
     Private Shared Function BodyOf(relativePath As String, signature As String, commentStart As String) As List(Of String)
 
-        Dim source As String = Path.Combine(AssistantCoreTests.RepositoryRoot(), relativePath)
+        Dim source As String = Path.Combine(TestRepository.Root(), relativePath)
         Dim lines As List(Of String) = File.ReadAllLines(source).Select(Function(line) line.Trim()).ToList()
         Dim start As Integer = lines.FindIndex(Function(line) line.Contains(signature, StringComparison.Ordinal))
 

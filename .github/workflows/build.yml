@@ -244,7 +244,11 @@ jobs:
         shell: pwsh
         # Headless tests (Avalonia.Headless with Skia): no desktop needed.
         # Every test must pass, none skipped or inconclusive; tests marked
-        # Manual are run by hand only.
+        # Manual are run by hand only. The view tests' pictures (nine PNGs,
+        # under a megabyte in all) go into TestResults/pictures, which the
+        # upload below carries.
+        env:
+          PAPERROUTE_TRIAL_PICTURES: ${{ github.workspace }}/TestResults/pictures
         run: |
           dotnet test PaperRoute.Desktop.Tests/PaperRoute.Desktop.Tests.csproj --configuration Release --no-build `
               --filter 'TestCategory!=Manual' `

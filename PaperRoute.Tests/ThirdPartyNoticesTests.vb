@@ -19,7 +19,7 @@ Public Class ThirdPartyNoticesTests
     Public Sub TheNoticesNameEveryRestoredPackageAtItsVersion()
 
         Dim root As String =
-            AssistantCoreTests.RepositoryRoot()
+            TestRepository.Root()
 
         Dim notices As String =
             File.ReadAllText(

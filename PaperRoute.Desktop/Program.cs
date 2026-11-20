@@ -1,5 +1,4 @@
 using Avalonia;
-using PaperRoute.ViewModels;
 using PaperRoute.ViewModels.Session;
 
 namespace PaperRoute.Desktop;
@@ -24,8 +23,7 @@ internal static class Program
                 return TrialStartup.RunSelfCheck(session, Console.Out);
             }
 
-            var shell = new ShellViewModel(session);
-            return Configure(AppBuilder.Configure(() => new App(shell))).StartWithClassicDesktopLifetime(args);
+            return Configure(AppBuilder.Configure(() => new App(session))).StartWithClassicDesktopLifetime(args);
         }
         finally
         {

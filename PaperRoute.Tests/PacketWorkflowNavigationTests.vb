@@ -470,7 +470,7 @@ Public Class PacketWorkflowNavigationTests
     <TestMethod>
     Public Sub PacketWindows_WriteNoShortOrGeneralDates()
 
-        Dim folder As String = Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManuscriptPipeline", "Forms")
+        Dim folder As String = Path.Combine(TestRepository.Root(), "ManuscriptPipeline", "Forms")
         Dim found As New List(Of String)()
 
         For Each filePath As String In Directory.GetFiles(folder, "SubmissionPacket*.vb")

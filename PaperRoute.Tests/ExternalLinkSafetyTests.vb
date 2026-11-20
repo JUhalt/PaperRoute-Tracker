@@ -86,11 +86,11 @@ Public Class ExternalLinkSafetyTests
     <TestMethod>
     Public Sub TheShellIsReachedOnlyThroughTheTwoOpenersAndDiagnostics()
 
-        Dim root As String = Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManuscriptPipeline")
+        Dim root As String = Path.Combine(TestRepository.Root(), "ManuscriptPipeline")
         ' And the app's code that moved into its core library (v1.1).
-        Dim core As String = Path.Combine(AssistantCoreTests.RepositoryRoot(), "PaperRoute.Core")
+        Dim core As String = Path.Combine(TestRepository.Root(), "PaperRoute.Core")
         ' And the Windows implementations the core asks for (core stage 2).
-        Dim platform As String = Path.Combine(AssistantCoreTests.RepositoryRoot(), "PaperRoute.Platform")
+        Dim platform As String = Path.Combine(TestRepository.Root(), "PaperRoute.Platform")
         Dim found As New List(Of String)()
 
         For Each source As String In {root, core, platform}.SelectMany(Function(folder) Directory.GetFiles(folder, "*.vb", SearchOption.AllDirectories))

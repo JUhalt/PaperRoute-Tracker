@@ -85,12 +85,11 @@ public sealed class BoardRuleTests : StorageCheckedTests
     // CompareRejectionsAscending (:2319-2348): the attention snapshot's
     // RejectionCount, most first and fewest first. The count depends on no
     // date (PaperRoute.Core ManuscriptAttentionService.vb:66-97 counts every
-    // rejection decision). The checked-in sort orders (V8,
-    // board-sort-orders-500.json from PR A) leave sorts 3 and 4 out, so the
-    // order of manuscripts with equal counts is NOT pinned: Form1 sorts with
-    // List.Sort (introsort, unstable above 16 items), and so does the port
-    // (BoardRules.Sort), but no test would catch a switch to a stable sort.
-    // This test pins the comparison on distinct counts only.
+    // rejection decision). This test pins the comparison on distinct counts;
+    // the order of manuscripts with equal counts (Form1 and the port's
+    // BoardRules.Sort both use List.Sort, introsort, unstable above 16 items)
+    // is pinned on the 500 library by V8 (BoardSortOrderTests), whose
+    // checked-in orders hold sorts 3 and 4.
     [TestMethod]
     public void V2_TheRejectionSortsOrderByTheSnapshotsRejectionCount()
     {

@@ -220,21 +220,21 @@ Public Class ErrorReportTests
 
         Dim app As String =
             Path.Combine(
-                AssistantCoreTests.RepositoryRoot(),
+                TestRepository.Root(),
                 "ManuscriptPipeline"
             )
 
         ' And the app's code that moved into its core library (v1.1).
         Dim core As String =
             Path.Combine(
-                AssistantCoreTests.RepositoryRoot(),
+                TestRepository.Root(),
                 "PaperRoute.Core"
             )
 
         ' And the Windows implementations the core asks for (core stage 2).
         Dim platform As String =
             Path.Combine(
-                AssistantCoreTests.RepositoryRoot(),
+                TestRepository.Root(),
                 "PaperRoute.Platform"
             )
 
