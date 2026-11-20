@@ -164,10 +164,40 @@ public sealed class DiskLibrarySession : ILibrarySession
         IReadOnlyList<string> skipped = Snapshot?.Copy?.Skipped ?? [];
         if (skipped.Count > 0)
         {
-            notice += " Could not be read, so not copied: " + string.Join(", ", skipped) + ".";
+            notice = SkippedNotice(notice, skipped, manuscripts.Count);
         }
 
         return new LoadResult(manuscripts, authors, settings, notice);
+    }
+
+    // The status line of a snapshot that skipped files. Without the
+    // manuscripts file the copy holds no library (or only the previous save),
+    // so the line says that in place of "Loaded 0 manuscripts", lest an empty
+    // Board read as an empty library; other files are named after it.
+    public static string SkippedNotice(string loadNotice, IReadOnlyList<string> skipped, int loaded)
+    {
+        string manuscriptsFile = Path.Combine(ReadOnlySnapshot.DataFolderName, "manuscripts.json");
+        string notice = loadNotice;
+        List<string> others = [.. skipped];
+        if (others.Remove(manuscriptsFile))
+        {
+            notice = $"The snapshot could not copy the manuscripts file ({manuscriptsFile}): another program may have been using it. Try again.";
+            if (loaded > 0)
+            {
+                notice += $" The Board shows the previous save, from {Path.Combine(ReadOnlySnapshot.DataFolderName, "manuscripts.bak")}.";
+            }
+        }
+
+        if (others.Count == 1)
+        {
+            notice += " This file could not be read, so it was not copied: " + others[0] + ".";
+        }
+        else if (others.Count > 1)
+        {
+            notice += " These files could not be read, so they were not copied: " + string.Join(", ", others) + ".";
+        }
+
+        return notice;
     }
 
     // The status texts of today's load (Form1.vb:1309-1453). The dialogs that

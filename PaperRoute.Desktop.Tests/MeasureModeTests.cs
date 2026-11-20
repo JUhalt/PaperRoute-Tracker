@@ -118,6 +118,24 @@ public sealed class MeasureModeTests : StorageCheckedTests
         Assert.StartsWith("The Board trial writes nothing into your own PaperRoute library.",
             BoardMeasurementReport.RefusalFor(Path.Combine(fakeProfile, "data", "board.json"), [fakeProfile]));
 
+        // Spellings a string comparison would miss: a junction that leads into
+        // the profile is resolved and refused; a device prefix, a loopback
+        // share and a stream form are refused as not plain local paths.
+        string junction = Path.Combine(_root, "J");
+        MakeJunction(junction, fakeProfile);
+        Assert.StartsWith("The Board trial writes nothing into your own PaperRoute library.",
+            BoardMeasurementReport.RefusalFor(Path.Combine(junction, "m.json"), [fakeProfile]));
+        Assert.StartsWith("The Board trial writes nothing into your own PaperRoute library.",
+            BoardMeasurementReport.RefusalFor(Path.Combine(junction, "data", "m.json"), [fakeProfile]));
+        string inProfile = Path.Combine(fakeProfile, "m.json");
+        foreach (string spelling in new[]
+        {
+            @"\\?\" + inProfile, @"\\.\" + inProfile, @"\\localhost\" + inProfile[0] + "$" + inProfile[2..], fakeProfile + "::$INDEX_ALLOCATION\\m.json",
+        })
+        {
+            Assert.AreEqual(BoardMeasurementReport.LocalFileMessage, BoardMeasurementReport.RefusalFor(spelling, [fakeProfile]), spelling);
+        }
+
         // The real profile's folders, by path only: refused before anything is read there.
         foreach (string root in ReadOnlySnapshot.DefaultStorageRoots())
         {
@@ -224,6 +242,38 @@ public sealed class MeasureModeTests : StorageCheckedTests
         Assert.AreEqual(0, stoppedDocument.RootElement.GetProperty("rows").GetArrayLength());
     }
 
+    // ---- The UI probe ----
+
+    // The probe ticks only where a key press could be served (Input priority,
+    // as today's WM_TIMER): work queued at Render priority and run within the
+    // action is a stall a person feels, so UI is Wall for such an action. A
+    // probe at Normal priority ticked between those jobs and gave about one
+    // job's time.
+    [TestMethod]
+    public void TheProbeCountsQueuedRenderPriorityWorkAsOneStall()
+    {
+        Assert.AreEqual(DispatcherPriority.Input, BoardMeasurement.ProbePriority);
+        MeasuredRow row = Headless.Run(() =>
+        {
+            var measurement = new BoardMeasurement(_ => { });
+            return measurement.Time("probe", "queued-render-jobs", "Ten 15 ms jobs at Render priority, run within the action", 250, "UI thread", () =>
+            {
+                for (int job = 0; job < 10; job++)
+                {
+                    Dispatcher.UIThread.Post(() => Thread.Sleep(15), DispatcherPriority.Render);
+                }
+
+                Dispatcher.UIThread.RunJobs();
+            });
+        });
+
+        TestContext.WriteLine($"Wall {row.WallMs:0.0} ms, UI {row.UiMs:0.0} ms.");
+        Assert.IsGreaterThanOrEqualTo(140, row.WallMs, "The ten jobs ran within the action.");
+        Assert.IsGreaterThanOrEqualTo(row.WallMs * 0.9, row.UiMs, $"UI {row.UiMs:0} ms against Wall {row.WallMs:0} ms: the probe ticked between the jobs.");
+    }
+
+    public TestContext TestContext { get; set; } = null!;
+
     // ---- The wait for a real window's frames ----
 
     // WindowMeasurement.WaitForFrames waits for the window's next animation
@@ -263,5 +313,28 @@ public sealed class MeasureModeTests : StorageCheckedTests
         Assert.IsTrue(waited, "The wait for two frames ended within its limit: " + timedOut);
         Assert.StartsWith("The window drew ", timedOut);
         StringAssert.Contains(timedOut, " of 1000000 frames within 0.2 s: is it minimized, or the screen locked?");
+    }
+
+    // A directory junction at link leading to target (both in this test's
+    // own folder). Junctions need no privilege; .NET makes none, so cmd does.
+    private static void MakeJunction(string link, string target)
+    {
+        var start = new System.Diagnostics.ProcessStartInfo("cmd.exe")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        foreach (string arg in new[] { "/c", "mklink", "/J", link, target })
+        {
+            start.ArgumentList.Add(arg);
+        }
+
+        using var process = System.Diagnostics.Process.Start(start) ?? throw new AssertFailedException("cmd did not start.");
+        string output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        Assert.AreEqual(0, process.ExitCode, output);
+        Assert.IsNotNull(new DirectoryInfo(link).LinkTarget, "The junction was made: " + output);
     }
 }

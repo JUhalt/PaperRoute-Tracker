@@ -73,7 +73,7 @@ public static class ReadOnlySnapshot
     }
 
     // Why the folder cannot be copied, in plain words, or null when it can.
-    // The default storage roots are checked first, on the path as given,
+    // Only a plain local path is accepted (IsPlainLocalPath). The default storage roots are checked first, on the path as given,
     // before anything is read; then the path with its links and short names
     // resolved; then that the folder exists and holds data\. alsoRefuse adds
     // folders to the default roots (tests name a fake profile); it can only
@@ -86,13 +86,16 @@ public static class ReadOnlySnapshot
         }
 
         string full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(source));
-        string[] refused = [.. DefaultStorageRoots(), .. (alsoRefuse ?? []).Select(item => Path.GetFullPath(item))];
-
-        string? root = refused.FirstOrDefault(item => TrialStartup.IsInside(full, item));
-        if (root is null)
+        if (!IsPlainLocalPath(full))
         {
-            string real = RealPath(full, refused);
-            root = refused.FirstOrDefault(item => TrialStartup.IsInside(real, item) || TrialStartup.IsInside(real, RealParent(item, refused)));
+            return LocalFolderMessage;
+        }
+
+        string[] refused = [.. DefaultStorageRoots(), .. (alsoRefuse ?? []).Select(item => Path.GetFullPath(item))];
+        string? root = RefusedRootFor(full, refused, out string real);
+        if (root is null && !IsPlainLocalPath(real))
+        {
+            return LocalFolderMessage;
         }
 
         if (root is not null)
@@ -166,8 +169,19 @@ public static class ReadOnlySnapshot
                 continue;
             }
 
-            // A file that is a link into the real profile is refused too.
+            // A file that is a link into the real profile is refused too, and
+            // so is one whose path or target is not a plain local path.
+            if (!IsPlainLocalPath(sourceFile))
+            {
+                throw new SnapshotRefusedException(LocalFolderMessage);
+            }
+
             string real = RealPath(sourceFile, protectedRoots);
+            if (!IsPlainLocalPath(real))
+            {
+                throw new SnapshotRefusedException(LocalFolderMessage);
+            }
+
             if (protectedRoots.Any(item => TrialStartup.IsInside(real, item)))
             {
                 throw new SnapshotRefusedException(
@@ -242,6 +256,34 @@ public static class ReadOnlySnapshot
         {
             roots.Add(Path.Combine(parent, name));
         }
+    }
+
+    internal const string LocalFolderMessage = "The Board trial needs a local folder path such as C:\\Libraries\\Test.";
+
+    // True for a full path on a local drive letter ("C:\..."), with no ':'
+    // after the drive. The comparisons with the storage folders work on such
+    // paths only, so everything else is refused: the \\?\ and \\.\ device
+    // prefixes, UNC paths (a loopback share such as \\localhost\C$ reaches
+    // the same folders) and the NTFS stream form "folder::$INDEX_ALLOCATION".
+    internal static bool IsPlainLocalPath(string full) =>
+        full.Length >= 3 && char.IsAsciiLetter(full[0]) && full[1] == ':' && full[2] == Path.DirectorySeparatorChar &&
+        full.IndexOf(':', 2) < 0;
+
+    // The refused folder that full (a plain local path) is, or lies inside,
+    // on the path as given or with its links and short names resolved; null
+    // when none. real is the resolved path.
+    internal static string? RefusedRootFor(string full, string[] refused, out string real)
+    {
+        string? root = refused.FirstOrDefault(item => TrialStartup.IsInside(full, item));
+        if (root is not null)
+        {
+            real = full;
+            return root;
+        }
+
+        string resolved = RealPath(full, refused);
+        real = resolved;
+        return refused.FirstOrDefault(item => TrialStartup.IsInside(resolved, item) || TrialStartup.IsInside(resolved, RealParent(item, refused)));
     }
 
     // The folder that holds a default root, with its links and short names

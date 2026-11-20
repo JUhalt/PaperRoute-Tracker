@@ -966,6 +966,12 @@ public sealed class CardViewTests : StorageCheckedTests
                     Assert.IsNotEmpty(onScreen, $"{place}: cards are drawn on screen.");
                     Assert.AreEqual(0, onScreen[0] % model.Columns, $"{place}: the first card on screen starts a row. {facts[^1]}");
                     CollectionAssert.AreEqual(Enumerable.Range(onScreen[0], onScreen.Count).ToList(), onScreen, $"{place}: the cards on screen follow one another, none missing. {facts[^1]}");
+                    foreach (int index in onScreen)
+                    {
+                        string? wrong = CardParts.DrawnWrong(shelf.FindCardView(index)!, model.Cards[index]);
+                        Assert.IsNull(wrong, $"{theme} {place}: the view at place {index} {wrong}.");
+                    }
+
                     if (place == "end")
                     {
                         Assert.AreEqual(model.Cards.Count - 1, onScreen[^1], $"At the end the last card is on screen. {facts[^1]}");
@@ -1045,6 +1051,13 @@ public sealed class CardViewTests : StorageCheckedTests
                 {
                     problems.Add($"{key} to card {expected}: its focus ring is not shown.");
                 }
+
+                CardView? focusedView = (board.Focused() as Visual)?.FindAncestorOfType<CardView>();
+                string? wrong = focusedView is null ? "is not in a card view" : CardParts.DrawnWrong(focusedView, model.Cards[expected]);
+                if (wrong is not null)
+                {
+                    problems.Add($"{key} to card {expected}: the focused view {wrong}.");
+                }
             }
 
             int last = (model.Cards.Count - 1) / columns * columns;
@@ -1103,6 +1116,12 @@ public sealed class CardViewTests : StorageCheckedTests
                 ["Tenth"] = model.Cards[10].AutomationKey,
             };
             string Focused() => CardParts.Id(board.Focused() as Control);
+            string FocusedDraws(int index)
+            {
+                CardView? view = (board.Focused() as Visual)?.FindAncestorOfType<CardView>();
+                return view is null ? "is not in a card view" : CardParts.DrawnWrong(view, model.Cards[index]) ?? "ok";
+            }
+
             string Rings() => string.Join(", ", board.Cards("PipelineShelf")
                 .Where(view => view.Part<Border>("FocusRing").IsEffectivelyVisible)
                 .Select(view => ((CardViewModel)view.DataContext!).AutomationKey));
@@ -1113,11 +1132,13 @@ public sealed class CardViewTests : StorageCheckedTests
             board.Window.UpdateLayout();
             facts["Offset"] = $"{scroller.Offset.Y:0} of {scroller.Extent.Height:0}";
             facts["AfterScroll"] = Focused();
+            facts["DrawsAfterScroll"] = FocusedDraws(1);
             facts["RingsAfterScroll"] = Rings();
             board.Press(Key.Right);
             board.Window.UpdateLayout();
             Dispatcher.UIThread.RunJobs();
             facts["RightAfterScroll"] = Focused();
+            facts["DrawsRightAfterScroll"] = FocusedDraws(2);
 
             // The fourth card's manuscript leaves the library: card 10 moves to place 9.
             shelf.BringCardIntoView(10)!.Part<Button>("Title").Focus(NavigationMethod.Tab);
@@ -1128,6 +1149,7 @@ public sealed class CardViewTests : StorageCheckedTests
             Dispatcher.UIThread.RunJobs();
             facts["TenthNowAt"] = model.Cards.Select(card => card.AutomationKey).ToList().IndexOf(facts["Tenth"]).ToString(CultureInfo.InvariantCulture);
             facts["AfterRender"] = Focused();
+            facts["DrawsAfterRender"] = FocusedDraws(9);
             facts["RingsAfterRender"] = Rings();
             return facts;
         });
@@ -1138,6 +1160,9 @@ public sealed class CardViewTests : StorageCheckedTests
         Assert.AreEqual("9", facts["TenthNowAt"], "The render moved the focused card up one place.");
         Assert.AreEqual(facts["Tenth"] + ".Title", facts["AfterRender"], "After the render, the same card has the keyboard.");
         Assert.AreEqual(facts["Tenth"], facts["RingsAfterRender"], "Only its focus ring shows after the render.");
+        Assert.AreEqual("ok", facts["DrawsAfterScroll"], "Scrolled far away, the focused view draws the second card.");
+        Assert.AreEqual("ok", facts["DrawsRightAfterScroll"], "After Right, the focused view draws the third card.");
+        Assert.AreEqual("ok", facts["DrawsAfterRender"], "After the render, the focused view draws the card now at place 9.");
     }
 
     // Tab order across the shelf's edges, the same under both options: from
@@ -1542,6 +1567,38 @@ internal static class CardParts
         board.Window.MouseDown(at, button, RawInputModifiers.None);
         board.Window.MouseUp(at, button, RawInputModifiers.None);
         Dispatcher.UIThread.RunJobs();
+    }
+
+    // What a card view draws that is not the card given (a recycled view that
+    // kept the previous manuscript's title, stage text or pill tone), or null
+    // when it draws that card. The automation id and the DataContext are
+    // bound apart from the texts drawn, so they alone cannot show this.
+    public static string? DrawnWrong(CardView view, CardViewModel card)
+    {
+        var wrong = new List<string>();
+        if (!ReferenceEquals(view.DataContext, card))
+        {
+            wrong.Add("is bound to another card");
+        }
+
+        string? title = view.Part<TextBlock>("TitleText").Text;
+        if (title != card.Title)
+        {
+            wrong.Add($"shows the title \"{title}\", not \"{card.Title}\"");
+        }
+
+        string? stage = view.Part<TextBlock>("StageText").Text;
+        if (stage != card.StageText)
+        {
+            wrong.Add($"shows the stage \"{stage}\", not \"{card.StageText}\"");
+        }
+
+        if (!view.Part<Border>("StagePill").Classes.Contains(card.StageClass))
+        {
+            wrong.Add($"has a pill without the class {card.StageClass}");
+        }
+
+        return wrong.Count == 0 ? null : string.Join("; ", wrong);
     }
 
     // A control's automation ID, else its type: what Tab reached.

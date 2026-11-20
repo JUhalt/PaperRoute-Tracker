@@ -18,11 +18,13 @@ namespace PaperRoute.Desktop.Measurement;
 // animation frames on a real window).
 //
 // Wall is a Stopwatch around the action. UI is the longest gap between the
-// ticks of a 1 ms DispatcherTimer on the interface thread while the action
-// runs (the twin of UiThreadProbe, ResponsivenessBudgetTests.vb:858-888),
-// never more than Wall; an action that never lets the dispatcher run has UI
-// equal to Wall, which is every headless action but the startup's load. A
-// row's verdict is UI against its budget. Each change is checked, outside its
+// ticks of a 1 ms DispatcherTimer at Input priority on the interface thread
+// while the action runs (the twin of UiThreadProbe, a WM_TIMER,
+// ResponsivenessBudgetTests.vb:858-888), never more than Wall. The probe
+// ticks only where input could be served, so an action whose queued jobs
+// (layout, render, a virtualising list's rows) all outrank input has UI
+// equal to Wall, which is every headless action but the startup's load (that
+// runs off the interface thread). A row's verdict is UI against its budget. Each change is checked, outside its
 // timed step, to have changed the Pipeline shelf as it should
 // (ResponsivenessBudgetTests.vb:420-446), so no row passes on a change that
 // did nothing; a failed check throws.
@@ -76,13 +78,14 @@ public sealed class BoardMeasurement
 
     // The 500 library's rows that do not meet their budget with every card of
     // a shown shelf made at once (option (a)). Their budgets stand; under (a)
-    // they are measured and reported, not held. Medians of five headless Release runs on the
-    // trial's development PC, 2026-11-20 (UI ms against the budget): warm startup
-    // 3,082 / 1,500 (167 cards made); first switch to Published 3,533 / 100
-    // (272 cards made); stage filter to Submitted 926 / 250 and back to All
-    // stages 1,577 / 250 (each a Reset of the Pipeline and of the Published
-    // shelf, shown before); the open list stepped and closed 300 / 250; the
-    // search keystroke 357 / 50 (a Reset of both shelves).
+    // they are measured and reported, not held. Medians of five headless
+    // Release runs on the trial's development PC, 2026-11-20, each in its own
+    // process, with the probe at Input priority (UI ms against the budget):
+    // warm startup 3,032 / 1,500 (167 cards made); first switch to Published
+    // 3,970 / 100 (272 cards made); stage filter to Submitted 1,107 / 250 and
+    // back to All stages 1,406 / 250 (each a Reset of the Pipeline and of the
+    // Published shelf, shown before); the open list stepped and closed 553 /
+    // 250; the search keystroke 669 / 50 (a Reset of both shelves).
     private static readonly IReadOnlyList<string> s_waitingUnderEveryCard =
     [
         WarmStartup,
@@ -95,20 +98,25 @@ public sealed class BoardMeasurement
 
     // Under option (b), rows of N (design step 13), the rows the 500 library
     // still does not meet; every other row is held. Medians of five headless
-    // Release runs on the same PC, 2026-11-20, each in its own process (UI ms
-    // against the budget, option (a) the same day in brackets): warm startup
-    // 428 / 1,500 (3,121), held; first switch to Published 344 / 100 (3,510),
-    // waiting: the 21 card views on screen cost about 16 ms each to make;
-    // stage filter to Submitted 133 / 250 (887) and back to All stages 85 /
-    // 250 (1,534), held; the open list stepped and closed 63 / 250 (300),
-    // held; the search keystroke 91 / 50 (323), waiting; scrolling the
-    // Published shelf a page at a time, its longest step 281 / 250 (17),
-    // waiting: held under option (a), whose cards are all made before, but
-    // under (b) each page gives a page of card views new cards (about 3.5 ms
-    // a card, then their layout).
+    // Release runs on the same PC, 2026-11-20, each in its own process, with
+    // the probe at Input priority, as today's WM_TIMER (UI ms against the
+    // budget, option (a) the same day in brackets): warm startup 481 / 1,500
+    // (3,032), held; first switch to Published 383 / 100 (3,970), waiting:
+    // the card views on screen cost about 16 ms each to make; stage filter to
+    // Submitted 240 / 250 (1,107), waiting: within its budget at the median
+    // but over in one run of five (251), so not held three times in a row;
+    // back to All stages 157 / 250 (1,406), held; the open list stepped and
+    // closed 154 / 250 (553), held; the search keystroke 208 / 50 (669),
+    // waiting; scrolling the Published shelf a page at a time, its longest
+    // step 288 / 250 (16), waiting: held under option (a), whose cards are all
+    // made before, but under (b) each page gives a page of card views new
+    // cards, then their layout. (A probe at Normal priority, used before
+    // 2026-11-20, ticked between the layout and render jobs and gave about
+    // half these numbers under (b).)
     private static readonly IReadOnlyList<string> s_waitingUnderRows =
     [
         FirstSwitchToPublished,
+        StageToSubmitted,
         SearchKeystroke,
         ScrollPublished,
     ];
@@ -458,7 +466,14 @@ public sealed class BoardMeasurement
     }
 
     // Ticks on the interface thread while an action runs; the longest gap
-    // between ticks is the longest time the dispatcher ran nothing else.
+    // between ticks is the longest time a key press could not have been
+    // handled. The timer runs at Input priority, below Default, Loaded and
+    // Render, so it ticks only where input could be served, as today's
+    // WM_TIMER (the lowest-priority message) does; a tick at Normal would land
+    // between the layout and render jobs a synchronous action queues and
+    // halve the stall a person feels.
+    public static readonly DispatcherPriority ProbePriority = DispatcherPriority.Input;
+
     private sealed class UiProbe : IDisposable
     {
         private readonly DispatcherTimer _timer;
@@ -468,7 +483,7 @@ public sealed class BoardMeasurement
 
         public UiProbe()
         {
-            _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(1), DispatcherPriority.Normal, Dispatcher.UIThread, (_, _) =>
+            _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(1), ProbePriority, Dispatcher.UIThread, (_, _) =>
             {
                 double now = _watch.Elapsed.TotalMilliseconds;
                 _longestGap = Math.Max(_longestGap, now - _lastTick);

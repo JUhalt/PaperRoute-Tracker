@@ -189,11 +189,14 @@ public sealed class BoardMeasurementReport
         return text.ToString();
     }
 
+    public const string LocalFileMessage = "\"--measure\" needs a local file path such as C:\\Measurements\\board.json.";
+
     // Why the measurement may not write its JSON at path, in plain words, or
-    // null when it may: the path must be full, end in .json, and lie in a
-    // folder that exists and is not, or does not lie inside, one of the real
-    // profile's storage folders (ReadOnlySnapshot.DefaultStorageRoots). Nothing
-    // is read or written. alsoRefuse adds folders (tests name a fake profile).
+    // null when it may: the path must be a plain local path, end in .json, and
+    // lie in a folder that exists and is not, or does not lie inside, one of
+    // the real profile's storage folders (ReadOnlySnapshot.DefaultStorageRoots),
+    // with links and short names resolved as the snapshot resolves them.
+    // Nothing is written. alsoRefuse adds folders (tests name a fake profile).
     public static string? RefusalFor(string path, IEnumerable<string>? alsoRefuse = null)
     {
         if (string.IsNullOrWhiteSpace(path) || !Path.IsPathFullyQualified(path))
@@ -207,9 +210,19 @@ public sealed class BoardMeasurementReport
             return $"The measurement is written as JSON: {full} does not end in .json.";
         }
 
+        if (!ReadOnlySnapshot.IsPlainLocalPath(full))
+        {
+            return LocalFileMessage;
+        }
+
         string folder = Path.GetDirectoryName(full) ?? full;
         string[] refused = [.. ReadOnlySnapshot.DefaultStorageRoots(), .. (alsoRefuse ?? []).Select(item => Path.GetFullPath(item))];
-        string? root = refused.FirstOrDefault(item => TrialStartup.IsInside(full, item));
+        string? root = ReadOnlySnapshot.RefusedRootFor(full, refused, out string real);
+        if (root is null && !ReadOnlySnapshot.IsPlainLocalPath(real))
+        {
+            return LocalFileMessage;
+        }
+
         if (root is not null)
         {
             return $"The Board trial writes nothing into your own PaperRoute library. The file {full} lies inside " +

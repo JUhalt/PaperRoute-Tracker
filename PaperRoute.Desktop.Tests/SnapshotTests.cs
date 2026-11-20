@@ -211,7 +211,46 @@ public sealed class SnapshotTests : StorageCheckedTests
         using var session = new DiskLibrarySession(copy, Path.Combine(StandInSession, "managed-library"), LargeLibraryFixture.Today);
         session.LoadAsync(CancellationToken.None).GetAwaiter().GetResult();
         Assert.HasCount(7, session.Manuscripts);
-        Assert.AreEqual("Loaded 7 manuscripts from local storage. Could not be read, so not copied: " + Path.Combine("data", "authors.json") + ".", session.StartupNotice);
+        Assert.AreEqual("Loaded 7 manuscripts from local storage. This file could not be read, so it was not copied: " + Path.Combine("data", "authors.json") + ".", session.StartupNotice);
+    }
+
+    // When the manuscripts file itself cannot be read (PaperRoute saving it
+    // without sharing, d1 section 9), the line says the copy failed, not
+    // "Loaded 0 manuscripts", and names the other files skipped after it.
+    [TestMethod]
+    public void ALockedManuscriptsFileIsReportedAsAFailedCopyNotAnEmptyLibrary()
+    {
+        LargeLibraryFixture.WriteExample(Source);
+        string manuscripts = Path.Combine(Source, "data", "manuscripts.json");
+        string[] before = SourceState(Source);
+
+        SnapshotCopy copy;
+        using (new FileStream(manuscripts, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            copy = ReadOnlySnapshot.Copy(Source, Destination, StandInSession);
+        }
+
+        CollectionAssert.AreEqual(before, SourceState(Source), "The copier changed the source folder.");
+        CollectionAssert.Contains(copy.Skipped.ToArray(), Path.Combine("data", "manuscripts.json"));
+        using var session = new DiskLibrarySession(copy, Path.Combine(StandInSession, "managed-library"), LargeLibraryFixture.Today);
+        session.LoadAsync(CancellationToken.None).GetAwaiter().GetResult();
+        Assert.IsEmpty(session.Manuscripts);
+        Assert.AreEqual(
+            "The snapshot could not copy the manuscripts file (" + Path.Combine("data", "manuscripts.json") + "): another program may have been using it. Try again.",
+            session.StartupNotice);
+
+        // The rule for the line, with the previous save and other files.
+        string json = Path.Combine("data", "manuscripts.json");
+        string authors = Path.Combine("data", "authors.json");
+        string schema = "schema.json";
+        Assert.AreEqual(
+            "The snapshot could not copy the manuscripts file (" + json + "): another program may have been using it. Try again. " +
+            "The Board shows the previous save, from " + Path.Combine("data", "manuscripts.bak") + ". " +
+            "These files could not be read, so they were not copied: " + schema + ", " + authors + ".",
+            DiskLibrarySession.SkippedNotice("Opened the previous save of the library - 9:00 AM", [schema, json, authors], 3));
+        Assert.AreEqual(
+            "Loaded 2 manuscripts from local storage. These files could not be read, so they were not copied: " + schema + ", " + authors + ".",
+            DiskLibrarySession.SkippedNotice("Loaded 2 manuscripts from local storage.", [schema, authors], 2));
     }
 
     [TestMethod]
@@ -258,6 +297,23 @@ public sealed class SnapshotTests : StorageCheckedTests
         }
 
         Assert.IsEmpty(Directory.EnumerateFileSystemEntries(StandInSession), "Nothing was copied.");
+
+        // Other spellings of the same folders, which a string comparison with
+        // "C:\..." would miss: the device prefixes, a loopback admin share and
+        // the NTFS stream form. Each is refused as not a plain local path.
+        string share = @"\\localhost\" + inside[0] + "$" + inside[2..];
+        foreach (string source in new[]
+        {
+            @"\\?\" + inside, @"\\.\" + inside, @"\\?\" + profile, share, profile + "::$INDEX_ALLOCATION",
+        })
+        {
+            string? message = ReadOnlySnapshot.RefusalFor(source, [profile]);
+            Assert.AreEqual("The Board trial needs a local folder path such as C:\\Libraries\\Test.", message, source);
+            var refused = Assert.ThrowsExactly<SnapshotRefusedException>(() => ReadOnlySnapshot.Copy(source, Destination, StandInSession, [profile]));
+            Assert.AreEqual(message, refused.Message, source);
+            Assert.IsEmpty(Directory.EnumerateFileSystemEntries(StandInSession), "Nothing was copied from " + source);
+        }
+
         CollectionAssert.AreEqual(before, SourceState(profile), "Nothing in the refused folder changed.");
 
         IReadOnlyList<string> defaults = ReadOnlySnapshot.DefaultStorageRoots();
