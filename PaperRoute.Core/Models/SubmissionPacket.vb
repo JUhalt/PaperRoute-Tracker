@@ -27,7 +27,7 @@ Namespace Models
 
         Public Property Notes As String = String.Empty
 
-        Public Property CreatedAtUtc As DateTime = DateTime.UtcNow
+        Public Property CreatedAtUtc As DateTime = CoreClock.UtcNow
 
         Public Property LastModifiedAtUtc As DateTime? = Nothing
 

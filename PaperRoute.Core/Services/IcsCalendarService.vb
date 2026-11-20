@@ -21,7 +21,7 @@ Namespace Services
 
             Return Export(
                 occurrences,
-                DateTime.UtcNow
+                CoreClock.UtcNow
             )
 
         End Function

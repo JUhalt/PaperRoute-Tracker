@@ -10,7 +10,7 @@ Namespace Models
 
         Public Property LastModifiedAtUtc As DateTime? = Nothing
 
-        Public Property EventDate As DateTime = DateTime.Now
+        Public Property EventDate As DateTime = CoreClock.Now
 
         Public Property Stage As PaperStage = PaperStage.Idea
 

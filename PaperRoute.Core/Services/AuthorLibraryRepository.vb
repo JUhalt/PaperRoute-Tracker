@@ -500,7 +500,7 @@ Namespace Services
 
             Dim baseName As String =
                 "authors_corrupt_" &
-                DateTime.Now.ToString(
+                CoreClock.Now.ToString(
                     "yyyyMMdd_HHmmss_fff"
                 )
 

@@ -259,7 +259,7 @@ Namespace Services
                     StoredText.NewLine &
                     StoredText.NewLine &
                     "Created: " &
-                    DateTime.Now.ToString("O") &
+                    CoreClock.Now.ToString("O") &
                     StoredText.NewLine &
                     "Manuscripts: " &
                     manuscripts.Count.ToString() &
@@ -303,7 +303,7 @@ Namespace Services
                 ' backup-info.txt stays for people who read it.
                 Dim manifest As New BackupManifest With {
                     .AppVersion = PacketExportService.AppVersion(),
-                    .CreatedUtc = DateTime.UtcNow,
+                    .CreatedUtc = CoreClock.UtcNow,
                     .Manuscripts = manuscripts.Count,
                     .Submissions = submissionCount,
                     .EditorialDecisions = decisionCount,

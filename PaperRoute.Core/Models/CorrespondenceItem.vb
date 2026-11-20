@@ -10,7 +10,7 @@ Namespace Models
 
         Public Property LastModifiedAtUtc As DateTime? = Nothing
 
-        Public Property ItemDate As DateTime = DateTime.Now
+        Public Property ItemDate As DateTime = CoreClock.Now
 
         Public Property Type As CorrespondenceType = CorrespondenceType.Other
 

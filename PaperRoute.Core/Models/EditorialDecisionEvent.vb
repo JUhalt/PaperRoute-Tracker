@@ -10,7 +10,7 @@ Namespace Models
 
         Public Property LastModifiedAtUtc As DateTime? = Nothing
 
-        Public Property DecisionDate As DateTime = DateTime.Now
+        Public Property DecisionDate As DateTime = CoreClock.Now
 
         Public Property Decision As EditorialDecision =
             EditorialDecision.None

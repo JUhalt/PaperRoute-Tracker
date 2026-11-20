@@ -54,7 +54,7 @@ Namespace Models
 
         Public Property Status As PublicationMatchStatus = PublicationMatchStatus.Pending
 
-        Public Property FoundAtUtc As DateTime = DateTime.UtcNow
+        Public Property FoundAtUtc As DateTime = CoreClock.UtcNow
 
         Public Property ReviewedAtUtc As DateTime? = Nothing
 

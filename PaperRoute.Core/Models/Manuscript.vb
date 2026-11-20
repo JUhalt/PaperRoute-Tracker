@@ -50,7 +50,7 @@ Namespace Models
 
         Public Property Location As ManuscriptLocation = ManuscriptLocation.Pipeline
 
-        Public Property StageEnteredDate As DateTime = DateTime.Now
+        Public Property StageEnteredDate As DateTime = CoreClock.Now
 
         Public Property RevisionDeadline As DateTime? = Nothing
 

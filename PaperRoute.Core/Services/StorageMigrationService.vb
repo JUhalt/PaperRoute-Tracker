@@ -717,7 +717,7 @@ Namespace Services
                 },
                 {
                     "UpdatedAtUtc",
-                    DateTime.UtcNow.ToString("O")
+                    CoreClock.UtcNow.ToString("O")
                 }
             }
 
@@ -961,7 +961,7 @@ Namespace Services
                 },
                 {
                     "UpdatedAtUtc",
-                    DateTime.UtcNow.ToString("O")
+                    CoreClock.UtcNow.ToString("O")
                 }
             }
 
@@ -1368,7 +1368,7 @@ Namespace Services
                 Dim payload As New Dictionary(Of String, Object) From {
                     {
                         "MigratedAtUtc",
-                        DateTime.UtcNow.ToString("O")
+                        CoreClock.UtcNow.ToString("O")
                     },
                     {
                         "SourceDataRoot",

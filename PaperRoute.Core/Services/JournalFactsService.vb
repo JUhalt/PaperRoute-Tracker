@@ -13,7 +13,7 @@ Namespace Services
     ' What DOAJ and OpenAlex said about one journal, at one moment.
     Public NotInheritable Class JournalFactsLookup
 
-        Public Property CheckedUtc As DateTime = DateTime.UtcNow
+        Public Property CheckedUtc As DateTime = CoreClock.UtcNow
         Public Property Issns As New List(Of String)()
         Public Property Doaj As DoajJournal
         ' DOAJ answered, whether or not it lists the journal.
@@ -58,7 +58,7 @@ Namespace Services
 
             OnlineAccess.Check(OnlineServiceCatalog.JournalFacts)
 
-            Dim result As New JournalFactsLookup With {.CheckedUtc = DateTime.UtcNow}
+            Dim result As New JournalFactsLookup With {.CheckedUtc = CoreClock.UtcNow}
             Dim known As List(Of String) = IssnService.NormalizeList(issns)
             Dim id As String = OpenAlexSourceClient.NormalizeId(openAlexId)
 

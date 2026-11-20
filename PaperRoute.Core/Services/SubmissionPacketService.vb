@@ -48,7 +48,7 @@ Namespace Services
                 .RevisionRoundNumber = revisionRoundNumber,
                 .Label = NormalizePacketLabel(label),
                 .Notes = NormalizeText(notes),
-                .CreatedAtUtc = If(createdAtUtc.HasValue, createdAtUtc.Value, DateTime.UtcNow)
+                .CreatedAtUtc = If(createdAtUtc.HasValue, createdAtUtc.Value, CoreClock.UtcNow)
             }
 
             manuscript.SubmissionPackets.Add(packet)
@@ -125,7 +125,7 @@ Namespace Services
             packet.RevisionRoundNumber = revisionRoundNumber
             packet.Label = normalizedLabel
             packet.Notes = normalizedNotes
-            packet.LastModifiedAtUtc = If(modifiedAtUtc.HasValue, modifiedAtUtc.Value, DateTime.UtcNow)
+            packet.LastModifiedAtUtc = If(modifiedAtUtc.HasValue, modifiedAtUtc.Value, CoreClock.UtcNow)
 
             Return True
 
@@ -614,7 +614,7 @@ Namespace Services
         )
 
             packet.LastModifiedAtUtc =
-                If(modifiedAtUtc.HasValue, modifiedAtUtc.Value, DateTime.UtcNow)
+                If(modifiedAtUtc.HasValue, modifiedAtUtc.Value, CoreClock.UtcNow)
 
         End Sub
 

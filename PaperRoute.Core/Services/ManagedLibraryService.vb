@@ -933,7 +933,7 @@ Namespace Services
                 Path.Combine(
                     rootDirectory,
                     RemovedFolderName,
-                    DateTime.Now.ToString(
+                    CoreClock.Now.ToString(
                         "yyyy-MM-dd",
                         CultureInfo.InvariantCulture
                     ),

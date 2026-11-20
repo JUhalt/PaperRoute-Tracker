@@ -15,7 +15,7 @@ Namespace Models
         Public Property ManuscriptLocation As String = String.Empty
         Public Property Notes As String = String.Empty
         Public Property Status As ReviewerResponseStatus = ReviewerResponseStatus.Unresolved
-        Public Property CreatedAtUtc As DateTime = DateTime.UtcNow
+        Public Property CreatedAtUtc As DateTime = CoreClock.UtcNow
         Public Property LastModifiedAtUtc As DateTime? = Nothing
         ' The comment began as an AI assistant suggestion from a decision
         ' letter (#84); Nothing when it was entered by hand.

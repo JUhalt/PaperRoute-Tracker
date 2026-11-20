@@ -60,7 +60,7 @@ Namespace Services
     Public NotInheritable Class JournalSuggestionsResult
 
         Public Property Request As JournalSuggestionRequest
-        Public Property RetrievedUtc As DateTime = DateTime.UtcNow
+        Public Property RetrievedUtc As DateTime = CoreClock.UtcNow
         Public Property Journals As New List(Of JournalSuggestion)()
         ' Matching articles in all journals.
         Public Property TotalMatching As Long
@@ -388,7 +388,7 @@ Namespace Services
             OnlineAccess.Check(OnlineServiceCatalog.JournalSuggestions)
             If JournalSuggestionService.CleanKeywords(request).Count = 0 Then Throw New ArgumentException("Check at least one keyword.", NameOf(request))
 
-            Dim result As New JournalSuggestionsResult With {.Request = request, .RetrievedUtc = DateTime.UtcNow}
+            Dim result As New JournalSuggestionsResult With {.Request = request, .RetrievedUtc = CoreClock.UtcNow}
 
             ' Only this call failing fails the search.
             Dim groups = JournalSuggestionService.ParseGroups(Await GetAsync(JournalSuggestionService.JournalsUrl(request), cancellationToken).ConfigureAwait(False))
