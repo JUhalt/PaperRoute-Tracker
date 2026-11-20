@@ -21,10 +21,14 @@ internal static class Headless
         });
     }
 
-    public static T Run<T>(Func<T> body)
+    public static T Run<T>(Func<T> body) => Run(body, s_timeout);
+
+    // With a longer limit, for the budget tests' runs over the 500 library,
+    // which a Debug build on a busy host can take more than a minute over.
+    public static T Run<T>(Func<T> body, TimeSpan timeout)
     {
         ArgumentNullException.ThrowIfNull(body);
         Task<T> work = AssemblySetup.Session.Dispatch(body, CancellationToken.None);
-        return work.WaitAsync(s_timeout).GetAwaiter().GetResult();
+        return work.WaitAsync(timeout).GetAwaiter().GetResult();
     }
 }

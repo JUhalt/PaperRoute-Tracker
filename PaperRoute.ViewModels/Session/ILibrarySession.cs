@@ -13,6 +13,10 @@ public interface ILibrarySession : IDisposable
     // Fixed when the session starts; tests pass their own.
     DateTime Today { get; }
 
+    // For a snapshot: the folder copied, and once the load has copied it, what
+    // was copied and when. Null for the example.
+    LibrarySnapshot? Snapshot { get; }
+
     // The library's own list order. Empty until LoadAsync has finished, and
     // after a load that failed.
     IReadOnlyList<Manuscript> Manuscripts { get; }

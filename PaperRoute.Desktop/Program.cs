@@ -1,26 +1,74 @@
 using Avalonia;
+using PaperRoute.ViewModels.Measurement;
 using PaperRoute.ViewModels.Session;
 
 namespace PaperRoute.Desktop;
 
 internal static class Program
 {
+    // Exit code for a command line the trial will not run (a refused folder,
+    // a bad argument); nothing was opened.
+    private const int RefusedExitCode = 2;
+
     // Lock 1 of the trial design (d1 1.3): the isolated storage session is the
     // first thing Main does, before any other call into PaperRoute.Core, so no
-    // default root can reach the user's own library. The example is the only
-    // library this wave opens.
+    // default root can reach the user's own library. The library is the
+    // example, or with "--snapshot-from <folder>" a read-only copy of the
+    // library in that folder (step 11b), refused before anything is read when
+    // the folder is, or lies inside, one of the real profile's storage folders.
+    // The command line is read first; reading it calls nothing in the core.
     //
-    // "--self-check" (d1 1.3 Modes, rule S2) opens no window: it loads the
-    // session, checks where storage went, ends the session and exits 0 or 1.
+    // "--self-check" (d1 1.3 Modes, rules S1 and S2) opens no window: it loads
+    // the session, checks where storage went, ends the session and exits 0 or 1.
+    //
+    // "--measure <file>.json" (d1 7.3) opens a real window, times the rows of
+    // d1 6.3 on the library, writes them as JSON and exits 0, or 1 if a row
+    // could not be measured. The file is refused, before anything is opened,
+    // unless its path is full, ends in .json and lies in an existing folder
+    // outside the real profile's storage folders.
     [STAThread]
     public static int Main(string[] args)
     {
-        ILibrarySession session = TrialStartup.StartExample(DateTime.Today);
+        if (!TrialOptions.TryParse(args, out TrialOptions? options, out string? error))
+        {
+            Console.Error.WriteLine(error);
+            return RefusedExitCode;
+        }
+
+        if (options.MeasureFile is { } measureFile && BoardMeasurementReport.RefusalFor(measureFile) is { } measureRefusal)
+        {
+            Console.Error.WriteLine(measureRefusal);
+            return RefusedExitCode;
+        }
+
+        ILibrarySession session;
+        if (options.SnapshotFrom is { } folder)
+        {
+            string? refusal = ReadOnlySnapshot.RefusalFor(folder);
+            if (refusal is not null)
+            {
+                Console.Error.WriteLine(refusal);
+                return RefusedExitCode;
+            }
+
+            session = TrialStartup.StartSnapshot(folder, options.Today ?? DateTime.Today);
+        }
+        else
+        {
+            session = TrialStartup.StartExample(DateTime.Today);
+        }
+
         try
         {
-            if (args.Contains(TrialStartup.SelfCheckArgument, StringComparer.OrdinalIgnoreCase))
+            if (options.SelfCheck)
             {
                 return TrialStartup.RunSelfCheck(session, Console.Out);
+            }
+
+            if (options.MeasureFile is { } file)
+            {
+                string daySource = options.Today is null ? "the computer's date" : TrialOptions.TodayArgument;
+                return Configure(AppBuilder.Configure(() => new App(session, file, daySource))).StartWithClassicDesktopLifetime(args);
             }
 
             return Configure(AppBuilder.Configure(() => new App(session))).StartWithClassicDesktopLifetime(args);

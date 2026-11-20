@@ -80,7 +80,12 @@ public sealed class SessionStartupProcessTests
         Assert.Contains($"PASS session folder removed: {folder}", run.Lines, report);
     }
 
-    private static SelfCheckRun RunSelfCheck()
+    private static SelfCheckRun RunSelfCheck() => RunTrial("--self-check");
+
+    // Runs "dotnet PaperRoute.Desktop.dll <arguments>" with no window; every
+    // caller passes "--self-check", or arguments the trial refuses before it
+    // opens anything.
+    internal static SelfCheckRun RunTrial(params string[] arguments)
     {
         string desktop = DesktopAssemblyPath();
         var start = new ProcessStartInfo(DotnetHost())
@@ -92,7 +97,10 @@ public sealed class SessionStartupProcessTests
             WorkingDirectory = Path.GetDirectoryName(desktop)!,
         };
         start.ArgumentList.Add(desktop);
-        start.ArgumentList.Add("--self-check");
+        foreach (string argument in arguments)
+        {
+            start.ArgumentList.Add(argument);
+        }
 
         using Process process = Process.Start(start) ?? throw new InvalidOperationException("The trial did not start.");
         Task<string> output = process.StandardOutput.ReadToEndAsync();
@@ -152,7 +160,7 @@ public sealed class SessionStartupProcessTests
         return "dotnet";
     }
 
-    private sealed record SelfCheckRun(int ExitCode, string[] Lines, string Errors)
+    internal sealed record SelfCheckRun(int ExitCode, string[] Lines, string Errors)
     {
         public string Describe() =>
             $"Exit code {ExitCode}.\nOutput:\n{string.Join("\n", Lines)}\nErrors:\n{Errors}";
