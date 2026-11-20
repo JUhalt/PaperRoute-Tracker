@@ -80,8 +80,11 @@ Public Class CertificationFixtureTests
     <TestMethod>
     Public Sub TheFixtureKeepsOutOfPaperRoutesOwnFolders()
 
-        Dim localData As String = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
-        Dim documents As String = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
+        ' Where the folders are, whether or not they exist yet: on a Linux
+        ' runner Documents (and possibly ~/.local/share) may not, and the
+        ' rule is the same.
+        Dim localData As String = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.DoNotVerify)
+        Dim documents As String = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments, Environment.SpecialFolderOption.DoNotVerify)
 
         For Each own As String In {
             localData,

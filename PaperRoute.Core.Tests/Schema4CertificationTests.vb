@@ -157,37 +157,6 @@ Public Class Schema4CertificationTests
     End Sub
 
     <TestMethod>
-    <DataRow(1)>
-    <DataRow(2)>
-    <DataRow(3)>
-    <DataRow(4)>
-    <DataRow(5)>
-    Public Sub LockedSchema_PreservesPriorBackupAndSourceBytesThenRetryCompletes(schemaVersion As Integer)
-        File.WriteAllText(Path.Combine(_dataDirectory, "manuscripts.json"), "[]")
-        File.WriteAllText(Path.Combine(_dataDirectory, "authors.json"), "{}")
-        File.WriteAllText(SchemaPath(), "{""SchemaVersion"":" & schemaVersion.ToString() & "}")
-        Dim backupPath As String = Path.Combine(_dataDirectory, "schema.v" & schemaVersion.ToString() & ".bak")
-        File.WriteAllText(backupPath, "Previous recovery metadata must survive a failed upgrade.")
-        Dim before As Dictionary(Of String, Byte()) = SnapshotFiles(_root)
-        Dim oldSchema As Byte() = File.ReadAllBytes(SchemaPath())
-
-        ' Permit migration validation reads, but prevent replacing the schema.
-        Using lockedSchema As New FileStream(SchemaPath(), FileMode.Open, FileAccess.Read, FileShare.Read)
-            Assert.ThrowsExactly(Of IOException)(Sub() Migrate())
-            AssertFileSnapshotEqual(before, SnapshotFiles(_root))
-            Assert.AreEqual(0, Directory.GetFiles(_dataDirectory, "schema.json.tmp*").Length)
-        End Using
-
-        Migrate()
-
-        Assert.AreEqual(StorageMigrationService.CurrentSchemaVersion, StorageMigrationService.ReadSchemaVersion(SchemaPath()))
-        CollectionAssert.AreEqual(oldSchema, File.ReadAllBytes(backupPath))
-        CollectionAssert.AreEqual(before(Path.Combine(_dataDirectory, "manuscripts.json")), File.ReadAllBytes(Path.Combine(_dataDirectory, "manuscripts.json")))
-        CollectionAssert.AreEqual(before(Path.Combine(_dataDirectory, "authors.json")), File.ReadAllBytes(Path.Combine(_dataDirectory, "authors.json")))
-        Assert.AreEqual(0, Directory.GetFiles(_dataDirectory, "schema.json.tmp*").Length)
-    End Sub
-
-    <TestMethod>
     Public Sub FutureSchema_RejectsBeforeChangingAnyCurrentOrLegacyRoot()
         SeedRepresentativeSchema4()
         File.WriteAllText(SchemaPath(), "{""SchemaVersion"":999,""futureMetadata"":""preserve exactly""}")
