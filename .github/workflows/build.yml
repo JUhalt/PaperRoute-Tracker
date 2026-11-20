@@ -71,6 +71,7 @@ jobs:
           $report | Where-Object { $_ -like 'Files scanned:*' -or $_ -like 'Windows-only rows:*' } | ForEach-Object { "Core inventory: $_" } >> $env:GITHUB_STEP_SUMMARY
 
       - name: Build Release
+        id: build-release
         run: dotnet build ManuscriptPipeline.slnx --configuration Release --no-restore
 
       - name: Build disposable workflow demo
@@ -109,7 +110,39 @@ jobs:
               [int] $counters.GetAttribute('passed') -ne [int] $counters.GetAttribute('total')) {
               throw 'Tests must all pass, with none skipped or inconclusive.'
           }
-          "Tests: $($counters.GetAttribute('passed')) passed; none skipped." >> $env:GITHUB_STEP_SUMMARY
+          "PaperRoute.Tests: $($counters.GetAttribute('passed')) passed; none skipped." >> $env:GITHUB_STEP_SUMMARY
+
+      # The core's own tests (core stage 2): the same rule, every test passes
+      # and none is skipped. It runs whenever the build did, so a failure in
+      # the step above still leaves this project's results to read, and the
+      # job fails if either step fails. The summary adds the two counts.
+      - name: Run core tests
+        if: ${{ !cancelled() && steps.build-release.outcome == 'success' }}
+        shell: pwsh
+        run: |
+          dotnet test PaperRoute.Core.Tests/PaperRoute.Core.Tests.vbproj --configuration Release --no-build `
+              --logger 'trx;LogFileName=PaperRoute.Core.Tests.trx' --results-directory "$env:GITHUB_WORKSPACE/TestResults"
+          if ($LASTEXITCODE -ne 0) { throw 'The core test run failed.' }
+          $counts = @{}
+          foreach ($name in 'PaperRoute.Tests', 'PaperRoute.Core.Tests') {
+              $path = Join-Path $env:GITHUB_WORKSPACE "TestResults/$name.trx"
+              if (-not (Test-Path -LiteralPath $path)) { continue }
+              $trx = [xml]::new()
+              $trx.XmlResolver = $null
+              $trx.Load($path)
+              $counters = $trx.SelectSingleNode('//*[local-name()="ResultSummary"]/*[local-name()="Counters"]')
+              if ($null -ne $counters -and [int] $counters.GetAttribute('total') -ge 1 -and
+                  [int] $counters.GetAttribute('passed') -eq [int] $counters.GetAttribute('total')) {
+                  $counts[$name] = [int] $counters.GetAttribute('passed')
+              }
+          }
+          if (-not $counts.ContainsKey('PaperRoute.Core.Tests')) {
+              throw 'Core tests must all pass, with none skipped or inconclusive.'
+          }
+          "PaperRoute.Core.Tests: $($counts['PaperRoute.Core.Tests']) passed; none skipped." >> $env:GITHUB_STEP_SUMMARY
+          if ($counts.ContainsKey('PaperRoute.Tests')) {
+              "Tests: $($counts['PaperRoute.Tests'] + $counts['PaperRoute.Core.Tests']) passed in the two projects ($($counts['PaperRoute.Tests']) + $($counts['PaperRoute.Core.Tests'])); none skipped." >> $env:GITHUB_STEP_SUMMARY
+          }
 
       - name: Upload test results
         if: always()
@@ -140,4 +173,74 @@ jobs:
           name: PaperRouteTracker-win-x64
           path: publish/win-x64/
           if-no-files-found: error
+          retention-days: 14
+
+  # The core and its own tests on Linux (core stage 2). Report-only until
+  # step 13 of the stage removes continue-on-error: its failures are the
+  # stage's remaining work, seen by a machine. The solution cannot build
+  # here (it holds the net10.0-windows app), so the job builds the core
+  # test project, which builds the core through its reference.
+  core-linux:
+    name: Core on Linux
+    runs-on: ubuntu-latest
+    continue-on-error: true   # report-only until core stage 2's step 13 removes this line
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      # Report only; -FailOnWindowsOnly from core stage 2's step 13. Until
+      # then a failure here must not keep the tests below from running.
+      - name: Inventory (no Windows-only API in the core)
+        shell: pwsh
+        continue-on-error: true
+        run: ./.github/scripts/Get-WindowsOnlyApiInventory.ps1 -Root . -AsMarkdown
+
+      - name: Restore the core tests
+        run: dotnet restore PaperRoute.Core.Tests/PaperRoute.Core.Tests.vbproj
+
+      - name: Build the core and its tests
+        run: dotnet build PaperRoute.Core.Tests/PaperRoute.Core.Tests.vbproj --configuration Release --no-restore
+
+      - name: Run core tests
+        shell: pwsh
+        env:
+          TZ: Etc/UTC
+          LANG: en_US.UTF-8
+        run: |
+          dotnet test PaperRoute.Core.Tests/PaperRoute.Core.Tests.vbproj --configuration Release --no-build `
+              --logger 'trx;LogFileName=PaperRoute.Core.Tests.trx' --results-directory "$env:GITHUB_WORKSPACE/TestResults"
+          $exitCode = $LASTEXITCODE
+          $path = Join-Path $env:GITHUB_WORKSPACE 'TestResults/PaperRoute.Core.Tests.trx'
+          $counters = $null
+          if (Test-Path -LiteralPath $path) {
+              $trx = [xml]::new()
+              $trx.XmlResolver = $null
+              $trx.Load($path)
+              $counters = $trx.SelectSingleNode('//*[local-name()="ResultSummary"]/*[local-name()="Counters"]')
+          }
+          if ($null -eq $counters) {
+              'Core on Linux: no test results.' >> $env:GITHUB_STEP_SUMMARY
+          }
+          else {
+              "Core on Linux: $($counters.GetAttribute('passed')) passed, $($counters.GetAttribute('failed')) failed, $([int] $counters.GetAttribute('total') - [int] $counters.GetAttribute('passed') - [int] $counters.GetAttribute('failed')) neither (skipped, inconclusive or not run), of $($counters.GetAttribute('total'))." >> $env:GITHUB_STEP_SUMMARY
+          }
+          if ($exitCode -ne 0) { throw 'The core test run failed.' }
+          if ($null -eq $counters -or [int] $counters.GetAttribute('total') -lt 1 -or
+              [int] $counters.GetAttribute('passed') -ne [int] $counters.GetAttribute('total')) {
+              throw 'Core tests must all pass, with none skipped or inconclusive.'
+          }
+
+      - name: Upload core test results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: PaperRoute-core-linux-results
+          path: TestResults/
+          if-no-files-found: ignore
           retention-days: 14
