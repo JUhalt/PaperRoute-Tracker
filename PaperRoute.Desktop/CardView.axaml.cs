@@ -23,6 +23,7 @@ public partial class CardView : UserControl
 
     public CardView()
     {
+        MadeCount++;
         InitializeComponent();
 
         Card.AddHandler(PointerPressedEvent, OnCardPressed);
@@ -33,6 +34,10 @@ public partial class CardView : UserControl
         MoreMenu.Opening += (_, _) => Fill(MoreMenu);
         RightClickMenu.Opening += (_, _) => Fill(RightClickMenu);
     }
+
+    // How many card views this process has made (on the interface thread),
+    // so a test or a measurement can tell how many a change made (d1 4.4).
+    public static int MadeCount { get; private set; }
 
     // The flyout ⋯ opens, and the one a right-click opens.
     public MenuFlyout MoreMenu { get; }
