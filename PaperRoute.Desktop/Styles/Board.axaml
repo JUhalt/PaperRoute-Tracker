@@ -20,6 +20,7 @@
                    underlined while hovered (LinkLabel, Form1.vb:495-503);
                    with card-title, a card's title: 14 px bold PrimaryText,
                    AccentBrush while pressed (Form1.vb:3239-3255)
+    card-title-text  the title's text, two 18 px lines tall, ellipsis
     route-dot      10 px dots: closed a MutedText disc 1 px inside, current an
                    AccentMuted fill in an AccentBrush ring, accepted an
                    AccentBrush disc (Controls\RouteDots.vb:59-91)
@@ -101,12 +102,21 @@
     <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
   </Style>
 
-  <!-- Link buttons. After Button.axaml, so these win over the button faces. -->
+  <!--
+    Link buttons. After Button.axaml, so these win over the button faces.
+    The focus ring is drawn inside the link's own bounds: Avalonia clips a
+    focus adorner to the control it marks, so a ring drawn 2 px outside showed
+    only as specks at its corners (found by step 10's pictures). The link has
+    4 px of padding (the 2 px ring and 2 px clear of the text) and 4 px less
+    margin on every side, so its text stays where it was; a link with a
+    margin of its own sets it 4 px less.
+  -->
   <Style Selector="Button.link">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="Padding" Value="0" />
+    <Setter Property="Padding" Value="4" />
+    <Setter Property="Margin" Value="-4" />
     <Setter Property="MinHeight" Value="0" />
     <Setter Property="CornerRadius" Value="0" />
     <Setter Property="HorizontalContentAlignment" Value="Left" />
@@ -114,7 +124,7 @@
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="FocusAdorner">
       <FocusAdornerTemplate>
-        <Border Margin="-2" BorderThickness="2" CornerRadius="4"
+        <Border BorderThickness="2" CornerRadius="4"
                 BorderBrush="{DynamicResource AccentSecondaryBrush}" />
       </FocusAdornerTemplate>
     </Setter>
@@ -148,6 +158,19 @@
   </Style>
   <Style Selector="Button.link.card-title:pressed /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <!-- The title's text: two lines tall whatever its length, cut short with an ellipsis, so every card keeps one height (Form1.vb:3150, 3246). -->
+  <Style Selector="TextBlock.card-title-text">
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="MaxLines" Value="2" />
+    <Setter Property="LineHeight" Value="18" />
+    <Setter Property="Height" Value="36" />
+  </Style>
+
+  <!-- A card menu's Delete... (Form1.vb:3545); off in the trial, so Fluent's disabled ink shows over it. -->
+  <Style Selector="MenuItem.danger">
+    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
   </Style>
 
   <!-- Route dots. -->

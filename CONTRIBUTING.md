@@ -31,6 +31,8 @@ dotnet test PaperRoute.Tests/PaperRoute.Tests.vbproj --configuration Release --n
 dotnet test PaperRoute.Core.Tests/PaperRoute.Core.Tests.vbproj --configuration Release --no-build
 ```
 
+Four tests in `PaperRoute.Core.Tests` (category `SameDataEverywhere`) compare the bytes a session stores with values recorded on the CI runners, which are on UTC with the en-US culture. On a computer in another time zone or culture they report themselves inconclusive and say why. CI runs them on Windows and on Ubuntu, where a test that did not run counts as not passing.
+
 ## Data safety
 
 Changes involving persistence, backup/restore, managed files, or import logic should preserve existing local data whenever possible. Avoid silently changing storage locations or destructive behavior without a migration path.

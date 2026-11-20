@@ -4,6 +4,15 @@
 * text=auto
 
 ###############################################################################
+# Files compared byte for byte on Windows and on Linux (core stage 2, step 14).
+# The golden hash list ends each line in LF, and text=auto would check it out
+# with CR LF on a Windows machine with core.autocrlf: -text keeps it exactly as
+# committed on every checkout. The backups are ZIP files, never converted.
+###############################################################################
+PaperRoute.Core.Tests/Fixtures/CrossSystem/*.txt -text
+PaperRoute.Core.Tests/Fixtures/CrossSystem/*.zip binary
+
+###############################################################################
 # Set default behavior for command prompt diff.
 #
 # This is need for earlier builds of msysgit that does not have it on by
