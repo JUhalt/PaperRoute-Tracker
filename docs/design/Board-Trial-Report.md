@@ -1,16 +1,16 @@
 # Board trial report
 
-Draft of November 20, 2026. Three parts wait for a person: the look of the Board on a real Windows contrast theme (step 11), the Narrator pass (step 17), and the maintainer's own hours, which k needs.
+Draft of November 20, 2026. Four parts wait for a person: the look of the Board on a real Windows contrast theme (step 11), the Narrator pass (step 17), a start on a real Linux machine, and the maintainer's own hours, which the second k needs. Section 10 lists the decisions that wait for the maintainer.
 
 ## Summary
 
 - **What was built.** The Board of PaperRoute Tracker, ported to Avalonia 12.1.6 in C# over the unchanged Visual Basic core, beside the Windows Forms app. It has shelves and cards, search, the stage and sort boxes, the Needs Attention chips, arrow keys, Light, Dark and high contrast, a read-only copy of a library folder (`--snapshot-from`) and a measuring mode (`--measure`). 181 headless tests pass on Windows and on Ubuntu (CI run 44703237752).
-- **Finding 1.** The C# interface over the VB core works. Compiled bindings reach VB core types, and no build error ever crossed the VB/C# line.
-- **Finding 2.** One card view is expensive: about 3 ms to make and about 12 ms to attach and lay out. Drawing every card misses the budgets by far. Any long list in the full port must be virtualized from the start.
-- **Finding 3.** The hours are small against the plan: 6.3 recorded hours, Board work about 3.5 hours. But they are wall-clock hours of unattended agent sessions, not a person's working hours. So k (0.05 to 0.19) describes this way of working. It is not a forecast of calendar time.
-- **Finding 4.** Avalonia needed help in more places than the design expected: the open-list keys of the boxes, Tab out of a list, contrast for the Fluent menus and scroll bars, and reuse of virtualized rows.
-- **Choice made.** Rows of N is the default. (Rows of N: the shelf makes only the rows of cards on screen and reuses them as you scroll.) In a real window, drawing every card failed all four of the design's switch rows.
-- **What waits.** Two rows are still over budget in a real window (first switch to Published, search keystroke). The contrast look, the Narrator pass, the maintainer's hours and a real Linux start all need a person.
+- **Finding 1.** The C# interface over the VB core works. Compiled bindings reach VB core types, and no build error that crossed the VB/C# line is recorded in any trial pull request or in the notes.
+- **Finding 2.** One card view is expensive: about 15 ms the first time (section 4.4). Drawing every card misses the budgets by far. Any long list in the full port must be virtualized from the start.
+- **Finding 3.** The hours are small against the plan: 6.3 recorded hours, Board work about 3.5 hours. But they are wall-clock hours, nearly all of unattended agent sessions, not a person's working hours. So k (0.06 to 0.20; k is the factor that scales the plan's unit sizes, section 2.3) describes this way of working. It is not a forecast of calendar time.
+- **Finding 4.** Avalonia needed help in places the design did not expect: the open-list keys of the boxes, Tab between cards under rows of N, and reuse of virtualized rows. As the design foresaw, Fluent's menus, scroll bars and tooltips also need control themes for contrast.
+- **Choice made.** Rows of N is the default. (Rows of N: the shelf makes only the rows of cards on screen and reuses them as you scroll.) It was chosen at step 13 from the headless numbers. The real-window run, taken afterwards, confirms it: drawing every card went over the budget on all four rows that the design's rule uses to decide (section 4.3).
+- **What waits.** Two budget rows are still over in a real window (first switch to Published, search keystroke); the report-only row, process start to Board (2,055 ms), is also over 1,500. The contrast look, the Narrator pass, the maintainer's hours and a real Linux start all need a person.
 
 ## 1. What the trial built
 
@@ -27,7 +27,7 @@ Steps are those of design section 8. Pull request #399 (steps 11 to 13) is open;
 | 11 | High contrast | Built and tested headless. The look on a real contrast theme waits for the maintainer. | #399 (open) |
 | 11b | `--snapshot-from` | Built; Linux path fix in 44d62e0 | #399 (open) |
 | 12 | Pictures, budgets, `--measure` | Built. Four budget rows wait under rows of N. | #399 (open) |
-| 13 | Rows of N behind a constant | Built; it is the default (`ShelfOption` b) | #399 (open) |
+| 13 | Rows of N behind a constant | Built; it is the default (`ShelfLayout.Option = "b"`; `-p:ShelfOption=a` builds every card) | #399 (open) |
 | 14 | `--snapshot` of the real library | Not built. The argument is refused with exit code 2. Waits for the maintainer's word. | none |
 | 15 | `--platform-check` and the `trial-linux` CI job | CI job done. `--platform-check` and the Linux checklist are not built. | #398 |
 | 16 | Spikes | Working copy done. VB `.axaml` done as a throwaway folder outside the repository, never committed. | #393 |
@@ -40,10 +40,10 @@ Steps are those of design section 8. Pull request #399 (steps 11 to 13) is open;
 
 Read this first:
 
-- The recorded hours are the **wall-clock time of unattended agent sessions**. Each commit's `Trial-Hours:` line gives the time of the agent session that wrote it, rounded to 0.1 h. They are not a person's working hours.
+- The recorded hours are **wall-clock time, nearly all of unattended agent sessions** (the 0.2 h on 44d62e0 is the orchestrating session's). Each trailer gives the writer's own estimate of its session's wall-clock time. Six of the 15 agent trailers differ by 0.1 h from the agent's recorded duration. They are not a person's working hours.
 - So k below measures **this way of working**: agents write, review and fix, and the maintainer reviews later. It is not a forecast of calendar time for the full port.
-- **k from the maintainer's own hours cannot be given.** No review hours are logged yet (section 2.5).
-- The trailers say "(agent session, wall clock)" instead of the design's part names. The part of each commit below was assigned from its changed files (`git show --stat`), not recorded.
+- **k from the maintainer's own hours cannot be given.** No review hours are logged yet (section 2.3).
+- The trailers say "(agent session, wall clock)", or "(main session, wall clock)" for 44d62e0, which the orchestrating session wrote, instead of the design's part names. The part of each commit below was assigned from its changed files (`git show --stat`), not recorded.
 
 The whole push ran from about 18:00 on November 19 to about 04:00 on November 20, 2026, mostly unattended. Steps 2 to 13 span 1725a1d (18:28) to 44d62e0 (03:31), about 9 hours on the clock. That is time on the clock, not effort.
 
@@ -61,8 +61,8 @@ Source: `git log` of branch `v11/board-trial-report` at 44d62e0 (16 commits carr
 | spike-workingcopy | 0.2 | 2165f61 | 0 | 0.5 to 1 day |
 | spike-vb | 0 | none | not measured (no commit) | 1 hour |
 | setup | 0 | none | 1.0 (SDK spike 0.5, 1725a1d 0.4, 63f4381 0.1), plus a share of PR A | none |
-| PR A (4b2853c, 36fe286, setup and Board tests) | 0 | none | 0.5 (split between the two unknown) | none |
-| docs | 0 | none | 0.6 (cbbabad) | none |
+| PR A, the fixture project (4b2853c, 36fe286, setup and Board tests) | 0 | none | 0.5 (split between the two unknown) | none |
+| PR A review fix (cbbabad), docs files | 0 | none | 0.6 (cbbabad) | none |
 | Linux CI job (17c56e4) | 0 | none | not measured (no record covers it) | none |
 | **Total** | **6.3** | 16 commits | **3.1** | |
 
@@ -72,7 +72,7 @@ Agent time by role, all trial workflows together (workflow records, 2026-11-15 t
 |---|---:|---:|---|
 | Implementers | 460.7 | 7.68 | mostly |
 | Reviewers | 158.6 | 2.64 | never |
-| Fixers | 93.8 | 1.56 | only where the fix had its own commit (6e22587, e29a58e, 5c6f608) |
+| Fixers | 93.8 | 1.56 | only 6e22587, e29a58e and 5c6f608. The fix commits 63f4381, 6fadabb and cbbabad carry no trailer (their time is in the Estimated column). |
 | **All agents** | **713.1** | **11.9** | |
 
 Reviewers in one wave ran side by side, so the elapsed time was shorter than these sums. The agents used 8,324,820 tokens in all.
@@ -91,8 +91,8 @@ The trailers do not always match the agent's duration. For example, 5660ff0 says
 ### 2.3 Board hours B, f and k
 
 **B, the Board hours.**
-- **Main figure, B = 3.5 h:** board 2.8 h recorded + 0.71 h estimated for the rule commits of #383.
-- **Wide figure, B = 5.0 h:** adds contrast (fba5671, 0.4), budgets and pictures (2d9c561, 0.6) and the wave 5 fix (5c6f608, 0.5), which can be read as Board work.
+- **Main figure, B = 3.5 h:** board 2.8 h recorded + 0.71 h estimated for the rule commits of #383. These hours leave out contrast and the budgets, so B = 3.5 h is paired with an f that leaves out those two items too.
+- **Wide figure, B = 5.0 h:** adds contrast (fba5671, 0.4), budgets and pictures (2d9c561, 0.6) and the review fix of steps 11b to 13 (5c6f608, 0.5), which can be read as Board work. B = 5.0 h is paired with the full f.
 - 36fe286's share of PR A is left out of both, because it cannot be split.
 
 **The checklist for f** (weights fixed in design 7.1 before work started):
@@ -103,43 +103,47 @@ The trailers do not always match the agent's duration. For example, 5660ff0 says
 | Search | 7 | done | 7 | 7 | built; tests pass |
 | Stage and sort boxes with #338 | 8 | done | 8 | 8 | built; tests pass |
 | Needs Attention chips | 7 | done | 7 | 7 | built; tests pass |
-| Arrow keys and Tab routes | 8 | done | 8 | 8 | built; K1 and K8 pass headless. Tab out of the shelf is left to Avalonia. |
+| Arrow keys and Tab routes | 8 | half (strict) or done (generous) | 4 | 8 | built; K1 and K8 pass headless. Tab out of the shelf is left to Avalonia, so today's Tab route out of the shelf was not reproduced. |
 | Light, Dark and contrast | 8 | half (strict) or done (generous) | 4 | 8 | contrast tested headless with stand-in colours, never on a real Windows contrast theme |
 | Board's headless tests (6.2) | 12 | done | 12 | 12 | 181 of 181 on both runners |
 | Narrator pass | 5 | not done | 0 | 0 | the maintainer's step 17 |
 | 500 library within budget | 10 | not done (strict) or half (generous) | 0 | 5 | two rows over in a real window: first switch 157 against 100, search keystroke 99 against 50 |
 | Card menu with working actions | 5 | outside the trial | 0 | 0 | design 1.4 |
 | Move to File Drawer with Undo | 5 | outside the trial | 0 | 0 | design 1.4 |
-| **Sum** | **100** | | **71** | **80** | |
+| **Sum** | **100** | | **67** | **80** | |
 
-f (strict) = 0.71. f (generous) = 0.80. Counting both arguable items as half gives 0.76.
+f (strict) = 0.67. f (generous) = 0.80. Counting each arguable item as half gives 0.72.
+
+Paired with B = 3.5 h, which leaves out the hours for contrast and the budgets, f leaves out those two items: 25 + 7 + 8 + 7 + 4 (strict) or 8 (generous) + 12, so 0.63 (strict) or 0.67 (generous).
 
 **Arithmetic.** H = 6, the design's default; the maintainer has not stated H. Every d and k scales as 6 / H.
+
+For the maintainer: state H (your working day in hours).
 
 d = B / H (days). Board size = (d / 5) / f weeks. k = size / 3 (3 weeks is the plan's midpoint for unit 2). Rescaled estimate = k × 42.25 + 29.25 weeks.
 
 | B (h) | d = B / 6 | d / 5 (weeks) | f | Size (weeks) | k | k × 42.25 | Estimate (weeks) |
 |---:|---:|---:|---:|---:|---:|---:|---:|
-| 3.5 | 0.583 | 0.1167 | 0.71 | 0.1643 | 0.0548 | 2.31 | 31.6 |
-| 3.5 | 0.583 | 0.1167 | 0.80 | 0.1458 | 0.0486 | 2.05 | 31.3 |
-| 5.0 | 0.833 | 0.1667 | 0.71 | 0.2347 | 0.0782 | 3.31 | 32.6 |
+| 3.5 | 0.583 | 0.1167 | 0.63 | 0.1852 | 0.0617 | 2.61 | 31.9 |
+| 3.5 | 0.583 | 0.1167 | 0.67 | 0.1741 | 0.0580 | 2.45 | 31.7 |
+| 5.0 | 0.833 | 0.1667 | 0.67 | 0.2488 | 0.0829 | 3.50 | 32.8 |
 | 5.0 | 0.833 | 0.1667 | 0.80 | 0.2083 | 0.0694 | 2.93 | 32.2 |
-| 11.9 (every trial agent-hour; upper bound) | 1.983 | 0.3967 | 0.71 | 0.5587 | 0.1862 | 7.87 | 37.1 |
+| 11.9 (every subagent hour; excludes the orchestrating session, CI and the maintainer) | 1.983 | 0.3967 | 0.67 | 0.5920 | 0.1973 | 8.34 | 37.6 |
 | 11.9 | 1.983 | 0.3967 | 0.80 | 0.4958 | 0.1653 | 6.98 | 36.2 |
 
-The plan as written (k = 1) gives 42.25 + 29.25 = 71.5 weeks. Even the upper bound uses only about 8 of the 42.25 unit weeks. Nearly all of the rescaled estimate is then the 29.25 weeks of groundwork and release, which the trial did not measure.
+The plan as written (k = 1) gives 42.25 + 29.25 = 71.5 weeks. Even every subagent hour uses only about 8 of the 42.25 unit weeks. Nearly all of the rescaled estimate is then the 29.25 weeks of groundwork and release, which the trial did not measure.
 
 **k given twice, as the design asks.**
-1. From the total hours: k = 0.049 to 0.078 (Board hours), 0.165 to 0.186 (every agent-hour). This calibrates the remaining units only if they are built the same way.
+1. From the total hours: k = 0.058 to 0.083 (Board hours, each B paired with its own f), 0.165 to 0.197 (every subagent hour). This calibrates the remaining units only if they are built the same way.
 2. From the maintainer's own hours: **cannot be given**. Zero hours are logged.
 
-For the maintainer: please log, in comments on #160, the hours spent per part and per pull request on step 0's decisions; reading and reviewing #378, #383, #384, #390, #393, #396, #398 and #399; merging and CI fixes; the step 11 contrast look; step 14 if kept; the step 17 Narrator pass; and reviewing this report. Time already spent can only be given from memory; mark it as an estimate.
+For the maintainer: please log your hours in comments on #160, per part and per pull request. Log them for: step 0's decisions; reviewing #378, #383, #384, #390, #393, #396, #398 and #399; merging and CI fixes; the contrast look (step 11); step 14, if kept; the Narrator pass (step 17); and reviewing this report. Mark hours already spent, which you can only give from memory, as estimates.
 
 ## 3. The plan's six questions (design 7.2)
 
 ### 3.1 How long the Board takes
 
-See section 2: B = 3.5 h (wide 5.0 h) of agent wall-clock time, f = 0.71 to 0.80, k = 0.049 to 0.078. What is unfinished: the Narrator pass, the contrast look on a real theme, two budget rows in a real window, and the card menu and File Drawer panel (outside the trial).
+See section 2: B = 3.5 h (wide 5.0 h) of agent wall-clock time, f = 0.67 to 0.80 (0.63 to 0.67 against B = 3.5 h), k = 0.058 to 0.083. What is unfinished: the Narrator pass, the contrast look on a real theme, two budget rows in a real window, and the card menu and File Drawer panel (outside the trial).
 
 ### 3.2 Does C# build over the VB core with compiled bindings? Does a VB `.axaml` build?
 
@@ -175,7 +179,7 @@ What bends:
 - The #358 rule that protects typed text from a workflow step's refresh has no direct counterpart. It needs a decision per unit.
 - Each unsaved-changes check takes a full snapshot: 40 to 65 µs for the largest records, measured in a loop, not as typing latency.
 
-Limits: only Title was tried. The test types the old value back instead of using an undo, as the design wrote.
+Limits: only Title was tried. Not tried: the other fields, saving, a recovery draft, discard, and a new baseline after a save. The test types the old value back instead of using an undo, as the design wrote.
 
 ### 3.5 Does it start on Linux
 
@@ -189,12 +193,12 @@ See section 4.
 
 ### 4.1 The comparison
 
-UI ms: the longest stall of the interface thread during the action. Medians. Budgets from design 6.3.
+UI ms: the longest stall of the interface thread during the action. Medians for the headless (5 runs) and real-window (3 runs) columns; the Windows Forms column and the CI table are single runs. Budgets from design 6.3.
 
 Sources and dates:
 - **Windows Forms:** v1.0.1 certification run of `ResponsivenessBudgetTests`, commit d67c312, 2026-11-14, Release, one run, window off-screen (`TestResults/v101-certification-evidence/B3-budget-d67c312-console.txt` on the development PC).
-- **Headless:** the development PC, 2026-11-20 03:01 to 03:09, Release, 1280 x 800, DPI 96, median of 5 runs, probe at Input priority (PR #399 body, "The numbers").
-- **Real window:** the development PC, 2026-11-20 03:33 to 03:35, Release, DPI 120 (125%), the `large-500` folder through `--snapshot-from`, median of 3 runs (`TestResults/v11-trial-pictures/real-window-2026-11-20/measure-500-*.json` on the development PC, not in the repository).
+- **Headless:** the development PC, Release, median of 5 runs (PR #399 body, "The numbers"); probe at Input priority (`PaperRoute.Desktop/Measurement/BoardMeasurement.cs:81-115`); 1280 x 800 and DPI 96 (`PaperRoute.Desktop.Tests/BoardBudgetTests.cs`); 2026-11-20 03:01 to 03:09 (the run files of the review fix 5c6f608, not in the repository).
+- **Real window:** the development PC, 2026-11-20 03:33 to 03:35, Release, DPI 120 (125%), 1280 x 800 (from the push notes; the window size is not in the JSON), the `large-500` folder through `--snapshot-from`, median of 3 runs (`TestResults/v11-trial-pictures/real-window-2026-11-20/measure-500-*.json` on the development PC, not in the repository).
 
 | Row | Budget | Windows Forms | Headless, every card | Headless, rows of N | Real window, every card | Real window, rows of N |
 |---|---:|---:|---:|---:|---:|---:|
@@ -210,7 +214,7 @@ Sources and dates:
 
 Bold: over budget at the median.
 
-Paint rows (the frame drawn after each action; budget 250 each): real window 10 to 29 ms under every card and 14 to 17 ms under rows of N; headless rows of N 2 to 16 ms. The corrected headless set has no paint figures for every card. Windows Forms paint rows were 5 to 17 ms where measured.
+Paint rows (the frame drawn after each action; budget 250 each): real window 10 to 29 ms under every card and 14 to 18 ms under rows of N; headless rows of N 2 to 43 ms (warm startup's frame 43); headless every card 2 to 25 ms. Windows Forms paint rows for the same actions were 5 to 17 ms (Board paints after page switches, not measured in the port, were 34 and 39).
 
 Headless stage filter to Submitted under rows of N: runs 240, 237, 246, 206 and 251. One run of five is over.
 
@@ -233,19 +237,21 @@ Every enforced row, paint rows included, passed on both runners. A "waiting" row
 
 | Row | Like for like with Windows Forms? | Why |
 |---|---|---|
-| Render, no card changes | yes | same action |
-| Open list stepped and closed | yes | same steps |
+| Render, no card changes | same action, different probe | see below |
+| Open list stepped and closed | same action, different probe | see below |
 | Stage filter to Submitted | same action, different work | Windows Forms keeps card windows; the port resets both shelves |
 | Back to All stages | same action, different work | Windows Forms rebuilds the visible shelf's card windows; rows of N makes only the rows on screen |
 | Warm startup | **no** | Windows Forms draws only the first screen; the rest fills in while idle (wall 4,166 ms). Its window was off-screen. |
 | First switch to Published | **no** | Windows Forms switches to a shelf already prepared while idle. The port makes the cards at the switch. |
 | Search keystroke, scroll | no figure | Windows Forms has no such row |
 
-Other differences: the Windows Forms run is from 2026-11-14 and off-screen; nobody measured it in a real window or on 2026-11-20. The real-window port runs used DPI 120 and the `large-500` folder; the headless and CI runs used DPI 96 and a fresh fixture. The port renders the search keystroke at once, not after the 200 ms wait.
+Other differences: the Windows Forms run is from 2026-11-14 and off-screen; nobody measured it in a real window or on 2026-11-20. The real-window port runs used DPI 120 and the `large-500` folder; the headless and CI runs used DPI 96 and a fresh fixture. The port renders the search keystroke at once, not after the 200 ms wait. The real-window runs used the computer's date (2026-11-20); the design passes `--today 2026-10-16` only for repeatable runs and omits it for the comparison with Windows Forms (design 6.3).
+
+The probes differ. Windows Forms' UI ms is the longest stretch in which its off-screen window processed no messages (DPI 96, one run). The port's is the longest gap between ticks of a 1 ms `DispatcherTimer` at Input priority; whether this matches `WM_TIMER` is not confirmed (section 8). The port also steps the open list by `SelectedIndex`, not by real key messages (section 9).
 
 ### 4.3 The choice: rows of N
 
-The design's switch rule (4.4): move to rows of N if every card goes over any of four rows in the real window. Every card went over all four:
+The design's switch rule (4.4): move to rows of N if every card goes over any of four rows in the real window. Rows of N was chosen at step 13 from the headless numbers (f337fec). The real-window run, taken afterwards on 44d62e0, confirms it: in a real window every card went over all four of the design's switch rows:
 
 | Switch row | Budget | Every card, real window | Rows of N, real window |
 |---|---:|---:|---:|
@@ -254,7 +260,7 @@ The design's switch rule (4.4): move to rows of N if every card goes over any of
 | Back to All stages | 250 | 838 | 74 |
 | Open list stepped and closed | 250 | 349 | 111 |
 
-So rows of N is the default (#399). It also beats today's Windows Forms figures on back to All stages and the open list. It costs more on one row: the Published scroll (19 ms to 147 ms in a real window), because each page rebinds card views to new cards and lays them out. Render with no changes is also higher (6 to 18 ms), still far within 250.
+Rows of N is the default (#399). It is also faster than today's Windows Forms figures on the open list, and on back to All stages, though there the two do different work (4.2). The Windows Forms run was off-screen. It costs more on one row: the Published scroll (19 ms to 147 ms in a real window), because each page rebinds card views to new cards and lays them out. Render with no changes is also higher (6 to 18 ms), still well under 250 ms.
 
 The every-card build stays selectable (`-p:ShelfOption=a`). CI builds and tests only rows of N. Every card last passed 178 of 178 locally in Debug (#399).
 
@@ -269,16 +275,16 @@ The waiting list is compiled into the build (`BoardMeasurement.s_waitingUnderRow
 | Stage filter to Submitted | 240 / 250, over in 1 of 5 runs | within (128) | within |
 | Published scroll | over (288 / 250) | within (147) | within |
 
-The cause is the cost of a card view: about 3 ms to make and about 12 ms to attach and lay out the first time (20 Published cards, Release; #399). Even the 21 views on one screen exceed a 100 ms switch and a 50 ms keystroke.
+The cause is the cost of a card view: about 3 ms to make and about 12 ms to attach and lay out the first time (#399), about 15 ms in all. The code comment beside the same headless numbers says about 16 ms each (`PaperRoute.Desktop/Measurement/BoardMeasurement.cs:105`). Even the 21 views on one screen exceed a 100 ms switch and a 50 ms keystroke.
 
-What could bring them in (from #399 and the wave records; none is built):
+What could bring them in (from #399 and the workflow records; none is built):
 - make a card view cheaper: a flatter tree, fewer bindings, menus built later;
 - prepare the hidden Published shelf while idle, as today's app does;
 - draw only the first screen at startup, as today's app does;
 - defer the hidden shelf's card updates until it is shown (today a shelf shown once rebinds its 21 views on every search or stage change);
 - for the scroll, cheaper reuse of card views (inferred; no source names a fix).
 
-The second and third items are the fill machinery that design 4.4 and plan :428 said would not be ported.
+The second and third items are how today's app fills the Board while it is idle, which design 4.4 and plan :428 said would not be ported.
 
 For the maintainer: say whether the budget verdicts rest on the real window (the design's rule for the switch) or on headless (the stricter guard in CI).
 
@@ -294,7 +300,7 @@ Under a Windows contrast theme the tokens take the system colours as today's `Ui
 | WindowText | `CardBorder`, `PrimaryText`, `SecondaryText`, `Warning`, `Danger`, every `Stage*Foreground` and `Tag*Foreground` |
 | GrayText | `SubtleBorder`, `MutedText` |
 | Highlight | `Accent` |
-| HotTrack | `AccentSecondary` (links) |
+| HotTrack | `AccentSecondary` (focus rings of buttons, links, tabs and the rail; a link while pressed) |
 | HighlightText | `OnAccentText` |
 
 - Pills, tags and the warning, danger and active chips get a 1 px outline in their own ink. Warning and danger keep only their bold weight, as today.
@@ -319,7 +325,7 @@ Not confirmed: that Avalonia's Win32 platform reports `ContrastPreference.High` 
 For the maintainer: run the trial (pull request #399's build) on Windows and work through these. Note what you see after each item.
 
 1. Turn on Night sky, then Desert (Aquatic and Dusk if there is time). The Board should switch at once, with no restart. Switching back should restore Light or Dark.
-2. Compare with the real theme: window background, text, gray text, the selection colour (selected tab underline, card focus ring, links, route dots) and the link colour.
+2. Compare with the real theme: window background, text, gray text, the selection colour (link text, selected tab underline, card focus ring, route dots) and the HotTrack colour on the focus rings of buttons, links and tabs.
 3. Each of these should have a 1 px outline in its ink: stage pills, tags, the warning, danger and active chips, the rail's Deadlines count, the quiet ⋯ button. Warning and danger should differ from a neutral chip only by weight and outline.
 4. Look at the parts the trial could not restyle: the ⋯ menu (background, items, disabled text), the shelf scroll bar, tooltips, and the focus visuals of the search box and the two boxes. Note each one that is hard to read.
 5. Check that the title bar and window borders follow the theme.
@@ -327,11 +333,13 @@ For the maintainer: run the trial (pull request #399's build) on Windows and wor
 
 ## 6. Narrator
 
+For the maintainer: run Narrator on Windows with the trial and fill in the "Heard?" column.
+
 Checklist for the maintainer's pass (design step 17). The middle column is what the code sets (`PaperRoute.Desktop/*.axaml` and the view models). What Narrator actually says has never been observed. Avalonia issue #22341 (ListBox type-ahead) does not apply: the trial uses no `ListBox`.
 
 | Element | Narrator should say | Heard? |
 |---|---|---|
-| Chips | The chip's text, for example "1 revision due soon". Help text "Filter the board", or "Filter applied. Press to clear it." when active. A zero-count chip is hidden. | |
+| Chips | The chip's text, for example "1 revision due soon". Help text "Filter the board", or "Filter applied. Press to clear it." when active. A zero-count chip is hidden, unless it is the active filter: then it stays shown and ignores a press. | |
 | Tabs | Strip named "Shelves". Each tab: "Pipeline (5)", "Published (1)", "File Drawer (1)", or "Pipeline (1 of 5)" while a filter hides some. The tab shows "Pipeline 5", but Narrator should say the bracketed form. | |
 | Stage box | "Filter by stage". Items "All stages (N)", then "<Stage> (count)". With the list open, each arrow press is read while the Board stays unchanged (#338). Esc keeps the arrowed item. The Board renders once when the list closes. | |
 | Sort box | "Sort the board", the seven sort texts, the same #338 reading. | |
@@ -362,8 +370,9 @@ Unproven: Avalonia's list accessibility across virtualization. Avalonia pull req
 
 Found on the way:
 - The first path fix accepted only drive-letter paths, so `--snapshot-from` and `--measure` refused every folder on Linux. 44d62e0 accepts a path from the root off Windows.
-- Issue #395 (open): with no `~/Documents`, as on a CI runner, `ManagedLibraryService` throws. Three options wait for the maintainer.
 - Refusal messages show a Windows example path on every system.
+
+Related, found by core stage 2 (#388): issue #395 (open): with no `~/Documents`, as on a CI runner, `ManagedLibraryService` throws. Three options wait for the maintainer.
 
 **What a real machine must still show.** First, someone writes `docs/design/Board-Trial-Linux-Checklist.md` and builds `--platform-check`; neither exists. Then, on Ubuntu 24.04:
 1. `dotnet publish -r linux-x64 --self-contained` the trial.
@@ -393,7 +402,7 @@ For the maintainer: a real Linux start needs a person at a Linux machine or the 
 
 **Measurement**
 - The interface-thread probe first ran at Normal priority. It ticked between layout and render jobs and hid about half the stall. It now runs at Input priority, with a test. Whether this matches `WM_TIMER` on real Windows is not confirmed. The measuring tool needs tests of its own.
-- Agents could not open a window, so the real-window run was taken afterwards by the orchestrating session.
+- By the run's rule, agents did not open a window, so the orchestrating session took the real-window run afterwards.
 
 **Snapshot safety**
 - The first folder refusal could be passed with `\\?\` or `\\.\` prefixes, a loopback admin share or a stream name. Both refusals now share one rule with a test per spelling. Two cases still cannot be refused: a library moved out of the default folders, and a default folder reached through `subst` or a mapped drive.
@@ -424,7 +433,7 @@ The port follows today's code in each case below.
 
 **Cards (#396, #399)**
 - Cards are spaced by 12 with no margin of their own; the title comes before the pill in the reading order.
-- A card is ringed only while its title has focus (the design said focus anywhere inside it).
+- A card shows its focus ring only while its title has the keyboard focus (the design said focus anywhere inside it).
 - The row list's container is the row view itself.
 
 **Keyboard (#390, #399)**
@@ -453,6 +462,8 @@ The port follows today's code in each case below.
 
 ## 10. Open decisions for the maintainer
 
+For the maintainer: please choose an option for each item below.
+
 1. **Rows of N as the default.** Options: keep it; go back to every card; decide after the Narrator pass. Recommendation: keep it now and confirm after the Narrator checks of section 6. Every card failed all four switch rows in the real window.
 2. **The every-card build (`-p:ShelfOption=a`).** Options: keep it selectable; remove it. Recommendation: remove it once rows of N is confirmed. CI no longer builds or tests it, so it will drift.
 3. **Which reading the budget verdicts rest on.** Options: the real window (the design's switch rule; two rows over); headless (four rows waiting); CI × 3. Recommendation: verdicts on the real window, headless as the guard in CI. This also settles the "500 library" item of f (0 or 5).
@@ -464,7 +475,7 @@ The port follows today's code in each case below.
 9. **The two #383 rule departures** (zero-count chip, missing target journal). Recommendation: accept. They match today's app, which the port is meant to keep.
 10. **Contrast for Fluent's menus, scroll bars, tooltips and focus visuals.** Options: size control themes in unit 0; accept Fluent's palette there. Recommendation: size them in unit 0, as design section 9 foresaw; the real-theme look (section 5.3) will show how bad they are.
 11. **The VB spike's place.** It is a folder outside the repository, not a scratch branch. Options: leave it; put it on a scratch branch for the record.
-12. **The MSTest pass mark.** Options: run ten local runs and a Debug run before calling question 3 closed; accept CI's green runs. Recommendation: run them once; it is cheap and closes the mark.
+12. **The MSTest pass mark.** Options: run ten local runs and a Debug run before calling question 3 closed; accept CI's green runs. Recommendation: run them once; it is cheap and closes the mark. An agent can run them; no person is needed.
 
 ## 11. Not done, and not checked
 
@@ -481,8 +492,6 @@ Not checked or not measured:
 - whether step 0's full answers are in #160 (its comments were not read);
 - ten local test runs with no flake, and a Debug run of the 181 tests;
 - the Windows Forms app in a real window, or on 2026-11-20;
-- paint and wall figures for every card in the corrected headless set;
-- the window size of the real-window runs (not in the JSON);
 - the "Windows Build" job of run 44703237752, still without a conclusion when read; both trial jobs had passed;
 - whether Avalonia reports a Windows contrast theme, and whether Input-priority probe ticks match `WM_TIMER`;
 - the Ubuntu count of 132 for run 44681774261, taken from the notes.
