@@ -24,7 +24,28 @@ public sealed class DiskLibrarySession : ILibrarySession
         string settingsDirectory,
         LibraryKind kind,
         DateTime today)
-        : this(dataDirectory, managedDirectory, settingsDirectory, kind, today, prepare: null)
+        : this(dataDirectory, managedDirectory, settingsDirectory, kind, today, prepare: null, snapshot: null)
+    {
+        if (kind == LibraryKind.Snapshot)
+        {
+            throw new ArgumentException("A snapshot session is made over its copy (the SnapshotCopy constructor).", nameof(kind));
+        }
+    }
+
+    // A snapshot over a copy already made (ReadOnlySnapshot.Copy): the copy's
+    // own folder is read, never the folder it was copied from.
+    public DiskLibrarySession(
+        SnapshotCopy copy,
+        string managedDirectory,
+        DateTime today)
+        : this(
+            Path.Combine((copy ?? throw new ArgumentNullException(nameof(copy))).DestinationFolder, ReadOnlySnapshot.DataFolderName),
+            managedDirectory,
+            copy.DestinationFolder,
+            LibraryKind.Snapshot,
+            today,
+            prepare: null,
+            snapshot: new LibrarySnapshot(copy))
     {
     }
 
@@ -34,14 +55,21 @@ public sealed class DiskLibrarySession : ILibrarySession
         string settingsDirectory,
         LibraryKind kind,
         DateTime today,
-        Action? prepare)
+        Action? prepare,
+        LibrarySnapshot? snapshot)
     {
         _dataDirectory = FullPath(dataDirectory, nameof(dataDirectory));
         _managedDirectory = FullPath(managedDirectory, nameof(managedDirectory));
         _settingsDirectory = FullPath(settingsDirectory, nameof(settingsDirectory));
+        if ((kind == LibraryKind.Snapshot) != (snapshot is not null))
+        {
+            throw new ArgumentException("A snapshot session, and only one, names the folder it copies.", nameof(snapshot));
+        }
+
         Kind = kind;
         Today = today.Date;
         _prepare = prepare;
+        Snapshot = snapshot;
     }
 
     public LibraryKind Kind { get; }
@@ -49,6 +77,8 @@ public sealed class DiskLibrarySession : ILibrarySession
     public bool IsReadOnly => true;
 
     public DateTime Today { get; }
+
+    public LibrarySnapshot? Snapshot { get; }
 
     public IReadOnlyList<Manuscript> Manuscripts => _manuscripts;
 
@@ -87,7 +117,24 @@ public sealed class DiskLibrarySession : ILibrarySession
     private LoadResult Read(CancellationToken cancel)
     {
         cancel.ThrowIfCancellationRequested();
-        Interlocked.Exchange(ref _prepare, null)?.Invoke();
+        Action? prepare = Interlocked.Exchange(ref _prepare, null);
+        if (Kind == LibraryKind.Snapshot)
+        {
+            // The snapshot's copy. A copy refused or failed leaves the Board
+            // empty with the reason, as a load that failed does.
+            try
+            {
+                prepare?.Invoke();
+            }
+            catch (Exception ex) when (IsReadFailure(ex))
+            {
+                return new LoadResult([], null, new AppSettings(), "The snapshot could not be taken: " + ex.Message);
+            }
+        }
+        else
+        {
+            prepare?.Invoke();
+        }
 
         AppSettings settings;
         try
@@ -111,6 +158,13 @@ public sealed class DiskLibrarySession : ILibrarySession
         catch (Exception ex) when (IsReadFailure(ex))
         {
             authors = null;
+        }
+
+        // A file the snapshot could not read is named (d1 1.3, lock 2).
+        IReadOnlyList<string> skipped = Snapshot?.Copy?.Skipped ?? [];
+        if (skipped.Count > 0)
+        {
+            notice += " Could not be read, so not copied: " + string.Join(", ", skipped) + ".";
         }
 
         return new LoadResult(manuscripts, authors, settings, notice);
@@ -163,8 +217,9 @@ public sealed class DiskLibrarySession : ILibrarySession
 
         // ManuscriptRepository.Load can write (it creates the data folder and
         // can recover from a backup; d1 1.3), and lock 1 guards only the
-        // default roots. In this wave the trial reads only the example's
-        // session and the tests' libraries, all inside the temporary folder.
+        // default roots. The trial reads only the example's session, a
+        // snapshot's copy inside its session (never the folder copied) and the
+        // tests' libraries, all inside the temporary folder.
         string full = Path.GetFullPath(path);
         if (!TrialStartup.IsInside(full, Path.GetTempPath()))
         {
