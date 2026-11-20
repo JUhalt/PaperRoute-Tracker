@@ -6,7 +6,7 @@ Draft of November 20, 2026. Four parts wait for a person: the look of the Board 
 
 - **What was built.** The Board of PaperRoute Tracker, ported to Avalonia 12.1.6 in C# over the unchanged Visual Basic core, beside the Windows Forms app. It has shelves and cards, search, the stage and sort boxes, the Needs Attention chips, arrow keys, Light, Dark and high contrast, a read-only copy of a library folder (`--snapshot-from`) and a measuring mode (`--measure`). 181 headless tests pass on Windows and on Ubuntu (CI run 44703237752).
 - **Finding 1.** The C# interface over the VB core works. Compiled bindings reach VB core types, and no build error that crossed the VB/C# line is recorded in any trial pull request or in the notes.
-- **Finding 2.** One card view is expensive: about 15 ms the first time (section 4.4). Drawing every card misses the budgets by far. Any long list in the full port must be virtualized from the start.
+- **Finding 2.** A card view is expensive: about 14 ms each for the first cards a process shows, and about 7 ms once warm (section 4.5). Drawing every card misses the budgets by far. Any long list in the full port must be virtualized from the start.
 - **Finding 3.** The hours are small against the plan: 6.3 recorded hours, Board work about 3.5 hours. But they are wall-clock hours, nearly all of unattended agent sessions, not a person's working hours. So k (0.06 to 0.20; k is the factor that scales the plan's unit sizes, section 2.3) describes this way of working. It is not a forecast of calendar time.
 - **Finding 4.** Avalonia needed help in places the design did not expect: the open-list keys of the boxes, Tab between cards under rows of N, and reuse of virtualized rows. As the design foresaw, Fluent's menus, scroll bars and tooltips also need control themes for contrast.
 - **Choice made.** Rows of N is the default. (Rows of N: the shelf makes only the rows of cards on screen and reuses them as you scroll.) It was chosen at step 13 from the headless numbers. The real-window run, taken afterwards, confirms it: drawing every card went over the budget on all four rows that the design's rule uses to decide (section 4.3).
@@ -277,7 +277,7 @@ The waiting list is compiled into the build (`BoardMeasurement.s_waitingUnderRow
 | Stage filter to Submitted | 240 / 250, over in 1 of 5 runs | within (128) | within |
 | Published scroll | over (288 / 250) | within (147) | within |
 
-The cause is the cost of a card view: about 3 ms to make and about 12 ms to attach and lay out the first time (#399), about 15 ms in all. The code comment beside the same headless numbers says about 16 ms each (`PaperRoute.Desktop/Measurement/BoardMeasurement.cs:105`). Even the 21 views on one screen exceed a 100 ms switch and a 50 ms keystroke.
+The cause is the cost of a card view: about 3 ms to make and about 12 ms to attach and lay out the first time (#399), about 15 ms in all. The code comment beside the same headless numbers says about 16 ms each (`PaperRoute.Desktop/Measurement/BoardMeasurement.cs:105`). Even the 21 views on one screen exceed a 100 ms switch and a 50 ms keystroke. Section 4.5 shows that these are figures for the first cards of a process; warm, a card costs about 7 ms.
 
 What could bring them in (from #399 and the workflow records; none is built):
 - make a card view cheaper: a flatter tree, fewer bindings, menus built later;
@@ -286,9 +286,43 @@ What could bring them in (from #399 and the workflow records; none is built):
 - defer the hidden shelf's card updates until it is shown (today a shelf shown once rebinds its 21 views on every search or stage change);
 - for the scroll, cheaper reuse of card views (inferred; no source names a fix).
 
-The second and third items are how today's app fills the Board while it is idle, which design 4.4 and plan :428 said would not be ported.
+The second and third items are how today's app fills the Board while it is idle, which design 4.4 and plan :428 said would not be ported. Section 4.5 measures where a card's cost sits and which of these changes the numbers support.
 
 For the maintainer: say whether the budget verdicts rest on the real window (the design's rule for the switch) or on headless (the stricter guard in CI).
+
+### 4.5 Where a card's cost sits
+
+Measured after the first draft of this report, on 2026-11-20 between 04:45 and 05:05, on master (fb3301f). Three scratch probes, none committed. The first removed one part of the real card at a time. The second built each part alone. The third re-ran the main claims with other cards, another order and twice as many cards. All are headless, Release, on the development PC, and time layout only (nothing is drawn). Figures are milliseconds per card, medians of 12 rounds.
+
+**The "about 15 ms" of section 4.4 is a cold figure.** The very first card a process shows costs about 400 ms: the first use of the runtime's compiler, of the styles and of the templates. The next 19 cost about 14 ms each (the median of two records; single cards from 9 to 53). After a warm-up a full card costs about 7 ms to show the first time (6.9 and 7.0 on two sets of cards; the three probes agree within 0.4 ms). Giving a made view a new card and laying it out again costs about 2 ms.
+
+| Part (warm, first show) | ms per card | How it was measured |
+|---|---|---|
+| The three buttons: title, ⋯, View route | 2.1 to 2.2 when removed; 1.1 to 1.3 when swapped for a plain border and text | removal, two sets of cards; the swap in a card built in code |
+| The journal line with the tag strip | 1.5 to 2.0 | removal |
+| The tag strip alone (part of the line above) | 1.1 to 1.35 | removal |
+| The route dots | 0.9 to 1.1; not separable from noise on one of the two sets | removal |
+| Everything else: pill, status, grids, borders, the focus ring | about 2, not broken down | what is left |
+| Loading the XAML and binding | 0.4 to 0.5 | the card against the same tree built in code |
+
+Not separable from noise (about 0.3 ms either way on a median): the tooltips, the accessible names, the class bindings with converters, the two empty menus, the focus ring's binding, style matching, and the length of the title.
+
+**Reuse**, which is what a scroll and a filter pay under rows of N, costs 1.9 to 2.3 ms per view. About half of it is the tag strip: without it, giving a view a new card falls from about 1.25 ms to 0.30 ms. The buttons and the dots add nothing measurable to reuse.
+
+**What this means for the two rows still over.**
+- *First switch to Published.* It makes about 21 card views. Even warm, 21 views at about 7 ms are about 147 ms in these headless probes, against a budget of 100. So a cheaper card alone will probably not bring this row in. It also needs fewer views made at the switch, views made earlier, or a different budget. How much of the row is first-use cost, and how much is the shelf's own first show, was not measured.
+- *Search keystroke.* The views of the shown shelf get new cards, and so do those of a hidden shelf that was shown before. At about 2 ms per reused view that is about 40 ms for each shelf of 21 views in these probes. The tag strip and the hidden shelf are the two targets for this row. These are estimates from the per-view figures, not measurements of the row.
+
+**Changes the numbers support, in order.** None is built. Every saving below comes from removing a part, so it is the most a change could save. A real replacement must keep the keyboard focus, the accessible roles, the commands and the styles, and will save less.
+1. Rework the tag strip's update: keep and refill its chips, or skip the rebuild when the tags are the same. Up to about 1 ms per reused view.
+2. Do not give a hidden shelf's views new cards until the shelf is shown.
+3. One lighter control for the title, ⋯ and View route, in place of three Fluent buttons. Up to 2.2 ms per first show; 1.1 to 1.3 measured for a plain swap.
+4. Draw the route dots as one small control. Up to about 1 ms per first show.
+5. Pay the first-use costs before the first switch, for example by compiling ahead of time (ReadyToRun) or by making one hidden card at startup. The first cards cost about twice the warm ones. A warm-up moves that cost earlier; it does not remove it.
+
+Not measured: drawing, and a real window; the card inside the real shelf; each part's share of the cold cost; any real replacement; how many cards it takes to get from the cold figure to the warm one (the probes warmed up on several hundred).
+
+Sources: the probes' source, raw numbers and tables, in `TestResults/v11-trial-pictures/card-cost-profile-2026-11-20` on the development PC, not in the repository.
 
 ## 5. High contrast
 
@@ -389,7 +423,7 @@ For the maintainer: a real Linux start needs a person at a Linux machine or the 
 ## 8. What was harder than the plan thought
 
 **Cards and lists**
-- One card view costs about 15 ms the first time (section 4.4). Give the card view a cost budget early, before other card-heavy pages are built.
+- A card view costs about 14 ms for the first cards of a process and about 7 ms warm (section 4.5). Give the card view a cost budget early, before other card-heavy pages are built.
 - Drawing every card was not enough; rows of N became the default. Plan virtualization from the start for any list that can reach hundreds of items.
 - In Avalonia 12.1.6 an `ItemsControl` with a row `ItemTemplate`, as the design specified, rebuilt a row's card views every time the row was reused. The fix makes the row view itself the container.
 - No test failed at first when a reused card kept the previous manuscript's title. Three "drawn wrong after reuse" tests were added and seen to fail with the binding broken. Every virtualized template needs such a test.
@@ -469,7 +503,7 @@ For the maintainer: please choose an option for each item below.
 1. **Rows of N as the default.** Options: keep it; go back to every card; decide after the Narrator pass. Recommendation: keep it now and confirm after the Narrator checks of section 6. Every card went over all four switch rows in the real window, measured after the choice was made (section 4.3).
 2. **The every-card build (`-p:ShelfOption=a`).** Options: keep it selectable; remove it. Recommendation: remove it once rows of N is confirmed. CI no longer builds or tests it, so it will drift.
 3. **Which reading the budget verdicts rest on.** Options: the real window (the design's switch rule; two rows over); headless (four rows waiting); CI × 3. Recommendation: verdicts on the real window, headless as the guard in CI. This also settles the "500 library" item of f (0 or 5).
-4. **The two rows over in a real window.** Options: make the card view cheaper; port today's fill strategy (Published prepared while idle, first screen only), which design 4.4 and plan :428 said not to port; defer the hidden shelf's updates; accept and change the budget. Recommendation: make the card view cheaper first. The per-card cost is the root of every miss, and it would help every card-heavy page.
+4. **The two rows over in a real window.** Options: make the card view cheaper; port today's fill strategy (Published prepared while idle, first screen only), which design 4.4 and plan :428 said not to port; defer the hidden shelf's updates; accept and change the budget. Recommendation: make the card view cheaper first, starting with the two changes that aim at the keystroke row (the tag strip's update, and not updating a hidden shelf), then a lighter title and buttons; section 4.5 has the numbers. For the first switch a cheaper card alone will probably not be enough: that row also needs fewer views made at the switch, views made earlier, or a different budget, and that choice is the maintainer's.
 5. **How k is read, and H.** Options: k from agent wall-clock hours only; k from the maintainer's hours once logged; both. Recommendation: both, as the design says, after the maintainer states H and logs review hours on #160. Do not use the agent-hour k as a calendar forecast. The checklist weights of section 2.3 stayed as the design fixed them before work started; changing them now would let them follow the result.
 6. **`--snapshot` of the real library (step 14).** Options: build it; drop it from the trial. The evidence supports neither strongly. `--snapshot-from` was enough for the real-window run.
 7. **Linux.** Options: find a Linux machine or use the VirtualBox guest for the steps of section 7; wait until a later unit. Also issue #395's three options for a missing Documents folder (do not verify and create on first use; fall back to the home folder; ask at first run).
