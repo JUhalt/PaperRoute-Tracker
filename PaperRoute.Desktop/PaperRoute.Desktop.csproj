@@ -17,6 +17,8 @@
 
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
+    <!-- The rail's logo: the Windows Forms app's own file, linked, not copied (Form1.Shell.vb:158-162). -->
+    <AvaloniaResource Include="..\ManuscriptPipeline\Assets\PaperRoute.png" Link="Assets\PaperRoute.png" />
   </ItemGroup>
 
   <!-- No developer-tools package (AvaloniaUI.DiagnosticsSupport): it needs a paid licence, and the trial leaves it out until the maintainer decides. -->

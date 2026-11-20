@@ -1,0 +1,149 @@
+<!--
+  The rail (d1 4.1, step 7), as today's BuildRail and RailPainter draw it
+  (ManuscriptPipeline\Form1.Shell.vb:101-307, Controls\RailItems.vb:40-136):
+
+    rail-column    208 px wide, HeaderBackground, inset 10,16,10,12, a 1 px
+                   CardBorder line down its right edge
+    rail-brand     "PaperRoute", 1.3 x the 10 pt base (17 px) bold, Accent
+    rail-tagline   0.85 x the base (11 px), SecondaryText
+    rail-summary   0.85 x the base (11 px), MutedText ("7 manuscripts")
+    rail (item)    a RadioButton (page) or Button (command), 34 px tall,
+                   radius 7, glyph 16 px at 10 px in, label 10 px after it:
+                     rest      no fill; glyph SecondaryText, label PrimaryText
+                     hovered   HoverBackground
+                     checked   AccentMutedBackground; glyph and label Accent,
+                               the label bold
+                     off       no fill; glyph and label MutedText (the trial's
+                               disabled items, d1 1.2)
+                   focus: a 2 px AccentSecondary ring 1.5 px inside the edge
+    rail-badge     a count at the right: a pill in WarningMutedBackground
+                   with Warning ink, 0.8 x the base bold (11 px)
+
+  The collapse control and the collapsed rail are not in the trial.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Style Selector="Border.rail-column">
+    <Setter Property="Width" Value="208" />
+    <Setter Property="Background" Value="{DynamicResource HeaderBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+    <Setter Property="BorderThickness" Value="0,0,1,0" />
+    <Setter Property="Padding" Value="10,16,10,12" />
+  </Style>
+
+  <Style Selector="TextBlock.rail-brand">
+    <Setter Property="FontSize" Value="17" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector="TextBlock.rail-tagline">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+  </Style>
+  <Style Selector="TextBlock.rail-summary">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+  <!-- The line above the commands (Form1.Shell.vb:266-271): 6 px in from each side. -->
+  <Style Selector="Border.rail-rule">
+    <Setter Property="Height" Value="1" />
+    <Setter Property="Margin" Value="6,0,6,8" />
+    <Setter Property="Background" Value="{DynamicResource CardBorderBrush}" />
+  </Style>
+
+  <!-- Both kinds of item share one face. After Button.axaml, so these win over the button faces. -->
+  <Style Selector="RadioButton.rail, Button.rail">
+    <Setter Property="Height" Value="34" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Margin" Value="0,0,0,2" />
+    <Setter Property="Padding" Value="10,0" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="FontSize" Value="{DynamicResource BodyFontSize}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="ToolTip.ShowOnDisabled" Value="True" />
+    <Setter Property="FocusAdorner">
+      <FocusAdornerTemplate>
+        <Border Margin="1.5" BorderThickness="2" CornerRadius="6"
+                BorderBrush="{DynamicResource AccentSecondaryBrush}" />
+      </FocusAdornerTemplate>
+    </Setter>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <ContentPresenter Name="PART_ContentPresenter"
+                          Background="{TemplateBinding Background}"
+                          BorderBrush="{TemplateBinding BorderBrush}"
+                          BorderThickness="{TemplateBinding BorderThickness}"
+                          CornerRadius="{TemplateBinding CornerRadius}"
+                          Padding="{TemplateBinding Padding}"
+                          Content="{TemplateBinding Content}"
+                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                          HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                          VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+      </ControlTemplate>
+    </Setter>
+  </Style>
+
+  <Style Selector="RadioButton.rail /template/ ContentPresenter#PART_ContentPresenter, Button.rail /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.1" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="RadioButton.rail:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.rail:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.rail:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource HoverBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector="RadioButton.rail:checked /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentMutedBackgroundBrush}" />
+  </Style>
+  <Style Selector="RadioButton.rail:disabled /template/ ContentPresenter#PART_ContentPresenter, Button.rail:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+
+  <Style Selector=":is(Control).rail Path.rail-glyph">
+    <Setter Property="Width" Value="16" />
+    <Setter Property="Height" Value="16" />
+    <Setter Property="Stretch" Value="None" />
+    <Setter Property="StrokeThickness" Value="1.5" />
+    <Setter Property="StrokeLineCap" Value="Round" />
+    <Setter Property="StrokeJoin" Value="Round" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Stroke" Value="{DynamicResource SecondaryTextBrush}" />
+  </Style>
+  <Style Selector=":is(Control).rail TextBlock.rail-label">
+    <Setter Property="Margin" Value="10,0,0,0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+  </Style>
+  <Style Selector="RadioButton.rail:checked Path.rail-glyph">
+    <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector="RadioButton.rail:checked TextBlock.rail-label">
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+  <Style Selector=":is(Control).rail:disabled Path.rail-glyph">
+    <Setter Property="Stroke" Value="{DynamicResource MutedTextBrush}" />
+  </Style>
+  <Style Selector=":is(Control).rail:disabled TextBlock.rail-label">
+    <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
+  </Style>
+
+  <Style Selector="Border.pill.rail-badge">
+    <Setter Property="Padding" Value="6,1" />
+    <Setter Property="Margin" Value="6,0,0,0" />
+  </Style>
+
+</Styles>

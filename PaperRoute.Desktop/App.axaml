@@ -19,5 +19,6 @@
     <StyleInclude Source="/Styles/Tabs.axaml" />
     <StyleInclude Source="/Styles/Inputs.axaml" />
     <StyleInclude Source="/Styles/Board.axaml" />
+    <StyleInclude Source="/Styles/Rail.axaml" />
   </Application.Styles>
 </Application>

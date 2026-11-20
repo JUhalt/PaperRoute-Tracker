@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using ManuscriptPipeline.Services;
 using PaperRoute.TestFixtures;
 using PaperRoute.ViewModels;
+using PaperRoute.ViewModels.Board;
 using PaperRoute.ViewModels.Session;
 
 namespace PaperRoute.Desktop.Tests;
@@ -82,7 +83,7 @@ public sealed class LibrarySessionTests
     {
         LargeLibraryFixture.WriteExample(_root);
         using DiskLibrarySession session = OpenSession();
-        var shell = new ShellViewModel(session);
+        ShellViewModel shell = ShellOver(session);
 
         Assert.AreEqual("Loading…", shell.Notice);
         await shell.LoadCommand.ExecuteAsync(null);
@@ -138,7 +139,7 @@ public sealed class LibrarySessionTests
     public void TheWindowShowsTheShellsNotice()
     {
         using DiskLibrarySession session = OpenSession();
-        var shell = new ShellViewModel(session);
+        ShellViewModel shell = ShellOver(session);
 
         (string before, string after) = Headless.Run(() =>
         {
@@ -161,6 +162,10 @@ public sealed class LibrarySessionTests
         Assert.AreEqual("Loading…", before);
         Assert.AreEqual("Loaded 7 manuscripts from local storage.", after);
     }
+
+    // The shell as the app makes it, with the waits the tests use.
+    internal static ShellViewModel ShellOver(ILibrarySession session) =>
+        new(session, new BoardViewModel(session, new ImmediateDebouncer(), new QueuedUiDispatcher()));
 
     private DiskLibrarySession OpenSession() => new(
         Path.Combine(_root, "data"),
