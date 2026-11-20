@@ -279,7 +279,7 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         }, informational: true);
         measurement.NoteChanges(board);
         Assert.AreEqual(expected, board.LastSyncChanges[0], $"Hiding {label}: the Pipeline's changes (-1 for a Reset).");
-        Assert.AreEqual(PipelineCount - size, shelf.CardViews().Count, $"Hiding {label}: the Pipeline's card views.");
+        CardViewsFor(shelf, PipelineCount - size, $"Hiding {label}");
         measurement.Time("500", $"hide-{size}{suffix}-paint", "Its frame", BoardMeasurement.UiThreadBudget, "UI thread", () => Frame(window), informational: true);
 
         measurement.Time("500", $"show-{size}{suffix}", $"The search cleared, putting the {label} back (render, layout)", BoardMeasurement.UiThreadBudget, "UI thread", () =>
@@ -290,8 +290,23 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         }, informational: true);
         measurement.NoteChanges(board);
         Assert.AreEqual(expected, board.LastSyncChanges[0], $"Showing {label} again: the Pipeline's changes (-1 for a Reset).");
-        Assert.AreEqual(PipelineCount, shelf.CardViews().Count, $"Showing {label} again: the Pipeline's card views.");
+        CardViewsFor(shelf, PipelineCount, $"Showing {label} again");
         measurement.Time("500", $"show-{size}{suffix}-paint", "Its frame", BoardMeasurement.UiThreadBudget, "UI thread", () => Frame(window), informational: true);
+    }
+
+    // Under option (a) the shelf has a card view for each of its cards; under
+    // (b) for some of them (the rows made), one at least.
+    private static void CardViewsFor(ShelfView shelf, int cards, string context)
+    {
+        int views = shelf.CardViews().Count;
+        if (ShelfLayout.UsesRows)
+        {
+            Assert.IsTrue(views > 0 && views < cards, $"{context}: rows of N made {views} card views for the Pipeline's {cards} cards.");
+        }
+        else
+        {
+            Assert.AreEqual(cards, views, $"{context}: the Pipeline's card views.");
+        }
     }
 
     private static string Tag(int size) => "budget-keep-" + size.ToString(CultureInfo.InvariantCulture);

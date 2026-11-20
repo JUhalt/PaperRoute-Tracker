@@ -108,7 +108,15 @@ public sealed class CardViewTests : StorageCheckedTests
             return (stops, expected, names, expectedNames, board.Cards("PipelineShelf").Count);
         });
 
-        Assert.AreEqual(60, views, "The Pipeline shelf made a card view for each of its 60 cards.");
+        if (ShelfLayout.UsesRows)
+        {
+            Assert.IsLessThan(60, views, "Rows of N: the Pipeline shelf made card views only for the rows made, not for all 60 cards.");
+        }
+        else
+        {
+            Assert.AreEqual(60, views, "The Pipeline shelf made a card view for each of its 60 cards.");
+        }
+
         CollectionAssert.AreEqual(expected, stops, "Tab went to: " + string.Join(" > ", stops.Take(12)) + " ...");
         CollectionAssert.AreEqual(expectedNames, names);
     }
@@ -263,7 +271,6 @@ public sealed class CardViewTests : StorageCheckedTests
                 ShelfView shelf = board.Shelf("PipelineShelf");
                 ScrollViewer scroller = shelf.FindControl<ScrollViewer>("Scroller") ?? throw new AssertFailedException("The shelf has no scroller.");
                 ShelfViewModel model = board.Board.Shelves[0];
-                IReadOnlyList<CardView> views = board.Cards("PipelineShelf");
                 int columns = model.Columns;
                 int count = model.Cards.Count;
                 var steps = new List<(string, string, string)>();
@@ -276,7 +283,12 @@ public sealed class CardViewTests : StorageCheckedTests
                     board.Window.UpdateLayout();
                     Dispatcher.UIThread.RunJobs();
                     steps.Add((name, CardParts.Id(board.Focused() as Control), Title(expected)));
-                    CardView target = views[expected];
+                    if (shelf.FindCardView(expected) is not CardView target)
+                    {
+                        problems.Add($"{name}: card {expected} has no card view.");
+                        return;
+                    }
+
                     if (!target.Part<Border>("FocusRing").IsEffectivelyVisible)
                     {
                         problems.Add($"{name}: card {expected}'s focus ring is not shown.");
@@ -290,7 +302,8 @@ public sealed class CardViewTests : StorageCheckedTests
                     }
                 }
 
-                void From(int index, string part = "Title") => views[index].Part<Button>(part).Focus(NavigationMethod.Tab);
+                void From(int index, string part = "Title") =>
+                    (shelf.BringCardIntoView(index) ?? throw new AssertFailedException($"Card {index} has no card view.")).Part<Button>(part).Focus(NavigationMethod.Tab);
 
                 int c = columns + 1;
                 From(c);
@@ -748,6 +761,44 @@ public sealed class CardViewTests : StorageCheckedTests
         Assert.AreEqual(itemWidth, shelf.ItemWidth, $"Card width at {width} px.");
     }
 
+    // Rows of N (d1 4.4 option (b)): the shelf's cards in rows of its column
+    // count, row i holding cards i x N on, the last row short and marked last;
+    // a render that removes a card keeps every row object and refills them in
+    // place; a new column count rewraps the same card objects. Under option
+    // (a) the shelf keeps no rows.
+    [TestMethod]
+    public void RowsOfNRewrapTheShelfsCardsAndKeepTheirRowObjects()
+    {
+        var harness = new BoardHarness(Sixty().Take(10));
+        ShelfViewModel shelf = harness.Pipeline;
+        shelf.SetWidth(1000);
+        Assert.AreEqual(3, shelf.Columns);
+        if (!ShelfLayout.UsesRows)
+        {
+            Assert.IsEmpty(shelf.Rows, "Option (a) keeps no rows.");
+            return;
+        }
+
+        string Shape() => string.Join(" | ", shelf.Rows.Select(row =>
+            $"{row.Index}:{string.Join(",", row.Cards.Select(card => shelf.Cards.IndexOf(card)))}{(row.IsLast ? " last" : string.Empty)}"));
+
+        Assert.AreEqual("0:0,1,2 | 1:3,4,5 | 2:6,7,8 | 3:9 last", Shape());
+        List<CardRowViewModel> before = shelf.Rows.ToList();
+
+        harness.Session.Library.RemoveAt(1);
+        harness.Session.RaiseChanged();
+        Assert.HasCount(9, shelf.Cards);
+        Assert.AreEqual("0:0,1,2 | 1:3,4,5 | 2:6,7,8 last", Shape(), "Nine cards: three full rows.");
+        Assert.IsTrue(shelf.Rows.Select((row, index) => ReferenceEquals(row, before[index])).All(same => same), "The rows that stay are the same objects, refilled.");
+
+        List<CardViewModel> cards = shelf.Cards.ToList();
+        shelf.SetWidth(700);
+        Assert.AreEqual(2, shelf.Columns);
+        Assert.AreEqual("0:0,1 | 1:2,3 | 2:4,5 | 3:6,7 | 4:8 last", Shape(), "Two columns: the same cards rewrapped.");
+        CollectionAssert.AreEqual(cards, shelf.Rows.SelectMany(row => row.Cards).ToList(), "Rewrapping makes no card.");
+        Assert.IsTrue(shelf.Rows.Take(3).Select((row, index) => ReferenceEquals(row, before[index])).All(same => same), "The first rows are still the same objects.");
+    }
+
     // The same on the drawn shelf, at 1280 and at 760 px: the cards fill as
     // many columns as the rule gives, every card lies inside the shelf, and
     // the hidden shelves made no card until first shown (d1 4.4).
@@ -850,8 +901,342 @@ public sealed class CardViewTests : StorageCheckedTests
             return (Pictures.Save(board.Window, "board-500-pipeline-light", TestContext), board.Cards("PipelineShelf").Count);
         });
 
-        Assert.AreEqual(167, views, "The Pipeline shelf made all 167 of its cards.");
+        if (ShelfLayout.UsesRows)
+        {
+            Assert.IsLessThan(167, views, "Rows of N: the Pipeline shelf made only the rows on screen and a margin, not all 167 cards.");
+        }
+        else
+        {
+            Assert.AreEqual(167, views, "The Pipeline shelf made all 167 of its cards.");
+        }
+
         Assert.IsTrue(File.Exists(path), $"No picture at {path}.");
+    }
+
+    // The 500 library's Pipeline at 1280 x 800 in the build's shelf option
+    // (design step 13 asks for option (b)): at the top, scrolled to the middle
+    // and to the end in Light, and in the middle in Dark. At each place the
+    // card views drawn are the cards of the rows the scroller shows, in shelf
+    // order, every one inside the shelf's width and one height; under (b) the
+    // shelf made fewer views than cards.
+    [TestMethod]
+    public void TheFiveHundredPipelineIsSavedAtTheTopTheMiddleAndTheEnd()
+    {
+        using DiskLibrarySession session = OpenFiveHundred();
+        List<string> facts = Headless.Run(() =>
+        {
+            var facts = new List<string>();
+            foreach ((ThemeVariant variant, string theme, string[] places) in new[]
+            {
+                (ThemeVariant.Light, "light", new[] { "top", "middle", "end" }),
+                (ThemeVariant.Dark, "dark", new[] { "middle" }),
+            })
+            {
+                using BoardWindow board = BoardWindow.Show(session, variant);
+                ShelfView shelf = board.Shelf("PipelineShelf");
+                ShelfViewModel model = board.Board.Shelves[0];
+                ScrollViewer scroller = shelf.FindControl<ScrollViewer>("Scroller") ?? throw new AssertFailedException("The shelf has no scroller.");
+                foreach (string place in places)
+                {
+                    double end = Math.Max(0, scroller.Extent.Height - scroller.Viewport.Height);
+                    scroller.Offset = new Vector(0, place switch { "top" => 0, "middle" => Math.Round(end / 2), _ => end });
+                    Dispatcher.UIThread.RunJobs();
+                    board.Window.UpdateLayout();
+                    end = Math.Max(0, scroller.Extent.Height - scroller.Viewport.Height);
+                    if (place == "end")
+                    {
+                        scroller.Offset = new Vector(0, end);
+                        Dispatcher.UIThread.RunJobs();
+                        board.Window.UpdateLayout();
+                    }
+
+                    string path = Pictures.Save(board.Window, $"board-500-pipeline-{ShelfLayout.Option}-{place}-{theme}", TestContext);
+                    IReadOnlyList<CardView> views = board.Cards("PipelineShelf");
+                    List<int> indexes = views.Select(view => model.Cards.IndexOf((CardViewModel)view.DataContext!)).ToList();
+                    List<int> onScreen = Enumerable.Range(0, model.Cards.Count).Where(index =>
+                    {
+                        CardView? view = shelf.FindCardView(index);
+                        Point top = view?.TranslatePoint(default, scroller) ?? new Point(0, double.MaxValue);
+                        return view is not null && top.Y + view.Bounds.Height > 0 && top.Y < scroller.Viewport.Height;
+                    }).ToList();
+                    facts.Add($"{theme} {place}: offset {scroller.Offset.Y:0} of {end:0}, {views.Count} card views (cards {indexes.Min()} to {indexes.Max()}), on screen {onScreen.FirstOrDefault()} to {onScreen.LastOrDefault()}, {path}");
+
+                    Assert.IsTrue(File.Exists(path), $"No picture at {path}.");
+                    CollectionAssert.AreEqual(indexes.Order().ToList(), indexes, $"{place}: the card views are in shelf order.");
+                    Assert.IsNotEmpty(onScreen, $"{place}: cards are drawn on screen.");
+                    Assert.AreEqual(0, onScreen[0] % model.Columns, $"{place}: the first card on screen starts a row. {facts[^1]}");
+                    CollectionAssert.AreEqual(Enumerable.Range(onScreen[0], onScreen.Count).ToList(), onScreen, $"{place}: the cards on screen follow one another, none missing. {facts[^1]}");
+                    if (place == "end")
+                    {
+                        Assert.AreEqual(model.Cards.Count - 1, onScreen[^1], $"At the end the last card is on screen. {facts[^1]}");
+                    }
+
+                    if (place == "top")
+                    {
+                        Assert.AreEqual(0, onScreen[0], "At the top the first card is on screen.");
+                    }
+
+                    Assert.HasCount(1, views.Select(view => view.Bounds.Height).Distinct().ToList(), $"{place}: every card is one height.");
+                    double right = shelf.Bounds.Width;
+                    Assert.IsTrue(views.All(view => (view.TranslatePoint(new Point(view.Bounds.Width, 0), shelf)?.X ?? double.MaxValue) <= right + 0.5), $"{place}: a card runs past the shelf's edge.");
+                    if (ShelfLayout.UsesRows)
+                    {
+                        Assert.IsLessThan(model.Cards.Count, views.Count, $"{place}: rows of N made fewer card views than the shelf's {model.Cards.Count} cards.");
+                    }
+                }
+            }
+
+            return facts;
+        });
+
+        foreach (string fact in facts)
+        {
+            TestContext.WriteLine(fact);
+        }
+    }
+
+    // K8, d1 4.5: Down into a row that is not made yet. On the 58-card
+    // shelf, from the first card, Down to the last row and Up back to the
+    // first, one row at a time: each lands on the card a row below (above),
+    // its focus ring shows and it is in view. Under option (b) some of those
+    // rows were not made before the key (the row is scrolled into view, made,
+    // then focused); the test says how many.
+    [TestMethod]
+    public void K8_DownIntoARowThatIsNotMadeYetScrollsItIntoViewAndFocusesIt()
+    {
+        var session = new MemorySession(Sixty().Take(58).ToList(), Papers.Today);
+        (List<string> problems, int notMade, int columns) = Headless.Run(() =>
+        {
+            using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
+            ShelfView shelf = board.Shelf("PipelineShelf");
+            ScrollViewer scroller = shelf.FindControl<ScrollViewer>("Scroller")!;
+            ShelfViewModel model = board.Board.Shelves[0];
+            int columns = model.Columns;
+            var problems = new List<string>();
+            int notMade = 0;
+            Assert.IsTrue(shelf.FocusFirstCard());
+
+            void Go(Key key, int expected)
+            {
+                if (shelf.FindCardView(expected) is null)
+                {
+                    notMade++;
+                }
+
+                board.Press(key);
+                board.Window.UpdateLayout();
+                Dispatcher.UIThread.RunJobs();
+                string want = model.Cards[expected].AutomationKey + ".Title";
+                string got = CardParts.Id(board.Focused() as Control);
+                if (got != want)
+                {
+                    problems.Add($"{key} to card {expected}: the keyboard is on {got}, not {want}.");
+                    return;
+                }
+
+                CardView view = shelf.FindCardView(expected)!;
+                Point top = view.TranslatePoint(default, scroller) ?? new Point(0, double.MaxValue);
+                if (top.Y < -0.5 || top.Y + view.Bounds.Height > scroller.Viewport.Height + 0.5)
+                {
+                    problems.Add($"{key} to card {expected}: out of view (top {top.Y}).");
+                }
+
+                if (!view.Part<Border>("FocusRing").IsEffectivelyVisible)
+                {
+                    problems.Add($"{key} to card {expected}: its focus ring is not shown.");
+                }
+            }
+
+            int last = (model.Cards.Count - 1) / columns * columns;
+            for (int index = columns; index <= last; index += columns)
+            {
+                Go(Key.Down, index);
+            }
+
+            for (int index = last - columns; index >= 0; index -= columns)
+            {
+                Go(Key.Up, index);
+            }
+
+            // The shelf scrolled to its end with the keyboard on the first
+            // row: the row below the focused card is far out of view.
+            int stepsBefore = notMade;
+            scroller.Offset = new Vector(0, scroller.Extent.Height);
+            Dispatcher.UIThread.RunJobs();
+            board.Window.UpdateLayout();
+            Go(Key.Down, columns);
+            if (ShelfLayout.UsesRows && notMade == stepsBefore)
+            {
+                problems.Add("Scrolled to the end, the second row was still made: the test did not reach a row that was not made.");
+            }
+
+            return (problems, notMade, columns);
+        });
+
+        TestContext.WriteLine($"Option ({ShelfLayout.Option}), {columns} columns: {notMade} of the steps went into a card that had no card view before the key.");
+        Assert.IsEmpty(problems, string.Join(Environment.NewLine, problems));
+        if (ShelfLayout.UsesRows)
+        {
+            Assert.IsGreaterThan(0, notMade, "Rows of N: some steps went into a row that was not made yet.");
+        }
+    }
+
+    // A focused card keeps the keyboard when its row scrolls far away (under
+    // option (b), when the list would recycle it), and the arrows go on from
+    // it; and a render that moves the focused card (a manuscript before it
+    // leaves the library, so every later card moves up one place) leaves the
+    // keyboard on the same card, with no other card's focus ring shown.
+    [TestMethod]
+    public void TheFocusedCardKeepsTheKeyboardWhenRowsAreRecycledOrRefilled()
+    {
+        var session = new MemorySession(Sixty().Take(58).ToList(), Papers.Today);
+        Dictionary<string, string> facts = Headless.Run(() =>
+        {
+            using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
+            ShelfView shelf = board.Shelf("PipelineShelf");
+            ScrollViewer scroller = shelf.FindControl<ScrollViewer>("Scroller")!;
+            ShelfViewModel model = board.Board.Shelves[0];
+            var facts = new Dictionary<string, string>
+            {
+                ["Second"] = model.Cards[1].AutomationKey,
+                ["Third"] = model.Cards[2].AutomationKey,
+                ["Tenth"] = model.Cards[10].AutomationKey,
+            };
+            string Focused() => CardParts.Id(board.Focused() as Control);
+            string Rings() => string.Join(", ", board.Cards("PipelineShelf")
+                .Where(view => view.Part<Border>("FocusRing").IsEffectivelyVisible)
+                .Select(view => ((CardViewModel)view.DataContext!).AutomationKey));
+
+            shelf.FindCardView(1)!.Part<Button>("Title").Focus(NavigationMethod.Tab);
+            scroller.Offset = new Vector(0, scroller.Extent.Height);
+            Dispatcher.UIThread.RunJobs();
+            board.Window.UpdateLayout();
+            facts["Offset"] = $"{scroller.Offset.Y:0} of {scroller.Extent.Height:0}";
+            facts["AfterScroll"] = Focused();
+            facts["RingsAfterScroll"] = Rings();
+            board.Press(Key.Right);
+            board.Window.UpdateLayout();
+            Dispatcher.UIThread.RunJobs();
+            facts["RightAfterScroll"] = Focused();
+
+            // The fourth card's manuscript leaves the library: card 10 moves to place 9.
+            shelf.BringCardIntoView(10)!.Part<Button>("Title").Focus(NavigationMethod.Tab);
+            session.Library.Remove(model.Cards[3].Manuscript);
+            session.RaiseChanged();
+            Dispatcher.UIThread.RunJobs();
+            board.Window.UpdateLayout();
+            Dispatcher.UIThread.RunJobs();
+            facts["TenthNowAt"] = model.Cards.Select(card => card.AutomationKey).ToList().IndexOf(facts["Tenth"]).ToString(CultureInfo.InvariantCulture);
+            facts["AfterRender"] = Focused();
+            facts["RingsAfterRender"] = Rings();
+            return facts;
+        });
+
+        Assert.AreEqual(facts["Second"] + ".Title", facts["AfterScroll"], $"Scrolled far away ({facts["Offset"]}), the second card keeps the keyboard.");
+        Assert.AreEqual(facts["Second"], facts["RingsAfterScroll"], "Only its focus ring shows.");
+        Assert.AreEqual(facts["Third"] + ".Title", facts["RightAfterScroll"], "Right goes on from it to the third card.");
+        Assert.AreEqual("9", facts["TenthNowAt"], "The render moved the focused card up one place.");
+        Assert.AreEqual(facts["Tenth"] + ".Title", facts["AfterRender"], "After the render, the same card has the keyboard.");
+        Assert.AreEqual(facts["Tenth"], facts["RingsAfterRender"], "Only its focus ring shows after the render.");
+    }
+
+    // Tab order across the shelf's edges, the same under both options: from
+    // the sort box with the shelf scrolled to its end, Tab lands on the first
+    // card's title; Shift+Tab from there goes back to the sort box; from the
+    // last card's View route, Shift+Tab walks back card by card (View route,
+    // ⋯, title, then the card before's View route) over rows that are not made.
+    [TestMethod]
+    public void K1_TabEntersAtTheFirstCardAndShiftTabWalksBackByCardOrder()
+    {
+        var session = new MemorySession(Sixty(), Papers.Today);
+        (string entered, string expectedFirst, string back, List<string> stops, List<string> expected) = Headless.Run(() =>
+        {
+            using BoardWindow board = BoardWindow.Show(session);
+            ShelfView shelf = board.Shelf("PipelineShelf");
+            ScrollViewer scroller = shelf.FindControl<ScrollViewer>("Scroller")!;
+            List<CardViewModel> cards = board.Board.Shelves[0].Cards.ToList();
+
+            scroller.Offset = new Vector(0, scroller.Extent.Height);
+            Dispatcher.UIThread.RunJobs();
+            board.Window.UpdateLayout();
+            board.Find<ComboBox>("BoardSort").Focus(NavigationMethod.Tab);
+            board.Press(Key.Tab);
+            string entered = CardParts.Id(board.Focused() as Control);
+            board.Press(Key.Tab, RawInputModifiers.Shift);
+            string back = CardParts.Id(board.Focused() as Control);
+
+            shelf.BringCardIntoView(cards.Count - 1)!.Part<Button>("ViewRoute").Focus(NavigationMethod.Tab);
+            var expected = new List<string>();
+            for (int index = cards.Count - 1; index >= cards.Count - 25; index--)
+            {
+                expected.AddRange([cards[index].AutomationKey + ".More", cards[index].AutomationKey + ".Title", cards[index - 1].AutomationKey + ".Route"]);
+            }
+
+            var stops = new List<string>();
+            for (int step = 0; step < expected.Count; step++)
+            {
+                board.Press(Key.Tab, RawInputModifiers.Shift);
+                stops.Add(CardParts.Id(board.Focused() as Control));
+            }
+
+            return (entered, cards[0].AutomationKey + ".Title", back, stops, expected);
+        });
+
+        Assert.AreEqual(expectedFirst, entered, "Tab from the sort box lands on the first card's title, wherever the shelf is scrolled.");
+        Assert.AreEqual("BoardSort", back, "Shift+Tab from the first card's title goes back to the sort box (Clear is off).");
+        CollectionAssert.AreEqual(expected, stops, "Shift+Tab went to: " + string.Join(" > ", stops.Take(12)) + " ...");
+    }
+
+    // d1 4.4: under option (b) a filter, a sort or a shelf change makes no
+    // more card views than the shelf shows on screen (rows are refilled in
+    // place); under option (a) a change past the reset threshold makes every
+    // card of the shown shelf again, which is only reported.
+    [TestMethod]
+    public void AFilterSortOrShelfChangeMakesOnlyTheCardsOnScreen()
+    {
+        using DiskLibrarySession session = OpenFiveHundred();
+        List<(string Change, int Made, int Views, int Cards)> changes = Headless.Run(() =>
+        {
+            using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
+            var changes = new List<(string, int, int, int)>();
+            void Change(string name, Action change, string shelf)
+            {
+                int before = CardView.MadeCount;
+                change();
+                Dispatcher.UIThread.RunJobs();
+                board.Window.UpdateLayout();
+                Dispatcher.UIThread.RunJobs();
+                int index = shelf switch { "PublishedShelf" => 1, _ => 0 };
+                changes.Add((name, CardView.MadeCount - before, board.Cards(shelf).Count, board.Board.Shelves[index].Cards.Count));
+            }
+
+            Change("stage filter to Submitted", () => board.Board.SelectedStageIndex = 3, "PipelineShelf");
+            Change("stage filter back to All stages", () => board.Board.SelectedStageIndex = 0, "PipelineShelf");
+            Change("another sort", () => board.Board.SelectedSortIndex = 1, "PipelineShelf");
+            Change("the first sort again", () => board.Board.SelectedSortIndex = 0, "PipelineShelf");
+            Change("first switch to Published", () => board.Board.SelectedShelfIndex = 1, "PublishedShelf");
+            Change("back to Pipeline", () => board.Board.SelectedShelfIndex = 0, "PipelineShelf");
+            Change("search \"teaching\"", () => { board.Board.SearchText = "teaching"; board.Board.Render(); }, "PipelineShelf");
+            return changes;
+        });
+
+        foreach ((string change, int made, int views, int cards) in changes)
+        {
+            TestContext.WriteLine($"Option ({ShelfLayout.Option}): {change}: {made} card views made; {views} card views for {cards} cards.");
+        }
+
+        if (ShelfLayout.UsesRows)
+        {
+            // A row of slack (a row the list measures and then keeps for reuse).
+            foreach ((string change, int made, int views, int cards) in changes)
+            {
+                Assert.IsLessThanOrEqualTo(views + 8, made, $"{change}: rows of N made {made} card views, more than the {views} the shelf shows.");
+                if (cards > 60)
+                {
+                    Assert.IsLessThan(cards, views, $"{change}: rows of N made views for fewer cards than the shelf's {cards}.");
+                }
+            }
+        }
     }
 
     // A close-up of one shelf: cards of the Pipeline's stages from Idea to In

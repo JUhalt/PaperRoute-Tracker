@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace PaperRoute.ViewModels.Board;
@@ -32,6 +33,7 @@ public sealed partial class ShelfViewModel : ObservableObject
     // shown (Form1.BoardFill.vb:195). It is never cleared.
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(RealizedCards))]
+    [NotifyPropertyChangedFor(nameof(RealizedRows))]
     private bool _isRealized;
 
     // The columns and the width of each card at the shelf's width (SetWidth).
@@ -68,11 +70,19 @@ public sealed partial class ShelfViewModel : ObservableObject
 
     public SyncedCollection<CardViewModel> Cards { get; } = [];
 
+    // The cards in rows of Columns, under option (b) only (ShelfLayout); empty
+    // under option (a). Row objects are kept and refilled in place (SyncRows).
+    public ObservableCollection<CardRowViewModel> Rows { get; } = [];
+
     public bool HasEmptyMessage => EmptyMessage is not null;
 
-    // What the view's card list shows: the cards once the shelf has been
-    // shown, nothing before.
-    public SyncedCollection<CardViewModel>? RealizedCards => IsRealized ? Cards : null;
+    // What the view's card list shows under option (a): the cards once the
+    // shelf has been shown, nothing before, and nothing under option (b).
+    public SyncedCollection<CardViewModel>? RealizedCards => IsRealized && !ShelfLayout.UsesRows ? Cards : null;
+
+    // What the view's row list shows under option (b): the rows once the
+    // shelf has been shown, nothing before, and nothing under option (a).
+    public ObservableCollection<CardRowViewModel>? RealizedRows => IsRealized && ShelfLayout.UsesRows ? Rows : null;
 
     public override string ToString() => TabText;
 
@@ -101,6 +111,52 @@ public sealed partial class ShelfViewModel : ObservableObject
         TabText = BoardRules.TabText(Name, cards.Count, total, filtersActive);
         TabCount = BoardRules.TabCount(cards.Count, total, filtersActive);
         EmptyMessage = cards.Count == 0 ? BoardRules.EmptyMessage(Location, total) : null;
-        return Cards.SyncInto(cards, resetThreshold);
+        int changes = Cards.SyncInto(cards, resetThreshold);
+        if (changes != 0)
+        {
+            SyncRows();
+        }
+
+        return changes;
+    }
+
+    // A new column count rewraps the cards into rows of the new N.
+    partial void OnColumnsChanged(int value) => SyncRows();
+
+    // Under option (b), brings Rows to the cards in rows of Columns: row i
+    // holds cards i x N to i x N + N - 1. Rows past the new end are removed
+    // from the end, new ones added at the end, and every other row object is
+    // kept and refilled only if its cards changed, so a render never replaces
+    // the list and the views make no card for it (d1 4.4: rebuilding the rows
+    // only rewraps existing card view models).
+    private void SyncRows()
+    {
+        if (!ShelfLayout.UsesRows)
+        {
+            return;
+        }
+
+        int columns = Math.Max(1, Columns);
+        int count = (Cards.Count + columns - 1) / columns;
+        while (Rows.Count > count)
+        {
+            Rows.RemoveAt(Rows.Count - 1);
+        }
+
+        for (int index = 0; index < count; index++)
+        {
+            int first = index * columns;
+            int length = Math.Min(columns, Cards.Count - first);
+            if (index < Rows.Count)
+            {
+                Rows[index].Fill(Cards, first, length, columns, index == count - 1);
+            }
+            else
+            {
+                var row = new CardRowViewModel(this, index);
+                row.Fill(Cards, first, length, columns, index == count - 1);
+                Rows.Add(row);
+            }
+        }
     }
 }

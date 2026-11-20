@@ -14,6 +14,11 @@
     <Version>0.1.0-trial</Version>
   </PropertyGroup>
 
+  <!-- The shelves' layout (d1 4.4, ShelfLayout.Option): option (b), rows of N, unless the build is given ShelfOption=a ("dotnet test -p:ShelfOption=a"), which draws option (a) so both can be measured. -->
+  <PropertyGroup Condition="'$(ShelfOption)' == 'a'">
+    <DefineConstants>$(DefineConstants);SHELF_OPTION_A</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <!-- Lock 3 of the trial design (d1 1.3): no call of a core save, backup or migration compiles here (RS0030, an error with TreatWarningsAsErrors). -->
