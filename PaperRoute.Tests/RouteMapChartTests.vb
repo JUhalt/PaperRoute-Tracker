@@ -174,7 +174,7 @@ Public Class RouteMapChartTests
         quick.Metadata.PublishedDate = New DateTime(2026, 7, 1)
         Dim reviewing As New Manuscript With {.Title = "Still in review", .CurrentStage = PaperStage.UnderReview}
         reviewing.Submissions.Add(Submitted("Assessment", Today.AddDays(-30)))
-        Return RouteMapService.Library({RouteMapServiceTests.Anchoring(), quick, reviewing}, Today, True).Routes
+        Return RouteMapService.Library({CoreTestSupport.RouteAnchoringManuscript(), quick, reviewing}, Today, True).Routes
     End Function
 
     Private Shared Function Submitted(journal As String, submittedOn As DateTime, ParamArray decisions As (Decision As EditorialDecision, DecisionDate As DateTime)()) As JournalSubmission
