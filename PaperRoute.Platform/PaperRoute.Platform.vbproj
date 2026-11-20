@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- The same three version nodes as PaperRoute.Core.vbproj; the release build passes -p:Version and the others to every project. -->
+    <!-- The same three version nodes as PaperRoute.Core.vbproj; keep them equal to ManuscriptPipeline.vbproj. The release workflow passes only -p:Version, so AssemblyVersion and FileVersion come from here; VersionSourceTests checks them. -->
     <Version>1.0.1</Version>
     <AssemblyVersion>1.0.1.0</AssemblyVersion>
     <FileVersion>1.0.1.0</FileVersion>
@@ -9,6 +9,10 @@
     <!-- The app's root namespace, so every Windows type keeps its full name. -->
     <RootNamespace>ManuscriptPipeline</RootNamespace>
     <Product>PaperRoute Tracker</Product>
+    <!-- As in PaperRoute.Core.vbproj, so the shipped DLL's file properties read the same as the core's. -->
+    <Authors>Joshua Uhalt</Authors>
+    <Company>PaperRoute</Company>
+    <Copyright>Copyright © Joshua Uhalt 2026</Copyright>
     <OutputType>Library</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
