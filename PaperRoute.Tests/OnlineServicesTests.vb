@@ -281,14 +281,14 @@ Public Class OnlineServicesTests
         ' A compatible server on this computer, and Claude.
         Dim draft As AssistantRequest = AssistantService.BuildResponseRequest("Reviewer 1", "Clarify the sample.", "")
         network.Requests.Clear()
-        OnlineAccess.Configure(AssistantCoreTests.CompatibleSettings("http://localhost:11434/v1"))
+        OnlineAccess.Configure(AssistantTestSupport.CompatibleSettings("http://localhost:11434/v1"))
         Dim compatible As HttpRequestException = Assert.ThrowsExactly(Of HttpRequestException)(
             Sub() AssistantService.CurrentProvider().CompleteAsync(draft, CancellationToken.None).GetAwaiter().GetResult())
         Assert.IsNull(compatible.StatusCode)
         Assert.AreEqual("http://localhost:11434/v1/chat/completions", network.Requests.Single().Uri.AbsoluteUri)
 
         network.Requests.Clear()
-        OnlineAccess.Configure(AssistantCoreTests.ClaudeSettings())
+        OnlineAccess.Configure(AssistantTestSupport.ClaudeSettings())
         OnlineAccess.KeyStore().Save(ProtectedKeyStore.Anthropic, "sk-ant-test-key-0001")
         Dim claude As HttpRequestException = Assert.ThrowsExactly(Of HttpRequestException)(
             Sub() AssistantService.CurrentProvider().CompleteAsync(draft, CancellationToken.None).GetAwaiter().GetResult())

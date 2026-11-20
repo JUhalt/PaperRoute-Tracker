@@ -23,7 +23,7 @@ Public Class DialogFitTests
     ' itself or through the one scaling rule, DialogScaling (#93).
     <TestMethod>
     Public Sub EveryV09DialogScalesAndFitsTheScreen()
-        Dim folder As String = Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManuscriptPipeline", "Forms")
+        Dim folder As String = Path.Combine(TestRepository.Root(), "ManuscriptPipeline", "Forms")
         For Each name As String In V09Dialogs
             Dim code As String = String.Join(Environment.NewLine,
                 File.ReadAllLines(Path.Combine(folder, name & ".vb")).Where(Function(line) Not line.TrimStart().StartsWith("'"c)))

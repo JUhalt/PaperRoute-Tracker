@@ -451,7 +451,7 @@ Public Class WorkflowThemeKeyboardSmokeTests
     Public Sub MainDrawsTheUiThreadsMenusWithTheThemedRenderer()
 
         Dim source As String =
-            File.ReadAllText(Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManuscriptPipeline", "Program.vb"))
+            File.ReadAllText(Path.Combine(TestRepository.Root(), "ManuscriptPipeline", "Program.vb"))
 
         Dim main As Integer = source.IndexOf("Public Sub Main(", StringComparison.Ordinal)
         Dim installing As Integer = source.IndexOf("ThemedMenuRenderer.Install()", Math.Max(main, 0), StringComparison.Ordinal)

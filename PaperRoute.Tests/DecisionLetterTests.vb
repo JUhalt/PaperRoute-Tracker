@@ -80,7 +80,7 @@ Public Class DecisionLetterTests
                             steps.Add("letter")
                             ShowOffscreen(letterDialog)
                             Assert.AreEqual(String.Empty, letterDialog.LetterBox.Text)
-                            letterDialog.LetterBox.Text = AssistantCoreTests.Letter
+                            letterDialog.LetterBox.Text = AssistantTestSupport.Letter
                             letterDialog.ReadLetterAsync().GetAwaiter().GetResult()
                             Assert.IsTrue(letterDialog.IsReviewing, letterDialog.StatusText)
 
@@ -113,7 +113,7 @@ Public Class DecisionLetterTests
                         Assert.IsTrue(decisionDialog.BannerShown)
                         StringAssert.Contains(decisionDialog.BannerBox.Text, "Based on their comments, I would like to invite a major revision.")
                         StringAssert.Contains(decisionDialog.BannerBox.Text, "60 days after Sep 15, 2026 (the letter's date)")
-                        Assert.AreEqual(AssistantCoreTests.Letter, decisionDialog.NotesBox.Text, "The letter is kept in the decision's notes.")
+                        Assert.AreEqual(AssistantTestSupport.Letter, decisionDialog.NotesBox.Text, "The letter is kept in the decision's notes.")
                         decisionDialog.SaveForTest()
                         Return Finish(decisionDialog)
                     End Function
@@ -122,7 +122,7 @@ Public Class DecisionLetterTests
 
                 CollectionAssert.AreEqual({"letter", "decision"}, steps)
                 Assert.AreEqual(1, provider.Requests.Count)
-                Assert.AreEqual(AssistantCoreTests.Letter, provider.Requests(0).Content, "Only the letter is sent.")
+                Assert.AreEqual(AssistantTestSupport.Letter, provider.Requests(0).Content, "Only the letter is sent.")
 
                 Dim decision As EditorialDecisionEvent = submission.Decisions.Single()
                 Assert.AreEqual(EditorialDecision.MajorRevision, decision.Decision)
@@ -136,7 +136,7 @@ Public Class DecisionLetterTests
                 StringAssert.Contains(decision.Suggestion.SourceText, "Based on their comments, I would like to invite a major revision.")
                 StringAssert.Contains(decision.Suggestion.SourceText, "Please submit your revised manuscript within 60 days.")
 
-                Dim expected As DecisionLetterProposal = AssistantService.ReadLetterReply(New AssistantReply With {.Text = AssistantCoreTests.LetterAnswer}, AssistantCoreTests.Letter, Today)
+                Dim expected As DecisionLetterProposal = AssistantService.ReadLetterReply(New AssistantReply With {.Text = AssistantTestSupport.LetterAnswer}, AssistantTestSupport.Letter, Today)
                 Assert.AreEqual(3, submission.ReviewerResponses.Count)
                 CollectionAssert.AreEqual({"Reviewer 1", "Reviewer 1", "Reviewer 2"}, submission.ReviewerResponses.Select(Function(item) item.ReviewerLabel).ToList())
                 For index As Integer = 0 To 2
@@ -149,7 +149,7 @@ Public Class DecisionLetterTests
                     Assert.IsNotNull(response.CommentSuggestion)
                     Assert.AreEqual(AssistantService.DecisionLetterFeature, response.CommentSuggestion.Feature)
                     Assert.AreEqual("claude-opus-5-5", response.CommentSuggestion.Model)
-                    Assert.AreEqual(AssistantCoreTests.Letter.Substring(candidate.SourceStart, candidate.SourceLength).Trim(), response.CommentSuggestion.SourceText, "The letter's own text it came from.")
+                    Assert.AreEqual(AssistantTestSupport.Letter.Substring(candidate.SourceStart, candidate.SourceLength).Trim(), response.CommentSuggestion.SourceText, "The letter's own text it came from.")
                     Assert.IsNull(response.ResponseSuggestion)
                 Next
                 Assert.IsFalse(submission.ReviewerResponses.Any(Function(item) item.CommentText.Contains("figure")), "Not added unless checked.")
@@ -164,9 +164,9 @@ Public Class DecisionLetterTests
                 Dim provider As FakeProvider = UseProvider()
                 provider.Truncated = True
                 Dim submission As JournalSubmission = SubmissionWithOneComment()
-                Using letterDialog As New DecisionLetterForm(DecisionLetterMode.NewDecision, submission, AssistantCoreTests.Letter, Today)
+                Using letterDialog As New DecisionLetterForm(DecisionLetterMode.NewDecision, submission, AssistantTestSupport.Letter, Today)
                     ShowOffscreen(letterDialog)
-                    Assert.AreEqual(AssistantCoreTests.Letter, letterDialog.LetterBox.Text, "The letter passed in is ready to read.")
+                    Assert.AreEqual(AssistantTestSupport.Letter, letterDialog.LetterBox.Text, "The letter passed in is ready to read.")
                     Assert.AreEqual("Read Letter sends only the letter's text to Claude, with PaperRoute's instructions. Nothing else from your library is sent.", letterDialog.IntroText)
                     Assert.IsFalse(letterDialog.ReadAgainButton.Visible)
 
@@ -180,7 +180,7 @@ Public Class DecisionLetterTests
                     ' Read Again goes back to the letter, still pasted.
                     letterDialog.ReadAgainButton.PerformClick()
                     Assert.IsFalse(letterDialog.IsReviewing)
-                    Assert.AreEqual(AssistantCoreTests.Letter, letterDialog.LetterBox.Text)
+                    Assert.AreEqual(AssistantTestSupport.Letter, letterDialog.LetterBox.Text)
                     Assert.AreEqual("Read Letter", letterDialog.PrimaryButton.Text)
                     letterDialog.ReadLetterAsync().GetAwaiter().GetResult()
                     Assert.AreEqual(2, provider.Requests.Count)
@@ -215,7 +215,7 @@ Public Class DecisionLetterTests
                     Dim edited As AcceptedLetterComment = letterDialog.AcceptedComments(0)
                     Assert.AreEqual("Referee 2", edited.ReviewerLabel)
                     Assert.AreEqual("The discussion should address how clinicians' experience moderates anchoring.", edited.Text)
-                    Assert.AreEqual(AssistantCoreTests.Letter.Substring(found.SourceStart, found.SourceLength), edited.SourceExcerpt, "The source stays the letter's text.")
+                    Assert.AreEqual(AssistantTestSupport.Letter.Substring(found.SourceStart, found.SourceLength), edited.SourceExcerpt, "The source stays the letter's text.")
                     Assert.AreEqual("Please add a figure showing the anchoring effect by experience.", letterDialog.AcceptedComments(1).Text)
                     Assert.AreEqual(String.Empty, letterDialog.AcceptedComments(1).SourceExcerpt, "Not in the letter: nothing is recorded as its source.")
 
@@ -246,7 +246,7 @@ Public Class DecisionLetterTests
                     Function(dialog, owner)
                         Dim letterDialog As DecisionLetterForm = DirectCast(dialog, DecisionLetterForm)
                         ShowOffscreen(letterDialog)
-                        letterDialog.LetterBox.Text = AssistantCoreTests.Letter
+                        letterDialog.LetterBox.Text = AssistantTestSupport.Letter
                         letterDialog.ReadLetterAsync().GetAwaiter().GetResult()
                         Assert.IsTrue(letterDialog.IsReviewing)
                         letterDialog.CancelForTest()
@@ -271,7 +271,7 @@ Public Class DecisionLetterTests
                             Return DialogResult.Cancel
                         End If
                         ShowOffscreen(letterDialog)
-                        letterDialog.LetterBox.Text = AssistantCoreTests.Letter
+                        letterDialog.LetterBox.Text = AssistantTestSupport.Letter
                         letterDialog.ReadLetterAsync().GetAwaiter().GetResult()
                         letterDialog.AcceptForTest()
                         Return Finish(letterDialog)
@@ -283,7 +283,7 @@ Public Class DecisionLetterTests
                 ' A failure says so plainly and keeps the letter to try again.
                 Dim serverError As Exception = New HttpRequestException("Server error", Nothing, HttpStatusCode.InternalServerError)
                 For Each failure In {
-                    (Problem:=serverError, Answer:=AssistantCoreTests.LetterAnswer, Expected:="Claude had a problem on its side (HTTP 500). Try again later. Nothing was changed."),
+                    (Problem:=serverError, Answer:=AssistantTestSupport.LetterAnswer, Expected:="Claude had a problem on its side (HTTP 500). Try again later. Nothing was changed."),
                     (Problem:=CType(Nothing, Exception), Answer:="I can't help with that.", Expected:="The answer wasn't in the expected format. Nothing was changed.")
                 }
                     provider.Failure = failure.Problem
@@ -293,11 +293,11 @@ Public Class DecisionLetterTests
                         Function(dialog, owner)
                             Dim letterDialog As DecisionLetterForm = DirectCast(dialog, DecisionLetterForm)
                             ShowOffscreen(letterDialog)
-                            letterDialog.LetterBox.Text = AssistantCoreTests.Letter
+                            letterDialog.LetterBox.Text = AssistantTestSupport.Letter
                             letterDialog.ReadLetterAsync().GetAwaiter().GetResult()
                             Assert.IsFalse(letterDialog.IsReviewing)
                             shown = letterDialog.StatusText
-                            Assert.AreEqual(AssistantCoreTests.Letter, letterDialog.LetterBox.Text, "The letter is kept to try again.")
+                            Assert.AreEqual(AssistantTestSupport.Letter, letterDialog.LetterBox.Text, "The letter is kept to try again.")
                             Assert.IsTrue(letterDialog.PrimaryButton.Enabled)
                             Assert.AreEqual("Cancel", letterDialog.CancelButtonForTest.Text)
                             letterDialog.CancelForTest()
@@ -321,11 +321,11 @@ Public Class DecisionLetterTests
                         asked.Add(request)
                         Return CType(Nothing, Boolean?)
                     End Function
-                Using letterDialog As New DecisionLetterForm(DecisionLetterMode.NewDecision, New JournalSubmission(), AssistantCoreTests.Letter, Today)
+                Using letterDialog As New DecisionLetterForm(DecisionLetterMode.NewDecision, New JournalSubmission(), AssistantTestSupport.Letter, Today)
                     ShowOffscreen(letterDialog)
                     letterDialog.ReadLetterAsync().GetAwaiter().GetResult()
                     Assert.AreEqual(1, asked.Count)
-                    Assert.AreEqual(AssistantCoreTests.Letter, asked(0).Content, "The question shows exactly the letter.")
+                    Assert.AreEqual(AssistantTestSupport.Letter, asked(0).Content, "The question shows exactly the letter.")
                     Assert.AreEqual(0, provider.Requests.Count, "Nothing was sent.")
                     Assert.IsFalse(letterDialog.IsReviewing)
                     Assert.AreEqual("Nothing was sent.", letterDialog.StatusText)
@@ -359,11 +359,11 @@ Public Class DecisionLetterTests
                     Assert.IsTrue(letterDialog.PrimaryButton.Enabled)
                     Assert.AreEqual(String.Empty, letterDialog.StatusText)
 
-                    letterDialog.LetterBox.Text = AssistantCoreTests.Letter
+                    letterDialog.LetterBox.Text = AssistantTestSupport.Letter
                     Assert.IsFalse(letterDialog.SentBox.Visible)
                     letterDialog.ToggleSentForTest()
                     Assert.IsTrue(letterDialog.SentBox.Visible)
-                    Dim sent As String = AssistantService.WhatIsSent(AssistantService.BuildLetterRequest(AssistantCoreTests.Letter))
+                    Dim sent As String = AssistantService.WhatIsSent(AssistantService.BuildLetterRequest(AssistantTestSupport.Letter))
                     Assert.AreEqual(sent.Replace(vbCrLf, vbLf).Replace(vbLf, vbCrLf), letterDialog.SentBox.Text)
                     letterDialog.LetterBox.AppendText(vbCrLf & "Reviewer 3" & vbCrLf & "Add a limitations section.")
                     StringAssert.Contains(letterDialog.SentBox.Text, "Add a limitations section.", "What is shown follows the letter.")
@@ -378,18 +378,18 @@ Public Class DecisionLetterTests
     Public Sub WhenTheAssistantCantBeUsedTheWindowSaysWhyAndSendsNothing()
         RunOnSta(
             Sub()
-                Dim network As New AssistantCoreTests.CapturingNetwork()
+                Dim network As New AssistantTestSupport.CapturingNetwork()
                 OnlineAccess.InnerHandlerFactory = Function() network
-                OnlineAccess.Configure(AssistantCoreTests.ClaudeSettings())
+                OnlineAccess.Configure(AssistantTestSupport.ClaudeSettings())
                 Assert.IsTrue(AssistantRunner.IsTurnedOn())
-                Using letterDialog As New DecisionLetterForm(DecisionLetterMode.NewDecision, New JournalSubmission(), AssistantCoreTests.Letter, Today)
+                Using letterDialog As New DecisionLetterForm(DecisionLetterMode.NewDecision, New JournalSubmission(), AssistantTestSupport.Letter, Today)
                     ShowOffscreen(letterDialog)
                     StringAssert.Contains(letterDialog.IntroText, "to Claude at api.anthropic.com, with PaperRoute's instructions.")
                     letterDialog.ReadLetterAsync().GetAwaiter().GetResult()
                     StringAssert.StartsWith(letterDialog.StatusText, "Add your Claude key")
                     Assert.IsFalse(letterDialog.IsReviewing)
 
-                    Dim offline As OnlineServicesSettings = AssistantCoreTests.ClaudeSettings()
+                    Dim offline As OnlineServicesSettings = AssistantTestSupport.ClaudeSettings()
                     offline.WorkOffline = True
                     OnlineAccess.Configure(offline)
                     letterDialog.ReadLetterAsync().GetAwaiter().GetResult()
@@ -407,7 +407,7 @@ Public Class DecisionLetterTests
             Sub()
                 Dim provider As FakeProvider = UseProvider()
                 provider.WaitForCancel = True
-                Dim letterDialog As New DecisionLetterForm(DecisionLetterMode.NewDecision, New JournalSubmission(), AssistantCoreTests.Letter, Today)
+                Dim letterDialog As New DecisionLetterForm(DecisionLetterMode.NewDecision, New JournalSubmission(), AssistantTestSupport.Letter, Today)
                 Try
                     ShowOffscreen(letterDialog)
                     Dim reading As Task = letterDialog.ReadLetterAsync()
@@ -452,7 +452,7 @@ Public Class DecisionLetterTests
                 UseProvider()
                 Dim manuscript As Manuscript = Fixture()
                 Dim submission As JournalSubmission = manuscript.Submissions(0)
-                Dim first As New EditorialDecisionEvent With {.Decision = EditorialDecision.MajorRevision, .DecisionDate = New DateTime(2026, 9, 15), .Notes = AssistantCoreTests.Letter}
+                Dim first As New EditorialDecisionEvent With {.Decision = EditorialDecision.MajorRevision, .DecisionDate = New DateTime(2026, 9, 15), .Notes = AssistantTestSupport.Letter}
                 submission.Decisions.Add(first)
                 ReviewerResponseService.AddItem(submission, New ReviewerResponseItem With {
                     .DecisionId = first.Id, .RevisionRoundNumber = 1, .ReviewerLabel = "Reviewer 1",
@@ -463,7 +463,7 @@ Public Class DecisionLetterTests
                     Function(dialog, owner)
                         Dim letterDialog As DecisionLetterForm = DirectCast(dialog, DecisionLetterForm)
                         ShowOffscreen(letterDialog)
-                        Assert.AreEqual(AssistantCoreTests.Letter, letterDialog.LetterBox.Text, "One decision: its notes hold the letter.")
+                        Assert.AreEqual(AssistantTestSupport.Letter, letterDialog.LetterBox.Text, "One decision: its notes hold the letter.")
                         Assert.AreEqual(0, letterDialog.DecisionBox.SelectedIndex, "The only decision is chosen.")
                         StringAssert.Contains(letterDialog.DecisionBox.Text, "Sep 15, 2026")
                         StringAssert.Contains(letterDialog.DecisionBox.Text, "Major revision")
@@ -503,7 +503,7 @@ Public Class DecisionLetterTests
                         ShowOffscreen(letterDialog)
                         Assert.AreEqual(-1, letterDialog.DecisionBox.SelectedIndex, "Two decisions: none chosen for the researcher.")
                         Assert.AreEqual(String.Empty, letterDialog.LetterBox.Text)
-                        letterDialog.LetterBox.Text = AssistantCoreTests.Letter
+                        letterDialog.LetterBox.Text = AssistantTestSupport.Letter
                         letterDialog.ReadLetterAsync().GetAwaiter().GetResult()
                         letterDialog.RoundBox.Value = 2
                         letterDialog.AcceptForTest()
@@ -582,7 +582,7 @@ Public Class DecisionLetterTests
                 Dim suggestion As AssistantSuggestion = AssistantService.SuggestionFor(AssistantService.DecisionLetterFeature, New AssistantReply With {.ProviderName = "Claude", .Model = "claude-opus-5-5"}, String.Empty, DateTime.UtcNow)
                 Using dialog As New AddDecisionForm()
                     Dim plainHeight As Integer = dialog.ClientSize.Height
-                    dialog.UseProposal(unclear, AssistantCoreTests.Letter, suggestion)
+                    dialog.UseProposal(unclear, AssistantTestSupport.Letter, suggestion)
                     ShowOffscreen(dialog)
                     Assert.IsTrue(dialog.BannerShown)
                     Assert.IsTrue(dialog.ClientSize.Height > plainHeight, "The dialog grows to hold the banner.")
@@ -629,7 +629,7 @@ Public Class DecisionLetterTests
                 }
                 Using dialog As New AddDecisionForm()
                     dialog.NotesBox.Text = "My own notes."
-                    dialog.UseProposal(early, AssistantCoreTests.Letter, Nothing)
+                    dialog.UseProposal(early, AssistantTestSupport.Letter, Nothing)
                     Assert.AreEqual("Minor Revision", dialog.DecisionList.Text)
                     Assert.IsTrue(dialog.DeadlineCheck.Checked)
                     Assert.IsTrue(dialog.DeadlinePicker.Enabled)
@@ -662,9 +662,9 @@ Public Class DecisionLetterTests
                 Dim dayText As Func(Of DateTime, String) = Function(day) day.ToString("MMM d, yyyy", Globalization.CultureInfo.CurrentCulture)
                 Dim noDate As DecisionLetterProposal = AssistantService.ReadLetterReply(
                     New AssistantReply With {.Text = "{""decision"":""major_revision"",""deadline_days"":60,""deadline_quote"":""Please submit your revised manuscript within 60 days."",""comments"":[]}"},
-                    AssistantCoreTests.Letter, now)
+                    AssistantTestSupport.Letter, now)
                 Using dialog As New AddDecisionForm()
-                    dialog.UseProposal(noDate, AssistantCoreTests.Letter, Nothing)
+                    dialog.UseProposal(noDate, AssistantTestSupport.Letter, Nothing)
                     Assert.AreEqual(now.AddDays(60), dialog.DeadlinePicker.Value.Date)
                     StringAssert.Contains(dialog.BannerBox.Text, "Decision date: not found in the letter; today's date is filled in.")
                     StringAssert.Contains(dialog.BannerBox.Text, "Revision deadline: 60 days after " & dayText(now) & " (today)")
@@ -708,7 +708,7 @@ Public Class DecisionLetterTests
                 ' A letter date far from today is reported, and no deadline is worked out from it.
                 Dim old As DecisionLetterProposal = AssistantService.ReadLetterReply(
                     New AssistantReply With {.Text = "{""decision"":""major_revision"",""decision_date"":""2022-03-03"",""deadline_days"":60,""deadline_quote"":""Please submit your revised manuscript within 60 days."",""comments"":[]}"},
-                    AssistantCoreTests.Letter, Today)
+                    AssistantTestSupport.Letter, Today)
                 Using dialog As New AddDecisionForm()
                     dialog.UseProposal(old, String.Empty, Nothing)
                     Assert.IsFalse(dialog.DeadlineCheck.Checked)
@@ -720,7 +720,7 @@ Public Class DecisionLetterTests
                 ' ...and a letter that gives no deadline isn't said to have one.
                 Dim oldRejection As DecisionLetterProposal = AssistantService.ReadLetterReply(
                     New AssistantReply With {.Text = "{""decision"":""rejected"",""decision_date"":""2022-03-03"",""deadline_date"":"""",""deadline_days"":0,""comments"":[]}"},
-                    AssistantCoreTests.Letter, Today)
+                    AssistantTestSupport.Letter, Today)
                 Using dialog As New AddDecisionForm()
                     dialog.UseProposal(oldRejection, String.Empty, Nothing)
                     StringAssert.Contains(dialog.BannerBox.Text, "Revision deadline: none found in the letter.")
@@ -770,7 +770,7 @@ Public Class DecisionLetterTests
                     Assert.IsFalse(Descendants(matrix).OfType(Of Button)().Any(Function(button) button.Text = "Add from &Letter..."))
 
                     ' Turned on while open: shown at the next refresh, after Add Comment.
-                    OnlineAccess.Configure(AssistantCoreTests.ClaudeSettings())
+                    OnlineAccess.Configure(AssistantTestSupport.ClaudeSettings())
                     matrix.RefreshFromSubmission()
                     Application.DoEvents()
                     Dim fromLetter As Button = Descendants(matrix).OfType(Of Button)().Single(Function(button) button.Text = "Add from &Letter...")
@@ -806,7 +806,7 @@ Public Class DecisionLetterTests
                 submission.Decisions.Add(New EditorialDecisionEvent With {.Decision = EditorialDecision.MajorRevision, .DecisionDate = New DateTime(2026, 9, 15)})
 
                 For Each letterMode As DecisionLetterMode In {DecisionLetterMode.NewDecision, DecisionLetterMode.ExistingDecision}
-                    Using letterDialog As New DecisionLetterForm(letterMode, submission, AssistantCoreTests.Letter, Today)
+                    Using letterDialog As New DecisionLetterForm(letterMode, submission, AssistantTestSupport.Letter, Today)
                         ShowOffscreen(letterDialog)
                         letterDialog.Size = letterDialog.MinimumSize
                         letterDialog.PerformLayout()
@@ -849,9 +849,9 @@ Public Class DecisionLetterTests
                     matrix.Close()
                 End Using
 
-                Dim proposal As DecisionLetterProposal = AssistantService.ReadLetterReply(New AssistantReply With {.Text = AssistantCoreTests.LetterAnswer, .ProviderName = "Claude", .Model = "claude-opus-5-5"}, AssistantCoreTests.Letter, Today)
+                Dim proposal As DecisionLetterProposal = AssistantService.ReadLetterReply(New AssistantReply With {.Text = AssistantTestSupport.LetterAnswer, .ProviderName = "Claude", .Model = "claude-opus-5-5"}, AssistantTestSupport.Letter, Today)
                 Using dialog As New AddDecisionForm()
-                    dialog.UseProposal(proposal, AssistantCoreTests.Letter, Nothing)
+                    dialog.UseProposal(proposal, AssistantTestSupport.Letter, Nothing)
                     ShowOffscreen(dialog)
                     For Each control As Control In Descendants(dialog).Where(Function(item) TypeOf item Is Button OrElse TypeOf item Is TextBox OrElse TypeOf item Is ComboBox OrElse TypeOf item Is DateTimePicker OrElse TypeOf item Is CheckBox)
                         AssertInside(control)
@@ -882,7 +882,7 @@ Public Class DecisionLetterTests
                     AssertDistinctAccelerators(matrix)
                 End Using
                 For Each letterMode As DecisionLetterMode In {DecisionLetterMode.NewDecision, DecisionLetterMode.ExistingDecision}
-                    Using letterDialog As New DecisionLetterForm(letterMode, submission, AssistantCoreTests.Letter, Today)
+                    Using letterDialog As New DecisionLetterForm(letterMode, submission, AssistantTestSupport.Letter, Today)
                         ShowOffscreen(letterDialog)
                         letterDialog.ReadLetterAsync().GetAwaiter().GetResult()
                         AssertNoLostAmpersands(letterDialog)
@@ -1041,7 +1041,7 @@ Public Class DecisionLetterTests
 
         Public ReadOnly Requests As New List(Of AssistantRequest)()
 
-        Public Property Answer As String = AssistantCoreTests.LetterAnswer
+        Public Property Answer As String = AssistantTestSupport.LetterAnswer
 
         Public Property Failure As Exception
 
