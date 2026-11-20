@@ -76,6 +76,37 @@ Public Class PlatformServicesTests
 
 
     <TestMethod>
+    Public Sub ResetForTestsPutsEveryMemberBack()
+
+        PlatformServices.Secrets = UnavailableSecretProtector.Instance
+        PlatformServices.Launcher = UnavailableLauncher.Instance
+        PlatformServices.FileIdentity = New KnownFileIdentity()
+        PlatformServices.Clock = New FixedTimeProvider(DateTimeOffset.UnixEpoch)
+        PlatformServices.NewId = CoreTestPlatform.CounterIds()
+
+        PlatformServices.ResetForTests(CoreTestPlatform.Secrets, CoreTestPlatform.Launcher)
+
+        Assert.AreSame(CoreTestPlatform.Secrets, PlatformServices.Secrets)
+        Assert.AreSame(CoreTestPlatform.Launcher, PlatformServices.Launcher)
+        Assert.AreSame(NoFileIdentity.Instance, PlatformServices.FileIdentity)
+        Assert.AreSame(TimeProvider.System, PlatformServices.Clock)
+        Assert.AreNotEqual(New Guid("00000001-0000-0000-0000-000000000000"), CoreIds.NewId())
+
+    End Sub
+
+
+    ' Knows every file as "x": only to move FileIdentity off its default.
+    Private NotInheritable Class KnownFileIdentity
+        Implements IFileIdentity
+
+        Public Function Identify(filePath As String) As String Implements IFileIdentity.Identify
+            Return "x"
+        End Function
+
+    End Class
+
+
+    <TestMethod>
     Public Sub TheTestKeyProtectorRoundTripsAndRefusesForeignBytes()
 
         Dim clear As Byte() = Encoding.UTF8.GetBytes("https://api.openalex.org" & vbLf & "abc123")
