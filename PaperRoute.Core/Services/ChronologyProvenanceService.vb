@@ -338,7 +338,7 @@ Namespace Services
         ) As DateTime
 
             If Not value.HasValue Then
-                Return DateTime.UtcNow
+                Return CoreClock.UtcNow
             End If
 
             Select Case value.Value.Kind

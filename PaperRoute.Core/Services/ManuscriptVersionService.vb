@@ -45,7 +45,7 @@ Namespace Services
                 .CreatedDate = If(
                     createdDate.HasValue,
                     createdDate.Value,
-                    DateTime.Now
+                    CoreClock.Now
                 ),
                 .Label = NormalizeText(label),
                 .Notes = NormalizeText(notes),

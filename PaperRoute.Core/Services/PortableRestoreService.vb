@@ -2150,7 +2150,7 @@ Namespace Services
             Return Path.Combine(
                 backupDirectory,
                 "PaperRoute_PreRestore_" &
-                DateTime.Now.ToString("yyyy-MM-dd_HHmmss") &
+                CoreClock.Now.ToString("yyyy-MM-dd_HHmmss") &
                 ".zip"
             )
 

@@ -149,7 +149,7 @@ Namespace Services
                             .TargetJournal = String.Empty,
                             .CurrentStage = PaperStage.Draft,
                             .Location = ManuscriptLocation.Pipeline,
-                            .StageEnteredDate = DateTime.Now
+                            .StageEnteredDate = CoreClock.Now
                         }
 
                         manuscriptsByTitle.Add(title, manuscript)
@@ -407,7 +407,7 @@ Namespace Services
                     If submittedDate.HasValue Then
                         manuscript.FileDrawerDate = submittedDate.Value
                     Else
-                        manuscript.FileDrawerDate = DateTime.Now
+                        manuscript.FileDrawerDate = CoreClock.Now
                     End If
 
                 Case ""
@@ -430,7 +430,7 @@ Namespace Services
 
             End Select
 
-            manuscript.StageEnteredDate = DateTime.Now
+            manuscript.StageEnteredDate = CoreClock.Now
 
         End Sub
 

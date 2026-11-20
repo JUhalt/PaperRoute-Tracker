@@ -282,7 +282,7 @@ Namespace Services
                         importAsPublished AndAlso
                         record.PublishedDate.HasValue,
                         record.PublishedDate.Value,
-                        DateTime.Now
+                        CoreClock.Now
                     )
             }
 

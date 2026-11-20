@@ -46,7 +46,7 @@ Namespace Services
             End Try
 
             Dim payload As New Dictionary(Of String, Object) From {
-                {"SchemaVersion", 6}, {"UpdatedAtUtc", DateTime.UtcNow.ToString("O")}
+                {"SchemaVersion", 6}, {"UpdatedAtUtc", CoreClock.UtcNow.ToString("O")}
             }
             ' Flushed and swapped in, keeping the old marker as schema.v5.bak:
             ' a power cut must never leave an empty schema.json (#125).

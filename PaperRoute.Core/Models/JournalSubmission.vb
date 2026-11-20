@@ -17,7 +17,7 @@ Namespace Models
 
         Public Property ManuscriptNumber As String = String.Empty
 
-        Public Property SubmittedDate As DateTime = DateTime.Now
+        Public Property SubmittedDate As DateTime = CoreClock.Now
 
         Public Property FollowUpDate As DateTime? = Nothing
 

@@ -10,7 +10,7 @@ Namespace Models
 
         Public Property LastModifiedAtUtc As DateTime? = Nothing
 
-        Public Property CreatedDate As DateTime = DateTime.Now
+        Public Property CreatedDate As DateTime = CoreClock.Now
 
         Public Property Label As String = String.Empty
 

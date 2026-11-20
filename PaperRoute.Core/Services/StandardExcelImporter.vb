@@ -257,7 +257,7 @@ Namespace Services
                     .TargetJournal = targetJournal,
                     .CurrentStage = stage,
                     .Location = location,
-                    .StageEnteredDate = If(stageEnteredDate.HasValue, stageEnteredDate.Value, DateTime.Now),
+                    .StageEnteredDate = If(stageEnteredDate.HasValue, stageEnteredDate.Value, CoreClock.Now),
                     .FileDrawerDate = fileDrawerDate,
                     .FileDrawerReason = fileDrawerReason
                 }

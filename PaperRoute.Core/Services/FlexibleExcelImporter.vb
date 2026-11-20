@@ -390,7 +390,7 @@ Namespace Services
                             .TargetJournal = String.Empty,
                             .CurrentStage = PaperStage.Draft,
                             .Location = ManuscriptLocation.Pipeline,
-                            .StageEnteredDate = DateTime.Now,
+                            .StageEnteredDate = CoreClock.Now,
                             .History = New List(Of HistoryEvent)(),
                             .Submissions = New List(Of JournalSubmission)()
                         }
@@ -633,7 +633,7 @@ Namespace Services
                     manuscript.History.Add(
                         New HistoryEvent With {
                             .Id = Guid.NewGuid(),
-                            .EventDate = DateTime.Now,
+                            .EventDate = CoreClock.Now,
                             .Stage = manuscript.CurrentStage,
                             .Note = "Imported note: " & notes
                         }
@@ -662,7 +662,7 @@ Namespace Services
 
             If Not submittedDate.HasValue Then
 
-                submittedDate = DateTime.Now.Date
+                submittedDate = CoreClock.Now.Date
 
                 result.Warnings.Add(
                     "Row " & rowNumber.ToString() &
