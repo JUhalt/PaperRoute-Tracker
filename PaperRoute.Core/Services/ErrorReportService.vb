@@ -61,10 +61,7 @@ Namespace Services
 
         Public Shared Function DefaultDirectory() As String
 
-            Return Path.Combine(
-                StorageMigrationService.CurrentDataRoot(),
-                "logs"
-            )
+            Return StorageLocations.LogsFolder()
 
         End Function
 

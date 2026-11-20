@@ -92,10 +92,7 @@ Namespace Services
 
         Private Shared Function GetDefaultDataDirectory() As String
 
-            Return Path.Combine(
-                StorageMigrationService.CurrentDataRoot(),
-                "data"
-            )
+            Return StorageLocations.LibraryDataFolder()
 
         End Function
 
