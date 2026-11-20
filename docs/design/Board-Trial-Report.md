@@ -14,20 +14,20 @@ Draft of November 20, 2026. Four parts wait for a person: the look of the Board 
 
 ## 1. What the trial built
 
-Steps are those of design section 8. Pull request #399 (steps 11 to 13) is open; all the others are merged.
+Steps are those of design section 8. Every pull request named here is merged; #399 (steps 11 to 13) merged on November 20, 2026, after this report's numbers were taken from its head, 44d62e0.
 
 | Step | What | State | Pull request |
 |---:|---|---|---|
-| 0 | Maintainer's answers; tracker issue | Tracker #160 exists. The decisions of 2026-11-15 (C#, on master, two tracks) are recorded in the design. Whether every step 0 item (weights, H, names) was answered in #160 was not checked. | none |
+| 0 | Maintainer's answers; tracker issue | Tracker #160 exists. The maintainer decided three things on 2026-11-15, recorded on #160: C# over the VB core, on master, two tracks. The design's other step 0 items (the names, two solution files, no developer tools, the checklist weights, H = 6) were taken at the design's defaults when work began on 2026-11-19 and reported to the maintainer, who has not yet confirmed them. `--snapshot` of the real library was held back. | none |
 | 1 | PR A: fixture project | Done | #378 |
 | 2 | PR B: empty trial solution | Done | #384 |
 | 3 to 5 | Session and startup; Board rules; #338 and debounce | Done | #383 |
 | 6 to 8 | Styles; shell; Board without cards | Done (core-reference guard and sort pins added) | #390 |
 | 9, 10 | Cards and shelves (every card); arrow keys | Done | #396 |
-| 11 | High contrast | Built and tested headless. The look on a real contrast theme waits for the maintainer. | #399 (open) |
-| 11b | `--snapshot-from` | Built; Linux path fix in 44d62e0 | #399 (open) |
-| 12 | Pictures, budgets, `--measure` | Built. Four budget rows wait under rows of N. | #399 (open) |
-| 13 | Rows of N behind a constant | Built; it is the default (`ShelfLayout.Option = "b"`; `-p:ShelfOption=a` builds every card) | #399 (open) |
+| 11 | High contrast | Built and tested headless. The look on a real contrast theme waits for the maintainer. | #399 |
+| 11b | `--snapshot-from` | Built; Linux path fix in 44d62e0 | #399 |
+| 12 | Pictures, budgets, `--measure` | Built. Four budget rows wait under rows of N. | #399 |
+| 13 | Rows of N behind a constant | Built; it is the default (`ShelfLayout.Option = "b"`; `-p:ShelfOption=a` builds every card) | #399 |
 | 14 | `--snapshot` of the real library | Not built. The argument is refused with exit code 2. Waits for the maintainer's word. | none |
 | 15 | `--platform-check` and the `trial-linux` CI job | CI job done. `--platform-check` and the Linux checklist are not built. | #398 |
 | 16 | Spikes | Working copy done. VB `.axaml` done as a throwaway folder outside the repository, never committed. | #393 |
@@ -168,7 +168,9 @@ What it needed:
 - Pictures go to a folder named by `PAPERROUTE_TRIAL_PICTURES`, because MSTest does not tell a test where `--results-directory` points.
 - `.axaml` files are linked as `Content`, because Avalonia's build removes every `None` item named `*.axaml`.
 
-Pass mark of design 6.1: the Release run and CI pass. **Not measured:** ten local runs in a row with no flake, and a Debug run of the full suite. The harness hours are not separate from the other trailers.
+Pass mark of design 6.1: the Release run and CI pass; all four checks of run 44703237752 passed. **Not measured:** ten local runs in a row with no flake, and a Debug run of all 181 tests (the last Debug run, of 178 tests, was on 5c6f608). The harness hours are not separate from the other trailers.
+
+**The enforced budget rows can fail on a busy PC.** Locally in Release they are held at the budget with no multiplier, as today's `ResponsivenessBudgetTests` are. On 2026-11-20, two full local runs on the quiet development PC passed (03:25 and 03:30). Two later full runs, made while other agent work was using the PC, each failed one enforced row: back to All stages at 257 ms against 250 (the run that ended at 04:03), and the open list at 329 ms against 250 (the run that ended at 04:08). Each time the budget tests passed when run alone a minute later. Those two runs were on core stage 2 branches merged with master, so they also had a different core. A third full run, on the branch that holds all of core stage 2 and made once the other work had ended, passed all 181 (it ended at 04:11). So the cause was the busy PC, not the core. CI holds the rows at three times the budget and passed with room (section 4.1).
 
 ### 3.4 The working-copy spike
 
@@ -322,7 +324,7 @@ Not confirmed: that Avalonia's Win32 platform reports `ContrastPreference.High` 
 
 ### 5.3 Checklist for a person
 
-For the maintainer: run the trial (pull request #399's build) on Windows and work through these. Note what you see after each item.
+For the maintainer: run the trial (master's build, `PaperRoute.Desktop`) on Windows and work through these. Note what you see after each item.
 
 1. Turn on Night sky, then Desert (Aquatic and Dusk if there is time). The Board should switch at once, with no restart. Switching back should restore Light or Dark.
 2. Compare with the real theme: window background, text, gray text, the selection colour (link text, selected tab underline, card focus ring, route dots) and the HotTrack colour on the focus rings of buttons, links and tabs.
@@ -464,18 +466,18 @@ The port follows today's code in each case below.
 
 For the maintainer: please choose an option for each item below.
 
-1. **Rows of N as the default.** Options: keep it; go back to every card; decide after the Narrator pass. Recommendation: keep it now and confirm after the Narrator checks of section 6. Every card failed all four switch rows in the real window.
+1. **Rows of N as the default.** Options: keep it; go back to every card; decide after the Narrator pass. Recommendation: keep it now and confirm after the Narrator checks of section 6. Every card went over all four switch rows in the real window, measured after the choice was made (section 4.3).
 2. **The every-card build (`-p:ShelfOption=a`).** Options: keep it selectable; remove it. Recommendation: remove it once rows of N is confirmed. CI no longer builds or tests it, so it will drift.
 3. **Which reading the budget verdicts rest on.** Options: the real window (the design's switch rule; two rows over); headless (four rows waiting); CI × 3. Recommendation: verdicts on the real window, headless as the guard in CI. This also settles the "500 library" item of f (0 or 5).
 4. **The two rows over in a real window.** Options: make the card view cheaper; port today's fill strategy (Published prepared while idle, first screen only), which design 4.4 and plan :428 said not to port; defer the hidden shelf's updates; accept and change the budget. Recommendation: make the card view cheaper first. The per-card cost is the root of every miss, and it would help every card-heavy page.
-5. **How k is read, and H.** Options: k from agent wall-clock hours only; k from the maintainer's hours once logged; both. Recommendation: both, as the design says, after the maintainer states H and logs review hours on #160. Do not use the agent-hour k as a calendar forecast.
+5. **How k is read, and H.** Options: k from agent wall-clock hours only; k from the maintainer's hours once logged; both. Recommendation: both, as the design says, after the maintainer states H and logs review hours on #160. Do not use the agent-hour k as a calendar forecast. The checklist weights of section 2.3 stayed as the design fixed them before work started; changing them now would let them follow the result.
 6. **`--snapshot` of the real library (step 14).** Options: build it; drop it from the trial. The evidence supports neither strongly. `--snapshot-from` was enough for the real-window run.
 7. **Linux.** Options: find a Linux machine or use the VirtualBox guest for the steps of section 7; wait until a later unit. Also issue #395's three options for a missing Documents folder (do not verify and create on first use; fall back to the home folder; ask at first run).
 8. **Dark mode's primary text `#F0F0F0`, and the system accent for search selection.** Options: accept; pick other values.
 9. **The two #383 rule departures** (zero-count chip, missing target journal). Recommendation: accept. They match today's app, which the port is meant to keep.
 10. **Contrast for Fluent's menus, scroll bars, tooltips and focus visuals.** Options: size control themes in unit 0; accept Fluent's palette there. Recommendation: size them in unit 0, as design section 9 foresaw; the real-theme look (section 5.3) will show how bad they are.
 11. **The VB spike's place.** It is a folder outside the repository, not a scratch branch. Options: leave it; put it on a scratch branch for the record.
-12. **The MSTest pass mark.** Options: run ten local runs and a Debug run before calling question 3 closed; accept CI's green runs. Recommendation: run them once; it is cheap and closes the mark. An agent can run them; no person is needed.
+12. **The MSTest pass mark, and the budget rows on a busy PC.** Options: run ten local runs and a Debug run before calling question 3 closed; accept CI's green runs. Recommendation: run them once on a quiet PC; it is cheap and closes the mark. An agent can run them; no person is needed. Separately: two full local runs failed one enforced budget row each while the PC was busy (section 3.3). Options: accept it, as today's Windows Forms budget tests behave the same way; or give the enforced rows a local margin. Recommendation: accept it, and say in the test's failure message that the PC must be quiet.
 
 ## 11. Not done, and not checked
 
@@ -488,11 +490,9 @@ Not done:
 - a cheaper card view, idle preparation of Published, deferred updates of a hidden shelf.
 
 Not checked or not measured:
-- the maintainer's hours (none logged), the orchestrating session's hours, CI time, the VB spike's time, and the hours of 17c56e4;
-- whether step 0's full answers are in #160 (its comments were not read);
+- the maintainer's hours (none logged), the orchestrating session's hours, CI time, and the hours of 17c56e4;
 - ten local test runs with no flake, and a Debug run of the 181 tests;
 - the Windows Forms app in a real window, or on 2026-11-20;
-- the "Windows Build" job of run 44703237752, still without a conclusion when read; both trial jobs had passed;
 - whether Avalonia reports a Windows contrast theme, and whether Input-priority probe ticks match `WM_TIMER`;
 - the Ubuntu count of 132 for run 44681774261, taken from the notes.
 
