@@ -2,10 +2,13 @@ Imports System
 Imports System.Collections.Generic
 Imports System.IO
 Imports System.Linq
-Imports System.Text.RegularExpressions
+Imports System.Reflection
+Imports System.Reflection.Emit
+Imports System.Runtime.CompilerServices
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
 Imports ManuscriptPipeline
 Imports ManuscriptPipeline.Models
+Imports ManuscriptPipeline.Services
 
 ' CoreClock and CoreIds (core stage 2, design 6.2 and risk R8). With the
 ' system clock each CoreClock member is the very DateTime call it stands
@@ -140,79 +143,222 @@ Public Class CoreClockTests
     ' Every read of the system clock in PaperRoute.Core goes through
     ' CoreClock (design 6.3), so a test clock reaches all of it. The one
     ' exception is OnlineAccess's Retry-After wait, an interval that is never
-    ' stored. Whole-line comments and string literals are skipped; a clock
-    ' name in a trailing comment is reported, and is easier to reword than
-    ' to allow.
+    ' stored. The scan reads the built assembly's IL, not its source, so it
+    ' sees a read however it is written: bare Now or Today, an Imports
+    ' alias, [DateTime], a line continuation, an interpolated string, a
+    ' lambda or a field initialiser.
     <TestMethod>
     Public Sub OnlyCoreClockReadsTheSystemClock()
 
-        Dim core As String = Path.Combine(TestRepository.Root(), "PaperRoute.Core")
-        Dim files As List(Of String) = SourceFiles(core)
-        Assert.IsTrue(files.Count >= 160, $"Only {files.Count} .vb files were found under {core}.")
-
-        Dim clockFile As String = Path.Combine(core, "Seams", "CoreClock.vb")
+        Dim clock As String = GetType(CoreClock).FullName
+        Dim platform As String = GetType(PlatformServices).FullName
         Dim allowed As String() = {
-            Path.Combine("Services", "OnlineAccess.vb") & "|RetryAfter.Date.Value - DateTimeOffset.UtcNow"
+            clock & ".get_Now|System.DateTime.get_Now",
+            clock & ".get_Now|System.TimeProvider.get_System",
+            clock & ".get_Now|System.TimeProvider.GetUtcNow",
+            clock & ".get_UtcNow|System.DateTime.get_UtcNow",
+            clock & ".get_UtcNow|System.TimeProvider.get_System",
+            clock & ".get_UtcNow|System.TimeProvider.GetUtcNow",
+            clock & ".get_Today|System.DateTime.get_Today",
+            clock & ".get_Today|System.TimeProvider.get_System",
+            platform & "..cctor|System.TimeProvider.get_System",
+            platform & ".ResetForTests|System.TimeProvider.get_System",
+            GetType(OnlineServiceBusyException).FullName & ".FromResponse|System.DateTimeOffset.get_UtcNow"
         }
 
-        ' The scan itself works: it finds the three reads CoreClock makes.
-        Assert.AreEqual(3, ClockReads(clockFile).Count, "The scan no longer finds CoreClock's own reads.")
-
-        Dim found As New List(Of String)()
-        For Each file As String In files
-            If String.Equals(file, clockFile, StringComparison.OrdinalIgnoreCase) Then Continue For
-            Dim relative As String = Path.GetRelativePath(core, file)
-            For Each read As (LineNumber As Integer, Text As String) In ClockReads(file)
-                Dim isAllowed As Boolean = allowed.Any(
-                    Function(entry) entry.StartsWith(relative & "|", StringComparison.OrdinalIgnoreCase) AndAlso
-                        read.Text.Contains(entry.Substring(relative.Length + 1), StringComparison.Ordinal))
-                If Not isAllowed Then found.Add($"{relative}:{read.LineNumber}: {read.Text}")
-            Next
-        Next
-
-        Assert.AreEqual(
-            0,
-            found.Count,
-            "Read the clock through CoreClock.Now, CoreClock.UtcNow or CoreClock.Today:" &
-            Environment.NewLine & String.Join(Environment.NewLine, found)
+        AssertOnlyTheseCalls(
+            Function(target) IsClockRead(target),
+            allowed,
+            "Read the clock through CoreClock.Now, CoreClock.UtcNow or CoreClock.Today:"
         )
 
     End Sub
 
 
-    Private Shared ReadOnly ClockRead As New Regex(
-        "\b(?:DateTime|DateTimeOffset|DateAndTime)\.(?:Now|UtcNow|Today)\b" &
-        "|(?<![\w.])Date\.(?:Now|UtcNow|Today)\b" &
-        "|\bTimeProvider\.System\.Get(?:Utc|Local)Now\b" &
-        "|\bMicrosoft\.VisualBasic\.(?:Now|Today)\b",
-        RegexOptions.IgnoreCase Or RegexOptions.CultureInvariant
-    )
-
-    ' A Visual Basic string literal ("" inside it is two adjacent matches).
-    Private Shared ReadOnly StringLiteral As New Regex("""[^""]*""", RegexOptions.CultureInvariant)
-
-
-    Private Shared Function SourceFiles(core As String) As List(Of String)
-        Dim skipped As String() = {
-            Path.DirectorySeparatorChar & "bin" & Path.DirectorySeparatorChar,
-            Path.DirectorySeparatorChar & "obj" & Path.DirectorySeparatorChar
-        }
-        Return Directory.EnumerateFiles(core, "*.vb", SearchOption.AllDirectories).
-            Where(Function(file) Not skipped.Any(Function(part) file.Substring(core.Length).Contains(part, StringComparison.OrdinalIgnoreCase))).
-            OrderBy(Function(file) file, StringComparer.Ordinal).
-            ToList()
+    Private Shared Function IsClockRead(target As MethodBase) As Boolean
+        Dim owner As String = If(target.DeclaringType?.FullName, String.Empty)
+        Select Case owner
+            Case "System.DateTime"
+                Return target.Name = "get_Now" OrElse target.Name = "get_UtcNow" OrElse target.Name = "get_Today"
+            Case "System.DateTimeOffset"
+                Return target.Name = "get_Now" OrElse target.Name = "get_UtcNow"
+            Case "Microsoft.VisualBasic.DateAndTime"
+                Return target.Name = "get_Now" OrElse target.Name = "get_Today" OrElse
+                    target.Name = "get_TimeOfDay" OrElse target.Name = "get_Timer" OrElse
+                    target.Name = "get_DateString" OrElse target.Name = "get_TimeString"
+            Case "System.TimeProvider"
+                Return target.Name = "get_System" OrElse target.Name = "GetUtcNow" OrElse target.Name = "GetLocalNow"
+            Case Else
+                Return False
+        End Select
     End Function
 
 
-    Private Shared Function ClockReads(file As String) As List(Of (LineNumber As Integer, Text As String))
-        Dim reads As New List(Of (LineNumber As Integer, Text As String))()
-        Dim lines As String() = IO.File.ReadAllLines(file)
-        For i As Integer = 0 To lines.Length - 1
-            Dim text As String = lines(i).Trim()
-            If text.StartsWith("'", StringComparison.Ordinal) Then Continue For
-            If ClockRead.IsMatch(StringLiteral.Replace(text, """""")) Then reads.Add((i + 1, text))
+    ' Fails unless the calls (call, callvirt, newobj, ldftn, ldvirtftn) to
+    ' the targets that match, made anywhere in PaperRoute.Core, are exactly
+    ' the allowed "site|target" entries, each as many times as it is listed.
+    ' A site is the method that holds the call; a call in an async or
+    ' iterator method is named by that method, and one in a lambda by its
+    ' generated name.
+    Private Shared Sub AssertOnlyTheseCalls(matches As Func(Of MethodBase, Boolean), allowed As String(), advice As String)
+
+        Dim scan As CallScan = ScanCore()
+
+        ' The scan itself works: it read the core's IL and resolved its calls.
+        Assert.IsTrue(scan.MethodCount >= 1000, $"Only {scan.MethodCount} method bodies were read from PaperRoute.Core.")
+        Assert.IsTrue(scan.Calls.Count >= 10000, $"Only {scan.Calls.Count} calls were resolved in PaperRoute.Core.")
+        Assert.AreEqual(
+            0,
+            scan.Unresolved.Count,
+            "Calls the scan could not resolve:" & Environment.NewLine & String.Join(Environment.NewLine, scan.Unresolved)
+        )
+
+        Dim found As List(Of String) = scan.Calls.
+            Where(Function(item) matches(item.Target)).
+            Select(Function(item) item.Site & "|" & item.Target.DeclaringType.FullName & "." & item.Target.Name).
+            ToList()
+
+        Dim unlisted As List(Of String) = found.ToList()
+        For Each entry As String In allowed
+            unlisted.Remove(entry)
         Next
-        Return reads
+        Dim missing As List(Of String) = allowed.ToList()
+        For Each entry As String In found
+            missing.Remove(entry)
+        Next
+
+        Assert.AreEqual(
+            0,
+            unlisted.Count,
+            advice & Environment.NewLine & String.Join(Environment.NewLine, unlisted.OrderBy(Function(entry) entry, StringComparer.Ordinal))
+        )
+        Assert.AreEqual(
+            0,
+            missing.Count,
+            "A listed call was not found; take it off the list:" &
+            Environment.NewLine & String.Join(Environment.NewLine, missing)
+        )
+
+    End Sub
+
+
+    Private NotInheritable Class CallScan
+        Public Property MethodCount As Integer
+        Public ReadOnly Property Calls As New List(Of (Site As String, Target As MethodBase))()
+        Public ReadOnly Property Unresolved As New List(Of String)()
+    End Class
+
+
+    Private Const AllMembers As BindingFlags =
+        BindingFlags.DeclaredOnly Or BindingFlags.Public Or BindingFlags.NonPublic Or
+        BindingFlags.Instance Or BindingFlags.Static
+
+
+    Private Shared ReadOnly OneByteOpCodes As New Dictionary(Of Integer, OpCode)()
+    Private Shared ReadOnly TwoByteOpCodes As New Dictionary(Of Integer, OpCode)()
+
+
+    Shared Sub New()
+        For Each field As FieldInfo In GetType(OpCodes).GetFields(BindingFlags.Public Or BindingFlags.Static)
+            Dim code As OpCode = DirectCast(field.GetValue(Nothing), OpCode)
+            Dim value As Integer = code.Value And &HFFFF
+            If code.Size = 1 Then
+                OneByteOpCodes(value) = code
+            Else
+                TwoByteOpCodes(value And &HFF) = code
+            End If
+        Next
+    End Sub
+
+
+    Private Shared Function ScanCore() As CallScan
+
+        Dim scan As New CallScan()
+
+        For Each type As Type In GetType(CoreClock).Assembly.GetTypes()
+            Dim methods As IEnumerable(Of MethodBase) =
+                type.GetMethods(AllMembers).Cast(Of MethodBase)().
+                Concat(type.GetConstructors(AllMembers))
+            For Each method As MethodBase In methods
+                Dim body As MethodBody = method.GetMethodBody()
+                If body Is Nothing Then Continue For
+                scan.MethodCount += 1
+                ReadCalls(method, body.GetILAsByteArray(), scan)
+            Next
+        Next
+
+        Return scan
+
+    End Function
+
+
+    Private Shared Sub ReadCalls(method As MethodBase, il As Byte(), scan As CallScan)
+
+        Dim typeArguments As Type() = If(method.DeclaringType.IsGenericType, method.DeclaringType.GetGenericArguments(), Nothing)
+        Dim methodArguments As Type() = If(TypeOf method Is MethodInfo AndAlso method.IsGenericMethod, method.GetGenericArguments(), Nothing)
+        Dim site As String = SiteOf(method)
+
+        Dim position As Integer = 0
+        Do While position < il.Length
+
+            Dim code As OpCode
+            Dim first As Integer = il(position)
+            position += 1
+            If first = &HFE Then
+                code = TwoByteOpCodes(il(position))
+                position += 1
+            Else
+                code = OneByteOpCodes(first)
+            End If
+
+            Select Case code.OperandType
+                Case OperandType.InlineNone
+                Case OperandType.ShortInlineBrTarget, OperandType.ShortInlineI, OperandType.ShortInlineVar
+                    position += 1
+                Case OperandType.InlineVar
+                    position += 2
+                Case OperandType.InlineI8, OperandType.InlineR
+                    position += 8
+                Case OperandType.InlineSwitch
+                    Dim count As Integer = BitConverter.ToInt32(il, position)
+                    position += 4 + 4 * count
+                Case OperandType.InlineMethod
+                    Dim token As Integer = BitConverter.ToInt32(il, position)
+                    position += 4
+                    Try
+                        scan.Calls.Add((site, method.Module.ResolveMethod(token, typeArguments, methodArguments)))
+                    Catch ex As Exception When TypeOf ex Is ArgumentException OrElse TypeOf ex Is TypeLoadException OrElse TypeOf ex Is MissingMemberException
+                        scan.Unresolved.Add($"{site}: token {token:X8}: {ex.Message}")
+                    End Try
+                Case Else
+                    position += 4
+            End Select
+
+        Loop
+
+    End Sub
+
+
+    ' The method a call belongs to as its author wrote it: an async or
+    ' iterator method's state machine is named by that method, and a
+    ' compiler-generated class by the class that holds it.
+    Private Shared Function SiteOf(method As MethodBase) As String
+
+        Dim type As Type = method.DeclaringType
+        Dim name As String = method.Name
+
+        Do While type.DeclaringType IsNot Nothing AndAlso type.IsDefined(GetType(CompilerGeneratedAttribute), False)
+            Dim generated As Type = type
+            Dim original As MethodInfo = type.DeclaringType.GetMethods(AllMembers).FirstOrDefault(
+                Function(candidate) candidate.GetCustomAttributes(Of StateMachineAttribute)(False).Any(
+                    Function(attribute) attribute.StateMachineType Is generated OrElse
+                        (generated.IsGenericType AndAlso attribute.StateMachineType Is generated.GetGenericTypeDefinition())))
+            If original IsNot Nothing Then name = original.Name
+            type = type.DeclaringType
+        Loop
+
+        Return type.FullName & "." & name
+
     End Function
 
 
@@ -250,6 +396,108 @@ Public Class CoreClockTests
 
         Assert.AreSame(TimeProvider.System, PlatformServices.Clock)
         Assert.AreNotEqual(New Guid("00000001-0000-0000-0000-000000000000"), CoreIds.NewId())
+
+    End Sub
+
+
+    ' A model's id initialiser takes the core's ids (design 10, step 7).
+    <TestMethod>
+    Public Sub AModelMadeUnderCounterIdsTakesTheNextId()
+
+        PlatformServices.NewId = CoreTestPlatform.CounterIds()
+
+        Assert.AreEqual(New Guid("00000001-0000-0000-0000-000000000000"), New ManuscriptVersion().Id)
+        Assert.AreEqual(New Guid("00000002-0000-0000-0000-000000000000"), New HistoryEvent().Id)
+
+    End Sub
+
+
+    ' The managed copy's stored name ends in the first 8 hex digits of a new
+    ' id (ManagedLibraryService.CreateUniqueDestinationPath). With counter
+    ' ids it is the first counter id's "00000001", so a scripted session
+    ' stores the same path every time (design 10, step 7).
+    <TestMethod>
+    Public Sub WithCounterIdsAManagedCopysSuffixIsTheFirstCounterId()
+
+        Dim root As String = CreateTemporaryRoot()
+
+        Try
+
+            Dim source As String = Path.Combine(root, "draft.docx")
+            IO.File.WriteAllText(source, "draft")
+
+            Dim manuscriptId As New Guid("aaaaaaaa-0000-0000-0000-000000000001")
+            Dim versionId As New Guid("bbbbbbbb-0000-0000-0000-000000000002")
+            Dim version As New ManuscriptVersion() With {
+                .Id = versionId,
+                .LocalFilePath = source,
+                .IsManagedCopy = True
+            }
+            Dim manuscript As New Manuscript() With {.Id = manuscriptId}
+            manuscript.Versions.Add(version)
+
+            Dim libraryRoot As String = Path.Combine(root, "Library")
+            Dim library As New ManagedLibraryService(libraryRoot)
+
+            ' Set last, so the copy's name takes the first counter id.
+            PlatformServices.NewId = CoreTestPlatform.CounterIds()
+            library.CommitManagedCopies({manuscript})
+
+            Dim expected As String = Path.Combine(
+                Path.GetFullPath(libraryRoot),
+                manuscriptId.ToString("N"),
+                "versions",
+                versionId.ToString("N"),
+                "draft_00000001.docx"
+            )
+
+            Assert.AreEqual(expected, version.LocalFilePath)
+            Assert.IsTrue(version.IsManagedCopy)
+            Assert.IsTrue(IO.File.Exists(expected), expected)
+            Assert.AreEqual("draft", IO.File.ReadAllText(expected))
+
+        Finally
+
+            DeleteTemporaryRoot(root)
+
+        End Try
+
+    End Sub
+
+
+    ' Every new identifier in PaperRoute.Core comes from CoreIds (design
+    ' 6.3), so counter ids reach all of them. Guid.NewGuid() is left only
+    ' where it names a temporary file or folder that never reaches stored
+    ' data; each such method is listed here, once for each call it makes.
+    ' Guid.CreateVersion7 counts as well. The scan reads the built
+    ' assembly's IL (as OnlyCoreClockReadsTheSystemClock does), so it sees
+    ' a call however it is written, in every folder, Seams\ included.
+    <TestMethod>
+    Public Sub OnlyTheListedTemporaryNamesUseGuidNewGuid()
+
+        Dim platform As String = GetType(PlatformServices).FullName
+        Dim newGuid As String = "|System.Guid.NewGuid"
+        Dim allowed As String() = {
+            platform & "..cctor" & newGuid,
+            platform & ".ResetForTests" & newGuid,
+            GetType(ExampleLibraryService).FullName & ".StartSession" & newGuid,
+            GetType(ManagedLibraryService.ManagedVersionDeletionTransaction).FullName & "..ctor" & newGuid,
+            GetType(ManagedPacketDeletionService.ManagedPacketDeletionTransaction).FullName & "..ctor" & newGuid,
+            GetType(PacketExportService).FullName & ".WriteZip" & newGuid,
+            GetType(PortableBackupService).FullName & ".CreateBackup" & newGuid,
+            GetType(PortableRestoreService).FullName & ".Restore" & newGuid,
+            GetType(PortableRestoreService).FullName & ".CreateTemporaryDirectory" & newGuid,
+            GetType(StorageMigrationService).FullName & ".MigrateApplicationDataIfNeeded" & newGuid,
+            GetType(StorageMigrationService).FullName & ".MigrateManagedLibraryIfNeeded" & newGuid
+        }
+        Assert.AreEqual(11, allowed.Length, "The two PlatformServices defaults and the nine temporary names.")
+
+        AssertOnlyTheseCalls(
+            Function(target) target.DeclaringType Is GetType(Guid) AndAlso
+                (target.Name = "NewGuid" OrElse target.Name = "CreateVersion7"),
+            allowed,
+            "Make a new identifier with CoreIds.NewId(); Guid.NewGuid() is left only for the listed temporary names:"
+        )
 
     End Sub
 

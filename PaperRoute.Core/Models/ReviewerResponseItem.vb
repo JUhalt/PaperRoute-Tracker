@@ -3,7 +3,7 @@ Imports System
 Namespace Models
 
     Public Class ReviewerResponseItem
-        Public Property Id As Guid = Guid.NewGuid()
+        Public Property Id As Guid = CoreIds.NewId()
         ' The owning JournalSubmission supplies the submission identity.
         ' Decisions and round numbers are selected explicitly, never inferred.
         Public Property DecisionId As Guid = Guid.Empty

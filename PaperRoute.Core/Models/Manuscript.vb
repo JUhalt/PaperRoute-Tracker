@@ -5,7 +5,7 @@ Namespace Models
 
     Public Class Manuscript
 
-        Public Property Id As Guid = Guid.NewGuid()
+        Public Property Id As Guid = CoreIds.NewId()
 
         Public Property Title As String = String.Empty
 

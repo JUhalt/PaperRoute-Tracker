@@ -998,7 +998,7 @@ Namespace Services
             End If
 
             Dim uniqueSuffix As String =
-                Guid.NewGuid().ToString("N").Substring(0, 8)
+                CoreIds.NewId().ToString("N").Substring(0, 8)
 
             ' Cleaned as a whole off Windows only: on Windows the name is
             ' what it always was (PortableFileName.CleanOffWindows).

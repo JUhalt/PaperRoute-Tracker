@@ -251,7 +251,7 @@ Namespace Services
                 Dim tagText As String = ReadOptionalText(worksheet, rowNumber, headers, "TAGS")
 
                 Dim manuscript As New Manuscript With {
-                    .Id = Guid.NewGuid(),
+                    .Id = CoreIds.NewId(),
                     .WorkType = workType,
                     .Title = title,
                     .TargetJournal = targetJournal,
@@ -268,7 +268,7 @@ Namespace Services
 
                 manuscript.History.Add(
                     New HistoryEvent With {
-                        .Id = Guid.NewGuid(),
+                        .Id = CoreIds.NewId(),
                         .EventDate = manuscript.StageEnteredDate,
                         .Stage = manuscript.CurrentStage,
                         .Note = "Imported from standard PaperRoute workbook."
@@ -414,7 +414,7 @@ Namespace Services
                 )
 
                 Dim submission As New JournalSubmission With {
-                    .Id = Guid.NewGuid(),
+                    .Id = CoreIds.NewId(),
                     .JournalName = journal,
                     .ManuscriptNumber = manuscriptNumber,
                     .SubmittedDate = submittedDate.Value.Date,
@@ -568,7 +568,7 @@ Namespace Services
 
                 parentSubmission.Decisions.Add(
                     New EditorialDecisionEvent With {
-                        .Id = Guid.NewGuid(),
+                        .Id = CoreIds.NewId(),
                         .DecisionDate = decisionDate.Value.Date,
                         .Decision = decision,
                         .RevisionDeadline = revisionDeadline,
@@ -771,7 +771,7 @@ Namespace Services
 
                 parentSubmission.Correspondence.Add(
                     New CorrespondenceItem With {
-                        .Id = Guid.NewGuid(),
+                        .Id = CoreIds.NewId(),
                         .ItemDate = itemDate.Value.Date,
                         .Type = itemType,
                         .Title = title,

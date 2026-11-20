@@ -5,7 +5,7 @@ Namespace Models
 
     Public Class JournalRecord
 
-        Public Property Id As Guid = Guid.NewGuid()
+        Public Property Id As Guid = CoreIds.NewId()
 
         Public Property Name As String = String.Empty
 

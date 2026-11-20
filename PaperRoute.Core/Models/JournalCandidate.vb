@@ -18,7 +18,7 @@ Namespace Models
     ' stored here.
     Public Class JournalCandidate
 
-        Public Property Id As Guid = Guid.NewGuid()
+        Public Property Id As Guid = CoreIds.NewId()
 
         Public Property JournalName As String = String.Empty
 

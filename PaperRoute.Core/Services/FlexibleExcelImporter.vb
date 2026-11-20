@@ -385,7 +385,7 @@ Namespace Services
                     If Not manuscriptsByTitle.TryGetValue(normalizedTitle, manuscript) Then
 
                         manuscript = New Manuscript With {
-                            .Id = Guid.NewGuid(),
+                            .Id = CoreIds.NewId(),
                             .Title = normalizedTitle,
                             .TargetJournal = String.Empty,
                             .CurrentStage = PaperStage.Draft,
@@ -632,7 +632,7 @@ Namespace Services
 
                     manuscript.History.Add(
                         New HistoryEvent With {
-                            .Id = Guid.NewGuid(),
+                            .Id = CoreIds.NewId(),
                             .EventDate = CoreClock.Now,
                             .Stage = manuscript.CurrentStage,
                             .Note = "Imported note: " & notes
@@ -682,7 +682,7 @@ Namespace Services
             End If
 
             Dim submission As New JournalSubmission With {
-                .Id = Guid.NewGuid(),
+                .Id = CoreIds.NewId(),
                 .JournalName = journal,
                 .ManuscriptNumber = manuscriptNumber,
                 .SubmittedDate = submittedDate.Value.Date,
@@ -745,7 +745,7 @@ Namespace Services
 
                     submission.Decisions.Add(
                         New EditorialDecisionEvent With {
-                            .Id = Guid.NewGuid(),
+                            .Id = CoreIds.NewId(),
                             .DecisionDate = decisionDate.Value.Date,
                             .Decision = decision,
                             .RevisionDeadline = revisionDeadline,
@@ -862,7 +862,7 @@ Namespace Services
 
             manuscript.History.Add(
                 New HistoryEvent With {
-                    .Id = Guid.NewGuid(),
+                    .Id = CoreIds.NewId(),
                     .EventDate = eventDate,
                     .Stage = manuscript.CurrentStage,
                     .Note = "Imported from mapped spreadsheet row " & rowNumber.ToString() & "."

@@ -143,7 +143,7 @@ Namespace Services
                     If Not manuscriptsByTitle.TryGetValue(title, manuscript) Then
 
                         manuscript = New Manuscript With {
-                            .Id = Guid.NewGuid(),
+                            .Id = CoreIds.NewId(),
                             .Title = title,
                             .CoAuthors = String.Empty,
                             .TargetJournal = String.Empty,
@@ -184,7 +184,7 @@ Namespace Services
                             Dim submissionNotes As String = BuildSubmissionNotes(attemptNumber, legacyJournalNote)
 
                             submission = New JournalSubmission With {
-                                .Id = Guid.NewGuid(),
+                                .Id = CoreIds.NewId(),
                                 .JournalName = journalName,
                                 .ManuscriptNumber = String.Empty,
                                 .SubmittedDate = submittedDate.Value.Date,
@@ -469,7 +469,7 @@ Namespace Services
 
             submission.Decisions.Add(
                 New EditorialDecisionEvent With {
-                    .Id = Guid.NewGuid(),
+                    .Id = CoreIds.NewId(),
                     .DecisionDate = responseDate.Value.Date,
                     .Decision = decision,
                     .RevisionDeadline = Nothing,
@@ -516,7 +516,7 @@ Namespace Services
 
             manuscript.History.Add(
                 New HistoryEvent With {
-                    .Id = Guid.NewGuid(),
+                    .Id = CoreIds.NewId(),
                     .EventDate = eventDate.Date,
                     .Stage = manuscript.CurrentStage,
                     .Note = note

@@ -5,7 +5,7 @@ Namespace Models
 
     Public Class JournalSubmission
 
-        Public Property Id As Guid = Guid.NewGuid()
+        Public Property Id As Guid = CoreIds.NewId()
 
         Public Property RecordedAtUtc As DateTime? = Nothing
 
