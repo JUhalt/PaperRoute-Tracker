@@ -24,25 +24,30 @@ Public Class StartupRegistersThePlatformTests
         ' PlatformSetup has registered them before the first test.
         Assert.IsInstanceOfType(PlatformServices.Secrets, GetType(DpapiSecretProtector))
         Assert.IsInstanceOfType(PlatformServices.Launcher, GetType(WindowsLauncher))
+        Assert.IsInstanceOfType(PlatformServices.FileIdentity, GetType(WindowsFileIdentity))
 
         Dim registeredSecrets As ISecretProtector = PlatformServices.Secrets
         Dim registeredLauncher As ILauncher = PlatformServices.Launcher
+        Dim registeredIdentity As IFileIdentity = PlatformServices.FileIdentity
 
         Try
 
             ' Stand-ins first, so what follows shows Register itself set each.
             PlatformServices.Secrets = New StandInSecretProtector()
             PlatformServices.Launcher = New StandInLauncher()
+            PlatformServices.FileIdentity = New StandInFileIdentity()
 
             WindowsPlatform.Register()
 
             Assert.IsInstanceOfType(PlatformServices.Secrets, GetType(DpapiSecretProtector))
             Assert.IsTrue(PlatformServices.Secrets.IsAvailable)
             Assert.IsInstanceOfType(PlatformServices.Launcher, GetType(WindowsLauncher))
+            Assert.IsInstanceOfType(PlatformServices.FileIdentity, GetType(WindowsFileIdentity))
 
         Finally
             PlatformServices.Secrets = registeredSecrets
             PlatformServices.Launcher = registeredLauncher
+            PlatformServices.FileIdentity = registeredIdentity
         End Try
 
     End Sub
@@ -79,6 +84,16 @@ Public Class StartupRegistersThePlatformTests
         Public Sub OpenFile(filePath As String) Implements ILauncher.OpenFile
             Throw New InvalidOperationException("A stand-in opens nothing.")
         End Sub
+
+    End Class
+
+
+    Private NotInheritable Class StandInFileIdentity
+        Implements IFileIdentity
+
+        Public Function Identify(filePath As String) As String Implements IFileIdentity.Identify
+            Throw New InvalidOperationException("A stand-in knows no file.")
+        End Function
 
     End Class
 

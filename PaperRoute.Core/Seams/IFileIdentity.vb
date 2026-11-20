@@ -1,8 +1,9 @@
 Imports System
 
 ' Whether two paths reach the same file (core stage 2, design 3.4). The host
-' registers its implementation in PlatformServices.FileIdentity: the Windows
-' file index, from core stage 2's step 11.
+' registers its implementation in PlatformServices.FileIdentity: on Windows
+' the volume and file index (WindowsFileIdentity, PaperRoute.Platform).
+' PacketExportService asks it before writing a packet's .zip.
 Public Interface IFileIdentity
 
     ' A text that every path to the same file shares, or Nothing when it is

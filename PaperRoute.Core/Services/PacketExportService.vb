@@ -5,14 +5,12 @@ Imports System.IO
 Imports System.IO.Compression
 Imports System.Linq
 Imports System.Reflection
-Imports System.Runtime.InteropServices
 Imports System.Security
 Imports System.Security.Cryptography
 Imports System.Text
 Imports System.Text.RegularExpressions
 Imports System.Threading
 Imports ManuscriptPipeline.Models
-Imports Microsoft.Win32.SafeHandles
 
 Namespace Services
 
@@ -1362,13 +1360,17 @@ Namespace Services
 
 
         ' The destination is one of the packet's files: the same path, or the
-        ' same file on the same volume reached another way.
+        ' same file reached another way, as the registered file identity
+        ' tells (on Windows the volume and file index, WindowsFileIdentity).
+        ' Where no identity is known (the core's default), only the path
+        ' comparison applies, so two different paths are never one file.
         Private Shared Function IsPacketFile(plan As PacketExportPlan, zipPath As String) As Boolean
             Dim paths As List(Of String) = PacketFilePaths(plan)
             If paths.Any(Function(item) SamePath(item, zipPath)) Then Return True
-            Dim destination As String = FileIdentity(zipPath)
+            Dim identity As IFileIdentity = PlatformServices.FileIdentity
+            Dim destination As String = identity.Identify(zipPath)
             If destination Is Nothing Then Return False
-            Return paths.Any(Function(item) String.Equals(FileIdentity(item), destination, StringComparison.Ordinal))
+            Return paths.Any(Function(item) String.Equals(identity.Identify(item), destination, StringComparison.Ordinal))
         End Function
 
 
@@ -1377,56 +1379,6 @@ Namespace Services
                 PacketExportFailure.DestinationUnwritable,
                 "That file is part of this packet. Choose another name for the .zip.",
                 inner)
-        End Function
-
-
-        ' The volume serial number and file index, which every path to one
-        ' file shares; Nothing when the file isn't there or can't be opened.
-        Private Shared Function FileIdentity(filePath As String) As String
-            Try
-                If String.IsNullOrWhiteSpace(filePath) OrElse Not File.Exists(filePath) Then Return Nothing
-                Using handle As SafeFileHandle = File.OpenHandle(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite Or FileShare.Delete)
-                    Dim information As ByHandleFileInformation
-                    If Not GetFileInformationByHandle(handle, information) Then Return Nothing
-                    Return IdentityText(information.VolumeSerialNumber, information.FileIndexHigh, information.FileIndexLow)
-                End Using
-            Catch ex As Exception When IsFileAccessException(ex)
-                Return Nothing
-            End Try
-        End Function
-
-
-        ' Nothing for a file index of 0, which some file servers report for
-        ' every file: the identity is then unknown, and only the path
-        ' comparison applies, so such files are never mistaken for each other.
-        Friend Shared Function IdentityText(volumeSerialNumber As UInteger, fileIndexHigh As UInteger, fileIndexLow As UInteger) As String
-            If fileIndexHigh = 0UI AndAlso fileIndexLow = 0UI Then Return Nothing
-            Return volumeSerialNumber.ToString("x8", CultureInfo.InvariantCulture) & ":" &
-                fileIndexHigh.ToString("x8", CultureInfo.InvariantCulture) &
-                fileIndexLow.ToString("x8", CultureInfo.InvariantCulture)
-        End Function
-
-
-        <StructLayout(LayoutKind.Sequential)>
-        Private Structure ByHandleFileInformation
-            Public FileAttributes As UInteger
-            Public CreationTimeLow As UInteger
-            Public CreationTimeHigh As UInteger
-            Public LastAccessTimeLow As UInteger
-            Public LastAccessTimeHigh As UInteger
-            Public LastWriteTimeLow As UInteger
-            Public LastWriteTimeHigh As UInteger
-            Public VolumeSerialNumber As UInteger
-            Public FileSizeHigh As UInteger
-            Public FileSizeLow As UInteger
-            Public NumberOfLinks As UInteger
-            Public FileIndexHigh As UInteger
-            Public FileIndexLow As UInteger
-        End Structure
-
-
-        <DllImport("kernel32.dll", SetLastError:=True)>
-        Private Shared Function GetFileInformationByHandle(handle As SafeFileHandle, <Out> ByRef information As ByHandleFileInformation) As <MarshalAs(UnmanagedType.Bool)> Boolean
         End Function
 
 

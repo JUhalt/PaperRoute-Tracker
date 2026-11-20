@@ -17,9 +17,9 @@ Namespace Services
         Public Shared Sub Register()
             PlatformServices.Secrets = New DpapiSecretProtector()
             PlatformServices.Launcher = New WindowsLauncher()
-            ' The file identity is added by the step that brings its Windows
-            ' implementation. The clock and the ids stay on their defaults:
-            ' the system clock and Guid.NewGuid.
+            PlatformServices.FileIdentity = New WindowsFileIdentity()
+            ' The clock and the ids stay on their defaults: the system clock
+            ' and Guid.NewGuid.
         End Sub
 
     End Class
