@@ -30,7 +30,7 @@
       <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto">
 
         <!-- Row 1: the title, a link two lines tall, cut short with an ellipsis (Form1.vb:3239-3255). -->
-        <Button x:Name="Title" Grid.Row="1" Classes="link card-title" Margin="0,8,0,4"
+        <Button x:Name="Title" Grid.Row="1" Classes="link card-title" Margin="-4,4,-4,0"
                 HorizontalAlignment="Stretch"
                 Command="{Binding OpenCommand}"
                 ToolTip.Tip="{Binding Title}"

@@ -102,12 +102,21 @@
     <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
   </Style>
 
-  <!-- Link buttons. After Button.axaml, so these win over the button faces. -->
+  <!--
+    Link buttons. After Button.axaml, so these win over the button faces.
+    The focus ring is drawn inside the link's own bounds: Avalonia clips a
+    focus adorner to the control it marks, so a ring drawn 2 px outside showed
+    only as specks at its corners (found by step 10's pictures). The link has
+    4 px of padding (the 2 px ring and 2 px clear of the text) and 4 px less
+    margin on every side, so its text stays where it was; a link with a
+    margin of its own sets it 4 px less.
+  -->
   <Style Selector="Button.link">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="Padding" Value="0" />
+    <Setter Property="Padding" Value="4" />
+    <Setter Property="Margin" Value="-4" />
     <Setter Property="MinHeight" Value="0" />
     <Setter Property="CornerRadius" Value="0" />
     <Setter Property="HorizontalContentAlignment" Value="Left" />
@@ -115,7 +124,7 @@
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="FocusAdorner">
       <FocusAdornerTemplate>
-        <Border Margin="-2" BorderThickness="2" CornerRadius="4"
+        <Border BorderThickness="2" CornerRadius="4"
                 BorderBrush="{DynamicResource AccentSecondaryBrush}" />
       </FocusAdornerTemplate>
     </Setter>

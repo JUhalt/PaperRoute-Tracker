@@ -1110,6 +1110,8 @@ internal sealed class BoardWindow : IDisposable
             Key.Up => PhysicalKey.ArrowUp,
             Key.Left => PhysicalKey.ArrowLeft,
             Key.Right => PhysicalKey.ArrowRight,
+            Key.Home => PhysicalKey.Home,
+            Key.End => PhysicalKey.End,
             Key.Enter => PhysicalKey.Enter,
             Key.Escape => PhysicalKey.Escape,
             Key.Space => PhysicalKey.Space,

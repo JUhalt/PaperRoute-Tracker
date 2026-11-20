@@ -62,7 +62,7 @@
                    Text="PaperRoute keeps your library on this computer. No account is needed, and your library is never uploaded. The one request PaperRoute makes by itself is a check for updates when it starts; it sends nothing about you, and Preferences turns it off." />
       </Border>
 
-      <Button x:Name="QuickStart" Classes="link" Margin="0,16,0,0" HorizontalAlignment="Left"
+      <Button x:Name="QuickStart" Classes="link" Margin="-4,12,-4,-4" HorizontalAlignment="Left"
               Content="Read the Quick Start"
               Command="{Binding NotInTrialCommand}" CommandParameter="The User Guide"
               AutomationProperties.HelpText="Opens Help at the Quick Start."

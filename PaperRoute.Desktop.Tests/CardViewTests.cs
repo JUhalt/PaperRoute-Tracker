@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Media;
@@ -28,7 +29,8 @@ namespace PaperRoute.Desktop.Tests;
 // commands. The tests are the ones step 9 names in d1 6.2: K1, K2, K4, H2, H6,
 // the headless part of V17, V22 and B6; then the example's seven cards as r1
 // 1.7 works them out, the columns, the pictures, and a first reading of the
-// 500 library's times (no assertion on time: step 12 sets budgets).
+// 500 library's times (no assertion on time: step 12 sets budgets). Step 10
+// adds K8, the arrow keys between cards, and its two pictures.
 //
 // Libraries are the example written to a temporary folder of the test's own,
 // the 500 library (LargeLibraryFixture) in the same way, or libraries held in
@@ -235,6 +237,134 @@ public sealed class CardViewTests : StorageCheckedTests
         Assert.IsFalse(clearOn, "Clear turned itself off.");
         Assert.AreEqual(expected, focused, "The keyboard lands on the first card's title.");
     }
+
+    // K8 (d1 4.5, new: plan item 62). On a 58-card shelf, at two widths with
+    // different column counts (so the last row is short at both): from card
+    // i's title, Right goes to i+1, Left to i-1 (from a row's first card, to
+    // the last card of the row above), Down to i+columns, Up to i-columns,
+    // Home to the first card and End to the last; each lands on that card's
+    // title, its card's focus ring shows, and the card is in view. At an edge
+    // the key does nothing: Left and Up on the first row, Right and Down on
+    // the last card, Down from a card with none below. The same keys from the
+    // card's ⋯ and View route move by cards too. Arrows with Shift, Ctrl or
+    // Alt move nothing.
+    [TestMethod]
+    public void K8_ArrowKeysMoveBetweenCardsByTheirPlaceInTheRows()
+    {
+        var session = new MemorySession(Sixty().Take(58).ToList(), Papers.Today);
+
+        List<(double Width, int Columns, List<(string Step, string Got, string Expected)> Steps, List<string> Problems)> runs = Headless.Run(() =>
+        {
+            var runs = new List<(double, int, List<(string, string, string)>, List<string>)>();
+            foreach (double width in new[] { 1280.0, 1600.0 })
+            {
+                using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light, width);
+                ShelfView shelf = board.Shelf("PipelineShelf");
+                ScrollViewer scroller = shelf.FindControl<ScrollViewer>("Scroller") ?? throw new AssertFailedException("The shelf has no scroller.");
+                ShelfViewModel model = board.Board.Shelves[0];
+                IReadOnlyList<CardView> views = board.Cards("PipelineShelf");
+                int columns = model.Columns;
+                int count = model.Cards.Count;
+                var steps = new List<(string, string, string)>();
+                var problems = new List<string>();
+                string Title(int index) => model.Cards[index].AutomationKey + ".Title";
+
+                void Step(string name, Key key, int expected, RawInputModifiers modifiers = RawInputModifiers.None)
+                {
+                    board.Press(key, modifiers);
+                    board.Window.UpdateLayout();
+                    Dispatcher.UIThread.RunJobs();
+                    steps.Add((name, CardParts.Id(board.Focused() as Control), Title(expected)));
+                    CardView target = views[expected];
+                    if (!target.Part<Border>("FocusRing").IsEffectivelyVisible)
+                    {
+                        problems.Add($"{name}: card {expected}'s focus ring is not shown.");
+                    }
+
+                    Rect inView = new Rect(scroller.Viewport);
+                    Point top = target.TranslatePoint(default, scroller) ?? new Point(0, double.MaxValue);
+                    if (top.Y < -0.5 || top.Y + target.Bounds.Height > inView.Height + 0.5)
+                    {
+                        problems.Add($"{name}: card {expected} is out of view (top {top.Y}, height {target.Bounds.Height}, viewport {inView.Height}).");
+                    }
+                }
+
+                void From(int index, string part = "Title") => views[index].Part<Button>(part).Focus(NavigationMethod.Tab);
+
+                int c = columns + 1;
+                From(c);
+                Step("Right", Key.Right, c + 1);
+                Step("Left", Key.Left, c);
+                Step("Down", Key.Down, c + columns);
+                Step("Up", Key.Up, c);
+                Step("Up to the first row", Key.Up, 1);
+                Step("Up on the first row", Key.Up, 1);
+                Step("Left", Key.Left, 0);
+                Step("Left on the first card", Key.Left, 0);
+                From(columns);
+                Step("Left from a row's first card", Key.Left, columns - 1);
+                Step("End", Key.End, count - 1);
+                Step("Right on the last card", Key.Right, count - 1);
+                Step("Down on the last card", Key.Down, count - 1);
+                From(count - columns);
+                Step("Down with no card below", Key.Down, count - columns);
+                Step("Home", Key.Home, 0);
+                From(c, "More");
+                Step("Right from ⋯", Key.Right, c + 1);
+                From(c, "ViewRoute");
+                Step("Down from View route", Key.Down, c + columns);
+                From(c);
+                Step("Shift+Right", Key.Right, c, RawInputModifiers.Shift);
+                Step("Ctrl+Down", Key.Down, c, RawInputModifiers.Control);
+                Step("Alt+Left", Key.Left, c, RawInputModifiers.Alt);
+                runs.Add((width, columns, steps, problems));
+            }
+
+            return runs;
+        });
+
+        foreach ((double width, int columns, List<(string Step, string Got, string Expected)> steps, List<string> problems) in runs)
+        {
+            TestContext.WriteLine($"{width} px: {columns} columns, 58 cards");
+            Assert.IsGreaterThanOrEqualTo(2, columns, $"At {width} px the shelf has more than one column.");
+            Assert.AreNotEqual(0, 58 % columns, $"At {width} px the last row is short.");
+            foreach ((string step, string got, string expected) in steps)
+            {
+                Assert.AreEqual(expected, got, $"At {width} px ({columns} columns), {step}.");
+            }
+
+            Assert.IsEmpty(problems, string.Join(Environment.NewLine, problems));
+        }
+
+        Assert.AreNotEqual(runs[0].Columns, runs[1].Columns, "The two widths give different column counts.");
+    }
+
+    // K8, the rule alone: where a key goes from card index in a shelf of
+    // count cards in rows of columns, as any layout of rows of N would need
+    // it (index itself at an edge, nothing for other keys).
+    [TestMethod]
+    [DataRow(Key.Right, 4, 10, 3, 5)]
+    [DataRow(Key.Right, 9, 10, 3, 9)]
+    [DataRow(Key.Left, 3, 10, 3, 2)]
+    [DataRow(Key.Left, 0, 10, 3, 0)]
+    [DataRow(Key.Down, 4, 10, 3, 7)]
+    [DataRow(Key.Down, 7, 10, 3, 7)]
+    [DataRow(Key.Down, 6, 10, 3, 9)]
+    [DataRow(Key.Up, 4, 10, 3, 1)]
+    [DataRow(Key.Up, 2, 10, 3, 2)]
+    [DataRow(Key.Down, 2, 12, 5, 7)]
+    [DataRow(Key.Down, 7, 12, 5, 7)]
+    [DataRow(Key.Up, 11, 12, 5, 6)]
+    [DataRow(Key.Down, 0, 3, 1, 1)]
+    [DataRow(Key.Home, 6, 10, 3, 0)]
+    [DataRow(Key.End, 2, 10, 3, 9)]
+    [DataRow(Key.Right, 0, 1, 4, 0)]
+    public void K8_AKeyGoesByIndexAndColumnCount(Key key, int index, int count, int columns, int expected) =>
+        Assert.AreEqual(expected, ShelfView.ArrowTarget(key, index, count, columns));
+
+    [TestMethod]
+    public void K8_OtherKeysAreNotTheShelfs() =>
+        Assert.IsTrue(new[] { Key.Tab, Key.Enter, Key.Space, Key.Escape, Key.PageDown }.All(key => ShelfView.ArrowTarget(key, 1, 10, 3) is null));
 
     // ---- Pointer, menu, notices ----
 
@@ -681,6 +811,16 @@ public sealed class CardViewTests : StorageCheckedTests
     [TestMethod]
     public void TheCloseUpOfStagesAndTonesIsSavedInDark() => SaveCloseUp(ThemeVariant.Dark, "cards-closeup-dark");
 
+    // A card in the middle of the shelf reached by the arrow keys (K8): the
+    // close-up's shelf, the keyboard put on the first card's title, then Down
+    // and Right, so the focus ring and the title's focus border can be judged
+    // in each theme.
+    [TestMethod]
+    public void AnArrowFocusedCardIsSavedInLight() => SaveArrowFocus(ThemeVariant.Light, "cards-arrow-focus-light");
+
+    [TestMethod]
+    public void AnArrowFocusedCardIsSavedInDark() => SaveArrowFocus(ThemeVariant.Dark, "cards-arrow-focus-dark");
+
     // ---- A first reading of the 500 library's times ----
 
     // How long the 500 library takes to show its first shelf and to switch
@@ -794,6 +934,47 @@ public sealed class CardViewTests : StorageCheckedTests
             return Pictures.Save(board.Window, name, TestContext, region);
         });
 
+        Assert.IsTrue(File.Exists(path), $"No picture at {path}.");
+    }
+
+    private void SaveArrowFocus(ThemeVariant variant, string name)
+    {
+        var session = new MemorySession(Showcase(), Papers.Today);
+        (string path, string focused, string expected, bool ring, bool insideTitle, string adorner) = Headless.Run(() =>
+        {
+            using BoardWindow board = BoardWindow.Show(session, variant, height: 1060);
+            ShelfViewModel model = board.Board.Shelves[0];
+            int target = model.Columns + 1;
+            Assert.IsTrue(board.Shelf("PipelineShelf").FocusFirstCard(), "The shelf shows a card.");
+            board.Press(Key.Down);
+            board.Press(Key.Right);
+            board.Window.UpdateLayout();
+            Dispatcher.UIThread.RunJobs();
+
+            // The title's own focus border: an adorner, which Avalonia clips to
+            // the title's bounds, so it must lie inside them to be seen.
+            Button title = board.Cards("PipelineShelf")[target].Part<Button>("Title");
+            List<Control> adorners = AdornerLayer.GetAdornerLayer(title)?.Children
+                .Where(child => ReferenceEquals(AdornerLayer.GetAdornedElement(child), title)).ToList() ?? [];
+            string adorner = adorners.Count == 1
+                ? $"{adorners[0].Bounds} in a title of {title.Bounds.Size}"
+                : $"{adorners.Count} adorners on the title";
+            bool inside = adorners.Count == 1 && new Rect(title.Bounds.Size).Contains(adorners[0].Bounds);
+
+            Panel host = board.Find<Panel>("ShelfHost");
+            Point origin = host.TranslatePoint(default, board.Window) ?? default;
+            var region = new PixelRect((int)origin.X, (int)origin.Y, (int)host.Bounds.Width, (int)host.Bounds.Height);
+            return (Pictures.Save(board.Window, name, TestContext, region),
+                    CardParts.Id(board.Focused() as Control),
+                    model.Cards[target].AutomationKey + ".Title",
+                    board.Cards("PipelineShelf")[target].Part<Border>("FocusRing").IsEffectivelyVisible,
+                    inside,
+                    adorner);
+        });
+
+        Assert.AreEqual(expected, focused, "Down then Right from the first card reaches the second row's second card.");
+        Assert.IsTrue(ring, "Its card's focus ring shows.");
+        Assert.IsTrue(insideTitle, "The title's focus border lies inside the title, where it is not clipped: " + adorner);
         Assert.IsTrue(File.Exists(path), $"No picture at {path}.");
     }
 
