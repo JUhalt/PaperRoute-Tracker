@@ -183,8 +183,12 @@ jobs:
   core-linux:
     name: Core on Linux
     runs-on: ubuntu-latest
-    continue-on-error: true   # report-only until core stage 2's step 13 removes this line
     timeout-minutes: 20
+    env:
+      # Report-only until core stage 2's step 13 sets this to 'false': tests that do
+      # not pass on Linux yet are listed in the step summary and raise a warning, and
+      # the job still fails if the tests could not be run or produced no results.
+      CORE_LINUX_REPORT_ONLY: 'true'
 
     steps:
       - name: Check out repository
@@ -231,9 +235,25 @@ jobs:
           else {
               "Core on Linux: $($counters.GetAttribute('passed')) passed, $($counters.GetAttribute('failed')) failed, $([int] $counters.GetAttribute('total') - [int] $counters.GetAttribute('passed') - [int] $counters.GetAttribute('failed')) neither (skipped, inconclusive or not run), of $($counters.GetAttribute('total'))." >> $env:GITHUB_STEP_SUMMARY
           }
-          if ($exitCode -ne 0) { throw 'The core test run failed.' }
-          if ($null -eq $counters -or [int] $counters.GetAttribute('total') -lt 1 -or
-              [int] $counters.GetAttribute('passed') -ne [int] $counters.GetAttribute('total')) {
+          if ($null -eq $counters -or [int] $counters.GetAttribute('total') -lt 1) {
+              throw "The core tests produced no results on Linux (dotnet test exit code $exitCode)."
+          }
+          $total = [int] $counters.GetAttribute('total')
+          $notPassed = $total - [int] $counters.GetAttribute('passed')
+          if ($notPassed -eq 0) {
+              if ($exitCode -ne 0) { throw "Every core test passed, but dotnet test ended with exit code $exitCode." }
+              return
+          }
+          $names = @($trx.SelectNodes('//*[local-name()="UnitTestResult"][not(@outcome="Passed")]') |
+              ForEach-Object { "$($_.GetAttribute('outcome')): $($_.GetAttribute('testName'))" } | Sort-Object)
+          '' >> $env:GITHUB_STEP_SUMMARY
+          "Not passing on Linux ($($names.Count)):" >> $env:GITHUB_STEP_SUMMARY
+          '' >> $env:GITHUB_STEP_SUMMARY
+          $names | ForEach-Object { "- ``$_``" } >> $env:GITHUB_STEP_SUMMARY
+          if ($env:CORE_LINUX_REPORT_ONLY -eq 'true') {
+              "::warning title=Core on Linux (report-only)::$notPassed of $total core tests do not pass on Linux yet. They are listed in this job's summary and in the PaperRoute-core-linux-results artifact."
+          }
+          else {
               throw 'Core tests must all pass, with none skipped or inconclusive.'
           }
 
