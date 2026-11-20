@@ -30,6 +30,7 @@ M:ManuscriptPipeline.Services.ManuscriptRepository.get_LastManagedLibraryRecover
 M:ManuscriptPipeline.Services.ManuscriptStageSummaryService.CountByStage(System.Collections.Generic.IEnumerable{ManuscriptPipeline.Models.Manuscript});counts manuscripts by stage in memory; no I/O
 M:ManuscriptPipeline.Services.RouteSummaryService.Describe(ManuscriptPipeline.Models.Manuscript);builds the route dots and text from a manuscript in memory; no I/O in the file or in what it calls
 M:ManuscriptPipeline.Services.StageClockService.Describe(ManuscriptPipeline.Models.Manuscript,System.DateTime);builds the stage-clock text in memory; no I/O
+M:ManuscriptPipeline.Services.StorageEnvironment.ConfigureIsolatedSessionRoot(System.String);WRITES: creates the new <temp>\PaperRoute-Trial-<guid> folder TrialStartup.StartSnapshot names and makes it the isolated session (lock 1 for --snapshot-from); refuses a folder that exists, is not a direct child of the temporary folder, or comes after any root was resolved (StorageEnvironment.vb:36-67)
 M:ManuscriptPipeline.Services.StorageEnvironment.DataFolderName;returns a folder name (reads PAPERROUTE_DEV_STORAGE and Debugger.IsAttached); no file access, writes nothing
 M:ManuscriptPipeline.Services.StorageEnvironment.LegacyDataFolderName;returns a folder name (reads PAPERROUTE_DEV_STORAGE and Debugger.IsAttached); no file access, writes nothing
 M:ManuscriptPipeline.Services.StorageEnvironment.LegacyManagedLibraryFolderName;returns a folder name (reads PAPERROUTE_DEV_STORAGE and Debugger.IsAttached); no file access, writes nothing

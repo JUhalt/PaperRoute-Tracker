@@ -5,12 +5,18 @@
              x:Class="PaperRoute.Desktop.ShelfView"
              x:DataType="board:ShelfViewModel">
   <!--
-    One shelf (d1 4.1, 4.4 option (a)): it scrolls down, never across
+    One shelf (d1 4.1, 4.4): it scrolls down, never across
     (ManuscriptShelfPanel.vb:8-10, 29-43), with 4 px inside (Form1.vb:1687).
-    Its cards sit in a wrap panel whose item width the view model works out
-    from the shelf's width (ShelfViewModel.SetWidth: today's columns, 12 px
-    apart). Nothing is virtualized. The cards are bound only once the shelf has
-    been shown (RealizedCards), so the hidden shelves make no card at start.
+    The view model works out the columns and the card width from the shelf's
+    width (ShelfViewModel.SetWidth: today's columns, 12 px apart). The cards
+    are bound only once the shelf has been shown, so the hidden shelves make
+    no card at start. Which list draws them is ShelfLayout.Option:
+    - option (a), Cards: every card of the shelf in a wrap panel, nothing
+      virtualized (RealizedCards);
+    - option (b), Rows: rows of N cards in a virtualizing stack panel, so only
+      the rows on screen and a margin of half a screen above and below are
+      made (RealizedRows, CardRowView).
+    The list of the other option is bound to nothing and stays empty.
     The empty message, one full-width line, shows when the shelf is empty or
     the filters hide everything (Form1.vb:2806-2878, 3552-3566).
   -->
@@ -28,6 +34,13 @@
           </DataTemplate>
         </ItemsControl.ItemTemplate>
       </ItemsControl>
+      <local:CardRowList x:Name="Rows" ItemsSource="{Binding RealizedRows}">
+        <local:CardRowList.ItemsPanel>
+          <ItemsPanelTemplate>
+            <VirtualizingStackPanel CacheLength="0.5" />
+          </ItemsPanelTemplate>
+        </local:CardRowList.ItemsPanel>
+      </local:CardRowList>
       <TextBlock x:Name="EmptyMessage" Classes="empty"
                  Text="{Binding EmptyMessage}"
                  IsVisible="{Binding HasEmptyMessage}" />

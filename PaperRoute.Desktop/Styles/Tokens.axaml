@@ -6,7 +6,9 @@
   Every brush lives in ThemeDictionaries and is used only through
   DynamicResource (test T3). ThemeTokens.AddDerived adds the computed brushes
   (primary hover and pressed, toned chip hovers) to each theme dictionary at
-  start-up. High contrast is step 11 and is not here.
+  start-up. High contrast (step 11) is not in this file: ContrastTheme adds a
+  dictionary for each contrast variant at start-up, giving every token here one
+  of the system colours, and OutlineThickness 1.
 -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
@@ -98,7 +100,7 @@
       <SolidColorBrush x:Key="TagOrangeBackgroundBrush" Color="#FFEDD5" />
       <SolidColorBrush x:Key="TagOrangeForegroundBrush" Color="#9A3412" />
 
-      <!-- Pills, tags and toned chips draw an outline in their ink only under high contrast (step 11). -->
+      <!-- Pills, tags and toned chips draw an outline in their ink only under high contrast (1 in ContrastTheme's dictionaries). -->
       <Thickness x:Key="OutlineThickness">0</Thickness>
     </ResourceDictionary>
 

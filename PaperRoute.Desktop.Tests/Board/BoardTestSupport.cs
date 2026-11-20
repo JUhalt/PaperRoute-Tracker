@@ -25,6 +25,8 @@ internal sealed class MemorySession : ILibrarySession
 
     public LibraryKind Kind => LibraryKind.Example;
 
+    public LibrarySnapshot? Snapshot => null;
+
     public bool IsReadOnly => true;
 
     public DateTime Today { get; set; }

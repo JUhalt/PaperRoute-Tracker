@@ -7,7 +7,8 @@ using PaperRoute.ViewModels.Session;
 
 namespace PaperRoute.ViewModels;
 
-// The window's view model (d1 3.3): the title, the example banner, the rail,
+// The window's view model (d1 3.3): the title, the banner (the example's, or
+// a snapshot's naming the folder copied), the rail,
 // the Board, and the notice strip. The window shows "Loading…" at once, then
 // the session's startup notice ("Loaded 7 manuscripts from local storage.")
 // once the load is done (d1 3.4). The session and the Board are handed in;
@@ -86,20 +87,40 @@ public sealed partial class ShellViewModel : ObservableObject, IInteractions
     public string WindowTitle => _session.Kind switch
     {
         LibraryKind.Example => ExampleWindowTitle,
+        LibraryKind.Snapshot => SnapshotWindowTitle(SnapshotSource()),
         _ => throw new InvalidOperationException($"No window title for a {_session.Kind} library."),
     };
 
     public string BannerName => _session.Kind switch
     {
         LibraryKind.Example => ExampleBannerName,
+        LibraryKind.Snapshot => SnapshotBannerName,
         _ => throw new InvalidOperationException($"No banner for a {_session.Kind} library."),
     };
 
+    // A snapshot's banner changes once, when the load has made the copy and
+    // its time is known.
     public string BannerText => _session.Kind switch
     {
         LibraryKind.Example => ExampleBannerText,
+        LibraryKind.Snapshot => SnapshotBannerText(SnapshotSource(), _session.Snapshot?.Copy?.TakenAt),
         _ => throw new InvalidOperationException($"No banner for a {_session.Kind} library."),
     };
+
+    // The snapshot's banner name (d1 1.3).
+    public const string SnapshotBannerName = "Read-only snapshot";
+
+    // The window title of a snapshot: the trial, then the folder copied.
+    public static string SnapshotWindowTitle(string sourceFolder) =>
+        "PaperRoute Board Trial - Read-only snapshot of " + sourceFolder;
+
+    // The snapshot's banner (d1 1.3, "Read-only snapshot taken at h:mm.
+    // Nothing you do here is saved."), naming the folder copied; before the
+    // copy is made it has no time.
+    public static string SnapshotBannerText(string sourceFolder, DateTime? takenAt) =>
+        "Read-only snapshot of the library in " + sourceFolder +
+        (takenAt is { } time ? ", taken at " + ReadOnlySnapshot.TimeText(time) : string.Empty) +
+        ". Nothing you do here is saved; the trial shows a copy and never changes that folder.";
 
     // The line under the brand (Form1.Shell.vb:180-185).
     public string Tagline => ProductInfo.Tagline;
@@ -168,5 +189,13 @@ public sealed partial class ShellViewModel : ObservableObject, IInteractions
         Notice = LoadingText;
         await _session.LoadAsync(cancel);
         Notice = _session.StartupNotice;
+        if (_session.Kind == LibraryKind.Snapshot)
+        {
+            OnPropertyChanged(nameof(BannerText));
+        }
     }
+
+    private string SnapshotSource() =>
+        _session.Snapshot?.SourceFolder
+        ?? throw new InvalidOperationException("A snapshot session names no folder.");
 }
