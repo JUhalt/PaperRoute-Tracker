@@ -154,7 +154,7 @@ Namespace Services
                        Not String.Equals(
                            version.LocalFilePath,
                            normalizedFilePath,
-                           StringComparison.OrdinalIgnoreCase
+                           PathComparison.Comparison
                        )
                    ) Then
 
@@ -195,7 +195,7 @@ Namespace Services
                 Not String.Equals(
                     version.LocalFilePath,
                     normalizedFilePath,
-                    StringComparison.OrdinalIgnoreCase
+                    PathComparison.Comparison
                 ) OrElse
                 version.IsManagedCopy <> isManagedCopy OrElse
                 Not NullableGuidEquals(
