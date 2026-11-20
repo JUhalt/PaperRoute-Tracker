@@ -26,4 +26,9 @@
     <ProjectReference Include="..\PaperRoute.TestFixtures\PaperRoute.TestFixtures.vbproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The orders today's WinForms Board gives the 500 library (V8), from the one checked-in copy. -->
+    <None Include="..\PaperRoute.TestFixtures\SortOrders\board-sort-orders-500.json" Link="SortOrders\board-sort-orders-500.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

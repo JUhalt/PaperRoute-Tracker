@@ -1,6 +1,10 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:PaperRoute.ViewModels"
         x:Class="PaperRoute.Desktop.MainWindow"
+        x:DataType="vm:ShellViewModel"
         Title="PaperRoute Board trial"
         Width="1280" Height="800">
+  <!-- The notice strip alone until the shell view (d1 8, step 7). -->
+  <TextBlock x:Name="NoticeText" Margin="16" Text="{Binding Notice}" />
 </Window>
