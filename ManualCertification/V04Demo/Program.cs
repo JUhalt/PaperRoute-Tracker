@@ -28,6 +28,10 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        // As the app's Main (core stage 2): the Windows parts the core asks
+        // for, stored keys through DPAPI, before anything could read a key.
+        WindowsPlatform.Register();
+
         Application.SetHighDpiMode(HighDpiMode.SystemAware);
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);

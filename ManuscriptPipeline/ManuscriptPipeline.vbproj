@@ -36,6 +36,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\PaperRoute.Core\PaperRoute.Core.vbproj" />
+    <!-- The Windows implementations the core asks for through PlatformServices (stored keys), registered in Program.Main. -->
+    <ProjectReference Include="..\PaperRoute.Platform\PaperRoute.Platform.vbproj" />
   </ItemGroup>
 
   <ItemGroup>
