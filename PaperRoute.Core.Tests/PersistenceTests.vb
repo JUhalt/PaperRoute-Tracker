@@ -911,10 +911,24 @@ Public Class PersistenceTests
     End Sub
 
 
-    ' The same against the error Windows really raises: manuscripts.json
-    ' held open by another program for the whole load.
+    ' manuscripts.json held open by another program for the whole load, on
+    ' every system (core stage 2, design d2 5.3). On Windows the load stops
+    ' with StorageFileInUseException and changes nothing: the rule
+    ' PersistenceSharingTests holds in PaperRoute.Tests. On Linux and macOS
+    ' .NET's FileShare.None is an advisory flock, so the loader's open fails
+    ' with an IOException whose HResult is the errno (EWOULDBLOCK), not
+    ' Windows' 32 or 33; StorageFile.IsSharingViolation does not count it as
+    ' in use, so the load treats the file as unreadable and turns to the
+    ' safety backup. That is the design's known difference, recorded here,
+    ' not changed: the core throws nothing and returns the previous save,
+    ' LastLoadRecoveredFromBackup is True (the app then says "PaperRoute
+    ' could not read the manuscript data file, so it opened the previous
+    ' save instead."), manuscripts.json holds the .bak's bytes, and the held
+    ' file, with the latest save, is kept byte-identical as
+    ' data\recovery\manuscripts_corrupt_<time>.json, where
+    ' LastRecoveryPreservedFilePath names it. Nothing is lost.
     <TestMethod>
-    Public Sub Load_FileHeldOpenByAnotherProgramIsReportedInUse()
+    Public Sub Load_FileHeldOpenByAnotherProgramKeepsItsBytesOnEverySystem()
 
         Dim repository As New ManuscriptRepository(
             _dataDirectory,
@@ -937,6 +951,12 @@ Public Class PersistenceTests
         Dim backupBefore As Byte() =
             File.ReadAllBytes(repository.BackupFilePath)
 
+        Dim loaded As List(Of Manuscript) =
+            Nothing
+
+        Dim failure As Exception =
+            Nothing
+
         Using holder As New FileStream(
             repository.DataFilePath,
             FileMode.Open,
@@ -944,33 +964,87 @@ Public Class PersistenceTests
             FileShare.None
         )
 
-            Assert.ThrowsExactly(Of StorageFileInUseException)(
-                Sub()
-                    Dim ignored As List(Of Manuscript) =
-                        repository.Load()
-                End Sub
-            )
+            Try
+                loaded = repository.Load()
+            Catch ex As Exception
+                failure = ex
+            End Try
 
         End Using
 
-        Assert.IsFalse(
-            repository.LastLoadRecoveredFromBackup
+        CollectionAssert.AreEqual(
+            backupBefore,
+            File.ReadAllBytes(repository.BackupFilePath),
+            "The safety backup is untouched."
+        )
+
+        If OperatingSystem.IsWindows() Then
+
+            Assert.AreEqual(
+                GetType(StorageFileInUseException),
+                failure?.GetType(),
+                "On Windows the held file is reported in use."
+            )
+
+            Assert.IsFalse(
+                repository.LastLoadRecoveredFromBackup
+            )
+
+            CollectionAssert.AreEqual(
+                primaryBefore,
+                File.ReadAllBytes(repository.DataFilePath)
+            )
+
+            Assert.IsFalse(
+                Directory.Exists(
+                    Path.Combine(_dataDirectory, "recovery")
+                )
+            )
+
+            Return
+
+        End If
+
+        Assert.IsNull(
+            failure,
+            "Elsewhere the load does not stop: " & failure?.ToString()
+        )
+
+        Assert.IsTrue(
+            repository.LastLoadRecoveredFromBackup,
+            "Elsewhere the held file reads as damaged, and the load turns to the safety backup."
+        )
+
+        Assert.AreEqual(
+            "Active Study",
+            loaded(0).Title,
+            "The library loaded is the previous save."
+        )
+
+        Dim preserved As String =
+            repository.LastRecoveryPreservedFilePath
+
+        Assert.AreEqual(
+            repository.RecoveryDirectory,
+            Path.GetDirectoryName(preserved),
+            "The held file is kept under data/recovery."
+        )
+
+        StringAssert.StartsWith(
+            Path.GetFileName(preserved),
+            "manuscripts_corrupt_"
         )
 
         CollectionAssert.AreEqual(
             primaryBefore,
-            File.ReadAllBytes(repository.DataFilePath)
+            File.ReadAllBytes(preserved),
+            "The held file, with the latest save, is kept byte-identical."
         )
 
         CollectionAssert.AreEqual(
             backupBefore,
-            File.ReadAllBytes(repository.BackupFilePath)
-        )
-
-        Assert.IsFalse(
-            Directory.Exists(
-                Path.Combine(_dataDirectory, "recovery")
-            )
+            File.ReadAllBytes(repository.DataFilePath),
+            "manuscripts.json is now the previous save."
         )
 
     End Sub

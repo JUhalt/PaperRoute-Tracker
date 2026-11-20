@@ -122,7 +122,7 @@ Public Class SubmissionReadinessFoundationTests
                 .Role = SubmissionPacketFileRole.CoverLetter,
                 .Label = "Cover letter",
                 .StorageMode = SubmissionPacketFileStorageMode.LinkedExternal,
-                .LocalFilePath = "C:\external\cover-letter.docx",
+                .LocalFilePath = CoreTestSupport.RootedPath("external", "cover-letter.docx"),
                 .Sha256 = New String("a"c, 64)
             }
         )

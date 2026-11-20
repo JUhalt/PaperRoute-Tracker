@@ -125,7 +125,7 @@ Public Class BoardSortOrderTests
             File.WriteAllText(Path.Combine(outFolder, FileName), written, New UTF8Encoding(False))
         End If
 
-        Dim checkedIn As String = Path.Combine(AssistantCoreTests.RepositoryRoot(), "PaperRoute.TestFixtures", "SortOrders", FileName)
+        Dim checkedIn As String = Path.Combine(TestRepository.Root(), "PaperRoute.TestFixtures", "SortOrders", FileName)
         Assert.IsTrue(File.Exists(checkedIn), "The checked-in sort orders are at " & checkedIn & ".")
 
         Using expected As JsonDocument = JsonDocument.Parse(File.ReadAllText(checkedIn))

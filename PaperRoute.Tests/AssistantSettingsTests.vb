@@ -196,11 +196,11 @@ Public Class AssistantSettingsTests
 
     <TestMethod>
     Public Sub TestConnectionTestsWhatIsTypedBeforeSave()
-        Dim network As New AssistantCoreTests.CapturingNetwork With {
+        Dim network As New AssistantTestSupport.CapturingNetwork With {
             .Respond = Function(sent)
-                           If sent.Uri.Host = "localhost" Then Return AssistantCoreTests.Answer(Net.HttpStatusCode.OK, AssistantCoreTests.ServerModelList("llama3.1:latest"))
-                           If sent.Uri.AbsolutePath = "/v1/models" Then Return AssistantCoreTests.Answer(Net.HttpStatusCode.OK, AssistantCoreTests.ClaudeModelList("claude-opus-5-5", "claude-haiku-4-5-20251001"))
-                           Return AssistantCoreTests.Answer(Net.HttpStatusCode.OK, AssistantCoreTests.ClaudeModelEntry("claude-haiku-4-5-20251001"))
+                           If sent.Uri.Host = "localhost" Then Return AssistantTestSupport.Answer(Net.HttpStatusCode.OK, AssistantTestSupport.ServerModelList("llama3.1:latest"))
+                           If sent.Uri.AbsolutePath = "/v1/models" Then Return AssistantTestSupport.Answer(Net.HttpStatusCode.OK, AssistantTestSupport.ClaudeModelList("claude-opus-5-5", "claude-haiku-4-5-20251001"))
+                           Return AssistantTestSupport.Answer(Net.HttpStatusCode.OK, AssistantTestSupport.ClaudeModelEntry("claude-haiku-4-5-20251001"))
                        End Function
         }
         OnlineAccess.InnerHandlerFactory = Function() network
@@ -287,7 +287,7 @@ Public Class AssistantSettingsTests
                     network.Requests.Clear()
                     PumpUntilComplete(dialog.TestConnectionAsync())
                     Assert.AreEqual("Connected. The server at localhost:11434 has llama3.1.", dialog.TestResultText)
-                    Dim sent As AssistantCoreTests.SentRequest = network.Requests.Single()
+                    Dim sent As AssistantTestSupport.SentRequest = network.Requests.Single()
                     Assert.AreEqual("http://localhost:11434/v1/models", sent.Uri.AbsoluteUri)
                     Assert.IsNull(sent.Header("Authorization"))
                     Assert.IsNull(sent.Header("x-api-key"), "The Claude key goes only to Anthropic.")
@@ -460,7 +460,7 @@ Public Class AssistantSettingsTests
             Sub()
                 _keys.Save(ProtectedKeyStore.Anthropic, ClaudeTestKey)
                 _keys.SaveFor(ProtectedKeyStore.AssistantEndpoint, "http://localhost:11434", ServerTestKey)
-                Dim settings As AppSettings = WithAssistant(AssistantCoreTests.CompatibleSettings("http://localhost:11434/v1"))
+                Dim settings As AppSettings = WithAssistant(AssistantTestSupport.CompatibleSettings("http://localhost:11434/v1"))
                 settings.OnlineServices.Assistant.EndpointKeyOrigin = "http://localhost:11434"
 
                 ' The other service is chosen: its key can still go.
@@ -498,7 +498,7 @@ Public Class AssistantSettingsTests
     Public Sub DontAskAgainChoicesCanBeForgotten()
         RunOnSta(
             Sub()
-                Dim settings As AppSettings = WithAssistant(AssistantCoreTests.ClaudeSettings())
+                Dim settings As AppSettings = WithAssistant(AssistantTestSupport.ClaudeSettings())
                 settings.OnlineServices.Assistant.ConfirmedUses.AddRange({"decision-letter|https://api.anthropic.com:443", "cover-letter|https://api.anthropic.com:443"})
 
                 Using dialog As New SettingsForm(settings, Service())
@@ -561,15 +561,15 @@ Public Class AssistantSettingsTests
     <DataRow(SystemColorMode.Dark)>
     Public Sub TheCardFitsAtTheSmallestSize(mode As SystemColorMode)
         ' Test Connection's longest kind of result wraps too.
-        Dim network As New AssistantCoreTests.CapturingNetwork With {
-            .Respond = Function(sent) AssistantCoreTests.Answer(Net.HttpStatusCode.OK, AssistantCoreTests.ServerModelList(
+        Dim network As New AssistantTestSupport.CapturingNetwork With {
+            .Respond = Function(sent) AssistantTestSupport.Answer(Net.HttpStatusCode.OK, AssistantTestSupport.ServerModelList(
                 "qwen3-coder:30b-a3b-instruct-q4_K_M", "deepseek-r1:70b-llama-distill-q4_K_M", "mistral-small3.2:24b-instruct-2506-q8_0",
                 "gemma3:27b-it-qat", "llama3.3:70b-instruct-q4_K_M", "phi4-reasoning:14b-plus-q8_0", "nomic-embed-text:latest"))
         }
         OnlineAccess.InnerHandlerFactory = Function() network
         RunOnSta(
             Sub()
-                Dim settings As AppSettings = WithAssistant(AssistantCoreTests.CompatibleSettings("http://localhost:11434/v1"))
+                Dim settings As AppSettings = WithAssistant(AssistantTestSupport.CompatibleSettings("http://localhost:11434/v1"))
                 _keys.SaveFor(ProtectedKeyStore.AssistantEndpoint, "http://localhost:11434", ServerTestKey)
                 settings.OnlineServices.Assistant.EndpointKeyOrigin = "http://localhost:11434"
                 Using dialog As New SettingsForm(settings, Service(), showAssistant:=True)
@@ -643,15 +643,15 @@ Public Class AssistantSettingsTests
         _keys.Save(ProtectedKeyStore.Anthropic, ClaudeTestKey)
         _keys.SaveFor(ProtectedKeyStore.AssistantEndpoint, "https://ai.example.org:443", ServerTestKey)
         CollectionAssert.AreEqual({"AI assistant: On (Claude, claude-opus-5-5)", "Claude key: Added", "Server key: Added"},
-                                  DiagnosticsForm.AssistantLines(AssistantCoreTests.ClaudeSettings().Assistant, _keys))
+                                  DiagnosticsForm.AssistantLines(AssistantTestSupport.ClaudeSettings().Assistant, _keys))
         Assert.AreEqual("AI assistant: On (OpenAI-compatible server on this computer)",
-                        DiagnosticsForm.AssistantLines(AssistantCoreTests.CompatibleSettings("http://localhost:11434/v1").Assistant, _keys)(0))
+                        DiagnosticsForm.AssistantLines(AssistantTestSupport.CompatibleSettings("http://localhost:11434/v1").Assistant, _keys)(0))
         Assert.AreEqual("AI assistant: On (OpenAI-compatible server elsewhere, https)",
-                        DiagnosticsForm.AssistantLines(AssistantCoreTests.CompatibleSettings("https://ai.example.org/v1").Assistant, _keys)(0))
+                        DiagnosticsForm.AssistantLines(AssistantTestSupport.CompatibleSettings("https://ai.example.org/v1").Assistant, _keys)(0))
 
         RunOnSta(
             Sub()
-                Dim settings As AppSettings = WithAssistant(AssistantCoreTests.CompatibleSettings("https://ai.example.org/v1"))
+                Dim settings As AppSettings = WithAssistant(AssistantTestSupport.CompatibleSettings("https://ai.example.org/v1"))
                 settings.OnlineServices.Assistant.EndpointKeyOrigin = "https://ai.example.org:443"
                 Using report As New DiagnosticsForm(settings)
                     Dim text As String = report.ReportText
@@ -670,14 +670,14 @@ Public Class AssistantSettingsTests
         RunOnSta(
             Sub()
                 Using board As New AssistantBoard(_directory)
-                    board.UseSettings(WithAssistant(AssistantCoreTests.ClaudeSettings()))
+                    board.UseSettings(WithAssistant(AssistantTestSupport.ClaudeSettings()))
                     Dim asked As Integer = 0
                     AssistantRunner.ConsentPrompt = Function(owner, asking, connection)
                                                         asked += 1
                                                         Return True
                                                     End Function
 
-                    Dim request As AssistantRequest = AssistantService.BuildLetterRequest(AssistantCoreTests.Letter)
+                    Dim request As AssistantRequest = AssistantService.BuildLetterRequest(AssistantTestSupport.Letter)
                     Assert.IsTrue(AssistantRunner.Confirm(Nothing, request))
                     Assert.IsTrue(AssistantRunner.Confirm(Nothing, request))
                     Assert.AreEqual(1, asked, "Not asked again.")
@@ -695,7 +695,7 @@ Public Class AssistantSettingsTests
         ' The main window reaches the gate only through the step that also
         ' connects the saving of a choice, and startup takes that step
         ' before the interface is built.
-        Dim folder As String = Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManuscriptPipeline")
+        Dim folder As String = Path.Combine(TestRepository.Root(), "ManuscriptPipeline")
         Dim configuring As New List(Of String)()
         For Each source As String In Directory.GetFiles(folder, "Form1*.vb")
             Dim code As String = String.Join(Environment.NewLine, File.ReadAllLines(source).Where(Function(line) Not line.TrimStart().StartsWith("'"c)))

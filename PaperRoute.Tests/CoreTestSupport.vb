@@ -49,6 +49,22 @@ Friend Module CoreTestSupport
     End Sub
 
 
+    ' A rooted path that need not exist, on the drive or root that holds the
+    ' temporary folder: "C:\Research\working.docx" on Windows (the temporary
+    ' folder is on C:), "/Research/working.docx" on Linux and macOS. Tests
+    ' that only store or compare a path use it in place of a "C:\..." literal,
+    ' which is not rooted outside Windows (core stage 2, design 7.2, batch 2).
+    Public Function RootedPath(
+        ParamArray parts As String()
+    ) As String
+
+        Return Path.Combine(
+            {Path.GetPathRoot(Path.GetTempPath())}.Concat(parts).ToArray()
+        )
+
+    End Function
+
+
     ' Where a save or a load puts a managed folder the library no longer
     ' needs: under removed\<date>, keeping the folder's path in the library.
     ' Exactly one dated folder is expected.
