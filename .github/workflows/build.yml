@@ -252,6 +252,9 @@ jobs:
           $names | ForEach-Object { "- ``$_``" } >> $env:GITHUB_STEP_SUMMARY
           if ($env:CORE_LINUX_REPORT_ONLY -eq 'true') {
               "::warning title=Core on Linux (report-only)::$notPassed of $total core tests do not pass on Linux yet. They are listed in this job's summary and in the PaperRoute-core-linux-results artifact."
+              # dotnet test's exit code has been judged above. Left as it is, the
+              # runner would end this step with it and fail the job after all.
+              $global:LASTEXITCODE = 0
           }
           else {
               throw 'Core tests must all pass, with none skipped or inconclusive.'
