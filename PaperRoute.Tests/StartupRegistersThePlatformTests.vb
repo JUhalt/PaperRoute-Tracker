@@ -13,21 +13,74 @@ Imports ManuscriptPipeline.Services
 ' every stored key as missing. The hosts are the app (Program.Main), the
 ' display evidence tool, the workflow demo, this suite (PlatformSetup) and
 ' the isolated-session test's own copy of Program.Main's start (risk R9).
+' The runtime test swaps the registry for a moment, so it runs alone.
 <TestClass>
+<DoNotParallelize>
 Public Class StartupRegistersThePlatformTests
 
     <TestMethod>
-    Public Sub AfterRegisterTheKeyProtectorIsDpapi()
+    Public Sub AfterRegisterTheKeyProtectorIsDpapiAndTheLauncherIsTheShell()
 
-        ' PlatformSetup has registered it before the first test.
+        ' PlatformSetup has registered them before the first test.
         Assert.IsInstanceOfType(PlatformServices.Secrets, GetType(DpapiSecretProtector))
+        Assert.IsInstanceOfType(PlatformServices.Launcher, GetType(WindowsLauncher))
 
-        WindowsPlatform.Register()
+        Dim registeredSecrets As ISecretProtector = PlatformServices.Secrets
+        Dim registeredLauncher As ILauncher = PlatformServices.Launcher
 
-        Assert.IsInstanceOfType(PlatformServices.Secrets, GetType(DpapiSecretProtector))
-        Assert.IsTrue(PlatformServices.Secrets.IsAvailable)
+        Try
+
+            ' Stand-ins first, so what follows shows Register itself set each.
+            PlatformServices.Secrets = New StandInSecretProtector()
+            PlatformServices.Launcher = New StandInLauncher()
+
+            WindowsPlatform.Register()
+
+            Assert.IsInstanceOfType(PlatformServices.Secrets, GetType(DpapiSecretProtector))
+            Assert.IsTrue(PlatformServices.Secrets.IsAvailable)
+            Assert.IsInstanceOfType(PlatformServices.Launcher, GetType(WindowsLauncher))
+
+        Finally
+            PlatformServices.Secrets = registeredSecrets
+            PlatformServices.Launcher = registeredLauncher
+        End Try
 
     End Sub
+
+
+    ' Only to move each member off what Register sets; never used.
+    Private NotInheritable Class StandInSecretProtector
+        Implements ISecretProtector
+
+        Public ReadOnly Property IsAvailable As Boolean Implements ISecretProtector.IsAvailable
+            Get
+                Return False
+            End Get
+        End Property
+
+        Public Function Protect(clear As Byte()) As Byte() Implements ISecretProtector.Protect
+            Throw New InvalidOperationException("A stand-in keeps no key.")
+        End Function
+
+        Public Function Unprotect(stored As Byte()) As Byte() Implements ISecretProtector.Unprotect
+            Throw New InvalidOperationException("A stand-in keeps no key.")
+        End Function
+
+    End Class
+
+
+    Private NotInheritable Class StandInLauncher
+        Implements ILauncher
+
+        Public Sub OpenLink(address As String) Implements ILauncher.OpenLink
+            Throw New InvalidOperationException("A stand-in opens nothing.")
+        End Sub
+
+        Public Sub OpenFile(filePath As String) Implements ILauncher.OpenFile
+            Throw New InvalidOperationException("A stand-in opens nothing.")
+        End Sub
+
+    End Class
 
 
     ' Velopack first (its hooks may end the process), then the platform,
