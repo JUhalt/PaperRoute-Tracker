@@ -1,4 +1,5 @@
 using Avalonia;
+using PaperRoute.ViewModels.Measurement;
 using PaperRoute.ViewModels.Session;
 
 namespace PaperRoute.Desktop;
@@ -19,12 +20,24 @@ internal static class Program
     //
     // "--self-check" (d1 1.3 Modes, rules S1 and S2) opens no window: it loads
     // the session, checks where storage went, ends the session and exits 0 or 1.
+    //
+    // "--measure <file>.json" (d1 7.3) opens a real window, times the rows of
+    // d1 6.3 on the library, writes them as JSON and exits 0, or 1 if a row
+    // could not be measured. The file is refused, before anything is opened,
+    // unless its path is full, ends in .json and lies in an existing folder
+    // outside the real profile's storage folders.
     [STAThread]
     public static int Main(string[] args)
     {
         if (!TrialOptions.TryParse(args, out TrialOptions? options, out string? error))
         {
             Console.Error.WriteLine(error);
+            return RefusedExitCode;
+        }
+
+        if (options.MeasureFile is { } measureFile && BoardMeasurementReport.RefusalFor(measureFile) is { } measureRefusal)
+        {
+            Console.Error.WriteLine(measureRefusal);
             return RefusedExitCode;
         }
 
@@ -50,6 +63,12 @@ internal static class Program
             if (options.SelfCheck)
             {
                 return TrialStartup.RunSelfCheck(session, Console.Out);
+            }
+
+            if (options.MeasureFile is { } file)
+            {
+                string daySource = options.Today is null ? "the computer's date" : TrialOptions.TodayArgument;
+                return Configure(AppBuilder.Configure(() => new App(session, file, daySource))).StartWithClassicDesktopLifetime(args);
             }
 
             return Configure(AppBuilder.Configure(() => new App(session))).StartWithClassicDesktopLifetime(args);
