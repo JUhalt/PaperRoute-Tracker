@@ -253,7 +253,7 @@ Namespace Services
         Public Shared Sub Ignore(match As PublicationMatch, Optional reviewedAtUtc As DateTime? = Nothing)
             If match Is Nothing Then Throw New ArgumentNullException(NameOf(match))
             match.Status = PublicationMatchStatus.Ignored
-            match.ReviewedAtUtc = If(reviewedAtUtc, DateTime.UtcNow)
+            match.ReviewedAtUtc = If(reviewedAtUtc, CoreClock.UtcNow)
         End Sub
 
 
@@ -319,7 +319,7 @@ Namespace Services
             manuscript.History.Add(published)
 
             match.Status = PublicationMatchStatus.Confirmed
-            match.ReviewedAtUtc = DateTime.UtcNow
+            match.ReviewedAtUtc = CoreClock.UtcNow
 
             ' Other possible matches no longer need review.
             For Each other As PublicationMatch In manuscript.PublicationMatches.Where(Function(item) item IsNot Nothing AndAlso item IsNot match AndAlso item.Status = PublicationMatchStatus.Pending)

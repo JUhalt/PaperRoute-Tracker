@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Tests of the Avalonia Board trial (v1.1): view-model tests with no window, and headless view tests (Avalonia.Headless with Skia drawing). Every run points storage at a temporary root first (AssemblySetup). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>PaperRoute.Desktop.Tests</AssemblyName>
+    <RootNamespace>PaperRoute.Desktop.Tests</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <Version>0.1.0-trial</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The version PaperRoute.Tests pins: move both suites together. -->
+    <PackageReference Include="MSTest" Version="4.5.2" />
+    <PackageReference Include="Avalonia.Headless" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Skia" Version="12.1.6" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PaperRoute.Desktop\PaperRoute.Desktop.csproj" />
+    <ProjectReference Include="..\PaperRoute.ViewModels\PaperRoute.ViewModels.csproj" />
+    <ProjectReference Include="..\PaperRoute.TestFixtures\PaperRoute.TestFixtures.vbproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The orders today's WinForms Board gives the 500 library (V8), from the one checked-in copy. -->
+    <None Include="..\PaperRoute.TestFixtures\SortOrders\board-sort-orders-500.json" Link="SortOrders\board-sort-orders-500.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

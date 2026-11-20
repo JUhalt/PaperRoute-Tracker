@@ -740,7 +740,7 @@ Namespace Services
                 PaperStage.Draft
 
             manuscript.StageEnteredDate =
-                DateTime.Now
+                CoreClock.Now
 
             manuscript.RevisionDeadline =
                 Nothing

@@ -210,7 +210,7 @@ Namespace Services
                 },
                 {
                     "UpdatedAtUtc",
-                    DateTime.UtcNow.ToString("O")
+                    CoreClock.UtcNow.ToString("O")
                 }
             }
 

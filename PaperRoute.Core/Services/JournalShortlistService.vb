@@ -53,7 +53,7 @@ Namespace Services
                 .JournalName = If(record IsNot Nothing, record.Name, name),
                 .JournalId = If(record IsNot Nothing, CType(record.Id, Guid?), Nothing),
                 .Status = status,
-                .AddedDate = DateTime.Today
+                .AddedDate = CoreClock.Today
             }
             manuscript.JournalShortlist.Add(candidate)
             Return candidate
@@ -173,7 +173,7 @@ Namespace Services
                 .JournalName = If(record IsNot Nothing, record.Name, name),
                 .JournalId = If(record IsNot Nothing, CType(record.Id, Guid?), Nothing),
                 .Status = CandidateStatus.Considering,
-                .AddedDate = DateTime.Today
+                .AddedDate = CoreClock.Today
             }
             manuscript.JournalShortlist.Add(candidate)
             Return (candidate, True)

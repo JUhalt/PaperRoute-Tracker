@@ -4,7 +4,7 @@ Namespace Models
 
     Public Class JournalChecklistTemplateItem
 
-        Public Property Id As Guid = Guid.NewGuid()
+        Public Property Id As Guid = CoreIds.NewId()
 
         Public Property Title As String = String.Empty
 

@@ -134,10 +134,7 @@ Namespace Services
 
         Private Shared Function GetDefaultDataDirectory() As String
 
-            Return Path.Combine(
-                StorageMigrationService.CurrentDataRoot(),
-                "data"
-            )
+            Return StorageLocations.LibraryDataFolder()
 
         End Function
 
@@ -652,7 +649,7 @@ Namespace Services
 
             Dim baseName As String =
                 "manuscripts_corrupt_" &
-                DateTime.Now.ToString(
+                CoreClock.Now.ToString(
                     "yyyyMMdd_HHmmss_fff"
                 )
 
@@ -1311,7 +1308,7 @@ Namespace Services
 
             Dim stamp As String =
                 "_pre-import_" &
-                DateTime.Now.ToString(
+                CoreClock.Now.ToString(
                     "yyyyMMdd_HHmmss"
                 ) &
                 ".json"

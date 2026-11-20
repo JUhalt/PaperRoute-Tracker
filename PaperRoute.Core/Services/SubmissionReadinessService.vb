@@ -47,7 +47,7 @@ Namespace Services
                 If(
                     createdAtUtc.HasValue,
                     createdAtUtc.Value,
-                    DateTime.UtcNow
+                    CoreClock.UtcNow
                 )
 
             Dim profile As New ManuscriptReadiness With {
@@ -170,7 +170,7 @@ Namespace Services
                     If(
                         modifiedAtUtc.HasValue,
                         modifiedAtUtc.Value,
-                        DateTime.UtcNow
+                        CoreClock.UtcNow
                     )
             End If
 
@@ -199,7 +199,7 @@ Namespace Services
                 If(
                     modifiedAtUtc.HasValue,
                     modifiedAtUtc.Value,
-                    DateTime.UtcNow
+                    CoreClock.UtcNow
                 )
 
             Dim wasComplete As Boolean =
@@ -239,7 +239,7 @@ Namespace Services
                 If(
                     modifiedAtUtc.HasValue,
                     modifiedAtUtc.Value,
-                    DateTime.UtcNow
+                    CoreClock.UtcNow
                 )
 
         End Sub

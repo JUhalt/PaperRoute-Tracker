@@ -4,7 +4,7 @@ Namespace Models
 
     Public Class SubmissionPacketFile
 
-        Public Property Id As Guid = Guid.NewGuid()
+        Public Property Id As Guid = CoreIds.NewId()
 
         Public Property Role As SubmissionPacketFileRole =
             SubmissionPacketFileRole.Other

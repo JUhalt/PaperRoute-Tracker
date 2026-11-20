@@ -41,11 +41,11 @@ Namespace Services
                 )
 
             Dim version As New ManuscriptVersion With {
-                .Id = Guid.NewGuid(),
+                .Id = CoreIds.NewId(),
                 .CreatedDate = If(
                     createdDate.HasValue,
                     createdDate.Value,
-                    DateTime.Now
+                    CoreClock.Now
                 ),
                 .Label = NormalizeText(label),
                 .Notes = NormalizeText(notes),

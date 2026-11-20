@@ -92,10 +92,7 @@ Namespace Services
 
         Private Shared Function GetDefaultDataDirectory() As String
 
-            Return Path.Combine(
-                StorageMigrationService.CurrentDataRoot(),
-                "data"
-            )
+            Return StorageLocations.LibraryDataFolder()
 
         End Function
 
@@ -503,7 +500,7 @@ Namespace Services
 
             Dim baseName As String =
                 "authors_corrupt_" &
-                DateTime.Now.ToString(
+                CoreClock.Now.ToString(
                     "yyyyMMdd_HHmmss_fff"
                 )
 

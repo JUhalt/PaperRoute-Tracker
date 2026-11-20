@@ -1128,7 +1128,7 @@ Namespace Services
                 Throw New PacketExportException(PacketExportFailure.NothingIncluded, "Choose at least one file to export.")
             End If
 
-            Dim exportUtc As DateTime = ToUtc(If(exportTimeUtc, DateTime.UtcNow))
+            Dim exportUtc As DateTime = ToUtc(If(exportTimeUtc, CoreClock.UtcNow))
             Dim version As String = If(String.IsNullOrWhiteSpace(appVersionText), AppVersion(), appVersionText.Trim())
             Dim entryTime As DateTimeOffset = New DateTimeOffset(exportUtc, TimeSpan.Zero).ToLocalTime()
 

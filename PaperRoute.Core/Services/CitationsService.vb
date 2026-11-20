@@ -44,7 +44,7 @@ Namespace Services
     Public NotInheritable Class CitationLookup
 
         Public Property Orcid As String = String.Empty
-        Public Property RetrievedUtc As DateTime = DateTime.UtcNow
+        Public Property RetrievedUtc As DateTime = CoreClock.UtcNow
         Public Property IncludeOpenAlexLinked As Boolean
         Public Property Candidates As New List(Of CitationCandidate)()
         ' Works on the ORCID record or in PaperRoute that OpenAlex doesn't have.
@@ -257,7 +257,7 @@ Namespace Services
                                         found As IDictionary(Of String, CitedWork), linked As IEnumerable(Of CitedWork), linkedTotal As Long?,
                                         excluded As IEnumerable(Of String)) As CitationLookup
 
-            Dim lookup As New CitationLookup With {.Orcid = orcid, .IncludeOpenAlexLinked = linked IsNot Nothing, .RetrievedUtc = DateTime.UtcNow}
+            Dim lookup As New CitationLookup With {.Orcid = orcid, .IncludeOpenAlexLinked = linked IsNot Nothing, .RetrievedUtc = CoreClock.UtcNow}
             Dim left As New HashSet(Of String)(If(excluded, Enumerable.Empty(Of String)()), StringComparer.OrdinalIgnoreCase)
             Dim seenIds As New HashSet(Of String)(StringComparer.Ordinal)
             Dim seenDois As New HashSet(Of String)(StringComparer.Ordinal)
