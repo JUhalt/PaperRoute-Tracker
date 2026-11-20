@@ -1092,7 +1092,7 @@ Namespace Services
                 Return sentence
             End If
 
-            Return notes.TrimEnd() & Environment.NewLine & sentence
+            Return notes.TrimEnd() & StoredText.NewLine & sentence
 
         End Function
 

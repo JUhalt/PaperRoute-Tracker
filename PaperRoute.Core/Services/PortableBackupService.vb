@@ -256,35 +256,35 @@ Namespace Services
 
                 Dim backupInfo As String =
                     "PaperRoute Portable Backup" &
-                    Environment.NewLine &
-                    Environment.NewLine &
+                    StoredText.NewLine &
+                    StoredText.NewLine &
                     "Created: " &
                     DateTime.Now.ToString("O") &
-                    Environment.NewLine &
+                    StoredText.NewLine &
                     "Manuscripts: " &
                     manuscripts.Count.ToString() &
-                    Environment.NewLine &
+                    StoredText.NewLine &
                     "Submissions: " &
                     submissionCount.ToString() &
-                    Environment.NewLine &
+                    StoredText.NewLine &
                     "Editorial decisions: " &
                     decisionCount.ToString() &
-                    Environment.NewLine &
+                    StoredText.NewLine &
                     "Correspondence records: " &
                     correspondenceCount.ToString() &
-                    Environment.NewLine &
-                    Environment.NewLine &
+                    StoredText.NewLine &
+                    StoredText.NewLine &
                     "manuscripts.json is the native PaperRoute manuscript data file." &
-                    Environment.NewLine &
+                    StoredText.NewLine &
                     "authors.json contains reusable authors, affiliations, and journals when present." &
-                    Environment.NewLine &
+                    StoredText.NewLine &
                     "citations.json contains your saved citation figures when present." &
-                    Environment.NewLine &
+                    StoredText.NewLine &
                     "library.xlsx is a human-readable export of the manuscript library." &
-                    Environment.NewLine &
+                    StoredText.NewLine &
                     "files contains documents managed by PaperRoute." &
-                    Environment.NewLine &
-                    Environment.NewLine &
+                    StoredText.NewLine &
+                    StoredText.NewLine &
                     "Externally linked files are referenced by path but are not copied into this backup."
 
                 File.WriteAllText(
@@ -318,7 +318,8 @@ Namespace Services
                     JsonSerializer.Serialize(
                         manifest,
                         New JsonSerializerOptions With {
-                            .WriteIndented = True
+                            .WriteIndented = True,
+                            .NewLine = StoredText.NewLine
                         }
                     )
                 )
