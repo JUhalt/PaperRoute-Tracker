@@ -297,9 +297,9 @@ internal sealed class StyleGallery : UserControl
     {
         host.Children.Add(Caption("TABS (PUBLISHED HOVERED)"));
         var strip = new TabStrip();
-        strip.Items.Add(Tab("Pipeline", "(3 of 167)"));
-        strip.Items.Add(With(Tab("Published", "(272)"), ":pointerover"));
-        strip.Items.Add(Tab("File Drawer", "(61)"));
+        strip.Items.Add(Tab("Pipeline", "3 of 167"));
+        strip.Items.Add(With(Tab("Published", "272"), ":pointerover"));
+        strip.Items.Add(Tab("File Drawer", "61"));
         strip.SelectedIndex = 0;
         var bar = new Grid();
         bar.Children.Add(new Border { Classes = { "hairline" } });
@@ -354,12 +354,8 @@ internal sealed class StyleGallery : UserControl
         dotRow.Children.Add(new TextBlock { Classes = { "meta" }, Text = "Route dots: closed, closed, current, accepted" });
         host.Children.Add(dotRow);
 
-        host.Children.Add(new Border
-        {
-            Classes = { "card" },
-            Padding = new Thickness(0),
-            Child = new TextBlock { Classes = { "empty" }, Text = "Nothing in progress. Choose + Add Manuscript to start one." },
-        });
+        // A shelf's empty message, as the Board draws it: a plain label on the board background (Form1.vb CreateEmptyLabel).
+        host.Children.Add(new TextBlock { Classes = { "empty" }, Text = "Nothing in progress. Choose + Add Manuscript to start one." });
         host.Children.Add(new Border
         {
             Classes = { "banner" },

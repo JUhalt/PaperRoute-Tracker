@@ -106,7 +106,7 @@
             <DataTemplate x:DataType="board:ShelfViewModel">
               <StackPanel Orientation="Horizontal">
                 <TextBlock Text="{Binding TabName}" />
-                <TextBlock Classes="tab-count" Text="{Binding TabCount, StringFormat='({0})'}" />
+                <TextBlock Classes="tab-count" Text="{Binding TabCount}" />
               </StackPanel>
             </DataTemplate>
           </TabStrip.ItemTemplate>

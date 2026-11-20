@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -392,7 +393,7 @@ public sealed class BoardViewTests : StorageCheckedTests
     {
         using DiskLibrarySession session = OpenExample();
 
-        (string firstStop, bool active, string tabAfterEnter, string helpAfterEnter, bool cleared, string tabAfterSpace) = Headless.Run(() =>
+        (string firstStop, bool active, string tabAfterEnter, string shownAfterEnter, string helpAfterEnter, bool cleared, string tabAfterSpace) = Headless.Run(() =>
         {
             using BoardWindow board = BoardWindow.Show(session);
             board.Find<TextBox>("SearchBox").Focus(NavigationMethod.Tab);
@@ -404,14 +405,16 @@ public sealed class BoardViewTests : StorageCheckedTests
             board.Press(Key.Enter);
             bool active = chip.Classes.Contains("active");
             string tabAfterEnter = board.Board.Shelves[0].TabText;
+            string shownAfterEnter = BoardWindow.ShownText(board.Tabs()[0]);
             string help = AutomationProperties.GetHelpText(chip) ?? string.Empty;
             board.Press(Key.Space);
-            return (firstStop, active, tabAfterEnter, help, !chip.Classes.Contains("active"), board.Board.Shelves[0].TabText);
+            return (firstStop, active, tabAfterEnter, shownAfterEnter, help, !chip.Classes.Contains("active"), board.Board.Shelves[0].TabText);
         });
 
         Assert.AreEqual("Chip.RevisionDueSoon", firstStop, "Tab from the search box reaches the first chip shown (the overdue chip has no count).");
         Assert.IsTrue(active, "Enter applies the chip's filter.");
         Assert.AreEqual("Pipeline (1 of 5)", tabAfterEnter, "Only the manuscript with no target journal shows.");
+        Assert.AreEqual("Pipeline 1 of 5", shownAfterEnter, "The tab draws the name and the bare count.");
         Assert.AreEqual("Filter applied. Press to clear it.", helpAfterEnter);
         Assert.IsTrue(cleared, "Space clears it again.");
         Assert.AreEqual("Pipeline (5)", tabAfterSpace);
@@ -439,10 +442,26 @@ public sealed class BoardViewTests : StorageCheckedTests
                 ("a chip", board.Chip(AttentionFilter.RevisionDueSoon)),
                 ("the stage box", board.Find<ComboBox>("StageFilter")),
                 ("the rail", board.Window.FindControl<ItemsControl>("RailPages")!.GetVisualDescendants().OfType<RadioButton>().First()),
+
+                // Focus that arrives by Tab selects a TextBox's text by itself; from inside
+                // the box, with the caret in the text, only the Ctrl+F handler selects it.
+                ("the search box itself", search),
             };
             foreach ((string name, Control control) in starts)
             {
-                control.Focus(NavigationMethod.Tab);
+                search.ClearSelection();
+                if (ReferenceEquals(control, search))
+                {
+                    search.Focus(NavigationMethod.Pointer);
+                    search.ClearSelection();
+                    search.CaretIndex = 3;
+                }
+                else
+                {
+                    control.Focus(NavigationMethod.Tab);
+                }
+
+                Dispatcher.UIThread.RunJobs();
                 board.Press(Key.F, RawInputModifiers.Control);
                 results.Add((name, ReferenceEquals(board.Focused(), search), search.SelectedText ?? string.Empty));
             }
@@ -542,13 +561,19 @@ public sealed class BoardViewTests : StorageCheckedTests
             Add("Clear", board.Find<Button>("ClearFilters"));
             foreach (ChipViewModel chip in board.Board.Chips.Where(chip => chip.IsVisible))
             {
-                Add("Chip." + chip.Filter, board.Chip(chip.Filter));
+                Button button = board.Chip(chip.Filter);
+                string key = "Chip." + chip.Filter;
+                Add(key, button);
+                facts[key + ".Shown"] = button.Content as string ?? string.Empty;
+                facts[key + ".Tone"] = button.Classes.Contains("warning") ? "warning" : button.Classes.Contains("danger") ? "danger" : "neutral";
+                facts[key + ".Fill"] = BoardWindow.TokenOf(button, button.Background, "WarningMutedBackgroundBrush", "DangerMutedBackgroundBrush", "CardBackgroundBrush");
             }
 
             IReadOnlyList<TabStripItem> tabs = board.Tabs();
             for (int index = 0; index < tabs.Count; index++)
             {
                 Add("Tab" + index, tabs[index]);
+                facts["Tab" + index + ".Shown"] = BoardWindow.ShownText(tabs[index]);
             }
 
             TextBlock title = board.Find<TextBlock>("PageTitle");
@@ -558,6 +583,12 @@ public sealed class BoardViewTests : StorageCheckedTests
             facts["Add.Enabled"] = board.Find<Button>("AddButton").IsEffectivelyEnabled.ToString();
             facts["Add.TipWhenOff"] = ToolTip.GetShowOnDisabled(board.Find<Button>("AddButton")).ToString();
             facts["Search.Placeholder"] = board.Find<TextBox>("SearchBox").PlaceholderText ?? string.Empty;
+
+            // The placeholder as drawn: solid MutedText, as today's, not dimmed by Fluent's own opacity.
+            TextBlock placeholder = board.Find<TextBox>("SearchBox").GetVisualDescendants().OfType<TextBlock>()
+                .Single(block => block.Name == "PART_Placeholder");
+            facts["Search.PlaceholderOpacity"] = placeholder.Opacity.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            facts["Search.PlaceholderInk"] = BoardWindow.TokenOf(placeholder, placeholder.Foreground, "MutedTextBrush");
             return facts;
         });
 
@@ -568,6 +599,8 @@ public sealed class BoardViewTests : StorageCheckedTests
         Expect("Search.Tip", "Search the board (Ctrl+F)");
         Expect("Search.Id", "BoardSearch");
         Expect("Search.Placeholder", "Search titles, journals, authors");
+        Expect("Search.PlaceholderOpacity", "1");
+        Expect("Search.PlaceholderInk", "MutedTextBrush");
         Expect("Add.Name", "Add Manuscript");
         Expect("Add.Tip", RailItemViewModel.NotInTrial);
         Expect("Add.Help", RailItemViewModel.NotInTrial);
@@ -586,19 +619,24 @@ public sealed class BoardViewTests : StorageCheckedTests
         Expect("Title.Text", "Board");
         Expect("Title.Heading", "1");
 
-        // The example's four chips (r1 1.7), each named by its text.
-        foreach ((AttentionFilter filter, string text) in new[]
+        // The example's four chips (r1 1.7), each named and shown by its text, in
+        // today's tone (Form1.vb:959-980: due soon and long review Warning, missing
+        // journal Neutral, recent rejection Danger) and that tone's fill.
+        foreach ((AttentionFilter filter, string text, string tone, string fill) in new[]
         {
-            (AttentionFilter.RevisionDueSoon, "1 revision due soon"),
-            (AttentionFilter.LongReview, "1 waiting 90+ days"),
-            (AttentionFilter.MissingTargetJournal, "1 no target journal"),
-            (AttentionFilter.RecentRejection, "1 rejected in last 30 days"),
+            (AttentionFilter.RevisionDueSoon, "1 revision due soon", "warning", "WarningMutedBackgroundBrush"),
+            (AttentionFilter.LongReview, "1 waiting 90+ days", "warning", "WarningMutedBackgroundBrush"),
+            (AttentionFilter.MissingTargetJournal, "1 no target journal", "neutral", "CardBackgroundBrush"),
+            (AttentionFilter.RecentRejection, "1 rejected in last 30 days", "danger", "DangerMutedBackgroundBrush"),
         })
         {
             Expect($"Chip.{filter}.Name", text);
             Expect($"Chip.{filter}.Peer", text);
+            Expect($"Chip.{filter}.Shown", text);
             Expect($"Chip.{filter}.Help", "Filter the board");
             Expect($"Chip.{filter}.Id", "Chip." + filter);
+            Expect($"Chip.{filter}.Tone", tone);
+            Expect($"Chip.{filter}.Fill", fill);
         }
 
         Assert.IsFalse(facts.ContainsKey("Chip.OverdueRevision.Name"), "The example has no overdue revision, so its chip is hidden.");
@@ -611,6 +649,11 @@ public sealed class BoardViewTests : StorageCheckedTests
         Expect("Tab1.Id", "Shelf.Published");
         Expect("Tab2.Name", "File Drawer (1)");
         Expect("Tab2.Id", "Shelf.FileDrawer");
+
+        // The tabs as drawn: the name, then the bare count (ShelfTabButton.vb:35-54).
+        Expect("Tab0.Shown", "Pipeline 5");
+        Expect("Tab1.Shown", "Published 1");
+        Expect("Tab2.Shown", "File Drawer 1");
     }
 
     // d1 1.2: View in Deadlines gives a notice in the trial; Add is disabled
@@ -638,35 +681,49 @@ public sealed class BoardViewTests : StorageCheckedTests
     }
 
     // The search box (r1 2.4) through the real TextBox: typing reaches the
-    // view model at once, and the Board renders once, the app's 200 ms wait
-    // after the last key.
+    // view model at once, each key restarts the app's 200 ms wait
+    // (Form1.vb BoardSearchTextChanged), and the Board renders once, the
+    // wait after the last key.
     [TestMethod]
     public void TypingInTheSearchBoxRendersOnceAfterTheWait()
     {
         using DiskLibrarySession session = OpenExample();
+        var gap = TimeSpan.FromMilliseconds(120);
 
-        (string text, int beforeWait, int afterWait, long waited, string tab) = Headless.Run(() =>
+        (string text, int beforeLastKey, long lastKeyAt, int afterWait, long waited, string tab) = Headless.Run(() =>
         {
             using BoardWindow board = BoardWindow.Show(session);
             board.Find<TextBox>("SearchBox").Focus(NavigationMethod.Tab);
             int start = board.Board.RenderCount;
-            board.Window.KeyTextInput("mem");
-            Dispatcher.UIThread.RunJobs();
             var clock = Stopwatch.StartNew();
-            int beforeWait = board.Board.RenderCount - start;
+            board.Window.KeyTextInput("m");
+            Dispatcher.UIThread.RunJobs();
+            BoardWindow.WaitFor(() => false, gap);
+            board.Window.KeyTextInput("e");
+            Dispatcher.UIThread.RunJobs();
+            BoardWindow.WaitFor(() => false, gap);
+
+            // At least 240 ms after the first key: a wait that did not restart would have rendered by now.
+            int beforeLastKey = board.Board.RenderCount - start;
+            long lastKeyAt = clock.ElapsedMilliseconds;
+            var sinceLastKey = Stopwatch.StartNew();
+            board.Window.KeyTextInput("m");
+            Dispatcher.UIThread.RunJobs();
             BoardWindow.WaitFor(() => board.Board.RenderCount > start, TimeSpan.FromSeconds(10));
-            long waited = clock.ElapsedMilliseconds;
+            long waited = sinceLastKey.ElapsedMilliseconds;
 
             // A while longer, so a second render would be seen.
             int after = board.Board.RenderCount;
             BoardWindow.WaitFor(() => board.Board.RenderCount > after, TimeSpan.FromMilliseconds(400));
-            return (board.Board.SearchText, beforeWait, board.Board.RenderCount - start, waited, board.Board.Shelves[0].TabText);
+            return (board.Board.SearchText, beforeLastKey, lastKeyAt, board.Board.RenderCount - start, waited, board.Board.Shelves[0].TabText);
         });
 
+        TestContext.WriteLine($"Last key {lastKeyAt} ms after the first; the render came {waited} ms after the last key.");
         Assert.AreEqual("mem", text, "The typed text reached the view model.");
-        Assert.AreEqual(0, beforeWait, "No render while the wait runs.");
+        Assert.IsGreaterThanOrEqualTo(2 * (long)gap.TotalMilliseconds, lastKeyAt);
+        Assert.AreEqual(0, beforeLastKey, $"No render {lastKeyAt} ms after the first key: each key restarts the wait.");
         Assert.AreEqual(1, afterWait, "One render after the wait, for three keys.");
-        Assert.IsGreaterThanOrEqualTo(150L, waited, $"The render waited ({waited} ms; the wait is {BoardViewModel.SearchDelay.TotalMilliseconds} ms from the last key).");
+        Assert.IsGreaterThanOrEqualTo(190L, waited, $"The render waited {waited} ms after the last key; the wait is {BoardViewModel.SearchDelay.TotalMilliseconds} ms.");
         Assert.AreEqual("Pipeline (1 of 5)", tab, "\"mem\" matches the sleep and memory manuscript only.");
     }
 
@@ -838,7 +895,7 @@ public sealed class BoardViewTests : StorageCheckedTests
         session.LoadAsync(CancellationToken.None).GetAwaiter().GetResult();
         Assert.HasCount(500, session.Manuscripts);
 
-        (string path, string chip, string tabs) = Headless.Run(() =>
+        (string path, string emptyPath, string chip, string tabs, string empty) = Headless.Run(() =>
         {
             using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
             // Pressed through its command, so the picture shows the chip on, not the keyboard's ring.
@@ -847,11 +904,20 @@ public sealed class BoardViewTests : StorageCheckedTests
             Dispatcher.UIThread.RunJobs();
             Assert.IsTrue(first.IsActive, "The chip is on.");
             string tabs = string.Join(" | ", board.Board.Shelves.Select(shelf => shelf.TabText));
-            return (Pictures.Save(board.Window, "board-500-chip-light", TestContext), first.Text, tabs);
+            string path = Pictures.Save(board.Window, "board-500-chip-light", TestContext);
+
+            // The Published shelf under the same chip, which hides all of it: the
+            // shelf area shows only its empty message, as this step builds it.
+            board.Board.SelectedShelfIndex = 1;
+            Dispatcher.UIThread.RunJobs();
+            TextBlock message = board.EmptyMessage("PublishedShelf");
+            Assert.IsTrue(message.IsEffectivelyVisible, "The Published shelf shows its empty message.");
+            return (path, Pictures.Save(board.Window, "board-500-empty-light", TestContext), first.Text, tabs, message.Text ?? string.Empty);
         });
 
-        TestContext.WriteLine($"Chip on: {chip}; tabs: {tabs}");
+        TestContext.WriteLine($"Chip on: {chip}; tabs: {tabs}; Published shows \"{empty}\"");
         Assert.IsTrue(File.Exists(path), $"No picture at {path}.");
+        Assert.IsTrue(File.Exists(emptyPath), $"No picture at {emptyPath}.");
     }
 
     // The narrow layout, for people to look at.
@@ -998,6 +1064,33 @@ internal sealed class BoardWindow : IDisposable
         Find<TabStrip>("ShelfTabs").GetVisualDescendants().OfType<TabStripItem>().ToList();
 
     public ShelfView Shelf(string name) => Find<ShelfView>(name);
+
+    // The text a control draws, its visible text blocks in order, joined by a space.
+    public static string ShownText(Control control) =>
+        string.Join(" ", control.GetVisualDescendants().OfType<TextBlock>()
+            .Where(block => block.IsEffectivelyVisible && !string.IsNullOrEmpty(block.Text))
+            .Select(block => block.Text));
+
+    // Which of the named brush tokens a brush shows, by colour, in the control's theme.
+    public static string TokenOf(Control control, IBrush? brush, params string[] tokens)
+    {
+        if (brush is not ISolidColorBrush solid)
+        {
+            return $"not a solid brush ({brush})";
+        }
+
+        foreach (string token in tokens)
+        {
+            if (control.TryFindResource(token, control.ActualThemeVariant, out object? found)
+                && found is ISolidColorBrush candidate
+                && candidate.Color == solid.Color)
+            {
+                return token;
+            }
+        }
+
+        return $"none of the tokens ({solid.Color})";
+    }
 
     public TextBlock EmptyMessage(string shelf) =>
         Shelf(shelf).FindControl<TextBlock>("EmptyMessage") ?? throw new AssertFailedException($"{shelf} has no empty message.");

@@ -67,7 +67,7 @@
     <Setter Property="TextElement.Foreground" Value="{DynamicResource MutedTextBrush}" />
   </Style>
 
-  <!-- "Pipeline (10)": the count after the name, quieter (ShelfTabButton.vb:35-56). -->
+  <!-- "Pipeline (10)" paints as "Pipeline 10": the bare count after the name, quieter (ShelfTabButton.vb:35-56); the accessible name keeps the parentheses. -->
   <Style Selector="TabStripItem TextBlock.tab-count">
     <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
     <Setter Property="Margin" Value="5,0,0,0" />

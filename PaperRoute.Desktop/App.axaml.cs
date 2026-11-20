@@ -40,7 +40,8 @@ public partial class App : Application
     }
 
     // The computed brushes (ThemeTokens) join Tokens.axaml's Light and Dark
-    // dictionaries before any control looks them up.
+    // dictionaries before any control looks them up; text boxes get their
+    // placeholder at full strength (InputTemplates).
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
@@ -48,6 +49,8 @@ public partial class App : Application
         {
             throw new InvalidOperationException("Tokens.axaml has no theme dictionaries to extend.");
         }
+
+        InputTemplates.Register();
     }
 
     public override void OnFrameworkInitializationCompleted()

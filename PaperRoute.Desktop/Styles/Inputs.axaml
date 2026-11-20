@@ -42,6 +42,12 @@
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
     <Setter Property="BorderThickness" Value="1" />
   </Style>
+  <!--
+    Fluent's template sets the placeholder's Opacity to 0.5 itself, and a value
+    set in a template outranks a style setter, so a setter here cannot undo it.
+    Today's placeholder is solid MutedText; App.Initialize resets the opacity
+    when a text box's template is applied (InputTemplates.cs).
+  -->
   <Style Selector="TextBox /template/ TextBlock#PART_Placeholder, TextBox:focus /template/ TextBlock#PART_Placeholder, TextBox:pointerover /template/ TextBlock#PART_Placeholder">
     <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
   </Style>
@@ -95,5 +101,4 @@
   <Style Selector="ComboBox:disabled /template/ TextBlock#PlaceholderTextBlock">
     <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
   </Style>
-
 </Styles>
