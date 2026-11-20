@@ -2843,6 +2843,291 @@ Public Class DialogPolishTests
     End Function
 
 
+    ' Every checked list is measured by its own window whenever its rows
+    ' change, at 96 to 144 DPI (#313, #329). At a real display a window's
+    ' text has the display's size from the start, so nothing changes a
+    ' list's font once its rows are in, and the one measurement they get is
+    ' the call their window makes after adding them. No test held the eight
+    ' checked lists to that call: the sweep above adds its rows and then
+    ' changes the font, the simulation grows a window's text after the
+    ' window is built, so above 96 DPI both judge the measurement
+    ' FontChanged makes, and at 96 the affiliations' and Fill Blanks' own
+    ' rows fit their lists; #329's test refills the six plain lists only.
+    ' With the eight calls taken out of fb3301f, all four passed. Here each
+    ' window is built on rows of its own, with "&"s and wider than its
+    ' list, and its list scrolls as far as DialogScaling.FitListExtent
+    ' takes a list of the same rows in the same font, shows its scroll bar
+    ' when they are wider than it, and, its rows drawn as the affiliations
+    ' are judged, scrolls 2 pixels past its widest row's last ink. At 96
+    ' DPI nothing has measured a list since its window filled it, so that
+    ' is the call judged; above 96 the text has grown since. The two
+    ' windows that fill their lists again are judged after each fill at
+    ' every DPI, once the text has grown: Publication & CV Export as its
+    ' scope is widened and narrowed, and ORCID Public Profile after a
+    ' lookup that finds a long title, short ones and none. A lookup asks
+    ' ORCID, so the window's own PopulatePreview is called with the record,
+    ' as #329's test calls the refreshes it cannot drive. With the eight
+    ' calls taken out, this named each window at 96 DPI and those two at
+    ' every DPI: Fill Blanks' list showed no scroll bar; Check for
+    ' Publications' and the pipeline report's were left to Windows Forms'
+    ' own extent, 211 and 191 pixels short of their widest rows; and the
+    ' other five kept the 16 pixels of an empty list.
+    <TestMethod>
+    Public Sub EveryCheckedListIsMeasuredByItsWindowWheneverItsRowsChangeAt96To144Dpi()
+
+        Dim judged As New List(Of String)()
+        Dim found As New List(Of String)()
+        Dim fillBlanksNeeds As New Dictionary(Of Integer, Integer)()
+
+        Dim suggestion As FieldInfo = GetType(OrcidLookupForm).GetField("_suggestion", BindingFlags.Instance Or BindingFlags.NonPublic)
+        Dim populate As MethodInfo = GetType(OrcidLookupForm).GetMethod("PopulatePreview", BindingFlags.Instance Or BindingFlags.NonPublic)
+
+        Assert.IsNotNull(suggestion, "ORCID Public Profile keeps the record a lookup found in _suggestion.")
+        Assert.IsNotNull(populate, "ORCID Public Profile lists a record's works in PopulatePreview.")
+
+        Dim failures As List(Of String) =
+            AtEachDpi(
+                CheckedListWindows(),
+                Sub(name, shown, dpi)
+
+                    Dim list As CheckedListBox =
+                        ViewCatalog.Descendants(shown).OfType(Of CheckedListBox)().Single()
+
+                    ShowListsTab(list)
+
+                    Dim what As String = $"{name} at {dpi} DPI: '{list.AccessibleName}'"
+
+                    If TypeOf shown Is OrcidLookupForm Then
+
+                        ' Filled by each lookup, after the text has grown.
+                        For Each lookup In {
+                            (Finds:="a work with a long title and two short ones", Record:=RecordWithWorks(WideRow(), "A short title", "Another short title"), Wide:=True),
+                            (Finds:="two short works", Record:=RecordWithWorks("A short title", "Another short title"), Wide:=False),
+                            (Finds:="no works", Record:=RecordWithWorks(), Wide:=False)
+                        }
+                            suggestion.SetValue(shown, lookup.Record)
+                            populate.Invoke(shown, Nothing)
+                            JudgeMeasuredByItsWindow($"{what}, after a lookup finds {lookup.Finds}", list, shown, lookup.Wide, found, judged)
+                        Next
+
+                    Else
+
+                        ' At 96 DPI nothing has measured the list since its
+                        ' window filled it; above, its text has grown since.
+                        Dim filled As Integer =
+                            JudgeMeasuredByItsWindow($"{what}, as its window filled it{If(dpi = 96, String.Empty, " and its text then grew")}", list, shown, True, found, judged)
+
+                        If TypeOf shown Is FillBlanksForm Then
+                            fillBlanksNeeds(dpi) = filled
+                        End If
+
+                        If TypeOf shown Is PublicationExportForm Then
+
+                            ' Filled again by each change of scope.
+                            Dim scope As ComboBox = PrivateMember(Of ComboBox)(shown, "cmbScope")
+
+                            scope.SelectedIndex = scope.FindStringExact("All manuscripts")
+
+                            Dim widened As Integer =
+                                JudgeMeasuredByItsWindow($"{what}, after its scope is widened to All manuscripts", list, shown, True, found, judged)
+
+                            If widened <= filled Then
+                                found.Add($"{what}: the case is not real, as All manuscripts needs {widened} pixels and Published only {filled}.")
+                            End If
+
+                            scope.SelectedIndex = scope.FindStringExact("Published only")
+                            JudgeMeasuredByItsWindow($"{what}, after its scope is narrowed to Published only", list, shown, True, found, judged)
+
+                        End If
+
+                    End If
+
+                End Sub)
+
+        Console.WriteLine(String.Join(Environment.NewLine, judged))
+
+        Assert.AreEqual(0, failures.Count, Environment.NewLine & String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        ' Seven windows fill their list as they are built, Publication & CV
+        ' Export fills its twice more, and three lookups fill ORCID Public
+        ' Profile's.
+        Assert.AreEqual(12 * Dpis.Length, judged.Count, "Each fill was judged at each DPI: " & String.Join("; ", judged))
+        Assert.IsTrue(fillBlanksNeeds(144) > fillBlanksNeeds(120) AndAlso fillBlanksNeeds(120) > fillBlanksNeeds(96), $"The case is real: Fill Blanks' rows are measured at each DPI's text size, {fillBlanksNeeds(96)}, {fillBlanksNeeds(120)} and {fillBlanksNeeds(144)} pixels.")
+
+    End Sub
+
+
+    ' Whether the list's window measured it after its rows last changed: it
+    ' scrolls as far as DialogScaling.FitListExtent takes a list of the same
+    ' rows in the same font, and shows its scroll bar when that is wider
+    ' than the list. Its rows are also drawn in a twin three times as wide
+    ' with the list's own engine, as the affiliations are judged, and the
+    ' list scrolls 2 pixels past its widest row's last ink. Returns the
+    ' pixels the rows need.
+    Private Shared Function JudgeMeasuredByItsWindow(what As String, list As CheckedListBox, shown As Form, wide As Boolean, found As List(Of String), judged As List(Of String)) As Integer
+
+        Application.DoEvents()
+
+        Dim extent As Integer =
+            CInt(SendMessage(list.Handle, LB_GETHORIZONTALEXTENT, IntPtr.Zero, IntPtr.Zero))
+
+        Dim bar As Boolean =
+            HasStyle(list, WS_HSCROLL)
+
+        Dim rows As List(Of String) =
+            list.Items.Cast(Of Object)().Select(Function(entry) list.GetItemText(entry)).ToList()
+
+        Dim needs As Integer
+
+        Using measured As New CheckedListBox With {.Font = list.Font, .UseTabStops = list.UseTabStops}
+
+            For Each row As String In rows
+                measured.Items.Add(row)
+            Next
+
+            DialogScaling.FitListExtent(measured)
+            needs = measured.HorizontalExtent
+
+        End Using
+
+        judged.Add($"{what}: {rows.Count} row(s) need {needs} pixels in a list {list.ClientSize.Width} wide, which scrolls to {extent}")
+
+        If wide <> (needs > list.ClientSize.Width) Then
+            found.Add($"{what}: the case is not real, as its {rows.Count} row(s) need {needs} pixels in a list {list.ClientSize.Width} wide.")
+        End If
+
+        If list.HorizontalExtent = 0 Then
+            found.Add($"{what}: its window did not measure it, so Windows Forms sizes its extent itself, to {extent}, where its rows need {needs} (scroll bar shown: {bar}).")
+        ElseIf extent <> needs Then
+            found.Add($"{what}: it scrolls sideways to {extent} where its rows need {needs}, so its window did not measure it after its rows changed (scroll bar shown: {bar}).")
+        ElseIf needs > list.ClientSize.Width AndAlso Not bar Then
+            found.Add($"{what}: its rows need {needs} pixels in a list {list.ClientSize.Width} wide, and it shows no horizontal scroll bar.")
+        End If
+
+        If rows.Count > 0 Then
+
+            Using twin As New CheckedListBox With {
+                .Font = list.Font, .UseCompatibleTextRendering = list.UseCompatibleTextRendering, .UseTabStops = list.UseTabStops,
+                .ForeColor = list.ForeColor, .BackColor = list.BackColor,
+                .BorderStyle = BorderStyle.None, .IntegralHeight = False,
+                .Size = New Size(3 * Math.Max(list.Width, needs), (rows.Count + 1) * list.ItemHeight)
+            }
+
+                For Each row As String In rows
+                    twin.Items.Add(row)
+                Next
+
+                shown.Controls.Add(twin)
+                Application.DoEvents()
+
+                Dim drawn As Integer = 0
+
+                For index As Integer = 0 To twin.Items.Count - 1
+                    drawn = Math.Max(drawn, LastInkColumn(twin, twin.GetItemRectangle(index)) + 1)
+                Next
+
+                shown.Controls.Remove(twin)
+
+                judged(judged.Count - 1) &= $"; drawn with {If(list.UseCompatibleTextRendering, "GDI+", "GDI")}, its widest row is {drawn} pixels"
+
+                If drawn > list.ClientSize.Width AndAlso (Not bar OrElse extent < drawn + 2) Then
+                    found.Add($"{what}: its widest row is drawn {drawn} pixels wide, with {If(list.UseCompatibleTextRendering, "GDI+", "GDI")}, in a list {list.ClientSize.Width} wide, and it scrolls sideways to {extent}, short of 2 pixels clear of it (scroll bar shown: {bar}).")
+                End If
+
+            End Using
+
+        End If
+
+        Return needs
+
+    End Function
+
+
+    ' The eight windows with a checked list that scrolls sideways, each on
+    ' rows of its own with "&"s that are wider than its list. ORCID Public
+    ' Profile's list is empty until a lookup.
+    Private Shared Function CheckedListWindows() As (Name As String, View As Type, Build As Func(Of Form))()
+
+        Return {
+            ("FillBlanksForm", GetType(FillBlanksForm), Function() CType(New FillBlanksForm(WideManuscripts(), New NothingToLookUp(), Function() True), Form)),
+            ("ManuscriptAuthorForm", GetType(ManuscriptAuthorForm), Function() CType(New ManuscriptAuthorForm(WideAffiliations(), Nothing, Array.Empty(Of Guid)()), Form)),
+            ("PublicationCheckForm", GetType(PublicationCheckForm), Function() CType(New PublicationCheckForm(WideManuscripts(), Nothing, String.Empty, New NothingToLookUp(), Function() True, DateTime.Today), Form)),
+            ("BibliographyExportSelectionForm", GetType(BibliographyExportSelectionForm), Function() CType(New BibliographyExportSelectionForm(WideManuscripts(), "BibTeX"), Form)),
+            ("BibliographyImportForm", GetType(BibliographyImportForm), Function() CType(New BibliographyImportForm(WideRecords(), New List(Of Manuscript)()), Form)),
+            ("OrcidLookupForm", GetType(OrcidLookupForm), Function() CType(New OrcidLookupForm(New AuthorRecord With {.GivenName = "Josiah", .FamilyName = "Carberry"}), Form)),
+            ("PublicationExportForm", GetType(PublicationExportForm), Function() CType(New PublicationExportForm(WideManuscripts(), New AuthorLibraryData()), Form)),
+            ("ReportForm", GetType(ReportForm), Function() CType(New ReportForm("Pipeline Report", "report.html", WideManuscripts(), Function(chosen, deadlines) ReportService.PipelineReport(chosen, DateTime.Today)), Form))
+        }
+
+    End Function
+
+
+    ' A published manuscript whose title has "&"s and is far wider than any
+    ' of the lists, a draft whose title is wider still and whose target
+    ' journal has an "&" too, and a short one; each with a DOI, as Fill
+    ' Blanks lists only those.
+    Private Shared Function WideManuscripts() As List(Of Manuscript)
+
+        Dim published As New Manuscript With {.Title = WideRow(), .CurrentStage = PaperStage.Published, .Location = ManuscriptLocation.Published}
+        published.Metadata.Doi = "10.5555/demo.wide"
+        published.Metadata.PublishedDate = New DateTime(2025, 3, 1)
+
+        Dim draft As New Manuscript With {.Title = WideRow() & " & Perception", .CurrentStage = PaperStage.Draft, .TargetJournal = "Journal of Memory & Language"}
+        draft.Metadata.Doi = "10.5555/demo.wider"
+
+        Dim brief As New Manuscript With {.Title = "A short title", .CurrentStage = PaperStage.Draft}
+        brief.Metadata.Doi = "10.5555/demo.short"
+
+        Return New List(Of Manuscript) From {published, draft, brief}
+
+    End Function
+
+
+    ' An affiliation whose department has "&"s and is far wider than the
+    ' list, and a short one.
+    Private Shared Function WideAffiliations() As AuthorLibraryData
+
+        Dim library As New AuthorLibraryData()
+        library.Affiliations.Add(New AffiliationRecord With {.Institution = "Blue Mountain University", .Department = WideRow()})
+        library.Affiliations.Add(New AffiliationRecord With {.Institution = "Cascade State University", .Department = "School of Nursing"})
+        library.Authors.Add(New AuthorRecord With {.GivenName = "Dana", .FamilyName = "Whitfield", .IsMe = True})
+        Return library
+
+    End Function
+
+
+    ' The records of a BibTeX file: one whose title has "&"s and is far
+    ' wider than the list, with a warning, so its row ends in the warning
+    ' sign, and a short one.
+    Private Shared Function WideRecords() As BibliographyParseResult
+
+        Dim parsed As New BibliographyParseResult With {.Format = BibliographyFormat.BibTeX}
+
+        Dim lengthy As New BibliographyRecord With {.SourceFormat = BibliographyFormat.BibTeX, .Title = WideRow(), .Doi = "10.5555/demo.wide", .PublishedDate = New DateTime(2025, 3, 1)}
+        lengthy.Warnings.Add("The month could not be read.")
+
+        parsed.Records.Add(lengthy)
+        parsed.Records.Add(New BibliographyRecord With {.SourceFormat = BibliographyFormat.BibTeX, .Title = "A short title"})
+
+        Return parsed
+
+    End Function
+
+
+    ' An ORCID record with a work of each title.
+    Private Shared Function RecordWithWorks(ParamArray titles As String()) As OrcidProfileSuggestion
+
+        Dim record As New OrcidProfileSuggestion With {.Orcid = "0000-0002-1825-0097", .GivenName = "Josiah", .FamilyName = "Carberry"}
+
+        For Each title As String In titles
+            record.Works.Add(New OrcidWorkSuggestion With {.PutCode = record.Works.Count + 1, .Title = title, .Doi = "10.5555/demo.work" & (record.Works.Count + 1).ToString(), .PublishedDate = New DateTime(2025, 3, 1)})
+        Next
+
+        Return record
+
+    End Function
+
+
     ' A checked list that scrolls sideways reaches the end of its widest
     ' row as the list itself draws it, a few pixels clear, at 12 to 18
     ' pixel text (E4.7, #313). In a real 150% session, v1.0.0-rc.3's Fill
@@ -3251,6 +3536,81 @@ Public Class DialogPolishTests
         Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
         Assert.AreEqual(6, judged.Count, "Each kind of list was judged at each size: " & String.Join("; ", judged))
         Assert.IsTrue(plainNeedsAt12 > measuredAt12 + 2, $"The case is real: at 12 pixels a plain list draws the row {plainNeedsAt12} pixels wide, wider than the {measuredAt12} TextRenderer measures with its own tab stops and padding. " & String.Join("; ", judged))
+
+    End Sub
+
+
+    ' The extent counts a checked list's box and the gaps beside it at the
+    ' list's DPI (#313, E4.7): a 13-pixel box and 1-pixel gaps at 96 DPI, 16
+    ' and 1 at 120, and 20 and 2 at 144. Windows Forms' own extent counts
+    ' 13 pixels until the list has drawn a box, which left C3's affiliation
+    ' a pixel out of reach at a real 150%. A test host is at 96 DPI and the
+    ' simulation grows a window's text only, so every other test here draws
+    ' and counts the 13-pixel box: with the box and the gaps held at their
+    ' 96-DPI sizes in fb3301f, each of them passed, and only the hand check
+    ' at a real 125% and 150% would have seen the difference (E4.7, which
+    ' rc.4 passed). Here Windows Forms is told each display's DPI
+    ' (ScalingMeasurementTests.AtDisplayDpi), and a checked list and a
+    ' plain one, each with one row in a font of its own, are fitted: each
+    ' reads that DPI, and its extent is the row's text, as TextRenderer
+    ' measures it there in the same font, and in the checked list the box,
+    ' a gap each side of it and the pixel before the text, in the plain
+    ' list the two gaps alone. This holds the arithmetic the hand check
+    ' passed; what Windows draws at a real 150% is still the hand check's
+    ' to see.
+    <TestMethod>
+    Public Sub FitListExtentCountsTheCheckBoxAndItsGapsAtTheListsDpi()
+
+        Dim found As New List(Of String)()
+        Dim judged As New List(Of String)()
+
+        Dim row As String = "Department of Psychology & Brain Sciences"
+
+        For Each display In {(Dpi:=96, Box:=13, Gap:=1), (Dpi:=120, Box:=16, Gap:=1), (Dpi:=144, Box:=20, Gap:=2)}
+
+            Dim at = display
+
+            ScalingMeasurementTests.AtDisplayDpi(
+                at.Dpi,
+                Sub()
+                    StaRunner.Run(
+                        Sub()
+
+                            Using font As New Font(Control.DefaultFont.FontFamily, 9.0F),
+                                  boxed As CheckedListBox = CheckedListOf(row, font, 400, BorderStyle.None),
+                                  plain As ListBox = ListOf(GetType(ListBox), row, font, 400, BorderStyle.None)
+
+                                DialogScaling.FitListExtent(boxed)
+                                DialogScaling.FitListExtent(plain)
+
+                                Dim text As Integer =
+                                    TextRenderer.MeasureText(row, font, New Size(Integer.MaxValue, Integer.MaxValue), TextFormatFlags.NoPrefix Or TextFormatFlags.ExpandTabs).Width
+
+                                judged.Add($"At {at.Dpi} DPI the row's text is {text} pixels; a checked list scrolls {boxed.HorizontalExtent - text} pixels past that, and a plain list {plain.HorizontalExtent - text}")
+
+                                If DialogScaling.Dpi(boxed) <> at.Dpi OrElse DialogScaling.Dpi(plain) <> at.Dpi Then
+                                    found.Add($"At {at.Dpi} DPI the lists read {DialogScaling.Dpi(boxed)} and {DialogScaling.Dpi(plain)} DPI.")
+                                End If
+
+                                If boxed.HorizontalExtent - text <> at.Box + 2 * at.Gap + 1 Then
+                                    found.Add($"At {at.Dpi} DPI a checked list's extent is {boxed.HorizontalExtent - text} pixels more than its row's text, not the {at.Box + 2 * at.Gap + 1} of a {at.Box}-pixel box, a {at.Gap}-pixel gap each side of it and the pixel before the text.")
+                                End If
+
+                                If plain.HorizontalExtent - text <> 2 * at.Gap Then
+                                    found.Add($"At {at.Dpi} DPI a plain list's extent is {plain.HorizontalExtent - text} pixels more than its row's text, not its two {at.Gap}-pixel gaps.")
+                                End If
+
+                            End Using
+
+                        End Sub)
+                End Sub)
+
+        Next
+
+        Console.WriteLine(String.Join(Environment.NewLine, judged))
+
+        Assert.AreEqual(0, found.Count, Environment.NewLine & String.Join(Environment.NewLine, found))
+        Assert.AreEqual(3, judged.Count, "The lists were judged at each DPI: " & String.Join("; ", judged))
 
     End Sub
 
