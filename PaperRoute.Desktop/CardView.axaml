@@ -1,0 +1,121 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:board="using:PaperRoute.ViewModels.Board"
+             xmlns:services="using:ManuscriptPipeline.Services"
+             xmlns:local="using:PaperRoute.Desktop"
+             x:Class="PaperRoute.Desktop.CardView"
+             x:DataType="board:CardViewModel">
+  <!--
+    One card (d1 4.1, "Card template"; Form1.vb CreateManuscriptCard :3131-3483),
+    top to bottom: the stage pill, the status line and the ⋯ button; the title,
+    two lines tall; the journal line with the tags at its right; a divider; the
+    route footer with its dots, its text and "View route →". Every row has a
+    fixed height, so every card is the same height, as today's computed height
+    is (Form1.vb:3150-3171).
+
+    The title comes first in the tree, before the row above it, so Tab reaches
+    the title, then ⋯, then View route, today's order (Form1.vb:3415-3424).
+    The pill, the texts, the tag strip and the dots are not tab stops.
+    A left click on the card opens it unless it lands on a button, a link or
+    the tag strip (CardView.axaml.cs). The ⋯ menu and the right-click menu are
+    filled when first opened, as today's menu is built when first needed.
+  -->
+  <Panel x:Name="CardHost" Classes="card-host">
+    <Border x:Name="Card" Classes="card interactive"
+            AutomationProperties.Name="{Binding Title}"
+            AutomationProperties.AutomationId="{Binding AutomationKey}">
+      <Border.ContextFlyout>
+        <MenuFlyout Placement="Pointer" />
+      </Border.ContextFlyout>
+      <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+
+        <!-- Row 1: the title, a link two lines tall, cut short with an ellipsis (Form1.vb:3239-3255). -->
+        <Button x:Name="Title" Grid.Row="1" Classes="link card-title" Margin="-4,4,-4,0"
+                HorizontalAlignment="Stretch"
+                Command="{Binding OpenCommand}"
+                ToolTip.Tip="{Binding Title}"
+                AutomationProperties.Name="{Binding Title}"
+                AutomationProperties.HelpText="{Binding AccessibleDescription}"
+                AutomationProperties.ControlTypeOverride="Hyperlink"
+                AutomationProperties.AutomationId="{Binding AutomationKey, StringFormat='{}{0}.Title'}">
+          <TextBlock x:Name="TitleText" Classes="card-title-text" Text="{Binding Title}" />
+        </Button>
+
+        <!-- Row 0: the stage pill, the status line, the ⋯ button (Form1.vb:3185-3230). -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto">
+          <Border x:Name="StagePill" Classes="pill">
+            <TextBlock x:Name="StageText" Text="{Binding StageText}" />
+          </Border>
+          <TextBlock x:Name="Status" Grid.Column="1" Classes="status" Margin="8,0,4,0" VerticalAlignment="Center"
+                     Classes.warning="{Binding StatusTone, Converter={x:Static local:BoardConverters.IsNamed}, ConverterParameter=Warning}"
+                     Classes.danger="{Binding StatusTone, Converter={x:Static local:BoardConverters.IsNamed}, ConverterParameter=Danger}"
+                     Classes.muted="{Binding StatusTone, Converter={x:Static local:BoardConverters.IsNamed}, ConverterParameter=Muted}"
+                     Text="{Binding Status}"
+                     ToolTip.Tip="{Binding Status}"
+                     IsVisible="{Binding HasStatus}" />
+          <Button x:Name="More" Grid.Column="2" Classes="quiet icon" Margin="0,0,-6,0" Content="⋯"
+                  AutomationProperties.Name="{Binding MoreActionsName}"
+                  AutomationProperties.AutomationId="{Binding AutomationKey, StringFormat='{}{0}.More'}">
+            <Button.Flyout>
+              <MenuFlyout Placement="BottomEdgeAlignedLeft" />
+            </Button.Flyout>
+          </Button>
+        </Grid>
+
+        <!-- Row 2: the journal, and the tags in at most half the line (Form1.vb:3257-3290, 3460-3467). -->
+        <local:JournalLinePanel Grid.Row="2">
+          <TextBlock x:Name="Journal" Classes="journal" VerticalAlignment="Center"
+                     Classes.warning="{Binding JournalTone, Converter={x:Static local:BoardConverters.IsNamed}, ConverterParameter=Warning}"
+                     Classes.muted="{Binding JournalTone, Converter={x:Static local:BoardConverters.IsNamed}, ConverterParameter=Muted}"
+                     Text="{Binding JournalText}"
+                     ToolTip.Tip="{Binding JournalToolTip}" />
+          <local:TagStripPanel x:Name="TagStrip"
+                               Tags="{Binding Tags}"
+                               Command="{Binding ApplyFirstTagCommand}"
+                               ToolTip.Tip="{Binding TagStripToolTip}"
+                               AutomationProperties.Name="{Binding TagsName}"
+                               AutomationProperties.ControlTypeOverride="Text" />
+        </local:JournalLinePanel>
+
+        <!-- Row 3: the divider (Form1.vb:3296-3301). -->
+        <Border Grid.Row="3" Classes="divider" Margin="0,10,0,8" />
+
+        <!-- Row 4: the route footer (Form1.vb:3303-3346). -->
+        <Grid Grid.Row="4" ColumnDefinitions="Auto,*,Auto">
+          <ItemsControl x:Name="RouteDots" Margin="0,0,6,0" VerticalAlignment="Center"
+                        Focusable="False" IsTabStop="False"
+                        ItemsSource="{Binding RouteDots}"
+                        IsVisible="{Binding HasRouteDots}"
+                        AutomationProperties.AccessibilityView="Raw">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="4" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="services:RouteDotState">
+                <Ellipse Classes="route-dot"
+                         Classes.closed="{Binding Converter={x:Static local:BoardConverters.IsNamed}, ConverterParameter=Closed}"
+                         Classes.current="{Binding Converter={x:Static local:BoardConverters.IsNamed}, ConverterParameter=Current}"
+                         Classes.accepted="{Binding Converter={x:Static local:BoardConverters.IsNamed}, ConverterParameter=Accepted}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock x:Name="RouteText" Grid.Column="1" Classes="meta" Margin="0,0,8,0" VerticalAlignment="Center"
+                     TextTrimming="CharacterEllipsis" MaxLines="1"
+                     Text="{Binding RouteText}" />
+          <Button x:Name="ViewRoute" Grid.Column="2" Classes="link" VerticalAlignment="Center"
+                  FontSize="{DynamicResource MetaFontSize}"
+                  Content="View route →"
+                  Command="{Binding ViewRouteCommand}"
+                  AutomationProperties.Name="{Binding ViewRouteName}"
+                  AutomationProperties.ControlTypeOverride="Hyperlink"
+                  AutomationProperties.AutomationId="{Binding AutomationKey, StringFormat='{}{0}.Route'}" />
+        </Grid>
+
+      </Grid>
+    </Border>
+    <!-- The accent edge while the title has focus, at once; not for ⋯ or View route (Card.axaml; Form1.vb:3403-3413). -->
+    <Border x:Name="FocusRing" Classes="card-focus" IsVisible="{Binding #Title.IsFocused}" />
+  </Panel>
+</UserControl>

@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Media.Imaging;
@@ -34,8 +35,10 @@ internal static class Pictures
     }
 
     // Lets transitions (100 ms hovers) finish, renders a frame, checks it is not
-    // blank and saves it as <name>.png. Returns the file's full path.
-    public static string Save(Window window, string name, TestContext context)
+    // blank and saves it as <name>.png, or only the region given (a close-up,
+    // in the window's pixels: headless draws at scale 1). Returns the file's
+    // full path.
+    public static string Save(Window window, string name, TestContext context, PixelRect? region = null)
     {
         ArgumentNullException.ThrowIfNull(window);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -45,8 +48,10 @@ internal static class Pictures
         AvaloniaHeadlessPlatform.ForceRenderTimerTick(30);
         Dispatcher.UIThread.RunJobs();
 
-        using WriteableBitmap? frame = window.CaptureRenderedFrame();
-        Assert.IsNotNull(frame, $"The headless platform captured no frame for the picture \"{name}\".");
+        using WriteableBitmap? captured = window.CaptureRenderedFrame();
+        Assert.IsNotNull(captured, $"The headless platform captured no frame for the picture \"{name}\".");
+        using WriteableBitmap? cropped = region is { } part ? Crop(captured, part) : null;
+        WriteableBitmap frame = cropped ?? captured;
         Assert.IsGreaterThan(1, CountColours(frame), $"The picture \"{name}\" is blank (a single colour).");
 
         string folder = Directory();
@@ -55,6 +60,24 @@ internal static class Pictures
         frame.Save(path, PngBitmapEncoderOptions.Default);
         context.WriteLine($"Picture saved: {path}");
         return path;
+    }
+
+    // The part of a frame inside a region (kept inside the frame).
+    private static WriteableBitmap Crop(WriteableBitmap frame, PixelRect region)
+    {
+        using ILockedFramebuffer source = frame.Lock();
+        PixelRect inside = region.Intersect(new PixelRect(source.Size));
+        Assert.IsTrue(inside.Width > 0 && inside.Height > 0, $"The region {region} lies outside the frame {source.Size}.");
+        var part = new WriteableBitmap(inside.Size, frame.Dpi, source.Format, AlphaFormat.Premul);
+        using ILockedFramebuffer target = part.Lock();
+        var row = new byte[inside.Width * 4];
+        for (int y = 0; y < inside.Height; y++)
+        {
+            Marshal.Copy(source.Address + ((inside.Y + y) * source.RowBytes) + (inside.X * 4), row, 0, row.Length);
+            Marshal.Copy(row, 0, target.Address + (y * target.RowBytes), row.Length);
+        }
+
+        return part;
     }
 
     // How many distinct colours the frame holds; 1 means nothing was drawn.

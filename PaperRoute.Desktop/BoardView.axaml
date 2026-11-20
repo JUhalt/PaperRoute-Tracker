@@ -9,7 +9,7 @@
     The Board (d1 4.1, step 8), laid out as today's boardPage is (Form1.vb:377-641):
     the welcome while the library is empty (Form1.Welcome.vb:21-34), else four
     rows: the page header, the Needs Attention bar, the shelf bar, and the shelf
-    host. The cards come in step 9; each shelf shows only its empty message.
+    host, whose three shelves hold the cards (ShelfView, CardView; step 9).
     Below a measured width the header's tools wrap under the title and the boxes
     move above the tabs, as SplitBar does today (BoardView.axaml.cs).
   -->
@@ -77,7 +77,7 @@
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
-        <Button x:Name="ViewDeadlines" Classes="link" Margin="4,7,0,0" VerticalAlignment="Top"
+        <Button x:Name="ViewDeadlines" Classes="link" Margin="0,3,-4,-4" VerticalAlignment="Top"
                 Content="View in Deadlines →"
                 Command="{Binding ViewDeadlinesCommand}"
                 ToolTip.Tip="Open Deadlines (Ctrl+4)"

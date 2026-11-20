@@ -31,6 +31,8 @@ dotnet test PaperRoute.Tests/PaperRoute.Tests.vbproj --configuration Release --n
 dotnet test PaperRoute.Core.Tests/PaperRoute.Core.Tests.vbproj --configuration Release --no-build
 ```
 
+Four tests in `PaperRoute.Core.Tests` (category `SameDataEverywhere`) compare the bytes a session stores with values recorded on the CI runners, which are on UTC with the en-US culture. On a computer in another time zone or culture they report themselves inconclusive and say why. CI runs them on Windows and on Ubuntu, where a test that did not run counts as not passing.
+
 `PaperRoute.Core` must not call an API that exists only on Windows, so that it can run on Linux and macOS as well as Windows; CI builds and tests it on Ubuntu, as below, and nothing tests it on macOS. Windows code belongs in `PaperRoute.Platform`: behind one of the core's interfaces when the core needs it, or called by the app directly when only the app does, as single instance is. Two checks hold this, and either one fails a pull request: the core treats the platform warning CA1416 as a build error, and `.github/scripts/Get-WindowsOnlyApiInventory.ps1 -FailOnWindowsOnly`, which also finds what the compiler cannot see (a `DllImport`, a named kernel object), fails on any windows-only row. CI runs the inventory in the Windows job and again in **Core on Linux**, which builds the core on Ubuntu and requires every test in `PaperRoute.Core.Tests` to pass there too, none skipped. To run the inventory yourself:
 
 ```powershell
