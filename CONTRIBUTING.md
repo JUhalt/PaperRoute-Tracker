@@ -31,6 +31,12 @@ dotnet test PaperRoute.Tests/PaperRoute.Tests.vbproj --configuration Release --n
 dotnet test PaperRoute.Core.Tests/PaperRoute.Core.Tests.vbproj --configuration Release --no-build
 ```
 
+`PaperRoute.Core` runs on Linux and macOS as well as Windows, so it must not call an API that exists only on Windows; that code belongs in `PaperRoute.Platform`, behind one of the core's interfaces. Two checks hold this, and either one fails a pull request: the core treats the platform warning CA1416 as a build error, and `.github/scripts/Get-WindowsOnlyApiInventory.ps1 -FailOnWindowsOnly`, which also finds what the compiler cannot see (a `DllImport`, a named kernel object), fails on any windows-only row. CI runs the inventory in the Windows job and again in **Core on Linux**, which builds the core on Ubuntu and requires every test in `PaperRoute.Core.Tests` to pass there too, none skipped. To run the inventory yourself:
+
+```powershell
+./.github/scripts/Get-WindowsOnlyApiInventory.ps1 -Root . -FailOnWindowsOnly
+```
+
 ## Data safety
 
 Changes involving persistence, backup/restore, managed files, or import logic should preserve existing local data whenever possible. Avoid silently changing storage locations or destructive behavior without a migration path.
