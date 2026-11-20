@@ -4,7 +4,7 @@ Namespace Models
 
     Public Class ReadinessItemState
 
-        Public Property Id As Guid = Guid.NewGuid()
+        Public Property Id As Guid = CoreIds.NewId()
 
         Public Property TemplateItemId As Guid? = Nothing
 

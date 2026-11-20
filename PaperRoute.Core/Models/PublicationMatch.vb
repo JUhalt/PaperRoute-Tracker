@@ -30,7 +30,7 @@ Namespace Models
     ' Published.
     Public Class PublicationMatch
 
-        Public Property Id As Guid = Guid.NewGuid()
+        Public Property Id As Guid = CoreIds.NewId()
 
         Public Property Doi As String = String.Empty
 

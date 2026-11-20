@@ -6,6 +6,7 @@ Imports System.Text.RegularExpressions
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
 Imports ManuscriptPipeline
 Imports ManuscriptPipeline.Models
+Imports ManuscriptPipeline.Services
 
 ' CoreClock and CoreIds (core stage 2, design 6.2 and risk R8). With the
 ' system clock each CoreClock member is the very DateTime call it stands
@@ -252,5 +253,154 @@ Public Class CoreClockTests
         Assert.AreNotEqual(New Guid("00000001-0000-0000-0000-000000000000"), CoreIds.NewId())
 
     End Sub
+
+
+    ' A model's id initialiser takes the core's ids (design 10, step 7).
+    <TestMethod>
+    Public Sub AModelMadeUnderCounterIdsTakesTheNextId()
+
+        PlatformServices.NewId = CoreTestPlatform.CounterIds()
+
+        Assert.AreEqual(New Guid("00000001-0000-0000-0000-000000000000"), New ManuscriptVersion().Id)
+        Assert.AreEqual(New Guid("00000002-0000-0000-0000-000000000000"), New HistoryEvent().Id)
+
+    End Sub
+
+
+    ' The managed copy's stored name ends in the first 8 hex digits of a new
+    ' id (ManagedLibraryService.CreateUniqueDestinationPath). With counter
+    ' ids it is the first counter id's "00000001", so a scripted session
+    ' stores the same path every time (design 10, step 7).
+    <TestMethod>
+    Public Sub WithCounterIdsAManagedCopysSuffixIsTheFirstCounterId()
+
+        Dim root As String = CreateTemporaryRoot()
+
+        Try
+
+            Dim source As String = Path.Combine(root, "draft.docx")
+            IO.File.WriteAllText(source, "draft")
+
+            Dim manuscriptId As New Guid("aaaaaaaa-0000-0000-0000-000000000001")
+            Dim versionId As New Guid("bbbbbbbb-0000-0000-0000-000000000002")
+            Dim version As New ManuscriptVersion() With {
+                .Id = versionId,
+                .LocalFilePath = source,
+                .IsManagedCopy = True
+            }
+            Dim manuscript As New Manuscript() With {.Id = manuscriptId}
+            manuscript.Versions.Add(version)
+
+            Dim libraryRoot As String = Path.Combine(root, "Library")
+            Dim library As New ManagedLibraryService(libraryRoot)
+
+            ' Set last, so the copy's name takes the first counter id.
+            PlatformServices.NewId = CoreTestPlatform.CounterIds()
+            library.CommitManagedCopies({manuscript})
+
+            Dim expected As String = Path.Combine(
+                Path.GetFullPath(libraryRoot),
+                manuscriptId.ToString("N"),
+                "versions",
+                versionId.ToString("N"),
+                "draft_00000001.docx"
+            )
+
+            Assert.AreEqual(expected, version.LocalFilePath)
+            Assert.IsTrue(version.IsManagedCopy)
+            Assert.IsTrue(IO.File.Exists(expected), expected)
+            Assert.AreEqual("draft", IO.File.ReadAllText(expected))
+
+        Finally
+
+            DeleteTemporaryRoot(root)
+
+        End Try
+
+    End Sub
+
+
+    ' Every new identifier in PaperRoute.Core comes from CoreIds (design
+    ' 6.3), so counter ids reach all of them. Guid.NewGuid() is left only
+    ' where it names a temporary file or folder that never reaches stored
+    ' data; each such line is listed here by its file and its trimmed text,
+    ' as many times as it occurs. Whole-line comments and string literals
+    ' are skipped, and Seams\ (CoreIds and the PlatformServices default)
+    ' is left out.
+    <TestMethod>
+    Public Sub OnlyTheListedTemporaryNamesUseGuidNewGuid()
+
+        Dim core As String = Path.Combine(TestRepository.Root(), "PaperRoute.Core")
+        Dim files As List(Of String) = SourceFiles(core)
+        Assert.IsTrue(files.Count >= 160, $"Only {files.Count} .vb files were found under {core}.")
+
+        Dim allowed As String() = {
+            Path.Combine("Services", "ExampleLibraryService.vb") & "|Dim root As String = Path.Combine(Path.GetTempPath(), ""PaperRoute-Example-"" & Guid.NewGuid().ToString(""N""))",
+            Path.Combine("Services", "ManagedLibraryService.vb") & "|Guid.NewGuid().ToString(""N"")",
+            Path.Combine("Services", "ManagedPacketDeletionService.vb") & "|Guid.NewGuid().ToString(""N"")",
+            Path.Combine("Services", "PacketExportService.vb") & "|System.IO.Path.GetFileName(zipPath) & ""."" & Guid.NewGuid().ToString(""N"").Substring(0, 8) & "".partial"")",
+            Path.Combine("Services", "PortableBackupService.vb") & "|""PaperRouteBackup_"" & Guid.NewGuid().ToString(""N"")",
+            Path.Combine("Services", "PortableRestoreService.vb") & "|Guid.NewGuid().ToString(""N"")",
+            Path.Combine("Services", "PortableRestoreService.vb") & "|Guid.NewGuid().ToString(""N"")",
+            Path.Combine("Services", "StorageMigrationService.vb") & "|Guid.NewGuid().ToString(""N"")",
+            Path.Combine("Services", "StorageMigrationService.vb") & "|Guid.NewGuid().ToString(""N"")"
+        }
+        Assert.AreEqual(9, allowed.Length)
+
+        Dim seams As String = Path.Combine(core, "Seams") & Path.DirectorySeparatorChar
+
+        ' The scan itself works: it finds PlatformServices' two defaults.
+        Assert.AreEqual(2, NewGuidCalls(Path.Combine(core, "Seams", "PlatformServices.vb")).Count, "The scan no longer finds PlatformServices' Guid.NewGuid defaults.")
+
+        Dim found As New List(Of String)()
+        For Each file As String In files
+            If file.StartsWith(seams, StringComparison.OrdinalIgnoreCase) Then Continue For
+            Dim relative As String = Path.GetRelativePath(core, file)
+            For Each hit As (LineNumber As Integer, Text As String) In NewGuidCalls(file)
+                found.Add(relative & "|" & hit.Text)
+            Next
+        Next
+
+        Dim unlisted As List(Of String) = found.ToList()
+        For Each entry As String In allowed
+            unlisted.Remove(entry)
+        Next
+        Dim missing As List(Of String) = allowed.ToList()
+        For Each entry As String In found
+            missing.Remove(entry)
+        Next
+
+        Assert.AreEqual(
+            0,
+            unlisted.Count,
+            "Make a new identifier with CoreIds.NewId(); Guid.NewGuid() is left only for the listed temporary names:" &
+            Environment.NewLine & String.Join(Environment.NewLine, unlisted)
+        )
+        Assert.AreEqual(
+            0,
+            missing.Count,
+            "A listed temporary name was not found; take it off the list:" &
+            Environment.NewLine & String.Join(Environment.NewLine, missing)
+        )
+
+    End Sub
+
+
+    Private Shared ReadOnly NewGuidCall As New Regex(
+        "\bGuid\s*\.\s*NewGuid\b",
+        RegexOptions.IgnoreCase Or RegexOptions.CultureInvariant
+    )
+
+
+    Private Shared Function NewGuidCalls(file As String) As List(Of (LineNumber As Integer, Text As String))
+        Dim calls As New List(Of (LineNumber As Integer, Text As String))()
+        Dim lines As String() = IO.File.ReadAllLines(file)
+        For i As Integer = 0 To lines.Length - 1
+            Dim text As String = lines(i).Trim()
+            If text.StartsWith("'", StringComparison.Ordinal) Then Continue For
+            If NewGuidCall.IsMatch(StringLiteral.Replace(text, """""")) Then calls.Add((i + 1, text))
+        Next
+        Return calls
+    End Function
 
 End Class

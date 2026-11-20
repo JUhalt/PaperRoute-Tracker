@@ -39,7 +39,7 @@ Namespace Services
             ValidateJournalConsistency(readiness, submission)
 
             Dim packet As New SubmissionPacket With {
-                .Id = Guid.NewGuid(),
+                .Id = CoreIds.NewId(),
                 .ReadinessProfileId = If(readiness Is Nothing, Nothing, CType(readiness.Id, Guid?)),
                 .JournalId = ResolveJournalId(manuscript, readiness, submission),
                 .JournalName = ResolveJournalName(manuscript, readiness, submission),
@@ -193,7 +193,7 @@ Namespace Services
             End If
 
             Dim packetFile As New SubmissionPacketFile With {
-                .Id = Guid.NewGuid(),
+                .Id = CoreIds.NewId(),
                 .Role = role,
                 .Label = normalizedLabel,
                 .Notes = NormalizeText(notes),

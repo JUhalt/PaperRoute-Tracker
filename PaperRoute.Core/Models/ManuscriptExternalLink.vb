@@ -4,7 +4,7 @@ Namespace Models
 
     Public Class ManuscriptExternalLink
 
-        Public Property Id As Guid = Guid.NewGuid()
+        Public Property Id As Guid = CoreIds.NewId()
 
         Public Property Label As String = String.Empty
 

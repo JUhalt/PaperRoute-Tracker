@@ -28,7 +28,7 @@ Namespace Services
         ) As ReviewerResponseItem
             Dim candidate = CopyForEdit(submission)
             Dim item = ManuscriptCloneService.CloneReviewerResponse(draft)
-            item.Id = Guid.NewGuid()
+            item.Id = CoreIds.NewId()
             item.CreatedAtUtc = CoreClock.UtcNow
             item.LastModifiedAtUtc = Nothing
             candidate.ReviewerResponses.Add(item)
@@ -49,7 +49,7 @@ Namespace Services
             For Each draft As ReviewerResponseItem In drafts
                 If draft Is Nothing Then Throw New ArgumentException("A response item to add is missing.", NameOf(drafts))
                 Dim item = ManuscriptCloneService.CloneReviewerResponse(draft)
-                item.Id = Guid.NewGuid()
+                item.Id = CoreIds.NewId()
                 item.CreatedAtUtc = CoreClock.UtcNow
                 item.LastModifiedAtUtc = Nothing
                 candidate.ReviewerResponses.Add(item)
