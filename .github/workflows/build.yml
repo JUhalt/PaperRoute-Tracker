@@ -184,6 +184,7 @@ jobs:
     name: Core on Linux
     runs-on: ubuntu-latest
     continue-on-error: true   # report-only until core stage 2's step 13 removes this line
+    timeout-minutes: 20
 
     steps:
       - name: Check out repository
@@ -213,7 +214,7 @@ jobs:
           TZ: Etc/UTC
           LANG: en_US.UTF-8
         run: |
-          dotnet test PaperRoute.Core.Tests/PaperRoute.Core.Tests.vbproj --configuration Release --no-build `
+          dotnet test PaperRoute.Core.Tests/PaperRoute.Core.Tests.vbproj --configuration Release --no-build --blame-hang-timeout 5m `
               --logger 'trx;LogFileName=PaperRoute.Core.Tests.trx' --results-directory "$env:GITHUB_WORKSPACE/TestResults"
           $exitCode = $LASTEXITCODE
           $path = Join-Path $env:GITHUB_WORKSPACE 'TestResults/PaperRoute.Core.Tests.trx'
