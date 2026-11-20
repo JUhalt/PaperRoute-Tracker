@@ -219,6 +219,10 @@ Public Class StoredBytesTests
     '   by Stamp before hashing. Today's core reads CoreClock, so the test
     '   clock below writes Stamp itself and these files are compared as
     '   written.
+    ' - The three fixture files are LF in git and were CRLF in that Windows
+    '   checkout (core.autocrlf), and the save copies them to the .bak files
+    '   as they are: the seed below gives them CRLF line ends, so the same
+    '   bytes are seeded on every system and from any checkout.
     ' No stored value depends on the time zone: the fixture's dates carry
     ' no offset or end in Z, and are written back as read (CalendarDateJson).
     ' To record again: run that throwaway test at tag v1.0.1, or read the
@@ -255,7 +259,7 @@ Public Class StoredBytesTests
         Directory.CreateDirectory(managedRoot)
 
         Dim fixtures As String = Path.Combine(AppContext.BaseDirectory, "Fixtures", "Schema4Representative")
-        Dim manuscriptsJson As String = File.ReadAllText(Path.Combine(fixtures, "manuscripts.json"))
+        Dim manuscriptsJson As String = File.ReadAllText(Path.Combine(fixtures, "manuscripts.json")).Replace(vbCrLf, vbLf).Replace(vbLf, vbCrLf)
         Dim manuscriptId As String = Guid.Parse("11111111-1111-1111-1111-111111111111").ToString("N")
         Dim paths As New Dictionary(Of String, String) From {
             {"__MANAGED_VERSION__", Path.Combine(managedRoot, manuscriptId, "versions", Guid.Parse("11111111-1111-1111-1111-111111111101").ToString("N"), "manuscript.txt")},
@@ -270,8 +274,8 @@ Public Class StoredBytesTests
             manuscriptsJson = manuscriptsJson.Replace("""" & pair.Key & """", JsonSerializer.Serialize(pair.Value))
         Next
         File.WriteAllText(Path.Combine(dataDirectory, "manuscripts.json"), manuscriptsJson)
-        File.Copy(Path.Combine(fixtures, "authors.json"), Path.Combine(dataDirectory, "authors.json"))
-        File.Copy(Path.Combine(fixtures, "schema.json"), StorageMigrationService.SchemaFilePath(currentData))
+        CopyWithCrLf(Path.Combine(fixtures, "authors.json"), Path.Combine(dataDirectory, "authors.json"))
+        CopyWithCrLf(Path.Combine(fixtures, "schema.json"), StorageMigrationService.SchemaFilePath(currentData))
 
         ' Opened as PaperRoute opens a library, then saved.
         StorageMigrationService.EnsureCurrentStorage(
@@ -339,6 +343,14 @@ Public Class StoredBytesTests
         Return result.ToArray()
 
     End Function
+
+
+    ' A byte copy with every line ending in CR LF, whatever the checkout gave.
+    Private Shared Sub CopyWithCrLf(source As String, destination As String)
+        Dim lf As Byte() = {10}
+        Dim crLf As Byte() = {13, 10}
+        WriteFile(destination, ReplaceBytes(ReplaceBytes(File.ReadAllBytes(source), crLf, lf), lf, crLf))
+    End Sub
 
 
     Private Shared Sub WriteFile(filePath As String, bytes As Byte())
