@@ -41,6 +41,24 @@ public sealed class SessionStartupProcessTests
         Assert.AreEqual(7, expected, "The example library no longer holds 7 manuscripts; update this test and the design.");
         Assert.Contains($"PASS example library: loaded {expected} manuscript(s); the example holds {expected}", run.Lines, report);
         Assert.Contains($"PASS startup notice: Loaded {expected} manuscripts from local storage.", run.Lines, report);
+
+        // Step 5: the example's Board rendered and every filter run on it
+        // (TrialStartup's BoardSelfCheck), before the storage checks above,
+        // which so cover those renders too.
+        string[] boardChecks =
+        [
+            "board render", "board search", "board stage list", "board stage list unchanged",
+            "board stage box closed", "board sort list", "board sort box closed", "board chip", "board clear",
+        ];
+        foreach (string check in boardChecks)
+        {
+            Assert.IsTrue(run.Lines.Any(line => line.StartsWith($"PASS {check}: ", StringComparison.Ordinal)),
+                $"No passing \"{check}\" line.\n{report}");
+        }
+
+        int lastBoard = Array.FindLastIndex(run.Lines, line => line.StartsWith("PASS board ", StringComparison.Ordinal));
+        int defaults = Array.FindIndex(run.Lines, line => line.StartsWith("PASS default roots: ", StringComparison.Ordinal));
+        Assert.IsLessThan(defaults, lastBoard, "The storage checks run after the Board's.\n" + report);
     }
 
     [TestMethod]

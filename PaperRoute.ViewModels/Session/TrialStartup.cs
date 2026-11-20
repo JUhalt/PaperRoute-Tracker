@@ -127,9 +127,10 @@ public static class TrialStartup
     }
 
     // The "--self-check" mode (d1 1.3 Modes): with no window, loads the
-    // session StartExample returned, checks the example arrived whole, runs
-    // SelfCheck, ends the session and checks its folder is gone. Returns the
-    // process exit code: 0 when every check passed, else 1.
+    // session StartExample returned, checks the example arrived whole, renders
+    // its Board and runs each filter on it (BoardSelfCheck), runs SelfCheck,
+    // ends the session and checks its folder is gone. Returns the process
+    // exit code: 0 when every check passed, else 1.
     public static int RunSelfCheck(ILibrarySession session, TextWriter output)
     {
         ArgumentNullException.ThrowIfNull(session);
@@ -140,6 +141,8 @@ public static class TrialStartup
         output.WriteLine($"session folder: {root}");
         try
         {
+            var board = new BoardSelfCheck(session, output);
+
             // No synchronization context here, so blocking cannot deadlock.
             session.LoadAsync(CancellationToken.None).GetAwaiter().GetResult();
 
@@ -149,6 +152,10 @@ public static class TrialStartup
                 $"loaded {loaded} manuscript(s); the example holds {expected}");
             passed &= Report(output, session.StartupNotice == DiskLibrarySession.LoadedText(loaded), "startup notice",
                 session.StartupNotice);
+
+            // The Board's renders and filters first, so the storage checks
+            // that follow also cover them.
+            passed &= board.Run();
             passed &= SelfCheck(output);
         }
         catch (Exception ex)

@@ -10,11 +10,9 @@ namespace PaperRoute.ViewModels.Board;
 // again from the session's library, as today, and the 28 places that render
 // today become LibraryChanged and the filter changes here.
 //
-// Not here yet (later steps of d1 section 8): the open-list rule of #338
-// for the two boxes (step 5: today a box change renders at once, as on a
-// closed box), the commands that give notices (open, route, deadlines, add)
-// and the tag-strip search (step 9), and the view's own state (columns,
-// realized shelves).
+// Not here yet (later steps of d1 section 8): the commands that give notices
+// (open, route, deadlines, add) and the tag-strip search (step 9), and the
+// view's own state (columns, realized shelves).
 public sealed partial class BoardViewModel : ObservableObject
 {
     // Form1.vb boardSearchDebounceTimer (:79-81).
@@ -22,6 +20,16 @@ public sealed partial class BoardViewModel : ObservableObject
 
     private readonly ILibrarySession _session;
     private readonly IDebouncer _searchDebouncer;
+    private readonly IUiDispatcher _dispatcher;
+
+    // The #338 rule (Form1.vb:60-69): a stage or sort chosen in an open list
+    // waits for the list to close. _filterChangePending marks a choice made
+    // meanwhile; _flushPosted says a flush is posted and not yet run;
+    // _filterShown is the (stage, sort) pair the last render showed, so a
+    // list closed on the choice it opened with renders nothing.
+    private bool _filterChangePending;
+    private bool _flushPosted;
+    private (int Stage, int Sort) _filterShown = (-1, -1);
 
     // The attention snapshots of this render, one per record, keyed by
     // reference so two records that share an Id keep their own (d1 3.2
@@ -46,6 +54,14 @@ public sealed partial class BoardViewModel : ObservableObject
 
     [ObservableProperty]
     private int _selectedSortIndex;
+
+    // Whether each box's list is dropped (Form1.vb BoardFilterListOpen,
+    // :1948-1954, ComboBox.DroppedDown). The view binds them to the boxes.
+    [ObservableProperty]
+    private bool _isStageListOpen;
+
+    [ObservableProperty]
+    private bool _isSortListOpen;
 
     // Form1.vb activeAttentionFilter (:14).
     [ObservableProperty]
@@ -78,12 +94,14 @@ public sealed partial class BoardViewModel : ObservableObject
     [ObservableProperty]
     private int _renderCount;
 
-    public BoardViewModel(ILibrarySession session, IDebouncer searchDebouncer)
+    public BoardViewModel(ILibrarySession session, IDebouncer searchDebouncer, IUiDispatcher dispatcher)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(searchDebouncer);
+        ArgumentNullException.ThrowIfNull(dispatcher);
         _session = session;
         _searchDebouncer = searchDebouncer;
+        _dispatcher = dispatcher;
 
         StageOptions = BuildStageOptions([]);
 
@@ -157,6 +175,9 @@ public sealed partial class BoardViewModel : ObservableObject
         // 2. The stage box and the chips (:2675-2676).
         RefreshStageOptions(all);
         RefreshChips(all, settings);
+
+        // The pair this render shows, after the stage box's refill (:2678).
+        _filterShown = (SelectedStageIndex, SelectedSortIndex);
 
         DropStaleCards(all);
 
@@ -271,9 +292,25 @@ public sealed partial class BoardViewModel : ObservableObject
         _searchDebouncer.Restart(SearchDelay, SearchDelayElapsed);
     }
 
-    partial void OnSelectedStageIndexChanged(int value) => FilterChanged();
+    partial void OnSelectedStageIndexChanged(int value) => FilterChanged(IsStageListOpen);
 
-    partial void OnSelectedSortIndexChanged(int value) => FilterChanged();
+    partial void OnSelectedSortIndexChanged(int value) => FilterChanged(IsSortListOpen);
+
+    partial void OnIsStageListOpenChanged(bool value)
+    {
+        if (!value)
+        {
+            FilterListClosed();
+        }
+    }
+
+    partial void OnIsSortListOpenChanged(bool value)
+    {
+        if (!value)
+        {
+            FilterListClosed();
+        }
+    }
 
     // Form1.vb BoardSearchDebounceElapsed (:1905-1918).
     private void SearchDelayElapsed()
@@ -287,12 +324,56 @@ public sealed partial class BoardViewModel : ObservableObject
         Render();
     }
 
-    // Form1.vb BoardFilterChanged (:1921-1943) for a closed box: the
-    // pending search is dropped and the Board renders at once. The open-list
-    // half of the rule (#338) is step 5's.
-    private void FilterChanged()
+    // Form1.vb BoardFilterChanged (:1921-1943). A step through the box's open
+    // list, or a choice that comes after a close whose flush has not run yet,
+    // only marks a change as pending (#338). A step on a closed box, by an
+    // arrow key or the mouse wheel, drops the pending search and renders at
+    // once.
+    private void FilterChanged(bool listOpen)
     {
         if (_suppressFilterEvents)
+        {
+            return;
+        }
+
+        if (_flushPosted || listOpen)
+        {
+            _filterChangePending = true;
+            return;
+        }
+
+        _searchDebouncer.Stop();
+        Render();
+    }
+
+    // Form1.vb BoardFilterListClosed (:1957-1969): one flush is posted, as
+    // the order of "choice changed" and "list closed" is not fixed (on
+    // Windows today; whether Avalonia's ComboBox changes its choice while its
+    // list is open was not checked, and this holds either way).
+    private void FilterListClosed()
+    {
+        if (_flushPosted)
+        {
+            return;
+        }
+
+        _flushPosted = true;
+        _dispatcher.Post(FlushFilterChange);
+    }
+
+    // Form1.vb FlushBoardFilterChange (:1975-1992): the choice made in the
+    // list just closed, rendered once, and only if it is not what the Board
+    // already shows (Esc or a click away may hand back the opening choice).
+    private void FlushFilterChange()
+    {
+        _flushPosted = false;
+        if (!_filterChangePending)
+        {
+            return;
+        }
+
+        _filterChangePending = false;
+        if (_filterShown == (SelectedStageIndex, SelectedSortIndex))
         {
             return;
         }

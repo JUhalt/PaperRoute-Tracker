@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using ManuscriptPipeline.Models;
 using PaperRoute.TestFixtures;
+using PaperRoute.ViewModels;
 using PaperRoute.ViewModels.Board;
 using PaperRoute.ViewModels.Session;
 
@@ -80,7 +81,7 @@ public sealed class BoardSortOrderTests : StorageCheckedTests
             Path.Combine(_root, "settings"),
             LibraryKind.Example,
             LargeLibraryFixture.Today);
-        var board = new BoardViewModel(session, new ManualDebouncer());
+        var board = new BoardViewModel(session, new ManualDebouncer(), new QueuedUiDispatcher());
 
         await session.LoadAsync(CancellationToken.None);
 

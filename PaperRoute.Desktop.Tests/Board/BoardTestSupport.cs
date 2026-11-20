@@ -161,20 +161,24 @@ internal static class Papers
     }
 }
 
-// A Board over a memory session, with its hand-fired search wait.
+// A Board over a memory session, with its hand-fired search wait and its
+// posted work run by hand.
 internal sealed class BoardHarness
 {
     public BoardHarness(IEnumerable<Manuscript> manuscripts, AppSettings? settings = null, AuthorLibraryData? authorLibrary = null, DateTime? today = null)
     {
         Session = new MemorySession(manuscripts, today ?? Papers.Today, settings, authorLibrary);
         Debouncer = new ManualDebouncer();
-        Board = new BoardViewModel(Session, Debouncer);
+        Posts = new QueuedUiDispatcher();
+        Board = new BoardViewModel(Session, Debouncer, Posts);
         Board.Render();
     }
 
     public MemorySession Session { get; }
 
     public ManualDebouncer Debouncer { get; }
+
+    public QueuedUiDispatcher Posts { get; }
 
     public BoardViewModel Board { get; }
 
