@@ -240,8 +240,9 @@ public sealed class CardViewTests : StorageCheckedTests
 
     // K8 (d1 4.5, new: plan item 62). On a 58-card shelf, at two widths with
     // different column counts (so the last row is short at both): from card
-    // i's title, Right goes to i+1, Left to i-1 (from a row's first card, to
-    // the last card of the row above), Down to i+columns, Up to i-columns,
+    // i's title, Right goes to i+1 (from a row's last card, to the first card
+    // of the row below), Left to i-1 (from a row's first card, to the last
+    // card of the row above), Down to i+columns, Up to i-columns,
     // Home to the first card and End to the last; each lands on that card's
     // title, its card's focus ring shows, and the card is in view. At an edge
     // the key does nothing: Left and Up on the first row, Right and Down on
@@ -303,6 +304,7 @@ public sealed class CardViewTests : StorageCheckedTests
                 Step("Left on the first card", Key.Left, 0);
                 From(columns);
                 Step("Left from a row's first card", Key.Left, columns - 1);
+                Step("Right from a row's last card", Key.Right, columns);
                 Step("End", Key.End, count - 1);
                 Step("Right on the last card", Key.Right, count - 1);
                 Step("Down on the last card", Key.Down, count - 1);
@@ -345,6 +347,8 @@ public sealed class CardViewTests : StorageCheckedTests
     [TestMethod]
     [DataRow(Key.Right, 4, 10, 3, 5)]
     [DataRow(Key.Right, 9, 10, 3, 9)]
+    [DataRow(Key.Right, 2, 10, 3, 3)]
+    [DataRow(Key.Right, 4, 12, 5, 5)]
     [DataRow(Key.Left, 3, 10, 3, 2)]
     [DataRow(Key.Left, 0, 10, 3, 0)]
     [DataRow(Key.Down, 4, 10, 3, 7)]
@@ -476,7 +480,8 @@ public sealed class CardViewTests : StorageCheckedTests
     // tag strip, here the "+N" at its end, puts the card's FIRST tag in the
     // search box, and the Board renders the search after its wait. The strip
     // shows as many tags as fit in half the line, then "+N" (TagChips.vb:
-    // 107-130); it is not a tab stop, and is named and tipped as today.
+    // 107-130), which the test replays on the drawn chips' widths; it is not
+    // a tab stop, and is named and tipped as today.
     [TestMethod]
     public void V17_AClickOnTheTagStripSearchesForTheFirstTag()
     {
@@ -500,6 +505,21 @@ public sealed class CardViewTests : StorageCheckedTests
                 ["HalfLine"] = (strip.Bounds.Width <= Math.Floor(card.Part<Border>("Card").Bounds.Width / 2)).ToString(),
             };
 
+            // The fit rule (TagChips.vb:114-123) replayed on the drawn chips: the
+            // strip is offered half its line; a chip is shown only if it and the
+            // "+N" for the tags after it fit, 4 px apart. The last chip shown had
+            // room for the "+N" drawn; the first hidden one (measured, as the rule
+            // stopped at it) had no room for itself and a "+N" of one less.
+            double offered = Math.Floor(((Control)strip.Parent!).Bounds.Width / 2);
+            List<Border> chips = strip.Children.OfType<Border>().Where(chip => !chip.Classes.Contains(TagStripPanel.MoreClass)).ToList();
+            Border moreChip = strip.Children.OfType<Border>().Single(chip => chip.Classes.Contains(TagStripPanel.MoreClass));
+            int shownChips = strip.ShownTexts.Count - 1;
+            double lastRight = shownChips == 0 ? 0 : chips[shownChips - 1].Bounds.Right;
+            double moreWidth = moreChip.DesiredSize.Width;
+            facts["LastShownFits"] = (shownChips == 0 || lastRight + 4 + moreWidth <= offered).ToString();
+            facts["FirstHiddenDoesNot"] = (shownChips == chips.Count || (shownChips == 0 ? 0 : lastRight + 4) + chips[shownChips].DesiredSize.Width + 4 + moreWidth > offered).ToString();
+            facts["Fit"] = $"offered {offered}, chips {string.Join(" ", chips.Select(chip => chip.DesiredSize.Width))}, +N {moreWidth}, shown {shownChips}";
+
             // The last chip drawn: "+N".
             Border last = strip.GetVisualChildren().OfType<Border>().Where(chip => chip.Bounds.Width > 0).OrderBy(chip => chip.Bounds.X).Last();
             board.Click(last);
@@ -518,6 +538,8 @@ public sealed class CardViewTests : StorageCheckedTests
         Assert.AreEqual(8, shown.Length - 1 + more, $"The chips shown and N count every tag: {facts["Shown"]}");
         CollectionAssert.AreEqual(new[] { "alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta" }.Take(shown.Length - 1).ToArray(), shown[..^1], "The first tags, in order.");
         Assert.AreEqual("True", facts["HalfLine"], "The strip keeps to half the line.");
+        Assert.AreEqual("True", facts["LastShownFits"], "The last chip shown has room for the +N after it: " + facts["Fit"]);
+        Assert.AreEqual("True", facts["FirstHiddenDoesNot"], "The first chip hidden would not have fitted with a +N after it: " + facts["Fit"]);
         Assert.AreEqual("Tags: alpha, beta, gamma, delta, epsilon, zeta, eta, theta", facts["Name"]);
         Assert.AreEqual("alpha, beta, gamma, delta, epsilon, zeta, eta, theta (click to search the board)", facts["Tip"]);
         Assert.AreEqual("False", facts["Focusable"], "The strip is not a tab stop.");
@@ -528,8 +550,10 @@ public sealed class CardViewTests : StorageCheckedTests
     }
 
     // H6. Ports MotionTests.vb:290: focus on a title turns its card's edge to
-    // the accent at once (:focus-within, no transition: an accent ring over
-    // the border, see Card.axaml); the pointer over a card turns its border
+    // the accent at once (no transition: an accent ring over the border, see
+    // Card.axaml), and focus on ⋯ or View route does not, as today
+    // (Form1.vb:3403-3413, the title alone; d1 4.5 says :focus-within, the
+    // code wins); the pointer over a card turns its border
     // there through its 100 ms transition; both go back when focus and
     // pointer leave.
     [TestMethod]
@@ -560,6 +584,14 @@ public sealed class CardViewTests : StorageCheckedTests
             facts["RingTransitions"] = (ring.Transitions?.Count ?? 0).ToString(CultureInfo.InvariantCulture);
             board.Window.UpdateLayout();
             facts["RingCoversCard"] = (ring.Bounds == first.Bounds).ToString();
+
+            // Only the title: focus on ⋯ or View route leaves the card at rest (Form1.vb:3403-3413).
+            cards[0].Part<Button>("More").Focus(NavigationMethod.Tab);
+            Dispatcher.UIThread.RunJobs();
+            facts["RingOnMore"] = ring.IsVisible.ToString();
+            cards[0].Part<Button>("ViewRoute").Focus(NavigationMethod.Tab);
+            Dispatcher.UIThread.RunJobs();
+            facts["RingOnViewRoute"] = ring.IsVisible.ToString();
 
             board.Find<TextBox>("SearchBox").Focus(NavigationMethod.Tab);
             AvaloniaHeadlessPlatform.ForceRenderTimerTick(30);
@@ -597,6 +629,8 @@ public sealed class CardViewTests : StorageCheckedTests
         Expect("FocusAtOnce", "True True 1,1,1,1");
         Expect("RingTransitions", "0");
         Expect("RingCoversCard", "True");
+        Expect("RingOnMore", "False");
+        Expect("RingOnViewRoute", "False");
         Assert.AreEqual("True", facts["BackAtRest"], facts["BackAtRestColour"]);
         Expect("Transition", "100");
         // Whether the border is still on its way as the pointer arrives is only
@@ -662,6 +696,26 @@ public sealed class CardViewTests : StorageCheckedTests
         Assert.AreEqual(string.Empty, Of(NullResult).Status, "No status line: its latest rejection was 190 days ago and it is off the Pipeline.");
         Assert.AreEqual("3 journals · 3 rejections", Of(NullResult).Route);
         Assert.AreEqual("closed closed closed", Of(NullResult).Dots);
+
+        // Each card's route footer: its dots (one per submission; a rejection
+        // closed, an open last one current, an acceptance accepted, none with
+        // no submission, Form1.vb:3303-3309) and its text (RouteSummaryService
+        // .Describe, Form1.vb:3314-3325).
+        Assert.AreEqual("closed accepted", Of(Anchoring).Dots);
+        Assert.AreEqual("current", Of(Retrieval).Dots);
+        Assert.AreEqual("current", Of(Sleep).Dots);
+        Assert.AreEqual("closed", Of(Invariance).Dots);
+        Assert.AreEqual(string.Empty, Of(OpenMaterials).Dots, "No submissions: no dots (Form1.vb:3309).");
+        Assert.AreEqual(string.Empty, Of(Pilot).Dots, "No submissions: no dots (Form1.vb:3309).");
+        Assert.AreEqual("2nd journal · accepted", Of(Anchoring).Route);
+        Assert.AreEqual("1st journal · major revision", Of(Retrieval).Route);
+        Assert.AreEqual("1st journal", Of(Sleep).Route);
+        Assert.AreEqual("1 journal · 1 rejection", Of(Invariance).Route);
+        Assert.AreEqual("Not yet submitted", Of(OpenMaterials).Route);
+        Assert.AreEqual("Not yet submitted", Of(Pilot).Route);
+
+        // Every card's link reads "View route →" (Form1.vb:3327).
+        CollectionAssert.AreEqual(Enumerable.Repeat("View route →", 7).ToArray(), cards.Select(card => card.ViewRoute).ToArray());
 
         // Every other status line is the stage clock, in the muted ink, or nothing off the Pipeline.
         Assert.IsTrue(Of(OpenMaterials).Status.EndsWith("[muted]", StringComparison.Ordinal), Of(OpenMaterials).Status);
@@ -1058,7 +1112,7 @@ public sealed class CardViewTests : StorageCheckedTests
     }
 
     // What one drawn card shows.
-    private sealed record DrawnCard(string Shelf, string Title, string Pill, string Status, string Journal, string Tags, string Route, string Dots, double Height)
+    private sealed record DrawnCard(string Shelf, string Title, string Pill, string Status, string Journal, string Tags, string Route, string Dots, string ViewRoute, double Height)
     {
         public static DrawnCard Of(string shelf, CardView card)
         {
@@ -1075,6 +1129,7 @@ public sealed class CardViewTests : StorageCheckedTests
                 string.Join(", ", card.Part<TagStripPanel>("TagStrip").ShownTexts),
                 card.Part<TextBlock>("RouteText").Text ?? string.Empty,
                 card.Part<ItemsControl>("RouteDots").IsVisible ? dots : string.Empty,
+                card.Part<Button>("ViewRoute").Content as string ?? string.Empty,
                 card.Part<Border>("Card").Bounds.Height);
         }
 

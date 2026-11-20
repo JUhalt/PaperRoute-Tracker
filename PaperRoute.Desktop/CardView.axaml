@@ -115,7 +115,7 @@
 
       </Grid>
     </Border>
-    <!-- The accent edge while the keyboard is inside the card, at once (Card.axaml). -->
-    <Border x:Name="FocusRing" Classes="card-focus" />
+    <!-- The accent edge while the title has focus, at once; not for ⋯ or View route (Card.axaml; Form1.vb:3403-3413). -->
+    <Border x:Name="FocusRing" Classes="card-focus" IsVisible="{Binding #Title.IsFocused}" />
   </Panel>
 </UserControl>

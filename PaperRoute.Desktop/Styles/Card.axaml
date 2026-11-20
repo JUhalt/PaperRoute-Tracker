@@ -3,7 +3,7 @@
   (ManuscriptPipeline\Controls\CardPanel.vb, Form1.vb:3131-3483): radius 10,
   a 1 px CardBorder outline on CardBackground, 14 px inside. A hovered card's
   border eases to the accent over 100 ms (UiMotion.HoverMilliseconds); focus
-  inside it turns it at once (Border.card-focus). The stripe classes are left out: the Board has
+  on its title turns it at once (Border.card-focus). The stripe classes are left out: the Board has
   none.
 -->
 <Styles xmlns="https://github.com/avaloniaui"
@@ -29,20 +29,19 @@
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
   </Style>
   <!--
-    Focus inside a card turns its edge to the accent at once: a ring drawn over
-    the card's own border, shown while the card's host has focus within. Not
-    the border itself: a :focus-within style that cleared the border's
-    transition left the border at the accent after focus went (step 9, H6).
+    Focus on a card's title turns its edge to the accent at once: a ring drawn
+    over the card's own border, which CardView shows while its title has focus.
+    Only the title, as today (Form1.vb:3403-3413 highlights on lblTitle.Focused
+    alone), not focus anywhere in the card as d1 4.5 and r1's target map have
+    it: ⋯ and View route leave the card at rest. Not the border itself: a
+    focus style that cleared the border's transition left the border at the
+    accent after focus went (step 9, H6).
   -->
   <Style Selector="Border.card-focus">
     <Setter Property="CornerRadius" Value="{DynamicResource CardRadius}" />
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="IsHitTestVisible" Value="False" />
-    <Setter Property="IsVisible" Value="False" />
-  </Style>
-  <Style Selector="Panel.card-host:focus-within > Border.card-focus">
-    <Setter Property="IsVisible" Value="True" />
   </Style>
 
   <!-- A tinted panel with no outline that follows its text: the welcome's privacy note (Form1.Welcome.vb:142-174). -->
