@@ -74,7 +74,7 @@ public sealed class LibrarySessionTests
         await session.LoadAsync(CancellationToken.None);
 
         Assert.IsEmpty(session.Manuscripts);
-        Assert.StartsWith("Library could not be loaded safely.", session.StartupNotice);
+        Assert.AreEqual("Library could not be loaded safely.", session.StartupNotice, "Today's status line (Form1.vb:1448-1449), with no exception text.");
     }
 
     [TestMethod]
@@ -90,6 +90,30 @@ public sealed class LibrarySessionTests
         Assert.AreEqual("Loaded 7 manuscripts from local storage.", shell.Notice);
         ((IInteractions)shell).Notice("A notice.");
         Assert.AreEqual("A notice.", shell.Notice);
+    }
+
+    // ManuscriptRepository.Load can write (d1 1.3), so the session refuses any
+    // folder outside the temporary folder: the user's own profile above all.
+    // Only the paths are checked; nothing is read or created.
+    [TestMethod]
+    public void TheSessionRefusesAFolderOutsideTheTemporaryFolder()
+    {
+        string profile = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "PaperRoute");
+
+        Assert.ThrowsExactly<ArgumentException>(() => new DiskLibrarySession(
+            Path.Combine(profile, "data"),
+            Path.Combine(_root, "library"),
+            _root,
+            LibraryKind.Example,
+            LargeLibraryFixture.Today));
+        Assert.ThrowsExactly<ArgumentException>(() => new DiskLibrarySession(
+            Path.Combine(_root, "data"),
+            Path.Combine(_root, "library"),
+            profile,
+            LibraryKind.Example,
+            LargeLibraryFixture.Today));
     }
 
     // Lock 3 of d1 1.3: the session has no member that could save, back up or

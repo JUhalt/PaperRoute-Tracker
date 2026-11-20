@@ -80,12 +80,17 @@ public sealed class BoardRuleTests : StorageCheckedTests
         Assert.AreEqual("1 rejected in last 1 day", harness.Chip(AttentionFilter.RecentRejection).Text);
     }
 
-    // V2, the two date-dependent sorts. Pins Form1.vb GetVisibleManuscripts
+    // V2, the two rejection sorts. Pins Form1.vb GetVisibleManuscripts
     // (:2261-2271) with CompareRejectionsDescending and
     // CompareRejectionsAscending (:2319-2348): the attention snapshot's
-    // RejectionCount, most first and fewest first. The checked-in sort orders
-    // (V8) leave these two out, since today's Form1 works the snapshots out
-    // for the real date; this test and V2 pin them instead.
+    // RejectionCount, most first and fewest first. The count depends on no
+    // date (PaperRoute.Core ManuscriptAttentionService.vb:66-97 counts every
+    // rejection decision). The checked-in sort orders (V8,
+    // board-sort-orders-500.json from PR A) leave sorts 3 and 4 out, so the
+    // order of manuscripts with equal counts is NOT pinned: Form1 sorts with
+    // List.Sort (introsort, unstable above 16 items), and so does the port
+    // (BoardRules.Sort), but no test would catch a switch to a stable sort.
+    // This test pins the comparison on distinct counts only.
     [TestMethod]
     public void V2_TheRejectionSortsOrderByTheSnapshotsRejectionCount()
     {
@@ -111,6 +116,30 @@ public sealed class BoardRuleTests : StorageCheckedTests
             },
             harness.Board.SortOptions.ToArray(),
             "The sort box's items (Form1.vb:546-552).");
+    }
+
+    // V8b, the title comparison. Pins Form1.vb CompareTitleAscending and
+    // CompareTitleDescending (:2293-2316): StringComparer.CurrentCultureIgnoreCase.
+    // V8 cannot see the comparer, since the 500 library's titles are already
+    // in title order ("Synthetic NNN:"). An ordinal comparer would put
+    // "Banana split" and "Cherry" before "apple"; no sort would keep the
+    // library's order.
+    [TestMethod]
+    public void V8b_TheTitleSortsIgnoreCaseInTheCurrentCulture()
+    {
+        var harness = new BoardHarness(
+        [
+            Paper("banana"),
+            Paper("Cherry"),
+            Paper("apple"),
+            Paper("Banana split"),
+        ]);
+
+        harness.Board.SelectedSortIndex = 1;
+        CollectionAssert.AreEqual(new[] { "apple", "banana", "Banana split", "Cherry" }, BoardHarness.Titles(harness.Pipeline));
+
+        harness.Board.SelectedSortIndex = 2;
+        CollectionAssert.AreEqual(new[] { "Cherry", "Banana split", "banana", "apple" }, BoardHarness.Titles(harness.Pipeline));
     }
 
     // V3. Pins Form1.vb StyleAttentionLabel (:991-1025: a chip shows while

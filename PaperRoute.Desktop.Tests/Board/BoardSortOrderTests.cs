@@ -9,7 +9,7 @@ using PaperRoute.ViewModels.Session;
 namespace PaperRoute.Desktop.Tests.Board;
 
 // V8 (d1 6.2): the order the trial's Board gives the 500-manuscript library
-// under the five sorts that do not depend on the date equals the order
+// under the five sorts the checked-in file holds (0, 1, 2, 5, 6) equals the order
 // today's Windows Forms Board gives it, as PaperRoute.Tests'
 // BoardSortOrderTests.TheFiveDateFreeSortsGiveTheCheckedInOrders read it
 // and checked it in (PaperRoute.TestFixtures\SortOrders\
@@ -24,11 +24,18 @@ namespace PaperRoute.Desktop.Tests.Board;
 // manuscript by its position in the library's order (0-based; position n is
 // the title "Synthetic" n + 1), and so does this test.
 //
-// The two attention sorts (Most and Fewest rejections) are not in the file:
-// today's Form1 works the snapshots out for the real date and has no seam
-// for it. They are pinned by V2 (the snapshot's RejectionCount, from the
-// core) and the ported comparison (BoardRuleTests
-// V2_TheRejectionSortsOrderByTheSnapshotsRejectionCount).
+// What this file can and cannot see. Every fixture title starts "Synthetic
+// NNN:" with a unique number, so the library is already in title order:
+// here Title A-Z is pinned only as the library's order and Title Z-A as its
+// reverse. The title comparer itself (CurrentCultureIgnoreCase) is pinned
+// by BoardRuleTests V8b_TheTitleSortsIgnoreCaseInTheCurrentCulture.
+//
+// The two rejection sorts (Most and Fewest rejections) are not in the file
+// (PR A's generator left indices 3 and 4 out), although their key, the
+// snapshot's RejectionCount, depends on no date. Their comparison on
+// distinct counts is pinned by BoardRuleTests
+// V2_TheRejectionSortsOrderByTheSnapshotsRejectionCount; their order on
+// equal counts (List.Sort, unstable above 16 items) is not pinned.
 [TestClass]
 public sealed class BoardSortOrderTests : StorageCheckedTests
 {

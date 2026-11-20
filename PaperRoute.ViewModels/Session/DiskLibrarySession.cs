@@ -142,7 +142,9 @@ public sealed class DiskLibrarySession : ILibrarySession
         }
         catch (Exception ex) when (IsReadFailure(ex))
         {
-            return ([], "Library could not be loaded safely. " + ex.Message);
+            // Today's status line exactly (Form1.vb:1448-1449): the exception's
+            // message goes to Form1's startup-failure window, not to the line.
+            return ([], "Library could not be loaded safely.");
         }
     }
 
@@ -159,7 +161,17 @@ public sealed class DiskLibrarySession : ILibrarySession
             throw new ArgumentException("An absolute folder is required.", name);
         }
 
-        return Path.GetFullPath(path);
+        // ManuscriptRepository.Load can write (it creates the data folder and
+        // can recover from a backup; d1 1.3), and lock 1 guards only the
+        // default roots. In this wave the trial reads only the example's
+        // session and the tests' libraries, all inside the temporary folder.
+        string full = Path.GetFullPath(path);
+        if (!TrialStartup.IsInside(full, Path.GetTempPath()))
+        {
+            throw new ArgumentException("The trial reads only libraries inside the temporary folder.", name);
+        }
+
+        return full;
     }
 
     private sealed record LoadResult(

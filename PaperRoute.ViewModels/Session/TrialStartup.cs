@@ -209,7 +209,7 @@ public static class TrialStartup
         return [.. locations];
     }
 
-    private static bool IsInside(string path, string folder)
+    internal static bool IsInside(string path, string folder)
     {
         string full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
         string parent = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
