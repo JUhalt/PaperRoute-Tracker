@@ -15,13 +15,14 @@
     <OutputType>Library</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- CA1416 (an API marked for one platform) is an error here, not a warning: the core runs on Linux and macOS as well as Windows, so a call to a Windows-only API must stop the build. Windows code belongs in PaperRoute.Platform, behind the core's interfaces (core stage 2, step 13). -->
+    <WarningsAsErrors>$(WarningsAsErrors);CA1416</WarningsAsErrors>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Anthropic" Version="13.3.0" />
     <PackageReference Include="ClosedXML" Version="0.105.1" />
-    <!-- ProtectedKeyStore's DPAPI calls: part of the Windows Desktop runtime the app targets, but not of plain net10.0. 10.0.0 is the .NET 10 release; in the app and its self-contained publish the runtime's own newer copy still wins. -->
-    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
+    <!-- No DPAPI package here: the Windows key protection is in PaperRoute.Platform (core stage 2, step 8), which the app references and this library never does. -->
   </ItemGroup>
 
 </Project>
