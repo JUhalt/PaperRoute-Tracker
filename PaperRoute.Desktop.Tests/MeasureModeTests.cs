@@ -118,22 +118,26 @@ public sealed class MeasureModeTests : StorageCheckedTests
         Assert.StartsWith("The Board trial writes nothing into your own PaperRoute library.",
             BoardMeasurementReport.RefusalFor(Path.Combine(fakeProfile, "data", "board.json"), [fakeProfile]));
 
-        // Spellings a string comparison would miss: a junction that leads into
-        // the profile is resolved and refused; a device prefix, a loopback
-        // share and a stream form are refused as not plain local paths.
-        string junction = Path.Combine(_root, "J");
-        MakeJunction(junction, fakeProfile);
+        // Spellings a string comparison would miss: a link that leads into the
+        // profile is resolved and refused; a device prefix, a loopback share
+        // and a stream form, which exist on Windows only, are refused as not
+        // plain local paths.
+        string link = Path.Combine(_root, "J");
+        MakeLink(link, fakeProfile);
         Assert.StartsWith("The Board trial writes nothing into your own PaperRoute library.",
-            BoardMeasurementReport.RefusalFor(Path.Combine(junction, "m.json"), [fakeProfile]));
+            BoardMeasurementReport.RefusalFor(Path.Combine(link, "m.json"), [fakeProfile]));
         Assert.StartsWith("The Board trial writes nothing into your own PaperRoute library.",
-            BoardMeasurementReport.RefusalFor(Path.Combine(junction, "data", "m.json"), [fakeProfile]));
-        string inProfile = Path.Combine(fakeProfile, "m.json");
-        foreach (string spelling in new[]
+            BoardMeasurementReport.RefusalFor(Path.Combine(link, "data", "m.json"), [fakeProfile]));
+        if (OperatingSystem.IsWindows())
         {
-            @"\\?\" + inProfile, @"\\.\" + inProfile, @"\\localhost\" + inProfile[0] + "$" + inProfile[2..], fakeProfile + "::$INDEX_ALLOCATION\\m.json",
-        })
-        {
-            Assert.AreEqual(BoardMeasurementReport.LocalFileMessage, BoardMeasurementReport.RefusalFor(spelling, [fakeProfile]), spelling);
+            string inProfile = Path.Combine(fakeProfile, "m.json");
+            foreach (string spelling in new[]
+            {
+                @"\\?\" + inProfile, @"\\.\" + inProfile, @"\\localhost\" + inProfile[0] + "$" + inProfile[2..], fakeProfile + "::$INDEX_ALLOCATION\\m.json",
+            })
+            {
+                Assert.AreEqual(BoardMeasurementReport.LocalFileMessage, BoardMeasurementReport.RefusalFor(spelling, [fakeProfile]), spelling);
+            }
         }
 
         // The real profile's folders, by path only: refused before anything is read there.
@@ -315,10 +319,19 @@ public sealed class MeasureModeTests : StorageCheckedTests
         StringAssert.Contains(timedOut, " of 1000000 frames within 0.2 s: is it minimized, or the screen locked?");
     }
 
-    // A directory junction at link leading to target (both in this test's
-    // own folder). Junctions need no privilege; .NET makes none, so cmd does.
-    private static void MakeJunction(string link, string target)
+    // A link at link leading to the folder target (both in this test's own
+    // folder). On Windows it is a directory junction: junctions need no
+    // privilege, and .NET makes none, so cmd does. Elsewhere it is a symbolic
+    // link, which needs no privilege there.
+    private static void MakeLink(string link, string target)
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            Directory.CreateSymbolicLink(link, target);
+            Assert.IsNotNull(new DirectoryInfo(link).LinkTarget, "The symbolic link was made.");
+            return;
+        }
+
         var start = new System.Diagnostics.ProcessStartInfo("cmd.exe")
         {
             UseShellExecute = false,

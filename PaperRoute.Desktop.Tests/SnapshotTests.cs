@@ -111,11 +111,23 @@ public sealed class SnapshotTests : StorageCheckedTests
     public void ARefusedSourceGivesTheMessageAndOpensNothing()
     {
         string probe = "trial-refusal-probe-" + Guid.NewGuid().ToString("N");
-        string[] sources =
-        [
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PaperRoute", probe),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "PaperRoute Library", probe),
-        ];
+
+        // A system that reports no Documents folder (a Linux CI runner) has no
+        // default managed-library folder to refuse, as in DefaultStorageRoots.
+        var sources = new List<string>();
+        string localData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (!string.IsNullOrEmpty(localData))
+        {
+            sources.Add(Path.Combine(localData, "PaperRoute", probe));
+        }
+
+        string documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        if (!string.IsNullOrEmpty(documents))
+        {
+            sources.Add(Path.Combine(documents, "PaperRoute Library", probe));
+        }
+
+        Assert.IsNotEmpty(sources, "This system reports neither a local data folder nor a Documents folder.");
 
         foreach (string source in sources)
         {
@@ -301,26 +313,45 @@ public sealed class SnapshotTests : StorageCheckedTests
         // Other spellings of the same folders, which a string comparison with
         // "C:\..." would miss: the device prefixes, a loopback admin share and
         // the NTFS stream form. Each is refused as not a plain local path.
-        string share = @"\\localhost\" + inside[0] + "$" + inside[2..];
-        foreach (string source in new[]
+        // These spellings exist on Windows only.
+        if (OperatingSystem.IsWindows())
         {
-            @"\\?\" + inside, @"\\.\" + inside, @"\\?\" + profile, share, profile + "::$INDEX_ALLOCATION",
-        })
-        {
-            string? message = ReadOnlySnapshot.RefusalFor(source, [profile]);
-            Assert.AreEqual("The Board trial needs a local folder path such as C:\\Libraries\\Test.", message, source);
-            var refused = Assert.ThrowsExactly<SnapshotRefusedException>(() => ReadOnlySnapshot.Copy(source, Destination, StandInSession, [profile]));
-            Assert.AreEqual(message, refused.Message, source);
-            Assert.IsEmpty(Directory.EnumerateFileSystemEntries(StandInSession), "Nothing was copied from " + source);
+            string share = @"\\localhost\" + inside[0] + "$" + inside[2..];
+            foreach (string source in new[]
+            {
+                @"\\?\" + inside, @"\\.\" + inside, @"\\?\" + profile, share, profile + "::$INDEX_ALLOCATION",
+            })
+            {
+                string? message = ReadOnlySnapshot.RefusalFor(source, [profile]);
+                Assert.AreEqual("The Board trial needs a local folder path such as C:\\Libraries\\Test.", message, source);
+                var refused = Assert.ThrowsExactly<SnapshotRefusedException>(() => ReadOnlySnapshot.Copy(source, Destination, StandInSession, [profile]));
+                Assert.AreEqual(message, refused.Message, source);
+                Assert.IsEmpty(Directory.EnumerateFileSystemEntries(StandInSession), "Nothing was copied from " + source);
+            }
         }
 
         CollectionAssert.AreEqual(before, SourceState(profile), "Nothing in the refused folder changed.");
 
+        // The default roots: the data folder under the local data folder and
+        // the managed library under Documents, each only when the system
+        // reports that parent (a Linux CI runner reports no Documents folder).
         IReadOnlyList<string> defaults = ReadOnlySnapshot.DefaultStorageRoots();
         string localData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         string documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        var expected = new List<string>();
+        if (!string.IsNullOrEmpty(localData))
+        {
+            expected.Add(Path.Combine(localData, "PaperRoute"));
+        }
+
+        if (!string.IsNullOrEmpty(documents))
+        {
+            expected.Add(Path.Combine(documents, "PaperRoute Library"));
+        }
+
+        Assert.IsNotEmpty(expected, "This system reports neither a local data folder nor a Documents folder.");
         CollectionAssert.IsSubsetOf(
-            new[] { Path.Combine(localData, "PaperRoute"), Path.Combine(documents, "PaperRoute Library") },
+            expected,
             defaults.ToArray(),
             "The default data root and the default managed-library root are refused.");
         foreach (string root in defaults)

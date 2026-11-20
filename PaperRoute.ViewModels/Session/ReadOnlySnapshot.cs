@@ -73,11 +73,16 @@ public static class ReadOnlySnapshot
     }
 
     // Why the folder cannot be copied, in plain words, or null when it can.
-    // Only a plain local path is accepted (IsPlainLocalPath). The default storage roots are checked first, on the path as given,
-    // before anything is read; then the path with its links and short names
-    // resolved; then that the folder exists and holds data\. alsoRefuse adds
-    // folders to the default roots (tests name a fake profile); it can only
-    // refuse more.
+    // Only a plain local path is accepted (IsPlainLocalPath). The default
+    // storage roots are checked first, on the path as given, before anything
+    // is read; then the path with its links and short names resolved; then
+    // that the folder exists and holds data\. alsoRefuse adds folders to the
+    // default roots (tests name a fake profile); it can only refuse more.
+    //
+    // What this cannot refuse: a library its owner moved out of the default
+    // folders (finding it would mean reading the real settings), and a
+    // default folder reached through a drive letter made with subst or a
+    // mapped drive.
     public static string? RefusalFor(string source, IEnumerable<string>? alsoRefuse = null)
     {
         if (string.IsNullOrWhiteSpace(source) || !Path.IsPathFullyQualified(source))
@@ -260,14 +265,19 @@ public static class ReadOnlySnapshot
 
     internal const string LocalFolderMessage = "The Board trial needs a local folder path such as C:\\Libraries\\Test.";
 
-    // True for a full path on a local drive letter ("C:\..."), with no ':'
-    // after the drive. The comparisons with the storage folders work on such
-    // paths only, so everything else is refused: the \\?\ and \\.\ device
-    // prefixes, UNC paths (a loopback share such as \\localhost\C$ reaches
-    // the same folders) and the NTFS stream form "folder::$INDEX_ALLOCATION".
+    // True for a full path the comparisons with the storage folders can be
+    // trusted on. On Windows that is a path on a drive letter ("C:\..."), with
+    // no ':' after the drive; everything else is refused: the \\?\ and \\.\
+    // device prefixes, UNC paths (a loopback share such as \\localhost\C$
+    // reaches the same folders) and the NTFS stream form
+    // "folder::$INDEX_ALLOCATION". On Linux and macOS a folder has no second
+    // spelling of that kind (links are resolved by RealPath), so any path
+    // from the root ("/...") is plain.
     internal static bool IsPlainLocalPath(string full) =>
-        full.Length >= 3 && char.IsAsciiLetter(full[0]) && full[1] == ':' && full[2] == Path.DirectorySeparatorChar &&
-        full.IndexOf(':', 2) < 0;
+        OperatingSystem.IsWindows()
+            ? full.Length >= 3 && char.IsAsciiLetter(full[0]) && full[1] == ':' && full[2] == Path.DirectorySeparatorChar &&
+                full.IndexOf(':', 2) < 0
+            : full.Length >= 1 && full[0] == Path.DirectorySeparatorChar;
 
     // The refused folder that full (a plain local path) is, or lies inside,
     // on the path as given or with its links and short names resolved; null
