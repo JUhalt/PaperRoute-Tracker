@@ -5,7 +5,7 @@ Namespace Models
     Public Class AffiliationRecord
 
         Public Property Id As Guid =
-            Guid.NewGuid()
+            CoreIds.NewId()
 
         Public Property Institution As String =
             String.Empty

@@ -183,7 +183,7 @@ Namespace Services
                         fingerprint,
                         originalLength,
                         originalWriteTime,
-                        DateTime.UtcNow
+                        CoreClock.UtcNow
                     )
                 End Using
             Catch ex As Exception When IsFileAccessException(ex)

@@ -198,6 +198,7 @@ Namespace Services
             _jsonOptions =
                 New JsonSerializerOptions With {
                     .WriteIndented = True,
+                    .NewLine = StoredText.NewLine,
                     .IgnoreReadOnlyProperties = True,
                     .PropertyNameCaseInsensitive = True
                 }
@@ -1857,7 +1858,7 @@ Namespace Services
                     End If
 
                     Dim versionFileName As String =
-                        Path.GetFileName(
+                        StoredPath.FileName(
                             version.LocalFilePath
                         )
 
@@ -1897,7 +1898,7 @@ Namespace Services
                         End If
 
                         Dim packetFileName As String =
-                            Path.GetFileName(packetFile.LocalFilePath)
+                            StoredPath.FileName(packetFile.LocalFilePath)
 
                         Dim expectedPacketFile As String =
                             Path.Combine(
@@ -1937,7 +1938,7 @@ Namespace Services
                         End If
 
                         Dim fileName As String =
-                            Path.GetFileName(
+                            StoredPath.FileName(
                                 item.LocalFilePath
                             )
 
@@ -1982,7 +1983,7 @@ Namespace Services
                     End If
 
                     Dim versionFileName As String =
-                        Path.GetFileName(
+                        StoredPath.FileName(
                             version.LocalFilePath
                         )
 
@@ -2013,7 +2014,7 @@ Namespace Services
                                 "packets",
                                 packet.Id.ToString("N"),
                                 packetFile.Id.ToString("N"),
-                                Path.GetFileName(packetFile.LocalFilePath)
+                                StoredPath.FileName(packetFile.LocalFilePath)
                             )
 
                     Next
@@ -2029,7 +2030,7 @@ Namespace Services
                         End If
 
                         Dim fileName As String =
-                            Path.GetFileName(
+                            StoredPath.FileName(
                                 item.LocalFilePath
                             )
 
@@ -2149,7 +2150,7 @@ Namespace Services
             Return Path.Combine(
                 backupDirectory,
                 "PaperRoute_PreRestore_" &
-                DateTime.Now.ToString("yyyy-MM-dd_HHmmss") &
+                CoreClock.Now.ToString("yyyy-MM-dd_HHmmss") &
                 ".zip"
             )
 
@@ -2286,7 +2287,7 @@ Namespace Services
                    String.Equals(
                        Path.GetFileName(sourceSubdirectory),
                        excludedSubdirectory,
-                       StringComparison.OrdinalIgnoreCase
+                       PathComparison.Comparison
                    ) Then
 
                     Continue For

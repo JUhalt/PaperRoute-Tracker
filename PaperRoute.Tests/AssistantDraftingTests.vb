@@ -30,7 +30,7 @@ Public Class AssistantDraftingTests
     <TestInitialize>
     Public Sub Setup()
         OnlineAccess.ResetForTests()
-        _directory = TestSupport.CreateTemporaryRoot()
+        _directory = CoreTestSupport.CreateTemporaryRoot()
         Dim keys As New ProtectedKeyStore(Path.Combine(_directory, "keys"))
         OnlineAccess.KeyStoreFactory = Function() keys
         _provider = New FakeProvider With {.Answer = "Thank you for this comment. We have [describe the change]."}
@@ -43,7 +43,7 @@ Public Class AssistantDraftingTests
         AssistantService.ProviderFactory = Nothing
         AssistantRunner.ConsentPrompt = Nothing
         OnlineAccess.ResetForTests()
-        TestSupport.DeleteTemporaryRoot(_directory)
+        CoreTestSupport.DeleteTemporaryRoot(_directory)
     End Sub
 
 

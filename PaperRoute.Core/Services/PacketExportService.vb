@@ -1128,7 +1128,7 @@ Namespace Services
                 Throw New PacketExportException(PacketExportFailure.NothingIncluded, "Choose at least one file to export.")
             End If
 
-            Dim exportUtc As DateTime = ToUtc(If(exportTimeUtc, DateTime.UtcNow))
+            Dim exportUtc As DateTime = ToUtc(If(exportTimeUtc, CoreClock.UtcNow))
             Dim version As String = If(String.IsNullOrWhiteSpace(appVersionText), AppVersion(), appVersionText.Trim())
             Dim entryTime As DateTimeOffset = New DateTimeOffset(exportUtc, TimeSpan.Zero).ToLocalTime()
 
@@ -1343,7 +1343,7 @@ Namespace Services
             Return plan.Rows.
                 Select(Function(item) item.Source.LocalFilePath).
                 Where(Function(item) Not String.IsNullOrWhiteSpace(item)).
-                Distinct(StringComparer.OrdinalIgnoreCase).
+                Distinct(PathComparison.Comparer).
                 ToList()
         End Function
 
@@ -1356,7 +1356,7 @@ Namespace Services
                 Where(Function(item) item.CanInclude).
                 Select(Function(item) item.Source.LocalFilePath).
                 Where(Function(item) Not String.IsNullOrWhiteSpace(item)).
-                Distinct(StringComparer.OrdinalIgnoreCase).
+                Distinct(PathComparison.Comparer).
                 ToList()
         End Function
 
@@ -1480,7 +1480,7 @@ Namespace Services
         Private Shared Function SamePath(first As String, second As String) As Boolean
             If String.IsNullOrWhiteSpace(first) OrElse String.IsNullOrWhiteSpace(second) Then Return False
             Try
-                Return String.Equals(System.IO.Path.GetFullPath(first), System.IO.Path.GetFullPath(second), StringComparison.OrdinalIgnoreCase)
+                Return String.Equals(System.IO.Path.GetFullPath(first), System.IO.Path.GetFullPath(second), PathComparison.Comparison)
             Catch ex As Exception When IsFileAccessException(ex)
                 Return False
             End Try
@@ -1656,11 +1656,7 @@ Namespace Services
 
 
         Private Shared Function BuildInvalidNameCharacters() As HashSet(Of Char)
-            Dim characters As New HashSet(Of Char)(System.IO.Path.GetInvalidFileNameChars())
-            For Each character As Char In ":\/*?""<>|"
-                characters.Add(character)
-            Next
-            Return characters
+            Return New HashSet(Of Char)(PortableFileName.InvalidCharacters)
         End Function
 
     End Class

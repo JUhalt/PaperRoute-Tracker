@@ -24,7 +24,7 @@ Namespace Services
 
 
         Public Sub New()
-            Me.New(Path.Combine(StorageMigrationService.CurrentDataRoot(), "keys"))
+            Me.New(StorageLocations.KeysFolder())
         End Sub
 
 

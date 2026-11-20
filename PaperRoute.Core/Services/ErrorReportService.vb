@@ -61,10 +61,7 @@ Namespace Services
 
         Public Shared Function DefaultDirectory() As String
 
-            Return Path.Combine(
-                StorageMigrationService.CurrentDataRoot(),
-                "logs"
-            )
+            Return StorageLocations.LogsFolder()
 
         End Function
 
@@ -152,9 +149,9 @@ Namespace Services
             builder.AppendLine("PaperRoute error report")
             builder.AppendLine("=======================")
             builder.AppendLine()
-            builder.AppendLine("Time: " & DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"))
+            builder.AppendLine("Time: " & CoreClock.Now.ToString("yyyy-MM-dd HH:mm:ss"))
             builder.AppendLine("Version: " & versionText())
-            builder.AppendLine("Windows: " & RuntimeInformation.OSDescription)
+            builder.AppendLine(If(OperatingSystem.IsWindows(), "Windows: ", "OS: ") & RuntimeInformation.OSDescription)
             builder.AppendLine("Runtime: " & RuntimeInformation.FrameworkDescription)
             builder.AppendLine("Where: " & If(String.IsNullOrWhiteSpace(where), "unknown", where))
             builder.AppendLine("Exception: " & exception.GetType().FullName)
@@ -173,7 +170,7 @@ Namespace Services
         Private Function NextReportPath() As String
 
             Dim stamp As String =
-                ReportPrefix & DateTime.Now.ToString("yyyyMMdd_HHmmss_fff")
+                ReportPrefix & CoreClock.Now.ToString("yyyyMMdd_HHmmss_fff")
 
             Dim candidate As String =
                 Path.Combine(_directory, stamp & ".txt")

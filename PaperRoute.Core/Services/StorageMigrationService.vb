@@ -717,12 +717,13 @@ Namespace Services
                 },
                 {
                     "UpdatedAtUtc",
-                    DateTime.UtcNow.ToString("O")
+                    CoreClock.UtcNow.ToString("O")
                 }
             }
 
             Dim options As New JsonSerializerOptions With {
-                .WriteIndented = True
+                .WriteIndented = True,
+                .NewLine = StoredText.NewLine
             }
 
             ' Flushed and swapped in, keeping the old marker as the backup:
@@ -960,12 +961,13 @@ Namespace Services
                 },
                 {
                     "UpdatedAtUtc",
-                    DateTime.UtcNow.ToString("O")
+                    CoreClock.UtcNow.ToString("O")
                 }
             }
 
             Dim options As New JsonSerializerOptions With {
-                .WriteIndented = True
+                .WriteIndented = True,
+                .NewLine = StoredText.NewLine
             }
 
             ' A new marker, with no previous one to keep (#125).
@@ -1142,7 +1144,7 @@ Namespace Services
 
                         If fullPath.StartsWith(
                             legacyRoot,
-                            StringComparison.OrdinalIgnoreCase
+                            PathComparison.Comparison
                         ) Then
 
                             Dim relativePath As String =
@@ -1231,6 +1233,7 @@ Namespace Services
 
             Dim options As New JsonSerializerOptions With {
                 .WriteIndented = True,
+                .NewLine = StoredText.NewLine,
                 .IgnoreReadOnlyProperties = True,
                 .PropertyNameCaseInsensitive = True
             }
@@ -1365,7 +1368,7 @@ Namespace Services
                 Dim payload As New Dictionary(Of String, Object) From {
                     {
                         "MigratedAtUtc",
-                        DateTime.UtcNow.ToString("O")
+                        CoreClock.UtcNow.ToString("O")
                     },
                     {
                         "SourceDataRoot",
@@ -1390,7 +1393,8 @@ Namespace Services
                 }
 
                 Dim options As New JsonSerializerOptions With {
-                    .WriteIndented = True
+                    .WriteIndented = True,
+                    .NewLine = StoredText.NewLine
                 }
 
                 File.WriteAllText(

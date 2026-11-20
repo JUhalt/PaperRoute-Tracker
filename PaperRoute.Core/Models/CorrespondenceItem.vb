@@ -4,13 +4,13 @@ Namespace Models
 
     Public Class CorrespondenceItem
 
-        Public Property Id As Guid = Guid.NewGuid()
+        Public Property Id As Guid = CoreIds.NewId()
 
         Public Property RecordedAtUtc As DateTime? = Nothing
 
         Public Property LastModifiedAtUtc As DateTime? = Nothing
 
-        Public Property ItemDate As DateTime = DateTime.Now
+        Public Property ItemDate As DateTime = CoreClock.Now
 
         Public Property Type As CorrespondenceType = CorrespondenceType.Other
 

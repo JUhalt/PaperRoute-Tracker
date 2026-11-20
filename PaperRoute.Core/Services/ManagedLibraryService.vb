@@ -109,7 +109,7 @@ Namespace Services
 
                 Return fullPath.StartsWith(
                     fullRoot,
-                    StringComparison.OrdinalIgnoreCase
+                    PathComparison.Comparison
                 )
 
             Catch
@@ -144,7 +144,7 @@ Namespace Services
 
                 Return Path.GetFullPath(filePath).StartsWith(
                     removedRoot,
-                    StringComparison.OrdinalIgnoreCase
+                    PathComparison.Comparison
                 )
 
             Catch
@@ -278,7 +278,7 @@ Namespace Services
                             If String.Equals(
                                 Path.GetDirectoryName(Path.GetFullPath(packetFile.LocalFilePath)),
                                 destinationDirectory,
-                                StringComparison.OrdinalIgnoreCase
+                                PathComparison.Comparison
                             ) Then
                                 Continue For
                             End If
@@ -933,7 +933,7 @@ Namespace Services
                 Path.Combine(
                     rootDirectory,
                     RemovedFolderName,
-                    DateTime.Now.ToString(
+                    CoreClock.Now.ToString(
                         "yyyy-MM-dd",
                         CultureInfo.InvariantCulture
                     ),
@@ -998,13 +998,17 @@ Namespace Services
             End If
 
             Dim uniqueSuffix As String =
-                Guid.NewGuid().ToString("N").Substring(0, 8)
+                CoreIds.NewId().ToString("N").Substring(0, 8)
 
+            ' Cleaned as a whole off Windows only: on Windows the name is
+            ' what it always was (PortableFileName.CleanOffWindows).
             Dim destinationFileName As String =
-                sourceName &
-                "_" &
-                uniqueSuffix &
-                extension
+                PortableFileName.CleanOffWindows(
+                    sourceName &
+                    "_" &
+                    uniqueSuffix &
+                    extension
+                )
 
             Return Path.Combine(
                 destinationDirectory,

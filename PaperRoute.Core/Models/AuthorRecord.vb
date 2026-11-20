@@ -5,7 +5,7 @@ Namespace Models
     Public Class AuthorRecord
 
         Public Property Id As Guid =
-            Guid.NewGuid()
+            CoreIds.NewId()
 
         Public Property GivenName As String =
             String.Empty

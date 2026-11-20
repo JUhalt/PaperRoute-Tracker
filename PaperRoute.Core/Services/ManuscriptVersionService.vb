@@ -41,11 +41,11 @@ Namespace Services
                 )
 
             Dim version As New ManuscriptVersion With {
-                .Id = Guid.NewGuid(),
+                .Id = CoreIds.NewId(),
                 .CreatedDate = If(
                     createdDate.HasValue,
                     createdDate.Value,
-                    DateTime.Now
+                    CoreClock.Now
                 ),
                 .Label = NormalizeText(label),
                 .Notes = NormalizeText(notes),
@@ -154,7 +154,7 @@ Namespace Services
                        Not String.Equals(
                            version.LocalFilePath,
                            normalizedFilePath,
-                           StringComparison.OrdinalIgnoreCase
+                           PathComparison.Comparison
                        )
                    ) Then
 
@@ -195,7 +195,7 @@ Namespace Services
                 Not String.Equals(
                     version.LocalFilePath,
                     normalizedFilePath,
-                    StringComparison.OrdinalIgnoreCase
+                    PathComparison.Comparison
                 ) OrElse
                 version.IsManagedCopy <> isManagedCopy OrElse
                 Not NullableGuidEquals(
