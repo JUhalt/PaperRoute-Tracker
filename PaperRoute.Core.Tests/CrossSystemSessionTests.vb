@@ -19,7 +19,7 @@ Imports ManuscriptPipeline.Services
 ' fixture, with a fixed clock and counter ids, writes a library, backs it up
 ' and restores the backup into a second root, all through the core's own
 ' services. Its hash list (one line per file written, the SHA-256 of its
-' bytes after the one normalisation check 4 allows, and two more that step
+' bytes after the one normalisation check 4 allows, and three more that step
 ' 14 found necessary, each in one named function) must be the same on every
 ' system, and the same as the golden file recorded from a CI run.
 '
@@ -120,11 +120,16 @@ Public Class CrossSystemSessionTests
 
         AssertRecordingZoneAndCulture()
 
-        Dim session As SessionResult = RunSession(Path.Combine(_root, "session"))
+        Dim sessionRoot As String = Path.Combine(_root, "session")
+        Dim session As SessionResult = RunSession(sessionRoot)
         Dim attachment As String = "session-hashes-" & SystemName() & ".txt"
         Attach(attachment, session.HashList)
 
-        AssertSameList(ReadGolden(attachment), session.HashList, "The session's list")
+        ' Every file the session wrote, so a line that differs can be
+        ' diffed from the two runners' artifacts.
+        Dim filesAttachment As String = AttachFolder("session-files-" & SystemName() & ".zip", sessionRoot)
+
+        AssertSameList(ReadGolden(attachment), session.HashList, "The session's list", filesAttachment)
 
     End Sub
 
@@ -191,10 +196,15 @@ Public Class CrossSystemSessionTests
 
         Dim golden As String = ReadGolden("session-hashes-" & SystemName() & ".txt")
 
+        Dim restoredRoot As String = Path.Combine(_root, "restored from " & madeOn)
+        Dim restoredList As String = RestoreAsElsewhere(backupPath, restoredRoot)
+        Dim filesAttachment As String = AttachFolder("restored-from-" & madeOn & "-on-" & SystemName() & ".zip", restoredRoot)
+
         AssertSameList(
             RestoredLibraryPart(golden),
-            RestoreAsElsewhere(backupPath, Path.Combine(_root, "restored from " & madeOn)),
-            "The library restored from " & backupName)
+            restoredList,
+            "The library restored from " & backupName,
+            filesAttachment)
 
         Assert.IsFalse(Directory.Exists(_defaultRoots), "Nothing was written to a default root.")
 
@@ -257,8 +267,9 @@ Public Class CrossSystemSessionTests
     '    then the manuscripts, the author library and citations.json.
     ' 2. Edit a manuscript: the draft gets an abstract and is submitted.
     ' 3. Add a version with a managed copy.
-    ' 4. Save: the manuscripts, which copies the version into the library,
-    '    and the author library.
+    ' 4. Save: the manuscripts, which copies the version into the library
+    '    (as Form1.SaveManuscripts does: the author library is not written,
+    '    since the session does not change it).
     ' 5. Back up: a portable backup.
     ' 6. Restore it into a second root, as on a new computer, and open that.
     Private Function RunSession(
@@ -278,8 +289,7 @@ Public Class CrossSystemSessionTests
         Dim repository As New ManuscriptRepository(fixture.DataDirectory, fixture.ManagedDirectory)
         Dim authorRepository As New AuthorLibraryRepository(fixture.DataDirectory)
         Dim manuscripts As List(Of Manuscript) = repository.Load()
-        Dim library As AuthorLibraryData = authorRepository.Load()
-
+        Assert.IsNotNull(authorRepository.Load())
         Assert.IsNotNull(New CitationStore(fixture.DataDirectory).Load())
 
         ' 2. Edit.
@@ -316,7 +326,6 @@ Public Class CrossSystemSessionTests
         clock.UtcNow = SavedUtc
 
         repository.Save(manuscripts)
-        authorRepository.Save(library)
 
         Assert.AreEqual(String.Empty, repository.LastSaveWarning)
 
@@ -329,6 +338,12 @@ Public Class CrossSystemSessionTests
         ' 6. Restore into a second root, and open it.
         Dim restoredRoot As String = Path.Combine(runRoot, "new computer")
         Dim restored As Integer = RestoreInto(backupPath, restoredRoot)
+
+        ' The list holds every file the session wrote: beside the library
+        ' there is only the fixture's linked folder.
+        AssertOnlyEntries(
+            libraryRoot,
+            {ProductInfo.DataFolderName, ProductInfo.ManagedLibraryFolderName, Path.GetFileName(fixture.LinkedDirectory)})
 
         ' The hash list.
         Dim savedRoots As New StoredRoots With {
@@ -346,8 +361,11 @@ Public Class CrossSystemSessionTests
         AddBackupEntries(lines, BackupPart, backupPath, savedRoots)
         AddLibrary(lines, RestoredPart, restoredRoot, restoredRoots)
 
+        Dim hashList As String = JoinList(lines)
+        AssertTheRestoreIsComplete(hashList)
+
         Return New SessionResult With {
-            .HashList = JoinList(lines),
+            .HashList = hashList,
             .BackupPath = backupPath,
             .RestoredManuscripts = restored
         }
@@ -385,7 +403,103 @@ Public Class CrossSystemSessionTests
 
         Assert.AreEqual(result.ManuscriptCount, New ManuscriptRepository(dataDirectory, managedRoot).Load().Count)
 
+        ' Restore stages and rolls back beside the managed folder and
+        ' deletes those folders as best effort; none may be left, since
+        ' the list holds only the library's two folders.
+        AssertOnlyEntries(restoredRoot, {ProductInfo.DataFolderName, ProductInfo.ManagedLibraryFolderName})
+
         Return result.ManuscriptCount
+
+    End Function
+
+
+    ' The folder holds exactly the named entries, compared by ordinal name.
+    Private Shared Sub AssertOnlyEntries(
+        folder As String,
+        expected As String()
+    )
+
+        Dim actual As String() = Directory.GetFileSystemEntries(folder).Select(Function(entry) Path.GetFileName(entry)).ToArray()
+
+        Dim extra As String() = actual.Except(expected, StringComparer.Ordinal).ToArray()
+        Dim missing As String() = expected.Except(actual, StringComparer.Ordinal).ToArray()
+
+        Assert.IsTrue(
+            extra.Length = 0 AndAlso missing.Length = 0,
+            folder & " holds other entries than the hash list covers. Extra: " & String.Join(" | ", extra) &
+            ". Missing: " & String.Join(" | ", missing) & ".")
+
+    End Sub
+
+
+    ' The restore is complete, without any recorded file: the restored
+    ' managed library holds the saved one's files with the same bytes, the
+    ' author library and citations are restored unchanged, and the backup
+    ' holds every saved managed file with the same bytes.
+    Private Shared Sub AssertTheRestoreIsComplete(
+        list As String
+    )
+
+        Dim hashes As New Dictionary(Of String, String)(StringComparer.Ordinal)
+        For Each line As String In SplitList(list)
+            Dim tab As Integer = line.LastIndexOf(vbTab, StringComparison.Ordinal)
+            hashes.Add(line.Substring(0, tab), line.Substring(tab + 1))
+        Next
+
+        Dim savedManaged As String = SavedPart & ProductInfo.ManagedLibraryFolderName & "/"
+        Dim restoredManaged As String = RestoredPart & ProductInfo.ManagedLibraryFolderName & "/"
+
+        Dim savedFiles As Dictionary(Of String, String) = FilesUnder(hashes, savedManaged)
+        Dim restoredFiles As Dictionary(Of String, String) = FilesUnder(hashes, restoredManaged)
+
+        Dim problems As New List(Of String)()
+
+        For Each saved As KeyValuePair(Of String, String) In savedFiles
+
+            Dim restoredHash As String = Nothing
+            If Not restoredFiles.TryGetValue(saved.Key, restoredHash) OrElse Not String.Equals(restoredHash, saved.Value, StringComparison.Ordinal) Then
+                problems.Add("not restored as saved: " & restoredManaged & saved.Key)
+            End If
+
+            Dim backupHash As String = Nothing
+            If Not hashes.TryGetValue(BackupPart & "files/" & saved.Key, backupHash) OrElse Not String.Equals(backupHash, saved.Value, StringComparison.Ordinal) Then
+                problems.Add("not backed up as saved: " & BackupPart & "files/" & saved.Key)
+            End If
+
+        Next
+
+        For Each restored As String In restoredFiles.Keys.Where(Function(item) Not savedFiles.ContainsKey(item))
+            problems.Add("restored but never saved: " & restoredManaged & restored)
+        Next
+
+        For Each dataFile As String In {"authors.json", "citations.json"}
+
+            Dim relative As String = ProductInfo.DataFolderName & "/data/" & dataFile
+            Dim savedHash As String = Nothing
+            Dim restoredHash As String = Nothing
+
+            If Not hashes.TryGetValue(SavedPart & relative, savedHash) OrElse
+               Not hashes.TryGetValue(RestoredPart & relative, restoredHash) OrElse
+               Not String.Equals(savedHash, restoredHash, StringComparison.Ordinal) Then
+                problems.Add("not restored as saved: " & RestoredPart & relative)
+            End If
+
+        Next
+
+        Assert.IsTrue(savedFiles.Count > 0, "The session saved managed files.")
+        Assert.AreEqual(0, problems.Count, "The restore is not complete: " & String.Join(" | ", problems) & ".")
+
+    End Sub
+
+
+    Private Shared Function FilesUnder(
+        hashes As Dictionary(Of String, String),
+        prefix As String
+    ) As Dictionary(Of String, String)
+
+        Return hashes.
+            Where(Function(item) item.Key.StartsWith(prefix, StringComparison.Ordinal)).
+            ToDictionary(Function(item) item.Key.Substring(prefix.Length), Function(item) item.Value, StringComparer.Ordinal)
 
     End Function
 
@@ -531,13 +645,18 @@ Public Class CrossSystemSessionTests
     ' Plan section 3, check 4: in every stored LocalFilePath value of the
     ' JSON data files (manuscripts.json and its .bak), a managed root becomes
     ' {managed root} and every separator becomes "/". All other bytes are
-    ' hashed as written. The only normalisations beyond check 4 are the two
-    ' named findings, NormaliseTheLinkedFolder and AddTheExcelExport.
+    ' hashed as written. The only normalisations beyond check 4 are the three
+    ' named findings, NormaliseTheLinkedFolder, AddTheExcelExport and
+    ' NormaliseTheAppVersion.
     Private Shared Function Normalise(
         relative As String,
         content As Byte(),
         roots As StoredRoots
     ) As Byte()
+
+        If String.Equals(relative, BackupPart & BackupManifest.FileName, StringComparison.Ordinal) Then
+            Return NormaliseTheAppVersion(content)
+        End If
 
         Dim extension As String = Path.GetExtension(relative)
         If Not (String.Equals(extension, ".json", StringComparison.OrdinalIgnoreCase) OrElse
@@ -591,6 +710,40 @@ Public Class CrossSystemSessionTests
     End Function
 
 
+    ' Beyond check 4 (a finding of step 14): the backup's manifest,
+    ' backup.json, stores the app's version (PortableBackupService,
+    ' PacketExportService.AppVersion(), from <Version> in the core's project
+    ' file). Hashed as written, it would change the golden list at every
+    ' version bump, and every bump would need a recording round. So the
+    ' stored value is checked against this build's version and then, in
+    ' backup.json and nowhere else, replaced with {app version}.
+    Private Const AppVersionToken As String = "{app version}"
+
+    Private Shared Function NormaliseTheAppVersion(
+        content As Byte()
+    ) As Byte()
+
+        Dim version As String = PacketExportService.AppVersion()
+        Dim text As String = Encoding.UTF8.GetString(content)
+
+        Using document As JsonDocument = JsonDocument.Parse(text)
+            Assert.AreEqual(
+                version,
+                document.RootElement.GetProperty("AppVersion").GetString(),
+                "backup.json stores this build's version.")
+        End Using
+
+        Dim stored As New Regex(
+            "(?<name>""AppVersion""\s*:\s*"")" & Regex.Escape(JsonSerializer.Serialize(version).Trim(""""c)) & """",
+            RegexOptions.CultureInvariant)
+
+        Assert.AreEqual(1, stored.Matches(text).Count, "backup.json holds one AppVersion value.")
+
+        Return Encoding.UTF8.GetBytes(stored.Replace(text, Function(found As Match) found.Groups("name").Value & AppVersionToken & """"))
+
+    End Function
+
+
     ' Beyond check 4 (a finding of step 14): a backup's library.xlsx, the
     ' human-readable export (LibraryExcelExporter, through ClosedXML and
     ' System.IO.Packaging), differs between two runs on one machine with the
@@ -601,12 +754,26 @@ Public Class CrossSystemSessionTests
     ' and stamps that part with the real clock, which no core seam reaches;
     ' and its shared strings hold each managed and linked file's full path,
     ' which is not a LocalFilePath field. So the export is listed here, by
-    ' name and nowhere else, as its entries: those two packaging parts are
-    ' left out, and in xl/sharedStrings.xml a cell that begins with a managed
-    ' root or the linked folder gets the token and "/" separators, as a
-    ' stored LocalFilePath does. Every other entry, the worksheets included,
-    ' is hashed as written.
+    ' name and nowhere else, as its entries. In _rels/.rels each random
+    ' relationship Id becomes {random id} and the core properties part's
+    ' random name {core properties}; that part is listed under the same
+    ' fixed name, with only its dcterms:created and dcterms:modified text
+    ' replaced by {real clock}. In xl/sharedStrings.xml a cell that begins
+    ' with a managed root or the linked folder gets the token and "/"
+    ' separators, as a stored LocalFilePath does. Every other byte, the
+    ' worksheets included, is hashed as written.
     Private Const ExcelExportName As String = "library.xlsx"
+
+    Private Const CorePropertiesFolder As String = "package/services/metadata/core-properties/"
+
+    Private Shared ReadOnly RandomRelationshipId As New Regex(
+        "Id=""R[0-9a-f]{16}""", RegexOptions.CultureInvariant)
+
+    Private Shared ReadOnly CorePropertiesName As New Regex(
+        "(?<=core-properties/)[0-9a-f]+(?=\.psmdcp)", RegexOptions.CultureInvariant)
+
+    Private Shared ReadOnly RealClockStamp As New Regex(
+        "(?<open><dcterms:(?<name>created|modified)\b[^>]*>)[^<]*(?=</dcterms:\k<name>>)", RegexOptions.CultureInvariant)
 
     Private Shared Sub AddTheExcelExport(
         lines As List(Of String),
@@ -621,19 +788,32 @@ Public Class CrossSystemSessionTests
 
                 If entry.FullName.EndsWith("/", StringComparison.Ordinal) Then Continue For
 
-                ' Random names and the real clock, from the packaging layer.
-                If String.Equals(entry.FullName, "_rels/.rels", StringComparison.Ordinal) OrElse
-                   entry.FullName.StartsWith("package/services/metadata/core-properties/", StringComparison.Ordinal) Then
-                    Continue For
-                End If
-
                 Dim bytes As Byte()
                 Using stream As Stream = entry.Open(), buffer As New MemoryStream()
                     stream.CopyTo(buffer)
                     bytes = buffer.ToArray()
                 End Using
 
-                If String.Equals(entry.FullName, "xl/sharedStrings.xml", StringComparison.Ordinal) Then
+                Dim name As String = entry.FullName
+
+                ' Random names and the real clock, from the packaging layer.
+                If String.Equals(name, "_rels/.rels", StringComparison.Ordinal) Then
+
+                    Dim text As String = Encoding.UTF8.GetString(bytes)
+                    text = RandomRelationshipId.Replace(text, "Id=""{random id}""")
+                    text = CorePropertiesName.Replace(text, "{core properties}")
+                    bytes = Encoding.UTF8.GetBytes(text)
+
+                ElseIf name.StartsWith(CorePropertiesFolder, StringComparison.Ordinal) AndAlso
+                       name.EndsWith(".psmdcp", StringComparison.Ordinal) Then
+
+                    name = CorePropertiesName.Replace(name, "{core properties}")
+
+                    Dim text As String = Encoding.UTF8.GetString(bytes)
+                    text = RealClockStamp.Replace(text, Function(found As Match) found.Groups("open").Value & "{real clock}")
+                    bytes = Encoding.UTF8.GetBytes(text)
+
+                ElseIf String.Equals(name, "xl/sharedStrings.xml", StringComparison.Ordinal) Then
 
                     Dim text As String = Encoding.UTF8.GetString(bytes)
 
@@ -658,7 +838,7 @@ Public Class CrossSystemSessionTests
 
                 End If
 
-                lines.Add(HashLine(part & entry.FullName, bytes))
+                lines.Add(HashLine(part & name, bytes))
 
             Next
 
@@ -777,11 +957,13 @@ Public Class CrossSystemSessionTests
     End Function
 
 
-    ' Equal lists, or a message naming every line only one of them has.
+    ' Equal lists, or a message naming every line only one of them has,
+    ' and the attachment that holds the files the actual list was made from.
     Private Shared Sub AssertSameList(
         expected As String,
         actual As String,
-        message As String
+        message As String,
+        Optional filesAttachment As String = Nothing
     )
 
         If String.Equals(expected, actual, StringComparison.Ordinal) Then Return
@@ -793,7 +975,10 @@ Public Class CrossSystemSessionTests
             message & " differs from the expected one" &
             If(expected.EndsWith(vbLf, StringComparison.Ordinal), String.Empty, " (which does not end in LF, or has CR LF line ends)") &
             ". Expected only: " & String.Join(" | ", expectedLines.Except(actualLines, StringComparer.Ordinal)) &
-            ". Actual only: " & String.Join(" | ", actualLines.Except(expectedLines, StringComparer.Ordinal)) & ".")
+            ". Actual only: " & String.Join(" | ", actualLines.Except(expectedLines, StringComparer.Ordinal)) & "." &
+            If(String.IsNullOrEmpty(filesAttachment), String.Empty,
+               " The files this list was made from are attached to this test's results as " & filesAttachment &
+               ", to diff with the same attachment of the run that recorded the expected list."))
 
     End Sub
 
@@ -833,6 +1018,20 @@ Public Class CrossSystemSessionTests
         TestContext.AddResultFile(filePath)
 
     End Sub
+
+
+    ' A folder's files, zipped under the run's root and attached as name.
+    Private Function AttachFolder(
+        name As String,
+        folder As String
+    ) As String
+
+        Dim zipPath As String = Path.Combine(_root, name)
+        ZipFile.CreateFromDirectory(folder, zipPath)
+        Attach(name, File.ReadAllBytes(zipPath))
+        Return name
+
+    End Function
 
 
     ' The kind of system, as the attachments and the checked-in backups

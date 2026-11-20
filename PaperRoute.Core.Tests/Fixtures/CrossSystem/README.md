@@ -12,4 +12,8 @@ An attachment lands in the job's `TestResults` folder, under `<user>_<machine>_<
 
 Copy each file here unchanged. `.gitattributes` marks `*.txt` here `-text` and `*.zip` `binary`, so git stores and checks out their bytes exactly. Check with `git ls-files --eol PaperRoute.Core.Tests/Fixtures/CrossSystem` that the list shows `-text`.
 
-The golden file must be recorded again when the session's data changes on purpose, for example after a version bump: `backup.json` stores the app's version.
+A version bump needs no recording: `backup.json` stores the app's version, and the test checks it against the build's version and then lists it as `{app version}` (`NormaliseTheAppVersion`).
+
+When the session's data changes on purpose (the fixture, the session's steps, or what the core writes), record all three files again together, from one CI run: `session-hashes.txt`, `windows-backup.zip` and `linux-backup.zip`. Restore copies `authors.json` and `citations.json` out of a backup unchanged, so an old checked-in backup restores the old bytes and fails against a newly recorded `restored/` part.
+
+When a list differs from the golden one, the failing test names the attachment that holds the files it was made from (`session-files-<system>.zip`, or `restored-from-<system>-on-<system>.zip`): diff the differing file between the two runners' artifacts.
