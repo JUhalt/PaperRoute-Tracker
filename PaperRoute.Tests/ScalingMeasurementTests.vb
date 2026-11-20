@@ -2150,7 +2150,7 @@ Public Class ScalingMeasurementTests
     ' "both" for both, which is where a value can be scaled twice, and
     ' "none" for neither.
     Friend Shared Function ScalingOf(view As Type) As (Scaling As String, ScalesWithWinForms As Boolean)
-        Return ScalingOf(view, Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManuscriptPipeline"))
+        Return ScalingOf(view, Path.Combine(TestRepository.Root(), "ManuscriptPipeline"))
     End Function
 
 
@@ -2176,7 +2176,7 @@ Public Class ScalingMeasurementTests
     ' so does a probe built in a test, which has no source here.
     Friend Shared Function KeepsItsClientSize(view As Type) As Boolean
 
-        Dim source As String = SourceOf(view, Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManuscriptPipeline"))
+        Dim source As String = SourceOf(view, Path.Combine(TestRepository.Root(), "ManuscriptPipeline"))
 
         Return Regex.IsMatch(source, "^\s*(Me\.)?ClientSize\s*=", RegexOptions.Multiline) AndAlso
                Not Regex.IsMatch(source, "^\s*(Me\.)?(Size|Bounds)\s*=", RegexOptions.Multiline)

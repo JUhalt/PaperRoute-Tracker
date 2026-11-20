@@ -345,7 +345,7 @@ Public Class WindowChromeTests
 
         Dim app As String =
             Path.Combine(
-                AssistantCoreTests.RepositoryRoot(),
+                TestRepository.Root(),
                 "ManuscriptPipeline"
             )
 
@@ -397,7 +397,7 @@ Public Class WindowChromeTests
     Public Sub TheHarnessHooksDialogsAndMenusAroundItsWindowsAsMainDoes()
 
         Dim source As String =
-            File.ReadAllText(Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManualCertification", "V04Demo", "Program.cs"))
+            File.ReadAllText(Path.Combine(TestRepository.Root(), "ManualCertification", "V04Demo", "Program.cs"))
 
         Dim main As Integer =
             source.IndexOf("private static void Main(", StringComparison.Ordinal)
@@ -430,7 +430,7 @@ Public Class WindowChromeTests
         Dim source As String =
             File.ReadAllText(
                 Path.Combine(
-                    AssistantCoreTests.RepositoryRoot(),
+                    TestRepository.Root(),
                     "ManuscriptPipeline",
                     "Form1.vb"
                 )

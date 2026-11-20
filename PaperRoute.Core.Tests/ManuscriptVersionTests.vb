@@ -72,7 +72,7 @@ Public Class ManuscriptVersionTests
                 .CreatedDate = New DateTime(2026, 7, 1, 9, 30, 0),
                 .Label = "Submitted manuscript",
                 .Notes = "Version sent with the original submission.",
-                .LocalFilePath = "C:\Research\Paper\submitted.docx",
+                .LocalFilePath = CoreTestSupport.RootedPath("Research", "Paper", "submitted.docx"),
                 .IsManagedCopy = False,
                 .SubmissionId = submissionId
             }
@@ -84,7 +84,7 @@ Public Class ManuscriptVersionTests
                 .CreatedDate = New DateTime(2026, 8, 15, 14, 0, 0),
                 .Label = "Revision 1",
                 .Notes = "Revision prepared after the major-revision decision.",
-                .LocalFilePath = "C:\Research\Paper\revision-1.docx",
+                .LocalFilePath = CoreTestSupport.RootedPath("Research", "Paper", "revision-1.docx"),
                 .IsManagedCopy = False,
                 .SubmissionId = submissionId,
                 .DecisionId = decisionId,
@@ -168,7 +168,7 @@ Public Class ManuscriptVersionTests
                 .CreatedDate = New DateTime(2026, 8, 15, 14, 0, 0),
                 .Label = "Revision 1",
                 .Notes = "Original version note.",
-                .LocalFilePath = "C:\Research\Paper\revision-1.docx",
+                .LocalFilePath = CoreTestSupport.RootedPath("Research", "Paper", "revision-1.docx"),
                 .IsManagedCopy = False,
                 .SubmissionId = submissionId,
                 .DecisionId = decisionId,

@@ -390,7 +390,7 @@ Public Class UserGuideServiceTests
         Dim readme As String =
             File.ReadAllText(
                 Path.Combine(
-                    AssistantCoreTests.RepositoryRoot(),
+                    TestRepository.Root(),
                     "README.md"
                 )
             )
@@ -646,7 +646,7 @@ Public Class UserGuideServiceTests
 
         Dim app As String =
             Path.Combine(
-                AssistantCoreTests.RepositoryRoot(),
+                TestRepository.Root(),
                 "ManuscriptPipeline"
             )
 
@@ -883,7 +883,7 @@ Public Class UserGuideServiceTests
         Dim source As String =
             File.ReadAllText(
                 Path.Combine(
-                    AssistantCoreTests.RepositoryRoot(),
+                    TestRepository.Root(),
                     "ManuscriptPipeline",
                     "Form1.ManuscriptPage.vb"
                 )
@@ -983,7 +983,7 @@ Public Class UserGuideServiceTests
 
         Dim app As String =
             Path.Combine(
-                AssistantCoreTests.RepositoryRoot(),
+                TestRepository.Root(),
                 "ManuscriptPipeline"
             )
 

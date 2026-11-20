@@ -157,7 +157,9 @@ Friend NotInheritable Class CertificationFixture
 
             For Each name As String In names
 
-                Dim own As String = Path.Combine(Environment.GetFolderPath(parent), name)
+                ' DoNotVerify: the folder is refused even where it does not
+                ' exist yet, which on Windows gives the same path as before.
+                Dim own As String = Path.Combine(Environment.GetFolderPath(parent, Environment.SpecialFolderOption.DoNotVerify), name)
 
                 If IsSameOrInside(target, own) OrElse IsSameOrInside(own, target) Then
                     Return True

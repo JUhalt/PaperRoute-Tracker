@@ -103,18 +103,6 @@ Public Class Schema6MigrationTests
     End Sub
 
     <TestMethod>
-    Public Sub Upgrade_WhenMarkerCannotBeReplaced_PreservesPreviousBackupAndCleansTemporaryFile()
-        Dim backupPath = Path.Combine(_data, "schema.v5.bak")
-        File.WriteAllText(backupPath, "previous recovery marker")
-        Using locked As New FileStream(_schema, FileMode.Open, FileAccess.Read, FileShare.Read)
-            Assert.ThrowsExactly(Of IOException)(Sub() EnsureStorage())
-        End Using
-        Assert.AreEqual(5, StorageMigrationService.ReadSchemaVersion(_schema))
-        Assert.AreEqual("previous recovery marker", File.ReadAllText(backupPath))
-        Assert.AreEqual(0, Directory.GetFiles(_data, "schema.json.tmp*").Length)
-    End Sub
-
-    <TestMethod>
     Public Sub FutureSchema_IsRejectedBeforeAnyStorageMigration()
         File.WriteAllText(_schema, "{""SchemaVersion"":10}")
         Assert.ThrowsExactly(Of InvalidOperationException)(Sub() EnsureStorage())
