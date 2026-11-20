@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using PaperRoute.Desktop.Styles;
 using PaperRoute.ViewModels;
 
 namespace PaperRoute.Desktop;
@@ -22,7 +23,16 @@ public partial class App : Application
         _shell = shell;
     }
 
-    public override void Initialize() => AvaloniaXamlLoader.Load(this);
+    // The computed brushes (ThemeTokens) join Tokens.axaml's Light and Dark
+    // dictionaries before any control looks them up.
+    public override void Initialize()
+    {
+        AvaloniaXamlLoader.Load(this);
+        if (ThemeTokens.AddDerivedToAll(Resources) == 0)
+        {
+            throw new InvalidOperationException("Tokens.axaml has no theme dictionaries to extend.");
+        }
+    }
 
     public override void OnFrameworkInitializationCompleted()
     {

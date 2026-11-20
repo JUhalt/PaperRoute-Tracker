@@ -1,0 +1,84 @@
+<!--
+  Shelf tabs (inventory C.6, retargeted from TabItem to TabStripItem), as
+  today's ShelfTabButton draws them (ManuscriptPipeline\Controls\ShelfTabButton.vb):
+  every tab in bold body text, so a tab never changes width when it is
+  selected; the name in PrimaryText when selected, SecondaryText otherwise;
+  the count in MutedText (TextBlock.tab-count); a 3 px accent underline under
+  the selected tab, on the strip's 1 px CardBorder hairline (Border.hairline,
+  drawn under the whole strip); no change on hover. Padding 2,6,2,8 and 22 px
+  between tabs.
+
+  The template parts are Fluent's for TabStripItem in Avalonia 12.1.6:
+  Border#PART_LayoutRoot > Panel > ContentPresenter#PART_ContentPresenter and
+  Border#PART_SelectedPipe (checked on the built control by
+  StyleFamilyTests.TabStripItemHasTheFluentPartsTabsAxamlTargets). Fluent
+  colours the layout root on hover, press and selection, so those states are
+  set here too.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Style Selector="TabStripItem">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Padding" Value="0,6,0,0" />
+    <Setter Property="Margin" Value="0,0,22,0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="FontSize" Value="{DynamicResource BodyFontSize}" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusAdorner">
+      <FocusAdornerTemplate>
+        <Border Margin="0,1,0,4" BorderThickness="2" CornerRadius="{DynamicResource ControlRadius}"
+                BorderBrush="{DynamicResource AccentSecondaryBrush}" />
+      </FocusAdornerTemplate>
+    </Setter>
+  </Style>
+  <!-- The text sits 8 px above the bottom; the underline takes the lowest 3 of them. -->
+  <Style Selector="TabStripItem /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Margin" Value="2,0,2,8" />
+  </Style>
+  <Style Selector="TabStripItem /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+  </Style>
+  <Style Selector="TabStripItem:pointerover /template/ Border#PART_LayoutRoot, TabStripItem:pressed /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+  </Style>
+  <Style Selector="TabStripItem:selected">
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+  </Style>
+  <Style Selector="TabStripItem:selected /template/ Border#PART_LayoutRoot, TabStripItem:selected:pointerover /template/ Border#PART_LayoutRoot, TabStripItem:selected:pressed /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+  </Style>
+  <!-- On :selected, not on every item: the template's own Height="2" outranks a style without a pseudo-class. -->
+  <Style Selector="TabStripItem:selected /template/ Border#PART_SelectedPipe">
+    <Setter Property="Height" Value="3" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="VerticalAlignment" Value="Bottom" />
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector="TabStripItem:disabled /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource MutedTextBrush}" />
+  </Style>
+
+  <!-- "Pipeline (10)": the count after the name, quieter (ShelfTabButton.vb:35-56). -->
+  <Style Selector="TabStripItem TextBlock.tab-count">
+    <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
+    <Setter Property="Margin" Value="5,0,0,0" />
+  </Style>
+
+  <!-- The shelf bar's baseline, under the tabs and the boxes alike (SplitBar.ShowBaseline, Form1.vb:613-619). -->
+  <Style Selector="Border.hairline">
+    <Setter Property="Height" Value="1" />
+    <Setter Property="VerticalAlignment" Value="Bottom" />
+    <Setter Property="Background" Value="{DynamicResource CardBorderBrush}" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+  </Style>
+
+</Styles>

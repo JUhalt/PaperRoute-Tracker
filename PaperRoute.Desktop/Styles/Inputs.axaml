@@ -1,0 +1,99 @@
+<!--
+  One style for the Board's text box and drop-down lists (d1 5, Inputs;
+  inventory 7.5): ControlRadius corners, CardBackground, a 1 px CardBorder
+  frame that turns AccentBrush while the control has focus, PrimaryText, and
+  MutedText for placeholders and when off. Today the search field is a rounded
+  panel framed this way (Form1.vb:1185-1257) and the stage and sort boxes are
+  square, framed by ThemedBorder.vb in the same two colours; the trial rounds
+  both, as the target map asks.
+
+  Fluent's parts in 12.1.6: TextBox draws its frame in Border#PART_BorderElement
+  and its placeholder in TextBlock#PART_Placeholder; ComboBox draws its face in
+  Border#Background, a focus fill in Border#HighlightBackground and the arrow
+  in PathIcon#DropDownGlyph. Fluent recolours these on hover, press and focus,
+  so those states are set here too.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- Text boxes. -->
+  <Style Selector="TextBox">
+    <Setter Property="CornerRadius" Value="{DynamicResource ControlRadius}" />
+    <Setter Property="FontSize" Value="{DynamicResource BodyFontSize}" />
+    <Setter Property="MinHeight" Value="32" />
+    <Setter Property="Padding" Value="10,6" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+    <Setter Property="CaretBrush" Value="{DynamicResource PrimaryTextBrush}" />
+    <Setter Property="PlaceholderForeground" Value="{DynamicResource MutedTextBrush}" />
+  </Style>
+  <Style Selector="TextBox:pointerover, TextBox:focus">
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+  </Style>
+  <Style Selector="TextBox:pointerover /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+  </Style>
+  <Style Selector="TextBox:focus /template/ Border#PART_BorderElement, TextBox:focus:pointerover /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="TextBox /template/ TextBlock#PART_Placeholder, TextBox:focus /template/ TextBlock#PART_Placeholder, TextBox:pointerover /template/ TextBlock#PART_Placeholder">
+    <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
+  </Style>
+  <Style Selector="TextBox:disabled">
+    <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
+  </Style>
+  <Style Selector="TextBox:disabled /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource BoardBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+  </Style>
+
+  <!-- Drop-down lists. -->
+  <Style Selector="ComboBox">
+    <Setter Property="CornerRadius" Value="{DynamicResource ControlRadius}" />
+    <Setter Property="FontSize" Value="{DynamicResource BodyFontSize}" />
+    <Setter Property="MinHeight" Value="32" />
+    <Setter Property="Padding" Value="10,5,8,5" />
+    <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+    <Setter Property="PlaceholderForeground" Value="{DynamicResource MutedTextBrush}" />
+  </Style>
+  <Style Selector="ComboBox /template/ Border#Background, ComboBox:pointerover /template/ Border#Background, ComboBox:pressed /template/ Border#Background">
+    <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+  </Style>
+  <Style Selector="ComboBox:focus-within /template/ Border#Background, ComboBox:dropdownopen /template/ Border#Background">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <!-- Fluent fills a keyboard-focused box with the accent; the frame alone shows focus here. -->
+  <Style Selector="ComboBox /template/ Border#HighlightBackground">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector="ComboBox /template/ ContentControl#ContentPresenter, ComboBox:pointerover /template/ ContentControl#ContentPresenter, ComboBox:focus-visible /template/ ContentControl#ContentPresenter, ComboBox:pressed /template/ ContentControl#ContentPresenter">
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+  </Style>
+  <Style Selector="ComboBox /template/ PathIcon#DropDownGlyph, ComboBox:pointerover /template/ PathIcon#DropDownGlyph, ComboBox:focus-visible /template/ PathIcon#DropDownGlyph, ComboBox:pressed /template/ PathIcon#DropDownGlyph">
+    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+  </Style>
+  <Style Selector="ComboBox:disabled /template/ Border#Background">
+    <Setter Property="Background" Value="{DynamicResource BoardBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+  </Style>
+  <Style Selector="ComboBox:disabled /template/ ContentControl#ContentPresenter">
+    <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
+  </Style>
+  <Style Selector="ComboBox:disabled /template/ PathIcon#DropDownGlyph">
+    <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
+  </Style>
+  <Style Selector="ComboBox:disabled /template/ TextBlock#PlaceholderTextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
+  </Style>
+
+</Styles>
