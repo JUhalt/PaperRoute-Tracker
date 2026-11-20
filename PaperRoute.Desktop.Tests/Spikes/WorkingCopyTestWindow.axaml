@@ -1,0 +1,17 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:spikes="using:PaperRoute.ViewModels.Spikes"
+        x:Class="PaperRoute.Desktop.Tests.Spikes.WorkingCopyTestWindow"
+        x:DataType="spikes:WorkingCopyEditorViewModel"
+        x:CompileBindings="True"
+        Width="480" Height="120">
+  <!--
+    The working-copy spike's test window (d1 7.2 item 4), in the test project,
+    never in the app: one box, its text bound two ways to the editor's Title by
+    a compiled binding, and a line that shows HasUnsavedChanges.
+  -->
+  <StackPanel Margin="12" Spacing="8">
+    <TextBox x:Name="TitleBox" Text="{Binding Title, Mode=TwoWay}" />
+    <TextBlock x:Name="UnsavedLine" Text="Unsaved changes" IsVisible="{Binding HasUnsavedChanges}" />
+  </StackPanel>
+</Window>

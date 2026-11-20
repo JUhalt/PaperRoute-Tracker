@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 
 namespace PaperRoute.ViewModels.Board;
 
@@ -10,12 +11,18 @@ namespace PaperRoute.ViewModels.Board;
 //
 // The core's reference types carry no null information, so every string
 // and list read from the manuscript goes through ?? here (d1 3.5).
+//
+// Its commands (d1 3.3) go through the Board that made it: Open and View
+// route give the trial's notices (d1 1.2), and a click on the tag strip
+// puts the first tag in the search box, as today (Form1.vb:3285-3289).
 public sealed partial class CardViewModel : ObservableObject
 {
+    private readonly BoardViewModel _board;
     private Manuscript _manuscript;
 
-    internal CardViewModel(CardFacts facts, (Guid Id, int Occurrence) slot, AuthorLibraryData? library)
+    internal CardViewModel(BoardViewModel board, CardFacts facts, (Guid Id, int Occurrence) slot, AuthorLibraryData? library)
     {
+        _board = board;
         Manuscript manuscript = facts.Manuscript;
         _manuscript = manuscript;
         Id = slot.Id;
@@ -58,6 +65,8 @@ public sealed partial class CardViewModel : ObservableObject
 
         MoreActionsName = "More actions for " + Title;
         ViewRouteName = "View route for " + Title;
+        AutomationKey = "Card." + Id.ToString("D") + "." + Occurrence.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        MenuItems = CardMenuItemViewModel.For(Location);
     }
 
     // The record the card stands for now (its actions, from step 9, act on
@@ -107,13 +116,21 @@ public sealed partial class CardViewModel : ObservableObject
     // The journal line's tooltip is the journal, only when there is one.
     public bool HasJournal { get; }
 
+    // That tooltip, or null for none (Form1.vb:3268).
+    public string? JournalToolTip => HasJournal ? JournalText : null;
+
     public IReadOnlyList<TagViewModel> Tags { get; }
+
+    public bool HasTags => Tags.Count > 0;
 
     // The tag strip's accessible name, "Tags: a, b" (TagChips.vb:91).
     public string TagsName { get; }
 
     // The tag strip's tooltip (Form1.vb:3285).
     public string TagsToolTip { get; }
+
+    // That tooltip, or null for a card with no tags (no strip today).
+    public string? TagStripToolTip => HasTags ? TagsToolTip : null;
 
     // What a click on the tag strip puts in the search box (Form1.vb:3288).
     public string? FirstTag { get; }
@@ -131,6 +148,26 @@ public sealed partial class CardViewModel : ObservableObject
     public string MoreActionsName { get; }
 
     public string ViewRouteName { get; }
+
+    // The start of the automation IDs of the card's parts (d1 4.3):
+    // "Card.<id>.<occurrence>", then ".Title", ".More" and ".Route".
+    public string AutomationKey { get; }
+
+    // The ⋯ menu (Form1.vb BuildCardMenu :3488-3549), every item off (d1 1.2).
+    public IReadOnlyList<CardMenuItemViewModel> MenuItems { get; }
+
+    // A click on the card's body or its title, Enter or bare Space on the
+    // title (Form1.vb:3352-3372).
+    [RelayCommand]
+    private void Open() => _board.OpenCardCommand.Execute(this);
+
+    // "View route →" (Form1.vb:3374-3377).
+    [RelayCommand]
+    private void ViewRoute() => _board.ViewRouteCommand.Execute(this);
+
+    // A left click on the tag strip (Form1.vb:3286-3289).
+    [RelayCommand]
+    private void ApplyFirstTag() => _board.ApplyFirstTagCommand.Execute(this);
 
     // A kept card stands for the record now in its slot, and its tag colours
     // follow the author library as it is now (Form1.vb CardFor :2971-2977).

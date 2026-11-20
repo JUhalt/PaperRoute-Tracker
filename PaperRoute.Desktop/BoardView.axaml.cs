@@ -2,12 +2,15 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
+using Avalonia.Threading;
+using PaperRoute.ViewModels.Board;
 
 namespace PaperRoute.Desktop;
 
 // The Board's view (d1 4.1, step 8). Everything it shows is bound to the
 // BoardViewModel; the code here is the view's own: Ctrl+F's focus, the boxes'
-// Esc (ArrowChoiceKeeper), and the narrow layout.
+// Esc (ArrowChoiceKeeper), the narrow layout, and where the keyboard goes
+// after Clear.
 //
 // Narrow window (d1 4.1): today the header's tools wrap under the title and
 // the shelf bar's boxes move above the tabs (SplitBar.WrapRightAbove,
@@ -30,7 +33,27 @@ public partial class BoardView : UserControl
         ArrowChoiceKeeper.Attach(StageFilter);
         ArrowChoiceKeeper.Attach(BoardSort);
         BoardBody.SizeChanged += (_, e) => ApplyLayout(e.NewSize.Width);
+
+        // Clear turns itself off once pressed; pressed from the keyboard, the
+        // keyboard goes on to the first card's title, the next tab stop, as
+        // Windows Forms moves it today (BoardFilterTests.vb:273-309).
+        ClearFilters.Click += (_, _) =>
+        {
+            if (ClearFilters.IsFocused)
+            {
+                Dispatcher.UIThread.Post(AfterClear);
+            }
+        };
     }
+
+    // The shelf shown.
+    public ShelfView SelectedShelfView =>
+        (DataContext as BoardViewModel)?.SelectedShelfIndex switch
+        {
+            1 => PublishedShelf,
+            2 => FileDrawerShelf,
+            _ => PipelineShelf,
+        };
 
     public bool IsNarrow => BoardBody.Classes.Contains(NarrowClass);
 
@@ -46,6 +69,17 @@ public partial class BoardView : UserControl
         bool focused = SearchBox.Focus(NavigationMethod.Tab);
         SearchBox.SelectAll();
         return focused;
+    }
+
+    private void AfterClear()
+    {
+        object? focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement();
+        if (ClearFilters.IsEffectivelyEnabled || (focused is not null && !ReferenceEquals(focused, ClearFilters)))
+        {
+            return;
+        }
+
+        SelectedShelfView.FocusFirstCard();
     }
 
     private void ApplyLayout(double width)
