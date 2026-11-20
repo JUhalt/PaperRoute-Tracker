@@ -917,21 +917,32 @@ Public Class CrossSystemSessionTests
     ' writes the local time, so elsewhere the bytes differ by design.
     Private Shared Sub AssertRecordingZoneAndCulture()
 
+        ' Elsewhere the test is inconclusive, not failed: a plain "dotnet test"
+        ' on a developer's computer stays green and says why four tests did not
+        ' run. Nothing is hidden on CI: the Windows job fails a run that holds a
+        ' skipped or inconclusive test, and the Linux job counts one as not
+        ' passing, so a runner that left UTC or en-US would show at once.
         Dim zone As TimeZoneInfo = TimeZoneInfo.Local
 
-        Assert.IsTrue(
-            zone.BaseUtcOffset = TimeSpan.Zero AndAlso Not zone.SupportsDaylightSavingTime,
-            "The same-data tests (category " & SameDataEverywhere & ") compare bytes recorded in UTC, " &
-            "and this machine's time zone is " & zone.Id & " (UTC offset " & zone.BaseUtcOffset.ToString() &
-            If(zone.SupportsDaylightSavingTime, ", with daylight saving time", String.Empty) & "). " &
-            "They run on the CI runners (TZ=Etc/UTC on Linux, the UTC windows-latest image); elsewhere leave them out with " &
-            "--filter ""TestCategory!=" & SameDataEverywhere & """, as Build-ReleaseCandidate.ps1 does.")
+        If Not (zone.BaseUtcOffset = TimeSpan.Zero AndAlso Not zone.SupportsDaylightSavingTime) Then
 
-        Assert.AreEqual(
-            "en-US",
-            CultureInfo.CurrentCulture.Name,
-            "The same-data tests (category " & SameDataEverywhere & ") compare bytes recorded with the en-US culture, " &
-            "and this machine's culture is '" & CultureInfo.CurrentCulture.Name & "' (on Linux, set LANG=en_US.UTF-8).")
+            Assert.Inconclusive(
+                "The same-data tests (category " & SameDataEverywhere & ") compare bytes recorded in UTC, " &
+                "and this machine's time zone is " & zone.Id & " (UTC offset " & zone.BaseUtcOffset.ToString() &
+                If(zone.SupportsDaylightSavingTime, ", with daylight saving time", String.Empty) & "). " &
+                "They run on the CI runners (TZ=Etc/UTC on Linux, the UTC windows-latest image). A run that must hold " &
+                "no skipped test leaves them out with --filter ""TestCategory!=" & SameDataEverywhere & """, " &
+                "as Build-ReleaseCandidate.ps1 does.")
+
+        End If
+
+        If Not String.Equals(CultureInfo.CurrentCulture.Name, "en-US", StringComparison.Ordinal) Then
+
+            Assert.Inconclusive(
+                "The same-data tests (category " & SameDataEverywhere & ") compare bytes recorded with the en-US culture, " &
+                "and this machine's culture is '" & CultureInfo.CurrentCulture.Name & "' (on Linux, set LANG=en_US.UTF-8).")
+
+        End If
 
     End Sub
 
