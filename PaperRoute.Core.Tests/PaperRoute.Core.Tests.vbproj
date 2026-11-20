@@ -29,4 +29,9 @@
     <None Include="..\PaperRoute.Tests\Fixtures\Schema4Representative\**\*" Link="Fixtures\Schema4Representative\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- CrossSystemSessionTests' recorded files (core stage 2, step 14): the golden hash list and the backups made on Windows and on Linux, each taken from a CI run's test results. Copied as they are; .gitattributes keeps git from changing their bytes. -->
+  <ItemGroup>
+    <None Include="Fixtures\CrossSystem\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
