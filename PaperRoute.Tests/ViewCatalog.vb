@@ -682,10 +682,10 @@ Friend NotInheritable Class ViewCatalog
     ' What the assistant's fictional answer proposes, put in front of the
     ' researcher in the open window as a reading does: no provider is asked.
     Private Shared Function LetterRead() As Form
-        Dim dialog As DecisionLetterForm = Shown(New DecisionLetterForm(DecisionLetterMode.NewDecision, New JournalSubmission With {.JournalName = "Fictional Journal of Psychology"}, AssistantCoreTests.Letter, LetterDay))
+        Dim dialog As DecisionLetterForm = Shown(New DecisionLetterForm(DecisionLetterMode.NewDecision, New JournalSubmission With {.JournalName = "Fictional Journal of Psychology"}, AssistantTestSupport.Letter, LetterDay))
         Dim found As DecisionLetterProposal = AssistantService.ReadLetterReply(
-            New AssistantReply With {.Text = AssistantCoreTests.LetterAnswer, .ProviderName = "Claude", .Model = "claude-opus-5-5"}, AssistantCoreTests.Letter, LetterDay)
-        SetPrivate(dialog, "_letter", AssistantCoreTests.Letter)
+            New AssistantReply With {.Text = AssistantTestSupport.LetterAnswer, .ProviderName = "Claude", .Model = "claude-opus-5-5"}, AssistantTestSupport.Letter, LetterDay)
+        SetPrivate(dialog, "_letter", AssistantTestSupport.Letter)
         CallPrivate(dialog, "ShowReview", found)
         Application.DoEvents()
         Return Reached(dialog, dialog.IsReviewing AndAlso dialog.CommentsGrid.Rows.Count > 0, "is not reviewing the letter's comments")

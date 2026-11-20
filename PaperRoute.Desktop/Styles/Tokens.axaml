@@ -1,0 +1,164 @@
+<!--
+  The trial's design tokens (d1 5.1), with today's values: every colour is the
+  one ManuscriptPipeline\Services\UiTheme.vb (and, for tags,
+  Controls\TagChips.vb:39-65) gives in Light and in Dark, as hex.
+
+  Every brush lives in ThemeDictionaries and is used only through
+  DynamicResource (test T3). ThemeTokens.AddDerived adds the computed brushes
+  (primary hover and pressed, toned chip hovers) to each theme dictionary at
+  start-up. High contrast is step 11 and is not here.
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- Shape (UiTheme.vb:19-20); FullRadius rounds a pill or chip whatever its height. -->
+  <CornerRadius x:Key="CardRadius">10</CornerRadius>
+  <CornerRadius x:Key="ControlRadius">8</CornerRadius>
+  <CornerRadius x:Key="FullRadius">999</CornerRadius>
+
+  <!-- Spacing (UiTheme.vb:14-18), logical pixels. -->
+  <x:Double x:Key="SpaceXs">4</x:Double>
+  <x:Double x:Key="SpaceSm">8</x:Double>
+  <x:Double x:Key="SpaceMd">12</x:Double>
+  <x:Double x:Key="SpaceLg">16</x:Double>
+  <x:Double x:Key="SpaceXl">24</x:Double>
+  <!-- A card's inner padding (Form1.vb:3136). -->
+  <Thickness x:Key="CardPadding">14</Thickness>
+
+  <!--
+    Font sizes in device-independent pixels: today's points x 96/72, rounded.
+    The window's base font is Segoe UI 10 pt (Form1.vb:324), so body text is 13
+    and the page title (1.6 x the base, Form1.Shell.vb:1211) is 21. Card fonts
+    from Form1.vb:2476-2509 (at the 10 pt base): title 10.5 pt bold, insight
+    9 pt bold, meta 9 pt, badge 8 pt bold, caption ("NEEDS ATTENTION") 8.5 pt bold.
+  -->
+  <x:Double x:Key="BodyFontSize">13</x:Double>
+  <x:Double x:Key="PageTitleFontSize">21</x:Double>
+  <x:Double x:Key="CardTitleFontSize">14</x:Double>
+  <x:Double x:Key="InsightFontSize">12</x:Double>
+  <x:Double x:Key="MetaFontSize">12</x:Double>
+  <x:Double x:Key="BadgeFontSize">11</x:Double>
+  <x:Double x:Key="CaptionFontSize">11</x:Double>
+  <!-- Fluent's own text size for buttons, boxes and lists (14 by default), set to the body size. -->
+  <x:Double x:Key="ControlContentThemeFontSize">13</x:Double>
+
+  <ResourceDictionary.ThemeDictionaries>
+
+    <ResourceDictionary x:Key="Light">
+      <SolidColorBrush x:Key="BoardBackgroundBrush" Color="#F4F7F8" />
+      <SolidColorBrush x:Key="HeaderBackgroundBrush" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="CardBackgroundBrush" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="CardBorderBrush" Color="#DAE4E7" />
+      <SolidColorBrush x:Key="SubtleBorderBrush" Color="#E7EEF0" />
+      <!-- Today SystemColors.ControlText (UiTheme.vb:275): black in Light. -->
+      <SolidColorBrush x:Key="PrimaryTextBrush" Color="#000000" />
+      <SolidColorBrush x:Key="SecondaryTextBrush" Color="#5B6977" />
+      <SolidColorBrush x:Key="MutedTextBrush" Color="#64717D" />
+      <SolidColorBrush x:Key="AccentBrush" Color="#0F766E" />
+      <SolidColorBrush x:Key="AccentSecondaryBrush" Color="#0E7490" />
+      <SolidColorBrush x:Key="AccentMutedBackgroundBrush" Color="#CCFBF1" />
+      <SolidColorBrush x:Key="OnAccentTextBrush" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="HoverBackgroundBrush" Color="#EBF4F5" />
+      <SolidColorBrush x:Key="WarningBrush" Color="#B45309" />
+      <SolidColorBrush x:Key="WarningMutedBackgroundBrush" Color="#FEF3C7" />
+      <SolidColorBrush x:Key="DangerBrush" Color="#BE232D" />
+      <SolidColorBrush x:Key="DangerMutedBackgroundBrush" Color="#FEE2E2" />
+
+      <SolidColorBrush x:Key="StageIdeaBackgroundBrush" Color="#EDE9FE" />
+      <SolidColorBrush x:Key="StageIdeaForegroundBrush" Color="#5B21B6" />
+      <SolidColorBrush x:Key="StageDraftBackgroundBrush" Color="#E5E7EB" />
+      <SolidColorBrush x:Key="StageDraftForegroundBrush" Color="#374151" />
+      <SolidColorBrush x:Key="StageSubmittedBackgroundBrush" Color="#DBEAFE" />
+      <SolidColorBrush x:Key="StageSubmittedForegroundBrush" Color="#1D4ED8" />
+      <SolidColorBrush x:Key="StageUnderReviewBackgroundBrush" Color="#CCFBF1" />
+      <SolidColorBrush x:Key="StageUnderReviewForegroundBrush" Color="#0F766E" />
+      <SolidColorBrush x:Key="StageRevisionBackgroundBrush" Color="#FEF3C7" />
+      <SolidColorBrush x:Key="StageRevisionForegroundBrush" Color="#B45309" />
+      <SolidColorBrush x:Key="StageAcceptedBackgroundBrush" Color="#DCFCE7" />
+      <SolidColorBrush x:Key="StageAcceptedForegroundBrush" Color="#15803D" />
+      <SolidColorBrush x:Key="StageInPressBackgroundBrush" Color="#CFFAFE" />
+      <SolidColorBrush x:Key="StageInPressForegroundBrush" Color="#0E7490" />
+      <SolidColorBrush x:Key="StagePublishedBackgroundBrush" Color="#D1FAE5" />
+      <SolidColorBrush x:Key="StagePublishedForegroundBrush" Color="#047857" />
+
+      <SolidColorBrush x:Key="TagTealBackgroundBrush" Color="#CCFBF1" />
+      <SolidColorBrush x:Key="TagTealForegroundBrush" Color="#115E59" />
+      <SolidColorBrush x:Key="TagBlueBackgroundBrush" Color="#DBEAFE" />
+      <SolidColorBrush x:Key="TagBlueForegroundBrush" Color="#1E40AF" />
+      <SolidColorBrush x:Key="TagVioletBackgroundBrush" Color="#EDE9FE" />
+      <SolidColorBrush x:Key="TagVioletForegroundBrush" Color="#5B21B6" />
+      <SolidColorBrush x:Key="TagRoseBackgroundBrush" Color="#FFE4E6" />
+      <SolidColorBrush x:Key="TagRoseForegroundBrush" Color="#9F1239" />
+      <SolidColorBrush x:Key="TagAmberBackgroundBrush" Color="#FEF3C7" />
+      <SolidColorBrush x:Key="TagAmberForegroundBrush" Color="#92400E" />
+      <SolidColorBrush x:Key="TagGreenBackgroundBrush" Color="#DCFCE7" />
+      <SolidColorBrush x:Key="TagGreenForegroundBrush" Color="#166534" />
+      <SolidColorBrush x:Key="TagSlateBackgroundBrush" Color="#E2E8F0" />
+      <SolidColorBrush x:Key="TagSlateForegroundBrush" Color="#334155" />
+      <SolidColorBrush x:Key="TagOrangeBackgroundBrush" Color="#FFEDD5" />
+      <SolidColorBrush x:Key="TagOrangeForegroundBrush" Color="#9A3412" />
+
+      <!-- Pills, tags and toned chips draw an outline in their ink only under high contrast (step 11). -->
+      <Thickness x:Key="OutlineThickness">0</Thickness>
+    </ResourceDictionary>
+
+    <ResourceDictionary x:Key="Dark">
+      <SolidColorBrush x:Key="BoardBackgroundBrush" Color="#181B20" />
+      <SolidColorBrush x:Key="HeaderBackgroundBrush" Color="#1F2329" />
+      <SolidColorBrush x:Key="CardBackgroundBrush" Color="#282C33" />
+      <SolidColorBrush x:Key="CardBorderBrush" Color="#3D444F" />
+      <SolidColorBrush x:Key="SubtleBorderBrush" Color="#323841" />
+      <!-- Open (d1 5.1): today SystemColors.ControlText under Windows Forms' Dark mode, which has no value in the code; 240,240,240 as the inventory proposes. -->
+      <SolidColorBrush x:Key="PrimaryTextBrush" Color="#F0F0F0" />
+      <SolidColorBrush x:Key="SecondaryTextBrush" Color="#ACB5C0" />
+      <SolidColorBrush x:Key="MutedTextBrush" Color="#8A95A1" />
+      <SolidColorBrush x:Key="AccentBrush" Color="#2DD4BF" />
+      <SolidColorBrush x:Key="AccentSecondaryBrush" Color="#22D3EE" />
+      <SolidColorBrush x:Key="AccentMutedBackgroundBrush" Color="#144544" />
+      <SolidColorBrush x:Key="OnAccentTextBrush" Color="#07201D" />
+      <SolidColorBrush x:Key="HoverBackgroundBrush" Color="#323841" />
+      <SolidColorBrush x:Key="WarningBrush" Color="#FBBF24" />
+      <SolidColorBrush x:Key="WarningMutedBackgroundBrush" Color="#5C3F15" />
+      <SolidColorBrush x:Key="DangerBrush" Color="#F87C7C" />
+      <SolidColorBrush x:Key="DangerMutedBackgroundBrush" Color="#5B2126" />
+
+      <SolidColorBrush x:Key="StageIdeaBackgroundBrush" Color="#483678" />
+      <SolidColorBrush x:Key="StageIdeaForegroundBrush" Color="#DDD6FE" />
+      <SolidColorBrush x:Key="StageDraftBackgroundBrush" Color="#41444B" />
+      <SolidColorBrush x:Key="StageDraftForegroundBrush" Color="#E5E7EB" />
+      <SolidColorBrush x:Key="StageSubmittedBackgroundBrush" Color="#1E406E" />
+      <SolidColorBrush x:Key="StageSubmittedForegroundBrush" Color="#BFDBFE" />
+      <SolidColorBrush x:Key="StageUnderReviewBackgroundBrush" Color="#115E59" />
+      <SolidColorBrush x:Key="StageUnderReviewForegroundBrush" Color="#99F6E4" />
+      <SolidColorBrush x:Key="StageRevisionBackgroundBrush" Color="#5C3F15" />
+      <SolidColorBrush x:Key="StageRevisionForegroundBrush" Color="#FDE68A" />
+      <SolidColorBrush x:Key="StageAcceptedBackgroundBrush" Color="#1F4C2F" />
+      <SolidColorBrush x:Key="StageAcceptedForegroundBrush" Color="#BBF7D0" />
+      <SolidColorBrush x:Key="StageInPressBackgroundBrush" Color="#134E4A" />
+      <SolidColorBrush x:Key="StageInPressForegroundBrush" Color="#A5F3FC" />
+      <SolidColorBrush x:Key="StagePublishedBackgroundBrush" Color="#114E3C" />
+      <SolidColorBrush x:Key="StagePublishedForegroundBrush" Color="#A7F3D0" />
+
+      <SolidColorBrush x:Key="TagTealBackgroundBrush" Color="#134E4A" />
+      <SolidColorBrush x:Key="TagTealForegroundBrush" Color="#99F6E4" />
+      <SolidColorBrush x:Key="TagBlueBackgroundBrush" Color="#1E3A8A" />
+      <SolidColorBrush x:Key="TagBlueForegroundBrush" Color="#BFDBFE" />
+      <SolidColorBrush x:Key="TagVioletBackgroundBrush" Color="#4C1D95" />
+      <SolidColorBrush x:Key="TagVioletForegroundBrush" Color="#DDD6FE" />
+      <SolidColorBrush x:Key="TagRoseBackgroundBrush" Color="#881337" />
+      <SolidColorBrush x:Key="TagRoseForegroundBrush" Color="#FECDD3" />
+      <SolidColorBrush x:Key="TagAmberBackgroundBrush" Color="#78350F" />
+      <SolidColorBrush x:Key="TagAmberForegroundBrush" Color="#FDE68A" />
+      <SolidColorBrush x:Key="TagGreenBackgroundBrush" Color="#14532D" />
+      <SolidColorBrush x:Key="TagGreenForegroundBrush" Color="#BBF7D0" />
+      <SolidColorBrush x:Key="TagSlateBackgroundBrush" Color="#334155" />
+      <SolidColorBrush x:Key="TagSlateForegroundBrush" Color="#E2E8F0" />
+      <SolidColorBrush x:Key="TagOrangeBackgroundBrush" Color="#7C2D12" />
+      <SolidColorBrush x:Key="TagOrangeForegroundBrush" Color="#FED7AA" />
+
+      <Thickness x:Key="OutlineThickness">0</Thickness>
+    </ResourceDictionary>
+
+  </ResourceDictionary.ThemeDictionaries>
+
+</ResourceDictionary>

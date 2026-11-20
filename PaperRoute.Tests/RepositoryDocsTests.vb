@@ -604,7 +604,7 @@ Public Class RepositoryDocsTests
 
         Dim folder As String =
             Path.Combine(
-                AssistantCoreTests.RepositoryRoot(),
+                TestRepository.Root(),
                 WinGetPackageFolder
             )
 
@@ -715,7 +715,7 @@ Public Class RepositoryDocsTests
 
         Return File.ReadAllText(
             Path.Combine(
-                AssistantCoreTests.RepositoryRoot(),
+                TestRepository.Root(),
                 relativePath
             )
         ).Replace(

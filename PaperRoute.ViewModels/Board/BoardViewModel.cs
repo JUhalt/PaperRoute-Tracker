@@ -10,9 +10,10 @@ namespace PaperRoute.ViewModels.Board;
 // again from the session's library, as today, and the 28 places that render
 // today become LibraryChanged and the filter changes here.
 //
-// Not here yet (later steps of d1 section 8): the commands that give notices
-// (open, route, deadlines, add) and the tag-strip search (step 9), and the
-// view's own state (columns, realized shelves).
+// Not here yet (later steps of d1 section 8): the card commands that give
+// notices (open, route) and the tag-strip search (step 9), and the view's own
+// state (columns, realized shelves). Step 8's view brings the notices of the
+// controls it shows: View in Deadlines and the welcome's links (d1 1.2).
 public sealed partial class BoardViewModel : ObservableObject
 {
     // Form1.vb boardSearchDebounceTimer (:79-81).
@@ -124,8 +125,23 @@ public sealed partial class BoardViewModel : ObservableObject
         _session.LibraryChanged += OnLibraryChanged;
     }
 
+    // View in Deadlines opens Deadlines today (Form1.vb:507); in the trial it
+    // gives a notice (d1 1.2).
+    public const string DeadlinesNotice = "Deadlines is not part of the trial.";
+
+    // The end of every notice a control the trial leaves out gives.
+    public const string NotInTrialSuffix = " is not part of the trial.";
+
     // The seven sort texts (Form1.vb:546-552).
     public IReadOnlyList<string> SortOptions => BoardRules.SortTexts;
+
+    // Where the Board's notices go: the shell's notice strip. Null until the
+    // shell is made, and then a notice is dropped.
+    public IInteractions? Interactions { get; set; }
+
+    // The welcome's "Explore an example library" line is left out of the
+    // example window (Form1.Welcome.vb:215); the trial opens only the example.
+    public bool ShowsExampleLink => _session.Kind != LibraryKind.Example;
 
     // Overdue, due soon, long wait, no journal, recent rejection.
     public IReadOnlyList<ChipViewModel> Chips { get; }
@@ -278,6 +294,21 @@ public sealed partial class BoardViewModel : ObservableObject
         }
 
         Render();
+    }
+
+    // View in Deadlines (d1 1.2).
+    [RelayCommand]
+    private void ViewDeadlines() => Interactions?.Notice(DeadlinesNotice);
+
+    // The welcome's buttons and links (d1 1.2): "<subject> is not part of the
+    // trial." The view names the subject: "Import & Export", "The Library".
+    [RelayCommand]
+    private void NotInTrial(string? subject)
+    {
+        if (!string.IsNullOrWhiteSpace(subject))
+        {
+            Interactions?.Notice(subject + NotInTrialSuffix);
+        }
     }
 
     // Form1.vb BoardSearchTextChanged (:1890-1902): each change restarts the

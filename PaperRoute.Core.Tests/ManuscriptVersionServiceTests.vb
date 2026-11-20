@@ -26,7 +26,7 @@ Public Class ManuscriptVersionServiceTests
                 manuscript,
                 "Working draft",
                 "Initial tracked version.",
-                "C:\Research\working.docx",
+                CoreTestSupport.RootedPath("Research", "working.docx"),
                 False,
                 createdDate:=created
             )

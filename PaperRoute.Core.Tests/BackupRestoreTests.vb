@@ -460,36 +460,6 @@ Public Class BackupRestoreTests
     End Sub
 
 
-    ' A write that fails after the destination existed leaves the previous
-    ' backup byte-identical (#114): the ZIP is written beside it and takes
-    ' its place only once it is finished.
-    <TestMethod>
-    Public Sub Backup_FailedWriteKeepsThePreviousBackup()
-
-        Dim dataDirectory As String = Path.Combine(_root, "source-data")
-        Dim managedDirectory As String = Path.Combine(_root, "source-library")
-        Dim repository As New ManuscriptRepository(dataDirectory, managedDirectory)
-        Dim manuscripts As List(Of Manuscript) = CreateRepresentativeLibrary()
-        repository.Save(manuscripts)
-
-        Dim backupPath As String = Path.Combine(_root, "backup.zip")
-        Dim service As New PortableBackupService(managedDirectory)
-        service.CreateBackup(backupPath, manuscripts, repository)
-        Dim previous As Byte() = File.ReadAllBytes(backupPath)
-
-        manuscripts(0).Title = "Changed since the last backup"
-        repository.Save(manuscripts)
-
-        ' Another program holds the name the ZIP is written under.
-        Using holder As New FileStream(backupPath & ".partial", FileMode.Create, FileAccess.ReadWrite, FileShare.None)
-            Assert.ThrowsExactly(Of IOException)(Sub() service.CreateBackup(backupPath, manuscripts, repository))
-        End Using
-
-        CollectionAssert.AreEqual(previous, File.ReadAllBytes(backupPath), "The previous backup is untouched.")
-
-    End Sub
-
-
     ' A ZIP that fails inspection never takes the destination's place, and
     ' the temporary file is gone. Here a managed file is missing from disk,
     ' so the archive could not be restored.
@@ -875,84 +845,6 @@ Public Class BackupRestoreTests
     End Sub
 
 
-    ' The rollback's move is tried again too (#295). The move into the
-    ' managed folder is refused, and a file of the library set aside is
-    ' held, so Windows itself refuses to put the library back until the
-    ' hold ends during a wait. The library goes back as it was, with nothing
-    ' beside it. Before the change it stayed set aside.
-    <TestMethod>
-    Public Sub Restore_PutsTheLibraryBackOnceItsHeldFileIsFree()
-
-        Dim scenario As RestoreScenario = CreateRestoreScenario()
-        Dim before As Dictionary(Of String, Byte()) = SnapshotLibrary(scenario)
-        Dim heldFile As String =
-            Path.GetRelativePath(scenario.TargetManaged, Directory.GetFiles(scenario.TargetManaged, "*", SearchOption.AllDirectories).First())
-        Dim service As New BusyFolderRestoreService(
-            scenario.TargetManaged,
-            Integer.MaxValue,
-            Function(folder) New IOException("Access to the path '" & folder & "' is denied.", AccessDeniedHResult),
-            intoFolder:=scenario.TargetManaged,
-            holdOnceSetAside:=heldFile
-        )
-
-        Dim failure As RestoreFailedException = Nothing
-
-        Try
-            failure = Assert.ThrowsExactly(Of RestoreFailedException)(
-                Sub() service.RestoreBackup(scenario.BackupPath, scenario.Current, scenario.TargetRepository))
-        Finally
-            service.ReleaseHold()
-        End Try
-
-        Assert.IsTrue(service.WaitsWithTheLibraryAside > 0, "Putting the library back waited for the held file.")
-        StringAssert.Contains(failure.Message, "put back as it was")
-        Assert.AreEqual(0, failure.LeftBehind.Count)
-        AssertSameFiles(before, SnapshotLibrary(scenario), "The library on disk after its held file was let go")
-        Assert.AreEqual(
-            0,
-            Directory.GetFileSystemEntries(_root, "*restore-*", SearchOption.AllDirectories).Length,
-            "Nothing of the restore is left beside the library."
-        )
-
-    End Sub
-
-
-    ' The removed folder's move into the restored library is tried again
-    ' too (#295): with a file inside it held once the old library is set
-    ' aside, the move waits for the hold to end, and the old library does
-    ' not stay beside the new one. Before the change it stayed.
-    <TestMethod>
-    Public Sub Restore_CarriesABusyRemovedFolderOverOnceItIsFree()
-
-        Dim scenario As RestoreScenario = CreateRestoreScenario()
-        Dim removedFile As String = Path.Combine(scenario.TargetManaged, "removed", "2026-10-09", "old-snapshot.txt")
-        Directory.CreateDirectory(Path.GetDirectoryName(removedFile))
-        File.WriteAllText(removedFile, "The one copy.")
-        Dim service As New BusyFolderRestoreService(
-            scenario.TargetManaged,
-            0,
-            Nothing,
-            holdOnceSetAside:=Path.GetRelativePath(scenario.TargetManaged, removedFile)
-        )
-
-        Try
-            service.RestoreBackup(scenario.BackupPath, scenario.Current, scenario.TargetRepository)
-        Finally
-            service.ReleaseHold()
-        End Try
-
-        Assert.IsTrue(service.Waits.Count > 0, "The move of the removed folder waited for the held file.")
-        Assert.AreEqual("The one copy.", File.ReadAllText(removedFile), "The removed folder comes across to the restored library.")
-        Assert.AreEqual(3, scenario.TargetRepository.Load().Count, "The library is the backup's.")
-        Assert.AreEqual(
-            0,
-            Directory.GetDirectories(_root, "*.restore-rollback-*").Length,
-            "Nothing of the old library is left beside the new one."
-        )
-
-    End Sub
-
-
     ' The startup window runs its restore on a worker thread too (#295),
     ' so with no library loaded a busy folder is waited for as well: the
     ' move into the managed folder is refused once, and the restore waits,
@@ -1313,12 +1205,11 @@ Public Class BackupRestoreTests
 
     ' Refuses the swap's folder moves as OneDrive or Defender does while it
     ' holds a file inside (#295): each move busyAttempts times before it goes
-    ' through, or, given intoFolder, only the move into that folder. Given
-    ' holdOnceSetAside, a path inside the library, that file is held once the
-    ' library is first set aside, so Windows itself refuses to move the
-    ' folder that holds it until the next wait. The moves that went through,
-    ' the waits between tries and the waits with the library not in its
-    ' place are recorded; no wait is slept.
+    ' through, or, given intoFolder, only the move into that folder. The
+    ' moves that went through, the waits between tries and the waits with
+    ' the library not in its place are recorded; no wait is slept. (The
+    ' copy in PaperRoute.Tests can also hold a file of the library once it
+    ' is set aside, which only Windows refuses to move.)
     Private NotInheritable Class BusyFolderRestoreService
         Inherits PortableRestoreService
 
@@ -1326,22 +1217,18 @@ Public Class BackupRestoreTests
         Private ReadOnly _busyAttempts As Integer
         Private ReadOnly _refusal As Func(Of String, Exception)
         Private ReadOnly _intoFolder As String
-        Private ReadOnly _holdOnceSetAside As String
         Private ReadOnly _refusals As New Dictionary(Of String, Integer)(StringComparer.OrdinalIgnoreCase)
-        Private _held As FileStream
-        Private _holdTaken As Boolean
 
         Public ReadOnly Property Moves As New List(Of String)()
         Public ReadOnly Property Waits As New List(Of Integer)()
         Public Property WaitsWithTheLibraryAside As Integer
 
-        Public Sub New(managedLibraryRootDirectory As String, busyAttempts As Integer, refusal As Func(Of String, Exception), Optional intoFolder As String = Nothing, Optional holdOnceSetAside As String = Nothing)
+        Public Sub New(managedLibraryRootDirectory As String, busyAttempts As Integer, refusal As Func(Of String, Exception), Optional intoFolder As String = Nothing)
             MyBase.New(managedLibraryRootDirectory)
             _managedRoot = Path.GetFullPath(managedLibraryRootDirectory)
             _busyAttempts = busyAttempts
             _refusal = refusal
             _intoFolder = If(intoFolder Is Nothing, Nothing, Path.GetFullPath(intoFolder))
-            _holdOnceSetAside = holdOnceSetAside
         End Sub
 
         Friend Overrides Sub MoveDirectory(sourceDirectory As String, destinationDirectory As String)
@@ -1354,25 +1241,12 @@ Public Class BackupRestoreTests
             End If
             MyBase.MoveDirectory(sourceDirectory, destinationDirectory)
             Moves.Add(Path.GetFileName(sourceDirectory) & " -> " & Path.GetFileName(destinationDirectory))
-            If _holdOnceSetAside IsNot Nothing AndAlso Not _holdTaken AndAlso
-               String.Equals(Path.GetFullPath(sourceDirectory), _managedRoot, StringComparison.OrdinalIgnoreCase) Then
-                _holdTaken = True
-                _held = New FileStream(Path.Combine(destinationDirectory, _holdOnceSetAside), FileMode.Open, FileAccess.Read, FileShare.None)
-            End If
         End Sub
 
         Friend Overrides Sub WaitBeforeRetry(milliseconds As Integer)
             Waits.Add(milliseconds)
             If Not Directory.Exists(_managedRoot) Then
                 WaitsWithTheLibraryAside += 1
-            End If
-            ReleaseHold()
-        End Sub
-
-        Public Sub ReleaseHold()
-            If _held IsNot Nothing Then
-                _held.Dispose()
-                _held = Nothing
             End If
         End Sub
     End Class

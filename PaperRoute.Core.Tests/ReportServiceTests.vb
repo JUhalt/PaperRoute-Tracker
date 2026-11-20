@@ -72,11 +72,11 @@ Public Class ReportServiceTests
         Dim submission As New JournalSubmission With {.JournalName = "Assessment", .SubmittedDate = Today.AddDays(-40), .Notes = "SECRET-NOTE", .PortalUrl = "https://portal.example/secret-folder"}
         Dim decision As New EditorialDecisionEvent With {.Decision = EditorialDecision.None, .DecisionDate = Today.AddDays(-30), .Notes = "SECRET-DECISION"}
         submission.Decisions.Add(decision)
-        submission.Correspondence.Add(New CorrespondenceItem With {.Title = "SECRET-CORRESPONDENCE", .LocalFilePath = "C:\secret-folder\letter.pdf"})
+        submission.Correspondence.Add(New CorrespondenceItem With {.Title = "SECRET-CORRESPONDENCE", .LocalFilePath = CoreTestSupport.RootedPath("secret-folder", "letter.pdf")})
         submission.ReviewerResponses.Add(New ReviewerResponseItem With {.DecisionId = decision.Id, .RevisionRoundNumber = 1, .CommentText = "SECRET-REVIEW", .ResponseText = "SECRET-RESPONSE"})
         manuscript.Submissions.Add(submission)
         manuscript.Reminders.Add(New ManuscriptReminder With {.Title = "SECRET-REMINDER", .DueDate = Today.AddDays(4), .Notes = "SECRET-NOTE"})
-        manuscript.Versions.Add(New ManuscriptVersion With {.Label = "v1", .LocalFilePath = "C:\secret-folder\v1.docx", .Notes = "SECRET-NOTE"})
+        manuscript.Versions.Add(New ManuscriptVersion With {.Label = "v1", .LocalFilePath = CoreTestSupport.RootedPath("secret-folder", "v1.docx"), .Notes = "SECRET-NOTE"})
         Return manuscript
     End Function
 

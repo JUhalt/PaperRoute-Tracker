@@ -59,7 +59,7 @@ Public Class CountWordingTests
     <TestMethod>
     Public Sub TheKnownCountsChooseTheSingular()
 
-        Dim app As String = Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManuscriptPipeline")
+        Dim app As String = Path.Combine(TestRepository.Root(), "ManuscriptPipeline")
         Dim codes As New Dictionary(Of String, String)(StringComparer.OrdinalIgnoreCase)
         Dim missing As New List(Of String)()
 

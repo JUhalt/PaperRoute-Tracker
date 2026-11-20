@@ -18,10 +18,16 @@ Imports Microsoft.VisualStudio.TestTools.UnitTesting
 ' does not promise to keep equal items in order, so the file is the order
 ' the Board gave, not one worked out again.
 '
-' Five of the seven sorts: Current order, Title A-Z and Z-A, and Newest and
-' Oldest stage change. Most and Fewest rejections compare the attention
-' snapshots, which Form1 works out for the real date, and Form1 has no seam
-' for the date, so their order is not pinned here.
+' All seven sorts (Form1.vb GetVisibleManuscripts, :2247-2285, and the
+' comparisons at :2293-2372), none of which depends on the date. Current
+' order does not sort. Title A-Z and Z-A compare Title (in the current
+' culture, ignoring case). Most and Fewest rejections compare the attention
+' snapshot's RejectionCount (:2319-2348); Form1 works the snapshot out for
+' DateTime.Today (:2431-2465, :2670-2673), but RejectionCount counts every
+' rejection decision with no date (ManuscriptAttentionService.vb:66-97), so
+' their order, ties included, is pinned here too. Newest and Oldest stage
+' change compare the stored StageEnteredDate (:2351-2372), which the
+' fixture sets from its fixed LargeLibraryFixture.Today.
 '
 ' A manuscript is named by its position in the library's order, from 0:
 ' its Id is a new Guid each time the fixture writes the library
@@ -38,12 +44,14 @@ Public Class BoardSortOrderTests
     Private Const FileName As String = "board-sort-orders-500.json"
     Private Const ManuscriptCount As Integer = 500
 
-    ' The sort box's index and its text: the five sorts that do not
-    ' depend on the date.
-    Private Shared ReadOnly DateFreeSorts As (Index As Integer, Text As String)() = {
+    ' The sort box's index and its text: all seven sorts, none of which
+    ' depends on the date.
+    Private Shared ReadOnly BoardSorts As (Index As Integer, Text As String)() = {
         (0, "Sort: Current order"),
         (1, "Sort: Title A-Z"),
         (2, "Sort: Title Z-A"),
+        (3, "Sort: Most rejections"),
+        (4, "Sort: Fewest rejections"),
         (5, "Sort: Newest stage change"),
         (6, "Sort: Oldest stage change")
     }
@@ -73,7 +81,7 @@ Public Class BoardSortOrderTests
 
 
     <TestMethod>
-    Public Sub TheFiveDateFreeSortsGiveTheCheckedInOrders()
+    Public Sub TheSevenSortsGiveTheCheckedInOrders()
 
         Dim observed As New List(Of (Index As Integer, Text As String, Orders As Dictionary(Of String, List(Of Integer))))()
 
@@ -88,7 +96,7 @@ Public Class BoardSortOrderTests
                     Dim positions As Dictionary(Of Manuscript, Integer) = LibraryPositions(board.Library)
                     Dim box As ComboBox = board.Part(Of ComboBox)("cboBoardSort")
 
-                    For Each sort In DateFreeSorts
+                    For Each sort In BoardSorts
 
                         Assert.AreEqual(sort.Text, box.Items(sort.Index).ToString(), "The sort box's item " & sort.Index & ".")
                         box.SelectedIndex = sort.Index
@@ -125,7 +133,7 @@ Public Class BoardSortOrderTests
             File.WriteAllText(Path.Combine(outFolder, FileName), written, New UTF8Encoding(False))
         End If
 
-        Dim checkedIn As String = Path.Combine(AssistantCoreTests.RepositoryRoot(), "PaperRoute.TestFixtures", "SortOrders", FileName)
+        Dim checkedIn As String = Path.Combine(TestRepository.Root(), "PaperRoute.TestFixtures", "SortOrders", FileName)
         Assert.IsTrue(File.Exists(checkedIn), "The checked-in sort orders are at " & checkedIn & ".")
 
         Using expected As JsonDocument = JsonDocument.Parse(File.ReadAllText(checkedIn))
@@ -133,7 +141,7 @@ Public Class BoardSortOrderTests
             Assert.AreEqual(ManuscriptCount, expected.RootElement.GetProperty("manuscripts").GetInt32(), "The file is for the 500 library.")
 
             Dim sorts As List(Of JsonElement) = expected.RootElement.GetProperty("sorts").EnumerateArray().ToList()
-            Assert.AreEqual(observed.Count, sorts.Count, "The file holds the five date-free sorts.")
+            Assert.AreEqual(observed.Count, sorts.Count, "The file holds the seven sorts.")
 
             For index As Integer = 0 To observed.Count - 1
                 Dim seen = observed(index)
@@ -190,7 +198,7 @@ Public Class BoardSortOrderTests
 
         Dim text As New StringBuilder()
         text.Append("{" & vbLf)
-        text.Append("  ""about"": ""The order today's WinForms Board gives LargeLibraryFixture.Create(root, 500) under its five sorts that do not depend on the date, shelf by shelf. Each number is a manuscript's position in the library's order, from 0 (position n is the title 'Synthetic' n + 1). Written by PaperRoute.Tests' BoardSortOrderTests.""," & vbLf)
+        text.Append("  ""about"": ""The order today's WinForms Board gives LargeLibraryFixture.Create(root, 500) under its seven sorts, none of which depends on the date (Most and Fewest rejections compare the attention snapshot's RejectionCount, which counts every rejection decision with no date), shelf by shelf. Each number is a manuscript's position in the library's order, from 0 (position n is the title 'Synthetic' n + 1). Written by PaperRoute.Tests' BoardSortOrderTests.""," & vbLf)
         text.Append("  ""manuscripts"": " & ManuscriptCount.ToString(CultureInfo.InvariantCulture) & "," & vbLf)
         text.Append("  ""sorts"": [" & vbLf)
 

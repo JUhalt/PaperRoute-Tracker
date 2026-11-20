@@ -58,9 +58,30 @@ Public Class StorageLocationsTests
         Assert.AreEqual(Path.Combine(_root, "managed-library"), StorageLocations.ManagedLibraryRoot())
 
         ' What the six builders produce through StorageLocations.
-        Assert.AreEqual(
-            Path.Combine(Path.GetFullPath(libraryData), "manuscripts.json"),
-            New ManuscriptRepository().DataFilePath)
+        '
+        ' The repository's default constructor also makes the default
+        ' managed-library service, which refuses to start when the system
+        ' reports no Documents folder. Windows always reports one. Linux and
+        ' macOS report none when the folder does not exist, as on a CI
+        ' runner. What PaperRoute should do there is not decided, so the
+        ' rule is recorded here as it stands, not worked around.
+        If String.IsNullOrWhiteSpace(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)) Then
+
+            Dim refused As InvalidOperationException =
+                Assert.ThrowsExactly(Of InvalidOperationException)(
+                    Sub()
+                        Dim neverMade As New ManuscriptRepository()
+                    End Sub)
+
+            Assert.AreEqual("The user's Documents folder could not be located.", refused.Message)
+
+        Else
+
+            Assert.AreEqual(
+                Path.Combine(Path.GetFullPath(libraryData), "manuscripts.json"),
+                New ManuscriptRepository().DataFilePath)
+
+        End If
         Assert.AreEqual(
             Path.Combine(Path.GetFullPath(libraryData), "authors.json"),
             New AuthorLibraryRepository().DataFilePath)

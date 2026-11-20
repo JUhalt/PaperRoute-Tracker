@@ -562,9 +562,9 @@ Public Class AuthorInstructionsTests
     Public Sub WhenTheAssistantCantBeUsedTheWindowSaysWhyAndSendsNothing()
         RunOnSta(
             Sub()
-                Dim network As New AssistantCoreTests.CapturingNetwork()
+                Dim network As New AssistantTestSupport.CapturingNetwork()
                 OnlineAccess.InnerHandlerFactory = Function() network
-                OnlineAccess.Configure(AssistantCoreTests.ClaudeSettings())
+                OnlineAccess.Configure(AssistantTestSupport.ClaudeSettings())
                 Using reader As New AuthorInstructionsForm("Fictional Open Psychology", String.Empty, Nothing, Nothing, Instructions)
                     ShowOffscreen(reader)
                     StringAssert.Contains(reader.IntroText, "to Claude at api.anthropic.com, with PaperRoute's instructions.")
@@ -572,7 +572,7 @@ Public Class AuthorInstructionsTests
                     StringAssert.StartsWith(reader.StatusText, "Add your Claude key")
                     Assert.IsFalse(reader.IsReviewing)
 
-                    Dim offline As OnlineServicesSettings = AssistantCoreTests.ClaudeSettings()
+                    Dim offline As OnlineServicesSettings = AssistantTestSupport.ClaudeSettings()
                     offline.WorkOffline = True
                     OnlineAccess.Configure(offline)
                     reader.ReadAsync().GetAwaiter().GetResult()
@@ -768,7 +768,7 @@ Public Class AuthorInstructionsTests
                     reader.Close()
                 End Using
 
-                OnlineAccess.Configure(AssistantCoreTests.ClaudeSettings())
+                OnlineAccess.Configure(AssistantTestSupport.ClaudeSettings())
                 Using editor As New JournalEditForm(New JournalRecord With {.Name = "Fictional Open Psychology"})
                     ShowOffscreen(editor)
                     editor.Size = editor.MinimumSize

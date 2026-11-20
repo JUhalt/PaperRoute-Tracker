@@ -1,0 +1,187 @@
+<!--
+  Chips (inventory C.5), as today's FilterChip draws them
+  (ManuscriptPipeline\Controls\FilterChip.vb:146-148, 171-240):
+
+    tone      fill                  ink           outline     weight
+    neutral   CardBackground        SecondaryText CardBorder  normal
+    warning   WarningMutedBackground Warning      none        bold
+    danger    DangerMutedBackground  Danger       none        bold
+    active    AccentMutedBackground  Accent       none        bold
+
+  Hovered, a neutral chip fills with HoverBackground and a toned one (active
+  included) with its fill 40 % back to the card (the *ChipHoverBrush tokens
+  ThemeTokens adds), easing over 100 ms. Padding 10,3, fully rounded; focus is a
+  2 px AccentSecondary ring 1.5 px inside the edge.
+
+  Written for both Button.chip (the Board's chips: a press button whose
+  "active" class is bound to the view model) and ToggleButton.chip (later,
+  Deadlines): "active" and ":checked" share one setter list.
+
+  Tags (Controls\TagChips.vb:19-65) are not controls: Border.tag with a
+  TextBlock, padded 7,2, fully rounded, in the meta font, coloured by their
+  tag-<palette> class (TagViewModel.PaletteClass).
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Style Selector="Button.chip, ToggleButton.chip">
+    <Setter Property="CornerRadius" Value="{DynamicResource FullRadius}" />
+    <Setter Property="Padding" Value="10,3" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="FontSize" Value="{DynamicResource BodyFontSize}" />
+    <Setter Property="FontWeight" Value="Normal" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+    <Setter Property="FocusAdorner">
+      <FocusAdornerTemplate>
+        <Border Margin="1.5" BorderThickness="2" CornerRadius="{DynamicResource FullRadius}"
+                BorderBrush="{DynamicResource AccentSecondaryBrush}" />
+      </FocusAdornerTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="Button.chip /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.chip /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.1" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Button.chip:pressed, ToggleButton.chip:pressed">
+    <Setter Property="RenderTransform" Value="{x:Null}" />
+  </Style>
+
+  <!-- Neutral, hovered or held. -->
+  <Style Selector="Button.chip:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.chip:pressed /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.chip:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.chip:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource HoverBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+  </Style>
+
+  <!-- Warning. -->
+  <Style Selector="Button.chip.warning, ToggleButton.chip.warning">
+    <Setter Property="Background" Value="{DynamicResource WarningMutedBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource WarningBrush}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource OutlineThickness}" />
+    <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+  <Style Selector="Button.chip.warning:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.chip.warning:pressed /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.chip.warning:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.chip.warning:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource WarningChipHoverBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource WarningBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
+  </Style>
+
+  <!-- Danger. -->
+  <Style Selector="Button.chip.danger, ToggleButton.chip.danger">
+    <Setter Property="Background" Value="{DynamicResource DangerMutedBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource OutlineThickness}" />
+    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+  <Style Selector="Button.chip.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.chip.danger:pressed /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.chip.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.chip.danger:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource DangerChipHoverBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+  </Style>
+
+  <!-- Active (the chip's filter is on): after the tones, so it wins over them. -->
+  <Style Selector="Button.chip.active, ToggleButton.chip:checked">
+    <Setter Property="Background" Value="{DynamicResource AccentMutedBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource OutlineThickness}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+  <!-- Fluent paints a checked toggle from its template; the chip keeps its own colours. -->
+  <Style Selector="ToggleButton.chip:checked /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentMutedBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector="Button.chip.active:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.chip.active:pressed /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.chip:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.chip:checked:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentChipHoverBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+  </Style>
+
+  <!-- Off: no chip is disabled on today's Board; kept for the family (C.5). -->
+  <Style Selector="Button.chip:disabled /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.chip:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
+  </Style>
+
+  <!-- Tags. -->
+  <Style Selector="Border.tag">
+    <Setter Property="CornerRadius" Value="{DynamicResource FullRadius}" />
+    <Setter Property="Padding" Value="7,2" />
+    <Setter Property="BorderThickness" Value="{DynamicResource OutlineThickness}" />
+    <Setter Property="Background" Value="{DynamicResource TagTealBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TagTealForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.tag > TextBlock">
+    <Setter Property="FontSize" Value="{DynamicResource MetaFontSize}" />
+    <Setter Property="Foreground" Value="{DynamicResource TagTealForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.tag.tag-teal">
+    <Setter Property="Background" Value="{DynamicResource TagTealBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TagTealForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.tag.tag-teal > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource TagTealForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.tag.tag-blue">
+    <Setter Property="Background" Value="{DynamicResource TagBlueBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TagBlueForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.tag.tag-blue > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource TagBlueForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.tag.tag-violet">
+    <Setter Property="Background" Value="{DynamicResource TagVioletBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TagVioletForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.tag.tag-violet > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource TagVioletForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.tag.tag-rose">
+    <Setter Property="Background" Value="{DynamicResource TagRoseBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TagRoseForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.tag.tag-rose > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource TagRoseForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.tag.tag-amber">
+    <Setter Property="Background" Value="{DynamicResource TagAmberBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TagAmberForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.tag.tag-amber > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource TagAmberForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.tag.tag-green">
+    <Setter Property="Background" Value="{DynamicResource TagGreenBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TagGreenForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.tag.tag-green > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource TagGreenForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.tag.tag-slate">
+    <Setter Property="Background" Value="{DynamicResource TagSlateBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TagSlateForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.tag.tag-slate > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource TagSlateForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.tag.tag-orange">
+    <Setter Property="Background" Value="{DynamicResource TagOrangeBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TagOrangeForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.tag.tag-orange > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource TagOrangeForegroundBrush}" />
+  </Style>
+
+</Styles>
