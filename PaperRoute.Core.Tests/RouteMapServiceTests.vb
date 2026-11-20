@@ -14,7 +14,7 @@ Public Class RouteMapServiceTests
 
     <TestMethod>
     Public Sub APublishedRouteSplitsIntoJournalAuthorAndProductionTime()
-        Dim manuscript As Manuscript = Anchoring()
+        Dim manuscript As Manuscript = CoreTestSupport.RouteAnchoringManuscript()
         Dim before As String = JsonSerializer.Serialize(manuscript)
 
         Dim map As RouteMap = RouteMapService.Build(manuscript, Today)
@@ -36,7 +36,7 @@ Public Class RouteMapServiceTests
 
     <TestMethod>
     Public Sub AMissingResubmissionIsShownAsNotRecordedNeverEstimated()
-        Dim manuscript As Manuscript = Anchoring()
+        Dim manuscript As Manuscript = CoreTestSupport.RouteAnchoringManuscript()
         manuscript.History.RemoveAll(Function(item) item.EventDate.Month = 6)
 
         Dim map As RouteMap = RouteMapService.Build(manuscript, Today)
@@ -103,7 +103,7 @@ Public Class RouteMapServiceTests
 
     <TestMethod>
     Public Sub EachNumberedStepSaysWhatItTook()
-        Dim steps As List(Of RouteStep) = RouteMapService.Steps(RouteMapService.Build(Anchoring(), Today))
+        Dim steps As List(Of RouteStep) = RouteMapService.Steps(RouteMapService.Build(CoreTestSupport.RouteAnchoringManuscript(), Today))
 
         CollectionAssert.AreEqual(
             {"Desk rejected", "Submitted to Open Psychology", "Major revision", "Resubmitted", "Minor revision", "Resubmitted", "Accepted", "Published"},
@@ -113,12 +113,12 @@ Public Class RouteMapServiceTests
              "42 days after resubmission", "after 14 days of revising", "24 days after resubmission", "28 days after acceptance"},
             steps.Select(Function(item) item.Note).ToList())
         CollectionAssert.AreEqual(Enumerable.Range(1, 8).ToList(), steps.Select(Function(item) item.Number).ToList(), "The first submission is day 0, not a step.")
-        Assert.AreEqual("2 journals  ·  2 revisions  ·  1 rejection", RouteMapService.Brief(RouteMapService.Build(Anchoring(), Today)))
+        Assert.AreEqual("2 journals  ·  2 revisions  ·  1 rejection", RouteMapService.Brief(RouteMapService.Build(CoreTestSupport.RouteAnchoringManuscript(), Today)))
     End Sub
 
     <TestMethod>
     Public Sub TheLibraryLinesUpPublishedRoutesUnlessAskedForAll()
-        Dim longer As Manuscript = Anchoring()
+        Dim longer As Manuscript = CoreTestSupport.RouteAnchoringManuscript()
         Dim shorter As New Manuscript With {.Title = "Quick note", .CurrentStage = PaperStage.Published, .Location = ManuscriptLocation.Published}
         shorter.Submissions.Add(Submitted("Open Psychology", New DateTime(2026, 5, 1), (EditorialDecision.Accepted, New DateTime(2026, 6, 10))))
         shorter.Metadata.PublishedDate = New DateTime(2026, 7, 1)
@@ -139,26 +139,9 @@ Public Class RouteMapServiceTests
         Assert.AreEqual(2, all.MedianDaysToPublication.SampleSize, "Only published routes count toward time to publication.")
     End Sub
 
-    ' The route from the design mockup: a desk rejection, rerouting, two
-    ' revision rounds with recorded returns to review, acceptance, and
-    ' publication, 264 days in all.
-    Friend Shared Function Anchoring() As Manuscript
-        Dim manuscript As New Manuscript With {
-            .Title = "Anchoring effects in clinical risk estimates",
-            .CurrentStage = PaperStage.Published,
-            .Location = ManuscriptLocation.Published
-        }
-        manuscript.Submissions.Add(Submitted("Psychological Letters", New DateTime(2026, 1, 5), (EditorialDecision.DeskRejected, New DateTime(2026, 1, 12))))
-        manuscript.Submissions.Add(Submitted("Open Psychology", New DateTime(2026, 3, 1),
-            (EditorialDecision.MajorRevision, New DateTime(2026, 4, 2)),
-            (EditorialDecision.MinorRevision, New DateTime(2026, 7, 22)),
-            (EditorialDecision.Accepted, New DateTime(2026, 8, 29))))
-        manuscript.History.Add(New HistoryEvent With {.Stage = PaperStage.UnderReview, .EventDate = New DateTime(2026, 6, 10)})
-        manuscript.History.Add(New HistoryEvent With {.Stage = PaperStage.UnderReview, .EventDate = New DateTime(2026, 8, 5)})
-        manuscript.Metadata.PublishedDate = New DateTime(2026, 9, 26)
-        Return manuscript
-    End Function
-
+    ' The route from the design mockup, 264 days in all, is
+    ' CoreTestSupport.RouteAnchoringManuscript: the route map's window tests
+    ' in PaperRoute.Tests draw it too.
     Private Shared Function Submitted(journal As String, submittedOn As DateTime, ParamArray decisions As (Decision As EditorialDecision, DecisionDate As DateTime)()) As JournalSubmission
         Dim submission As New JournalSubmission With {.JournalName = journal, .SubmittedDate = submittedOn}
         For Each decision In decisions

@@ -55,7 +55,7 @@ Public Class AssistantCoreTests
         OnlineAccess.ResetForTests()
         AssistantService.ProviderFactory = Nothing
         AssistantRunner.ConsentPrompt = Nothing
-        _directory = TestSupport.CreateTemporaryRoot()
+        _directory = CoreTestSupport.CreateTemporaryRoot()
         _keys = New ProtectedKeyStore(Path.Combine(_directory, "keys"))
         OnlineAccess.KeyStoreFactory = Function() _keys
     End Sub
@@ -65,7 +65,7 @@ Public Class AssistantCoreTests
         OnlineAccess.ResetForTests()
         AssistantService.ProviderFactory = Nothing
         AssistantRunner.ConsentPrompt = Nothing
-        TestSupport.DeleteTemporaryRoot(_directory)
+        CoreTestSupport.DeleteTemporaryRoot(_directory)
     End Sub
 
 
@@ -762,13 +762,10 @@ Public Class AssistantCoreTests
     ' Helpers
     ' ---------------------------------------------------------------
 
+    ' TestRepository.Root (CoreTestSupport.vb), which PaperRoute.Core.Tests
+    ' shares; core stage 2's step 12 changes the callers and drops this.
     Friend Shared Function RepositoryRoot() As String
-        Dim folder As New DirectoryInfo(AppContext.BaseDirectory)
-        While folder IsNot Nothing AndAlso Not File.Exists(Path.Combine(folder.FullName, "ManuscriptPipeline.slnx"))
-            folder = folder.Parent
-        End While
-        Assert.IsNotNull(folder, "The repository root was not found.")
-        Return folder.FullName
+        Return TestRepository.Root()
     End Function
 
     Friend Shared Function ClaudeSettings() As OnlineServicesSettings

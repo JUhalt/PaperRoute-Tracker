@@ -28,7 +28,7 @@ Public Class JournalFactsTests
     <TestInitialize>
     Public Sub Setup()
         OnlineAccess.ResetForTests()
-        _directory = TestSupport.CreateTemporaryRoot()
+        _directory = CoreTestSupport.CreateTemporaryRoot()
         IsolateKeys()
     End Sub
 
@@ -41,7 +41,7 @@ Public Class JournalFactsTests
     <TestCleanup>
     Public Sub Cleanup()
         OnlineAccess.ResetForTests()
-        TestSupport.DeleteTemporaryRoot(_directory)
+        CoreTestSupport.DeleteTemporaryRoot(_directory)
     End Sub
 
 

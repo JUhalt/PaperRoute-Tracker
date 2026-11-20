@@ -119,7 +119,7 @@ Public Class StoredBytesTests
     <TestMethod>
     Public Sub EveryIndentedJsonWriterSetsTheStoredLineBreak()
 
-        Dim core As String = Path.Combine(AssistantCoreTests.RepositoryRoot(), "PaperRoute.Core")
+        Dim core As String = Path.Combine(TestRepository.Root(), "PaperRoute.Core")
         Dim writers As Integer = 0
         Dim missing As New List(Of String)()
 
@@ -171,7 +171,7 @@ Public Class StoredBytesTests
     <TestMethod>
     Public Sub StoredTextIsNotBuiltWithTheSystemLineBreak()
 
-        Dim services As String = Path.Combine(AssistantCoreTests.RepositoryRoot(), "PaperRoute.Core", "Services")
+        Dim services As String = Path.Combine(TestRepository.Root(), "PaperRoute.Core", "Services")
 
         For Each name As String In {"TitlePageParserService.vb", "FlexibleExcelImporter.vb", "PortableBackupService.vb"}
             Dim code As String = String.Join(vbLf, File.ReadAllLines(Path.Combine(services, name)).Where(Function(line) Not line.TrimStart().StartsWith("'"c)))
