@@ -154,7 +154,7 @@ Namespace Services
             builder.AppendLine()
             builder.AppendLine("Time: " & DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"))
             builder.AppendLine("Version: " & versionText())
-            builder.AppendLine("Windows: " & RuntimeInformation.OSDescription)
+            builder.AppendLine(If(OperatingSystem.IsWindows(), "Windows: ", "OS: ") & RuntimeInformation.OSDescription)
             builder.AppendLine("Runtime: " & RuntimeInformation.FrameworkDescription)
             builder.AppendLine("Where: " & If(String.IsNullOrWhiteSpace(where), "unknown", where))
             builder.AppendLine("Exception: " & exception.GetType().FullName)

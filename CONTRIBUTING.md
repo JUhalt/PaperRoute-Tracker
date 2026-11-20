@@ -28,6 +28,7 @@ Before opening a pull request, confirm the solution builds in Release configurat
 
 ```powershell
 dotnet test PaperRoute.Tests/PaperRoute.Tests.vbproj --configuration Release --no-build
+dotnet test PaperRoute.Core.Tests/PaperRoute.Core.Tests.vbproj --configuration Release --no-build
 ```
 
 ## Data safety

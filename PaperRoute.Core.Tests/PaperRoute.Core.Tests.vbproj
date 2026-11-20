@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The tests of PaperRoute.Core that need no Windows (core stage 2, v1.1): plain net10.0, so they run on Linux and macOS as well as Windows. The tests that need Windows Forms or another Windows-only part stay in PaperRoute.Tests; no test is in both (NoTestFileIsInBothTestProjects). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>PaperRoute.Core.Tests</AssemblyName>
+    <!-- The same namespace as PaperRoute.Tests, so a moved file needs no edit. -->
+    <RootNamespace>PaperRoute.Tests</RootNamespace>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Equal to PaperRoute.Tests.vbproj's; the two move together. -->
+    <PackageReference Include="MSTest" Version="4.5.2" />
+    <PackageReference Include="ClosedXML" Version="0.105.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PaperRoute.Core\PaperRoute.Core.vbproj" />
+  </ItemGroup>
+
+  <!-- Shared with PaperRoute.Tests, linked so one file serves both projects. They hold no test methods. -->
+  <ItemGroup>
+    <Compile Include="..\PaperRoute.Tests\CoreTestSupport.vb" Link="Shared\CoreTestSupport.vb" />
+    <Compile Include="..\PaperRoute.Tests\CertificationFixture.vb" Link="Shared\CertificationFixture.vb" />
+    <None Include="..\PaperRoute.Tests\Fixtures\Schema4Representative\**\*" Link="Fixtures\Schema4Representative\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

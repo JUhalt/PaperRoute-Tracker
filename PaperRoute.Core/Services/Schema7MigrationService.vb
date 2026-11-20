@@ -39,7 +39,7 @@ Namespace Services
             ' Flushed and swapped in, keeping the old marker as schema.vN.bak:
             ' a power cut must never leave an empty schema.json (#125).
             StorageFile.Write(schemaPath, Path.Combine(Path.GetDirectoryName(schemaPath), "schema.v" & fromVersion.ToString() & ".bak"),
-                Sub(stream) JsonSerializer.Serialize(stream, payload, New JsonSerializerOptions With {.WriteIndented = True}))
+                Sub(stream) JsonSerializer.Serialize(stream, payload, New JsonSerializerOptions With {.WriteIndented = True, .NewLine = StoredText.NewLine}))
         End Sub
 
         Private Shared Sub ValidatePrimaryOrBackup(primaryPath As String, backupPath As String, validate As Action(Of String))

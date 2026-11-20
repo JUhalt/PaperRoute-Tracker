@@ -120,6 +120,7 @@ Namespace Services
             _jsonOptions =
                 New JsonSerializerOptions With {
                     .WriteIndented = True,
+                    .NewLine = StoredText.NewLine,
                     .IgnoreReadOnlyProperties = True,
                     .PropertyNameCaseInsensitive = True
                 }

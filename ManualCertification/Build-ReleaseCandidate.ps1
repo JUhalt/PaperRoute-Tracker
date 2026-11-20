@@ -434,18 +434,29 @@ try {
     # This runs on the maintainer's computer, so the OnDemand tests (the
     # file dialogs, which leave Explorer's view state under HKCU) are left
     # to CI, which runs them on disposable runners (#196), and the OnScreen
-    # tests, which need an unlocked desktop in use, to certification.
-    Invoke-CandidateCommand '02-test' $dotnet (@(
-        'test', 'PaperRoute.Tests/PaperRoute.Tests.vbproj', '--configuration', 'Release', '--no-build', '--no-restore',
-        '--filter', 'TestCategory!=OnDemand&TestCategory!=OnScreen',
-        '--artifacts-path', $buildRoot, '--logger', 'trx;LogFileName=PaperRoute.Tests.trx', '--results-directory', $testRoot
-    ) + $properties)
-    $trxPath = Join-Path $testRoot 'PaperRoute.Tests.trx'
-    $trx = Read-SafeXml $trxPath
-    $counters = $trx.SelectSingleNode('//*[local-name()="ResultSummary"]/*[local-name()="Counters"]')
-    if ($null -eq $counters -or [int] $counters.GetAttribute('total') -lt 1 -or
-        [int] $counters.GetAttribute('passed') -ne [int] $counters.GetAttribute('total')) {
-        throw 'The TRX report must contain tests, all passing, with none skipped.'
+    # tests, which need an unlocked desktop in use, to certification. Both
+    # test projects run (core stage 2 moved the core's tests that need no
+    # Windows to PaperRoute.Core.Tests), each under the same rule, and the
+    # candidate records the sum.
+    $testsPassed = 0
+    $testsPassedByProject = [ordered]@{}
+    foreach ($testProject in @(
+        [ordered]@{ Step = '02-test'; Name = 'PaperRoute.Tests' },
+        [ordered]@{ Step = '02-test-core'; Name = 'PaperRoute.Core.Tests' })) {
+        Invoke-CandidateCommand $testProject.Step $dotnet (@(
+            'test', "$($testProject.Name)/$($testProject.Name).vbproj", '--configuration', 'Release', '--no-build', '--no-restore',
+            '--filter', 'TestCategory!=OnDemand&TestCategory!=OnScreen&TestCategory!=SameDataEverywhere',
+            '--artifacts-path', $buildRoot, '--logger', "trx;LogFileName=$($testProject.Name).trx", '--results-directory', $testRoot
+        ) + $properties)
+        $trxPath = Join-Path $testRoot "$($testProject.Name).trx"
+        $trx = Read-SafeXml $trxPath
+        $counters = $trx.SelectSingleNode('//*[local-name()="ResultSummary"]/*[local-name()="Counters"]')
+        if ($null -eq $counters -or [int] $counters.GetAttribute('total') -lt 1 -or
+            [int] $counters.GetAttribute('passed') -ne [int] $counters.GetAttribute('total')) {
+            throw "The TRX report of $($testProject.Name) must contain tests, all passing, with none skipped."
+        }
+        $testsPassedByProject[$testProject.Name] = [int] $counters.GetAttribute('passed')
+        $testsPassed += [int] $counters.GetAttribute('passed')
     }
     Invoke-CandidateCommand '03-publish' $dotnet (@(
         'publish', 'ManuscriptPipeline/ManuscriptPipeline.vbproj', '--configuration', 'Release', '--runtime', 'win-x64',
@@ -530,7 +541,8 @@ try {
         Commit = $commit; DirtyCheckout = ($sourceStatus.Count -gt 0); SourceStatusFile = 'source-status.txt'
         SourceSnapshotFile = 'source-files.json'; SourceSnapshotSha256 = (Get-Sha256 (Join-Path $candidateRoot 'source-files.json'))
         StartedAtUtc = $startedAt.ToString('o'); CompletedAtUtc = [DateTime]::UtcNow.ToString('o')
-        TestsPassed = [int] $counters.GetAttribute('passed'); TestReport = 'tests/PaperRoute.Tests.trx'
+        TestsPassed = $testsPassed; TestReport = 'tests/PaperRoute.Tests.trx'
+        TestsPassedByProject = $testsPassedByProject; CoreTestReport = 'tests/PaperRoute.Core.Tests.trx'
         ProductVersion = $versionInfo.ProductVersion; AssemblyVersion = $assemblyVersion
         FileVersion = $versionInfo.FileVersion; PublishedDllSha256 = $dllHash
         PublishedCoreDllSha256 = $coreDllHash
@@ -543,6 +555,6 @@ try {
     }
     [IO.File]::WriteAllText((Join-Path $candidateRoot 'candidate-verification.json'), ($evidence | ConvertTo-Json -Depth 8), $utf8)
     Write-Host "Verified local candidate: $candidateRoot"
-    Write-Host "Tests: $($evidence.TestsPassed) passed; the OnDemand tests are left to CI and the OnScreen tests to certification. Installer signature: $($evidence.InstallerSignatureStatus). Bundled .NET runtime: $runtimeVersion. HighDpiMode: $highDpiMode."
+    Write-Host "Tests: $($evidence.TestsPassed) passed in the two test projects ($(@($testsPassedByProject.Values) -join ' + ')); the OnDemand tests are left to CI and the OnScreen tests to certification. Installer signature: $($evidence.InstallerSignatureStatus). Bundled .NET runtime: $runtimeVersion. HighDpiMode: $highDpiMode."
 }
 finally { Pop-Location }

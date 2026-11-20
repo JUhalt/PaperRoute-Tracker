@@ -46,7 +46,7 @@ Namespace Services
                 StringComparison.OrdinalIgnoreCase
             ) OrElse
                sample.Contains(
-                   Environment.NewLine & "TY  -"
+                   vbCrLf & "TY  -"
                ) Then
                 Return BibliographyFormat.Ris
             End If
