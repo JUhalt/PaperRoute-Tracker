@@ -49,7 +49,7 @@ Namespace Services
 
                 Dim root As String = Path.TrimEndingDirectorySeparator(Path.GetFullPath(rootDirectory))
                 Dim temporaryRoot As String = Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.GetTempPath()))
-                If Not String.Equals(Path.GetDirectoryName(root), temporaryRoot, StringComparison.OrdinalIgnoreCase) Then
+                If Not String.Equals(Path.GetDirectoryName(root), temporaryRoot, PathComparison.Comparison) Then
                     Throw New ArgumentException(
                         "The session directory must be a new direct child of the operating system temporary directory.",
                         NameOf(rootDirectory))

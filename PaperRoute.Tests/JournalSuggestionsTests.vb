@@ -29,14 +29,14 @@ Public Class JournalSuggestionsTests
     <TestInitialize>
     Public Sub Setup()
         OnlineAccess.ResetForTests()
-        _directory = TestSupport.CreateTemporaryRoot()
+        _directory = CoreTestSupport.CreateTemporaryRoot()
         IsolateKeys()
     End Sub
 
     <TestCleanup>
     Public Sub Cleanup()
         OnlineAccess.ResetForTests()
-        TestSupport.DeleteTemporaryRoot(_directory)
+        CoreTestSupport.DeleteTemporaryRoot(_directory)
     End Sub
 
     Private Sub IsolateKeys()

@@ -215,7 +215,8 @@ Namespace Services
             }
 
             Dim options As New JsonSerializerOptions With {
-                .WriteIndented = True
+                .WriteIndented = True,
+                .NewLine = StoredText.NewLine
             }
 
             ' Flushed and swapped in, keeping the old marker as the backup:

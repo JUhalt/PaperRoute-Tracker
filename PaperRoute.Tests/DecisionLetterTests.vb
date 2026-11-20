@@ -34,7 +34,7 @@ Public Class DecisionLetterTests
         Reset()
         ' Windows opened by other windows check dates against this day too.
         DecisionLetterForm.TodayOverride = Today
-        _directory = TestSupport.CreateTemporaryRoot()
+        _directory = CoreTestSupport.CreateTemporaryRoot()
         Dim keys As New ProtectedKeyStore(Path.Combine(_directory, "keys"))
         OnlineAccess.KeyStoreFactory = Function() keys
     End Sub
@@ -42,7 +42,7 @@ Public Class DecisionLetterTests
     <TestCleanup>
     Public Sub Cleanup()
         Reset()
-        TestSupport.DeleteTemporaryRoot(_directory)
+        CoreTestSupport.DeleteTemporaryRoot(_directory)
     End Sub
 
     Private Shared Sub Reset()

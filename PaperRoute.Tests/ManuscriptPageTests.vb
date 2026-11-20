@@ -1738,7 +1738,7 @@ Public Class ManuscriptPageTests
         RunOnStaThread(
             Sub()
                 Using board As New PageBoard()
-                    Dim published As Manuscript = RouteMapServiceTests.Anchoring()
+                    Dim published As Manuscript = CoreTestSupport.RouteAnchoringManuscript()
                     Dim routed As Manuscript = WithRoute()
                     board.Prepare(published, routed, Sample("Unsubmitted idea"))
                     Dim opened As New List(Of Manuscript)()
@@ -1785,9 +1785,9 @@ Public Class ManuscriptPageTests
                 OnlineAccess.InnerHandlerFactory = Function() network
                 Try
                     Using board As New PageBoard()
-                        Dim published As Manuscript = RouteMapServiceTests.Anchoring()
+                        Dim published As Manuscript = CoreTestSupport.RouteAnchoringManuscript()
                         published.Metadata.Doi = "https://doi.org/10.5555/Example.Anchoring"
-                        Dim second As Manuscript = RouteMapServiceTests.Anchoring()
+                        Dim second As Manuscript = CoreTestSupport.RouteAnchoringManuscript()
                         second.Title = "A second published manuscript"
                         second.Metadata.Doi = "10.5555/example.second"
                         board.Prepare(published, second, Sample("Unsubmitted idea"))
@@ -1889,9 +1889,9 @@ Public Class ManuscriptPageTests
                     OnlineAccess.InnerHandlerFactory = Function() network
                     Try
                         Using board As New PageBoard()
-                            Dim published As Manuscript = RouteMapServiceTests.Anchoring()
+                            Dim published As Manuscript = CoreTestSupport.RouteAnchoringManuscript()
                             published.Metadata.Doi = "10.5555/example.anchoring"
-                            Dim second As Manuscript = RouteMapServiceTests.Anchoring()
+                            Dim second As Manuscript = CoreTestSupport.RouteAnchoringManuscript()
                             second.Title = "A second published manuscript"
                             second.Metadata.Doi = "10.5555/example.second"
                             board.Prepare(published, second)
@@ -1940,7 +1940,7 @@ Public Class ManuscriptPageTests
     Public Sub TheRouteViewOpensOnItsRouteDrawnToScale()
         RunOnStaThread(
             Sub()
-                Using view As New ManuscriptRouteViewForm(RouteMapServiceTests.Anchoring())
+                Using view As New ManuscriptRouteViewForm(CoreTestSupport.RouteAnchoringManuscript())
                     ShowOffscreen(view)
                     Dim bar As RouteMapBar = Descendants(view).OfType(Of RouteMapBar)().Single()
                     Assert.AreEqual("Route drawn to scale. 264 days from first submission to publication: 105 days with the journals, 131 days with you, 28 days in production.", bar.AccessibleName)

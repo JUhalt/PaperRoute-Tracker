@@ -59,7 +59,7 @@ Public Class AuthorInstructionsTests
     <TestInitialize>
     Public Sub Setup()
         Reset()
-        _directory = TestSupport.CreateTemporaryRoot()
+        _directory = CoreTestSupport.CreateTemporaryRoot()
         Dim keys As New ProtectedKeyStore(Path.Combine(_directory, "keys"))
         OnlineAccess.KeyStoreFactory = Function() keys
     End Sub
@@ -67,7 +67,7 @@ Public Class AuthorInstructionsTests
     <TestCleanup>
     Public Sub Cleanup()
         Reset()
-        TestSupport.DeleteTemporaryRoot(_directory)
+        CoreTestSupport.DeleteTemporaryRoot(_directory)
     End Sub
 
     Private Shared Sub Reset()

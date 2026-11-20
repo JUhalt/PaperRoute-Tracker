@@ -33,7 +33,7 @@ Public Class AssistantSettingsTests
         OnlineAccess.ResetForTests()
         AssistantService.ProviderFactory = Nothing
         AssistantRunner.ConsentPrompt = Nothing
-        _directory = TestSupport.CreateTemporaryRoot()
+        _directory = CoreTestSupport.CreateTemporaryRoot()
         ' The Diagnostics report reads the settings and the schema marker
         ' and lists the logs folder under the default roots: all under the
         ' temporary folder, never the user's own profile.
@@ -48,7 +48,7 @@ Public Class AssistantSettingsTests
         AssistantService.ProviderFactory = Nothing
         AssistantRunner.ConsentPrompt = Nothing
         StorageEnvironment.RootOverride = Nothing
-        TestSupport.DeleteTemporaryRoot(_directory)
+        CoreTestSupport.DeleteTemporaryRoot(_directory)
     End Sub
 
 
