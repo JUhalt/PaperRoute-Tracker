@@ -1,13 +1,17 @@
 name: CI
 run-name: "CI • ${{ github.event_name == 'pull_request' && format('PR #{0}', github.event.pull_request.number) || github.ref_name }}"
 
+# A release branch such as release/v1.0.x gets its patches through pull
+# requests too, and release.yml may tag it, so CI runs there as on master.
 on:
   push:
     branches:
       - master
+      - 'release/v*.x'
   pull_request:
     branches:
       - master
+      - 'release/v*.x'
   workflow_dispatch:
 
 permissions:
@@ -57,6 +61,12 @@ jobs:
               throw "Known vulnerabilities in: $(($findings | ForEach-Object { "$($_.id) $($_.resolvedVersion)" } | Sort-Object -Unique) -join ', ')."
           }
           Write-Host 'No known vulnerabilities in the restored package graph.'
+
+      # release.yml's tag check and its newer-release check, run against
+      # throwaway git repositories, since only a real tag runs release.yml.
+      - name: Test the release tag checks
+        shell: pwsh
+        run: ./ManualCertification/Test-ReleaseTagChecks.ps1 -RunName ci
 
       - name: Verify release asset checks with synthetic fixtures
         shell: pwsh
