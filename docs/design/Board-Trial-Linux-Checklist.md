@@ -262,7 +262,8 @@ terminal, say what happens next:
 
 1. "A file dialog opens now. Choose any file, or cancel. Nothing you choose is opened."
 2. "The trial asks the system to open example.org in your browser now."
-3. "The trial starts a second copy of itself now and waits for it."
+3. "The trial starts a second copy of itself now and waits for it to finish. No second window
+   opens."
 
 Then it writes the results to a JSON file, closes the window and ends.
 

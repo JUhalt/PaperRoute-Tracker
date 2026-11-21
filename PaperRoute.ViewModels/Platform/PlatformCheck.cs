@@ -31,7 +31,9 @@ public sealed class PlatformCheck
 
     public const string DialogNotice = "A file dialog opens now. Choose any file, or cancel. Nothing you choose is opened.";
     public const string LauncherNotice = "The trial asks the system to open example.org in your browser now.";
-    public const string RestartNotice = "The trial starts a second copy of itself now and waits for it.";
+    // Says that no window opens: the first person to run the check by hand
+    // waited for a second window and took its absence for a failure.
+    public const string RestartNotice = "The trial starts a second copy of itself now and waits for it to finish. No second window opens.";
     public const string DoneNotice = "The platform check is done. The trial writes the results and closes now.";
 
     // The detail of a dialog that threw: its message is not kept.
