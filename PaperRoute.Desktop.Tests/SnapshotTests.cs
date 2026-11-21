@@ -40,6 +40,16 @@ public sealed class SnapshotTests : StorageCheckedTests
 
     private string Destination => Path.Combine(StandInSession, "current-data");
 
+    // The folder and clock the snapshot picture's banner shows (see
+    // TheBoardOnACopiedLibraryIsSavedWithTheSnapshotBanner). The folder is
+    // only named, never made or read; its name is long enough that the
+    // banner wraps to a second line, as a real library's folder often does.
+    private static readonly string PictureSource = Path.Combine(
+        Path.GetPathRoot(Path.GetTempPath()) ?? Path.DirectorySeparatorChar.ToString(),
+        "Libraries", "Shared lab drive", "Research group", "Manuscripts in progress", "2026 submissions", "Lab library");
+
+    private static readonly DateTime PictureTakenAt = new(2026, 11, 20, 9, 41, 0, DateTimeKind.Local);
+
     [TestInitialize]
     public void CreateRoot()
     {
@@ -430,12 +440,18 @@ public sealed class SnapshotTests : StorageCheckedTests
     }
 
     // The picture: the Board on a copied 500 library, with the snapshot
-    // banner, in Light. The tabs show the copy's counts.
+    // banner, in Light. The tabs show the copy's counts. The banner names a
+    // fixed folder and a fixed clock instead of this run's random temporary
+    // folder and the time of the copy, so that two runs of the suite make the
+    // same bytes and a picture comparison sees a real change in the banner.
+    // The banner's wording for a real copy is checked above.
     [TestMethod]
     public void TheBoardOnACopiedLibraryIsSavedWithTheSnapshotBanner()
     {
         WriteLibrary(500);
-        SnapshotCopy copy = ReadOnlySnapshot.Copy(Source, Destination, StandInSession);
+        SnapshotCopy made = ReadOnlySnapshot.Copy(Source, Destination, StandInSession);
+        Assert.AreEqual(Source, made.SourceFolder);
+        SnapshotCopy copy = made with { SourceFolder = PictureSource, TakenAt = PictureTakenAt };
         using var session = new DiskLibrarySession(copy, Path.Combine(StandInSession, "managed-library"), LargeLibraryFixture.Today);
         session.LoadAsync(CancellationToken.None).GetAwaiter().GetResult();
         Assert.HasCount(500, session.Manuscripts);
@@ -457,8 +473,9 @@ public sealed class SnapshotTests : StorageCheckedTests
 
         TestContext.WriteLine($"Title: {title}\nBanner: {banner}\nTabs: {tabs}");
         Assert.IsTrue(File.Exists(path), $"No picture at {path}.");
-        Assert.AreEqual(ShellViewModel.SnapshotWindowTitle(Source), title);
-        Assert.AreEqual(ShellViewModel.SnapshotBannerText(Source, copy.TakenAt), banner);
+        Assert.AreEqual(ShellViewModel.SnapshotWindowTitle(PictureSource), title);
+        Assert.AreEqual(ShellViewModel.SnapshotBannerText(PictureSource, PictureTakenAt), banner);
+        Assert.IsFalse(banner.Contains(_root, StringComparison.OrdinalIgnoreCase), $"The picture's banner names this run's temporary folder: {banner}");
         Assert.AreEqual("Read-only snapshot", bannerName);
         Assert.AreEqual(FiveHundredTabs, tabs);
         Assert.AreEqual(167, shown);
