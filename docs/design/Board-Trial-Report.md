@@ -238,7 +238,7 @@ Pass mark of design 6.1: met. The Release run and CI pass; all four checks of ru
 
 **The enforced budget rows can fail on a busy PC.** Locally in Release they are held at the budget with no multiplier, as today's `ResponsivenessBudgetTests` are. On 2026-11-20, every full local run on the quiet development PC passed (two at 03:25 and 03:30, and the ten above). Two full runs made between them, while other agent work was using the PC, each failed one enforced row: back to All stages at 257 ms against 250 (the run that ended at 04:03), and the open list at 329 ms against 250 (the run that ended at 04:08). Each time the budget tests passed when run alone a minute later. Those two runs were on core stage 2 branches merged with master, so they also had a different core. A third full run, on the branch that holds all of core stage 2 and made once the other work had ended, passed all 181 (it ended at 04:11). So the failures followed the load: the same core passed once the PC was quiet. No run separated the two directly. CI holds the rows at three times the budget and passed with room (section 4.1).
 
-The same was seen on 2026-11-21. #402's local run failed one enforced row (back to All stages, 290 ms against 250) while another build and test run was using the PC (#402's description). During the #403 work a reviewer saw the two enforced rows fail at 265 to 379 ms under heavy load, and every run of them on a quiet PC passed, ten for each build (the fixer agent's record). The full local suite then passed 236 of 236 in Release, timing rows included, once master had been merged into #403's branch (the development PC, 2026-11-21 11:27 to 11:30, the tree committed as f51b5e2). The every-card build (`-p:ShelfOption=a`) also passed 236 of 236, in Debug (11:37 to 11:41). These are master's tests. The branch of draft #404, not merged, adds 9 and passed 245 of 245 the same afternoon (section 4.7); its CI had not finished when this was written.
+The same was seen on 2026-11-21. #402's local run failed one enforced row (back to All stages, 290 ms against 250) while another build and test run was using the PC (#402's description). During the #403 work a reviewer saw the two enforced rows fail at 265 to 379 ms under heavy load, and every run of them on a quiet PC passed, ten for each build (the fixer agent's record). The full local suite then passed 236 of 236 in Release, timing rows included, once master had been merged into #403's branch (the development PC, 2026-11-21 11:27 to 11:30, the tree committed as f51b5e2). The every-card build (`-p:ShelfOption=a`) also passed 236 of 236, in Debug (11:37 to 11:41). These are master's tests. The branch of draft #404, not merged, adds 9 and passed 245 of 245 the same afternoon on the development PC, and 245 of 245 on each system in CI run 44935982620 (section 4.7).
 
 ### 3.4 The working-copy spike
 
@@ -462,7 +462,7 @@ This is change 2 of section 4.5, written during the #403 work and not built then
 - At 3b6e801 a reviewer broke the change on purpose, so that waiting rows were never brought current at the show. Then 8 of the 9 new tests failed. A scratch test of 18 ways back to a shelf found a wrong card at the first layout in 10 of them. With the change as written, the same scratch test found none in 18, and each shelf's first frame after a switch was pixel for pixel its settled frame.
 - At 3b6e801, with the change reverted, 1 of the 9 failed (only the check that the rows waited); the other 8 hold behaviour that must stay the same. The fixer's commit b89f432 adds a second such check, in the stage test. The revert was not run again after it.
 - The two reviewers made 8 findings. Three went to the fixer agent. It acted on one: a test's stage step had checked only an empty shelf. It acted in part on one: the new row's checks and texts. It left the third, the finding marked as needing a fix before merging, for the orchestrating session: the gain is not shown in the measured sequence.
-- #404's CI had not finished when this was written.
+- CI run 44935982620 at b89f432, read from the uploaded results files: 245 of 245 tests pass on Windows and 245 of 245 on Ubuntu, each with 31 pictures and with the 9 new tests among them. "Core on Linux" and "Windows Build" passed.
 
 **Measured.** All headless, Release, the 500 test library, the budget test alone, on the development PC with other programs running. The runs were made by the reviewer who checked the numbers (its result is in the workflow's record). "Before" is f51b5e2 (master's tree); "after" is 3b6e801, whose product code is that of b89f432 (the fixer changed only a test and the new row's checks and texts). Alternating pairs as in 4.6. UI ms, median (lowest to highest). These figures are of 2026-11-21 and are not compared with any of 2026-11-20.
 
@@ -598,6 +598,7 @@ Unproven: Avalonia's list accessibility across virtualization. Avalonia pull req
 | 44703237752 | #399, head 44d62e0 | 181 of 181 | 31 |
 | 44915194505 | #402, head 1146a42 | 231 of 231 (from the uploaded results file) | 31 |
 | 44925677319 | #403, head f51b5e2 | 236 of 236 (from the uploaded results file) | 31 |
+| 44935982620 | draft #404, head b89f432 (not merged) | 245 of 245 (from the uploaded results file) | 31 |
 
 In run 44925677319 the two accessibility tree tests, whose expected texts were made on Windows, pass on Ubuntu too. "Core on Linux" passed. In run 44915194505 the three tests that start a real second program (a second copy run to its exit code, a program stopped at its limit, a missing program file) passed on both systems.
 
@@ -760,11 +761,10 @@ Not checked or not measured:
 - why the rows fall with the tag strip change when the per-card cost does not;
 - the first-switch gain of the dropped first-show attempt (not shown);
 - the every-card build in a real window on 2026-11-21 (only rows of N was measured that day);
-- the per-row timings of CI runs 44915194505 and 44925677319 (only their test and picture counts were read);
+- the per-row timings of CI runs 44915194505, 44925677319 and 44935982620 (only their test and picture counts were read);
 - in a real window, the three keyboard observations of section 6;
 - a timed row for a search keystroke typed right after another shelf was shown. The measured sequence has none. The only figure for it is a reviewer's scratch test (headless, timed by a stopwatch, not repeated, not in the repository): 183.5 ms a key on master's code, 100.5 on the branch of draft #404 (section 4.7). It has no real-window figure;
 - why the measured sequence's search row does not gain with the hidden-shelf change while the scratch test's does, and a key typed before any other shelf was ever shown, as a row of its own;
-- #404's CI result, which had not come in when this was written;
 - two reviewer notes on #404 not acted on: the arrow keys, Tab and the ⋯ menu right after Published comes back from waiting rows are covered by one record and one test's Right and Down only; and a hidden shelf's waiting rows keep earlier card view models alive until it is shown again (at most as many as the rows the shelf had made; memory not measured).
 
 The real-window JSON files of both days stay on the development PC and are not committed, because they hold the computer's name.
