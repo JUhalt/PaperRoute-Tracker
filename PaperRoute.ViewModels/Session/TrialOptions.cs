@@ -10,10 +10,15 @@ namespace PaperRoute.ViewModels.Session;
 //   --self-check               no window: load, check, exit 0 or 1
 //   --measure <file>.json      a real window: time the rows of d1 6.3 on the
 //                              library, write them as JSON, exit (d1 7.3)
+//   --platform-check <file>.json  a real window on the example: try the file
+//                              dialog, the launcher and a restart once each,
+//                              write the outcomes as JSON, exit (step 15)
 // "--snapshot" (the real profile, d1 step 14) is not built, and says so.
 // "--measure" and "--self-check" do not go together: one opens a window, the
-// other none. Whether the file named may be written is checked after parsing
-// (BoardMeasurementReport.RefusalFor), before any session starts.
+// other none. "--platform-check" goes with none of "--self-check", "--measure"
+// and "--snapshot-from". Whether the file named may be written is checked after parsing
+// (BoardMeasurementReport.RefusalFor for "--measure", PlatformCheckReport.RefusalFor
+// for "--platform-check"), before any session starts.
 // Arguments the trial does not know are left to Avalonia, as before.
 // Parsing reads no file and calls nothing in the core.
 public sealed class TrialOptions
@@ -22,6 +27,7 @@ public sealed class TrialOptions
     public const string TodayArgument = "--today";
     public const string SnapshotArgument = "--snapshot";
     public const string MeasureArgument = "--measure";
+    public const string PlatformCheckArgument = "--platform-check";
     public const string TodayFormat = "yyyy-MM-dd";
 
     private TrialOptions()
@@ -38,6 +44,9 @@ public sealed class TrialOptions
 
     // The JSON file named after --measure, or null when not measuring.
     public string? MeasureFile { get; private set; }
+
+    // The JSON file named after --platform-check, or null.
+    public string? PlatformCheckFile { get; private set; }
 
     // True with the options, or false with a plain message.
     public static bool TryParse(
@@ -111,6 +120,22 @@ public sealed class TrialOptions
 
                 parsed.MeasureFile = args[++index];
             }
+            else if (Is(argument, PlatformCheckArgument))
+            {
+                if (parsed.PlatformCheckFile is not null)
+                {
+                    error = "\"--platform-check\" is given twice.";
+                    return false;
+                }
+
+                if (index + 1 >= args.Count || string.IsNullOrWhiteSpace(args[index + 1]) || args[index + 1].StartsWith("--", StringComparison.Ordinal))
+                {
+                    error = "\"--platform-check\" needs the full path of the JSON file to write after it.";
+                    return false;
+                }
+
+                parsed.PlatformCheckFile = args[++index];
+            }
         }
 
         if (parsed.Today is not null && parsed.SnapshotFrom is null)
@@ -122,6 +147,24 @@ public sealed class TrialOptions
         if (parsed.MeasureFile is not null && parsed.SelfCheck)
         {
             error = "\"--measure\" opens a window and \"--self-check\" opens none: give one or the other.";
+            return false;
+        }
+
+        if (parsed.PlatformCheckFile is not null && parsed.SelfCheck)
+        {
+            error = "\"--platform-check\" opens a window and \"--self-check\" opens none: give one or the other.";
+            return false;
+        }
+
+        if (parsed.PlatformCheckFile is not null && parsed.MeasureFile is not null)
+        {
+            error = "\"--platform-check\" and \"--measure\" each run their own check in the window: give one or the other.";
+            return false;
+        }
+
+        if (parsed.PlatformCheckFile is not null && parsed.SnapshotFrom is not null)
+        {
+            error = "\"--platform-check\" runs on the example library only: leave out \"--snapshot-from\".";
             return false;
         }
 

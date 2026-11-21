@@ -120,7 +120,7 @@ public sealed class SessionStartupProcessTests
 
     // The Desktop project's own output folder, the same configuration as this
     // test run: <repo>\PaperRoute.Desktop\bin\<Configuration>\net10.0.
-    private static string DesktopAssemblyPath()
+    internal static string DesktopAssemblyPath()
     {
         string testOutput = Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory);
         DirectoryInfo? folder = new(testOutput);
@@ -139,7 +139,7 @@ public sealed class SessionStartupProcessTests
     }
 
     // The dotnet host that runs these tests, when the SDK names it.
-    private static string DotnetHost()
+    internal static string DotnetHost()
     {
         string? host = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH");
         if (!string.IsNullOrEmpty(host) && File.Exists(host))
