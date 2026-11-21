@@ -1,5 +1,6 @@
 using Avalonia;
 using PaperRoute.ViewModels.Measurement;
+using PaperRoute.ViewModels.Platform;
 using PaperRoute.ViewModels.Session;
 
 namespace PaperRoute.Desktop;
@@ -26,6 +27,12 @@ internal static class Program
     // could not be measured. The file is refused, before anything is opened,
     // unless its path is full, ends in .json and lies in an existing folder
     // outside the real profile's storage folders.
+    //
+    // "--platform-check <file>.json" (d1 1.3 Modes, step 15) opens a real
+    // window on the example, tries the system's file dialog, its launcher and
+    // a restart once each, writes each outcome as JSON and exits 0, or 1 if
+    // the check itself broke. Its file is refused by the same rule as the
+    // measurement's, before anything is opened.
     [STAThread]
     public static int Main(string[] args)
     {
@@ -38,6 +45,12 @@ internal static class Program
         if (options.MeasureFile is { } measureFile && BoardMeasurementReport.RefusalFor(measureFile) is { } measureRefusal)
         {
             Console.Error.WriteLine(measureRefusal);
+            return RefusedExitCode;
+        }
+
+        if (options.PlatformCheckFile is { } checkFile && PlatformCheckReport.RefusalFor(checkFile) is { } checkRefusal)
+        {
+            Console.Error.WriteLine(checkRefusal);
             return RefusedExitCode;
         }
 
@@ -69,6 +82,11 @@ internal static class Program
             {
                 string daySource = options.Today is null ? "the computer's date" : TrialOptions.TodayArgument;
                 return Configure(AppBuilder.Configure(() => new App(session, file, daySource))).StartWithClassicDesktopLifetime(args);
+            }
+
+            if (options.PlatformCheckFile is { } platformFile)
+            {
+                return Configure(AppBuilder.Configure(() => new App(session, platformFile, platformCheck: true))).StartWithClassicDesktopLifetime(args);
             }
 
             return Configure(AppBuilder.Configure(() => new App(session))).StartWithClassicDesktopLifetime(args);
