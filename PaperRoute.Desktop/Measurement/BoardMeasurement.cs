@@ -367,12 +367,17 @@ public sealed class BoardMeasurement
         Settle(window);
         List<int> hiddenChanges = board.LastSyncChanges.ToList();
         Require(!requireChanges || hiddenChanges[1] != 0, "The search changed the hidden Published shelf's cards.");
+        Require(!requireChanges || board.Shelves[1].RowsAreStale == ShelfLayout.UsesRows, ShelfLayout.UsesRows
+            ? "The hidden Published shelf's rows waited for the switch."
+            : "No rows wait under option (a).");
         _frame(window);
-        Time(library, SwitchToPublishedAfterHiddenChange, $"Switch to Published after a search made while it was hidden (\"{SearchText}\"; its rows brought to its cards at the switch, option ({Option}))", PageSwitchBudget, "page switch", () =>
+        string atSwitch = ShelfLayout.UsesRows ? "its rows brought to its cards at the switch" : "no rows wait";
+        Time(library, SwitchToPublishedAfterHiddenChange, $"Switch to Published after a search made while it was hidden (\"{SearchText}\"; {atSwitch}, option ({Option}))", PageSwitchBudget, "page switch", () =>
         {
             board.SelectedShelfIndex = 1;
             Settle(window);
-        }, informational: true, note: "not a row of d1 6.3");
+        }, informational: true, note: "not a row of d1 6.3; compare with the same sequence on a build where hidden rows did not wait (f51b5e2), which is over this budget too");
+        Require(!board.Shelves[1].RowsAreStale, "Published's rows are current once it is shown.");
         RequireShelf(view, "PublishedShelf", -1, "after a search made while it was hidden");
         _frame(window);
         board.SearchText = string.Empty;

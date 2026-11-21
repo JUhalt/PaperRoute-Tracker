@@ -131,15 +131,49 @@ public sealed class HiddenShelfTests : StorageCheckedTests
             using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
             using var watch = new ShownWatch(board, 1);
             var facts = new List<string>();
+            ShelfViewModel published = board.Board.Shelves[1];
+
+            // Published first shown in the third sort, so its row views last
+            // held its cards in that order.
+            board.Board.SelectedSortIndex = 2;
+            Settle(board);
             ClickTab(board, 1);
+            List<string> shownBefore = BoardHarness.Titles(published);
             ClickTab(board, 0);
 
+            // Every Published manuscript of the test library is at the
+            // Published stage, so a stage either keeps all its cards or none.
+            // First a stage that empties it (and the first sort put back),
+            // shown; then, hidden again, the Published stage, which gives it
+            // its cards back in the first sort's order: its reused rows and
+            // row views are refilled with other manuscripts at their places.
             board.Board.SelectedStageIndex = 3;
+            board.Board.SelectedSortIndex = 0;
             Settle(board);
+            Assert.HasCount(0, published.Cards, "The Submitted stage leaves Published empty.");
             CheckBeforeSwitch(board, session, "the stage changed while hidden");
             ClickTab(board, 1);
             watch.AssertCurrent("the stage changed while hidden");
             Check(board, session, "the stage changed while hidden", facts);
+
+            ClickTab(board, 0);
+            int publishedStage = board.Board.StageOptions.ToList().FindIndex(option => option.Stage == PaperStage.Published);
+            Assert.IsGreaterThan(0, publishedStage, "The stage box has the Published stage.");
+            board.Board.SelectedStageIndex = publishedStage;
+            Settle(board);
+            List<string> refilled = BoardHarness.Titles(published);
+            Assert.IsNotEmpty(refilled, "The Published stage gives the hidden shelf its cards back.");
+            Assert.AreNotEqual(shownBefore[0], refilled[0], "The first place holds another manuscript than when the shelf's views were last filled.");
+            if (ShelfLayout.UsesRows)
+            {
+                Assert.IsTrue(published.RowsAreStale, "The stage change leaves the hidden shelf's rows waiting.");
+            }
+
+            CheckBeforeSwitch(board, session, "the stage changed again while hidden");
+            ClickTab(board, 1);
+            watch.AssertCurrent("the stage changed again while hidden");
+            Check(board, session, "the stage changed again while hidden", facts);
+            facts.Add($"{refilled.Count} cards after the stage change, first \"{refilled[0]}\" (was \"{shownBefore[0]}\")");
 
             ClickTab(board, 0);
             board.Board.SelectedStageIndex = 0;
