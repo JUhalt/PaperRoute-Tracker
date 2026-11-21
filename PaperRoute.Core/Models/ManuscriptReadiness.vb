@@ -5,7 +5,7 @@ Namespace Models
 
     Public Class ManuscriptReadiness
 
-        Public Property Id As Guid = Guid.NewGuid()
+        Public Property Id As Guid = CoreIds.NewId()
 
         Public Property JournalId As Guid? = Nothing
 
@@ -15,7 +15,7 @@ Namespace Models
 
         Public Property Notes As String = String.Empty
 
-        Public Property CreatedAtUtc As DateTime = DateTime.UtcNow
+        Public Property CreatedAtUtc As DateTime = CoreClock.UtcNow
 
         Public Property LastModifiedAtUtc As DateTime? = Nothing
 

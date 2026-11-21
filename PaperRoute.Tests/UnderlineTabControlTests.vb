@@ -115,7 +115,7 @@ Public Class UnderlineTabControlTests
     Public Sub TheFiveWindowsAreTheOnesThatUseTheControl()
 
         Dim forms As String =
-            Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManuscriptPipeline", "Forms")
+            Path.Combine(TestRepository.Root(), "ManuscriptPipeline", "Forms")
 
         Dim users As List(Of String) =
             Directory.GetFiles(forms, "*.vb").

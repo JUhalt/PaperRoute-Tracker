@@ -67,7 +67,7 @@ Namespace Services
 
         Public Property Model As String = String.Empty
 
-        Public Property SuggestedUtc As DateTime = DateTime.UtcNow
+        Public Property SuggestedUtc As DateTime = CoreClock.UtcNow
 
         ' The answer stopped at its length limit, so comments may be missing.
         Public Property Truncated As Boolean
@@ -117,7 +117,7 @@ Namespace Services
 
         Public Property Model As String = String.Empty
 
-        Public Property SuggestedUtc As DateTime = DateTime.UtcNow
+        Public Property SuggestedUtc As DateTime = CoreClock.UtcNow
 
         ' The answer stopped at its length limit, so requirements may be
         ' missing.

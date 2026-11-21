@@ -4,9 +4,9 @@ Namespace Models
 
     Public Class ManuscriptReminder
 
-        Public Property Id As Guid = Guid.NewGuid()
+        Public Property Id As Guid = CoreIds.NewId()
 
-        Public Property DueDate As DateTime = DateTime.Today
+        Public Property DueDate As DateTime = CoreClock.Today
 
         Public Property Title As String = String.Empty
 

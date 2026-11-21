@@ -46,7 +46,7 @@ Namespace Services
                 StringComparison.OrdinalIgnoreCase
             ) OrElse
                sample.Contains(
-                   Environment.NewLine & "TY  -"
+                   vbCrLf & "TY  -"
                ) Then
                 Return BibliographyFormat.Ris
             End If
@@ -282,7 +282,7 @@ Namespace Services
                         importAsPublished AndAlso
                         record.PublishedDate.HasValue,
                         record.PublishedDate.Value,
-                        DateTime.Now
+                        CoreClock.Now
                     )
             }
 

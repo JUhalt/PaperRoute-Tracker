@@ -553,7 +553,7 @@ Namespace Services
             metadata.ExternalIdentifiers(
                 "crossref:last-applied-utc"
             ) =
-                DateTime.UtcNow.ToString(
+                CoreClock.UtcNow.ToString(
                     "O"
                 )
 

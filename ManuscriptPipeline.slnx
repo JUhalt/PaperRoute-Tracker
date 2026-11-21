@@ -1,6 +1,8 @@
 <Solution>
   <Project Path="ManuscriptPipeline/ManuscriptPipeline.vbproj" />
   <Project Path="PaperRoute.Core/PaperRoute.Core.vbproj" />
+  <Project Path="PaperRoute.Core.Tests/PaperRoute.Core.Tests.vbproj" />
+  <Project Path="PaperRoute.Platform/PaperRoute.Platform.vbproj" />
   <Project Path="PaperRoute.TestFixtures/PaperRoute.TestFixtures.vbproj" />
   <Project Path="PaperRoute.Tests/PaperRoute.Tests.vbproj" />
 </Solution>

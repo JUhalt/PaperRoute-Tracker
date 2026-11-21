@@ -121,7 +121,7 @@ Public Class KeyboardAccessTests
     Public Sub RouteViewOpensEachWaypointFromItsOwnLinkInRouteOrder()
 
         Dim manuscript As Manuscript =
-            RouteMapServiceTests.Anchoring()
+            CoreTestSupport.RouteAnchoringManuscript()
 
         Dim waypoints As List(Of ManuscriptRouteWaypoint) =
             ManuscriptRouteProjectionService.Project(manuscript).Waypoints
@@ -382,7 +382,7 @@ Public Class KeyboardAccessTests
     Public Sub RouteViewsFirstTabIsVisibleAndEnterNeverPressesClose()
 
         Dim manuscript As Manuscript =
-            RouteMapServiceTests.Anchoring()
+            CoreTestSupport.RouteAnchoringManuscript()
 
         Dim waypoints As List(Of ManuscriptRouteWaypoint) =
             ManuscriptRouteProjectionService.Project(manuscript).Waypoints

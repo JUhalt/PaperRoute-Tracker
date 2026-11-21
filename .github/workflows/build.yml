@@ -62,15 +62,23 @@ jobs:
         shell: pwsh
         run: ./ManualCertification/Test-ReleaseAssetVerifier.ps1 -RunName ci
 
-      # Report only until core stage 2 makes it strict with -FailOnWindowsOnly.
+      # The core must call no Windows-only API (core stage 2). The script prints
+      # its report and, with -FailOnWindowsOnly, ends with exit code 1 on any
+      # windows-only row; it throws if it scanned fewer than 160 files. Its exit
+      # code is kept, the report and its two summary lines are written, and only
+      # then does the step fail, so a failure still leaves the rows to read.
       - name: Inventory Windows-only APIs in the core
         shell: pwsh
         run: |
-          $report = @(./.github/scripts/Get-WindowsOnlyApiInventory.ps1 -Root .)
+          $global:LASTEXITCODE = 0
+          $report = @(./.github/scripts/Get-WindowsOnlyApiInventory.ps1 -Root . -FailOnWindowsOnly)
+          $exitCode = $LASTEXITCODE
           $report | Write-Host
           $report | Where-Object { $_ -like 'Files scanned:*' -or $_ -like 'Windows-only rows:*' } | ForEach-Object { "Core inventory: $_" } >> $env:GITHUB_STEP_SUMMARY
+          if ($exitCode -ne 0) { throw "The core uses a Windows-only API (inventory exit code $exitCode); the rows are listed above." }
 
       - name: Build Release
+        id: build-release
         run: dotnet build ManuscriptPipeline.slnx --configuration Release --no-restore
 
       - name: Build disposable workflow demo
@@ -109,7 +117,39 @@ jobs:
               [int] $counters.GetAttribute('passed') -ne [int] $counters.GetAttribute('total')) {
               throw 'Tests must all pass, with none skipped or inconclusive.'
           }
-          "Tests: $($counters.GetAttribute('passed')) passed; none skipped." >> $env:GITHUB_STEP_SUMMARY
+          "PaperRoute.Tests: $($counters.GetAttribute('passed')) passed; none skipped." >> $env:GITHUB_STEP_SUMMARY
+
+      # The core's own tests (core stage 2): the same rule, every test passes
+      # and none is skipped. It runs whenever the build did, so a failure in
+      # the step above still leaves this project's results to read, and the
+      # job fails if either step fails. The summary adds the two counts.
+      - name: Run core tests
+        if: ${{ !cancelled() && steps.build-release.outcome == 'success' }}
+        shell: pwsh
+        run: |
+          dotnet test PaperRoute.Core.Tests/PaperRoute.Core.Tests.vbproj --configuration Release --no-build `
+              --logger 'trx;LogFileName=PaperRoute.Core.Tests.trx' --results-directory "$env:GITHUB_WORKSPACE/TestResults"
+          if ($LASTEXITCODE -ne 0) { throw 'The core test run failed.' }
+          $counts = @{}
+          foreach ($name in 'PaperRoute.Tests', 'PaperRoute.Core.Tests') {
+              $path = Join-Path $env:GITHUB_WORKSPACE "TestResults/$name.trx"
+              if (-not (Test-Path -LiteralPath $path)) { continue }
+              $trx = [xml]::new()
+              $trx.XmlResolver = $null
+              $trx.Load($path)
+              $counters = $trx.SelectSingleNode('//*[local-name()="ResultSummary"]/*[local-name()="Counters"]')
+              if ($null -ne $counters -and [int] $counters.GetAttribute('total') -ge 1 -and
+                  [int] $counters.GetAttribute('passed') -eq [int] $counters.GetAttribute('total')) {
+                  $counts[$name] = [int] $counters.GetAttribute('passed')
+              }
+          }
+          if (-not $counts.ContainsKey('PaperRoute.Core.Tests')) {
+              throw 'Core tests must all pass, with none skipped or inconclusive.'
+          }
+          "PaperRoute.Core.Tests: $($counts['PaperRoute.Core.Tests']) passed; none skipped." >> $env:GITHUB_STEP_SUMMARY
+          if ($counts.ContainsKey('PaperRoute.Tests')) {
+              "Tests: $($counts['PaperRoute.Tests'] + $counts['PaperRoute.Core.Tests']) passed in the two projects ($($counts['PaperRoute.Tests']) + $($counts['PaperRoute.Core.Tests'])); none skipped." >> $env:GITHUB_STEP_SUMMARY
+          }
 
       - name: Upload test results
         if: always()
@@ -134,10 +174,280 @@ jobs:
           -p:DebugType=None
           -p:PublishDir=${{ github.workspace }}/publish/win-x64/
 
+      # The Avalonia Board trial (v1.1) lives beside the Windows Forms app and
+      # must never ship inside it. The app's dependency list, from the build
+      # and from the publish above (single-file, so the list is bundled and
+      # only the copies in bin are readable), must not name the trial.
+      - name: Check the Windows Forms app carries no Avalonia trial
+        shell: pwsh
+        run: |
+          $roots = @('ManuscriptPipeline/bin/Release', 'publish/win-x64') | Where-Object { Test-Path -LiteralPath $_ }
+          $depsFiles = @($roots | ForEach-Object { Get-ChildItem -LiteralPath $_ -Recurse -File -Filter 'PaperRouteTracker.deps.json' })
+          if ($depsFiles.Count -eq 0) { throw 'No PaperRouteTracker.deps.json was found, so the trial guard had nothing to check.' }
+          $names = @('Avalonia', 'PaperRoute.Desktop', 'PaperRoute.ViewModels')
+          $hits = @(foreach ($file in $depsFiles) {
+              $text = Get-Content -LiteralPath $file.FullName -Raw
+              foreach ($name in $names) {
+                  if ($text.IndexOf($name, [StringComparison]::OrdinalIgnoreCase) -ge 0) { "$($file.FullName) names $name" }
+              }
+          })
+          if ($hits.Count -gt 0) { throw "The Windows Forms app's dependency list carries the Avalonia trial: $($hits -join '; ')." }
+          Write-Host "No Avalonia trial assembly in: $(($depsFiles | ForEach-Object { $_.FullName }) -join ', ')."
+
       - name: Upload Windows build
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: PaperRouteTracker-win-x64
           path: publish/win-x64/
           if-no-files-found: error
+          retention-days: 14
+
+  # The Avalonia Board trial (v1.1): its own solution, so the release
+  # workflow, which builds ManuscriptPipeline.slnx, never restores or ships it.
+  trial:
+    name: Avalonia Board trial (Windows)
+    runs-on: windows-latest
+    # A hung headless test host must not hold the runner for GitHub's 360 minutes.
+    timeout-minutes: 20
+    env:
+      # Avalonia.BuildServices reports build telemetry unless this is set.
+      AVALONIA_TELEMETRY_OPTOUT: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Restore dependencies
+        run: dotnet restore PaperRoute.Desktop.slnx
+
+      # The same scan as the Windows build's (#144), over Avalonia's package graph.
+      - name: Check packages for known vulnerabilities
+        shell: pwsh
+        run: |
+          $report = dotnet list PaperRoute.Desktop.slnx package --vulnerable --include-transitive --format json
+          $exitCode = $LASTEXITCODE
+          $report | Write-Host
+          if ($exitCode -ne 0) { throw "dotnet list package --vulnerable failed with exit code $exitCode." }
+          $scan = ($report | Out-String) | ConvertFrom-Json
+          $problems = @(if ($null -ne $scan.PSObject.Properties['problems']) { $scan.problems })
+          if ($problems.Count -gt 0) { throw 'The vulnerability scan reported a problem; see its output above.' }
+          $findings = @($scan.projects | ForEach-Object { if ($null -ne $_.PSObject.Properties['frameworks']) { $_.frameworks } } |
+              ForEach-Object { @($_.topLevelPackages) + @($_.transitivePackages) } |
+              Where-Object { $null -ne $_ -and $null -ne $_.PSObject.Properties['vulnerabilities'] -and @($_.vulnerabilities).Count -gt 0 })
+          if ($findings.Count -gt 0) {
+              throw "Known vulnerabilities in: $(($findings | ForEach-Object { "$($_.id) $($_.resolvedVersion)" } | Sort-Object -Unique) -join ', ')."
+          }
+          Write-Host 'No known vulnerabilities in the restored package graph.'
+
+      - name: Build Release
+        run: dotnet build PaperRoute.Desktop.slnx --configuration Release --no-restore
+
+      - name: Run trial tests
+        shell: pwsh
+        # Headless tests (Avalonia.Headless with Skia): no desktop needed.
+        # Every test must pass, none skipped or inconclusive; tests marked
+        # Manual are run by hand only. The view tests' pictures (PNGs, a few
+        # megabytes in all) go into TestResults/pictures, which the upload
+        # below carries.
+        env:
+          PAPERROUTE_TRIAL_PICTURES: ${{ github.workspace }}/TestResults/pictures
+        run: |
+          dotnet test PaperRoute.Desktop.Tests/PaperRoute.Desktop.Tests.csproj --configuration Release --no-build `
+              --filter 'TestCategory!=Manual' `
+              --logger 'trx;LogFileName=PaperRoute.Desktop.Tests.trx' --results-directory "$env:GITHUB_WORKSPACE/TestResults"
+          if ($LASTEXITCODE -ne 0) { throw 'The trial test run failed.' }
+          $trx = [xml]::new()
+          $trx.XmlResolver = $null
+          $trx.Load((Join-Path $env:GITHUB_WORKSPACE 'TestResults/PaperRoute.Desktop.Tests.trx'))
+          $counters = $trx.SelectSingleNode('//*[local-name()="ResultSummary"]/*[local-name()="Counters"]')
+          if ($null -eq $counters -or [int] $counters.GetAttribute('total') -lt 1 -or
+              [int] $counters.GetAttribute('passed') -ne [int] $counters.GetAttribute('total')) {
+              throw 'Trial tests must all pass, with none skipped or inconclusive.'
+          }
+          "Trial tests: $($counters.GetAttribute('passed')) passed; none skipped." >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Upload trial test results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: PaperRoute-trial-results
+          path: TestResults/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # The same trial on Ubuntu: the first sign of whether the Avalonia
+  # interface builds and its headless tests pass off Windows (the trial's
+  # question 5). The build must succeed. The tests are report-only: those
+  # that do not pass yet are listed in the step summary and raise a warning,
+  # as findings for the trial's report, and do not fail a pull request.
+  trial-linux:
+    name: Avalonia Board trial (Linux, report-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Avalonia.BuildServices reports build telemetry unless this is set.
+      AVALONIA_TELEMETRY_OPTOUT: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Restore dependencies
+        run: dotnet restore PaperRoute.Desktop.slnx
+
+      - name: Build Release
+        run: dotnet build PaperRoute.Desktop.slnx --configuration Release --no-restore
+
+      - name: Run trial tests
+        shell: pwsh
+        env:
+          PAPERROUTE_TRIAL_PICTURES: ${{ github.workspace }}/TestResults/pictures
+          TZ: Etc/UTC
+          LANG: en_US.UTF-8
+        run: |
+          dotnet test PaperRoute.Desktop.Tests/PaperRoute.Desktop.Tests.csproj --configuration Release --no-build --blame-hang-timeout 5m `
+              --filter 'TestCategory!=Manual' `
+              --logger 'trx;LogFileName=PaperRoute.Desktop.Tests.trx' --results-directory "$env:GITHUB_WORKSPACE/TestResults"
+          $exitCode = $LASTEXITCODE
+          $path = Join-Path $env:GITHUB_WORKSPACE 'TestResults/PaperRoute.Desktop.Tests.trx'
+          $counters = $null
+          if (Test-Path -LiteralPath $path) {
+              $trx = [xml]::new()
+              $trx.XmlResolver = $null
+              $trx.Load($path)
+              $counters = $trx.SelectSingleNode('//*[local-name()="ResultSummary"]/*[local-name()="Counters"]')
+          }
+          if ($null -eq $counters -or [int] $counters.GetAttribute('total') -lt 1) {
+              throw "The trial tests produced no results on Linux (dotnet test exit code $exitCode)."
+          }
+          $total = [int] $counters.GetAttribute('total')
+          $notPassed = $total - [int] $counters.GetAttribute('passed')
+          "Board trial on Linux: $($counters.GetAttribute('passed')) of $total tests passed." >> $env:GITHUB_STEP_SUMMARY
+          if ($notPassed -gt 0) {
+              $names = @($trx.SelectNodes('//*[local-name()="UnitTestResult"][not(@outcome="Passed")]') |
+                  ForEach-Object { "$($_.GetAttribute('outcome')): $($_.GetAttribute('testName'))" } | Sort-Object)
+              '' >> $env:GITHUB_STEP_SUMMARY
+              "Not passing on Linux ($($names.Count)):" >> $env:GITHUB_STEP_SUMMARY
+              '' >> $env:GITHUB_STEP_SUMMARY
+              $names | ForEach-Object { "- ``$_``" } >> $env:GITHUB_STEP_SUMMARY
+              "::warning title=Board trial on Linux (report-only)::$notPassed of $total trial tests do not pass on Linux yet. They are listed in this job's summary and in the PaperRoute-trial-linux-results artifact."
+          }
+          # Report-only: the result has been judged above. Left as it is, the
+          # runner would end this step with dotnet test's exit code and fail
+          # the job.
+          $global:LASTEXITCODE = 0
+
+      - name: Upload trial test results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: PaperRoute-trial-linux-results
+          path: TestResults/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # The core and its own tests on Linux (core stage 2). Strict since the
+  # stage's step 13: a windows-only row in the core's inventory, or a core
+  # test that does not pass here, fails the job. The solution cannot build
+  # here (it holds the net10.0-windows app), so the job builds the core
+  # test project, which builds the core through its reference.
+  core-linux:
+    name: Core on Linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # 'false' since core stage 2's step 13: a core test that does not pass on Linux
+      # is listed in the step summary and fails the job. 'true' would turn those
+      # failures into a warning again; the job would still fail if the tests could
+      # not be run or produced no results.
+      CORE_LINUX_REPORT_ONLY: 'false'
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      # The same inventory as the Windows job's, as Markdown in the log. With
+      # -FailOnWindowsOnly the script ends with exit code 1 on any windows-only
+      # row, and as the step's only command that code ends the step: the job
+      # fails, and the steps below do not run.
+      - name: Inventory (no Windows-only API in the core)
+        shell: pwsh
+        run: ./.github/scripts/Get-WindowsOnlyApiInventory.ps1 -Root . -AsMarkdown -FailOnWindowsOnly
+
+      - name: Restore the core tests
+        run: dotnet restore PaperRoute.Core.Tests/PaperRoute.Core.Tests.vbproj
+
+      - name: Build the core and its tests
+        run: dotnet build PaperRoute.Core.Tests/PaperRoute.Core.Tests.vbproj --configuration Release --no-restore
+
+      - name: Run core tests
+        shell: pwsh
+        env:
+          TZ: Etc/UTC
+          LANG: en_US.UTF-8
+        run: |
+          dotnet test PaperRoute.Core.Tests/PaperRoute.Core.Tests.vbproj --configuration Release --no-build --blame-hang-timeout 5m `
+              --logger 'trx;LogFileName=PaperRoute.Core.Tests.trx' --results-directory "$env:GITHUB_WORKSPACE/TestResults"
+          $exitCode = $LASTEXITCODE
+          $path = Join-Path $env:GITHUB_WORKSPACE 'TestResults/PaperRoute.Core.Tests.trx'
+          $counters = $null
+          if (Test-Path -LiteralPath $path) {
+              $trx = [xml]::new()
+              $trx.XmlResolver = $null
+              $trx.Load($path)
+              $counters = $trx.SelectSingleNode('//*[local-name()="ResultSummary"]/*[local-name()="Counters"]')
+          }
+          if ($null -eq $counters) {
+              'Core on Linux: no test results.' >> $env:GITHUB_STEP_SUMMARY
+          }
+          else {
+              "Core on Linux: $($counters.GetAttribute('passed')) passed, $($counters.GetAttribute('failed')) failed, $([int] $counters.GetAttribute('total') - [int] $counters.GetAttribute('passed') - [int] $counters.GetAttribute('failed')) neither (skipped, inconclusive or not run), of $($counters.GetAttribute('total'))." >> $env:GITHUB_STEP_SUMMARY
+          }
+          if ($null -eq $counters -or [int] $counters.GetAttribute('total') -lt 1) {
+              throw "The core tests produced no results on Linux (dotnet test exit code $exitCode)."
+          }
+          $total = [int] $counters.GetAttribute('total')
+          $notPassed = $total - [int] $counters.GetAttribute('passed')
+          if ($notPassed -eq 0) {
+              if ($exitCode -ne 0) { throw "Every core test passed, but dotnet test ended with exit code $exitCode." }
+              return
+          }
+          $names = @($trx.SelectNodes('//*[local-name()="UnitTestResult"][not(@outcome="Passed")]') |
+              ForEach-Object { "$($_.GetAttribute('outcome')): $($_.GetAttribute('testName'))" } | Sort-Object)
+          '' >> $env:GITHUB_STEP_SUMMARY
+          "Not passing on Linux ($($names.Count)):" >> $env:GITHUB_STEP_SUMMARY
+          '' >> $env:GITHUB_STEP_SUMMARY
+          $names | ForEach-Object { "- ``$_``" } >> $env:GITHUB_STEP_SUMMARY
+          if ($env:CORE_LINUX_REPORT_ONLY -eq 'true') {
+              "::warning title=Core on Linux (report-only)::$notPassed of $total core tests do not pass on Linux yet. They are listed in this job's summary and in the PaperRoute-core-linux-results artifact."
+              # dotnet test's exit code has been judged above. Left as it is, the
+              # runner would end this step with it and fail the job after all.
+              $global:LASTEXITCODE = 0
+          }
+          else {
+              throw 'Core tests must all pass, with none skipped or inconclusive.'
+          }
+
+      - name: Upload core test results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: PaperRoute-core-linux-results
+          path: TestResults/
+          if-no-files-found: ignore
           retention-days: 14

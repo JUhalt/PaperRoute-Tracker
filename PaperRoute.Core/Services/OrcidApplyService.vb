@@ -50,7 +50,7 @@ Namespace Services
                 normalizedOrcid
 
             author.OrcidLastCheckedUtc =
-                DateTime.UtcNow
+                CoreClock.UtcNow
 
             result.AuthorUpdated =
                 True
@@ -421,7 +421,7 @@ Namespace Services
                     If(
                         shouldImportAsPublished,
                         work.PublishedDate.Value,
-                        DateTime.Now
+                        CoreClock.Now
                     )
             }
 

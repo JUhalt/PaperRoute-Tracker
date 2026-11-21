@@ -1,5 +1,4 @@
 Imports System
-Imports System.Diagnostics
 
 Namespace Services
 
@@ -86,12 +85,10 @@ Namespace Services
 
             End If
 
-            Process.Start(
-                New ProcessStartInfo With {
-                    .FileName = value.Trim(),
-                    .UseShellExecute = True
-                }
-            )
+            ' The trimmed text itself, never a Uri's rewritten form, which
+            ' could add a slash or change escaping (core stage 2, risk R6).
+            ' The host's launcher opens it: the Windows shell in the app.
+            PlatformServices.Launcher.OpenLink(value.Trim())
 
         End Sub
 

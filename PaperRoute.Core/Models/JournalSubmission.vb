@@ -5,7 +5,7 @@ Namespace Models
 
     Public Class JournalSubmission
 
-        Public Property Id As Guid = Guid.NewGuid()
+        Public Property Id As Guid = CoreIds.NewId()
 
         Public Property RecordedAtUtc As DateTime? = Nothing
 
@@ -17,7 +17,7 @@ Namespace Models
 
         Public Property ManuscriptNumber As String = String.Empty
 
-        Public Property SubmittedDate As DateTime = DateTime.Now
+        Public Property SubmittedDate As DateTime = CoreClock.Now
 
         Public Property FollowUpDate As DateTime? = Nothing
 

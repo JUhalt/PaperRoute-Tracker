@@ -143,13 +143,13 @@ Namespace Services
                     If Not manuscriptsByTitle.TryGetValue(title, manuscript) Then
 
                         manuscript = New Manuscript With {
-                            .Id = Guid.NewGuid(),
+                            .Id = CoreIds.NewId(),
                             .Title = title,
                             .CoAuthors = String.Empty,
                             .TargetJournal = String.Empty,
                             .CurrentStage = PaperStage.Draft,
                             .Location = ManuscriptLocation.Pipeline,
-                            .StageEnteredDate = DateTime.Now
+                            .StageEnteredDate = CoreClock.Now
                         }
 
                         manuscriptsByTitle.Add(title, manuscript)
@@ -184,7 +184,7 @@ Namespace Services
                             Dim submissionNotes As String = BuildSubmissionNotes(attemptNumber, legacyJournalNote)
 
                             submission = New JournalSubmission With {
-                                .Id = Guid.NewGuid(),
+                                .Id = CoreIds.NewId(),
                                 .JournalName = journalName,
                                 .ManuscriptNumber = String.Empty,
                                 .SubmittedDate = submittedDate.Value.Date,
@@ -407,7 +407,7 @@ Namespace Services
                     If submittedDate.HasValue Then
                         manuscript.FileDrawerDate = submittedDate.Value
                     Else
-                        manuscript.FileDrawerDate = DateTime.Now
+                        manuscript.FileDrawerDate = CoreClock.Now
                     End If
 
                 Case ""
@@ -430,7 +430,7 @@ Namespace Services
 
             End Select
 
-            manuscript.StageEnteredDate = DateTime.Now
+            manuscript.StageEnteredDate = CoreClock.Now
 
         End Sub
 
@@ -469,7 +469,7 @@ Namespace Services
 
             submission.Decisions.Add(
                 New EditorialDecisionEvent With {
-                    .Id = Guid.NewGuid(),
+                    .Id = CoreIds.NewId(),
                     .DecisionDate = responseDate.Value.Date,
                     .Decision = decision,
                     .RevisionDeadline = Nothing,
@@ -516,7 +516,7 @@ Namespace Services
 
             manuscript.History.Add(
                 New HistoryEvent With {
-                    .Id = Guid.NewGuid(),
+                    .Id = CoreIds.NewId(),
                     .EventDate = eventDate.Date,
                     .Stage = manuscript.CurrentStage,
                     .Note = note

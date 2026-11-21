@@ -18,7 +18,7 @@ Namespace Models
     ' stored here.
     Public Class JournalCandidate
 
-        Public Property Id As Guid = Guid.NewGuid()
+        Public Property Id As Guid = CoreIds.NewId()
 
         Public Property JournalName As String = String.Empty
 
@@ -32,7 +32,7 @@ Namespace Models
         ' Ids of the checks answered yes (JournalChoiceGuide).
         Public Property Checks As List(Of String) = New List(Of String)()
 
-        Public Property AddedDate As DateTime = DateTime.Today
+        Public Property AddedDate As DateTime = CoreClock.Today
 
         ' Why the journal was suggested (#88), when it came from Find
         ' Journals; Nothing for a journal added by hand.

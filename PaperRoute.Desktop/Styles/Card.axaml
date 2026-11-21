@@ -1,0 +1,60 @@
+<!--
+  Cards (inventory C.3) as today's CardPanel draws them
+  (ManuscriptPipeline\Controls\CardPanel.vb, Form1.vb:3131-3483): radius 10,
+  a 1 px CardBorder outline on CardBackground, 14 px inside. A hovered card's
+  border eases to the accent over 100 ms (UiMotion.HoverMilliseconds); focus
+  on its title turns it at once (Border.card-focus). The stripe classes are left out: the Board has
+  none.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Style Selector="Border.card">
+    <Setter Property="CornerRadius" Value="{DynamicResource CardRadius}" />
+    <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Padding" Value="{DynamicResource CardPadding}" />
+  </Style>
+
+  <Style Selector="Border.card.interactive">
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="BorderBrush" Duration="0:0:0.1" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Border.card.interactive:pointerover">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <!--
+    Focus on a card's title turns its edge to the accent at once: a ring drawn
+    over the card's own border, which CardView shows while its title has focus.
+    Only the title, as today (Form1.vb:3403-3413 highlights on lblTitle.Focused
+    alone), not focus anywhere in the card as d1 4.5 and r1's target map have
+    it: ⋯ and View route leave the card at rest. Not the border itself: a
+    focus style that cleared the border's transition left the border at the
+    accent after focus went (step 9, H6).
+  -->
+  <Style Selector="Border.card-focus">
+    <Setter Property="CornerRadius" Value="{DynamicResource CardRadius}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+  </Style>
+
+  <!-- A tinted panel with no outline that follows its text: the welcome's privacy note (Form1.Welcome.vb:142-174). -->
+  <Style Selector="Border.card.callout">
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Background" Value="{DynamicResource AccentMutedBackgroundBrush}" />
+  </Style>
+
+  <!-- The 1 px line between a card's journal line and its route footer (Form1.vb:3296-3301). -->
+  <Style Selector="Border.divider">
+    <Setter Property="Height" Value="1" />
+    <Setter Property="Background" Value="{DynamicResource SubtleBorderBrush}" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+  </Style>
+
+</Styles>

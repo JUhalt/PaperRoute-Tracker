@@ -30,7 +30,7 @@ Public Class AssistantDraftingTests
     <TestInitialize>
     Public Sub Setup()
         OnlineAccess.ResetForTests()
-        _directory = TestSupport.CreateTemporaryRoot()
+        _directory = CoreTestSupport.CreateTemporaryRoot()
         Dim keys As New ProtectedKeyStore(Path.Combine(_directory, "keys"))
         OnlineAccess.KeyStoreFactory = Function() keys
         _provider = New FakeProvider With {.Answer = "Thank you for this comment. We have [describe the change]."}
@@ -43,7 +43,7 @@ Public Class AssistantDraftingTests
         AssistantService.ProviderFactory = Nothing
         AssistantRunner.ConsentPrompt = Nothing
         OnlineAccess.ResetForTests()
-        TestSupport.DeleteTemporaryRoot(_directory)
+        CoreTestSupport.DeleteTemporaryRoot(_directory)
     End Sub
 
 
@@ -267,7 +267,7 @@ Public Class AssistantDraftingTests
             Sub()
                 ' Turned on for Claude, but no key yet.
                 AssistantService.ProviderFactory = Nothing
-                OnlineAccess.Configure(AssistantCoreTests.ClaudeSettings())
+                OnlineAccess.Configure(AssistantTestSupport.ClaudeSettings())
                 Dim submission As JournalSubmission = SubmissionWithDecision()
                 Using editor As New ReviewerResponseItemForm(submission)
                     ShowOffscreen(editor)
@@ -289,8 +289,8 @@ Public Class AssistantDraftingTests
     Public Sub EveryAssistantWindowScalesWithTheDisplay()
         RunOnSta(
             Sub()
-                OnlineAccess.Configure(AssistantCoreTests.ClaudeSettings())
-                Dim request As AssistantRequest = AssistantService.BuildLetterRequest(AssistantCoreTests.Letter)
+                OnlineAccess.Configure(AssistantTestSupport.ClaudeSettings())
+                Dim request As AssistantRequest = AssistantService.BuildLetterRequest(AssistantTestSupport.Letter)
                 Dim windows As New List(Of Form) From {
                     New AssistantConsentForm(request, OnlineAccess.CurrentAssistant()),
                     New DecisionLetterForm(DecisionLetterMode.NewDecision, New JournalSubmission()),

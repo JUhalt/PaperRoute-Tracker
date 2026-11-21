@@ -39,7 +39,7 @@ Namespace Services
             ValidateJournalConsistency(readiness, submission)
 
             Dim packet As New SubmissionPacket With {
-                .Id = Guid.NewGuid(),
+                .Id = CoreIds.NewId(),
                 .ReadinessProfileId = If(readiness Is Nothing, Nothing, CType(readiness.Id, Guid?)),
                 .JournalId = ResolveJournalId(manuscript, readiness, submission),
                 .JournalName = ResolveJournalName(manuscript, readiness, submission),
@@ -48,7 +48,7 @@ Namespace Services
                 .RevisionRoundNumber = revisionRoundNumber,
                 .Label = NormalizePacketLabel(label),
                 .Notes = NormalizeText(notes),
-                .CreatedAtUtc = If(createdAtUtc.HasValue, createdAtUtc.Value, DateTime.UtcNow)
+                .CreatedAtUtc = If(createdAtUtc.HasValue, createdAtUtc.Value, CoreClock.UtcNow)
             }
 
             manuscript.SubmissionPackets.Add(packet)
@@ -125,7 +125,7 @@ Namespace Services
             packet.RevisionRoundNumber = revisionRoundNumber
             packet.Label = normalizedLabel
             packet.Notes = normalizedNotes
-            packet.LastModifiedAtUtc = If(modifiedAtUtc.HasValue, modifiedAtUtc.Value, DateTime.UtcNow)
+            packet.LastModifiedAtUtc = If(modifiedAtUtc.HasValue, modifiedAtUtc.Value, CoreClock.UtcNow)
 
             Return True
 
@@ -193,7 +193,7 @@ Namespace Services
             End If
 
             Dim packetFile As New SubmissionPacketFile With {
-                .Id = Guid.NewGuid(),
+                .Id = CoreIds.NewId(),
                 .Role = role,
                 .Label = normalizedLabel,
                 .Notes = NormalizeText(notes),
@@ -614,7 +614,7 @@ Namespace Services
         )
 
             packet.LastModifiedAtUtc =
-                If(modifiedAtUtc.HasValue, modifiedAtUtc.Value, DateTime.UtcNow)
+                If(modifiedAtUtc.HasValue, modifiedAtUtc.Value, CoreClock.UtcNow)
 
         End Sub
 

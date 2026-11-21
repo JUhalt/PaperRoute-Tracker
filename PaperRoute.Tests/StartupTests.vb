@@ -1415,7 +1415,7 @@ Public Class StartupTests
         Dim source As String =
             File.ReadAllText(
                 Path.Combine(
-                    AssistantCoreTests.RepositoryRoot(),
+                    TestRepository.Root(),
                     "ManuscriptPipeline",
                     "Form1.vb"
                 )

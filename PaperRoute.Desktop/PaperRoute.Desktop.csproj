@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Avalonia Board trial (v1.1): the window, views and styles. Beside the Windows Forms app, never part of it: ManuscriptPipeline.slnx and the release workflow do not build it, and CI fails if the Windows Forms app's deps.json names it. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>PaperRoute.Desktop</AssemblyName>
+    <RootNamespace>PaperRoute.Desktop</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsPackable>false</IsPackable>
+    <!-- A trial version, so no trial file can claim the app's version. -->
+    <Version>0.1.0-trial</Version>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+    <!-- The rail's logo: the Windows Forms app's own file, linked, not copied (Form1.Shell.vb:158-162). -->
+    <AvaloniaResource Include="..\ManuscriptPipeline\Assets\PaperRoute.png" Link="Assets\PaperRoute.png" />
+  </ItemGroup>
+
+  <!-- No developer-tools package (AvaloniaUI.DiagnosticsSupport): it needs a paid licence, and the trial leaves it out until the maintainer decides. -->
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.6" />
+    <!-- Lock 3 of the trial design (d1 1.3), with the same list as PaperRoute.ViewModels. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="5.6.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <AdditionalFiles Include="..\PaperRoute.ViewModels\BannedSymbols.txt" Link="BannedSymbols.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PaperRoute.ViewModels\PaperRoute.ViewModels.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -64,7 +64,9 @@ Public Class VersionSourceTests
         Dim app As Assembly =
             GetType(Global.ManuscriptPipeline.Form1).Assembly
 
-        For Each owner As Assembly In {app, GetType(PacketExportService).Assembly, GetType(OnlineAccess).Assembly, GetType(Global.ManuscriptPipeline.Models.Manuscript).Assembly}
+        ' The app, the core library and the platform library (core stage 2):
+        ' every DLL the app ships carries the app's numbers.
+        For Each owner As Assembly In {app, GetType(PacketExportService).Assembly, GetType(OnlineAccess).Assembly, GetType(Global.ManuscriptPipeline.Models.Manuscript).Assembly, GetType(WindowsPlatform).Assembly}
 
             Assert.AreEqual(
                 assemblyVersion,
@@ -89,7 +91,7 @@ Public Class VersionSourceTests
         Dim project As XDocument =
             XDocument.Load(
                 Path.Combine(
-                    AssistantCoreTests.RepositoryRoot(),
+                    TestRepository.Root(),
                     "ManuscriptPipeline",
                     "ManuscriptPipeline.vbproj"
                 )

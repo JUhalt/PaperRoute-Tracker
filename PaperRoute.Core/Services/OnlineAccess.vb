@@ -498,7 +498,7 @@ Namespace Services
             If busy IsNot Nothing Then
                 Dim keyHint As String = If(HasOpenAlexKey(), String.Empty, " A free OpenAlex key, added in Settings > Preferences > Online services, raises the allowance.")
                 If busy.DailyAllowanceUsed Then
-                    Dim reset As DateTime = DateTime.UtcNow.Date.AddDays(1)
+                    Dim reset As DateTime = CoreClock.UtcNow.Date.AddDays(1)
                     Return serviceName & "'s free daily allowance is used up. It starts again at " &
                         reset.ToLocalTime().ToString("t", Globalization.CultureInfo.CurrentCulture) & "." &
                         If(serviceName = "OpenAlex", keyHint, String.Empty)

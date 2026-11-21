@@ -20,7 +20,7 @@ Namespace Services
 
         Public Sub New()
 
-            Me.New(StorageMigrationService.CurrentDataRoot())
+            Me.New(StorageLocations.SettingsFolder())
 
         End Sub
 
@@ -35,6 +35,7 @@ Namespace Services
             _jsonOptions =
                 New JsonSerializerOptions With {
                     .WriteIndented = True,
+                    .NewLine = StoredText.NewLine,
                     .PropertyNameCaseInsensitive = True
                 }
 

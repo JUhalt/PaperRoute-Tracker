@@ -1,7 +1,4 @@
 Imports System
-Imports System.Collections.Generic
-Imports System.Diagnostics
-Imports System.IO
 Imports System.Windows.Forms
 
 Namespace Services
@@ -11,19 +8,11 @@ Namespace Services
     ' edited manuscripts.json can put any path behind an Open button, so a
     ' file Windows would run rather than show, such as an .exe or a .ps1,
     ' is opened only after the researcher says so (#117).
+    '
+    ' The rule for which files ask is the core's ProgramFileRule, and the
+    ' launch is the registered launcher (the Windows shell, WindowsLauncher);
+    ' the question stays here (core stage 2, step 10).
     Public NotInheritable Class FileOpenService
-
-        ' Types Windows runs as a program or script.
-        Private Shared ReadOnly ProgramExtensions As New HashSet(Of String)(
-            {
-                ".exe", ".com", ".scr", ".pif", ".msi", ".msp",
-                ".bat", ".cmd", ".ps1", ".psm1", ".vbs", ".vbe",
-                ".js", ".jse", ".wsf", ".wsh", ".hta", ".reg",
-                ".lnk", ".url", ".cpl", ".jar", ".appx", ".msix"
-            },
-            StringComparer.OrdinalIgnoreCase
-        )
-
 
         Private Sub New()
         End Sub
@@ -33,16 +22,7 @@ Namespace Services
             filePath As String
         ) As Boolean
 
-            If String.IsNullOrWhiteSpace(filePath) Then
-                Return False
-            End If
-
-            ' Windows ignores trailing dots and spaces in a name.
-            Return ProgramExtensions.Contains(
-                Path.GetExtension(
-                    filePath.TrimEnd(" "c, "."c)
-                )
-            )
+            Return ProgramFileRule.IsProgramOrScript(filePath)
 
         End Function
 
@@ -57,7 +37,7 @@ Namespace Services
             OpenRecordedFile(
                 filePath,
                 Function(candidate) AskToOpen(owner, candidate),
-                AddressOf StartWithShell
+                Sub(target) PlatformServices.Launcher.OpenFile(target)
             )
 
         End Sub
@@ -71,14 +51,7 @@ Namespace Services
             start As Action(Of String)
         )
 
-            If IsProgramOrScript(filePath) AndAlso
-               Not confirm(filePath) Then
-
-                Return
-
-            End If
-
-            start(filePath)
+            ProgramFileRule.Open(filePath, confirm, start)
 
         End Sub
 
@@ -104,20 +77,6 @@ Namespace Services
             ) = DialogResult.Yes
 
         End Function
-
-
-        Private Shared Sub StartWithShell(
-            filePath As String
-        )
-
-            Process.Start(
-                New ProcessStartInfo With {
-                    .FileName = filePath,
-                    .UseShellExecute = True
-                }
-            )
-
-        End Sub
 
     End Class
 

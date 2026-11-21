@@ -20,12 +20,13 @@ Namespace Services
 
         Private Shared ReadOnly Options As New JsonSerializerOptions With {
             .WriteIndented = True,
+            .NewLine = StoredText.NewLine,
             .PropertyNameCaseInsensitive = True
         }
 
 
         Public Sub New()
-            Me.New(Path.Combine(StorageMigrationService.CurrentDataRoot(), "data"))
+            Me.New(StorageLocations.LibraryDataFolder())
         End Sub
 
 

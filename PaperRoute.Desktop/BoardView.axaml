@@ -1,0 +1,155 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:PaperRoute.ViewModels"
+             xmlns:board="using:PaperRoute.ViewModels.Board"
+             xmlns:local="using:PaperRoute.Desktop"
+             x:Class="PaperRoute.Desktop.BoardView"
+             x:DataType="board:BoardViewModel">
+  <!--
+    The Board (d1 4.1, step 8), laid out as today's boardPage is (Form1.vb:377-641):
+    the welcome while the library is empty (Form1.Welcome.vb:21-34), else four
+    rows: the page header, the Needs Attention bar, the shelf bar, and the shelf
+    host, whose three shelves hold the cards (ShelfView, CardView; step 9).
+    Below a measured width the header's tools wrap under the title and the boxes
+    move above the tabs, as SplitBar does today (BoardView.axaml.cs).
+  -->
+  <Panel>
+
+    <local:WelcomeView x:Name="Welcome" IsVisible="{Binding IsLibraryEmpty}" />
+
+    <Grid x:Name="BoardBody" RowDefinitions="Auto,Auto,Auto,*" Margin="22,14,22,8"
+          IsVisible="{Binding !IsLibraryEmpty}">
+
+      <!-- Row 0, the page header (CreatePageHeader, Form1.Shell.vb:1201-1239; Form1.vb:402-449). -->
+      <Grid x:Name="Header" Grid.Row="0" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+        <TextBlock x:Name="PageTitle" Classes="page-title" Text="Board" VerticalAlignment="Center"
+                   AutomationProperties.HeadingLevel="1" />
+        <StackPanel x:Name="HeaderTools" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+          <TextBox x:Name="SearchBox" Width="250"
+                   Text="{Binding SearchText, Mode=TwoWay}"
+                   PlaceholderText="Search titles, journals, authors"
+                   ToolTip.Tip="Search the board (Ctrl+F)"
+                   AutomationProperties.Name="Search the board (Ctrl+F)"
+                   AutomationProperties.AutomationId="BoardSearch">
+            <TextBox.InnerLeftContent>
+              <Path Margin="10,0,0,0" Width="14" Height="14" VerticalAlignment="Center"
+                    Stroke="{DynamicResource MutedTextBrush}" StrokeThickness="1.6" StrokeLineCap="Round"
+                    Data="M 10.5,6 A 4.5,4.5 0 1 1 1.5,6 A 4.5,4.5 0 1 1 10.5,6 Z M 9.4,9.4 L 13,13"
+                    AutomationProperties.AccessibilityView="Raw" />
+            </TextBox.InnerLeftContent>
+          </TextBox>
+          <Button x:Name="AddButton" Classes="primary" Margin="10,0,0,0" Content="+ Add Manuscript"
+                  IsEnabled="False"
+                  ToolTip.Tip="{x:Static vm:RailItemViewModel.NotInTrial}"
+                  ToolTip.ShowOnDisabled="True"
+                  AutomationProperties.Name="Add Manuscript"
+                  AutomationProperties.HelpText="{x:Static vm:RailItemViewModel.NotInTrial}"
+                  AutomationProperties.AutomationId="AddManuscript" />
+        </StackPanel>
+      </Grid>
+
+      <!-- Row 1, Needs Attention (Form1.vb:451-511), in today's order: the caption, the all-clear line, the chips, the link. -->
+      <WrapPanel x:Name="AttentionBar" Grid.Row="1" Margin="0,10,0,6">
+        <TextBlock Classes="caption" Text="NEEDS ATTENTION" Margin="0,7,10,0" />
+        <TextBlock x:Name="NothingNeedsAttention" Text="Nothing needs attention right now." Margin="0,5,18,0"
+                   FontSize="{DynamicResource BodyFontSize}" Foreground="{DynamicResource SecondaryTextBrush}"
+                   IsVisible="{Binding NothingNeedsAttention}" />
+        <ItemsControl x:Name="Chips" ItemsSource="{Binding Chips}">
+          <ItemsControl.ItemsPanel>
+            <!-- A wrap panel, so the chips wrap one by one in a narrow window, as today's FlowLayoutPanel does. -->
+            <ItemsPanelTemplate>
+              <WrapPanel />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="board:ChipViewModel">
+              <Button Classes="chip" Margin="0,2,8,2"
+                      Classes.warning="{Binding IsWarning}"
+                      Classes.danger="{Binding IsDanger}"
+                      Classes.active="{Binding IsActive}"
+                      IsVisible="{Binding IsVisible}"
+                      Content="{Binding Text}"
+                      Command="{Binding $parent[local:BoardView].((board:BoardViewModel)DataContext).ToggleChipCommand}"
+                      CommandParameter="{Binding}"
+                      AutomationProperties.Name="{Binding Text}"
+                      AutomationProperties.HelpText="{Binding HelpText}"
+                      AutomationProperties.AutomationId="{Binding Filter, StringFormat='Chip.{0}'}" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <Button x:Name="ViewDeadlines" Classes="link" Margin="0,3,-4,-4" VerticalAlignment="Top"
+                Content="View in Deadlines →"
+                Command="{Binding ViewDeadlinesCommand}"
+                ToolTip.Tip="Open Deadlines (Ctrl+4)"
+                AutomationProperties.Name="View in Deadlines"
+                AutomationProperties.HelpText="Opens the Deadlines page (Ctrl+4)."
+                AutomationProperties.ControlTypeOverride="Hyperlink"
+                AutomationProperties.AutomationId="ViewInDeadlines" />
+      </WrapPanel>
+
+      <!-- Row 2, the shelf bar (Form1.vb:513-621): the tabs at the left, the boxes and Clear at the right, over one hairline. -->
+      <Grid x:Name="ShelfBar" Grid.Row="2" Margin="0,0,0,10" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+        <Border Classes="hairline" Grid.RowSpan="2" Grid.ColumnSpan="2" />
+        <TabStrip x:Name="ShelfTabs" VerticalAlignment="Bottom"
+                  ItemsSource="{Binding Shelves}"
+                  SelectedIndex="{Binding SelectedShelfIndex, Mode=TwoWay}"
+                  KeyboardNavigation.TabNavigation="Once"
+                  AutomationProperties.Name="Shelves"
+                  AutomationProperties.AutomationId="ShelfTabs">
+          <TabStrip.Styles>
+            <Style Selector="TabStripItem" x:DataType="board:ShelfViewModel">
+              <Setter Property="AutomationProperties.Name" Value="{Binding TabText}" />
+              <Setter Property="AutomationProperties.AutomationId" Value="{Binding Location, StringFormat='Shelf.{0}'}" />
+            </Style>
+          </TabStrip.Styles>
+          <TabStrip.ItemTemplate>
+            <DataTemplate x:DataType="board:ShelfViewModel">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Text="{Binding TabName}" />
+                <TextBlock Classes="tab-count" Text="{Binding TabCount}" />
+              </StackPanel>
+            </DataTemplate>
+          </TabStrip.ItemTemplate>
+        </TabStrip>
+        <StackPanel x:Name="ShelfTools" Grid.Column="1" Orientation="Horizontal" Margin="0,0,0,6" VerticalAlignment="Bottom">
+          <ComboBox x:Name="StageFilter" MinWidth="150" Margin="0,5,0,0"
+                    ItemsSource="{Binding StageOptions}"
+                    SelectedIndex="{Binding SelectedStageIndex, Mode=TwoWay}"
+                    IsDropDownOpen="{Binding IsStageListOpen, Mode=TwoWay}"
+                    AutomationProperties.Name="Filter by stage"
+                    AutomationProperties.AutomationId="StageFilter">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="board:StageOptionViewModel">
+                <TextBlock Text="{Binding Text}" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+          <ComboBox x:Name="BoardSort" MinWidth="235" Margin="8,5,0,0"
+                    ItemsSource="{Binding SortOptions}"
+                    SelectedIndex="{Binding SelectedSortIndex, Mode=TwoWay}"
+                    IsDropDownOpen="{Binding IsSortListOpen, Mode=TwoWay}"
+                    AutomationProperties.Name="Sort the board"
+                    AutomationProperties.AutomationId="BoardSort" />
+          <Button x:Name="ClearFilters" MinWidth="72" Margin="8,4,0,0" Content="Clear"
+                  Command="{Binding ClearCommand}"
+                  AutomationProperties.Name="Clear search and filters"
+                  AutomationProperties.AutomationId="ClearFilters" />
+        </StackPanel>
+      </Grid>
+
+      <!-- Row 3, the shelf host (Form1.vb:623-634): one shelf shown at a time, the one whose tab is selected. -->
+      <Panel x:Name="ShelfHost" Grid.Row="3">
+        <Border IsVisible="{Binding SelectedShelfIndex, Converter={x:Static local:BoardConverters.IsIndex}, ConverterParameter=0}">
+          <local:ShelfView x:Name="PipelineShelf" DataContext="{Binding Shelves[0]}" />
+        </Border>
+        <Border IsVisible="{Binding SelectedShelfIndex, Converter={x:Static local:BoardConverters.IsIndex}, ConverterParameter=1}">
+          <local:ShelfView x:Name="PublishedShelf" DataContext="{Binding Shelves[1]}" />
+        </Border>
+        <Border IsVisible="{Binding SelectedShelfIndex, Converter={x:Static local:BoardConverters.IsIndex}, ConverterParameter=2}">
+          <local:ShelfView x:Name="FileDrawerShelf" DataContext="{Binding Shelves[2]}" />
+        </Border>
+      </Panel>
+
+    </Grid>
+  </Panel>
+</UserControl>
