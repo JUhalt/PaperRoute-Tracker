@@ -15,7 +15,7 @@ Draft of November 20, 2026, brought up to date on November 21, 2026. Two pieces 
 
 ## 1. What the trial built
 
-Steps are those of design section 8. Every pull request named here is merged, except this report's own (#400, a draft). #399 (steps 11 to 13) merged on November 20, 2026, after this report's numbers were taken from its head, 44d62e0. On November 21, 2026, #402 (step 15) merged as 294a120, and #403 (the first change for a cheaper card, work after step 13 that design section 8 did not list) merged after it.
+Steps are those of design section 8. Every pull request named here is merged, except this report's own (#400, a draft). #399 (steps 11 to 13) merged on November 20, 2026, after this report's numbers were taken from its head, 44d62e0. On November 21, 2026, #402 (step 15) merged as 294a120, and #403 (the first change for a cheaper card, work after step 13 that design section 8 did not list) merged after it as e3cfae6.
 
 | Step | What | State | Pull request |
 |---:|---|---|---|
