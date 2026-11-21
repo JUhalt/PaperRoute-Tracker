@@ -24,7 +24,9 @@
   <ItemGroup>
     <Compile Include="..\PaperRoute.Tests\CoreTestSupport.vb" Link="Shared\CoreTestSupport.vb" />
     <Compile Include="..\PaperRoute.Tests\CertificationFixture.vb" Link="Shared\CertificationFixture.vb" />
-    <!-- The synthetic documents HiddenMetadataTests reads (batch 2); PacketExportTests uses them too. -->
+    <!-- The letter, answers, settings and capturing network the assistant tests share (AssistantCoreTests, batch 3). -->
+    <Compile Include="..\PaperRoute.Tests\AssistantTestSupport.vb" Link="Shared\AssistantTestSupport.vb" />
+    <!-- The synthetic documents HiddenMetadataTests reads (batch 2); PacketExportTests (batch 3) uses them too. -->
     <Compile Include="..\PaperRoute.Tests\PacketExportFixtures.vb" Link="Shared\PacketExportFixtures.vb" />
     <None Include="..\PaperRoute.Tests\Fixtures\Schema4Representative\**\*" Link="Fixtures\Schema4Representative\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

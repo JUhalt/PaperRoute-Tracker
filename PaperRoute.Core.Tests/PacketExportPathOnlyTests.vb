@@ -14,8 +14,10 @@ Imports ManuscriptPipeline.Services
 ' the same path (however Path.GetFullPath spells it) is still refused, so a
 ' packet file is never overwritten by its own .zip; a different path is
 ' never taken for a packet file; and nothing throws for want of an identity.
-' On Windows, PaperRoute.Tests runs the same export with WindowsFileIdentity
-' registered (PacketExportTests).
+' PacketExportTests, here too, runs the whole export on that default; on
+' Windows, PaperRoute.Tests runs the export with WindowsFileIdentity
+' registered, where a packet file reached another way is refused
+' (PacketExportWindowsTests).
 <TestClass>
 <DoNotParallelize>
 Public Class PacketExportPathOnlyTests
