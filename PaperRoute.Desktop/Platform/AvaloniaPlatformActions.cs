@@ -7,9 +7,11 @@ namespace PaperRoute.Desktop.Platform;
 
 // The real actions of "--platform-check" (step 15): Avalonia's file dialog
 // and launcher on the trial's window, and System.Diagnostics.Process for the
-// restart. Kept thin on purpose: no test runs this class, because each call
-// opens a dialog, a browser or a second program. Everything around it is
-// tested with stand-ins (PlatformCheckTests).
+// restart. Kept thin on purpose: no test opens the dialog or the launcher,
+// because each is a real dialog or browser on the person's screen, and
+// everything around them is tested with stand-ins (PlatformCheckTests). The
+// start of a second program opens nothing, so Start is also run for real
+// there.
 public sealed class AvaloniaPlatformActions : IPlatformActions
 {
     private readonly TopLevel _topLevel;
@@ -42,8 +44,15 @@ public sealed class AvaloniaPlatformActions : IPlatformActions
 
     public Task<bool> LaunchAsync(Uri address) => _topLevel.Launcher.LaunchUriAsync(address);
 
-    public IStartedProgram StartProgram(string fileName, IReadOnlyList<string> arguments)
+    public IStartedProgram StartProgram(string fileName, IReadOnlyList<string> arguments) => Start(fileName, arguments);
+
+    // Starts the program file with the arguments, with no window of its own
+    // and its output and errors read and dropped. Needs no window of the
+    // trial's, so the tests run it as it is.
+    public static IStartedProgram Start(string fileName, IReadOnlyList<string> arguments)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
+        ArgumentNullException.ThrowIfNull(arguments);
         var start = new ProcessStartInfo(fileName)
         {
             UseShellExecute = false,

@@ -8,7 +8,8 @@ using PaperRoute.ViewModels.Session;
 namespace PaperRoute.ViewModels.Platform;
 
 // What a reader of the platform check's JSON needs beside the outcomes to
-// judge them: the system, the runtime, whether APPIMAGE was set (not its
+// judge them: which trial ran (its version and configuration), the system,
+// the runtime, whether APPIMAGE was set (not its
 // value; whether the trial ran from it is the restart's startedFrom, since
 // APPIMAGE is passed down to every program an AppImage starts), the Linux
 // session type (XDG_SESSION_TYPE's value, and only
@@ -26,6 +27,14 @@ public sealed record PlatformFacts(
     string ThemeVariant,
     string ContrastPreference)
 {
+    // Which trial ran, so a JSON sent back weeks later can be matched to its
+    // commit: the program's version as it was built ("0.1.0-trial+" and the
+    // commit's hash) and its configuration ("Release" or "Debug", the word
+    // "--measure" writes). Null when the caller does not know them.
+    public string? TrialVersion { get; init; }
+
+    public string? Build { get; init; }
+
     // The facts for this process, with the environment read through
     // environment (tests give their own) and the window's figures given.
     public static PlatformFacts Read(Func<string, string?> environment, double renderScaling, string themeVariant, string contrastPreference)
@@ -47,7 +56,8 @@ public sealed record PlatformFacts(
 }
 
 // The JSON "--platform-check" writes: the mode and the format's version,
-// the time, the facts, then one small object per action (tried, ok, detail,
+// the time, the trial's version and configuration (null when not known),
+// the other facts, then one small object per action (tried, ok, detail,
 // the exception's type when there was one and its message when it may be
 // kept, milliseconds), the error when the check itself broke or its window
 // was closed before the end, and then the step that was still running.
@@ -83,6 +93,8 @@ public sealed class PlatformCheckReport
             json.WriteString("mode", PlatformCheck.Mode);
             json.WriteNumber("formatVersion", PlatformCheck.FormatVersion);
             json.WriteString("takenAt", TakenAt.ToString("o", CultureInfo.InvariantCulture));
+            json.WriteString("trialVersion", Facts.TrialVersion);
+            json.WriteString("build", Facts.Build);
             json.WriteString("operatingSystem", Facts.OperatingSystem);
             json.WriteString("runtimeIdentifier", Facts.RuntimeIdentifier);
             json.WriteString("processArchitecture", Facts.ProcessArchitecture);

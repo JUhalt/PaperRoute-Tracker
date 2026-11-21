@@ -1,6 +1,8 @@
+using System.Reflection;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Platform;
+using PaperRoute.Desktop.Measurement;
 using PaperRoute.ViewModels;
 using PaperRoute.ViewModels.Platform;
 using PaperRoute.ViewModels.Session;
@@ -155,11 +157,23 @@ public sealed class PlatformCheckWindow
     {
         ArgumentNullException.ThrowIfNull(window);
         PlatformColorValues? colors = Application.Current?.PlatformSettings?.GetColorValues();
-        return PlatformFacts.Read(
+        return Stamped(PlatformFacts.Read(
             environment,
             window.RenderScaling,
             colors?.ThemeVariant.ToString() ?? "unknown",
-            colors?.ContrastPreference.ToString() ?? "unknown");
+            colors?.ContrastPreference.ToString() ?? "unknown"));
+    }
+
+    // The trial's version as it was built: "0.1.0-trial+" and the hash of the
+    // commit the build was made from (the SDK adds the hash).
+    public static string? TrialVersion =>
+        typeof(PlatformCheckWindow).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+
+    // The facts with which trial this is: its version and its configuration.
+    public static PlatformFacts Stamped(PlatformFacts facts)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+        return facts with { TrialVersion = TrialVersion, Build = BoardMeasurement.Build };
     }
 
     private void Say(string text)
@@ -178,7 +192,7 @@ public sealed class PlatformCheckWindow
         catch (Exception ex)
         {
             error ??= ex.GetType().Name + ": " + _scrubber.Scrub(ex.Message);
-            return PlatformFacts.Read(_environment, 0, "unknown", "unknown");
+            return Stamped(PlatformFacts.Read(_environment, 0, "unknown", "unknown"));
         }
     }
 

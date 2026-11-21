@@ -16,9 +16,10 @@ namespace PaperRoute.Desktop.Tests;
 // check's flow with stand-ins for every outcome of its three actions, the
 // JSON read back field by field, that nothing about a chosen file, the
 // person or the computer reaches the JSON, and the flow in the trial's own
-// window on the headless platform. The real actions
+// window on the headless platform. The real dialog and launcher
 // (AvaloniaPlatformActions) are run by a person only, and no test here
-// starts the program with the mode: its window would be real.
+// starts the program with the mode: its window would be real. The real
+// start of a second program opens nothing, so the last three tests run it.
 [TestClass]
 public sealed class PlatformCheckTests : StorageCheckedTests
 {
@@ -518,7 +519,8 @@ public sealed class PlatformCheckTests : StorageCheckedTests
             ["WAYLAND_DISPLAY"] = "wayland-secret-0",
             ["DISPLAY"] = ":secret.9",
         };
-        PlatformFacts facts = PlatformFacts.Read(name => environment.GetValueOrDefault(name), 1.25, "Dark", "NoPreference");
+        PlatformFacts facts = PlatformFacts.Read(name => environment.GetValueOrDefault(name), 1.25, "Dark", "NoPreference")
+            with { TrialVersion = "0.1.0-trial+0123abc", Build = "Release" };
         var actions = new StandInActions { Chosen = [ChosenName, "two.txt"], Launched = false, ExitCode = 1 };
         (PlatformCheckOutcomes outcomes, _) = Run(actions, Target());
         var report = new PlatformCheckReport { TakenAt = new DateTime(2026, 11, 21, 9, 30, 0), Facts = facts, Outcomes = outcomes };
@@ -534,6 +536,8 @@ public sealed class PlatformCheckTests : StorageCheckedTests
         Assert.AreEqual("platform-check", root.GetProperty("mode").GetString());
         Assert.AreEqual(1, root.GetProperty("formatVersion").GetInt32());
         Assert.AreEqual("2026-11-21T09:30:00.0000000", root.GetProperty("takenAt").GetString());
+        Assert.AreEqual("0.1.0-trial+0123abc", root.GetProperty("trialVersion").GetString());
+        Assert.AreEqual("Release", root.GetProperty("build").GetString());
         Assert.AreEqual(System.Runtime.InteropServices.RuntimeInformation.OSDescription, root.GetProperty("operatingSystem").GetString());
         Assert.AreEqual(System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier, root.GetProperty("runtimeIdentifier").GetString());
         Assert.AreEqual(System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString(), root.GetProperty("processArchitecture").GetString());
@@ -584,6 +588,8 @@ public sealed class PlatformCheckTests : StorageCheckedTests
         PlatformFacts bare = PlatformFacts.Read(_ => null, 1, "Light", "High");
         using JsonDocument bareDocument = JsonDocument.Parse(new PlatformCheckReport { TakenAt = report.TakenAt, Facts = bare, Outcomes = outcomes }.ToJson());
         Assert.AreEqual(JsonValueKind.Null, bareDocument.RootElement.GetProperty("xdgSessionType").ValueKind);
+        Assert.AreEqual(JsonValueKind.Null, bareDocument.RootElement.GetProperty("trialVersion").ValueKind, "A version nobody gave is written as null.");
+        Assert.AreEqual(JsonValueKind.Null, bareDocument.RootElement.GetProperty("build").ValueKind);
         Assert.IsFalse(bareDocument.RootElement.GetProperty("appImageSet").GetBoolean());
         Assert.IsFalse(bareDocument.RootElement.GetProperty("displaySet").GetBoolean());
     }
@@ -667,6 +673,10 @@ public sealed class PlatformCheckTests : StorageCheckedTests
         using JsonDocument document = JsonDocument.Parse(File.ReadAllBytes(path));
         Assert.AreEqual("platform-check", document.RootElement.GetProperty("mode").GetString());
         Assert.IsTrue(document.RootElement.GetProperty("renderScaling").GetDouble() > 0, "The window's render scaling is read.");
+        Assert.IsFalse(string.IsNullOrWhiteSpace(PlatformCheckWindow.TrialVersion), "The trial's assembly carries its version.");
+        Assert.AreEqual(PlatformCheckWindow.TrialVersion, document.RootElement.GetProperty("trialVersion").GetString(),
+            "The window's JSON says which trial ran.");
+        Assert.AreEqual(PaperRoute.Desktop.Measurement.BoardMeasurement.Build, document.RootElement.GetProperty("build").GetString());
         Assert.DoesNotContain(ChosenName, File.ReadAllText(path));
 
         // A folder that went away before the write: the check broke, exit 1.
@@ -773,6 +783,64 @@ public sealed class PlatformCheckTests : StorageCheckedTests
             "Still running when the window was closed: no outcome came back. The second copy was still running; it was stopped.",
             restart.GetProperty("detail").GetString());
         Assert.DoesNotContain(ChosenName, File.ReadAllText(path));
+    }
+
+    // ---- The real start of a second program (it opens nothing) ----
+
+    // AvaloniaPlatformActions.Start is what the restart runs for real. Here
+    // it starts the trial's own "--self-check" through the dotnet host, as
+    // SessionStartupProcessTests does, waits for it and reads its exit code.
+    [TestMethod]
+    public void TheRealStartRunsASecondCopyAndReadsItsExitCode()
+    {
+        using IStartedProgram started = AvaloniaPlatformActions.Start(
+            SessionStartupProcessTests.DotnetHost(),
+            [SessionStartupProcessTests.DesktopAssemblyPath(), "--self-check"]);
+        bool exited = started.WaitForExitAsync(TimeSpan.FromMinutes(2)).GetAwaiter().GetResult();
+        if (!exited)
+        {
+            started.Stop();
+        }
+
+        Assert.IsTrue(exited, "The second copy's self-check ended within two minutes.");
+        Assert.AreEqual(0, started.ExitCode, "The second copy's self-check passed.");
+    }
+
+    // A program that outlives its limit: the wait says it has not ended,
+    // Stop ends it, and a second wait sees it gone. The program writes
+    // nothing: ping to this computer on Windows, sleep elsewhere.
+    [TestMethod]
+    public void TheRealStopEndsAProgramThatOutlivesItsLimit()
+    {
+        (string file, string[] arguments) = OperatingSystem.IsWindows()
+            ? (Path.Combine(Environment.SystemDirectory, "ping.exe"), new[] { "-n", "120", "127.0.0.1" })
+            : ("sleep", new[] { "120" });
+        using IStartedProgram started = AvaloniaPlatformActions.Start(file, arguments);
+        bool endedEarly;
+        try
+        {
+            endedEarly = started.WaitForExitAsync(TimeSpan.FromMilliseconds(300)).GetAwaiter().GetResult();
+        }
+        finally
+        {
+            started.Stop();
+        }
+
+        Assert.IsFalse(endedEarly, "It runs for two minutes, so it had not ended at the limit.");
+        Assert.IsTrue(started.WaitForExitAsync(TimeSpan.FromSeconds(30)).GetAwaiter().GetResult(), "Once stopped, it is gone.");
+    }
+
+    // A program file that is not there: Start throws what the check's flow
+    // expects on Windows and Linux alike, and the scrubbed message names
+    // neither the file's folder nor the working folder.
+    [TestMethod]
+    public void TheRealStartOfAMissingProgramThrowsWhatTheCheckExpects()
+    {
+        string missing = Path.Combine(_root, "no-such-program");
+        Win32Exception thrown = Assert.ThrowsExactly<Win32Exception>(() => AvaloniaPlatformActions.Start(missing, ["--self-check"]));
+        string scrubbed = PrivacyScrubber.ForThisProcess(missing).Scrub(thrown.Message);
+        Assert.DoesNotContain(_root, scrubbed, StringComparison.OrdinalIgnoreCase, thrown.Message);
+        Assert.DoesNotContain(Path.TrimEndingDirectorySeparator(Environment.CurrentDirectory), scrubbed, StringComparison.OrdinalIgnoreCase, thrown.Message);
     }
 
     // ---- Helpers ----

@@ -383,7 +383,9 @@ and the restart `exceptionMessage`.
     it ...", the terminal had an `APPIMAGE` variable from another program (for example a
     terminal opened from an AppImage editor), and the trial ignored it.
 
-The file also holds facts about the system: `operatingSystem`, `runtimeIdentifier`,
+The file also says which trial ran: `trialVersion` (the trial's version, a `+`, and the
+hash of the commit it was built from) and `build` (`Release` or `Debug`). And it holds facts
+about the system: `operatingSystem`, `runtimeIdentifier`,
 `processArchitecture`, `appImageSet` (whether the `APPIMAGE` variable was set; whether the
 trial ran from it is the restart's `startedFrom`), `xdgSessionType` (`x11` or `wayland`),
 `waylandDisplaySet` and `displaySet` (only whether these are set, not their values),
