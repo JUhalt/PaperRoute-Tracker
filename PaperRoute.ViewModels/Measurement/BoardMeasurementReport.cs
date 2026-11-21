@@ -197,22 +197,34 @@ public sealed class BoardMeasurementReport
     // the real profile's storage folders (ReadOnlySnapshot.DefaultStorageRoots),
     // with links and short names resolved as the snapshot resolves them.
     // Nothing is written. alsoRefuse adds folders (tests name a fake profile).
-    public static string? RefusalFor(string path, IEnumerable<string>? alsoRefuse = null)
+    public static string? RefusalFor(string path, IEnumerable<string>? alsoRefuse = null) =>
+        RefusalFor(path, TrialOptions.MeasureArgument, "measurement", alsoRefuse);
+
+    // The same rule for another mode that writes a JSON file
+    // ("--platform-check"): argument names the mode, what the file holds.
+    // For "--measure" the messages are the ones above, word for word.
+    public static string? RefusalFor(string path, string argument, string what, IEnumerable<string>? alsoRefuse)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(argument);
+        ArgumentException.ThrowIfNullOrWhiteSpace(what);
+        bool measure = string.Equals(argument, TrialOptions.MeasureArgument, StringComparison.Ordinal);
+        string example = measure ? @"C:\Measurements\board.json"
+            : System.OperatingSystem.IsWindows() ? @"C:\Checks\platform-check.json" : "/tmp/platform-check.json";
+        string localFile = measure ? LocalFileMessage : $"\"{argument}\" needs a local file path such as {example}.";
         if (string.IsNullOrWhiteSpace(path) || !Path.IsPathFullyQualified(path))
         {
-            return "\"--measure\" needs the full path of the JSON file to write, such as C:\\Measurements\\board.json.";
+            return $"\"{argument}\" needs the full path of the JSON file to write, such as {example}.";
         }
 
         string full = Path.GetFullPath(path);
         if (!string.Equals(Path.GetExtension(full), ".json", StringComparison.OrdinalIgnoreCase))
         {
-            return $"The measurement is written as JSON: {full} does not end in .json.";
+            return $"The {what} is written as JSON: {full} does not end in .json.";
         }
 
         if (!ReadOnlySnapshot.IsPlainLocalPath(full))
         {
-            return LocalFileMessage;
+            return localFile;
         }
 
         string folder = Path.GetDirectoryName(full) ?? full;
@@ -220,7 +232,7 @@ public sealed class BoardMeasurementReport
         string? root = ReadOnlySnapshot.RefusedRootFor(full, refused, out string real);
         if (root is null && !ReadOnlySnapshot.IsPlainLocalPath(real))
         {
-            return LocalFileMessage;
+            return localFile;
         }
 
         if (root is not null)
@@ -231,7 +243,7 @@ public sealed class BoardMeasurementReport
 
         if (!Directory.Exists(folder))
         {
-            return $"The Board trial found no folder at {folder} to write the measurement into.";
+            return $"The Board trial found no folder at {folder} to write the {what} into.";
         }
 
         return null;

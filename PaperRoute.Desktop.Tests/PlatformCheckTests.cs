@@ -1,0 +1,605 @@
+using System.ComponentModel;
+using System.Text.Json;
+using Avalonia.Controls;
+using Avalonia.Threading;
+using PaperRoute.Desktop.Platform;
+using PaperRoute.Desktop.Tests.Board;
+using PaperRoute.ViewModels.Platform;
+using PaperRoute.ViewModels.Session;
+
+namespace PaperRoute.Desktop.Tests;
+
+// "--platform-check <file>.json" (d1 1.3 Modes, step 15), proved without a
+// real window, dialog, browser or second program: the command line, the
+// files it refuses before anything opens (the rule "--measure" uses), the
+// check's flow with stand-ins for every outcome of its three actions, the
+// JSON read back field by field, that nothing about a chosen file, the
+// person or the computer reaches the JSON, and the flow in the trial's own
+// window on the headless platform. The real actions
+// (AvaloniaPlatformActions) are run by a person only, and no test here
+// starts the program with the mode: its window would be real.
+[TestClass]
+public sealed class PlatformCheckTests : StorageCheckedTests
+{
+    // A file name nobody else writes, to search the JSON for.
+    private const string ChosenName = "Chosen-Secret-Draft-7Q4Z.docx";
+
+    private string _root = string.Empty;
+
+    [TestInitialize]
+    public void CreateRoot()
+    {
+        _root = Path.Combine(Path.GetTempPath(), "PaperRoute-TrialPlatform-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(_root);
+    }
+
+    [TestCleanup]
+    public void DeleteRoot()
+    {
+        try
+        {
+            Directory.Delete(_root, recursive: true);
+        }
+        catch (IOException)
+        {
+            // Left for the temporary-file clean-up.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Left for the temporary-file clean-up.
+        }
+    }
+
+    // ---- The command line ----
+
+    [TestMethod]
+    public void PlatformCheckTakesTheFileAfterIt()
+    {
+        string file = Path.Combine(_root, "platform.json");
+        Assert.IsTrue(TrialOptions.TryParse(["--platform-check", file], out TrialOptions? options, out string? error), error);
+        Assert.AreEqual(file, options.PlatformCheckFile);
+        Assert.IsNull(options.MeasureFile);
+        Assert.IsNull(options.SnapshotFrom);
+        Assert.IsFalse(options.SelfCheck);
+
+        Assert.IsTrue(TrialOptions.TryParse(["--PLATFORM-CHECK", "/tmp/p.json"], out TrialOptions? upper, out error), error);
+        Assert.AreEqual("/tmp/p.json", upper.PlatformCheckFile, "Arguments are read without regard to case, as the others are.");
+
+        Assert.IsTrue(TrialOptions.TryParse([], out TrialOptions? none, out _));
+        Assert.IsNull(none.PlatformCheckFile);
+    }
+
+    [TestMethod]
+    [DataRow(new[] { "--platform-check" }, "\"--platform-check\" needs the full path of the JSON file to write after it.")]
+    [DataRow(new[] { "--platform-check", "" }, "\"--platform-check\" needs the full path of the JSON file to write after it.")]
+    [DataRow(new[] { "--platform-check", "--self-check" }, "\"--platform-check\" needs the full path of the JSON file to write after it.")]
+    [DataRow(new[] { "--platform-check", "/tmp/a.json", "--platform-check", "/tmp/b.json" }, "\"--platform-check\" is given twice.")]
+    [DataRow(new[] { "--platform-check", "/tmp/a.json", "--self-check" }, "\"--platform-check\" opens a window and \"--self-check\" opens none: give one or the other.")]
+    [DataRow(new[] { "--self-check", "--platform-check", "/tmp/a.json" }, "\"--platform-check\" opens a window and \"--self-check\" opens none: give one or the other.")]
+    [DataRow(new[] { "--platform-check", "/tmp/a.json", "--measure", "/tmp/b.json" }, "\"--platform-check\" and \"--measure\" each run their own check in the window: give one or the other.")]
+    [DataRow(new[] { "--snapshot-from", "/tmp/library", "--platform-check", "/tmp/a.json" }, "\"--platform-check\" runs on the example library only: leave out \"--snapshot-from\".")]
+    [DataRow(new[] { "--platform-check", "/tmp/a.json", "--today", "2026-10-16" }, "\"--today\" is accepted only with \"--snapshot-from\".")]
+    public void PlatformCheckRefusesACommandLineItCannotRun(string[] args, string message)
+    {
+        Assert.IsFalse(TrialOptions.TryParse(args, out TrialOptions? options, out string? error), string.Join(" ", args));
+        Assert.IsNull(options);
+        Assert.AreEqual(message, error);
+    }
+
+    // The refusals the process gives before it opens anything; each run also
+    // carries --self-check, so a refusal that failed would open no window.
+    [TestMethod]
+    public void TheTrialRefusesAPlatformCheckItCannotRunAndOpensNothing()
+    {
+        SessionStartupProcessTests.SelfCheckRun missing = SessionStartupProcessTests.RunTrial("--self-check", "--platform-check");
+        Assert.AreEqual(2, missing.ExitCode, missing.Describe());
+        StringAssert.Contains(missing.Errors, "\"--platform-check\" needs the full path of the JSON file to write after it.", missing.Describe());
+        Assert.IsEmpty(missing.Lines, missing.Describe());
+
+        string file = Path.Combine(_root, "platform.json");
+        SessionStartupProcessTests.SelfCheckRun both = SessionStartupProcessTests.RunTrial("--platform-check", file, "--self-check");
+        Assert.AreEqual(2, both.ExitCode, both.Describe());
+        StringAssert.Contains(both.Errors, "\"--platform-check\" opens a window and \"--self-check\" opens none", both.Describe());
+        Assert.IsEmpty(both.Lines, both.Describe());
+        Assert.IsFalse(File.Exists(file), "Nothing was written.");
+    }
+
+    // ---- Where the JSON may go: the rule "--measure" follows ----
+
+    [TestMethod]
+    public void TheCheckIsWrittenOnlyWhereTheMeasurementMayBe()
+    {
+        string fakeProfile = Path.Combine(_root, "profile", "PaperRoute");
+        Directory.CreateDirectory(fakeProfile);
+
+        Assert.IsNull(PlatformCheckReport.RefusalFor(Path.Combine(_root, "platform.json"), [fakeProfile]));
+        Assert.StartsWith("\"--platform-check\" needs the full path of the JSON file to write, such as ", PlatformCheckReport.RefusalFor("platform.json"));
+        Assert.StartsWith("The platform check is written as JSON:", PlatformCheckReport.RefusalFor(Path.Combine(_root, "platform.txt")));
+        Assert.AreEqual($"The Board trial found no folder at {Path.Combine(_root, "missing")} to write the platform check into.",
+            PlatformCheckReport.RefusalFor(Path.Combine(_root, "missing", "platform.json")));
+        Assert.StartsWith("The Board trial writes nothing into your own PaperRoute library.",
+            PlatformCheckReport.RefusalFor(Path.Combine(fakeProfile, "platform.json"), [fakeProfile]));
+        Assert.StartsWith("The Board trial writes nothing into your own PaperRoute library.",
+            PlatformCheckReport.RefusalFor(Path.Combine(fakeProfile, "data", "platform.json"), [fakeProfile]));
+
+        // The real profile's folders, by path only.
+        foreach (string root in ReadOnlySnapshot.DefaultStorageRoots())
+        {
+            Assert.StartsWith("The Board trial writes nothing into your own PaperRoute library.",
+                PlatformCheckReport.RefusalFor(Path.Combine(root, "platform.json")), root);
+        }
+
+        // The example names a path of the system it runs on.
+        string example = OperatingSystem.IsWindows() ? @"C:\Checks\platform-check.json" : "/tmp/platform-check.json";
+        StringAssert.Contains(PlatformCheckReport.RefusalFor("platform.json"), example);
+
+        // The measurement's own messages are unchanged.
+        Assert.StartsWith("\"--measure\" needs the full path of the JSON file to write, such as C:\\Measurements\\board.json.",
+            ViewModels.Measurement.BoardMeasurementReport.RefusalFor("board.json"));
+        Assert.IsFalse(Directory.EnumerateFileSystemEntries(fakeProfile).Any(), "Nothing was written into the fake profile.");
+    }
+
+    // ---- What a restart starts ----
+
+    [TestMethod]
+    public void TheRestartStartsTheAppImageOrTheProgramAndNeverTheDotnetHost()
+    {
+        RestartTarget appImage = RestartTarget.For("/opt/trial/PaperRoute-Board-Trial-x86_64.AppImage", "/tmp/.mount_x/usr/bin/PaperRoute.Desktop");
+        Assert.AreEqual("/opt/trial/PaperRoute-Board-Trial-x86_64.AppImage", appImage.FileName);
+        Assert.AreEqual(RestartTarget.FromAppImage, appImage.Source);
+        Assert.IsNull(appImage.NotPossible);
+
+        RestartTarget program = RestartTarget.For(null, "/opt/trial/PaperRoute.Desktop");
+        Assert.AreEqual("/opt/trial/PaperRoute.Desktop", program.FileName);
+        Assert.AreEqual(RestartTarget.FromProcessPath, program.Source);
+        Assert.AreEqual("/opt/trial/PaperRoute.Desktop", RestartTarget.For("", "/opt/trial/PaperRoute.Desktop").FileName, "An empty APPIMAGE is not an AppImage.");
+
+        foreach (string host in new[] { "/usr/share/dotnet/dotnet", @"C:\Program Files\dotnet\dotnet.exe", "/usr/lib/dotnet/DOTNET" })
+        {
+            RestartTarget viaHost = RestartTarget.For(null, host);
+            Assert.IsNull(viaHost.FileName, host);
+            StringAssert.Contains(viaHost.NotPossible, "dotnet host", host);
+        }
+
+        Assert.IsFalse(RestartTarget.IsDotnetHost("/opt/trial/dotnetish"));
+        Assert.IsNull(RestartTarget.For(null, null).FileName);
+        StringAssert.Contains(RestartTarget.For(null, null).NotPossible, "Environment.ProcessPath is empty");
+    }
+
+    // ---- The flow, with stand-ins ----
+
+    [TestMethod]
+    public void EveryActionIsTriedInOrderAndThePersonIsToldBeforeEach()
+    {
+        var actions = new StandInActions { Chosen = [Path.Combine(_root, ChosenName)] };
+        (PlatformCheckOutcomes outcomes, List<string> said) = Run(actions, Target());
+
+        CollectionAssert.AreEqual(
+            new[] { "say: " + PlatformCheck.DialogNotice, "dialog", "say: " + PlatformCheck.LauncherNotice, "launch https://example.org/", "say: " + PlatformCheck.RestartNotice, "start PaperRoute.Desktop --self-check", "wait", "say: " + PlatformCheck.DoneNotice },
+            actions.Log,
+            string.Join(Environment.NewLine, actions.Log));
+        Assert.IsTrue(outcomes.Dialog.Tried && outcomes.Launcher.Tried && outcomes.Restart.Tried);
+        Assert.AreEqual(true, outcomes.Dialog.Ok);
+        Assert.AreEqual(1, outcomes.Dialog.ItemsChosen);
+        Assert.AreEqual(true, outcomes.Launcher.Ok);
+        Assert.AreEqual(true, outcomes.Restart.Ok);
+        Assert.AreEqual(0, outcomes.Restart.ExitCode);
+        Assert.AreEqual(false, outcomes.Restart.StoppedAfterLimit);
+        Assert.AreEqual("PaperRoute.Desktop", outcomes.Restart.Program);
+        Assert.IsTrue(actions.Disposed, "The started program is let go.");
+    }
+
+    [TestMethod]
+    [DataRow(0, "The file dialog opened and came back with nothing chosen (cancelled).")]
+    [DataRow(1, "The file dialog opened and came back with 1 item(s) chosen. Nothing chosen was opened or read.")]
+    [DataRow(2, "The file dialog opened and came back with 2 item(s) chosen. Nothing chosen was opened or read.")]
+    public void TheDialogCountsWhatCameBackAndKeepsNothingElse(int count, string detail)
+    {
+        var actions = new StandInActions
+        {
+            Chosen = [.. Enumerable.Range(0, count).Select(index => Path.Combine(_root, index + "-" + ChosenName))],
+        };
+        (PlatformCheckOutcomes outcomes, _) = Run(actions, Target());
+        Assert.IsTrue(outcomes.Dialog.Tried);
+        Assert.AreEqual(true, outcomes.Dialog.Ok);
+        Assert.AreEqual(count, outcomes.Dialog.ItemsChosen);
+        Assert.AreEqual(detail, outcomes.Dialog.Detail);
+        Assert.IsNull(outcomes.Dialog.ExceptionType);
+
+        string json = Json(outcomes);
+        Assert.DoesNotContain(ChosenName, json, "No chosen file's name is in the JSON.");
+        Assert.DoesNotContain(_root, json, "No chosen file's folder is in the JSON.");
+        Assert.DoesNotContain(JsonEncodedText.Encode(_root).ToString(), json, "No chosen file's folder is in the JSON, escaped either.");
+    }
+
+    [TestMethod]
+    public void ADialogThatThrowsOrIsMissingIsAnOutcome()
+    {
+        var throwing = new StandInActions { DialogError = new InvalidOperationException($"The portal refused {Path.Combine(_root, ChosenName)}.") };
+        (PlatformCheckOutcomes thrown, List<string> said) = Run(throwing, Target());
+        Assert.IsTrue(thrown.Dialog.Tried);
+        Assert.AreEqual(false, thrown.Dialog.Ok);
+        Assert.AreEqual("The file dialog failed.", thrown.Dialog.Detail);
+        Assert.AreEqual("System.InvalidOperationException", thrown.Dialog.ExceptionType);
+        Assert.IsTrue(thrown.Launcher.Tried && thrown.Restart.Tried, "The other actions are still tried.");
+        Assert.Contains(PlatformCheck.DialogNotice, said);
+
+        var none = new StandInActions { CanOpen = false };
+        (PlatformCheckOutcomes missing, List<string> saidNone) = Run(none, Target());
+        Assert.IsFalse(missing.Dialog.Tried);
+        Assert.AreEqual(false, missing.Dialog.Ok);
+        StringAssert.Contains(missing.Dialog.Detail, "StorageProvider.CanOpen is false");
+        Assert.DoesNotContain("dialog", none.Log, "No dialog was asked for.");
+        Assert.DoesNotContain(PlatformCheck.DialogNotice, saidNone, "The person is not told of a dialog that does not open.");
+        Assert.IsTrue(missing.Launcher.Tried && missing.Restart.Tried);
+    }
+
+    [TestMethod]
+    public void TheLauncherReportsWhatTheSystemSaid()
+    {
+        (PlatformCheckOutcomes opened, _) = Run(new StandInActions { Launched = true }, Target());
+        Assert.AreEqual(true, opened.Launcher.Ok);
+        Assert.AreEqual("The system reports that it opened https://example.org.", opened.Launcher.Detail);
+
+        (PlatformCheckOutcomes refused, _) = Run(new StandInActions { Launched = false }, Target());
+        Assert.IsTrue(refused.Launcher.Tried);
+        Assert.AreEqual(false, refused.Launcher.Ok);
+        Assert.AreEqual("The system reports that it could not open https://example.org.", refused.Launcher.Detail);
+
+        (PlatformCheckOutcomes thrown, _) = Run(new StandInActions { LaunchError = new NotSupportedException("No launcher here.") }, Target());
+        Assert.IsTrue(thrown.Launcher.Tried);
+        Assert.AreEqual(false, thrown.Launcher.Ok);
+        Assert.AreEqual("System.NotSupportedException", thrown.Launcher.ExceptionType);
+        Assert.AreEqual("No launcher here.", thrown.Launcher.ExceptionMessage);
+        Assert.IsTrue(thrown.Restart.Tried, "The restart is still tried.");
+    }
+
+    [TestMethod]
+    public void ARestartThatExitsIsJudgedByItsExitCode()
+    {
+        (PlatformCheckOutcomes passed, _) = Run(new StandInActions { ExitCode = 0 }, Target());
+        Assert.AreEqual(true, passed.Restart.Ok);
+        Assert.AreEqual(0, passed.Restart.ExitCode);
+        StringAssert.Contains(passed.Restart.Detail, "exited with code 0: its self-check passed.");
+
+        var failing = new StandInActions { ExitCode = 1 };
+        (PlatformCheckOutcomes failed, _) = Run(failing, Target());
+        Assert.IsTrue(failed.Restart.Tried);
+        Assert.AreEqual(false, failed.Restart.Ok);
+        Assert.AreEqual(1, failed.Restart.ExitCode);
+        Assert.AreEqual(false, failed.Restart.StoppedAfterLimit);
+        StringAssert.Contains(failed.Restart.Detail, "exited with code 1: it started, but its self-check did not pass.");
+        Assert.IsFalse(failing.Stopped, "A program that exited is not stopped.");
+    }
+
+    [TestMethod]
+    public void ARestartThatDoesNotExitWithinTheLimitIsStopped()
+    {
+        var hanging = new StandInActions { Exits = false };
+        (PlatformCheckOutcomes outcomes, _) = Run(hanging, Target(), TimeSpan.FromSeconds(90));
+        Assert.IsTrue(hanging.Stopped, "The second copy was stopped.");
+        Assert.AreEqual(TimeSpan.FromSeconds(90), hanging.WaitedFor, "The wait used the limit given.");
+        Assert.IsTrue(outcomes.Restart.Tried);
+        Assert.AreEqual(false, outcomes.Restart.Ok);
+        Assert.AreEqual(true, outcomes.Restart.StoppedAfterLimit);
+        Assert.IsNull(outcomes.Restart.ExitCode);
+        Assert.AreEqual("The second copy started from PaperRoute.Desktop did not exit within 90 s and was stopped.", outcomes.Restart.Detail);
+
+        using JsonDocument document = JsonDocument.Parse(Json(outcomes));
+        Assert.IsTrue(document.RootElement.GetProperty("restart").GetProperty("stoppedAfterLimit").GetBoolean());
+    }
+
+    [TestMethod]
+    public void ARestartThatCannotStartSaysWhyWithoutTheProgramsFolder()
+    {
+        string folder = Path.Combine(_root, "trial");
+        string program = Path.Combine(folder, "PaperRoute.Desktop");
+        var actions = new StandInActions
+        {
+            StartError = new Win32Exception(2, $"An error occurred trying to start process '{program}' with working directory '{_root}'. No such file or directory"),
+        };
+        var scrubber = new PrivacyScrubber(program, _root, null, null, null);
+        (PlatformCheckOutcomes outcomes, _) = Run(actions, RestartTarget.For(null, program), scrubber: scrubber);
+        Assert.IsTrue(outcomes.Restart.Tried);
+        Assert.AreEqual(false, outcomes.Restart.Ok);
+        Assert.AreEqual("The second copy could not be started from PaperRoute.Desktop.", outcomes.Restart.Detail);
+        Assert.AreEqual("System.ComponentModel.Win32Exception", outcomes.Restart.ExceptionType);
+        Assert.AreEqual(
+            "An error occurred trying to start process 'PaperRoute.Desktop' with working directory '<working folder>'. No such file or directory",
+            outcomes.Restart.ExceptionMessage);
+        Assert.AreEqual("PaperRoute.Desktop", outcomes.Restart.Program);
+
+        string json = Json(outcomes);
+        Assert.DoesNotContain(folder, json);
+        Assert.DoesNotContain(_root, json);
+        Assert.DoesNotContain(JsonEncodedText.Encode(_root).ToString(), json);
+    }
+
+    [TestMethod]
+    public void ARestartThroughTheDotnetHostIsNotTriedAndSaysSo()
+    {
+        var actions = new StandInActions();
+        (PlatformCheckOutcomes outcomes, List<string> said) = Run(actions, RestartTarget.For(null, "/usr/share/dotnet/dotnet"));
+        Assert.IsFalse(outcomes.Restart.Tried);
+        Assert.IsNull(outcomes.Restart.Ok);
+        StringAssert.Contains(outcomes.Restart.Detail, "dotnet host");
+        Assert.IsFalse(actions.Log.Any(item => item.StartsWith("start", StringComparison.Ordinal)), "Nothing was started.");
+        Assert.DoesNotContain(PlatformCheck.RestartNotice, said, "The person is not told of a restart that is not tried.");
+
+        using JsonDocument document = JsonDocument.Parse(Json(outcomes));
+        JsonElement restart = document.RootElement.GetProperty("restart");
+        Assert.IsFalse(restart.GetProperty("tried").GetBoolean());
+        Assert.AreEqual(JsonValueKind.Null, restart.GetProperty("ok").ValueKind);
+        Assert.IsFalse(restart.TryGetProperty("program", out _), "No program was started, so none is named.");
+    }
+
+    // ---- The JSON ----
+
+    [TestMethod]
+    public void TheJsonHoldsTheFactsAndEachOutcomeFieldByField()
+    {
+        var environment = new Dictionary<string, string?>
+        {
+            ["APPIMAGE"] = "/home/someone-secret/Apps/Trial.AppImage",
+            ["XDG_SESSION_TYPE"] = "wayland",
+            ["WAYLAND_DISPLAY"] = "wayland-secret-0",
+            ["DISPLAY"] = ":secret.9",
+        };
+        PlatformFacts facts = PlatformFacts.Read(name => environment.GetValueOrDefault(name), 1.25, "Dark", "NoPreference");
+        var actions = new StandInActions { Chosen = [ChosenName, "two.txt"], Launched = false, ExitCode = 1 };
+        (PlatformCheckOutcomes outcomes, _) = Run(actions, Target());
+        var report = new PlatformCheckReport { TakenAt = new DateTime(2026, 11, 21, 9, 30, 0), Facts = facts, Outcomes = outcomes };
+
+        string path = Path.Combine(_root, "platform.json");
+        report.WriteJson(path);
+        byte[] bytes = File.ReadAllBytes(path);
+        Assert.IsFalse(bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF, "No byte-order mark.");
+        string text = File.ReadAllText(path);
+        using JsonDocument document = JsonDocument.Parse(bytes);
+        JsonElement root = document.RootElement;
+
+        Assert.AreEqual("platform-check", root.GetProperty("mode").GetString());
+        Assert.AreEqual(1, root.GetProperty("formatVersion").GetInt32());
+        Assert.AreEqual("2026-11-21T09:30:00.0000000", root.GetProperty("takenAt").GetString());
+        Assert.AreEqual(System.Runtime.InteropServices.RuntimeInformation.OSDescription, root.GetProperty("operatingSystem").GetString());
+        Assert.AreEqual(System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier, root.GetProperty("runtimeIdentifier").GetString());
+        Assert.AreEqual(System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString(), root.GetProperty("processArchitecture").GetString());
+        Assert.IsTrue(root.GetProperty("appImageSet").GetBoolean());
+        Assert.AreEqual("wayland", root.GetProperty("xdgSessionType").GetString());
+        Assert.IsTrue(root.GetProperty("waylandDisplaySet").GetBoolean());
+        Assert.IsTrue(root.GetProperty("displaySet").GetBoolean());
+        Assert.AreEqual(1.25, root.GetProperty("renderScaling").GetDouble());
+        Assert.AreEqual("Dark", root.GetProperty("themeVariant").GetString());
+        Assert.AreEqual("NoPreference", root.GetProperty("contrastPreference").GetString());
+        Assert.IsFalse(root.TryGetProperty("error", out _), "No error when the check ran to its end.");
+
+        JsonElement dialog = root.GetProperty("fileDialog");
+        Assert.IsTrue(dialog.GetProperty("tried").GetBoolean());
+        Assert.IsTrue(dialog.GetProperty("ok").GetBoolean());
+        Assert.AreEqual(2, dialog.GetProperty("itemsChosen").GetInt32());
+        Assert.AreEqual("The file dialog opened and came back with 2 item(s) chosen. Nothing chosen was opened or read.", dialog.GetProperty("detail").GetString());
+        Assert.IsGreaterThanOrEqualTo(0, dialog.GetProperty("milliseconds").GetDouble());
+        Assert.IsFalse(dialog.TryGetProperty("exceptionType", out _));
+
+        JsonElement launcher = root.GetProperty("launcher");
+        Assert.IsTrue(launcher.GetProperty("tried").GetBoolean());
+        Assert.IsFalse(launcher.GetProperty("ok").GetBoolean());
+        Assert.AreEqual("The system reports that it could not open https://example.org.", launcher.GetProperty("detail").GetString());
+        Assert.IsGreaterThanOrEqualTo(0, launcher.GetProperty("milliseconds").GetDouble());
+
+        JsonElement restart = root.GetProperty("restart");
+        Assert.IsTrue(restart.GetProperty("tried").GetBoolean());
+        Assert.IsFalse(restart.GetProperty("ok").GetBoolean());
+        Assert.AreEqual(1, restart.GetProperty("exitCode").GetInt32());
+        Assert.IsFalse(restart.GetProperty("stoppedAfterLimit").GetBoolean());
+        Assert.AreEqual("PaperRoute.Desktop", restart.GetProperty("program").GetString());
+        Assert.AreEqual("process path", restart.GetProperty("startedFrom").GetString());
+
+        // Only whether the variables are set, never their values; no chosen file.
+        foreach (string secret in new[] { "someone-secret", "Trial.AppImage", "wayland-secret-0", ":secret.9", ChosenName, "two.txt" })
+        {
+            Assert.DoesNotContain(secret, text, secret);
+        }
+
+        // A check that broke names its error and has no outcomes.
+        var broken = new PlatformCheckReport { TakenAt = report.TakenAt, Facts = facts, Error = "InvalidOperationException: the load failed" };
+        using JsonDocument brokenDocument = JsonDocument.Parse(broken.ToJson());
+        Assert.AreEqual("InvalidOperationException: the load failed", brokenDocument.RootElement.GetProperty("error").GetString());
+        Assert.IsFalse(brokenDocument.RootElement.TryGetProperty("fileDialog", out _));
+
+        // No session type off Linux is written as null.
+        PlatformFacts bare = PlatformFacts.Read(_ => null, 1, "Light", "High");
+        using JsonDocument bareDocument = JsonDocument.Parse(new PlatformCheckReport { TakenAt = report.TakenAt, Facts = bare, Outcomes = outcomes }.ToJson());
+        Assert.AreEqual(JsonValueKind.Null, bareDocument.RootElement.GetProperty("xdgSessionType").ValueKind);
+        Assert.IsFalse(bareDocument.RootElement.GetProperty("appImageSet").GetBoolean());
+        Assert.IsFalse(bareDocument.RootElement.GetProperty("displaySet").GetBoolean());
+    }
+
+    [TestMethod]
+    public void TheScrubberTakesOutFoldersAndNames()
+    {
+        var scrubber = new PrivacyScrubber(
+            "/home/pat-example/Apps/Trial/PaperRoute.Desktop",
+            "/home/pat-example/Work",
+            "/home/pat-example",
+            "pat-example",
+            "pat-laptop-77");
+        Assert.AreEqual(
+            "Could not start 'PaperRoute.Desktop' in '<working folder>'; see <home>/.config on <computer> for <user>; also <program folder>/x.",
+            scrubber.Scrub("Could not start '/home/pat-example/Apps/Trial/PaperRoute.Desktop' in '/home/pat-example/Work'; see /home/pat-example/.config on PAT-LAPTOP-77 for pat-example; also /home/pat-example/Apps/Trial/x."));
+        Assert.AreEqual(string.Empty, scrubber.Scrub(null));
+
+        // This process's own names never reach a scrubbed message.
+        PrivacyScrubber here = PrivacyScrubber.ForThisProcess(Environment.ProcessPath);
+        string scrubbed = here.Scrub($"{Environment.MachineName} {Environment.UserName} {Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)}");
+        Assert.DoesNotContain(Environment.MachineName, scrubbed, StringComparison.OrdinalIgnoreCase);
+        if (Environment.UserName.Length >= 2)
+        {
+            Assert.DoesNotContain(Environment.UserName, scrubbed, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    // ---- In the trial's own window (headless) ----
+
+    // PlatformCheckWindow in the app's window over a library in memory, with
+    // stand-ins: the notice strip shows each sentence while its action runs,
+    // the same lines go to the output, the JSON is written, the window closes
+    // and the exit code is 0; a JSON that cannot be written gives 1.
+    [TestMethod]
+    public void TheWindowTellsThePersonWritesTheJsonAndCloses()
+    {
+        var session = new MemorySession([], Papers.Today);
+        string path = Path.Combine(_root, "platform.json");
+        (int code, List<string> shown, string output, bool closed) = Headless.Run(() =>
+        {
+            using BoardWindow board = BoardWindow.Show(session);
+            TextBlock notice = board.Window.FindControl<TextBlock>("NoticeText") ?? throw new AssertFailedException("No notice strip.");
+            var shown = new List<string>();
+            var actions = new StandInActions { Chosen = [ChosenName] };
+            actions.Seen = () => shown.Add(notice.Text ?? string.Empty);
+            bool closed = false;
+            board.Window.Closed += (_, _) => closed = true;
+            using var output = new StringWriter();
+            Task<int> run = PlatformCheckWindow.RunAsync(board.Window, board.Shell, path, actions, Target(),
+                new PrivacyScrubber(null, null, null, null, null), output, TimeSpan.FromSeconds(5), _ => null);
+            Dispatcher.UIThread.RunJobs();
+            Assert.IsTrue(run.IsCompleted, "With stand-ins that answer at once, the check ends at once.");
+            return (run.Result, shown, output.ToString(), closed);
+        });
+
+        Assert.AreEqual(0, code);
+        CollectionAssert.AreEqual(new[] { PlatformCheck.DialogNotice, PlatformCheck.LauncherNotice, PlatformCheck.RestartNotice }, shown,
+            "The notice strip showed each sentence while its action ran.");
+        CollectionAssert.AreEqual(
+            new[] { PlatformCheck.DialogNotice, PlatformCheck.LauncherNotice, PlatformCheck.RestartNotice, PlatformCheck.DoneNotice },
+            output.Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries));
+        Assert.IsTrue(closed, "The window was closed.");
+        using JsonDocument document = JsonDocument.Parse(File.ReadAllBytes(path));
+        Assert.AreEqual("platform-check", document.RootElement.GetProperty("mode").GetString());
+        Assert.IsTrue(document.RootElement.GetProperty("renderScaling").GetDouble() > 0, "The window's render scaling is read.");
+        Assert.DoesNotContain(ChosenName, File.ReadAllText(path));
+
+        // A folder that went away before the write: the check broke, exit 1.
+        string gone = Path.Combine(_root, "gone", "platform.json");
+        int failed = Headless.Run(() =>
+        {
+            using BoardWindow board = BoardWindow.Show(new MemorySession([], Papers.Today));
+            Task<int> run = PlatformCheckWindow.RunAsync(board.Window, board.Shell, gone, new StandInActions(), Target(),
+                new PrivacyScrubber(null, null, null, null, null), TextWriter.Null, TimeSpan.FromSeconds(5), _ => null);
+            Dispatcher.UIThread.RunJobs();
+            return run.IsCompleted ? run.Result : -1;
+        });
+        Assert.AreEqual(1, failed);
+        Assert.IsFalse(File.Exists(gone));
+    }
+
+    // ---- Helpers ----
+
+    private static RestartTarget Target() => RestartTarget.For(null, "/opt/trial/PaperRoute.Desktop");
+
+    // Runs the flow with no synchronization context: the stand-ins answer
+    // at once, so nothing waits.
+    private static (PlatformCheckOutcomes Outcomes, List<string> Said) Run(
+        StandInActions actions, RestartTarget target, TimeSpan? limit = null, PrivacyScrubber? scrubber = null)
+    {
+        var said = new List<string>();
+        var check = new PlatformCheck(actions, target, scrubber ?? new PrivacyScrubber(null, null, null, null, null), text =>
+        {
+            said.Add(text);
+            actions.Note("say: " + text);
+        }, limit ?? TimeSpan.FromSeconds(5));
+        PlatformCheckOutcomes outcomes = check.RunAsync().GetAwaiter().GetResult();
+        return (outcomes, said);
+    }
+
+    private static string Json(PlatformCheckOutcomes outcomes) => new PlatformCheckReport
+    {
+        TakenAt = new DateTime(2026, 11, 21),
+        Facts = PlatformFacts.Read(_ => null, 1, "Light", "NoPreference"),
+        Outcomes = outcomes,
+    }.ToJson();
+
+    // Stand-ins for the dialog, the launcher and the started program; each
+    // call is logged in order.
+    private sealed class StandInActions : IPlatformActions
+    {
+        public List<string> Log { get; } = [];
+
+        public bool CanOpen { get; init; } = true;
+
+        public IReadOnlyList<string> Chosen { get; init; } = [];
+
+        public Exception? DialogError { get; init; }
+
+        public bool Launched { get; init; } = true;
+
+        public Exception? LaunchError { get; init; }
+
+        public Exception? StartError { get; init; }
+
+        public bool Exits { get; init; } = true;
+
+        public int ExitCode { get; init; }
+
+        public bool Stopped { get; private set; }
+
+        public bool Disposed { get; private set; }
+
+        public TimeSpan WaitedFor { get; private set; }
+
+        // Called as each action runs (the window test reads the notice strip).
+        public Action? Seen { get; set; }
+
+        public bool CanOpenFileDialog => CanOpen;
+
+        public void Note(string item) => Log.Add(item);
+
+        public Task<IReadOnlyList<string>> OpenFileDialogAsync()
+        {
+            Add("dialog");
+            Seen?.Invoke();
+            return DialogError is null ? Task.FromResult(Chosen) : Task.FromException<IReadOnlyList<string>>(DialogError);
+        }
+
+        public Task<bool> LaunchAsync(Uri address)
+        {
+            Add("launch " + address.AbsoluteUri);
+            Seen?.Invoke();
+            return LaunchError is null ? Task.FromResult(Launched) : Task.FromException<bool>(LaunchError);
+        }
+
+        public IStartedProgram StartProgram(string fileName, IReadOnlyList<string> arguments)
+        {
+            Add("start " + RestartTarget.FileNameOf(fileName) + " " + string.Join(" ", arguments));
+            Seen?.Invoke();
+            if (StartError is not null)
+            {
+                throw StartError;
+            }
+
+            return new StandInProgram(this);
+        }
+
+        private void Add(string item) => Log.Add(item);
+
+        private sealed class StandInProgram(StandInActions owner) : IStartedProgram
+        {
+            public int ExitCode => owner.Exits ? owner.ExitCode : throw new InvalidOperationException("It has not exited.");
+
+            public Task<bool> WaitForExitAsync(TimeSpan limit)
+            {
+                owner.Add("wait");
+                owner.WaitedFor = limit;
+                return Task.FromResult(owner.Exits);
+            }
+
+            public void Stop()
+            {
+                owner.Add("stop");
+                owner.Stopped = true;
+            }
+
+            public void Dispose() => owner.Disposed = true;
+        }
+    }
+}

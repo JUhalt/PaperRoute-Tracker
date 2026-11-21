@@ -4,9 +4,11 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using PaperRoute.Desktop.Measurement;
+using PaperRoute.Desktop.Platform;
 using PaperRoute.Desktop.Styles;
 using PaperRoute.ViewModels;
 using PaperRoute.ViewModels.Board;
+using PaperRoute.ViewModels.Platform;
 using PaperRoute.ViewModels.Session;
 
 namespace PaperRoute.Desktop;
@@ -19,6 +21,7 @@ public partial class App : Application
     private readonly ILibrarySession? _session;
     private readonly string? _measureFile;
     private readonly string _daySource = string.Empty;
+    private readonly string? _platformCheckFile;
 
     public App()
     {
@@ -38,6 +41,23 @@ public partial class App : Application
         ArgumentException.ThrowIfNullOrWhiteSpace(measureFile);
         _measureFile = measureFile;
         _daySource = daySource ?? string.Empty;
+    }
+
+    // "--platform-check" (step 15): the app opens its window on the example,
+    // tries the system's file dialog, launcher and a restart once each
+    // (PlatformCheckWindow), writes the JSON to platformCheckFile and shuts
+    // down with the check's exit code. The bool only tells this constructor
+    // from the measurement's.
+    public App(ILibrarySession session, string platformCheckFile, bool platformCheck)
+        : this(session)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(platformCheckFile);
+        if (!platformCheck)
+        {
+            throw new ArgumentException("This constructor is for the platform check.", nameof(platformCheck));
+        }
+
+        _platformCheckFile = platformCheckFile;
     }
 
     // The shell over a session, made on the interface thread: the Board's
@@ -94,7 +114,58 @@ public partial class App : Application
             ShellViewModel? shell = _session is null ? null : CreateShell(_session);
             var window = new MainWindow { DataContext = shell };
             window.Activated += (_, _) => contrast.Refresh();
-            if (shell is not null)
+            if (shell is not null && _platformCheckFile is not null)
+            {
+                // The check loads the library once the window is open, then
+                // runs; closing the window before it ends stops the app with 1.
+                string file = _platformCheckFile;
+                bool finished = false;
+                bool shutDown = false;
+                desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+                window.Closed += (_, _) =>
+                {
+                    if (!finished && !shutDown)
+                    {
+                        Console.Error.WriteLine("The window was closed before the platform check finished; its JSON may be missing.");
+                        shutDown = true;
+                        desktop.Shutdown(1);
+                    }
+                };
+                window.Opened += async (_, _) =>
+                {
+                    int code = 1;
+                    try
+                    {
+                        string? appImage = Environment.GetEnvironmentVariable("APPIMAGE");
+                        RestartTarget restart = RestartTarget.For(appImage, Environment.ProcessPath);
+                        code = await PlatformCheckWindow.RunAsync(
+                            window,
+                            shell,
+                            file,
+                            new AvaloniaPlatformActions(window),
+                            restart,
+                            PrivacyScrubber.ForThisProcess(string.IsNullOrWhiteSpace(appImage) ? Environment.ProcessPath : appImage),
+                            Console.Out,
+                            PlatformCheck.DefaultRestartLimit,
+                            Environment.GetEnvironmentVariable,
+                            beforeClose: () => finished = true);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine("The platform check broke: " + ex.GetType().Name);
+                    }
+                    finally
+                    {
+                        finished = true;
+                        if (!shutDown)
+                        {
+                            shutDown = true;
+                            desktop.Shutdown(code);
+                        }
+                    }
+                };
+            }
+            else if (shell is not null)
             {
                 // The window shows "Loading…" first; the load starts once it is open.
                 window.Opened += (_, _) =>
