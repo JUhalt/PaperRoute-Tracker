@@ -37,6 +37,9 @@ public sealed class TagStripPanel : Panel
     private readonly Border _more;
     private readonly TextBlock _moreText;
     private readonly List<(Border Chip, TagViewModel Tag)> _chips = [];
+
+    // Every chip made, shown or not, in the order of Children.
+    private readonly List<Border> _made = [];
     private readonly List<(Control Chip, double X)> _placed = [];
     private bool _attached;
     private bool _pressed;
@@ -203,25 +206,94 @@ public sealed class TagStripPanel : Panel
         return _more.DesiredSize.Width;
     }
 
+    // Shows Tags with the chips the strip has made already, making more only
+    // when it has too few (a card view is given card after card as rows of N
+    // refill it). The chips are the first children, in order, then "+N"; a
+    // chip not needed now stays, hidden, between them and "+N" for a later
+    // card. When the new tags read and colour as the old ones, nothing is
+    // touched and nothing is measured again.
     private void Rebuild()
     {
-        foreach ((Border chip, _) in _chips)
+        IReadOnlyList<TagViewModel> tags = Tags ?? [];
+        if (ShowsAlready(tags))
         {
-            Children.Remove(chip);
+            for (int index = 0; index < tags.Count; index++)
+            {
+                _chips[index] = (_chips[index].Chip, tags[index]);
+            }
+
+            return;
         }
 
         _chips.Clear();
-        int at = 0;
-        foreach (TagViewModel tag in Tags ?? [])
+        for (int index = 0; index < tags.Count; index++)
         {
-            var chip = new Border { Child = new TextBlock { Text = tag.Text } };
-            chip.Classes.Add("tag");
-            chip.Classes.Add(tag.PaletteClass);
-            Children.Insert(at++, chip);
+            TagViewModel tag = tags[index];
+            Border chip;
+            if (index < _made.Count)
+            {
+                chip = _made[index];
+                var text = (TextBlock)chip.Child!;
+                if (!string.Equals(text.Text, tag.Text, StringComparison.Ordinal))
+                {
+                    text.Text = tag.Text;
+                }
+
+                SetPalette(chip, tag.PaletteClass);
+                chip.IsVisible = true;
+            }
+            else
+            {
+                chip = new Border { Child = new TextBlock { Text = tag.Text } };
+                chip.Classes.Add("tag");
+                chip.Classes.Add(tag.PaletteClass);
+                Children.Insert(_made.Count, chip);
+                _made.Add(chip);
+            }
+
             _chips.Add((chip, tag));
         }
 
+        for (int index = tags.Count; index < _made.Count; index++)
+        {
+            _made[index].IsVisible = false;
+        }
+
         InvalidateMeasure();
+    }
+
+    // Whether the chips shown are these tags already: the same texts in the
+    // same palettes, in order.
+    private bool ShowsAlready(IReadOnlyList<TagViewModel> tags)
+    {
+        if (tags.Count != _chips.Count)
+        {
+            return false;
+        }
+
+        for (int index = 0; index < tags.Count; index++)
+        {
+            Border chip = _chips[index].Chip;
+            if (!string.Equals(((TextBlock)chip.Child!).Text, tags[index].Text, StringComparison.Ordinal)
+                || !chip.Classes.Contains(tags[index].PaletteClass))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    // A chip's palette class, the one class of it that starts "tag-".
+    private static void SetPalette(Border chip, string palette)
+    {
+        if (chip.Classes.Contains(palette))
+        {
+            return;
+        }
+
+        chip.Classes.RemoveAll(chip.Classes.Where(name => name.StartsWith("tag-", StringComparison.Ordinal)).ToList());
+        chip.Classes.Add(palette);
     }
 
     // A kept card's tag colours follow the author library (CardViewModel.Refresh).
@@ -255,8 +327,7 @@ public sealed class TagStripPanel : Panel
         {
             if (ReferenceEquals(tag, sender))
             {
-                chip.Classes.RemoveAll(chip.Classes.Where(name => name.StartsWith("tag-", StringComparison.Ordinal)).ToList());
-                chip.Classes.Add(tag.PaletteClass);
+                SetPalette(chip, tag.PaletteClass);
             }
         }
     }

@@ -1264,6 +1264,107 @@ public sealed class CardViewTests : StorageCheckedTests
         }
     }
 
+    // The performance wave of 2026-11-21: a tag strip keeps its chips and
+    // refills them as its card view is given card after card (TagStripPanel).
+    // After each change that refills the card views of the 500 library's
+    // shown shelf (a scroll, a stage filter, a sort, a search by tag, the
+    // other shelf), every card view laid out there draws its own card: its
+    // title, stage and pill, and its own tags in their palettes with the "+N"
+    // that is left, under the name and tooltip of its own tags
+    // (CardParts.DrawnWrong). Under rows of N the changes must have given
+    // views a card with other tags, or nothing was put to the test.
+    [TestMethod]
+    public void EveryCardDrawsItsOwnTagsAfterItsViewIsRefilled()
+    {
+        using DiskLibrarySession session = OpenFiveHundred();
+        (List<string> wrong, List<string> facts, int retagged) = Headless.Run(() =>
+        {
+            using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
+            var wrong = new List<string>();
+            var facts = new List<string>();
+            int retagged = 0;
+            var last = new Dictionary<CardView, CardViewModel>(ReferenceEqualityComparer.Instance);
+            void Check(string name, Action change, string shelf)
+            {
+                change();
+                Dispatcher.UIThread.RunJobs();
+                board.Window.UpdateLayout();
+                Dispatcher.UIThread.RunJobs();
+                int looked = 0;
+                int given = 0;
+                int otherTags = 0;
+                foreach (CardView view in board.Cards(shelf))
+                {
+                    if (view.DataContext is not CardViewModel card || !view.IsEffectivelyVisible)
+                    {
+                        continue;
+                    }
+
+                    if (last.TryGetValue(view, out CardViewModel? before) && !ReferenceEquals(before, card))
+                    {
+                        given++;
+                        if (!before.Tags.Select(tag => tag.Text).SequenceEqual(card.Tags.Select(tag => tag.Text)))
+                        {
+                            otherTags++;
+                        }
+                    }
+
+                    last[view] = card;
+                    looked++;
+                    if (CardParts.DrawnWrong(view, card) is { } what)
+                    {
+                        wrong.Add($"{name}: the view of \"{card.Title}\" {what}");
+                    }
+                }
+
+                retagged += otherTags;
+                facts.Add($"{name}: {looked} card views looked at, {given} given another card, {otherTags} of those a card with other tags");
+            }
+
+            void ScrollTo(string shelf, double part)
+            {
+                ScrollViewer scroller = board.Shelf(shelf).FindControl<ScrollViewer>("Scroller")!;
+                scroller.Offset = new Vector(0, Math.Round(Math.Max(0, scroller.Extent.Height - scroller.Viewport.Height) * part));
+            }
+
+            // The tag most Pipeline cards carry: a search for it keeps some
+            // cards and drops others, so the views are given other cards.
+            string tag = board.Board.Shelves[0].Cards.SelectMany(card => card.Tags)
+                .GroupBy(found => found.Text, StringComparer.Ordinal)
+                .OrderByDescending(group => group.Count())
+                .ThenBy(group => group.Key, StringComparer.Ordinal)
+                .First().Key;
+
+            Check("as first shown", () => { }, "PipelineShelf");
+            Check("scrolled to the middle", () => ScrollTo("PipelineShelf", 0.5), "PipelineShelf");
+            Check("scrolled to the end", () => ScrollTo("PipelineShelf", 1), "PipelineShelf");
+            Check("stage filter to Submitted", () => board.Board.SelectedStageIndex = 3, "PipelineShelf");
+            Check("stage filter back to All stages", () => board.Board.SelectedStageIndex = 0, "PipelineShelf");
+            Check("another sort", () => board.Board.SelectedSortIndex = 1, "PipelineShelf");
+            Check("the first sort again", () => board.Board.SelectedSortIndex = 0, "PipelineShelf");
+            Check($"search \"{tag}\"", () => { board.Board.SearchText = tag; board.Board.Render(); }, "PipelineShelf");
+            Check("search cleared", () => { board.Board.SearchText = string.Empty; board.Board.Render(); }, "PipelineShelf");
+            Check("first switch to Published", () => board.Board.SelectedShelfIndex = 1, "PublishedShelf");
+            Check("Published scrolled to the middle", () => ScrollTo("PublishedShelf", 0.5), "PublishedShelf");
+            Check($"search \"{tag}\" on Published", () => { board.Board.SearchText = tag; board.Board.Render(); }, "PublishedShelf");
+            Check("back to Pipeline, still searched", () => board.Board.SelectedShelfIndex = 0, "PipelineShelf");
+            Check("search cleared on Pipeline", () => { board.Board.SearchText = string.Empty; board.Board.Render(); }, "PipelineShelf");
+            Check("Published again", () => board.Board.SelectedShelfIndex = 1, "PublishedShelf");
+            return (wrong, facts, retagged);
+        });
+
+        foreach (string fact in facts)
+        {
+            TestContext.WriteLine(fact);
+        }
+
+        Assert.IsEmpty(wrong, string.Join(Environment.NewLine, wrong));
+        if (ShelfLayout.UsesRows)
+        {
+            Assert.IsGreaterThan(0, retagged, "Rows of N: no card view was given a card with other tags, so no strip was refilled.");
+        }
+    }
+
     // A close-up of one shelf: cards of the Pipeline's stages from Idea to In
     // Press, and each tone of the status and journal lines side by side:
     // danger (overdue, rejected), warning (due soon, waiting, consider
@@ -1570,9 +1671,12 @@ internal static class CardParts
     }
 
     // What a card view draws that is not the card given (a recycled view that
-    // kept the previous manuscript's title, stage text or pill tone), or null
-    // when it draws that card. The automation id and the DataContext are
-    // bound apart from the texts drawn, so they alone cannot show this.
+    // kept the previous manuscript's title, stage text, pill tone or tags),
+    // or null when it draws that card. The automation id and the DataContext
+    // are bound apart from the texts drawn, so they alone cannot show this.
+    // The tag strip keeps its chips from card to card (TagStripPanel), so its
+    // chips are read as drawn; a strip that is not shown is not laid out and
+    // is only checked for what it was given.
     public static string? DrawnWrong(CardView view, CardViewModel card)
     {
         var wrong = new List<string>();
@@ -1596,6 +1700,85 @@ internal static class CardParts
         if (!view.Part<Border>("StagePill").Classes.Contains(card.StageClass))
         {
             wrong.Add($"has a pill without the class {card.StageClass}");
+        }
+
+        TagStripPanel strip = view.Part<TagStripPanel>("TagStrip");
+        if (!ReferenceEquals(strip.Tags, card.Tags))
+        {
+            wrong.Add("has a tag strip given another card's tags");
+        }
+        else if (strip.IsEffectivelyVisible && TagsDrawnWrong(strip, card.Tags) is { } tags)
+        {
+            wrong.Add(tags);
+        }
+
+        if ((AutomationProperties.GetName(strip) ?? string.Empty) != card.TagsName)
+        {
+            wrong.Add($"names its tags \"{AutomationProperties.GetName(strip)}\", not \"{card.TagsName}\"");
+        }
+
+        if ((ToolTip.GetTip(strip) as string) != card.TagStripToolTip)
+        {
+            wrong.Add($"has the tag tooltip \"{ToolTip.GetTip(strip)}\", not \"{card.TagStripToolTip}\"");
+        }
+
+        return wrong.Count == 0 ? null : string.Join("; ", wrong);
+    }
+
+    // What a laid-out tag strip draws that is not these tags, or null when it
+    // draws them: its chips are the first tags in order, each with its text
+    // and with its palette's class alone, then "+N" for the tags that did not
+    // fit (TagStripPanel.MeasureOverride: once one chip is placed, "+N" for
+    // the rest always fits, so only a strip too narrow for any chip may draw
+    // nothing for tags it has). A chip a refilled strip kept from another
+    // card, drawn or in the wrong colour, is named.
+    public static string? TagsDrawnWrong(TagStripPanel strip, IReadOnlyList<TagViewModel> tags)
+    {
+        static string TextOf(Border chip) => (chip.Child as TextBlock)?.Text ?? string.Empty;
+        List<Border> drawn = strip.Children.OfType<Border>()
+            .Where(chip => chip.IsVisible && chip.Bounds.Width > 0)
+            .ToList();
+        int chips = drawn.TakeWhile(chip => !chip.Classes.Contains(TagStripPanel.MoreClass)).Count();
+        var wrong = new List<string>();
+        if (chips > tags.Count)
+        {
+            wrong.Add($"draws {chips} tag chips for {tags.Count} tags ({string.Join(", ", drawn.Select(TextOf))})");
+        }
+
+        for (int index = 0; index < Math.Min(chips, tags.Count); index++)
+        {
+            Border chip = drawn[index];
+            if (TextOf(chip) != tags[index].Text)
+            {
+                wrong.Add($"draws the tag \"{TextOf(chip)}\" at place {index}, not \"{tags[index].Text}\"");
+            }
+
+            List<string> palettes = chip.Classes.Where(name => name.StartsWith("tag-", StringComparison.Ordinal)).ToList();
+            if (palettes.Count != 1 || palettes[0] != tags[index].PaletteClass)
+            {
+                wrong.Add($"draws the tag \"{TextOf(chip)}\" as \"{string.Join(" ", palettes)}\", not \"{tags[index].PaletteClass}\"");
+            }
+        }
+
+        List<Border> rest = drawn.Skip(chips).ToList();
+        int left = tags.Count - chips;
+        if (rest.Count > 1 || (rest.Count == 1 && left <= 0))
+        {
+            wrong.Add($"draws {rest.Count} chips after its tags ({string.Join(", ", rest.Select(TextOf))}) with {Math.Max(0, left)} tags left");
+        }
+        else if (rest.Count == 1 && TextOf(rest[0]) != "+" + left.ToString(CultureInfo.CurrentCulture))
+        {
+            wrong.Add($"draws \"{TextOf(rest[0])}\" for the {left} tags that did not fit");
+        }
+        else if (rest.Count == 0 && left > 0 && chips > 0)
+        {
+            wrong.Add($"draws no \"+{left}\" for the tags that did not fit");
+        }
+
+        List<string> texts = drawn.Select(TextOf).ToList();
+        if (!strip.ShownTexts.SequenceEqual(texts))
+        {
+            wrong.Add($"says it shows [{string.Join(", ", strip.ShownTexts)}] and draws [{string.Join(", ", texts)}]");
         }
 
         return wrong.Count == 0 ? null : string.Join("; ", wrong);
