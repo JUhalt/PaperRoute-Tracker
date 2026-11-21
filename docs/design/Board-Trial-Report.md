@@ -1,21 +1,21 @@
 # Board trial report
 
-Draft of November 20, 2026, brought up to date on November 21, 2026. Two pieces of work have merged since: the platform check mode and the Linux checklist (step 15, #402), and the first change for a cheaper card (#403). Five things wait for a person: the look of the Board on a real Windows contrast theme (step 11); the Narrator pass (step 17); the first real run of `--platform-check` on Windows; the Linux checklist on a real Ubuntu machine; and the maintainer's own hours, which the second estimate of k needs (section 2.3). Section 10 lists the decisions that wait for the maintainer.
+Draft of November 20, 2026, brought up to date on November 21, 2026. Two pieces of work have merged since: the platform check mode and the Linux checklist (step 15, #402), and the first change for a cheaper card (#403). A third piece, a hidden shelf that waits for its rows, is built, tested and measured headless but not merged: it waits as draft #404, and master does not have it (section 4.7). Five things wait for a person: the look of the Board on a real Windows contrast theme (step 11); the Narrator pass (step 17); the first real run of `--platform-check` on Windows; the Linux checklist on a real Ubuntu machine; and the maintainer's own hours, which the second estimate of k needs (section 2.3). Section 10 lists the decisions that wait for the maintainer.
 
 ## Summary
 
-- **What was built.** The Board of PaperRoute Tracker, ported to Avalonia 12.1.6 in C# over the unchanged Visual Basic core, beside the Windows Forms app. It has shelves and cards, search, the stage and sort boxes, the Needs Attention chips, arrow keys, Light, Dark and high contrast, a read-only copy of a library folder (`--snapshot-from`) and a measuring mode (`--measure`). Since the first draft it also has a platform check mode (`--platform-check`) with a checklist for one person on Ubuntu (#402), and a tag strip that keeps and refills its chips (#403). 236 headless tests pass on Windows and on Ubuntu (CI run 44925677319, #403's head f51b5e2, 2026-11-21); at the first draft it was 181 (CI run 44703237752).
+- **What was built.** The Board of PaperRoute Tracker, ported to Avalonia 12.1.6 in C# over the unchanged Visual Basic core, beside the Windows Forms app. It has shelves and cards, search, the stage and sort boxes, the Needs Attention chips, arrow keys, Light, Dark and high contrast, a read-only copy of a library folder (`--snapshot-from`) and a measuring mode (`--measure`). Since the first draft it also has a platform check mode (`--platform-check`) with a checklist for one person on Ubuntu (#402), and a tag strip that keeps and refills its chips (#403). On master, 236 headless tests pass on Windows and on Ubuntu (CI run 44925677319, #403's head f51b5e2, 2026-11-21); at the first draft it was 181 (CI run 44703237752). The branch of draft #404 has 245 (section 4.7).
 - **Finding 1.** The C# interface over the VB core works. Compiled bindings reach VB core types, and no build error that crossed the VB/C# line is recorded in any trial pull request or in the notes.
 - **Finding 2.** A card view is expensive: about 14 ms each for the first cards a process shows, and about 7 ms once warm (section 4.5). Drawing every card misses the budgets by far. Any long list in the full port must be virtualized from the start. The first change aimed at the card, a tag strip that keeps its chips (#403), lowered the search keystroke in every paired run on 2026-11-21. It made no measurable difference to a card's cost: the time saved in giving a reused card view its new manuscript was spent again in laying the view out (section 4.6).
-- **Finding 3.** The hours are small against the plan: 6.3 recorded hours in the push, Board work about 3.5 hours. (The 4.8 hours recorded for #402 and #403 on 2026-11-21 are listed apart, section 2.4.) But they are wall-clock hours, nearly all of unattended agent sessions, not a person's working hours. So k (0.06 to 0.20; k is the factor that scales the plan's unit sizes, section 2.3) describes this way of working. It is not a forecast of calendar time.
+- **Finding 3.** The hours are small against the plan: 6.3 recorded hours in the push, Board work about 3.5 hours. (The 4.8 hours recorded for #402 and #403 on 2026-11-21, and the 1.0 hour of draft #404 the same day, are listed apart, section 2.4.) But they are wall-clock hours, nearly all of unattended agent sessions, not a person's working hours. So k (0.06 to 0.20; k is the factor that scales the plan's unit sizes, section 2.3) describes this way of working. It is not a forecast of calendar time.
 - **Finding 4.** Avalonia needed help in places the design did not expect: the open-list keys of the boxes, Tab between cards under rows of N, and reuse of virtualized rows. As the design foresaw, Fluent's menus, scroll bars and tooltips also need control themes for contrast.
 - **Choice made.** Rows of N is the default. (Rows of N: the shelf makes only the rows of cards on screen and reuses them as you scroll.) It was chosen at step 13 from the headless numbers. The real-window run, taken afterwards, confirms it: drawing every card went over the budget on all four rows that the design's rule uses to decide (section 4.3).
 - **Finding 5.** Timings taken on a busy PC can mislead. The first gain reported for the tag strip change was taken while other work loaded the PC, with the two builds measured at different times. A reviewer could not reproduce it. Only runs of the two builds in turn, on a quiet PC, separated the code from the load (section 8).
-- **What waits.** Two budget rows are still over in a real window (first switch to Published, search keystroke); the report-only row, process start to Board (2,055 ms on 2026-11-20), is also over 1,500. On 2026-11-21, with the tag strip change and the PC in use, the search keystroke was 93 ms against 50 and the first switch 305 ms against 100 (section 4.6). The contrast look, the Narrator pass, the maintainer's hours, the Linux checklist on a real machine and the first real runs of `--platform-check` all need a person.
+- **What waits.** Two budget rows are still over in a real window (first switch to Published, search keystroke); the report-only row, process start to Board (2,055 ms on 2026-11-20), is also over 1,500. On 2026-11-21, with the tag strip change and the PC in use, the search keystroke was 93 ms against 50 and the first switch 305 ms against 100 (section 4.6). These are rows of the measured sequence. It has no row for a key typed right after another shelf was shown. In a reviewer's scratch test of that case (headless, not repeated, not in the repository) a key cost 183.5 ms at the median on master's code (section 4.7). The next change for the keystroke, a hidden shelf that waits for its rows, is built and waits as draft #404, not merged: in the measured sequence it did not lower the keystroke by more than the noise; in that scratch test it did (decision 4a). The contrast look, the Narrator pass, the maintainer's hours, the Linux checklist on a real machine and the first real runs of `--platform-check` all need a person.
 
 ## 1. What the trial built
 
-Steps are those of design section 8. Every pull request named here is merged, except this report's own (#400, a draft). #399 (steps 11 to 13) merged on November 20, 2026, after this report's numbers were taken from its head, 44d62e0. On November 21, 2026, #402 (step 15) merged as 294a120, and #403 (the first change for a cheaper card, work after step 13 that design section 8 did not list) merged after it as e3cfae6.
+Steps are those of design section 8. Every pull request named here is merged, except two drafts: this report's own (#400) and the hidden shelf that waits for its rows (#404, section 4.7). #399 (steps 11 to 13) merged on November 20, 2026, after this report's numbers were taken from its head, 44d62e0. On November 21, 2026, #402 (step 15) merged as 294a120, and #403 (the first change for a cheaper card, work after step 13 that design section 8 did not list) merged after it as e3cfae6.
 
 | Step | What | State | Pull request |
 |---:|---|---|---|
@@ -29,7 +29,7 @@ Steps are those of design section 8. Every pull request named here is merged, ex
 | 11b | `--snapshot-from` | Built; Linux path fix in 44d62e0 | #399 |
 | 12 | Pictures, budgets, `--measure` | Built. Four budget rows wait under rows of N. | #399 |
 | 13 | Rows of N behind a constant | Built; it is the default (`ShelfLayout.Option = "b"`; `-p:ShelfOption=a` builds every card) | #399 |
-| after 13 | A cheaper card: change 1 of section 4.5, and tests that hold the accessibility tree, the Tab order and each reused card's tags | Built: the tag strip keeps and refills its chips. One more attempt was tried and dropped, change 2 is written and not built, changes 3 and 4 are not started (section 4.6). | #403 |
+| after 13 | A cheaper card: change 1 of section 4.5, and tests that hold the accessibility tree, the Tab order and each reused card's tags | Built: the tag strip keeps and refills its chips. One more attempt was tried and dropped (section 4.6). Change 2, a hidden shelf that waits for its rows, is built, tested and measured headless, and waits, not merged and not in master, as draft #404 (section 4.7). Changes 3 and 4 are not started. | #403; #404 (draft) |
 | 14 | `--snapshot` of the real library | Not built. The argument is refused with exit code 2. Waits for the maintainer's word. | none |
 | 15 | `--platform-check` and the `trial-linux` CI job | CI job done (#398). `--platform-check` and `docs/design/Board-Trial-Linux-Checklist.md` built (#402). The mode has never run with a real dialog and launcher, on Windows or on Linux; the checklist has never been worked through (section 7). | #398, #402 |
 | 16 | Spikes | Working copy done. VB `.axaml` done as a throwaway folder outside the repository, never committed. | #393 |
@@ -143,7 +143,7 @@ For the maintainer: please log your hours in comments on #160, per part and per 
 
 ### 2.4 Hours recorded after the table (2026-11-21)
 
-The table of 2.2 and the figures of 2.3 stay as they were: they are the push's. The hours below were recorded on 2026-11-21 for #402 and #403. B, f and k are not recomputed with them.
+The table of 2.2 and the figures of 2.3 stay as they were: they are the push's. The hours below were recorded on 2026-11-21 for #402 and #403, and later that day for draft #404 (at the end of this section). B, f and k are not recomputed with them.
 
 Source: `git log` of the two pull requests' branches (`v11/board-trial-platform-check`, `v11/board-trial-card-cost`). Unlike the push's, these trailers name a part, for example "(shell)". The part in the table was still assigned from the changed files (`git show --stat`), as 2.1 says; it agrees with the trailer except where noted.
 
@@ -178,7 +178,32 @@ The two workflows ran on the same PC. Reviewers are never in a trailer. The seco
 
 What these hours would change in the calibration. B counts Board hours against the Board checklist of 2.3. #402's hours are shell and Linux work, which 2.3 does not count in B. #403's board hours went to the "500 library within budget" item, which is still not done, since the same rows still wait (section 4.6). So, if they were added, B would grow and f would not, and k would rise. 2.3 does not say whether hours spent after the calibration's figures were taken belong in it; that is decision 5c.
 
-For the maintainer: when you log hours on #160, include reviewing #402, #403 and this report (#400).
+**Draft #404, the hidden shelf that waits for its rows (2026-11-21, afternoon).** Source: `git log` of branch `v11/board-trial-hidden-shelf` (f51b5e2..b89f432), and the workflow's record of its four agents. The branch is not merged, so these hours are of work that master does not have.
+
+| Commit | Trial-Hours | Part from the changed files | Note |
+|---|---:|---|---|
+| 6824f98 | 0.5 | board (with Board tests) | the change: `ShelfViewModel.cs`, `BoardViewModel.cs`, `ShelfView.axaml.cs` and `HiddenShelfTests.cs`; the trailer says board |
+| 3b6e801 | 0.1 | measure (with Board tests) | the new row in `BoardMeasurement.cs` and its checks in `BoardBudgetTests.cs`; the trailer says board |
+| b89f432 | 0.4 | board (Board tests) and measure | the fixer's: a test's stage step and the new row's checks and texts; the trailer says board |
+| **Total** | **1.0** | | 3 commits with a trailer, each saying board |
+
+The three commits were made by one workflow of four agents. It ran from 11:51 to 13:23 on 2026-11-21 (5,525 seconds on the clock), and the two reviewers ran side by side.
+
+| Agent | Minutes | In a trailer? |
+|---|---:|---|
+| Implementer (6824f98, 3b6e801) | 32.6 | yes, 0.6 h against 0.54 h |
+| Reviewer of the keyboard and of stale readers | 27.3 | never |
+| Reviewer of the numbers and the logic | 36.8 | never |
+| Fixer (b89f432) | 22.6 | yes, 0.4 h against 0.38 h |
+| **All four** | **119.3 (1.99 h)** | |
+
+The four agents used 625,393 tokens and 197 tool calls. The orchestrating session's own time on #404 is not measured.
+
+Like #403's, these hours went to the "500 library within budget" item of 2.3, which is still not done. Whether they belong in B is part of decision 5c.
+
+This report's update for #404 (the commit that adds section 4.7) carries its own trailer, marked docs, like the report's earlier commits. It is in none of these tables.
+
+For the maintainer: when you log hours on #160, include reviewing #402, #403, draft #404 and this report (#400).
 
 ## 3. The plan's six questions (design 7.2)
 
@@ -213,7 +238,7 @@ Pass mark of design 6.1: met. The Release run and CI pass; all four checks of ru
 
 **The enforced budget rows can fail on a busy PC.** Locally in Release they are held at the budget with no multiplier, as today's `ResponsivenessBudgetTests` are. On 2026-11-20, every full local run on the quiet development PC passed (two at 03:25 and 03:30, and the ten above). Two full runs made between them, while other agent work was using the PC, each failed one enforced row: back to All stages at 257 ms against 250 (the run that ended at 04:03), and the open list at 329 ms against 250 (the run that ended at 04:08). Each time the budget tests passed when run alone a minute later. Those two runs were on core stage 2 branches merged with master, so they also had a different core. A third full run, on the branch that holds all of core stage 2 and made once the other work had ended, passed all 181 (it ended at 04:11). So the failures followed the load: the same core passed once the PC was quiet. No run separated the two directly. CI holds the rows at three times the budget and passed with room (section 4.1).
 
-The same was seen on 2026-11-21. #402's local run failed one enforced row (back to All stages, 290 ms against 250) while another build and test run was using the PC (#402's description). During the #403 work a reviewer saw the two enforced rows fail at 265 to 379 ms under heavy load, and every run of them on a quiet PC passed, ten for each build (the fixer agent's record). The full local suite then passed 236 of 236 in Release, timing rows included, once master had been merged into #403's branch (the development PC, 2026-11-21 11:27 to 11:30, the tree committed as f51b5e2). The every-card build (`-p:ShelfOption=a`) also passed 236 of 236, in Debug (11:37 to 11:41).
+The same was seen on 2026-11-21. #402's local run failed one enforced row (back to All stages, 290 ms against 250) while another build and test run was using the PC (#402's description). During the #403 work a reviewer saw the two enforced rows fail at 265 to 379 ms under heavy load, and every run of them on a quiet PC passed, ten for each build (the fixer agent's record). The full local suite then passed 236 of 236 in Release, timing rows included, once master had been merged into #403's branch (the development PC, 2026-11-21 11:27 to 11:30, the tree committed as f51b5e2). The every-card build (`-p:ShelfOption=a`) also passed 236 of 236, in Debug (11:37 to 11:41). These are master's tests. The branch of draft #404, not merged, adds 9 and passed 245 of 245 the same afternoon (section 4.7); its CI had not finished when this was written.
 
 ### 3.4 The working-copy spike
 
@@ -238,7 +263,7 @@ See section 4.
 
 ### 4.1 The comparison
 
-The tables of sections 4.1 to 4.4 are the record of 2026-11-20 (the Windows Forms column excepted, which is of 2026-11-14). The figures of 2026-11-21, before and after the tag strip change, are in section 4.6. Its real-window figures were taken with the PC in use. Neither of its tables is compared with these.
+The tables of sections 4.1 to 4.4 are the record of 2026-11-20 (the Windows Forms column excepted, which is of 2026-11-14). The figures of 2026-11-21, before and after the tag strip change, are in section 4.6; the headless figures of the hidden-shelf change (draft #404, not merged) are in section 4.7. Section 4.6's real-window figures were taken with the PC in use. Neither of its tables is compared with these.
 
 UI ms: the longest stall of the interface thread during the action. Medians for the headless (5 runs) and real-window (3 runs) columns; the Windows Forms column and the CI table are single runs. Budgets from design 6.3.
 
@@ -324,11 +349,11 @@ The waiting list is compiled into the build (`BoardMeasurement.s_waitingUnderRow
 
 The cause is the cost of a card view: about 3 ms to make and about 12 ms to attach and lay out the first time (#399), about 15 ms in all. The code comment beside the same headless numbers says about 16 ms each (`PaperRoute.Desktop/Measurement/BoardMeasurement.cs:105`). Even the 21 views on one screen exceed a 100 ms switch and a 50 ms keystroke. Section 4.5 shows that these are figures for the first cards of a process; warm, a card costs about 7 ms.
 
-What could bring them in (from #399 and the workflow records). None was built when this list was first written; the state on 2026-11-21 is in brackets, and section 4.6 has the details:
+What could bring them in (from #399 and the workflow records). None was built when this list was first written; the state on 2026-11-21 is in brackets, and sections 4.6 and 4.7 have the details:
 - make a card view cheaper: a flatter tree, fewer bindings, menus built later [one part built: the tag strip keeps its chips (#403); the lighter buttons and the route dots as one control are not started];
 - prepare the hidden Published shelf while idle, as today's app does [not built];
 - draw only the first screen at startup, as today's app does [not built];
-- defer the hidden shelf's card updates until it is shown (today a shelf shown once rebinds its 21 views on every search or stage change) [written with tests, not built or run];
+- defer the hidden shelf's card updates until it is shown (today a shelf shown once rebinds its 21 views on every search or stage change) [built and measured headless; not merged and not in master: it waits as draft #404 (section 4.7)];
 - for the scroll, cheaper reuse of card views (inferred; no source names a fix) [not built; the tag strip change did not make reuse cheaper per card].
 
 One more was tried on 2026-11-21 and dropped: making fewer rows at a shelf's first show (section 4.6).
@@ -358,11 +383,11 @@ Not separable from noise (about 0.3 ms either way on a median): the tooltips, th
 
 **What this means for the two rows still over.**
 - *First switch to Published.* It makes about 21 card views. Even warm, 21 views at about 7 ms are about 147 ms in these headless probes, against a budget of 100. So a cheaper card alone will probably not bring this row in. It also needs fewer views made at the switch, views made earlier, or a different budget. How much of the row is first-use cost, and how much is the shelf's own first show, was not measured.
-- *Search keystroke.* The views of the shown shelf get new cards, and so do those of a hidden shelf that was shown before. At about 2 ms per reused view that is about 40 ms for each shelf of 21 views in these probes. The tag strip and the hidden shelf are the two targets for this row. These are estimates from the per-view figures, not measurements of the row.
+- *Search keystroke.* The views of the shown shelf get new cards, and so do those of a hidden shelf that was shown before. At about 2 ms per reused view that is about 40 ms for each shelf of 21 views in these probes. The tag strip and the hidden shelf are the two targets for this row. These are estimates from the per-view figures, not measurements of the row. They are the estimates of 2026-11-20; what was measured on 2026-11-21, once the hidden-shelf change was built, is in section 4.7.
 
-**Changes the numbers support, in order.** None was built when this was written (2026-11-20); the state on 2026-11-21 is in brackets (section 4.6). Every saving below comes from removing a part, so it is the most a change could save. A real replacement must keep the keyboard focus, the accessible roles, the commands and the styles, and will save less.
+**Changes the numbers support, in order.** None was built when this was written (2026-11-20); the state on 2026-11-21 is in brackets (sections 4.6 and 4.7). Every saving below comes from removing a part, so it is the most a change could save. A real replacement must keep the keyboard focus, the accessible roles, the commands and the styles, and will save less.
 1. Rework the tag strip's update: keep and refill its chips, or skip the rebuild when the tags are the same. Up to about 1 ms per reused view. [Built (#403). Per card it saved nothing measurable.]
-2. Do not give a hidden shelf's views new cards until the shelf is shown. [Written with tests; not built, run or measured.]
+2. Do not give a hidden shelf's views new cards until the shelf is shown. [Built, tested and measured headless (section 4.7); not merged, it waits as draft #404. In the measured sequence the search keystroke did not gain by more than the noise.]
 3. One lighter control for the title, ⋯ and View route, in place of three Fluent buttons. Up to 2.2 ms per first show; 1.1 to 1.3 measured for a plain swap. [Not started.]
 4. Draw the route dots as one small control. Up to about 1 ms per first show. [Not started. It would take unnamed elements out of the accessibility tree; decision 13.]
 5. Pay the first-use costs before the first switch, for example by compiling ahead of time (ReadyToRun) or by making one hidden card at startup. The first cards cost about twice the warm ones. A warm-up moves that cost earlier; it does not remove it. [Not started.]
@@ -415,13 +440,74 @@ These headless figures are of 2026-11-21 and are not compared with the headless 
 
 **Tried during the #403 work and not taken** (#403's description and the workflow's records):
 - **Fewer rows made at a first show.** The shelf normally makes some rows beyond the visible part, ready for scrolling. The change made none of those extra rows at first and added them after the first frame. It made 15 card views at the first switch in place of 21. It was dropped for four reasons. The scroll bar's thumb was 3 pixels shorter in the narrow picture. A shelf hidden again at once made its extra rows during its next switch, so the cost moved instead of going away. It read four private members of Avalonia by reflection. And it changed how the row is timed as well as what is timed, so its gain was not shown. A reviewer ran five headless runs of each, one after another, while the load on the PC varied. The first-switch median was 397 ms with the change and 453 with only its change to the timing, both on #403's head 493f9aa. At fb3301f, which had neither and no tag strip change either, it was 640; #403's head alone, measured earlier, gave 691. The ranges overlap. Its tree test also checked the tree after idle frames, not as first shown. It stays as a patch on the development PC.
-- **A hidden shelf waits for its rows** (section 4.5, change 2): written, with tests, but not built, run or measured, for lack of time. The draft stays on the development PC.
+- **A hidden shelf waits for its rows** (section 4.5, change 2): written, with tests, but not built, run or measured during the #403 work, for lack of time. It was finished, built and measured afterwards, on the afternoon of 2026-11-21, and waits as draft #404, not merged (section 4.7).
 - **A lighter look for the three buttons** (change 3): not started.
 - **The route dots as one control** (change 4): not started. It would take five unnamed elements a card out of the accessibility tree, and the rule set for the #403 work, not by the design, was that the tree does not change (decision 13).
 
 **What this means for the two rows still over.**
-- *Search keystroke.* One change is built and lowered it: in 5 of 5 real-window pairs and 10 of 10 headless pairs, with the ranges overlapping. It is still over: 93 ms against 50 in the real window, 85 headless. One more change for this row (change 2, the hidden shelf) is written and not built.
+- *Search keystroke.* One change is built and lowered it: in 5 of 5 real-window pairs and 10 of 10 headless pairs, with the ranges overlapping. It is still over: 93 ms against 50 in the real window, 85 headless. These figures are of the measured sequence of design 6.3, in which the search keystroke comes after the stage rows, not right after another shelf was shown. That sequence has no row for a key typed right after another shelf was shown. A reviewer's scratch test of that case, made later on 2026-11-21 (headless, not repeated, not in the repository), read 183.5 ms at the median (117 to 314) on master's code, against 90 for the measured sequence's row in the same afternoon's pairs (section 4.7). It has no real-window figure. One more change for this row (change 2, the hidden shelf) has since been built and measured headless: in the measured sequence it did not lower the row by more than the noise. It waits as draft #404, not merged (section 4.7).
 - *First switch to Published.* Nothing built changes it: 2 of 5 real-window pairs and 7 of 10 headless pairs, not separable from noise. The one attempt aimed at it (fewer rows at a first show) was dropped, and its gain was not shown.
+
+### 4.7 A hidden shelf that waits for its rows: built, measured, not merged (2026-11-21)
+
+This is change 2 of section 4.5, written during the #403 work and not built then (4.6). On the afternoon of 2026-11-21 a workflow of four agents (an implementer, two reviewers, a fixer; 11:51 to 13:23) finished it, built it, tested it, reviewed it and measured it. It waits as draft pull request #404 (branch `v11/board-trial-hidden-shelf`, base f51b5e2, head b89f432). **It is not merged and not in master.** Master is still e3cfae6, whose tree is the same as f51b5e2's. The build the maintainer tests by hand does not have this change, and every figure of 4.1 to 4.6 that describes master still stands.
+
+**Why it is not merged.** The rule for this line of work is that a change is merged only when it is shown to help by more than the noise. In the measured sequence of design 6.3, the search keystroke, the row the change was written for, did not gain by more than the noise. In a reviewer's scratch test of another sequence it did (below). The measurement that would settle it is not built (decision 4a). The orchestrating session stopped there so that the maintainer's test by hand is not held up.
+
+**What it changes.** Under rows of N, a shelf that was shown once and is hidden again no longer refills its rows on every render (a search keystroke, a stage or sort change, a library change). The render marks its rows as waiting. They are brought to its cards as the shelf is shown again, before the tab change reaches a binding or the layout, so no card of an earlier render is drawn. Its cards, tab text, tab count and empty message still change at once. A shelf never shown, and the every-card build, behave as before. Three readers in `ShelfView` that could run on a hidden shelf now return nothing instead of another card's view. A new report-only row, `switch-published-after-hidden-change` (the switch to Published after a search made while it was hidden), is timed last in the measured sequence, after the scroll row, so no earlier row's conditions change.
+
+**What was checked** (the agents' results in the workflow's record; #404's description):
+- 245 of 245 tests pass at b89f432's tree on the development PC in Release: the 236 from before and 9 new ones in `HiddenShelfTests`. The every-card build (Debug, `-p:ShelfOption=a`) passed 245 of 245 at 3b6e801 and again at b89f432. The accessibility tree tests pass with their expected files untouched. These counts are of the branch; master's stays 236.
+- All 31 pictures are the same bytes as at f51b5e2 (SHA-256 per file), at 3b6e801 and again at b89f432's tree.
+- A reviewer broke the change on purpose: with waiting rows never brought current at the show, 8 of the 9 new tests fail, and a scratch test of 18 ways back to a shelf finds a wrong card at the first layout in 10 of them. At 3b6e801 the same scratch test finds none in 18, and each shelf's first frame after a switch is pixel for pixel its settled frame. With the change reverted, 1 of the 9 fails (only the check that the rows waited); the other 8 hold behaviour that must stay the same.
+- The two reviewers made 8 findings. Three went to the fixer. It acted on one (a test's stage step had checked only an empty shelf), partly on one (the new row's checks and texts), and left one for the orchestrating session: the must-fix, that the gain is not shown in the measured sequence.
+- #404's CI had not finished when this was written.
+
+**Measured.** All headless, Release, the 500 test library, the budget test alone, on the development PC with other programs running. The runs are the reviewer of the numbers' (its result in the workflow's record). "Before" is f51b5e2 (master's tree); "after" is 3b6e801, whose product code is that of b89f432 (the fixer changed only a test and the new row's checks and texts). Alternating pairs as in 4.6. UI ms, median (lowest to highest). These figures are of 2026-11-21 and are not compared with any of 2026-11-20.
+
+Ten alternating pairs:
+
+| Row | Budget | Before | After | After lower in | Reading |
+|---|---:|---:|---:|---|---|
+| Search keystroke | 50 | **90** (77 to 229) | **94.5** (72 to 178) | 6 of 10 | not separable |
+| Stage filter to Submitted | 250 | 155 (130 to 506) | 104 (77 to 203) | 9 of 10 | lower |
+| Back to All stages | 250 | 81.5 (61 to 404) | 89.5 (59 to 218) | 4 of 10 | not separable |
+| Open list stepped and closed | 250 | 68.5 (58 to 318) | 73 (56 to 153) | 4 of 10 | not separable |
+| First switch to Published | 100 | **295.5** (251 to 854) | **281.5** (234 to 398) | 6 of 10 | not separable |
+| Switch back to Pipeline (report-only) | 100 | 2 (2 to 5) | 2 (2 to 5) | 3 of 10 | not separable |
+| Render, no card changes | 250 | 6 (5 to 16) | 6 (4 to 16) | 4 of 10 | not separable |
+| Published scroll, longest step | 250 | **319** (254 to 597) | **316** (278 to 523) | 5 of 10 | not separable |
+| Warm startup | 1,500 | 324 (281 to 723) | 344 (273 to 455) | 4 of 10 | not separable |
+| A search that hides 64 of the Pipeline's cards (report-only) | 250 | 99.5 (67 to 180) | 59.5 (43 to 170) | 10 of 10 | lower; not expected; why was not measured |
+| The same for 65 cards, threshold moved so there is no reset (report-only) | 250 | 48.5 (39 to 124) | 33.5 (27 to 75) | 9 of 10 | lower; why was not measured |
+
+Bold: over budget at the median. The last two rows belong to the budget test's check of the reset threshold, the number of cards up to which a search changes the shelf's list card by card instead of resetting it. One "before" run failed its budget test on noise: back to All 404 ms and the open list 318 against 250, at a moment when the first switch read 854. Its figures are in the table. All 20 runs of the budget test at the branch passed (the reviewer's record).
+
+A second sitting of five alternating pairs: the search keystroke lower after in 2 of 5 (88 before, 99 after); the stage filter to Submitted in 4 of 5 (147, 127); back to All in 2 of 5; the open list in 2 of 5; the scroll's longest step in 0 of 5 (285, 333).
+
+**The new row.** At the branch, its ten runs read 177, 140, 407, 163, 167, 190, 237, 144, 137 and 141 ms: median 165, over the 100 ms page-switch budget in 10 of 10. The same switch is over 100 ms before the change too. In a third sitting, three alternating pairs with f51b5e2's product code under the branch's measurement read 128, 187, 142 before (median 142) and 160, 182, 162 after (median 162), lower after in 1 of 3: not separable. In that sitting the search keystroke was lower after in 3 of 3 (100 before, 93 after).
+
+**A key typed right after another shelf was shown.** A reviewer's scratch test, not in the repository: ten rounds in each of two processes per commit; before each round Published is shown again, then a search is typed with Pipeline shown, then Published is shown. Headless, the same conditions as above. As far as its record says, the two commits were not run in alternating pairs, and the test was not repeated.
+
+| | Before (f51b5e2) | After (3b6e801) |
+|---|---:|---:|
+| The search keystroke | 183.5 (117 to 314) | 100.5 (66 to 154) |
+| The switch to Published after it | 53.5 (33 to 109) | 90 (66 to 163) |
+
+So in that sequence a key cost about 83 ms less at the median and the next switch about 36.5 ms more. The same test counted the work. Before: 15 row refills during the keystroke and none at the switch. After: none during the keystroke, and at the switch 15 row refills and 76 row-list changes, all of them before the shelf is made visible (`PropertyChanged(SelectedShelfIndex)`, which the shelves' visibility follows).
+
+This scratch test is also the only figure for that case on master's code: 183.5 ms a key, headless, about twice the measured sequence's row of the same afternoon (90). The measured sequence has no row for it, and nobody measured it in a real window.
+
+**What differs between the two sequences** (known from the code, not a measured cause). In the measured sequence (`BoardMeasurement.MeasureBoard`) the order is: first switch to Published, back to Pipeline, a render with no change, stage to Submitted, stage back to All, the open list (it ends on Submitted and is then set back to All), the search keystroke, then Published shown again for the scroll. So the stage rows come between Published's last show and the search row, and they empty Published twice: every Published manuscript of the test library is at the Published stage, so the Submitted stage leaves that shelf no cards. In the scratch test Published is shown just before each keystroke. Why the measured sequence's search row does not gain while the scratch test's does was not measured.
+
+**Not shown.**
+- Any of this in a real window.
+- Why the measured sequence's search row does not gain while the scratch test's does.
+- A key typed before any other shelf was ever shown, as a row of its own.
+- Reviewer notes not acted on: the arrow keys between cards, Tab and the ⋯ menu right after Published comes back from waiting rows are covered by one record and by one test's Right and Down only. A hidden shelf's waiting rows keep earlier card view models alive until it is shown again, at most the realized rows' worth (15 rows in the scratch test); memory was not measured.
+- The same as at f51b5e2, not changed: keyboard focus on a card's title is lost when its shelf is hidden, and does not come back (section 6).
+
+**What comes next** (decision 4a). Time a search keystroke typed while Published is hidden after it was shown, as a row of its own. Then take alternating pairs, headless and in a real window, with f51b5e2's product code under the same measurement. Merge #404 only if that row gains by more than the noise.
 
 ## 5. High contrast
 
@@ -493,7 +579,7 @@ Checks that rows of N needs before it is chosen for good (design section 9):
 - **Into a row not made yet.** What Narrator says after Down, Tab or Shift+Tab moves into a row that did not exist a moment before.
 
 Seen headless by #403's keyboard reviewer on 2026-11-21, the same before and after #403, and for a person to judge in a real window (the workflow's record; #403's description):
-- **Focus on a hidden shelf.** When a card's title has the keyboard focus and its shelf is hidden, the focus is lost. It does not come back when the shelf is shown again, and the next Right arrow goes to the rail's Board item.
+- **Focus on a hidden shelf.** When a card's title has the keyboard focus and its shelf is hidden, the focus is lost. It does not come back when the shelf is shown again, and the next Right arrow goes to the rail's Board item. The branch of draft #404 does not change this (section 4.7).
 - **The ⋯ menu.** Opened with Enter or Space, the menu puts the focus on the rail's Board item, and Esc leaves the menu open. This is probably a limit of headless popups; only a real window can tell.
 - **Off screen.** The automation tree reports every element as on screen (`IsOffscreen` is false), the rows made below the visible part of the shelf included. What Narrator does with those rows is part of the card-count check above.
 
@@ -548,7 +634,7 @@ For the maintainer: a real Linux start needs a person at a Linux machine or the 
 - In Avalonia 12.1.6 an `ItemsControl` with a row `ItemTemplate`, as the design specified, rebuilt a row's card views every time the row was reused. The fix makes the row view itself the container.
 - No test failed at first when a reused card kept the previous manuscript's title. Three "drawn wrong after reuse" tests were added and seen to fail with the binding broken. Every virtualized template needs such a test.
 - Rows of N needs every card the same height, so the journal row is held to one tag chip tall.
-- A hidden shelf shown once still rebinds its card views on each render.
+- A hidden shelf shown once still rebinds its card views on each render. This is true of master. Draft #404, not merged, makes such a shelf wait until it is shown again (section 4.7).
 - A removal measurement gives the most a change could save, not what it will save. Keeping the tag strip's chips saved nothing measurable per card: the time moved from giving a view its card to laying it out (section 4.6).
 - In Avalonia 12.1.6 changing a virtualizing panel's cache length alone makes no new rows; the panel decides how many extra rows to make beyond the visible part only when the visible part moves. Making fewer rows at a first show and the rest later needed four private members of Avalonia read by reflection, and was dropped (section 4.6).
 
@@ -562,6 +648,7 @@ For the maintainer: a real Linux start needs a person at a Linux machine or the 
 - The interface-thread probe first ran at Normal priority. It ticked between layout and render jobs and hid about half the stall. It now runs at Input priority, with a test. Whether this matches `WM_TIMER` on real Windows is not confirmed. The measuring tool needs tests of its own.
 - By the run's rule, agents did not open a window, so the orchestrating session took the real-window run afterwards.
 - Numbers taken on a loaded PC overstated a gain (the #403 work, 2026-11-21). The implementers' first figures for the tag strip change were taken while other work loaded the PC, with the two builds measured at different times: the search keystroke "511 to 288 ms, with ranges that do not overlap", and a gain per card. A reviewer could not reproduce them. Only runs of the two builds in turn, on a quiet PC, separated the code from the load: 146 to 85 ms, lower in 10 of 10 pairs, with the ranges overlapping, and no gain per card. 7f44e0b's commit message still quotes the withdrawn figures; 09f561a's message corrects them. Every before-and-after timing should be taken this way: both builds, in turn, in one sitting, on a quiet PC.
+- A timed sequence answers only for its own order. The hidden-shelf change lowered the search keystroke in a reviewer's scratch test where Published was shown just before each key, and not in the measured sequence, where the stage rows come between (section 4.7). Why was not measured. A change aimed at one case needs a timed row for that case before its gain can be shown.
 - The real-window runs of the two days gave different figures for the same Board code. The PC was in use on 2026-11-21; its load on 2026-11-20 was not recorded, and the runs differ in build and in number. Only figures of one sitting can be compared.
 
 **Snapshot safety**
@@ -627,14 +714,14 @@ For the maintainer: please choose an option for each item below.
 1. **Rows of N as the default.** Options: keep it; go back to every card; decide after the Narrator pass. Recommendation: keep it now and confirm after the Narrator checks of section 6. Every card went over all four switch rows in the real window, measured after the choice was made (section 4.3).
 2. **The every-card build (`-p:ShelfOption=a`).** Options: keep it selectable; remove it. Recommendation: remove it once rows of N is confirmed. CI no longer builds or tests it, so it will drift. Since #403 it also has its own expected accessibility trees to keep up to date; it passed 236 of 236 locally on 2026-11-21.
 3. **Which reading the budget verdicts rest on.** Options: the real window (the design's switch rule; two rows over); headless (four rows waiting); CI × 3. Recommendation: verdicts on the real window, headless as the guard in CI. This also settles the "500 library" item of f (0 or 5).
-4. **The two rows over in a real window.** Where things stand (section 4.6): the tag strip keeps its chips (#403, built); fewer rows at a first show (tried and dropped); a hidden shelf that waits for its rows (written with tests, not built, run or measured); a lighter title and buttons, and the route dots as one control (not started). The two rows now need different answers, so they are asked as 4a and 4b.
-   - *4a. Search keystroke* (on 2026-11-21, 93 ms against 50 in a real window, 85 headless, after the tag strip change lowered it in every pair). Options: build and measure the written hidden-shelf change; accept the row and change its budget. (A lighter card, with plain buttons and the route dots as one control, is not offered for this row: section 4.5 found that the buttons and dots add nothing measurable when a view is reused, which is what a keystroke pays for.) Recommendation: build and measure the hidden-shelf change next, both builds in turn on a quiet PC, because it is written and aims at this row (section 4.5). Whether it brings the row under 50 is not known.
+4. **The two rows over in a real window.** Where things stand (sections 4.6 and 4.7): the tag strip keeps its chips (#403, merged); fewer rows at a first show (tried and dropped); a hidden shelf that waits for its rows (built and measured headless; not merged, it waits as draft #404); a lighter title and buttons, and the route dots as one control (not started). The two rows now need different answers, so they are asked as 4a and 4b.
+   - *4a. Search keystroke.* It is still over: on 2026-11-21, 93 ms against 50 in a real window in the measured sequence, after the tag strip change lowered it in every pair (section 4.6). The hidden-shelf change is built and waits, not merged, as draft #404 (section 4.7). In the measured sequence it did not make a key faster by more than the noise (lower in 6 of 10 headless pairs, 90 ms before and 94.5 after). In a reviewer's scratch test of typing right after Published was shown, it did: about 184 ms a key before, about 100 after, and the next switch to Published about 37 ms slower (headless, not repeated, not in the repository). Options: (a) finish its measurement: a timed row for a keystroke typed after another shelf was shown, taken in alternating pairs, headless and in a real window, and merge #404 if that row gains by more than the noise; (b) leave #404 out and set this budget from the measured figure; (c) decide after the feel check by hand (the checkpoint sheet for your test of the trial by hand asks you to type before and after Published was first shown and to say whether it feels different). (A lighter card, with plain buttons and the route dots as one control, is not offered for this row: section 4.5 found that the buttons and dots add nothing measurable when a view is reused, which is what a keystroke pays for.) Recommendation: (a). Whether any change brings the row under 50 is not known. The checkpoint sheet's decision `dec-typing` has the same three options and the same recommendation.
    - *4b. First switch to Published* (on 2026-11-21, 305 ms against 100 in a real window; nothing built has changed it, and the one attempt was dropped). Options: make the card lighter (a cheaper card alone will probably not be enough, section 4.5); make fewer views at the switch by another way than the dropped one; prepare the Published shelf while the app is idle, as today's app does (design 4.4 and plan :428 said not to port this); pay the first-use costs earlier (section 4.5, change 5); accept and change the budget. No recommendation: no change tried so far has moved this row, and the choice between porting today's fill strategy and a new budget is the maintainer's.
 5. **How k is read.** Options: k from agent wall-clock hours only; k from the maintainer's hours once logged; both. Recommendation: both, as the design says. Do not use the agent-hour k as a calendar forecast. The checklist weights of section 2.3 stay as the design fixed them before work started; changing them now would let them follow the result.
 
-   5b. **H, your working day in hours.** Please state it; the report uses 6, the design's default. When you log hours on #160, include reviewing #402, #403 and this report (#400).
+   5b. **H, your working day in hours.** Please state it; the report uses 6, the design's default. When you log hours on #160, include reviewing #402, #403, draft #404 and this report (#400).
 
-   5c. **Do the 4.8 hours of 2026-11-21 (section 2.4) belong in B?** Options: leave them out, as this report does, because they were spent after the calibration's figures were taken; add #403's 1.6 board hours to B, so that B grows, f stays the same and k rises. No recommendation: section 2.3 does not settle it.
+   5c. **Do the hours of 2026-11-21 (section 2.4) belong in B?** These are the 4.8 hours of #402 and #403, and the 1.0 hour of draft #404. Options: leave them out, as this report does, because they were spent after the calibration's figures were taken; add #403's 1.6 board hours (and #404's 1.0, if it is merged) to B, so that B grows, f stays the same and k rises. No recommendation: section 2.3 does not settle it.
 6. **`--snapshot` of the real library (step 14).** Options: build it; drop it from the trial. The evidence supports neither strongly. `--snapshot-from` was enough for the real-window run.
 7. **A real Linux start.** The mode and the checklist exist (#402). What is missing is a person at a Linux desktop. Options: (a) the maintainer works through `docs/design/Board-Trial-Linux-Checklist.md` on a real Ubuntu 24.04 machine; (b) the maintainer works through it on the VirtualBox guest; (c) wait until a later unit. Either way, the person sends back the checklist's result sheet. No recommendation: the report has no evidence that favours one machine over the other.
 8. **Dark mode's primary text `#F0F0F0`, and the system accent for search selection.** Options: accept; pick other values.
@@ -654,7 +741,7 @@ Not done:
 - `--snapshot` (step 14);
 - any real Linux start or AppImage (the `linux-x64` publish was made only on the development PC, for the checklist's part A);
 - the card menu actions and the File Drawer panel (outside the trial);
-- a cheaper card view beyond the tag strip. The hidden shelf that waits for its rows is written, not built. The lighter buttons, the route dots as one control and paying the first-use costs earlier are not started. Idle preparation of Published and drawing only the first screen at startup are not built.
+- a cheaper card view beyond the tag strip, in master. The hidden shelf that waits for its rows is built and measured headless, but not merged: it waits as draft #404 (section 4.7). The lighter buttons, the route dots as one control and paying the first-use costs earlier are not started. Idle preparation of Published and drawing only the first screen at startup are not built.
 
 Built on 2026-11-21 and so moved out of this list: `--platform-check` and the Linux checklist (step 15, #402); the tag strip that keeps its chips (#403).
 
@@ -662,7 +749,7 @@ Never run for real:
 - `--platform-check` with a real file dialog and a real launcher, on Windows or on Linux;
 - the app's own branch for the mode in `App.axaml.cs` (read, not run);
 - every checklist command marked "not tried here", and all of the checklist's part F (the AppImage);
-- the hidden-shelf change (section 4.6).
+- the hidden-shelf change of draft #404 in a real window (it was built, tested and measured only headless, section 4.7).
 
 Not checked or not measured:
 - the maintainer's hours (none logged), the orchestrating session's hours beyond its trailers, CI time, and the hours of 17c56e4;
@@ -673,6 +760,10 @@ Not checked or not measured:
 - the first-switch gain of the dropped first-show attempt (not shown);
 - the every-card build in a real window on 2026-11-21 (only rows of N was measured that day);
 - the per-row timings of CI runs 44915194505 and 44925677319 (only their test and picture counts were read);
-- in a real window, the three keyboard observations of section 6.
+- in a real window, the three keyboard observations of section 6;
+- a timed row for a search keystroke typed right after another shelf was shown. The measured sequence has none. The only figure for it is a reviewer's scratch test (headless, not repeated, not in the repository): 183.5 ms a key on master's code, 100.5 on the branch of draft #404 (section 4.7). It has no real-window figure;
+- why the measured sequence's search row does not gain with the hidden-shelf change while the scratch test's does, and a key typed before any other shelf was ever shown, as a row of its own;
+- #404's CI result, which had not come in when this was written;
+- two reviewer notes on #404 not acted on: the arrow keys, Tab and the ⋯ menu right after Published comes back from waiting rows are covered by one record and one test's Right and Down only; and a hidden shelf's waiting rows keep earlier card view models alive until it is shown again (at most the realized rows' worth; memory not measured).
 
 The real-window JSON files of both days stay on the development PC and are not committed, because they hold the computer's name.
