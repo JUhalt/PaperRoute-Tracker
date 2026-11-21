@@ -1,8 +1,12 @@
 # Board trial: Linux checklist
 
 This checklist answers the plan's question 5: **does the Board trial start on Linux?**
-A person follows it once, on a real Ubuntu 24.04 desktop. Each step has one action.
-Under each step, "Note:" says what to write down.
+A person follows it once, on a real Ubuntu 24.04 desktop. Most steps have one action; where
+a step has more, they are listed in the order to do them. Under each step, "Note:" says
+what to write down.
+
+The trial's window is made with Avalonia, a toolkit for windows that runs on Windows, Linux
+and macOS. Avalonia's name appears in a few results below.
 
 Some commands were not tried by the person who wrote this checklist. They are marked
 **not tried here**, with the reason. If such a command does not work, write down what
@@ -40,13 +44,25 @@ happened and go on.
 
 ### A1. Publish the trial for Linux on the Windows PC
 
-Open PowerShell in the repository folder. Run:
+Open PowerShell in the repository folder. First, in the same PowerShell window and before
+any `dotnet` command in this checklist, turn off the build telemetry that Avalonia's build
+tools send otherwise (the repository's CI sets the same variable):
 
 ```powershell
-dotnet publish PaperRoute.Desktop/PaperRoute.Desktop.csproj --configuration Release --runtime linux-x64 --self-contained --output publish-linux-x64
+$env:AVALONIA_TELEMETRY_OPTOUT = "1"
 ```
 
-What it produced when it was tried for this checklist (2026-11-21, commit `f9fb22e`):
+Then run:
+
+```powershell
+dotnet publish PaperRoute.Desktop/PaperRoute.Desktop.csproj --configuration Release --runtime linux-x64 --self-contained --output ..\board-trial-publish-linux-x64
+```
+
+The output goes beside the repository folder, not inside it: the repository's `.gitignore`
+does not cover a published folder inside it, so a later commit could pick one up.
+
+What it produced when it was tried for this checklist (2026-11-21, commit `f9fb22e`, with
+the output in a scratch folder outside the repository):
 
 - The publish ended with exit code 0, in about 2 minutes, with 5 warnings and no errors. All 5
   warnings are CA1416 in the core (`ProtectedKeyStore.vb` and `SingleInstanceService.vb`
@@ -66,7 +82,7 @@ program file.
 
 ### A2. Copy the folder to Ubuntu
 
-Copy the whole `publish-linux-x64` folder to your home folder on Ubuntu, for example to
+Copy the whole `board-trial-publish-linux-x64` folder to your home folder on Ubuntu, for example to
 `~/board-trial`. Copy the whole folder, not single files.
 
 **Not tried here:** how you copy depends on your setup (shared folder, USB drive, network).
@@ -84,7 +100,13 @@ dpkg -l | grep -i fuse
 **Not tried here** (no Ubuntu machine was used to write this checklist). On Ubuntu 24.04 the
 FUSE 2 library may be listed under a name such as `libfuse2t64`; this name was not checked.
 
-Note: every line the command printed, or "nothing printed".
+How to read the lines: `libfuse2` is installed if a line starts with `ii` and names
+`libfuse2` or `libfuse2t64`. Lines that name `fuse3` or `libfuse3-3` do not count: that is
+FUSE 3, a different library. If `libfuse2` is installed, **do not remove it**. Write that
+down, go on, and treat the result of F4 as "with libfuse2".
+
+Note: every line the command printed, or "nothing printed", and whether `libfuse2` is
+installed by the rule above.
 
 ### A4. Note the system
 
@@ -185,7 +207,8 @@ temporary folder of its own and shows the copy. It never changes the folder you 
 **Use only a test library.** A test library comes from one of these places:
 
 - The manual test that writes the 500-manuscript library. On the Windows PC, in the
-  repository folder, run:
+  repository folder, in a PowerShell window where `$env:AVALONIA_TELEMETRY_OPTOUT = "1"` was
+  set (see A1; set it again in a new window), run:
 
   ```powershell
   dotnet test PaperRoute.Desktop.Tests/PaperRoute.Desktop.Tests.csproj --configuration Release --filter "FullyQualifiedName~WriteLargeLibraryForMeasurement"
@@ -201,8 +224,9 @@ What the trial refuses, and what it cannot refuse:
   reads anything there.
 - It **cannot** refuse a library that its owner moved out of the default folders, because
   finding it would mean reading the real settings. On Windows it also cannot refuse a default
-  folder reached through a drive letter made with `subst` or a mapped drive. So the choice of
-  folder is yours: name only a test library.
+  folder reached through a drive letter made with `subst` or a mapped drive. On Linux, in the
+  same way, it may not recognize a default folder reached through a bind mount or a mounted
+  share (this was not tried). So the choice of folder is yours: name only a test library.
 
 ### D1. Copy the test library to Ubuntu
 
@@ -237,10 +261,18 @@ after the other. Before each one, the notice strip at the bottom of the window, 
 terminal, say what happens next:
 
 1. "A file dialog opens now. Choose any file, or cancel. Nothing you choose is opened."
-2. "Your browser opens example.org now."
+2. "The trial asks the system to open example.org in your browser now."
 3. "The trial starts a second copy of itself now and waits for it."
 
 Then it writes the results to a JSON file, closes the window and ends.
+
+No step has a time limit of its own except the second copy (two minutes). If a dialog or a
+browser never comes back, closing the trial's window is the way out: the trial then writes
+what it learnt so far to the same JSON file, with the step that was still running, stops a
+second copy that is still running, and ends with exit code 1.
+
+The JSON file must not exist yet, unless an earlier platform check wrote it: the trial
+refuses to replace any other file. Use a new file name for each run.
 
 ### E1. Make a folder for the result
 
@@ -263,23 +295,38 @@ checklist. The mode was tested only with stand-ins.
 
 When the file dialog opens, choose any file, or press Cancel. The trial does not open or
 read what you choose. The JSON records only that the dialog came back and how many items
-you chose; it does not record their names.
+you chose; it does not record their names. If the dialog fails, the JSON records only the
+kind of error, not its message, because a message may name the file you chose.
 
-Note: whether a dialog opened, what it looked like (the GNOME file chooser, or another), and
-whether you chose a file or cancelled.
+If nothing comes back after a minute, close the trial's window, note that it was on the
+file dialog, and keep the terminal lines.
+
+Note: whether the notice strip showed the first sentence above; whether the Board showed the
+7 manuscripts of the example behind the dialog (the rail says "7 manuscripts"); whether a
+dialog opened, what it looked like (the GNOME file chooser, or another); and whether you
+chose a file or cancelled.
 
 ### E4. Watch the browser
 
 A browser window or tab with example.org should open. You may close it.
 
-Note: whether the browser opened, and which browser.
+If nothing happens after a minute and the trial's window does not move on, close the
+trial's window, note that it was on the browser, and keep the terminal lines.
+
+Note: whether the notice strip showed the second sentence; whether a page with example.org
+appeared, and in which browser. Only this note tells whether a page appeared: the JSON can
+say only whether the system accepted the request.
 
 ### E5. Wait for the second copy
 
 The trial starts a second copy of itself with `--self-check` and waits up to two minutes.
-The second copy opens no window.
+The second copy opens no window. After two minutes the trial stops it by itself.
 
-Note: how long the wait seemed, and whether the window closed by itself at the end.
+If the window is still open a minute after the two minutes, close it, note that it was on
+the second copy, and keep the terminal lines.
+
+Note: whether the notice strip showed the third sentence; how long the wait seemed; and
+whether the window closed by itself at the end.
 
 ### E6. Read the exit code and the file
 
@@ -287,43 +334,61 @@ Note: how long the wait seemed, and whether the window closed by itself at the e
 cat "$HOME/trial-results/platform-check.json"
 ```
 
-The exit code is 0 when the check ran to its end, whatever each result was. It is 1 when the
-check itself broke, and 2 when the command line or the file's place was refused (nothing was
-opened then).
+The exit code is the last line E2 printed, after the window closed ("exit code: ..."). It is
+0 when the check ran to its end, whatever each result was. It is 1 when the check itself
+broke or the window was closed before the end, and 2 when the command line or the file's
+place was refused (nothing was opened then).
+
+If the window was closed before the end, the file has `error` ("The window was closed before
+the check finished.") and `stepRunning` (`load`, `fileDialog`, `launcher` or `restart`): the
+step that never came back. That step has `tried: true, ok: null`, and the steps after it
+`tried: false` ("Not reached").
 
 What each result in the file means. Each one has `tried`, `ok`, `detail`, and
-`milliseconds`; when something threw an error, also `exceptionType` and `exceptionMessage`.
+`milliseconds`; when something threw an error, also `exceptionType`, and for the launcher
+and the restart `exceptionMessage`.
 
 - `fileDialog`
   - `tried: true, ok: true`: the system's file dialog opened and came back. `itemsChosen`
     says how many items you chose (0 means you cancelled).
-  - `tried: true, ok: false`: the dialog threw an error. Read `exceptionType` and
-    `exceptionMessage`.
+  - `tried: true, ok: false`: the dialog threw an error. Read `exceptionType`. There is no
+    `exceptionMessage` for the dialog: a message may name the file you chose, so it is not
+    kept.
   - `tried: false, ok: false`: Avalonia reports no file dialog on this system, so none was
     opened.
 - `launcher`
-  - `ok: true`: the system reports that it opened https://example.org.
+  - `ok: true`: the system accepted the request to open https://example.org. This does not
+    show that a page appeared: only your note from E4 tells that.
   - `ok: false`: the system reports that it could not open it, or the launcher threw an error.
     If the browser did open anyway, write that down: it matters.
 - `restart`
   - `ok: true, exitCode: 0`: a second copy started from the program file and its self-check
     passed.
-  - `ok: false` with an `exitCode` other than 0: the second copy started, but its self-check
-    did not pass.
+  - `ok: false, exitCode: 1`: the second copy started, but its self-check did not pass.
+  - `ok: false, exitCode: 2`: the second copy refused its command line or folder, so its
+    self-check did not run.
+  - `ok: false` with any other `exitCode`: the trial's self-check exits only 0 or 1, so this
+    code came from somewhere else, for example the AppImage runtime (one that cannot use
+    FUSE) or the .NET runtime, before the self-check finished.
   - `ok: false, stoppedAfterLimit: true`: the second copy did not end within two minutes and
     the trial stopped it.
-  - `ok: false` with `exceptionType`: the second copy could not be started.
+  - `ok: false` with `exceptionType`: the second copy could not be started, or waiting for it
+    failed (then it was stopped).
   - `tried: false, ok: null`: a restart was not tried. This happens when the trial was
     started as `dotnet PaperRoute.Desktop.dll`, which has no program file of its own to start
     again. Start `./PaperRoute.Desktop` instead.
-  - `startedFrom` says where the program came from: `APPIMAGE` (from an AppImage, Part F) or
-    `process path` (the program file in the folder). `program` gives only the file's name.
+  - `startedFrom` says where the program came from: `APPIMAGE` (the AppImage this trial runs
+    from, Part F) or `process path` (the program file in the folder). `program` gives only the
+    file's name. If `detail` ends with "APPIMAGE is set, but this process is not running from
+    it ...", the terminal had an `APPIMAGE` variable from another program (for example a
+    terminal opened from an AppImage editor), and the trial ignored it.
 
 The file also holds facts about the system: `operatingSystem`, `runtimeIdentifier`,
-`processArchitecture`, `appImageSet` (whether the trial ran from an AppImage),
-`xdgSessionType` (`x11` or `wayland`), `waylandDisplaySet` and `displaySet` (only whether
-these are set, not their values), `renderScaling`, `themeVariant` and `contrastPreference`.
-It holds no user name, computer name or file name you chose.
+`processArchitecture`, `appImageSet` (whether the `APPIMAGE` variable was set; whether the
+trial ran from it is the restart's `startedFrom`), `xdgSessionType` (`x11` or `wayland`),
+`waylandDisplaySet` and `displaySet` (only whether these are set, not their values),
+`renderScaling`, `themeVariant` and `contrastPreference`. It holds no user name, computer
+name or name of a file you chose.
 
 Note: the exit code, and for each of the three results the values of `tried` and `ok`.
 
@@ -331,15 +396,20 @@ Note: the exit code, and for each of the three results the values of `tried` and
 
 **Every command in this part is not tried here.** Packing an AppImage needs the AppImage
 tool (`appimagetool`), which is a download. The maintainer decides whether to download it
-and from where. The steps below say what has to happen; they are not exact commands.
+and from where.
 
-### F1. Get the AppImage tool
+**Who does what.** F1 to F3 are the maintainer's: the maintainer packs the AppImage, on a
+machine of their choice, before handing it over. They are not exact commands, only what has
+to happen. **A tester starts at F4** with the AppImage file the maintainer gave. If no
+AppImage was given, skip Part F and go to Part G.
+
+### F1. Get the AppImage tool (maintainer)
 
 **Not tried here:** the maintainer chooses the download.
 
 Note: where the tool came from and its version.
 
-### F2. Make an AppDir
+### F2. Make an AppDir (maintainer)
 
 An AppImage is made from a folder (an "AppDir"). It holds:
 
@@ -353,7 +423,7 @@ An AppImage is made from a folder (an "AppDir"). It holds:
 
 Note: the files you put in the AppDir.
 
-### F3. Pack the AppImage
+### F3. Pack the AppImage (maintainer)
 
 Run the AppImage tool on the AppDir. **Not tried here:** its options were not checked.
 
@@ -380,9 +450,21 @@ Note: whether the window opened, and every line the terminal printed.
 ```
 
 **Not tried here.** This time the JSON should say `appImageSet: true`, and the restart should
-say `startedFrom: APPIMAGE`.
+say `startedFrom: APPIMAGE`. The trial takes the AppImage as the program to restart only when
+the program it runs lies inside the folder where the AppImage was mounted (the `APPDIR`
+variable the AppImage runtime sets); if the restart says `startedFrom: process path` with the
+note "APPIMAGE is set, but this process is not running from it", write that down.
 
-Note: the same as in E3 to E6.
+If F4 needed `--appimage-extract-and-run`, give it here as well, before `--platform-check`.
+The restart will not pass that option on to the second copy, so the second copy may fail to
+start in the same way F4 first did (an `exitCode` other than 0, 1 or 2). Setting
+`APPIMAGE_EXTRACT_AND_RUN=1` at the start of the command instead
+(`APPIMAGE_EXTRACT_AND_RUN=1 ./<the AppImage file> --platform-check ...`) would reach the
+second copy too; **not checked here** whether this AppImage honours it. If you try it, run it
+as a second check with a new file name, after the first.
+
+Note: the same as in E3 to E6, and whether you gave `--appimage-extract-and-run` or
+`APPIMAGE_EXTRACT_AND_RUN=1`.
 
 ## Part G. What to send back
 
@@ -410,7 +492,9 @@ the terminal lines may hold them; remove them if you wish.
 | B5 Board responds? | |
 | C1 self-check exit code | |
 | D2 snapshot opened, 500 manuscripts? | |
-| E exit code | |
+| E exit code (window closed early? on which step?) | |
+| E3 Board showed 7 manuscripts behind the dialog? | |
+| E4 a page with example.org appeared? | |
 | E fileDialog tried / ok | |
 | E launcher tried / ok | |
 | E restart tried / ok | |

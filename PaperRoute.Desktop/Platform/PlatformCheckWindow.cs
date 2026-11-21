@@ -13,12 +13,30 @@ namespace PaperRoute.Desktop.Platform;
 // the person before each one in the notice strip and on standard output. The
 // outcomes and the facts go to the JSON at path (accepted by
 // PlatformCheckReport.RefusalFor), the window closes (beforeClose runs
-// first), and the exit code is 0
-// when the check ran to its end and the JSON was written, whatever each
-// action's outcome, or 1 when the check itself broke.
-public static class PlatformCheckWindow
+// first), and the exit code is 0 when the check ran to its end and the JSON
+// was written, whatever each action's outcome, or 1 when the check itself
+// broke.
+//
+// Closing the window before the end is the person's way out of a dialog or
+// a browser that never comes back: CloseEarly then stops a second copy that
+// is still running, writes what was learnt so far with the error and the
+// step that was running, and the exit code is 1.
+public sealed class PlatformCheckWindow
 {
-    public static async Task<int> RunAsync(
+    // The step named when the window is closed while the library still loads.
+    public const string LoadStep = "load";
+
+    private readonly Window _window;
+    private readonly ShellViewModel _shell;
+    private readonly string _path;
+    private readonly TextWriter _output;
+    private readonly Func<string, string?> _environment;
+    private readonly PrivacyScrubber _scrubber;
+    private readonly PlatformCheck _check;
+    private bool _loading;
+    private bool _written;
+
+    public PlatformCheckWindow(
         Window window,
         ShellViewModel shell,
         string path,
@@ -27,8 +45,7 @@ public static class PlatformCheckWindow
         PrivacyScrubber scrubber,
         TextWriter output,
         TimeSpan restartLimit,
-        Func<string, string?> environment,
-        Action? beforeClose = null)
+        Func<string, string?> environment)
     {
         ArgumentNullException.ThrowIfNull(window);
         ArgumentNullException.ThrowIfNull(shell);
@@ -38,60 +55,98 @@ public static class PlatformCheckWindow
         ArgumentNullException.ThrowIfNull(scrubber);
         ArgumentNullException.ThrowIfNull(output);
         ArgumentNullException.ThrowIfNull(environment);
+        _window = window;
+        _shell = shell;
+        _path = path;
+        _output = output;
+        _environment = environment;
+        _scrubber = scrubber;
+        _check = new PlatformCheck(actions, restart, scrubber, Say, restartLimit);
+    }
 
-        void Say(string text)
-        {
-            ((IInteractions)shell).Notice(text);
-            output.WriteLine(text);
-            output.Flush();
-        }
+    // True once the JSON was written, by the run or by CloseEarly.
+    public bool Written => _written;
 
+    public static Task<int> RunAsync(
+        Window window,
+        ShellViewModel shell,
+        string path,
+        IPlatformActions actions,
+        RestartTarget restart,
+        PrivacyScrubber scrubber,
+        TextWriter output,
+        TimeSpan restartLimit,
+        Func<string, string?> environment,
+        Action? beforeClose = null) =>
+        new PlatformCheckWindow(window, shell, path, actions, restart, scrubber, output, restartLimit, environment).RunAsync(beforeClose);
+
+    public async Task<int> RunAsync(Action? beforeClose = null)
+    {
         PlatformCheckOutcomes? outcomes = null;
         string? error = null;
         try
         {
-            if (shell.LoadCommand.CanExecute(null))
+            if (_shell.LoadCommand.CanExecute(null))
             {
-                await shell.LoadCommand.ExecuteAsync(null);
+                _loading = true;
+                try
+                {
+                    await _shell.LoadCommand.ExecuteAsync(null);
+                }
+                finally
+                {
+                    _loading = false;
+                }
             }
 
-            outcomes = await new PlatformCheck(actions, restart, scrubber, Say, restartLimit).RunAsync();
+            outcomes = await _check.RunAsync();
         }
         catch (Exception ex)
         {
-            error = ex.GetType().Name + ": " + scrubber.Scrub(ex.Message);
+            error = ex.GetType().Name + ": " + _scrubber.Scrub(ex.Message);
         }
 
-        PlatformFacts facts;
-        try
+        if (_written)
         {
-            facts = FactsFor(window, environment);
-        }
-        catch (Exception ex)
-        {
-            error ??= ex.GetType().Name + ": " + scrubber.Scrub(ex.Message);
-            facts = PlatformFacts.Read(environment, 0, "unknown", "unknown");
+            // CloseEarly wrote the JSON, and the window is closed already.
+            return 1;
         }
 
-        var report = new PlatformCheckReport { TakenAt = DateTime.Now, Facts = facts, Outcomes = outcomes, Error = error };
-        try
+        if (!Write(new PlatformCheckReport { TakenAt = DateTime.Now, Facts = Facts(ref error), Outcomes = outcomes, Error = error }))
         {
-            report.WriteJson(path);
-        }
-        catch (IOException ex)
-        {
-            Console.Error.WriteLine($"The platform check could not be written to {path}: {ex.Message}");
-            error ??= ex.Message;
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            Console.Error.WriteLine($"The platform check could not be written to {path}: {ex.Message}");
-            error ??= ex.Message;
+            error ??= "The JSON could not be written.";
         }
 
         beforeClose?.Invoke();
-        window.Close();
+        _window.Close();
         return error is null ? 0 : 1;
+    }
+
+    // The window was closed before the check finished: a second copy still
+    // running is stopped, no further step is tried, and the JSON gets what is
+    // known (finished steps, the running one as still running, the rest as
+    // not reached), the error and the running step. Returns 1. Does nothing
+    // more once the JSON was written.
+    public int CloseEarly()
+    {
+        if (_written)
+        {
+            return 1;
+        }
+
+        string? step = _loading ? LoadStep : _check.RunningStep;
+        _check.Abandon();
+        string? error = PlatformCheckReport.ClosedEarlyError;
+        PlatformFacts facts = Facts(ref error);
+        Write(new PlatformCheckReport
+        {
+            TakenAt = DateTime.Now,
+            Facts = facts,
+            Outcomes = _check.Snapshot(),
+            Error = error,
+            StepRunning = step,
+        });
+        return 1;
     }
 
     // The window's render scaling and what Avalonia reports of the system's
@@ -105,5 +160,42 @@ public static class PlatformCheckWindow
             window.RenderScaling,
             colors?.ThemeVariant.ToString() ?? "unknown",
             colors?.ContrastPreference.ToString() ?? "unknown");
+    }
+
+    private void Say(string text)
+    {
+        ((IInteractions)_shell).Notice(text);
+        _output.WriteLine(text);
+        _output.Flush();
+    }
+
+    private PlatformFacts Facts(ref string? error)
+    {
+        try
+        {
+            return FactsFor(_window, _environment);
+        }
+        catch (Exception ex)
+        {
+            error ??= ex.GetType().Name + ": " + _scrubber.Scrub(ex.Message);
+            return PlatformFacts.Read(_environment, 0, "unknown", "unknown");
+        }
+    }
+
+    // Writes the JSON once; false (and a line on standard error) when it
+    // could not be written.
+    private bool Write(PlatformCheckReport report)
+    {
+        _written = true;
+        try
+        {
+            report.WriteJson(_path);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine($"The platform check could not be written to {_path}: {ex.Message}");
+            return false;
+        }
     }
 }

@@ -17,7 +17,8 @@ namespace PaperRoute.ViewModels.Session;
 // "--measure" and "--self-check" do not go together: one opens a window, the
 // other none. "--platform-check" goes with none of "--self-check", "--measure"
 // and "--snapshot-from". Whether the file named may be written is checked after parsing
-// (BoardMeasurementReport.RefusalFor), before any session starts.
+// (BoardMeasurementReport.RefusalFor for "--measure", PlatformCheckReport.RefusalFor
+// for "--platform-check"), before any session starts.
 // Arguments the trial does not know are left to Avalonia, as before.
 // Parsing reads no file and calls nothing in the core.
 public sealed class TrialOptions

@@ -57,11 +57,30 @@ public sealed class AvaloniaPlatformActions : IPlatformActions
         }
 
         Process process = Process.Start(start) ?? throw new InvalidOperationException("The system started no process.");
-        process.OutputDataReceived += (_, _) => { };
-        process.ErrorDataReceived += (_, _) => { };
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-        return new StartedProcess(process);
+        try
+        {
+            process.OutputDataReceived += (_, _) => { };
+            process.ErrorDataReceived += (_, _) => { };
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+            return new StartedProcess(process);
+        }
+        catch
+        {
+            // A started program that nothing would hold is stopped.
+            var started = new StartedProcess(process);
+            try
+            {
+                started.Stop();
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+            {
+                // It is reported by the exception thrown on below.
+            }
+
+            started.Dispose();
+            throw;
+        }
     }
 
     private sealed class StartedProcess(Process process) : IStartedProgram

@@ -8,8 +8,10 @@ using PaperRoute.ViewModels.Session;
 namespace PaperRoute.ViewModels.Platform;
 
 // What a reader of the platform check's JSON needs beside the outcomes to
-// judge them: the system, the runtime, whether the trial ran from an AppImage
-// (not where), the Linux session type (XDG_SESSION_TYPE's value, and only
+// judge them: the system, the runtime, whether APPIMAGE was set (not its
+// value; whether the trial ran from it is the restart's startedFrom, since
+// APPIMAGE is passed down to every program an AppImage starts), the Linux
+// session type (XDG_SESSION_TYPE's value, and only
 // whether WAYLAND_DISPLAY and DISPLAY are set), the window's render scaling
 // and the theme Avalonia reports. No names of people, computers or files.
 public sealed record PlatformFacts(
@@ -46,8 +48,9 @@ public sealed record PlatformFacts(
 
 // The JSON "--platform-check" writes: the mode and the format's version,
 // the time, the facts, then one small object per action (tried, ok, detail,
-// the exception's type and message when there was one, milliseconds), and
-// the error when the check itself broke.
+// the exception's type when there was one and its message when it may be
+// kept, milliseconds), the error when the check itself broke or its window
+// was closed before the end, and then the step that was still running.
 public sealed class PlatformCheckReport
 {
     public required DateTime TakenAt { get; init; }
@@ -57,8 +60,19 @@ public sealed class PlatformCheckReport
     // Null when the check broke before the actions were tried.
     public PlatformCheckOutcomes? Outcomes { get; init; }
 
-    // Set when the check itself broke (scrubbed); the exit code is then 1.
+    // Set when the check itself broke (scrubbed), or the window was closed
+    // before it finished; the exit code is then 1.
     public string? Error { get; init; }
+
+    // The step that was still running when the window was closed early
+    // (PlatformCheck.DialogStep, LauncherStep or RestartStep), else null.
+    public string? StepRunning { get; init; }
+
+    // The error of a check whose window was closed before it finished.
+    public const string ClosedEarlyError = "The window was closed before the check finished.";
+
+    public const string ExistingFileMessage =
+        "The platform check does not replace a file it did not write: {0} already exists. Choose a new file name.";
 
     public string ToJson()
     {
@@ -99,6 +113,11 @@ public sealed class PlatformCheckReport
                 json.WriteString("error", Error);
             }
 
+            if (StepRunning is not null)
+            {
+                json.WriteString("stepRunning", StepRunning);
+            }
+
             json.WriteEndObject();
         }
 
@@ -114,9 +133,51 @@ public sealed class PlatformCheckReport
 
     // Why the check may not write its JSON at path, or null when it may: the
     // rule "--measure" follows (BoardMeasurementReport.RefusalFor), in this
-    // mode's words.
-    public static string? RefusalFor(string path, IEnumerable<string>? alsoRefuse = null) =>
-        BoardMeasurementReport.RefusalFor(path, TrialOptions.PlatformCheckArgument, "platform check", alsoRefuse);
+    // mode's words, and one more: a path that already exists is refused
+    // unless it is a JSON this mode wrote (its root "mode" is
+    // "platform-check"), so a mistyped path never replaces another file.
+    public static string? RefusalFor(string path, IEnumerable<string>? alsoRefuse = null)
+    {
+        string? refusal = BoardMeasurementReport.RefusalFor(path, TrialOptions.PlatformCheckArgument, "platform check", alsoRefuse);
+        if (refusal is not null)
+        {
+            return refusal;
+        }
+
+        string full = Path.GetFullPath(path);
+        if (Directory.Exists(full))
+        {
+            return string.Format(CultureInfo.InvariantCulture, ExistingFileMessage, full);
+        }
+
+        return File.Exists(full) && !WrittenByThisMode(full)
+            ? string.Format(CultureInfo.InvariantCulture, ExistingFileMessage, full)
+            : null;
+    }
+
+    // True when the file is a small JSON whose root "mode" is this mode's.
+    // Only a file of at most 1 MB is read; anything else is not this mode's.
+    private static bool WrittenByThisMode(string path)
+    {
+        try
+        {
+            var info = new FileInfo(path);
+            if (info.Length > 1024 * 1024)
+            {
+                return false;
+            }
+
+            using JsonDocument document = JsonDocument.Parse(File.ReadAllBytes(path));
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("mode", out JsonElement mode)
+                && mode.ValueKind == JsonValueKind.String
+                && string.Equals(mode.GetString(), PlatformCheck.Mode, StringComparison.Ordinal);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return false;
+        }
+    }
 
     private static void Write(Utf8JsonWriter json, string name, CheckOutcome outcome)
     {
@@ -135,7 +196,12 @@ public sealed class PlatformCheckReport
         if (outcome.ExceptionType is not null)
         {
             json.WriteString("exceptionType", outcome.ExceptionType);
-            json.WriteString("exceptionMessage", outcome.ExceptionMessage ?? string.Empty);
+        }
+
+        // Left out when it may not be kept (the file dialog's).
+        if (outcome.ExceptionMessage is not null)
+        {
+            json.WriteString("exceptionMessage", outcome.ExceptionMessage);
         }
 
         json.WriteNumber("milliseconds", Math.Round(outcome.Milliseconds, 1));

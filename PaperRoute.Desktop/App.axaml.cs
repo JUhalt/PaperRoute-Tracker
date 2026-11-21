@@ -117,17 +117,43 @@ public partial class App : Application
             if (shell is not null && _platformCheckFile is not null)
             {
                 // The check loads the library once the window is open, then
-                // runs; closing the window before it ends stops the app with 1.
+                // runs. Closing the window before it ends writes what was
+                // learnt so far, stops a second copy still running, and
+                // stops the app with 1.
                 string file = _platformCheckFile;
                 bool finished = false;
                 bool shutDown = false;
+                RestartTarget restart = RestartTarget.For(
+                    Environment.GetEnvironmentVariable("APPIMAGE"),
+                    Environment.GetEnvironmentVariable("APPDIR"),
+                    Environment.ProcessPath,
+                    File.Exists);
+                var check = new PlatformCheckWindow(
+                    window,
+                    shell,
+                    file,
+                    new AvaloniaPlatformActions(window),
+                    restart,
+                    PrivacyScrubber.ForThisProcess(restart.FileName ?? Environment.ProcessPath),
+                    Console.Out,
+                    PlatformCheck.DefaultRestartLimit,
+                    Environment.GetEnvironmentVariable);
                 desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
                 window.Closed += (_, _) =>
                 {
                     if (!finished && !shutDown)
                     {
-                        Console.Error.WriteLine("The window was closed before the platform check finished; its JSON may be missing.");
                         shutDown = true;
+                        try
+                        {
+                            check.CloseEarly();
+                            Console.Error.WriteLine("The window was closed before the platform check finished; the JSON holds what was learnt so far.");
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.Error.WriteLine("The window was closed before the platform check finished, and its JSON could not be written: " + ex.GetType().Name);
+                        }
+
                         desktop.Shutdown(1);
                     }
                 };
@@ -136,19 +162,7 @@ public partial class App : Application
                     int code = 1;
                     try
                     {
-                        string? appImage = Environment.GetEnvironmentVariable("APPIMAGE");
-                        RestartTarget restart = RestartTarget.For(appImage, Environment.ProcessPath);
-                        code = await PlatformCheckWindow.RunAsync(
-                            window,
-                            shell,
-                            file,
-                            new AvaloniaPlatformActions(window),
-                            restart,
-                            PrivacyScrubber.ForThisProcess(string.IsNullOrWhiteSpace(appImage) ? Environment.ProcessPath : appImage),
-                            Console.Out,
-                            PlatformCheck.DefaultRestartLimit,
-                            Environment.GetEnvironmentVariable,
-                            beforeClose: () => finished = true);
+                        code = await check.RunAsync(beforeClose: () => finished = true);
                     }
                     catch (Exception ex)
                     {
