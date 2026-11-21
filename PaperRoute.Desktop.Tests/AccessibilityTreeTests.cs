@@ -28,7 +28,9 @@ namespace PaperRoute.Desktop.Tests;
 // When the text differs, the test writes what it found beside the pictures
 // (<name>.actual.txt) and names the first line that differs. A change that
 // means to alter the tree replaces the expected file with that text, and says
-// why in its commit.
+// why in its commit. Under option (a) of ShelfLayout the expected files are
+// <name>-option-a.txt (made at 7f44e0b, where option (a) was first run with
+// this test; the tag strip change of that commit draws nothing differently).
 [TestClass]
 public sealed class AccessibilityTreeTests : StorageCheckedTests
 {
@@ -93,6 +95,8 @@ public sealed class AccessibilityTreeTests : StorageCheckedTests
 
     private void Compare(string name, string actual)
     {
+        // The every-card drawing (ShelfLayout option (a)) has a tree of its own.
+        name += ShelfLayout.UsesRows ? string.Empty : "-option-a";
         string expectedPath = Path.Combine(AppContext.BaseDirectory, "Expected", name + ".txt");
         string expected = File.Exists(expectedPath) ? File.ReadAllText(expectedPath).Replace("\r\n", "\n", StringComparison.Ordinal) : string.Empty;
         if (expected == actual)
