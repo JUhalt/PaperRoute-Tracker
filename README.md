@@ -16,13 +16,12 @@ PaperRoute Tracker helps researchers manage manuscripts from idea through submis
 
 ## Current status
 
-- **Stable:** [v1.0.0 — Trusted Research Workflow](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v1.0.0) is 1.0, the release to trust with your real publication pipeline. It keeps the Schema 9 library, so v0.9.2 can still open a library it has used. It builds on v0.9.2, which readied PaperRoute for 1.0: your files and your library are harder to lose and easier to recover, and PaperRoute can be worked from the keyboard and with a screen reader throughout. And it builds on v0.9, which helps you decide where a manuscript should go: a journal shortlist for each manuscript, a guide to choosing a journal, journal facts and metrics from open indexes, journals that publish work like yours, your own citations, a teaching example library, packet export with RO-Crate metadata, and optional AI help, all under one local-first rule with a **Work offline** switch. See the [v1.0.0 release notes](docs/releases/1.0.0.md), the [v0.9.2 release notes](docs/releases/0.9.2.md), the [v0.9 release notes](docs/releases/0.9.0.md), and the [user guide](docs/USER_GUIDE.md).
-- **Preview:** [v1.0.1-rc.1 — Certification Follow-ups](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v1.0.1-rc.1) is the candidate for v1.0.1, a small release on the same app with what 1.0's certification noted. It fixes six ways to lose people, affiliations or typed text on the manuscript page, or to have unsaved edits written early, each present since v0.9.2 or earlier. It keeps the Schema 9 library, so v1.0.0 can still open a library it has used; read the [release notes](docs/releases/1.0.1-rc.1.md) before trying it.
+- **Stable:** [v1.0.1 — Certification Follow-ups](https://github.com/JUhalt/PaperRoute-Tracker/releases/tag/v1.0.1) is a patch for v1.0.0 on the same app, with what 1.0's certification noted. It fixes six ways to lose people, affiliations or typed text on the manuscript page, or to have unsaved edits written early, each present since v0.9.2 or earlier. It keeps the Schema 9 library, so v1.0.0 can still open a library it has used. It builds on v1.0.0, which is 1.0, the release to trust with your real publication pipeline. It also builds on v0.9.2, which readied PaperRoute for 1.0: your files and your library are harder to lose and easier to recover, and PaperRoute can be worked from the keyboard and with a screen reader throughout. And it builds on v0.9, which helps you decide where a manuscript should go: a journal shortlist for each manuscript, a guide to choosing a journal, journal facts and metrics from open indexes, journals that publish work like yours, your own citations, a teaching example library, packet export with RO-Crate metadata, and optional AI help, all under one local-first rule with a **Work offline** switch. See the [v1.0.1 release notes](docs/releases/1.0.1.md), the [v1.0.0 release notes](docs/releases/1.0.0.md), the [v0.9.2 release notes](docs/releases/0.9.2.md), the [v0.9 release notes](docs/releases/0.9.0.md), and the [user guide](docs/USER_GUIDE.md).
 - **Next:** [v1.1 — macOS and Linux](https://github.com/JUhalt/PaperRoute-Tracker/milestone/15): one calm interface on Windows, macOS, and Linux.
 
 v0.9 moves the library to Schema 9, which v0.8 cannot open, so keep a backup made with v0.8 before upgrading. The [upgrade notes](UPGRADE_NOTES.md) explain the save and compatibility boundaries.
 
-**New to PaperRoute?** Start with the [PaperRoute User Guide](https://github.com/JUhalt/PaperRoute-Tracker/blob/v1.0.0/docs/USER_GUIDE.md) for a Quick Start, feature tour, and task-oriented "How do I...?" reference.
+**New to PaperRoute?** Start with the [PaperRoute User Guide](https://github.com/JUhalt/PaperRoute-Tracker/blob/v1.0.1/docs/USER_GUIDE.md) for a Quick Start, feature tour, and task-oriented "How do I...?" reference.
 
 <p align="center">
   <img src="docs/images/board.png" width="860" alt="The PaperRoute board: pipeline cards with stage, what needs attention, target journal, and each manuscript's route so far (fictional sample data)">
@@ -199,7 +198,7 @@ dotnet restore ManuscriptPipeline.slnx
 dotnet build ManuscriptPipeline.slnx --configuration Release
 ```
 
-The internal project/folder name remains `ManuscriptPipeline` for compatibility and to avoid unnecessary namespace churn. The built assembly is `PaperRouteTracker.exe`.
+The internal project/folder name remains `ManuscriptPipeline` for compatibility and to avoid unnecessary namespace churn. The built assembly is `PaperRouteTracker.exe`. The data model and the services that do not draw the interface are in a library beside it, `PaperRoute.Core` (folder `PaperRoute.Core`, built as `PaperRoute.Core.dll`), which the app references; the Windows implementations the core asks for, such as the DPAPI key protection, are in a second library, `PaperRoute.Platform` (built as `PaperRoute.Platform.dll`), which the app references and the core does not. The solution builds all of them.
 
 ## Technology
 
@@ -208,7 +207,7 @@ The internal project/folder name remains `ManuscriptPipeline` for compatibility 
 - ClosedXML for Excel workbook support
 - The Anthropic .NET SDK for the optional AI assistant's Claude requests
 - System.Text.Json for local persistence
-- GitHub Actions for Windows CI and release builds
+- GitHub Actions for Windows CI and release builds, and for building and testing the core library on Ubuntu
 - Velopack for Windows installation and automatic updates
 
 ## Independence
@@ -226,7 +225,7 @@ PaperRoute is an independent, open-source project. Its implementation, local-fir
 | **Released** | v0.9 — Journal Choice & Guidance | Choosing a journal, journal facts, packet export, a teaching example, optional AI help |
 | **Released** | v0.9.2 — 1.0 Hardening | Recovery, speed, accessibility, display scaling, certification |
 | **Released** | v1.0 — Trusted Research Workflow | "I trust this application with my research workflow." |
-| **Preview** | [v1.0.1 — Certification Follow-ups](https://github.com/JUhalt/PaperRoute-Tracker/milestone/17) | What 1.0's certification noted, fixed on the same app |
+| **Released** | v1.0.1 — Certification Follow-ups | What 1.0's certification noted, fixed on the same app |
 | **Next** | [v1.1 — macOS and Linux](https://github.com/JUhalt/PaperRoute-Tracker/milestone/15) | One calm interface on Windows, macOS, and Linux |
 | **Then** | [v1.2 — Open Science Studies](https://github.com/JUhalt/PaperRoute-Tracker/milestone/16) | Studies, preregistration, materials and data, shared on the open-science site you choose |
 

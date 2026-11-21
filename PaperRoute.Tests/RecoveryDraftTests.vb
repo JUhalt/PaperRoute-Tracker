@@ -619,7 +619,7 @@ Public Class RecoveryDraftTests
     ' if that call is removed; it passed before any change here.
     <TestMethod>
     Public Sub StartupOffersTheDraftAfterTheBoardIsRendered()
-        Dim startup As String = File.ReadAllText(Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManuscriptPipeline", "Form1.vb"))
+        Dim startup As String = File.ReadAllText(Path.Combine(TestRepository.Root(), "ManuscriptPipeline", "Form1.vb"))
         Dim loading As Integer = startup.IndexOf("Private Sub Form1_Load(", StringComparison.Ordinal)
         Dim rendering As Integer = startup.IndexOf("RenderManuscripts()", loading, StringComparison.Ordinal)
         Dim offering As Integer = startup.IndexOf("OfferRecoveryDraft()", loading, StringComparison.Ordinal)

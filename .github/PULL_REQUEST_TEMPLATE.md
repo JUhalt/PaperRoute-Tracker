@@ -13,6 +13,7 @@ For documentation-only changes, mark build/application checks as not applicable 
 - [ ] `dotnet restore ManuscriptPipeline.slnx`
 - [ ] `dotnet build ManuscriptPipeline.slnx --configuration Release`
 - [ ] `dotnet test PaperRoute.Tests/PaperRoute.Tests.vbproj --configuration Release --no-build`
+- [ ] `dotnet test PaperRoute.Core.Tests/PaperRoute.Core.Tests.vbproj --configuration Release --no-build`
 - [ ] Relevant manual workflow tested where applicable
 - [ ] Light/Dark/System appearance checked for UI changes where applicable
 - [ ] DPI/resizing behavior checked for UI changes where applicable

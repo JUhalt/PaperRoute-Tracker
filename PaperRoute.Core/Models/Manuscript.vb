@@ -1,0 +1,120 @@
+﻿Imports System
+Imports System.Collections.Generic
+
+Namespace Models
+
+    Public Class Manuscript
+
+        Public Property Id As Guid = CoreIds.NewId()
+
+        Public Property Title As String = String.Empty
+
+        Public Property CoAuthors As String = String.Empty
+
+        Public Property Authors As List(Of ManuscriptAuthor) =
+            New List(Of ManuscriptAuthor)()
+
+        Public Property TargetJournal As String = String.Empty
+
+        Public Property TargetJournalId As Guid? = Nothing
+
+        Public Property ManuscriptUrl As String = String.Empty
+
+        Public Property Metadata As ManuscriptMetadata =
+            New ManuscriptMetadata()
+
+        Public Property RelatedLinks As List(Of ManuscriptExternalLink) =
+            New List(Of ManuscriptExternalLink)()
+
+        Public Property Reminders As List(Of ManuscriptReminder) =
+            New List(Of ManuscriptReminder)()
+
+        Public Property Versions As List(Of ManuscriptVersion) =
+            New List(Of ManuscriptVersion)()
+
+        Public Property CurrentVersionId As Guid? = Nothing
+
+        ' Readiness is journal-specific and intentionally independent of the
+        ' manuscript lifecycle. A manuscript may retain preparation history
+        ' for several journals after rerouting.
+        Public Property ReadinessProfiles As List(Of ManuscriptReadiness) =
+            New List(Of ManuscriptReadiness)()
+
+        ' Submission packets may be prepared before a real submission exists.
+        ' They therefore live on the manuscript rather than under
+        ' JournalSubmission.
+        Public Property SubmissionPackets As List(Of SubmissionPacket) =
+            New List(Of SubmissionPacket)()
+
+        Public Property CurrentStage As PaperStage = PaperStage.Idea
+
+        Public Property Location As ManuscriptLocation = ManuscriptLocation.Pipeline
+
+        Public Property StageEnteredDate As DateTime = CoreClock.Now
+
+        Public Property RevisionDeadline As DateTime? = Nothing
+
+        Public Property FileDrawerDate As DateTime? = Nothing
+
+        Public Property FileDrawerReason As String = String.Empty
+
+        Public Property History As List(Of HistoryEvent) =
+            New List(Of HistoryEvent)()
+
+        Public Property Submissions As List(Of JournalSubmission) =
+            New List(Of JournalSubmission)()
+
+        ' The kind of work and the user's own tags (Schema 8).
+        Public Property WorkType As WorkType = WorkType.Unspecified
+
+        Public Property Tags As List(Of String) =
+            New List(Of String)()
+
+        ' Journals being considered for this manuscript, in the order the
+        ' researcher ranks them (#65, Schema 9).
+        Public Property JournalShortlist As List(Of JournalCandidate) =
+            New List(Of JournalCandidate)()
+
+        ' Possible publications found by a publication check (Schema 7).
+        Public Property PublicationMatches As List(Of PublicationMatch) =
+            New List(Of PublicationMatch)()
+
+
+        Public ReadOnly Property SubmissionCount As Integer
+            Get
+                Return Submissions.Count
+            End Get
+        End Property
+
+
+        Public ReadOnly Property RejectionCount As Integer
+            Get
+
+                Dim count As Integer = 0
+
+                For Each submission As JournalSubmission In Submissions
+
+                    For Each decisionEvent As EditorialDecisionEvent In submission.Decisions
+
+                        Select Case decisionEvent.Decision
+
+                            Case EditorialDecision.Rejected,
+                                 EditorialDecision.DeskRejected,
+                                 EditorialDecision.RejectedAfterReview
+
+                                count += 1
+
+                        End Select
+
+                    Next
+
+                Next
+
+                Return count
+
+            End Get
+        End Property
+
+    End Class
+
+End Namespace

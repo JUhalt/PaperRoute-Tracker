@@ -115,9 +115,17 @@ Public Class DeleteQuestionTests
     Friend Shared Function SourceFiles() As List(Of String)
 
         Dim app As String =
-            Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManuscriptPipeline")
+            Path.Combine(TestRepository.Root(), "ManuscriptPipeline")
 
-        Return Directory.GetFiles(app, "*.vb", SearchOption.AllDirectories).
+        ' The app's code that moved into its core library (v1.1) is swept too.
+        Dim core As String =
+            Path.Combine(TestRepository.Root(), "PaperRoute.Core")
+
+        ' And the Windows implementations the core asks for (core stage 2).
+        Dim platform As String =
+            Path.Combine(TestRepository.Root(), "PaperRoute.Platform")
+
+        Return {app, core, platform}.SelectMany(Function(folder) Directory.GetFiles(folder, "*.vb", SearchOption.AllDirectories)).
             Where(Function(source) Not source.Contains("\obj\", StringComparison.OrdinalIgnoreCase) AndAlso Not source.Contains("\bin\", StringComparison.OrdinalIgnoreCase)).
             ToList()
 

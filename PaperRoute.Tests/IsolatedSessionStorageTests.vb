@@ -145,6 +145,32 @@ Public Class IsolatedSessionStorageTests
 
     End Sub
 
+    ' The fresh copy's platform library registers in the copy's own registry
+    ' (core stage 2, risk R9): one core per context, so the example session
+    ' the test below starts reads keys as the app does, and the test host's
+    ' registration is untouched.
+    <TestMethod>
+    <DoNotParallelize>
+    Public Sub TheFreshCopyRegistersInItsOwnRegistry()
+
+        Dim hostSecrets As Global.ManuscriptPipeline.ISecretProtector = Global.ManuscriptPipeline.PlatformServices.Secrets
+
+        Using session As New IsolatedStorageAssembly()
+
+            Assert.AreEqual("UnavailableSecretProtector", session.Secrets().GetType().Name, "A fresh copy starts on the core's default.")
+
+            session.CallStatic("WindowsPlatform", "Register")
+
+            Dim secrets As Object = session.Secrets()
+            Assert.AreEqual("ManuscriptPipeline.Services.DpapiSecretProtector", secrets.GetType().FullName)
+            Assert.AreNotSame(GetType(DpapiSecretProtector), secrets.GetType(), "It is the copy's platform library, not the test host's.")
+            Assert.AreNotSame(AssemblyLoadContext.Default, AssemblyLoadContext.GetLoadContext(secrets.GetType().Assembly))
+            Assert.AreSame(hostSecrets, Global.ManuscriptPipeline.PlatformServices.Secrets, "The test host's registry is untouched.")
+
+        End Using
+
+    End Sub
+
     ' #83 and #96, end to end: the example's own process, as Program.Main
     ' runs it for --example, in a fresh copy of PaperRoute. The window opens
     ' on the seeded example, a manuscript and a setting are changed and
@@ -177,7 +203,12 @@ Public Class IsolatedSessionStorageTests
             Sub()
                 Using session As New IsolatedStorageAssembly()
 
-                    ' First, before any folder is resolved, as in Program.Main.
+                    ' As Program.Main: the Windows platform first, in this
+                    ' context's own registry (the test host's registration
+                    ' is another copy of the core's statics).
+                    session.CallStatic("WindowsPlatform", "Register")
+
+                    ' Then, before any folder is resolved, as in Program.Main.
                     session.CallStatic("ExampleLibraryService", "StartSession")
                     Dim currentData As String = session.StoragePath("CurrentDataRoot")
                     Dim root As String = Path.GetDirectoryName(currentData)
@@ -353,11 +384,19 @@ Public Class IsolatedSessionStorageTests
 
     ' A fresh collectible assembly context exercises the real process-wide seam
     ' without configuring or resetting the test host's ordinary application copy.
+    ' The app, its core library and its platform library all load into it from
+    ' the app's folder, so none shares statics with the test host's copies;
+    ' Form1 comes from the app.
     Private NotInheritable Class IsolatedStorageAssembly
         Implements IDisposable
 
-        Private ReadOnly _context As New AssemblyLoadContext("PaperRoute isolated storage " & Guid.NewGuid().ToString("N"), True)
-        Private ReadOnly _assembly As Assembly = _context.LoadFromAssemblyPath(GetType(StorageEnvironment).Assembly.Location)
+        Private Shared ReadOnly AppFolder As String = Path.GetDirectoryName(GetType(Global.ManuscriptPipeline.Form1).Assembly.Location)
+        Private ReadOnly _context As New SiblingLoadContext("PaperRoute isolated storage " & Guid.NewGuid().ToString("N"), AppFolder)
+        Private ReadOnly _assemblies As Assembly() = {
+            _context.LoadFromAssemblyPath(GetType(Global.ManuscriptPipeline.Form1).Assembly.Location),
+            _context.LoadFromAssemblyName(New AssemblyName("PaperRoute.Core")),
+            _context.LoadFromAssemblyName(New AssemblyName("PaperRoute.Platform"))
+        }
         Public ReadOnly Property Root As String = Path.Combine(Path.GetTempPath(), "PaperRoute-Isolation-Test-" & Guid.NewGuid().ToString("N"))
 
         Public Sub Configure(rootDirectory As String)
@@ -369,14 +408,29 @@ Public Class IsolatedSessionStorageTests
         End Function
 
         Public Function Create(typeName As String) As Object
-            Return Activator.CreateInstance(_assembly.GetType("ManuscriptPipeline." & typeName, True))
+            Return Activator.CreateInstance(FindType("ManuscriptPipeline." & typeName))
         End Function
 
         Public Function CallStatic(typeName As String, methodName As String, ParamArray arguments As Object()) As Object
-            Dim method As MethodInfo = _assembly.GetType("ManuscriptPipeline.Services." & typeName, True).
+            Dim method As MethodInfo = FindType("ManuscriptPipeline.Services." & typeName).
                 GetMethods(BindingFlags.Public Or BindingFlags.NonPublic Or BindingFlags.Static).
                 Single(Function(item) item.Name = methodName AndAlso item.GetParameters().Length = arguments.Length)
             Return Invoke(method, Nothing, arguments)
+        End Function
+
+        ' The key protector this context's core holds (core stage 2).
+        Public Function Secrets() As Object
+            Return FindType("ManuscriptPipeline.PlatformServices").GetProperty("Secrets").GetValue(Nothing)
+        End Function
+
+        ' The app first, then the core library, then the platform library,
+        ' all from this context.
+        Private Function FindType(fullName As String) As Type
+            For Each owner As Assembly In _assemblies
+                Dim found As Type = owner.GetType(fullName, False)
+                If found IsNot Nothing Then Return found
+            Next
+            Throw New TypeLoadException(fullName & " is in none of the app, its core library and its platform library.")
         End Function
 
         Public Function CallInstance(target As Object, methodName As String, ParamArray arguments As Object()) As Object
@@ -402,6 +456,29 @@ Public Class IsolatedSessionStorageTests
                 DeleteTemporaryRoot(normalized)
             End If
         End Sub
+
+    End Class
+
+    ' Resolves the app, its core library and its platform library from the
+    ' app's folder into this context; everything else (the framework, the
+    ' packages) comes from the default context, as before.
+    Private NotInheritable Class SiblingLoadContext
+        Inherits AssemblyLoadContext
+
+        Private Shared ReadOnly Siblings As String() = {"PaperRouteTracker", "PaperRoute.Core", "PaperRoute.Platform"}
+        Private ReadOnly _folder As String
+
+        Public Sub New(name As String, folder As String)
+            MyBase.New(name, True)
+            _folder = folder
+        End Sub
+
+        Protected Overrides Function Load(assemblyName As AssemblyName) As Assembly
+            If Siblings.Contains(assemblyName.Name, StringComparer.OrdinalIgnoreCase) Then
+                Return LoadFromAssemblyPath(Path.Combine(_folder, assemblyName.Name & ".dll"))
+            End If
+            Return Nothing
+        End Function
 
     End Class
 

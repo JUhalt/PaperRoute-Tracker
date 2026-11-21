@@ -253,9 +253,13 @@ try {
         Write-Host ('{0}  {1}x{2}  {3}' -f $path, $size.Width, $size.Height, $windows[$index].Title)
     }
     $applicationDll = Join-Path $harness.DirectoryName 'PaperRouteTracker.dll'
+    $coreDll = Join-Path $harness.DirectoryName 'PaperRoute.Core.dll'
+    $platformDll = Join-Path $harness.DirectoryName 'PaperRoute.Platform.dll'
     $evidence = [ordered]@{
         Name = $Name; Harness = $harness.FullName; HarnessSha256 = (Get-Sha256 $harness.FullName)
         ApplicationDllSha256 = if (Test-Path -LiteralPath $applicationDll -PathType Leaf) { Get-Sha256 $applicationDll } else { $null }
+        CoreDllSha256 = if (Test-Path -LiteralPath $coreDll -PathType Leaf) { Get-Sha256 $coreDll } else { $null }
+        PlatformDllSha256 = if (Test-Path -LiteralPath $platformDll -PathType Leaf) { Get-Sha256 $platformDll } else { $null }
         Arguments = @($HarnessArguments); StartedAtUtc = $startedAt.ToString('o'); Painted = $marker
         WaitedSeconds = $waitedSeconds; CapturedAtUtc = [DateTime]::UtcNow.ToString('o')
         CaptureMethod = 'PrintWindow PW_RENDERFULLCONTENT, cropped to DWMWA_EXTENDED_FRAME_BOUNDS'

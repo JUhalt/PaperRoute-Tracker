@@ -38,6 +38,11 @@ Friend Module Program
         ' existing VB application framework continues as usual.
         VelopackApp.Build().Run()
 
+        ' Then the Windows parts the core asks for (core stage 2): stored
+        ' keys through DPAPI. Before anything that could read a key, so a
+        ' stored key never reads as missing (StartupRegistersThePlatformTests).
+        WindowsPlatform.Register()
+
         ' The example library for teaching (#83) opens in its own disposable
         ' session, configured before any storage folder is resolved, so the
         ' user's library is never opened.
@@ -48,7 +53,7 @@ Friend Module Program
         ' (#120): a crash anywhere in the process, and a faulted task nobody
         ' awaited, which gets a report only. After the example session is
         ' configured, so its reports go to the disposable session too.
-        Dim errorReports As New ErrorReportService()
+        Dim errorReports As New ErrorReportService(AddressOf UpdateService.CurrentVersionText)
 
         AddHandler AppDomain.CurrentDomain.UnhandledException,
             AddressOf errorReports.OnUnhandledException

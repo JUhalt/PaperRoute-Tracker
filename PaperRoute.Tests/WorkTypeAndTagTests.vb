@@ -4,6 +4,7 @@ Imports System.Drawing
 Imports System.IO
 Imports System.Linq
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
+Imports ManuscriptPipeline.Controls
 Imports ManuscriptPipeline.Models
 Imports ManuscriptPipeline.Services
 
@@ -65,7 +66,7 @@ Public Class WorkTypeAndTagTests
     Public Sub EveryTagColorIsLegibleInBothThemes()
         For Each palette As TagPalette In [Enum].GetValues(GetType(TagPalette))
             For Each dark In {False, True}
-                Dim ratio As Double = Contrast(WorkTypeService.Foreground(palette, dark), WorkTypeService.Background(palette, dark))
+                Dim ratio As Double = Contrast(TagChipPainter.Foreground(palette, dark), TagChipPainter.Background(palette, dark))
                 Assert.IsTrue(ratio >= 4.5, palette.ToString() & If(dark, " dark ", " light ") & ratio.ToString("0.00"))
             Next
         Next

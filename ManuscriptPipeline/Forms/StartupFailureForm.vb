@@ -874,7 +874,7 @@ Namespace Forms
             Try
 
                 UrlSafetyService.OpenInBrowser(
-                    UserGuideService.RecoveringYourLibraryUrl
+                    UpdateService.RecoveringYourLibraryUrl
                 )
 
             Catch ex As Exception

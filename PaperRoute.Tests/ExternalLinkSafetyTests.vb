@@ -80,16 +80,21 @@ Public Class ExternalLinkSafetyTests
     End Sub
 
 
-    ' The shell is reached from three places only: the browser opener for
-    ' web links, the file opener that asks before a program, and the
+    ' The shell is reached from two places only: the Windows launcher,
+    ' through which the browser opener for web links and the file opener
+    ' that asks before a program reach it (core stage 2, step 10), and the
     ' open-folder button in Diagnostics.
     <TestMethod>
     Public Sub TheShellIsReachedOnlyThroughTheTwoOpenersAndDiagnostics()
 
-        Dim root As String = Path.Combine(AssistantCoreTests.RepositoryRoot(), "ManuscriptPipeline")
+        Dim root As String = Path.Combine(TestRepository.Root(), "ManuscriptPipeline")
+        ' And the app's code that moved into its core library (v1.1).
+        Dim core As String = Path.Combine(TestRepository.Root(), "PaperRoute.Core")
+        ' And the Windows implementations the core asks for (core stage 2).
+        Dim platform As String = Path.Combine(TestRepository.Root(), "PaperRoute.Platform")
         Dim found As New List(Of String)()
 
-        For Each source As String In Directory.GetFiles(root, "*.vb", SearchOption.AllDirectories)
+        For Each source As String In {root, core, platform}.SelectMany(Function(folder) Directory.GetFiles(folder, "*.vb", SearchOption.AllDirectories))
 
             If source.Contains(Path.DirectorySeparatorChar & "obj" & Path.DirectorySeparatorChar) OrElse
                source.Contains(Path.DirectorySeparatorChar & "bin" & Path.DirectorySeparatorChar) Then Continue For
@@ -106,7 +111,7 @@ Public Class ExternalLinkSafetyTests
         Next
 
         found.Sort(StringComparer.Ordinal)
-        CollectionAssert.AreEqual({"DiagnosticsForm.vb", "FileOpenService.vb", "UrlSafetyService.vb"}, found, String.Join(", ", found))
+        CollectionAssert.AreEqual({"DiagnosticsForm.vb", "WindowsLauncher.vb"}, found, String.Join(", ", found))
 
     End Sub
 

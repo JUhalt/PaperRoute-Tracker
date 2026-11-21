@@ -90,6 +90,16 @@ foreach ($pair in @(@('Version', $Version), @('AssemblyVersion', $numericVersion
         throw "Project $($pair[0]) must explicitly equal '$($pair[1])' before packaging."
     }
 }
+# The app's model and services are in PaperRoute.Core.dll from v1.1, and the
+# manifests and the User-Agent read the version there: its project writes the
+# same three versions explicitly.
+$coreProject = Read-SafeXml (Join-Path $repoRoot 'PaperRoute.Core/PaperRoute.Core.vbproj')
+foreach ($pair in @(@('Version', $Version), @('AssemblyVersion', $numericVersion), @('FileVersion', $numericVersion))) {
+    $nodes = @($coreProject.SelectNodes("/Project/PropertyGroup/$($pair[0])"))
+    if ($nodes.Count -ne 1 -or $nodes[0].InnerText -cne $pair[1]) {
+        throw "PaperRoute.Core $($pair[0]) must explicitly equal the app's '$($pair[1])' before packaging."
+    }
+}
 # The Velopack library the app references and the vpk that packs it are one
 # version, as release.yml requires; 1.2.161 from 1.0 (#179).
 $velopackVersion = '1.2.161'
@@ -366,18 +376,28 @@ function Assert-NoticesNameRuntime([string] $NoticesPath, [string] $RuntimeVersi
     }
 }
 
-function Assert-ArchivePayload([string] $Path, [string] $ExpectedDllHash, [switch] $CheckNuspec) {
+function Assert-ArchivePayload([string] $Path, [string] $ExpectedDllHash, [string] $ExpectedCoreDllHash, [string] $ExpectedPlatformDllHash, [switch] $CheckNuspec) {
     $archive = [IO.Compression.ZipFile]::OpenRead($Path)
     try {
         $dllEntries = @($archive.Entries | Where-Object { $_.Name -ceq 'PaperRouteTracker.dll' })
         $exeEntries = @($archive.Entries | Where-Object { $_.Name -ceq 'PaperRouteTracker.exe' })
-        if ($dllEntries.Count -ne 1 -or $exeEntries.Count -lt 1) {
+        $coreEntries = @($archive.Entries | Where-Object { $_.Name -ceq 'PaperRoute.Core.dll' })
+        $platformEntries = @($archive.Entries | Where-Object { $_.Name -ceq 'PaperRoute.Platform.dll' })
+        if ($dllEntries.Count -ne 1 -or $exeEntries.Count -lt 1 -or $coreEntries.Count -ne 1 -or $platformEntries.Count -ne 1) {
             throw "'$Path' does not contain an unambiguous PaperRoute payload."
         }
         $stream = $dllEntries[0].Open()
         try { $dllHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($stream)).ToLowerInvariant() }
         finally { $stream.Dispose() }
         if ($dllHash -cne $ExpectedDllHash) { throw "The application DLL in '$Path' differs from the published DLL." }
+        $coreStream = $coreEntries[0].Open()
+        try { $coreDllHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($coreStream)).ToLowerInvariant() }
+        finally { $coreStream.Dispose() }
+        if ($coreDllHash -cne $ExpectedCoreDllHash) { throw "PaperRoute.Core.dll in '$Path' differs from the published one." }
+        $platformStream = $platformEntries[0].Open()
+        try { $platformDllHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($platformStream)).ToLowerInvariant() }
+        finally { $platformStream.Dispose() }
+        if ($platformDllHash -cne $ExpectedPlatformDllHash) { throw "PaperRoute.Platform.dll in '$Path' differs from the published one." }
         foreach ($legalName in @('LICENSE.txt', 'NOTICE.md', 'THIRD-PARTY-NOTICES.txt')) {
             $legalEntries = @($archive.Entries | Where-Object { $_.Name -ceq $legalName })
             if ($legalEntries.Count -ne 1) { throw "'$Path' must contain exactly one '$legalName'." }
@@ -405,7 +425,7 @@ function Assert-ArchivePayload([string] $Path, [string] $ExpectedDllHash, [switc
                 throw "Package identity/version mismatch in '$Path'."
             }
         }
-        return [ordered]@{ FileName = [IO.Path]::GetFileName($Path); PayloadDllSha256 = $dllHash }
+        return [ordered]@{ FileName = [IO.Path]::GetFileName($Path); PayloadDllSha256 = $dllHash; PayloadCoreDllSha256 = $coreDllHash; PayloadPlatformDllSha256 = $platformDllHash }
     }
     finally { $archive.Dispose() }
 }
@@ -419,18 +439,29 @@ try {
     # This runs on the maintainer's computer, so the OnDemand tests (the
     # file dialogs, which leave Explorer's view state under HKCU) are left
     # to CI, which runs them on disposable runners (#196), and the OnScreen
-    # tests, which need an unlocked desktop in use, to certification.
-    Invoke-CandidateCommand '02-test' $dotnet (@(
-        'test', 'PaperRoute.Tests/PaperRoute.Tests.vbproj', '--configuration', 'Release', '--no-build', '--no-restore',
-        '--filter', 'TestCategory!=OnDemand&TestCategory!=OnScreen',
-        '--artifacts-path', $buildRoot, '--logger', 'trx;LogFileName=PaperRoute.Tests.trx', '--results-directory', $testRoot
-    ) + $properties)
-    $trxPath = Join-Path $testRoot 'PaperRoute.Tests.trx'
-    $trx = Read-SafeXml $trxPath
-    $counters = $trx.SelectSingleNode('//*[local-name()="ResultSummary"]/*[local-name()="Counters"]')
-    if ($null -eq $counters -or [int] $counters.GetAttribute('total') -lt 1 -or
-        [int] $counters.GetAttribute('passed') -ne [int] $counters.GetAttribute('total')) {
-        throw 'The TRX report must contain tests, all passing, with none skipped.'
+    # tests, which need an unlocked desktop in use, to certification. Both
+    # test projects run (core stage 2 moved the core's tests that need no
+    # Windows to PaperRoute.Core.Tests), each under the same rule, and the
+    # candidate records the sum.
+    $testsPassed = 0
+    $testsPassedByProject = [ordered]@{}
+    foreach ($testProject in @(
+        [ordered]@{ Step = '02-test'; Name = 'PaperRoute.Tests' },
+        [ordered]@{ Step = '02-test-core'; Name = 'PaperRoute.Core.Tests' })) {
+        Invoke-CandidateCommand $testProject.Step $dotnet (@(
+            'test', "$($testProject.Name)/$($testProject.Name).vbproj", '--configuration', 'Release', '--no-build', '--no-restore',
+            '--filter', 'TestCategory!=OnDemand&TestCategory!=OnScreen&TestCategory!=SameDataEverywhere',
+            '--artifacts-path', $buildRoot, '--logger', "trx;LogFileName=$($testProject.Name).trx", '--results-directory', $testRoot
+        ) + $properties)
+        $trxPath = Join-Path $testRoot "$($testProject.Name).trx"
+        $trx = Read-SafeXml $trxPath
+        $counters = $trx.SelectSingleNode('//*[local-name()="ResultSummary"]/*[local-name()="Counters"]')
+        if ($null -eq $counters -or [int] $counters.GetAttribute('total') -lt 1 -or
+            [int] $counters.GetAttribute('passed') -ne [int] $counters.GetAttribute('total')) {
+            throw "The TRX report of $($testProject.Name) must contain tests, all passing, with none skipped."
+        }
+        $testsPassedByProject[$testProject.Name] = [int] $counters.GetAttribute('passed')
+        $testsPassed += [int] $counters.GetAttribute('passed')
     }
     Invoke-CandidateCommand '03-publish' $dotnet (@(
         'publish', 'ManuscriptPipeline/ManuscriptPipeline.vbproj', '--configuration', 'Release', '--runtime', 'win-x64',
@@ -439,7 +470,7 @@ try {
     ) + $properties)
 
     foreach ($required in @('PaperRouteTracker.exe', 'PaperRouteTracker.dll', 'PaperRouteTracker.deps.json',
-        'PaperRouteTracker.runtimeconfig.json', 'coreclr.dll', 'hostfxr.dll', 'System.Windows.Forms.dll',
+        'PaperRouteTracker.runtimeconfig.json', 'PaperRoute.Core.dll', 'PaperRoute.Platform.dll', 'coreclr.dll', 'hostfxr.dll', 'System.Windows.Forms.dll',
         'docs/USER_GUIDE.md', 'LICENSE.txt', 'NOTICE.md', 'THIRD-PARTY-NOTICES.txt')) {
         if (-not (Test-Path -LiteralPath (Join-Path $publishRoot $required) -PathType Leaf)) {
             throw "The self-contained publish payload is missing '$required'."
@@ -456,6 +487,18 @@ try {
         throw "Published binary versions do not match '$Version' / '$numericVersion'."
     }
     $dllHash = Get-Sha256 $dllPath
+    $coreDllPath = Join-Path $publishRoot 'PaperRoute.Core.dll'
+    $coreVersionInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo($coreDllPath)
+    $coreAssemblyVersion = [Reflection.AssemblyName]::GetAssemblyName($coreDllPath).Version.ToString()
+    if (($coreVersionInfo.ProductVersion -split '\+')[0] -cne $Version -or
+        $coreVersionInfo.FileVersion -cne $numericVersion -or $coreAssemblyVersion -cne $numericVersion) {
+        throw "Published PaperRoute.Core.dll versions do not match '$Version' / '$numericVersion'."
+    }
+    $coreDllHash = Get-Sha256 $coreDllPath
+    # PaperRoute.Platform.dll (v1.1: the Windows implementations the core asks
+    # for) has no version gate: nothing reads its version. The package must
+    # carry the published copy.
+    $platformDllHash = Get-Sha256 (Join-Path $publishRoot 'PaperRoute.Platform.dll')
     Invoke-CandidateCommand '04-package' $dnx @(
         'vpk', '--version', $velopackVersion, 'pack', '--packId', $packId, '--packVersion', $Version,
         '--packDir', $publishRoot, '--mainExe', 'PaperRouteTracker.exe', '--packTitle', 'PaperRoute Tracker',
@@ -472,7 +515,7 @@ try {
     if ($packages.Count -ne 1 -or $installers.Count -ne 1 -or $portable.Count -ne 0 -or $installers[0].Length -le 0) {
         throw 'Expected exactly one full package and one installer, and no portable ZIP, in the fresh release directory.'
     }
-    $packageProof = Assert-ArchivePayload $packages[0].FullName $dllHash -CheckNuspec
+    $packageProof = Assert-ArchivePayload $packages[0].FullName $dllHash $coreDllHash $platformDllHash -CheckNuspec
     $feedPath = Join-Path $releaseRoot "releases.$channel.json"
     $feed = Get-Content -LiteralPath $feedPath -Raw | ConvertFrom-Json
     $fullAsset = @($feed.Assets | Where-Object { $_.FileName -ceq $packages[0].Name })
@@ -507,9 +550,11 @@ try {
         Commit = $commit; DirtyCheckout = ($sourceStatus.Count -gt 0); SourceStatusFile = 'source-status.txt'
         SourceSnapshotFile = 'source-files.json'; SourceSnapshotSha256 = (Get-Sha256 (Join-Path $candidateRoot 'source-files.json'))
         StartedAtUtc = $startedAt.ToString('o'); CompletedAtUtc = [DateTime]::UtcNow.ToString('o')
-        TestsPassed = [int] $counters.GetAttribute('passed'); TestReport = 'tests/PaperRoute.Tests.trx'
+        TestsPassed = $testsPassed; TestReport = 'tests/PaperRoute.Tests.trx'
+        TestsPassedByProject = $testsPassedByProject; CoreTestReport = 'tests/PaperRoute.Core.Tests.trx'
         ProductVersion = $versionInfo.ProductVersion; AssemblyVersion = $assemblyVersion
         FileVersion = $versionInfo.FileVersion; PublishedDllSha256 = $dllHash
+        PublishedCoreDllSha256 = $coreDllHash; PublishedPlatformDllSha256 = $platformDllHash
         ReleaseNotesSha256 = (Get-Sha256 $releaseNotes)
         Package = $packageProof; Assets = $assetProof
         ChecksumFileSha256 = (Get-Sha256 $checksumPath); InstallerSignatureStatus = $signature.Status.ToString()
@@ -519,6 +564,6 @@ try {
     }
     [IO.File]::WriteAllText((Join-Path $candidateRoot 'candidate-verification.json'), ($evidence | ConvertTo-Json -Depth 8), $utf8)
     Write-Host "Verified local candidate: $candidateRoot"
-    Write-Host "Tests: $($evidence.TestsPassed) passed; the OnDemand tests are left to CI and the OnScreen tests to certification. Installer signature: $($evidence.InstallerSignatureStatus). Bundled .NET runtime: $runtimeVersion. HighDpiMode: $highDpiMode."
+    Write-Host "Tests: $($evidence.TestsPassed) passed in the two test projects ($(@($testsPassedByProject.Values) -join ' + ')); the OnDemand tests are left to CI and the OnScreen tests to certification. Installer signature: $($evidence.InstallerSignatureStatus). Bundled .NET runtime: $runtimeVersion. HighDpiMode: $highDpiMode."
 }
 finally { Pop-Location }

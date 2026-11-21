@@ -1,0 +1,116 @@
+<!--
+  Pills (inventory C.4): small fully rounded labels that are not controls.
+  The card's stage pill is today's PillLabel (Controls\PillLabel.vb;
+  Form1.vb:3138, 3152-3153, 3193-3194): the stage in upper case, badge font
+  (8 pt bold, 11 px), 16 x 6 px of inset in all (8,3), in the stage's own pair.
+  OutlineThickness is 0 in Light and Dark; under high contrast (step 11) the
+  pill is outlined in its ink, as PillLabel.vb:31-46 does today.
+
+  Left out of C.4: success and info (no token in d1 5.1, nothing on the Board)
+  and the icon pill.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Style Selector="Border.pill">
+    <Setter Property="CornerRadius" Value="{DynamicResource FullRadius}" />
+    <Setter Property="Padding" Value="8,3" />
+    <Setter Property="Background" Value="{DynamicResource HoverBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource SecondaryTextBrush}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource OutlineThickness}" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.pill > TextBlock">
+    <Setter Property="FontSize" Value="{DynamicResource BadgeFontSize}" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+  </Style>
+
+  <!-- A count beside a rail item (step 7). -->
+  <Style Selector="Border.pill.count">
+    <Setter Property="MinWidth" Value="20" />
+  </Style>
+  <Style Selector="Border.pill.accent">
+    <Setter Property="Background" Value="{DynamicResource AccentMutedBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector="Border.pill.accent > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector="Border.pill.warning">
+    <Setter Property="Background" Value="{DynamicResource WarningMutedBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource WarningBrush}" />
+  </Style>
+  <Style Selector="Border.pill.warning > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
+  </Style>
+  <Style Selector="Border.pill.danger">
+    <Setter Property="Background" Value="{DynamicResource DangerMutedBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}" />
+  </Style>
+  <Style Selector="Border.pill.danger > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+  </Style>
+
+  <!-- The eight stages (UiTheme.StageBackground / StageForeground, UiTheme.vb:476-623); class names as CardViewModel.StageClass gives them. -->
+  <Style Selector="Border.pill.stage-idea">
+    <Setter Property="Background" Value="{DynamicResource StageIdeaBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource StageIdeaForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.pill.stage-idea > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource StageIdeaForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.pill.stage-draft">
+    <Setter Property="Background" Value="{DynamicResource StageDraftBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource StageDraftForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.pill.stage-draft > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource StageDraftForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.pill.stage-submitted">
+    <Setter Property="Background" Value="{DynamicResource StageSubmittedBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource StageSubmittedForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.pill.stage-submitted > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource StageSubmittedForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.pill.stage-under-review">
+    <Setter Property="Background" Value="{DynamicResource StageUnderReviewBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource StageUnderReviewForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.pill.stage-under-review > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource StageUnderReviewForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.pill.stage-revision">
+    <Setter Property="Background" Value="{DynamicResource StageRevisionBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource StageRevisionForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.pill.stage-revision > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource StageRevisionForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.pill.stage-accepted">
+    <Setter Property="Background" Value="{DynamicResource StageAcceptedBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource StageAcceptedForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.pill.stage-accepted > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource StageAcceptedForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.pill.stage-in-press">
+    <Setter Property="Background" Value="{DynamicResource StageInPressBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource StageInPressForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.pill.stage-in-press > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource StageInPressForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.pill.stage-published">
+    <Setter Property="Background" Value="{DynamicResource StagePublishedBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource StagePublishedForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.pill.stage-published > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource StagePublishedForegroundBrush}" />
+  </Style>
+
+</Styles>

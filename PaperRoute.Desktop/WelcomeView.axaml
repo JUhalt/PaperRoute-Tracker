@@ -1,0 +1,86 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:PaperRoute.ViewModels"
+             xmlns:board="using:PaperRoute.ViewModels.Board"
+             x:Class="PaperRoute.Desktop.WelcomeView"
+             x:DataType="board:BoardViewModel">
+  <!--
+    The empty library's welcome (d1 4.1), ported from BuildWelcome
+    (Form1.Welcome.vb:37-221): it replaces the whole Board, header included,
+    while the library has no manuscripts. Its texts are today's. In the trial
+    Add is disabled and every other button and link gives a notice (d1 1.2);
+    the example link is left out of the example window (:215), so the trial
+    never shows it.
+  -->
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+    <StackPanel x:Name="Column" Margin="44,56,22,22" HorizontalAlignment="Left">
+
+      <TextBlock x:Name="WelcomeTitle" Classes="page-title" Margin="0,0,0,10" TextWrapping="Wrap"
+                 Text="Your manuscript library is empty"
+                 AutomationProperties.HeadingLevel="1" />
+
+      <TextBlock MaxWidth="560" HorizontalAlignment="Left" Margin="0,0,0,16" TextWrapping="Wrap"
+                 FontSize="{DynamicResource BodyFontSize}" Foreground="{DynamicResource SecondaryTextBrush}"
+                 Text="Start with the paper you are working on now, or bring in what you have already published. Everything else, from journal submissions to reviewer responses, builds on that." />
+
+      <WrapPanel Margin="0,0,0,14">
+        <Button x:Name="WelcomeAdd" Classes="primary" MinHeight="36" Margin="0,0,10,0" Content="+ Add Manuscript"
+                IsEnabled="False"
+                ToolTip.Tip="{x:Static vm:RailItemViewModel.NotInTrial}"
+                ToolTip.ShowOnDisabled="True"
+                AutomationProperties.Name="Add Manuscript"
+                AutomationProperties.HelpText="{x:Static vm:RailItemViewModel.NotInTrial}"
+                AutomationProperties.AutomationId="WelcomeAddManuscript" />
+        <Button x:Name="WelcomeImport" MinHeight="36" Content="Import Existing Work"
+                Command="{Binding NotInTrialCommand}" CommandParameter="Import &amp; Export"
+                AutomationProperties.HelpText="Opens Import &amp; Export"
+                AutomationProperties.AutomationId="WelcomeImport" />
+      </WrapPanel>
+
+      <WrapPanel x:Name="WaysToStart" MaxWidth="560" HorizontalAlignment="Left" Margin="0,0,0,18"
+                 AutomationProperties.Name="Ways to start"
+                 AutomationProperties.AccessibilityView="Control">
+        <Button Classes="quiet compact" Margin="0,0,8,6" Content="Paste a title page"
+                Command="{Binding NotInTrialCommand}" CommandParameter="Adding a manuscript"
+                AutomationProperties.HelpText="Start by importing: Paste a title page" />
+        <Button Classes="quiet compact" Margin="0,0,8,6" Content="ORCID works"
+                Command="{Binding NotInTrialCommand}" CommandParameter="The Library"
+                AutomationProperties.HelpText="Start by importing: ORCID works" />
+        <Button Classes="quiet compact" Margin="0,0,8,6" Content="BibTeX or RIS"
+                Command="{Binding NotInTrialCommand}" CommandParameter="Import &amp; Export"
+                AutomationProperties.HelpText="Start by importing: BibTeX or RIS" />
+        <Button Classes="quiet compact" Margin="0,0,8,6" Content="Spreadsheet"
+                Command="{Binding NotInTrialCommand}" CommandParameter="Import &amp; Export"
+                AutomationProperties.HelpText="Start by importing: Spreadsheet" />
+      </WrapPanel>
+
+      <!-- The privacy promise, in a tinted panel that follows its text (#258). -->
+      <Border x:Name="PrivacyNote" Classes="card callout" HorizontalAlignment="Left" Padding="12,8"
+              CornerRadius="{DynamicResource ControlRadius}">
+        <TextBlock MaxWidth="536" TextWrapping="Wrap"
+                   FontSize="{DynamicResource BodyFontSize}" Foreground="{DynamicResource PrimaryTextBrush}"
+                   Text="PaperRoute keeps your library on this computer. No account is needed, and your library is never uploaded. The one request PaperRoute makes by itself is a check for updates when it starts; it sends nothing about you, and Preferences turns it off." />
+      </Border>
+
+      <Button x:Name="QuickStart" Classes="link" Margin="-4,12,-4,-4" HorizontalAlignment="Left"
+              Content="Read the Quick Start"
+              Command="{Binding NotInTrialCommand}" CommandParameter="The User Guide"
+              AutomationProperties.HelpText="Opens Help at the Quick Start."
+              AutomationProperties.ControlTypeOverride="Hyperlink"
+              AutomationProperties.AutomationId="QuickStart" />
+
+      <StackPanel x:Name="ExampleLine" Orientation="Horizontal" Margin="0,6,0,0"
+                  IsVisible="{Binding ShowsExampleLink}">
+        <TextBlock VerticalAlignment="Center" FontSize="{DynamicResource BodyFontSize}"
+                   Foreground="{DynamicResource SecondaryTextBrush}"
+                   Text="New to PaperRoute, or teaching with it? " />
+        <Button Classes="link" Content="Explore an example library"
+                Command="{Binding NotInTrialCommand}" CommandParameter="Opening the example library"
+                AutomationProperties.HelpText="Opens a fictional research group's library in a separate window. Your library is not changed."
+                AutomationProperties.ControlTypeOverride="Hyperlink"
+                AutomationProperties.AutomationId="ExploreExample" />
+      </StackPanel>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

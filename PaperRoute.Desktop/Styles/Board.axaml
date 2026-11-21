@@ -1,0 +1,197 @@
+<!--
+  The Board's page-level classes (d1 5, Board.axaml), each with today's font
+  and colour:
+
+    page-title     21 px bold, PrimaryText (Form1.Shell.vb:1211)
+    caption        11 px bold, MutedText ("NEEDS ATTENTION", Form1.vb:463-467)
+    status.*       a card's status line: insights in 12 px bold, Warning or
+                   Danger; the stage clock (muted) in 12 px regular, MutedText
+                   (Form1.vb:3197-3212)
+    journal.*      the journal line, 12 px: Secondary, Warning ("No target
+                   journal yet") or Muted (Form1.vb:3257-3268)
+    meta           12 px SecondaryText (the route text, Form1.vb:3314-3325)
+    empty          an empty shelf's message, SecondaryText, 12 px inset
+                   (Form1.vb:3552-3566)
+    banner         the example banner: AccentMutedBackground, 16,8 inset,
+                   PrimaryText (Form1.Example.vb:36-60)
+    notice-strip   the status line under the page: MutedText on the board,
+                   inset 22,4,0,6 (Form1.vb:646-652)
+    link           a link button: AccentBrush, AccentSecondary while pressed,
+                   underlined while hovered (LinkLabel, Form1.vb:495-503);
+                   with card-title, a card's title: 14 px bold PrimaryText,
+                   AccentBrush while pressed (Form1.vb:3239-3255)
+    card-title-text  the title's text, two 18 px lines tall, ellipsis
+    route-dot      10 px dots: closed a MutedText disc 1 px inside, current an
+                   AccentMuted fill in an AccentBrush ring, accepted an
+                   AccentBrush disc (Controls\RouteDots.vb:59-91)
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Style Selector="TextBlock.page-title">
+    <Setter Property="FontSize" Value="{DynamicResource PageTitleFontSize}" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.caption">
+    <Setter Property="FontSize" Value="{DynamicResource CaptionFontSize}" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.status">
+    <Setter Property="FontSize" Value="{DynamicResource InsightFontSize}" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="MaxLines" Value="1" />
+  </Style>
+  <Style Selector="TextBlock.status.warning">
+    <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
+  </Style>
+  <Style Selector="TextBlock.status.danger">
+    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+  </Style>
+  <Style Selector="TextBlock.status.muted">
+    <Setter Property="FontSize" Value="{DynamicResource MetaFontSize}" />
+    <Setter Property="FontWeight" Value="Normal" />
+    <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.journal">
+    <Setter Property="FontSize" Value="{DynamicResource MetaFontSize}" />
+    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="MaxLines" Value="1" />
+  </Style>
+  <Style Selector="TextBlock.journal.warning">
+    <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
+  </Style>
+  <Style Selector="TextBlock.journal.muted">
+    <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.meta">
+    <Setter Property="FontSize" Value="{DynamicResource MetaFontSize}" />
+    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.empty">
+    <Setter Property="FontSize" Value="{DynamicResource BodyFontSize}" />
+    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+    <Setter Property="Padding" Value="12" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+  <Style Selector="Border.banner">
+    <Setter Property="Background" Value="{DynamicResource AccentMutedBackgroundBrush}" />
+    <Setter Property="Padding" Value="16,8" />
+  </Style>
+  <Style Selector="Border.banner TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+  <Style Selector="Border.notice-strip">
+    <Setter Property="Background" Value="{DynamicResource BoardBackgroundBrush}" />
+    <Setter Property="Padding" Value="22,4,0,6" />
+  </Style>
+  <Style Selector="Border.notice-strip TextBlock">
+    <Setter Property="FontSize" Value="{DynamicResource BodyFontSize}" />
+    <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
+  </Style>
+
+  <!--
+    Link buttons. After Button.axaml, so these win over the button faces.
+    The focus ring is drawn inside the link's own bounds: Avalonia clips a
+    focus adorner to the control it marks, so a ring drawn 2 px outside showed
+    only as specks at its corners (found by step 10's pictures). The link has
+    4 px of padding (the 2 px ring and 2 px clear of the text) and 4 px less
+    margin on every side, so its text stays where it was; a link with a
+    margin of its own sets it 4 px less.
+  -->
+  <Style Selector="Button.link">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="4" />
+    <Setter Property="Margin" Value="-4" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusAdorner">
+      <FocusAdornerTemplate>
+        <Border BorderThickness="2" CornerRadius="4"
+                BorderBrush="{DynamicResource AccentSecondaryBrush}" />
+      </FocusAdornerTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="Button.link /template/ ContentPresenter#PART_ContentPresenter, Button.link:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.link:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.link:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector="Button.link:pointerover AccessText, Button.link:pointerover TextBlock">
+    <Setter Property="TextDecorations" Value="Underline" />
+  </Style>
+  <Style Selector="Button.link:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentSecondaryBrush}" />
+  </Style>
+  <Style Selector="Button.link:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
+  </Style>
+
+  <Style Selector="Button.link.card-title">
+    <Setter Property="FontSize" Value="{DynamicResource CardTitleFontSize}" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+  </Style>
+  <Style Selector="Button.link.card-title:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+  </Style>
+  <Style Selector="Button.link.card-title:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <!-- The title's text: two lines tall whatever its length, cut short with an ellipsis, so every card keeps one height (Form1.vb:3150, 3246). -->
+  <Style Selector="TextBlock.card-title-text">
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="MaxLines" Value="2" />
+    <Setter Property="LineHeight" Value="18" />
+    <Setter Property="Height" Value="36" />
+  </Style>
+
+  <!-- A card menu's Delete... (Form1.vb:3545); off in the trial, so Fluent's disabled ink shows over it. -->
+  <Style Selector="MenuItem.danger">
+    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+  </Style>
+
+  <!-- Route dots. -->
+  <Style Selector="Ellipse.route-dot">
+    <Setter Property="Width" Value="10" />
+    <Setter Property="Height" Value="10" />
+    <Setter Property="Fill" Value="{DynamicResource MutedTextBrush}" />
+  </Style>
+  <Style Selector="Ellipse.route-dot.closed">
+    <Setter Property="Width" Value="8" />
+    <Setter Property="Height" Value="8" />
+    <Setter Property="Margin" Value="1" />
+    <Setter Property="Fill" Value="{DynamicResource MutedTextBrush}" />
+  </Style>
+  <Style Selector="Ellipse.route-dot.current">
+    <Setter Property="Fill" Value="{DynamicResource AccentMutedBackgroundBrush}" />
+    <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="StrokeThickness" Value="1.8" />
+  </Style>
+  <Style Selector="Ellipse.route-dot.accepted">
+    <Setter Property="Fill" Value="{DynamicResource AccentBrush}" />
+  </Style>
+
+</Styles>

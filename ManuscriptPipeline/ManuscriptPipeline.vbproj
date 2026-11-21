@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <Version>1.0.1-rc.1</Version>
+    <Version>1.0.1</Version>
     <AssemblyVersion>1.0.1.0</AssemblyVersion>
     <FileVersion>1.0.1.0</FileVersion>
     <AssemblyName>PaperRouteTracker</AssemblyName>
@@ -29,9 +29,15 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Anthropic" Version="13.3.0" />
+    <!-- Form1 reads workbooks with ClosedXML directly; the services that use it are in PaperRoute.Core, which references it too. -->
     <PackageReference Include="ClosedXML" Version="0.105.1" />
     <PackageReference Include="Velopack" Version="1.2.161" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PaperRoute.Core\PaperRoute.Core.vbproj" />
+    <!-- The Windows implementations the core asks for through PlatformServices (stored keys), registered in Program.Main. -->
+    <ProjectReference Include="..\PaperRoute.Platform\PaperRoute.Platform.vbproj" />
   </ItemGroup>
 
   <ItemGroup>

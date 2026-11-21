@@ -218,9 +218,26 @@ Public Class UserGuideServiceTests
         )
 
         StringAssert.StartsWith(
-            UserGuideService.GitHubGuideUrl,
+            UpdateService.GitHubGuideUrl,
             "https://github.com/JUhalt/PaperRoute-Tracker/blob/",
             "The link Help opens is built the same way."
+        )
+
+        ' The app supplies the running version and whether Setup installed
+        ' this copy; the link is built from exactly those.
+        Assert.AreEqual(
+            UserGuideService.GitHubGuideUrlFor(
+                UpdateService.CurrentVersionText(),
+                developmentBuild:=Not UpdateService.IsInstalledBuild(AppUpdateChannel.Stable)
+            ),
+            UpdateService.GitHubGuideUrl,
+            "Help's link is the running version's guide."
+        )
+
+        Assert.AreEqual(
+            UpdateService.GitHubGuideUrl & "#recovering-your-library",
+            UpdateService.RecoveringYourLibraryUrl,
+            "The startup window's link is that guide's recovery section (#119)."
         )
 
     End Sub
@@ -373,7 +390,7 @@ Public Class UserGuideServiceTests
         Dim readme As String =
             File.ReadAllText(
                 Path.Combine(
-                    AssistantCoreTests.RepositoryRoot(),
+                    TestRepository.Root(),
                     "README.md"
                 )
             )
@@ -629,7 +646,7 @@ Public Class UserGuideServiceTests
 
         Dim app As String =
             Path.Combine(
-                AssistantCoreTests.RepositoryRoot(),
+                TestRepository.Root(),
                 "ManuscriptPipeline"
             )
 
@@ -866,7 +883,7 @@ Public Class UserGuideServiceTests
         Dim source As String =
             File.ReadAllText(
                 Path.Combine(
-                    AssistantCoreTests.RepositoryRoot(),
+                    TestRepository.Root(),
                     "ManuscriptPipeline",
                     "Form1.ManuscriptPage.vb"
                 )
@@ -966,7 +983,7 @@ Public Class UserGuideServiceTests
 
         Dim app As String =
             Path.Combine(
-                AssistantCoreTests.RepositoryRoot(),
+                TestRepository.Root(),
                 "ManuscriptPipeline"
             )
 
