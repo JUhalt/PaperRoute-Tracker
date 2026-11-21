@@ -24,9 +24,38 @@ Namespace Services
         ' view catalog resets it before each view and expects zero after.
         Friend Shared DefaultRootUses As Integer = 0
 
+        ' For tests (#395): what the system answers for a folder of the
+        ' user's, and whether it is Windows, so a test can play a profile
+        ' with no Documents folder without reading or making the real one.
+        ' Set in a test and put back in its cleanup, like RootOverride.
+        Friend Shared AskSystemFolder As Func(Of Environment.SpecialFolder, Environment.SpecialFolderOption, String) =
+            AddressOf Environment.GetFolderPath
+        Friend Shared RunsOnWindows As Func(Of Boolean) =
+            AddressOf OperatingSystem.IsWindows
+
 
         Private Sub New()
         End Sub
+
+
+        ' Where a folder of the user's is, such as Documents (#395). Linux
+        ' and macOS answer with an empty string for a folder that does not
+        ' exist yet, as ~/Documents on a fresh profile or a CI runner. There
+        ' the path is asked for without that check, and the folder is made
+        ' on first use, by the Directory.CreateDirectory that makes
+        ' PaperRoute's own folder inside it. Windows answers as before: a
+        ' redirected folder that is missing right now (OneDrive, a network
+        ' share) still answers empty, and the callers still refuse it.
+        Friend Shared Function UserFolder(folder As Environment.SpecialFolder) As String
+
+            Dim answer As Environment.SpecialFolderOption =
+                If(RunsOnWindows.Invoke(),
+                   Environment.SpecialFolderOption.None,
+                   Environment.SpecialFolderOption.DoNotVerify)
+
+            Return AskSystemFolder.Invoke(folder, answer)
+
+        End Function
 
 
         ' Called once, before any storage root is resolved: by the example

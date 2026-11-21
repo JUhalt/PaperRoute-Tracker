@@ -45,8 +45,10 @@ Namespace Services
                 Return StorageMigrationService.CurrentManagedLibraryRoot()
             End If
 
+            ' Empty on Windows for a redirected Documents folder that is
+            ' missing right now; elsewhere only if the system names none.
             Dim documentsDirectory As String =
-                Environment.GetFolderPath(
+                StorageEnvironment.UserFolder(
                     Environment.SpecialFolder.MyDocuments
                 )
 

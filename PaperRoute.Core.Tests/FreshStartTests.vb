@@ -115,9 +115,8 @@ Public Class FreshStartTests
     ' The calls a first start makes, in the app's order. The repository is
     ' made with the folders its default constructor resolves (the data
     ' folder and the managed-library root, which StorageLocationsTests
-    ' pins), because the default constructor refuses to start on a system
-    ' that reports no Documents folder, such as a Linux CI runner, which
-    ' is a question for later and not this test's.
+    ' pins), so this test does not depend on what the system says about
+    ' the user's Documents folder (DocumentsFolderTests holds that rule).
     Private Shared Function StartAsTheAppDoes() As ManuscriptRepository
 
         StorageMigrationService.EnsureCurrentStorage()

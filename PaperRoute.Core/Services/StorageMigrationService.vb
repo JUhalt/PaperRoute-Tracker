@@ -87,7 +87,7 @@ Namespace Services
         Public Shared Function CurrentDataRoot() As String
 
             Return StorageEnvironment.ResolveStorageRoot("current-data", Function() Path.Combine(
-                Environment.GetFolderPath(
+                StorageEnvironment.UserFolder(
                     Environment.SpecialFolder.LocalApplicationData
                 ),
                 StorageEnvironment.DataFolderName()
@@ -99,7 +99,7 @@ Namespace Services
         Public Shared Function LegacyDataRoot() As String
 
             Return StorageEnvironment.ResolveStorageRoot("legacy-data", Function() Path.Combine(
-                Environment.GetFolderPath(
+                StorageEnvironment.UserFolder(
                     Environment.SpecialFolder.LocalApplicationData
                 ),
                 StorageEnvironment.LegacyDataFolderName()
@@ -111,7 +111,7 @@ Namespace Services
         Public Shared Function CurrentManagedLibraryRoot() As String
 
             Return StorageEnvironment.ResolveStorageRoot("managed-library", Function() Path.Combine(
-                Environment.GetFolderPath(
+                StorageEnvironment.UserFolder(
                     Environment.SpecialFolder.MyDocuments
                 ),
                 StorageEnvironment.ManagedLibraryFolderName()
@@ -123,7 +123,7 @@ Namespace Services
         Public Shared Function LegacyManagedLibraryRoot() As String
 
             Return StorageEnvironment.ResolveStorageRoot("legacy-managed-library", Function() Path.Combine(
-                Environment.GetFolderPath(
+                StorageEnvironment.UserFolder(
                     Environment.SpecialFolder.MyDocuments
                 ),
                 StorageEnvironment.LegacyManagedLibraryFolderName()
