@@ -103,6 +103,38 @@ public sealed partial class ShelfViewModel : ObservableObject
         ItemWidth = Math.Max(1, Math.Floor((available - ((columns - 1) * CardGap)) / columns));
     }
 
+    // Whether this is the shelf the Board shows (BoardViewModel sets it as the
+    // shelf tab changes). A shelf shown once and hidden again keeps its row
+    // views, so under option (b) it does not refill its rows while hidden:
+    // a render only marks them stale, and they are brought to the cards as
+    // the shelf is shown again, before the view lays it out and draws it, so
+    // nobody sees an old card. Its cards, tab text and empty message change
+    // at once whether shown or not.
+    public bool IsShown
+    {
+        get => _isShown;
+        internal set
+        {
+            if (_isShown == value)
+            {
+                return;
+            }
+
+            _isShown = value;
+            if (value && _rowsStale)
+            {
+                SyncRows();
+            }
+        }
+    }
+
+    // True while a hidden shelf's rows wait for it to be shown: Rows then
+    // hold the cards of an earlier render, and only Cards is current.
+    public bool RowsAreStale => _rowsStale;
+
+    private bool _isShown;
+    private bool _rowsStale;
+
     // Returns what SyncInto did: the number of changes, or -1 for a Reset.
     internal int Show(IReadOnlyList<CardViewModel> cards, int total, bool filtersActive, int resetThreshold)
     {
@@ -114,14 +146,27 @@ public sealed partial class ShelfViewModel : ObservableObject
         int changes = Cards.SyncInto(cards, resetThreshold);
         if (changes != 0)
         {
-            SyncRows();
+            SyncRowsWhenShown();
         }
 
         return changes;
     }
 
     // A new column count rewraps the cards into rows of the new N.
-    partial void OnColumnsChanged(int value) => SyncRows();
+    partial void OnColumnsChanged(int value) => SyncRowsWhenShown();
+
+    // Rows are refilled now unless the shelf has row views it is hiding
+    // (realized, not shown); then they wait for IsShown.
+    private void SyncRowsWhenShown()
+    {
+        if (IsRealized && !IsShown)
+        {
+            _rowsStale = ShelfLayout.UsesRows;
+            return;
+        }
+
+        SyncRows();
+    }
 
     // Under option (b), brings Rows to the cards in rows of Columns: row i
     // holds cards i x N to i x N + N - 1. Rows past the new end are removed
@@ -131,6 +176,7 @@ public sealed partial class ShelfViewModel : ObservableObject
     // only rewraps existing card view models).
     private void SyncRows()
     {
+        _rowsStale = false;
         if (!ShelfLayout.UsesRows)
         {
             return;

@@ -117,17 +117,29 @@ public partial class ShelfView : UserControl
             return [];
         }
 
-        var order = new Dictionary<CardViewModel, int>(ReferenceEqualityComparer.Instance);
-        for (int index = 0; index < shelf.Cards.Count; index++)
+        // A view counts where it shows the card at its place (its row's
+        // index x the columns + its slot). That is every view shown while
+        // the rows are current; a shelf hidden after it was shown keeps its
+        // rows as they were until it is shown again (ShelfViewModel.IsShown),
+        // and its views that no longer show the card at their place are left out.
+        int columns = Math.Max(1, shelf.Columns);
+        var made = new List<(int Place, CardView View)>();
+        foreach (CardRowView row in RowViews())
         {
-            order[shelf.Cards[index]] = index;
+            int slot = 0;
+            foreach (CardView view in row.ShownCards())
+            {
+                int place = (row.Row!.Index * columns) + slot;
+                if (place < shelf.Cards.Count && ReferenceEquals(view.DataContext, shelf.Cards[place]))
+                {
+                    made.Add((place, view));
+                }
+
+                slot++;
+            }
         }
 
-        return RowViews()
-            .SelectMany(row => row.ShownCards())
-            .Where(view => view.DataContext is CardViewModel card && order.ContainsKey(card))
-            .OrderBy(view => order[(CardViewModel)view.DataContext!])
-            .ToList();
+        return made.OrderBy(item => item.Place).Select(item => item.View).ToList();
     }
 
     // The card view of the card at index if it is made, without scrolling.
@@ -143,8 +155,12 @@ public partial class ShelfView : UserControl
             return Cards.ContainerFromIndex(index)?.GetVisualDescendants().OfType<CardView>().FirstOrDefault();
         }
 
+        // A hidden shelf's rows may wait for it to be shown again
+        // (ShelfViewModel.RowsAreStale): a view that does not show the card
+        // at index is not that card's view.
         int columns = Math.Max(1, shelf.Columns);
-        return RowView(index / columns)?.CardAt(index % columns);
+        CardView? view = RowView(index / columns)?.CardAt(index % columns);
+        return view is not null && ReferenceEquals(view.DataContext, shelf.Cards[index]) ? view : null;
     }
 
     // The card view of the card at index, its row scrolled into view first
@@ -158,6 +174,12 @@ public partial class ShelfView : UserControl
 
         if (ShelfLayout.UsesRows)
         {
+            // Rows that wait for the shelf to be shown are not scrolled to.
+            if (shelf.RowsAreStale)
+            {
+                return null;
+            }
+
             int row = index / Math.Max(1, shelf.Columns);
             Rows.ScrollIntoView(row);
             if (RowView(row) is null)
