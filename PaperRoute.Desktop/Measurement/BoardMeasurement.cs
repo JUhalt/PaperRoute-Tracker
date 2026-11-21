@@ -76,6 +76,10 @@ public sealed class BoardMeasurement
     public const string ScrollPublished = "scroll-published-longest-step";
     public const string ProcessStartToBoard = "process-start-to-board";
 
+    // Report-only, not a row of d1 6.3: the switch to Published after a
+    // search made while it was hidden (its rows refilled at the switch).
+    public const string SwitchToPublishedAfterHiddenChange = "switch-published-after-hidden-change";
+
     // The 500 library's rows that do not meet their budget with every card of
     // a shown shelf made at once (option (a)). Their budgets stand; under (a)
     // they are measured and reported, not held. Medians of five headless
@@ -351,8 +355,32 @@ public sealed class BoardMeasurement
             longestWall, longestUi, UiThreadBudget, "UI thread", Note: $"{steps} steps, {total:0} ms in all; {CardView.MadeCount - madeBefore} card views made"));
         board.SelectedShelfIndex = 0;
         Settle(window);
-    }
+        _frame(window);
 
+        // Report-only, last, so no row above changes: a hidden shelf shown
+        // before does not refill its rows while hidden (ShelfViewModel.IsShown),
+        // so a search made while Published is hidden is paid for at the switch
+        // that shows it. The search set with Pipeline shown, then the switch
+        // timed, then the search cleared and the Board put back.
+        board.SearchText = SearchText;
+        board.Render();
+        Settle(window);
+        List<int> hiddenChanges = board.LastSyncChanges.ToList();
+        Require(!requireChanges || hiddenChanges[1] != 0, "The search changed the hidden Published shelf's cards.");
+        _frame(window);
+        Time(library, SwitchToPublishedAfterHiddenChange, $"Switch to Published after a search made while it was hidden (\"{SearchText}\"; its rows brought to its cards at the switch, option ({Option}))", PageSwitchBudget, "page switch", () =>
+        {
+            board.SelectedShelfIndex = 1;
+            Settle(window);
+        }, informational: true, note: "not a row of d1 6.3");
+        RequireShelf(view, "PublishedShelf", -1, "after a search made while it was hidden");
+        _frame(window);
+        board.SearchText = string.Empty;
+        board.Render();
+        board.SelectedShelfIndex = 0;
+        Settle(window);
+        RequireShelf(view, "PipelineShelf", pipeline, "at the end");
+    }
     public MeasuredRow Time(string library, string id, string action, double budget, string budgetName, Action work, bool informational = false, string note = "")
     {
         ArgumentNullException.ThrowIfNull(work);

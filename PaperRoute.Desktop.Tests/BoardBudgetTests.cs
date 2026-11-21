@@ -63,6 +63,13 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         BoardMeasurement.ScrollPublished,
     ];
 
+    // The rows that are not rows of d1 6.3, timed once each and report-only.
+    public static readonly IReadOnlyList<string> ReportOnlyRows =
+    [
+        BoardMeasurement.SwitchBackToPipeline,
+        BoardMeasurement.SwitchToPublishedAfterHiddenChange,
+    ];
+
     // The folder the manual writer fills and "--measure" opens (d1 7.3),
     // under the repository's ignored TestResults folder.
     public static readonly string MeasurementFolder = Path.Combine("TestResults", "v11-trial", "large-500");
@@ -120,6 +127,9 @@ public sealed class BoardBudgetTests : StorageCheckedTests
 
         List<string> missing = BudgetRows.Where(id => rows.Count(row => row.Library == "500" && row.Id == id) != 1).ToList();
         Assert.IsEmpty(missing, "Rows of d1 6.3 not timed exactly once on the 500 library: " + string.Join(", ", missing));
+        List<string> reported = ReportOnlyRows.Where(id => rows.Count(row => row.Library == "500" && row.Id == id && row.Informational) != 1).ToList();
+        Assert.IsEmpty(reported, "Report-only rows not timed exactly once, report-only, on the 500 library: " + string.Join(", ", reported));
+        Assert.AreEqual(BoardMeasurement.SwitchToPublishedAfterHiddenChange, rows.Last(row => row.Library == "500").Id, "The switch after a hidden change is the last row, so no row before it changes.");
         foreach (string id in BoardMeasurement.WaitingForRowsOfN)
         {
             Assert.Contains(id, BudgetRows, $"WaitingForRowsOfN names {id}, which is not a row of d1 6.3.");
