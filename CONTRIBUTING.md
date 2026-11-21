@@ -39,6 +39,18 @@ Four tests in `PaperRoute.Core.Tests` (category `SameDataEverywhere`) compare th
 ./.github/scripts/Get-WindowsOnlyApiInventory.ps1 -Root . -FailOnWindowsOnly
 ```
 
+### The Avalonia trial and its build telemetry
+
+The v1.1 interface is being built in C# on Avalonia, beside the Windows Forms app, in a second solution, `PaperRoute.Desktop.slnx`: `PaperRoute.ViewModels`, `PaperRoute.Desktop` and `PaperRoute.Desktop.Tests`, over the same `PaperRoute.Core`. CI builds and tests it on Windows and on Ubuntu.
+
+Avalonia's build package (`Avalonia.BuildServices`, which the Avalonia packages bring with them) sends anonymous build data to Avalonia every time one of these projects is compiled, unless the environment variable `AVALONIA_TELEMETRY_OPTOUT` is `1`. Its README says what is sent: the time of the build, the project's name as a hash, the output type, target framework and runtime identifier, the Avalonia version and licence tier, an anonymous identifier for the machine and the machine's name as a hash, the development environment, the operating system's version and architecture, and whether the build runs in CI. It says that no source code, file paths or personal information are sent. This project opts out: the CI jobs that build the trial set the variable, and the maintainer's development PC has it set for the user account. To opt out as well, set it once for your user before you build the trial:
+
+```powershell
+[Environment]::SetEnvironmentVariable('AVALONIA_TELEMETRY_OPTOUT', '1', 'User')
+```
+
+A terminal or an editor that is already open sees the variable after it is restarted. For one PowerShell session only, use `$env:AVALONIA_TELEMETRY_OPTOUT = '1'`; on Linux or macOS, `export AVALONIA_TELEMETRY_OPTOUT=1`.
+
 ## Data safety
 
 Changes involving persistence, backup/restore, managed files, or import logic should preserve existing local data whenever possible. Avoid silently changing storage locations or destructive behavior without a migration path.
