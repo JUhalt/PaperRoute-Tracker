@@ -76,6 +76,62 @@ public sealed class TagStripReuseTests
         Assert.IsEmpty(wrong, string.Join("\n", wrong));
     }
 
+    // The check the Board's tests make of a card's strip
+    // (CardParts.TagsDrawnWrong) is not satisfied by any strip: it accepts a
+    // strip for the tags it was given, with and without "+N", and names a
+    // strip that draws another tag, another colour, a chip too many or too
+    // few for the tags asked about.
+    [TestMethod]
+    public void TheCheckOfAStripNamesAStripThatDrawsOtherTags()
+    {
+        (string Text, TagPalette Palette)[] two = [("alpha", TagPalette.Blue), ("beta", TagPalette.Teal)];
+        (string Text, TagPalette Palette)[] many = [("a rather long tag name", TagPalette.Blue), ("another long tag name", TagPalette.Violet), ("third", TagPalette.Teal), ("fourth", TagPalette.Rose)];
+        Dictionary<string, string?> found = Headless.Run(() =>
+        {
+            var strip = new TagStripPanel { Width = Width, Tags = Tags(two) };
+            var window = new Window { Width = 400, Height = 200, Content = new StackPanel { Children = { strip } } };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            try
+            {
+                var found = new Dictionary<string, string?>
+                {
+                    ["two shown"] = string.Join(", ", strip.ShownTexts),
+                    ["its own tags"] = CardParts.TagsDrawnWrong(strip, Tags(two)),
+                    ["another tag"] = CardParts.TagsDrawnWrong(strip, Tags([("alpha", TagPalette.Blue), ("gamma", TagPalette.Teal)])),
+                    ["another colour"] = CardParts.TagsDrawnWrong(strip, Tags([("alpha", TagPalette.Amber), ("beta", TagPalette.Teal)])),
+                    ["one tag fewer"] = CardParts.TagsDrawnWrong(strip, Tags([("alpha", TagPalette.Blue)])),
+                    ["one tag more"] = CardParts.TagsDrawnWrong(strip, Tags([("alpha", TagPalette.Blue), ("beta", TagPalette.Teal), ("gamma", TagPalette.Violet)])),
+                    ["no tags"] = CardParts.TagsDrawnWrong(strip, Tags([])),
+                };
+
+                strip.Tags = Tags(many);
+                window.UpdateLayout();
+                Dispatcher.UIThread.RunJobs();
+                found["many shown"] = string.Join(", ", strip.ShownTexts);
+                found["its own tags, with +N"] = CardParts.TagsDrawnWrong(strip, Tags(many));
+                found["one tag fewer, with +N"] = CardParts.TagsDrawnWrong(strip, Tags(many.Take(3).ToArray()));
+                return found;
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+
+        string all = string.Join("\n", found.Select(pair => $"{pair.Key}: {pair.Value ?? "(nothing wrong)"}"));
+        Assert.AreEqual("alpha, beta", found["two shown"], all);
+        Assert.IsNull(found["its own tags"], all);
+        Assert.Contains("gamma", found["another tag"] ?? string.Empty, all);
+        Assert.Contains("tag-amber", found["another colour"] ?? string.Empty, all);
+        Assert.Contains("2 tag chips for 1 tags", found["one tag fewer"] ?? string.Empty, all);
+        Assert.Contains("no \"+1\"", found["one tag more"] ?? string.Empty, all);
+        Assert.Contains("2 tag chips for 0 tags", found["no tags"] ?? string.Empty, all);
+        Assert.IsTrue((found["many shown"] ?? string.Empty).Split(", ")[^1].StartsWith('+'), "The long tags need \"+N\". " + all);
+        Assert.IsNull(found["its own tags, with +N"], all);
+        Assert.IsNotNull(found["one tag fewer, with +N"], all);
+    }
+
     private static IReadOnlyList<TagViewModel> Tags((string Text, TagPalette Palette)[] list) =>
         list.Select(tag => new TagViewModel(tag.Text, tag.Palette)).ToList();
 
