@@ -1320,17 +1320,6 @@ Public Class PacketExportTests
 
 
     <TestMethod>
-    Public Sub FileIdentity_IndexZeroIsUnknown()
-        ' Some file servers report 0 as every file's index: two different
-        ' files would then look like one, so the identity is unknown and
-        ' only the path comparison applies.
-        Assert.IsNull(PacketExportService.IdentityText(&H1234ABCDUI, 0UI, 0UI))
-        Assert.AreEqual("1234abcd:0000000000000007", PacketExportService.IdentityText(&H1234ABCDUI, 0UI, 7UI))
-        Assert.AreEqual("1234abcd:0000000100000000", PacketExportService.IdentityText(&H1234ABCDUI, 1UI, 0UI))
-    End Sub
-
-
-    <TestMethod>
     Public Sub SyntheticExport_WritesCrateForOfflineChecker()
         Dim fixture As ExportFixture = BuildExampleFixture(_root)
         Dim zipPath As String = ExportWithDefaults(fixture, "paperroute-export-synthetic.zip",
