@@ -1,0 +1,1042 @@
+# tree
+Window | name="PaperRoute Board Trial - Example Library" | help="" | id="" | tabstop=no | tab=-
+  Group | name="WindowChrome" | help="" | id="AvaloniaWindowChrome" | tabstop=no | tab=-
+  None | name="" | help="" | id="" | tabstop=no | tab=-
+    None | name="" | help="" | id="PART_TransparencyFallback" | tabstop=no | tab=-
+    None | name="" | help="" | id="" | tabstop=no | tab=-
+    None | name="" | help="" | id="" | tabstop=no | tab=-
+    None | name="" | help="" | id="PART_VisualLayerManager" | tabstop=no | tab=-
+      None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+        None | name="" | help="" | id="" | tabstop=no | tab=-
+          None | name="Example library" | help="" | id="Banner" | tabstop=no | tab=-
+            Text | name="Example library: a fictional research group's manuscripts, to explore and to teach with. Change anything; it is discarded when this window closes, and your own library is never opened. Trial build: nothing is saved." | help="" | id="BannerText" | tabstop=no | tab=-
+          None | name="" | help="" | id="Rail" | tabstop=no | tab=-
+            None | name="" | help="" | id="" | tabstop=no | tab=-
+              None | name="" | help="" | id="" | tabstop=no | tab=-
+                Image | name="PaperRoute logo" | help="" | id="" | tabstop=no | tab=-
+                Text | name="PaperRoute" | help="" | id="" | tabstop=no | tab=-
+                Text | name="Track • Submit • Publish" | help="" | id="" | tabstop=no | tab=-
+                Text | name="500 manuscripts" | help="" | id="RailSummary" | tabstop=no | tab=-
+              None | name="" | help="" | id="" | tabstop=no | tab=-
+                None | name="" | help="" | id="" | tabstop=no | tab=-
+                List | name="" | help="" | id="RailCommands" | tabstop=no | tab=-
+                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                    None | name="" | help="" | id="PART_ItemsPresenter" | tabstop=no | tab=-
+                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                          Button | name="Online" | help="Not in the trial (read-only)" | id="Rail.Online" | tabstop=yes | tab=-
+                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                None | name="" | help="" | id="" | tabstop=no | tab=-
+                                Text | name="Online" | help="" | id="" | tabstop=no | tab=-
+                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                          Button | name="Settings" | help="Not in the trial (read-only)" | id="Rail.Settings" | tabstop=yes | tab=-
+                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                None | name="" | help="" | id="" | tabstop=no | tab=-
+                                Text | name="Settings" | help="" | id="" | tabstop=no | tab=-
+                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                          Button | name="Help" | help="Not in the trial (read-only)" | id="Rail.Help" | tabstop=yes | tab=-
+                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                None | name="" | help="" | id="" | tabstop=no | tab=-
+                                Text | name="Help" | help="" | id="" | tabstop=no | tab=-
+              List | name="Pages" | help="" | id="RailPages" | tabstop=no | tab=-
+                None | name="" | help="" | id="" | tabstop=no | tab=-
+                  None | name="" | help="" | id="PART_ItemsPresenter" | tabstop=no | tab=-
+                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                        RadioButton | name="Board" | help="Board (Ctrl+1)" | id="Rail.Board" | tabstop=yes | tab=1
+                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                              Text | name="Board" | help="" | id="" | tabstop=no | tab=-
+                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                        RadioButton | name="Library" | help="Not in the trial (read-only)" | id="Rail.Library" | tabstop=yes | tab=-
+                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                              Text | name="Library" | help="" | id="" | tabstop=no | tab=-
+                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                        RadioButton | name="Journals" | help="Not in the trial (read-only)" | id="Rail.Journals" | tabstop=yes | tab=-
+                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                              Text | name="Journals" | help="" | id="" | tabstop=no | tab=-
+                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                        RadioButton | name="Deadlines" | help="60 due. Not in the trial (read-only)" | id="Rail.Deadlines" | tabstop=yes | tab=-
+                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                Text | name="60" | help="" | id="" | tabstop=no | tab=-
+                              Text | name="Deadlines" | help="" | id="" | tabstop=no | tab=-
+                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                        RadioButton | name="Insights" | help="Not in the trial (read-only)" | id="Rail.Insights" | tabstop=yes | tab=-
+                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                              Text | name="Insights" | help="" | id="" | tabstop=no | tab=-
+                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                        RadioButton | name="Import & Export" | help="Not in the trial (read-only)" | id="Rail.ImportExport" | tabstop=yes | tab=-
+                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                              Text | name="Import & Export" | help="" | id="" | tabstop=no | tab=-
+          None | name="" | help="" | id="NoticeStrip" | tabstop=no | tab=-
+            Text | name="Loaded 500 manuscripts from local storage." | help="" | id="Notice" | tabstop=no | tab=-
+          None | name="" | help="" | id="BoardHost" | tabstop=no | tab=-
+            Custom | name="" | help="" | id="BoardView" | tabstop=no | tab=-
+              None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                None | name="" | help="" | id="" | tabstop=no | tab=-
+                  None | name="" | help="" | id="BoardBody" | tabstop=no | tab=-
+                    None | name="" | help="" | id="Header" | tabstop=no | tab=-
+                      Text | name="Board" | help="" | id="PageTitle" | tabstop=no | tab=-
+                      None | name="" | help="" | id="HeaderTools" | tabstop=no | tab=-
+                        Edit | name="Search the board (Ctrl+F)" | help="Search the board (Ctrl+F)" | id="BoardSearch" | tabstop=yes | tab=2
+                          None | name="" | help="" | id="" | tabstop=no | tab=-
+                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                              None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                None | name="" | help="" | id="" | tabstop=no | tab=-
+                                  None | name="" | help="" | id="PART_BorderElement" | tabstop=no | tab=-
+                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                      None | name="" | help="" | id="PART_InnerDockPanel" | tabstop=no | tab=-
+                                        ScrollViewer | name="" | help="" | id="PART_ScrollViewer" | tabstop=no | tab=-
+                                          None | name="" | help="" | id="" | tabstop=no | tab=-
+                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                Text | name="Search titles, journals, authors" | help="" | id="PART_Placeholder" | tabstop=no | tab=-
+                                                None | name="" | help="" | id="PART_TextPresenter" | tabstop=no | tab=-
+                                            None | name="" | help="" | id="PART_ScrollBarsSeparator" | tabstop=no | tab=-
+                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                        Button | name="Add Manuscript" | help="Not in the trial (read-only)" | id="AddManuscript" | tabstop=yes | tab=-
+                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                    None | name="" | help="" | id="AttentionBar" | tabstop=no | tab=-
+                      Text | name="NEEDS ATTENTION" | help="" | id="" | tabstop=no | tab=-
+                      List | name="" | help="" | id="Chips" | tabstop=no | tab=-
+                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                          None | name="" | help="" | id="PART_ItemsPresenter" | tabstop=no | tab=-
+                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                Button | name="5 overdue revisions" | help="Filter the board" | id="Chip.OverdueRevision" | tabstop=yes | tab=3
+                                  None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                Button | name="9 revisions due soon" | help="Filter the board" | id="Chip.RevisionDueSoon" | tabstop=yes | tab=4
+                                  None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                Button | name="53 waiting 90+ days" | help="Filter the board" | id="Chip.LongReview" | tabstop=yes | tab=5
+                                  None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                Button | name="4 no target journal" | help="Filter the board" | id="Chip.MissingTargetJournal" | tabstop=yes | tab=6
+                                  None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                      Hyperlink | name="View in Deadlines" | help="Opens the Deadlines page (Ctrl+4)." | id="ViewInDeadlines" | tabstop=yes | tab=7
+                        None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                          None | name="" | help="" | id="" | tabstop=no | tab=-
+                    None | name="" | help="" | id="ShelfBar" | tabstop=no | tab=-
+                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                      List | name="Shelves" | help="" | id="ShelfTabs" | tabstop=no | tab=-
+                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                          None | name="" | help="" | id="PART_ItemsPresenter" | tabstop=no | tab=-
+                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                              ListItem | name="Pipeline (167)" | help="" | id="Shelf.Pipeline" | tabstop=yes | tab=8
+                                None | name="" | help="" | id="PART_LayoutRoot" | tabstop=no | tab=-
+                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                    None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                                        Text | name="Pipeline" | help="" | id="" | tabstop=no | tab=-
+                                        Text | name="167" | help="" | id="" | tabstop=no | tab=-
+                                    None | name="" | help="" | id="PART_SelectedPipe" | tabstop=no | tab=-
+                              ListItem | name="Published (272)" | help="" | id="Shelf.Published" | tabstop=yes | tab=-
+                                None | name="" | help="" | id="PART_LayoutRoot" | tabstop=no | tab=-
+                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                    None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                                        Text | name="Published" | help="" | id="" | tabstop=no | tab=-
+                                        Text | name="272" | help="" | id="" | tabstop=no | tab=-
+                              ListItem | name="File Drawer (61)" | help="" | id="Shelf.FileDrawer" | tabstop=yes | tab=-
+                                None | name="" | help="" | id="PART_LayoutRoot" | tabstop=no | tab=-
+                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                    None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                                        Text | name="File Drawer" | help="" | id="" | tabstop=no | tab=-
+                                        Text | name="61" | help="" | id="" | tabstop=no | tab=-
+                      None | name="" | help="" | id="ShelfTools" | tabstop=no | tab=-
+                        ComboBox | name="Filter by stage" | help="" | id="StageFilter" | tabstop=yes | tab=9
+                          None | name="" | help="" | id="" | tabstop=no | tab=-
+                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                              None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                None | name="" | help="" | id="" | tabstop=no | tab=-
+                                  None | name="" | help="" | id="Background" | tabstop=no | tab=-
+                                  None | name="" | help="" | id="ContentPresenter" | tabstop=no | tab=-
+                                    None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                      Text | name="All stages (500)" | help="" | id="" | tabstop=no | tab=-
+                                  None | name="" | help="" | id="DropDownGlyph" | tabstop=no | tab=-
+                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                          None | name="" | help="" | id="" | tabstop=no | tab=-
+                                  Custom | name="" | help="" | id="PART_Popup" | tabstop=no | tab=-
+                        ComboBox | name="Sort the board" | help="" | id="BoardSort" | tabstop=yes | tab=10
+                          None | name="" | help="" | id="" | tabstop=no | tab=-
+                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                              None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                None | name="" | help="" | id="" | tabstop=no | tab=-
+                                  None | name="" | help="" | id="Background" | tabstop=no | tab=-
+                                  None | name="" | help="" | id="ContentPresenter" | tabstop=no | tab=-
+                                    None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                      Text | name="Sort: Current order" | help="" | id="" | tabstop=no | tab=-
+                                  None | name="" | help="" | id="DropDownGlyph" | tabstop=no | tab=-
+                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                          None | name="" | help="" | id="" | tabstop=no | tab=-
+                                  Custom | name="" | help="" | id="PART_Popup" | tabstop=no | tab=-
+                        Button | name="Clear search and filters" | help="" | id="ClearFilters" | tabstop=yes | tab=-
+                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                    None | name="" | help="" | id="ShelfHost" | tabstop=no | tab=-
+                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                        Custom | name="" | help="" | id="PipelineShelf" | tabstop=no | tab=-
+                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                            ScrollViewer | name="" | help="" | id="Scroller" | tabstop=no | tab=-
+                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                  None | name="" | help="" | id="ShelfPanel" | tabstop=no | tab=-
+                                    List | name="" | help="" | id="Cards" | tabstop=no | tab=-
+                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                                        None | name="" | help="" | id="PART_ItemsPresenter" | tabstop=no | tab=-
+                                          None | name="" | help="" | id="" | tabstop=no | tab=-
+                                    List | name="" | help="" | id="Rows" | tabstop=no | tab=-
+                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                                        None | name="" | help="" | id="PART_ItemsPresenter" | tabstop=no | tab=-
+                                          None | name="" | help="" | id="" | tabstop=no | tab=-
+                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                              Custom | name="" | help="" | id="" | tabstop=no | tab=-
+                                                None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                  None | name="" | help="" | id="CardHost" | tabstop=no | tab=-
+                                                    None | name="Synthetic 005: metacognitive judgments of learning, a survey" | help="" | id="Card[Synthetic 005: metacognitive judgments of learning, a survey#0]" | tabstop=no | tab=-
+                                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        Hyperlink | name="Synthetic 005: metacognitive judgments of learning, a survey" | help="Under Review, Waiting 115 days, Fictional Journal 02, 1st journal" | id="Card[Synthetic 005: metacognitive judgments of learning, a survey#0].Title" | tabstop=yes | tab=11
+                                                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                            Text | name="Synthetic 005: metacognitive judgments of learning, a survey" | help="" | id="TitleText" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          None | name="" | help="" | id="StagePill" | tabstop=no | tab=-
+                                                            Text | name="UNDER REVIEW" | help="" | id="StageText" | tabstop=no | tab=-
+                                                          Text | name="Waiting 115 days" | help="Waiting 115 days" | id="Status" | tabstop=no | tab=-
+                                                          Button | name="More actions for Synthetic 005: metacognitive judgments of learning, a survey" | help="" | id="Card[Synthetic 005: metacognitive judgments of learning, a survey#0].More" | tabstop=yes | tab=12
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="Fictional Journal 02" | help="Fictional Journal 02" | id="Journal" | tabstop=no | tab=-
+                                                          Text | name="Tags: methods, developmental, open science" | help="methods, developmental, open science (click to search the board)" | id="TagStrip" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="methods" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="developmental" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="open science" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="+2" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          List | name="" | help="" | id="RouteDots" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="PART_ItemsPresenter" | tabstop=no | tab=-
+                                                                None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="1st journal" | help="" | id="RouteText" | tabstop=no | tab=-
+                                                          Hyperlink | name="View route for Synthetic 005: metacognitive judgments of learning, a survey" | help="" | id="Card[Synthetic 005: metacognitive judgments of learning, a survey#0].Route" | tabstop=yes | tab=13
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                              Custom | name="" | help="" | id="" | tabstop=no | tab=-
+                                                None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                  None | name="" | help="" | id="CardHost" | tabstop=no | tab=-
+                                                    None | name="Synthetic 009: test anxiety and performance, a field experiment" | help="" | id="Card[Synthetic 009: test anxiety and performance, a field experiment#0]" | tabstop=no | tab=-
+                                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        Hyperlink | name="Synthetic 009: test anxiety and performance, a field experiment" | help="Under Review, Waiting 267 days, Fictional Journal 06, 1st journal" | id="Card[Synthetic 009: test anxiety and performance, a field experiment#0].Title" | tabstop=yes | tab=14
+                                                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                            Text | name="Synthetic 009: test anxiety and performance, a field experiment" | help="" | id="TitleText" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          None | name="" | help="" | id="StagePill" | tabstop=no | tab=-
+                                                            Text | name="UNDER REVIEW" | help="" | id="StageText" | tabstop=no | tab=-
+                                                          Text | name="Waiting 267 days" | help="Waiting 267 days" | id="Status" | tabstop=no | tab=-
+                                                          Button | name="More actions for Synthetic 009: test anxiety and performance, a field experiment" | help="" | id="Card[Synthetic 009: test anxiety and performance, a field experiment#0].More" | tabstop=yes | tab=15
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="Fictional Journal 06" | help="Fictional Journal 06" | id="Journal" | tabstop=no | tab=-
+                                                          Text | name="Tags: developmental, teaching" | help="developmental, teaching (click to search the board)" | id="TagStrip" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="developmental" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="teaching" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="+1" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          List | name="" | help="" | id="RouteDots" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="PART_ItemsPresenter" | tabstop=no | tab=-
+                                                                None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="1st journal" | help="" | id="RouteText" | tabstop=no | tab=-
+                                                          Hyperlink | name="View route for Synthetic 009: test anxiety and performance, a field experiment" | help="" | id="Card[Synthetic 009: test anxiety and performance, a field experiment#0].Route" | tabstop=yes | tab=16
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                              Custom | name="" | help="" | id="" | tabstop=no | tab=-
+                                                None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                  None | name="" | help="" | id="CardHost" | tabstop=no | tab=-
+                                                    None | name="Synthetic 010: self-control and course persistence, a multilevel analysis" | help="" | id="Card[Synthetic 010: self-control and course persistence, a multilevel analysis#0]" | tabstop=no | tab=-
+                                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        Hyperlink | name="Synthetic 010: self-control and course persistence, a multilevel analysis" | help="Draft, 190 days, Fictional Journal 02, 1 journal · 1 rejection" | id="Card[Synthetic 010: self-control and course persistence, a multilevel analysis#0].Title" | tabstop=yes | tab=17
+                                                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                            Text | name="Synthetic 010: self-control and course persistence, a multilevel analysis" | help="" | id="TitleText" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          None | name="" | help="" | id="StagePill" | tabstop=no | tab=-
+                                                            Text | name="DRAFT" | help="" | id="StageText" | tabstop=no | tab=-
+                                                          Text | name="190 days" | help="190 days" | id="Status" | tabstop=no | tab=-
+                                                          Button | name="More actions for Synthetic 010: self-control and course persistence, a multilevel analysis" | help="" | id="Card[Synthetic 010: self-control and course persistence, a multilevel analysis#0].More" | tabstop=yes | tab=18
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="Fictional Journal 02" | help="Fictional Journal 02" | id="Journal" | tabstop=no | tab=-
+                                                          Text | name="Tags: teaching, developmental, collaboration" | help="teaching, developmental, collaboration (click to search the board)" | id="TagStrip" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="teaching" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="developmental" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="collaboration" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="+2" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          List | name="" | help="" | id="RouteDots" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="PART_ItemsPresenter" | tabstop=no | tab=-
+                                                                None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="1 journal · 1 rejection" | help="" | id="RouteText" | tabstop=no | tab=-
+                                                          Hyperlink | name="View route for Synthetic 010: self-control and course persistence, a multilevel analysis" | help="" | id="Card[Synthetic 010: self-control and course persistence, a multilevel analysis#0].Route" | tabstop=yes | tab=19
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                              Custom | name="" | help="" | id="" | tabstop=no | tab=-
+                                                None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                  None | name="" | help="" | id="CardHost" | tabstop=no | tab=-
+                                                    None | name="Synthetic 012: feedback timing in classroom learning, a null result" | help="" | id="Card[Synthetic 012: feedback timing in classroom learning, a null result#0]" | tabstop=no | tab=-
+                                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        Hyperlink | name="Synthetic 012: feedback timing in classroom learning, a null result" | help="Submitted, Waiting 107 days, Fictional Journal 09, 2nd journal · 1 rejection" | id="Card[Synthetic 012: feedback timing in classroom learning, a null result#0].Title" | tabstop=yes | tab=20
+                                                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                            Text | name="Synthetic 012: feedback timing in classroom learning, a null result" | help="" | id="TitleText" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          None | name="" | help="" | id="StagePill" | tabstop=no | tab=-
+                                                            Text | name="SUBMITTED" | help="" | id="StageText" | tabstop=no | tab=-
+                                                          Text | name="Waiting 107 days" | help="Waiting 107 days" | id="Status" | tabstop=no | tab=-
+                                                          Button | name="More actions for Synthetic 012: feedback timing in classroom learning, a null result" | help="" | id="Card[Synthetic 012: feedback timing in classroom learning, a null result#0].More" | tabstop=yes | tab=21
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="Fictional Journal 09" | help="Fictional Journal 09" | id="Journal" | tabstop=no | tab=-
+                                                          Text | name="Tags: teaching, methods, clinical" | help="teaching, methods, clinical (click to search the board)" | id="TagStrip" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="teaching" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="methods" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="clinical" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="+2" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          List | name="" | help="" | id="RouteDots" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="PART_ItemsPresenter" | tabstop=no | tab=-
+                                                                None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="2nd journal · 1 rejection" | help="" | id="RouteText" | tabstop=no | tab=-
+                                                          Hyperlink | name="View route for Synthetic 012: feedback timing in classroom learning, a null result" | help="" | id="Card[Synthetic 012: feedback timing in classroom learning, a null result#0].Route" | tabstop=yes | tab=22
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                              Custom | name="" | help="" | id="" | tabstop=no | tab=-
+                                                None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                  None | name="" | help="" | id="CardHost" | tabstop=no | tab=-
+                                                    None | name="Synthetic 013: working memory training and transfer, a multilevel analysis" | help="" | id="Card[Synthetic 013: working memory training and transfer, a multilevel analysis#0]" | tabstop=no | tab=-
+                                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        Hyperlink | name="Synthetic 013: working memory training and transfer, a multilevel analysis" | help="Draft, 64 days, Fictional Journal 12, Not yet submitted" | id="Card[Synthetic 013: working memory training and transfer, a multilevel analysis#0].Title" | tabstop=yes | tab=23
+                                                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                            Text | name="Synthetic 013: working memory training and transfer, a multilevel analysis" | help="" | id="TitleText" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          None | name="" | help="" | id="StagePill" | tabstop=no | tab=-
+                                                            Text | name="DRAFT" | help="" | id="StageText" | tabstop=no | tab=-
+                                                          Text | name="64 days" | help="64 days" | id="Status" | tabstop=no | tab=-
+                                                          Button | name="More actions for Synthetic 013: working memory training and transfer, a multilevel analysis" | help="" | id="Card[Synthetic 013: working memory training and transfer, a multilevel analysis#0].More" | tabstop=yes | tab=24
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="Fictional Journal 12" | help="Fictional Journal 12" | id="Journal" | tabstop=no | tab=-
+                                                          Text | name="Tags: teaching, replication, open science" | help="teaching, replication, open science (click to search the board)" | id="TagStrip" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="teaching" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="replication" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="open science" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="+2" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="Not yet submitted" | help="" | id="RouteText" | tabstop=no | tab=-
+                                                          Hyperlink | name="View route for Synthetic 013: working memory training and transfer, a multilevel analysis" | help="" | id="Card[Synthetic 013: working memory training and transfer, a multilevel analysis#0].Route" | tabstop=yes | tab=25
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                              Custom | name="" | help="" | id="" | tabstop=no | tab=-
+                                                None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                  None | name="" | help="" | id="CardHost" | tabstop=no | tab=-
+                                                    None | name="Synthetic 014: attention lapses during long lectures, a multilevel analysis" | help="" | id="Card[Synthetic 014: attention lapses during long lectures, a multilevel analysis#0]" | tabstop=no | tab=-
+                                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        Hyperlink | name="Synthetic 014: attention lapses during long lectures, a multilevel analysis" | help="Under Review, Waiting 256 days, Fictional Journal 04, 1st journal" | id="Card[Synthetic 014: attention lapses during long lectures, a multilevel analysis#0].Title" | tabstop=yes | tab=26
+                                                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                            Text | name="Synthetic 014: attention lapses during long lectures, a multilevel analysis" | help="" | id="TitleText" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          None | name="" | help="" | id="StagePill" | tabstop=no | tab=-
+                                                            Text | name="UNDER REVIEW" | help="" | id="StageText" | tabstop=no | tab=-
+                                                          Text | name="Waiting 256 days" | help="Waiting 256 days" | id="Status" | tabstop=no | tab=-
+                                                          Button | name="More actions for Synthetic 014: attention lapses during long lectures, a multilevel analysis" | help="" | id="Card[Synthetic 014: attention lapses during long lectures, a multilevel analysis#0].More" | tabstop=yes | tab=27
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="Fictional Journal 04" | help="Fictional Journal 04" | id="Journal" | tabstop=no | tab=-
+                                                          Text | name="" | help="" | id="TagStrip" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="+0" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          List | name="" | help="" | id="RouteDots" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="PART_ItemsPresenter" | tabstop=no | tab=-
+                                                                None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="1st journal" | help="" | id="RouteText" | tabstop=no | tab=-
+                                                          Hyperlink | name="View route for Synthetic 014: attention lapses during long lectures, a multilevel analysis" | help="" | id="Card[Synthetic 014: attention lapses during long lectures, a multilevel analysis#0].Route" | tabstop=yes | tab=28
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                              Custom | name="" | help="" | id="" | tabstop=no | tab=-
+                                                None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                  None | name="" | help="" | id="CardHost" | tabstop=no | tab=-
+                                                    None | name="Synthetic 018: metacognitive judgments of learning, a multilevel analysis" | help="" | id="Card[Synthetic 018: metacognitive judgments of learning, a multilevel analysis#0]" | tabstop=no | tab=-
+                                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        Hyperlink | name="Synthetic 018: metacognitive judgments of learning, a multilevel analysis" | help="Idea, added 182 days ago, Fictional Journal 09, Not yet submitted" | id="Card[Synthetic 018: metacognitive judgments of learning, a multilevel analysis#0].Title" | tabstop=yes | tab=29
+                                                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                            Text | name="Synthetic 018: metacognitive judgments of learning, a multilevel analysis" | help="" | id="TitleText" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          None | name="" | help="" | id="StagePill" | tabstop=no | tab=-
+                                                            Text | name="IDEA" | help="" | id="StageText" | tabstop=no | tab=-
+                                                          Text | name="added 182 days ago" | help="added 182 days ago" | id="Status" | tabstop=no | tab=-
+                                                          Button | name="More actions for Synthetic 018: metacognitive judgments of learning, a multilevel analysis" | help="" | id="Card[Synthetic 018: metacognitive judgments of learning, a multilevel analysis#0].More" | tabstop=yes | tab=30
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="Fictional Journal 09" | help="Fictional Journal 09" | id="Journal" | tabstop=no | tab=-
+                                                          Text | name="Tags: replication, teaching" | help="replication, teaching (click to search the board)" | id="TagStrip" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="replication" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="teaching" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="+0" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="Not yet submitted" | help="" | id="RouteText" | tabstop=no | tab=-
+                                                          Hyperlink | name="View route for Synthetic 018: metacognitive judgments of learning, a multilevel analysis" | help="" | id="Card[Synthetic 018: metacognitive judgments of learning, a multilevel analysis#0].Route" | tabstop=yes | tab=31
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                              Custom | name="" | help="" | id="" | tabstop=no | tab=-
+                                                None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                  None | name="" | help="" | id="CardHost" | tabstop=no | tab=-
+                                                    None | name="Synthetic 021: attention lapses during long lectures, a null result" | help="" | id="Card[Synthetic 021: attention lapses during long lectures, a null result#0]" | tabstop=no | tab=-
+                                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        Hyperlink | name="Synthetic 021: attention lapses during long lectures, a null result" | help="Revision, Revision overdue by 7 days, Fictional Journal 02, 2nd journal · minor revision" | id="Card[Synthetic 021: attention lapses during long lectures, a null result#0].Title" | tabstop=yes | tab=32
+                                                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                            Text | name="Synthetic 021: attention lapses during long lectures, a null result" | help="" | id="TitleText" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          None | name="" | help="" | id="StagePill" | tabstop=no | tab=-
+                                                            Text | name="REVISION" | help="" | id="StageText" | tabstop=no | tab=-
+                                                          Text | name="Revision overdue by 7 days" | help="Revision overdue by 7 days" | id="Status" | tabstop=no | tab=-
+                                                          Button | name="More actions for Synthetic 021: attention lapses during long lectures, a null result" | help="" | id="Card[Synthetic 021: attention lapses during long lectures, a null result#0].More" | tabstop=yes | tab=33
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="Fictional Journal 02" | help="Fictional Journal 02" | id="Journal" | tabstop=no | tab=-
+                                                          Text | name="Tags: open science" | help="open science (click to search the board)" | id="TagStrip" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="open science" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="+0" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          List | name="" | help="" | id="RouteDots" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="PART_ItemsPresenter" | tabstop=no | tab=-
+                                                                None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="2nd journal · minor revision" | help="" | id="RouteText" | tabstop=no | tab=-
+                                                          Hyperlink | name="View route for Synthetic 021: attention lapses during long lectures, a null result" | help="" | id="Card[Synthetic 021: attention lapses during long lectures, a null result#0].Route" | tabstop=yes | tab=34
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                              Custom | name="" | help="" | id="" | tabstop=no | tab=-
+                                                None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                  None | name="" | help="" | id="CardHost" | tabstop=no | tab=-
+                                                    None | name="Synthetic 023: handwriting and note quality, a null result" | help="" | id="Card[Synthetic 023: handwriting and note quality, a null result#0]" | tabstop=no | tab=-
+                                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        Hyperlink | name="Synthetic 023: handwriting and note quality, a null result" | help="Draft, 28 days, Fictional Journal 10, 1 journal · 1 rejection" | id="Card[Synthetic 023: handwriting and note quality, a null result#0].Title" | tabstop=yes | tab=35
+                                                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                            Text | name="Synthetic 023: handwriting and note quality, a null result" | help="" | id="TitleText" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          None | name="" | help="" | id="StagePill" | tabstop=no | tab=-
+                                                            Text | name="DRAFT" | help="" | id="StageText" | tabstop=no | tab=-
+                                                          Text | name="28 days" | help="28 days" | id="Status" | tabstop=no | tab=-
+                                                          Button | name="More actions for Synthetic 023: handwriting and note quality, a null result" | help="" | id="Card[Synthetic 023: handwriting and note quality, a null result#0].More" | tabstop=yes | tab=36
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="Fictional Journal 10" | help="Fictional Journal 10" | id="Journal" | tabstop=no | tab=-
+                                                          Text | name="Tags: replication, clinical" | help="replication, clinical (click to search the board)" | id="TagStrip" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="replication" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="clinical" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="+0" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          List | name="" | help="" | id="RouteDots" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="PART_ItemsPresenter" | tabstop=no | tab=-
+                                                                None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="1 journal · 1 rejection" | help="" | id="RouteText" | tabstop=no | tab=-
+                                                          Hyperlink | name="View route for Synthetic 023: handwriting and note quality, a null result" | help="" | id="Card[Synthetic 023: handwriting and note quality, a null result#0].Route" | tabstop=yes | tab=37
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                              Custom | name="" | help="" | id="" | tabstop=no | tab=-
+                                                None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                  None | name="" | help="" | id="CardHost" | tabstop=no | tab=-
+                                                    None | name="Synthetic 026: spacing effects in vocabulary learning, a survey" | help="" | id="Card[Synthetic 026: spacing effects in vocabulary learning, a survey#0]" | tabstop=no | tab=-
+                                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        Hyperlink | name="Synthetic 026: spacing effects in vocabulary learning, a survey" | help="Revision, 362 days, Fictional Journal 02, 1st journal · minor revision" | id="Card[Synthetic 026: spacing effects in vocabulary learning, a survey#0].Title" | tabstop=yes | tab=38
+                                                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                            Text | name="Synthetic 026: spacing effects in vocabulary learning, a survey" | help="" | id="TitleText" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          None | name="" | help="" | id="StagePill" | tabstop=no | tab=-
+                                                            Text | name="REVISION" | help="" | id="StageText" | tabstop=no | tab=-
+                                                          Text | name="362 days" | help="362 days" | id="Status" | tabstop=no | tab=-
+                                                          Button | name="More actions for Synthetic 026: spacing effects in vocabulary learning, a survey" | help="" | id="Card[Synthetic 026: spacing effects in vocabulary learning, a survey#0].More" | tabstop=yes | tab=39
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="Fictional Journal 02" | help="Fictional Journal 02" | id="Journal" | tabstop=no | tab=-
+                                                          Text | name="Tags: clinical" | help="clinical (click to search the board)" | id="TagStrip" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="clinical" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="+0" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          List | name="" | help="" | id="RouteDots" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="PART_ItemsPresenter" | tabstop=no | tab=-
+                                                                None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="1st journal · minor revision" | help="" | id="RouteText" | tabstop=no | tab=-
+                                                          Hyperlink | name="View route for Synthetic 026: spacing effects in vocabulary learning, a survey" | help="" | id="Card[Synthetic 026: spacing effects in vocabulary learning, a survey#0].Route" | tabstop=yes | tab=40
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                              Custom | name="" | help="" | id="" | tabstop=no | tab=-
+                                                None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                  None | name="" | help="" | id="CardHost" | tabstop=no | tab=-
+                                                    None | name="Synthetic 029: handwriting and note quality, a preregistered replication" | help="" | id="Card[Synthetic 029: handwriting and note quality, a preregistered replication#0]" | tabstop=no | tab=-
+                                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        Hyperlink | name="Synthetic 029: handwriting and note quality, a preregistered replication" | help="Submitted, Waiting 156 days, Fictional Journal 08, 2nd journal · 1 rejection" | id="Card[Synthetic 029: handwriting and note quality, a preregistered replication#0].Title" | tabstop=yes | tab=-
+                                                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                            Text | name="Synthetic 029: handwriting and note quality, a preregistered replication" | help="" | id="TitleText" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          None | name="" | help="" | id="StagePill" | tabstop=no | tab=-
+                                                            Text | name="SUBMITTED" | help="" | id="StageText" | tabstop=no | tab=-
+                                                          Text | name="Waiting 156 days" | help="Waiting 156 days" | id="Status" | tabstop=no | tab=-
+                                                          Button | name="More actions for Synthetic 029: handwriting and note quality, a preregistered replication" | help="" | id="Card[Synthetic 029: handwriting and note quality, a preregistered replication#0].More" | tabstop=yes | tab=-
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="Fictional Journal 08" | help="Fictional Journal 08" | id="Journal" | tabstop=no | tab=-
+                                                          Text | name="" | help="" | id="TagStrip" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="+0" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          List | name="" | help="" | id="RouteDots" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="PART_ItemsPresenter" | tabstop=no | tab=-
+                                                                None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="2nd journal · 1 rejection" | help="" | id="RouteText" | tabstop=no | tab=-
+                                                          Hyperlink | name="View route for Synthetic 029: handwriting and note quality, a preregistered replication" | help="" | id="Card[Synthetic 029: handwriting and note quality, a preregistered replication#0].Route" | tabstop=yes | tab=-
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                              Custom | name="" | help="" | id="" | tabstop=no | tab=-
+                                                None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                  None | name="" | help="" | id="CardHost" | tabstop=no | tab=-
+                                                    None | name="Synthetic 031: retrieval practice in introductory statistics, a meta-analysis" | help="" | id="Card[Synthetic 031: retrieval practice in introductory statistics, a meta-analysis#0]" | tabstop=no | tab=-
+                                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        Hyperlink | name="Synthetic 031: retrieval practice in introductory statistics, a meta-analysis" | help="Draft, 326 days, Fictional Journal 05, Not yet submitted" | id="Card[Synthetic 031: retrieval practice in introductory statistics, a meta-analysis#0].Title" | tabstop=yes | tab=-
+                                                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                            Text | name="Synthetic 031: retrieval practice in introductory statistics, a meta-analysis" | help="" | id="TitleText" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          None | name="" | help="" | id="StagePill" | tabstop=no | tab=-
+                                                            Text | name="DRAFT" | help="" | id="StageText" | tabstop=no | tab=-
+                                                          Text | name="326 days" | help="326 days" | id="Status" | tabstop=no | tab=-
+                                                          Button | name="More actions for Synthetic 031: retrieval practice in introductory statistics, a meta-analysis" | help="" | id="Card[Synthetic 031: retrieval practice in introductory statistics, a meta-analysis#0].More" | tabstop=yes | tab=-
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="Fictional Journal 05" | help="Fictional Journal 05" | id="Journal" | tabstop=no | tab=-
+                                                          Text | name="" | help="" | id="TagStrip" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="+0" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="Not yet submitted" | help="" | id="RouteText" | tabstop=no | tab=-
+                                                          Hyperlink | name="View route for Synthetic 031: retrieval practice in introductory statistics, a meta-analysis" | help="" | id="Card[Synthetic 031: retrieval practice in introductory statistics, a meta-analysis#0].Route" | tabstop=yes | tab=-
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                              Custom | name="" | help="" | id="" | tabstop=no | tab=-
+                                                None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                  None | name="" | help="" | id="CardHost" | tabstop=no | tab=-
+                                                    None | name="Synthetic 035: retrieval practice in introductory statistics, a registered report" | help="" | id="Card[Synthetic 035: retrieval practice in introductory statistics, a registered report#0]" | tabstop=no | tab=-
+                                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        Hyperlink | name="Synthetic 035: retrieval practice in introductory statistics, a registered report" | help="Submitted, Waiting 270 days, Fictional Journal 11, 2nd journal · 1 rejection" | id="Card[Synthetic 035: retrieval practice in introductory statistics, a registered report#0].Title" | tabstop=yes | tab=-
+                                                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                            Text | name="Synthetic 035: retrieval practice in introductory statistics, a registered report" | help="" | id="TitleText" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          None | name="" | help="" | id="StagePill" | tabstop=no | tab=-
+                                                            Text | name="SUBMITTED" | help="" | id="StageText" | tabstop=no | tab=-
+                                                          Text | name="Waiting 270 days" | help="Waiting 270 days" | id="Status" | tabstop=no | tab=-
+                                                          Button | name="More actions for Synthetic 035: retrieval practice in introductory statistics, a registered report" | help="" | id="Card[Synthetic 035: retrieval practice in introductory statistics, a registered report#0].More" | tabstop=yes | tab=-
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="Fictional Journal 11" | help="Fictional Journal 11" | id="Journal" | tabstop=no | tab=-
+                                                          Text | name="Tags: teaching, open science, collaboration" | help="teaching, open science, collaboration (click to search the board)" | id="TagStrip" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="teaching" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="open science" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="collaboration" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="+2" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          List | name="" | help="" | id="RouteDots" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="PART_ItemsPresenter" | tabstop=no | tab=-
+                                                                None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="2nd journal · 1 rejection" | help="" | id="RouteText" | tabstop=no | tab=-
+                                                          Hyperlink | name="View route for Synthetic 035: retrieval practice in introductory statistics, a registered report" | help="" | id="Card[Synthetic 035: retrieval practice in introductory statistics, a registered report#0].Route" | tabstop=yes | tab=-
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                              Custom | name="" | help="" | id="" | tabstop=no | tab=-
+                                                None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                  None | name="" | help="" | id="CardHost" | tabstop=no | tab=-
+                                                    None | name="Synthetic 041: spacing effects in vocabulary learning, a survey" | help="" | id="Card[Synthetic 041: spacing effects in vocabulary learning, a survey#0]" | tabstop=no | tab=-
+                                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        Hyperlink | name="Synthetic 041: spacing effects in vocabulary learning, a survey" | help="Revision, 109 days, Fictional Journal 10, 2nd journal · major revision" | id="Card[Synthetic 041: spacing effects in vocabulary learning, a survey#0].Title" | tabstop=yes | tab=-
+                                                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                            Text | name="Synthetic 041: spacing effects in vocabulary learning, a survey" | help="" | id="TitleText" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          None | name="" | help="" | id="StagePill" | tabstop=no | tab=-
+                                                            Text | name="REVISION" | help="" | id="StageText" | tabstop=no | tab=-
+                                                          Text | name="109 days" | help="109 days" | id="Status" | tabstop=no | tab=-
+                                                          Button | name="More actions for Synthetic 041: spacing effects in vocabulary learning, a survey" | help="" | id="Card[Synthetic 041: spacing effects in vocabulary learning, a survey#0].More" | tabstop=yes | tab=-
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="Fictional Journal 10" | help="Fictional Journal 10" | id="Journal" | tabstop=no | tab=-
+                                                          Text | name="Tags: longitudinal, collaboration, replication" | help="longitudinal, collaboration, replication (click to search the board)" | id="TagStrip" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="longitudinal" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="collaboration" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="replication" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="+2" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          List | name="" | help="" | id="RouteDots" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="PART_ItemsPresenter" | tabstop=no | tab=-
+                                                                None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="2nd journal · major revision" | help="" | id="RouteText" | tabstop=no | tab=-
+                                                          Hyperlink | name="View route for Synthetic 041: spacing effects in vocabulary learning, a survey" | help="" | id="Card[Synthetic 041: spacing effects in vocabulary learning, a survey#0].Route" | tabstop=yes | tab=-
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                              Custom | name="" | help="" | id="" | tabstop=no | tab=-
+                                                None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                  None | name="" | help="" | id="CardHost" | tabstop=no | tab=-
+                                                    None | name="Synthetic 043: sleep and memory consolidation in older adults, a multilevel analysis" | help="" | id="Card[Synthetic 043: sleep and memory consolidation in older adults, a multilevel analysis#0]" | tabstop=no | tab=-
+                                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        Hyperlink | name="Synthetic 043: sleep and memory consolidation in older adults, a multilevel analysis" | help="Revision, 20 days, Fictional Journal 01, 2nd journal · minor revision" | id="Card[Synthetic 043: sleep and memory consolidation in older adults, a multilevel analysis#0].Title" | tabstop=yes | tab=-
+                                                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                            Text | name="Synthetic 043: sleep and memory consolidation in older adults, a multilevel analysis" | help="" | id="TitleText" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          None | name="" | help="" | id="StagePill" | tabstop=no | tab=-
+                                                            Text | name="REVISION" | help="" | id="StageText" | tabstop=no | tab=-
+                                                          Text | name="20 days" | help="20 days" | id="Status" | tabstop=no | tab=-
+                                                          Button | name="More actions for Synthetic 043: sleep and memory consolidation in older adults, a multilevel analysis" | help="" | id="Card[Synthetic 043: sleep and memory consolidation in older adults, a multilevel analysis#0].More" | tabstop=yes | tab=-
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="Fictional Journal 01" | help="Fictional Journal 01" | id="Journal" | tabstop=no | tab=-
+                                                          Text | name="Tags: developmental, teaching, longitudinal" | help="developmental, teaching, longitudinal (click to search the board)" | id="TagStrip" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="developmental" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="teaching" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="longitudinal" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="+2" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          List | name="" | help="" | id="RouteDots" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="PART_ItemsPresenter" | tabstop=no | tab=-
+                                                                None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="2nd journal · minor revision" | help="" | id="RouteText" | tabstop=no | tab=-
+                                                          Hyperlink | name="View route for Synthetic 043: sleep and memory consolidation in older adults, a multilevel analysis" | help="" | id="Card[Synthetic 043: sleep and memory consolidation in older adults, a multilevel analysis#0].Route" | tabstop=yes | tab=-
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                              Custom | name="" | help="" | id="" | tabstop=no | tab=-
+                                                None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                  None | name="" | help="" | id="CardHost" | tabstop=no | tab=-
+                                                    None | name="Synthetic 045: test anxiety and performance, a field experiment" | help="" | id="Card[Synthetic 045: test anxiety and performance, a field experiment#0]" | tabstop=no | tab=-
+                                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        Hyperlink | name="Synthetic 045: test anxiety and performance, a field experiment" | help="Under Review, Waiting 379 days, Fictional Journal 08, 1st journal" | id="Card[Synthetic 045: test anxiety and performance, a field experiment#0].Title" | tabstop=yes | tab=-
+                                                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                            Text | name="Synthetic 045: test anxiety and performance, a field experiment" | help="" | id="TitleText" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          None | name="" | help="" | id="StagePill" | tabstop=no | tab=-
+                                                            Text | name="UNDER REVIEW" | help="" | id="StageText" | tabstop=no | tab=-
+                                                          Text | name="Waiting 379 days" | help="Waiting 379 days" | id="Status" | tabstop=no | tab=-
+                                                          Button | name="More actions for Synthetic 045: test anxiety and performance, a field experiment" | help="" | id="Card[Synthetic 045: test anxiety and performance, a field experiment#0].More" | tabstop=yes | tab=-
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="Fictional Journal 08" | help="Fictional Journal 08" | id="Journal" | tabstop=no | tab=-
+                                                          Text | name="Tags: replication" | help="replication (click to search the board)" | id="TagStrip" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="replication" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="+0" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          List | name="" | help="" | id="RouteDots" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="PART_ItemsPresenter" | tabstop=no | tab=-
+                                                                None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="1st journal" | help="" | id="RouteText" | tabstop=no | tab=-
+                                                          Hyperlink | name="View route for Synthetic 045: test anxiety and performance, a field experiment" | help="" | id="Card[Synthetic 045: test anxiety and performance, a field experiment#0].Route" | tabstop=yes | tab=-
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                              Custom | name="" | help="" | id="" | tabstop=no | tab=-
+                                                None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                  None | name="" | help="" | id="CardHost" | tabstop=no | tab=-
+                                                    None | name="Synthetic 057: metacognitive judgments of learning, a preregistered replication" | help="" | id="Card[Synthetic 057: metacognitive judgments of learning, a preregistered replication#0]" | tabstop=no | tab=-
+                                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        Hyperlink | name="Synthetic 057: metacognitive judgments of learning, a preregistered replication" | help="Submitted, Waiting 291 days, Fictional Journal 02, 2nd journal · 1 rejection" | id="Card[Synthetic 057: metacognitive judgments of learning, a preregistered replication#0].Title" | tabstop=yes | tab=-
+                                                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                            Text | name="Synthetic 057: metacognitive judgments of learning, a preregistered replication" | help="" | id="TitleText" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          None | name="" | help="" | id="StagePill" | tabstop=no | tab=-
+                                                            Text | name="SUBMITTED" | help="" | id="StageText" | tabstop=no | tab=-
+                                                          Text | name="Waiting 291 days" | help="Waiting 291 days" | id="Status" | tabstop=no | tab=-
+                                                          Button | name="More actions for Synthetic 057: metacognitive judgments of learning, a preregistered replication" | help="" | id="Card[Synthetic 057: metacognitive judgments of learning, a preregistered replication#0].More" | tabstop=yes | tab=-
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="Fictional Journal 02" | help="Fictional Journal 02" | id="Journal" | tabstop=no | tab=-
+                                                          Text | name="" | help="" | id="TagStrip" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="+0" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          List | name="" | help="" | id="RouteDots" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="PART_ItemsPresenter" | tabstop=no | tab=-
+                                                                None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="2nd journal · 1 rejection" | help="" | id="RouteText" | tabstop=no | tab=-
+                                                          Hyperlink | name="View route for Synthetic 057: metacognitive judgments of learning, a preregistered replication" | help="" | id="Card[Synthetic 057: metacognitive judgments of learning, a preregistered replication#0].Route" | tabstop=yes | tab=-
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                              Custom | name="" | help="" | id="" | tabstop=no | tab=-
+                                                None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                  None | name="" | help="" | id="CardHost" | tabstop=no | tab=-
+                                                    None | name="Synthetic 058: feedback timing in classroom learning, a survey" | help="" | id="Card[Synthetic 058: feedback timing in classroom learning, a survey#0]" | tabstop=no | tab=-
+                                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        Hyperlink | name="Synthetic 058: feedback timing in classroom learning, a survey" | help="Revision, Revision due in 12 days, Fictional Journal 02, 2nd journal · major revision" | id="Card[Synthetic 058: feedback timing in classroom learning, a survey#0].Title" | tabstop=yes | tab=-
+                                                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                            Text | name="Synthetic 058: feedback timing in classroom learning, a survey" | help="" | id="TitleText" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          None | name="" | help="" | id="StagePill" | tabstop=no | tab=-
+                                                            Text | name="REVISION" | help="" | id="StageText" | tabstop=no | tab=-
+                                                          Text | name="Revision due in 12 days" | help="Revision due in 12 days" | id="Status" | tabstop=no | tab=-
+                                                          Button | name="More actions for Synthetic 058: feedback timing in classroom learning, a survey" | help="" | id="Card[Synthetic 058: feedback timing in classroom learning, a survey#0].More" | tabstop=yes | tab=-
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="Fictional Journal 02" | help="Fictional Journal 02" | id="Journal" | tabstop=no | tab=-
+                                                          Text | name="Tags: clinical, developmental" | help="clinical, developmental (click to search the board)" | id="TagStrip" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="clinical" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="developmental" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="+1" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          List | name="" | help="" | id="RouteDots" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="PART_ItemsPresenter" | tabstop=no | tab=-
+                                                                None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="2nd journal · major revision" | help="" | id="RouteText" | tabstop=no | tab=-
+                                                          Hyperlink | name="View route for Synthetic 058: feedback timing in classroom learning, a survey" | help="" | id="Card[Synthetic 058: feedback timing in classroom learning, a survey#0].Route" | tabstop=yes | tab=-
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                              Custom | name="" | help="" | id="" | tabstop=no | tab=-
+                                                None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                  None | name="" | help="" | id="CardHost" | tabstop=no | tab=-
+                                                    None | name="Synthetic 059: working memory training and transfer, a field experiment" | help="" | id="Card[Synthetic 059: working memory training and transfer, a field experiment#0]" | tabstop=no | tab=-
+                                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        Hyperlink | name="Synthetic 059: working memory training and transfer, a field experiment" | help="Draft, 186 days, Fictional Journal 05, 1 journal · 1 rejection" | id="Card[Synthetic 059: working memory training and transfer, a field experiment#0].Title" | tabstop=yes | tab=-
+                                                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                            Text | name="Synthetic 059: working memory training and transfer, a field experiment" | help="" | id="TitleText" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          None | name="" | help="" | id="StagePill" | tabstop=no | tab=-
+                                                            Text | name="DRAFT" | help="" | id="StageText" | tabstop=no | tab=-
+                                                          Text | name="186 days" | help="186 days" | id="Status" | tabstop=no | tab=-
+                                                          Button | name="More actions for Synthetic 059: working memory training and transfer, a field experiment" | help="" | id="Card[Synthetic 059: working memory training and transfer, a field experiment#0].More" | tabstop=yes | tab=-
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="Fictional Journal 05" | help="Fictional Journal 05" | id="Journal" | tabstop=no | tab=-
+                                                          Text | name="Tags: collaboration, clinical, open science" | help="collaboration, clinical, open science (click to search the board)" | id="TagStrip" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="collaboration" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="clinical" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="open science" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="+2" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          List | name="" | help="" | id="RouteDots" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="PART_ItemsPresenter" | tabstop=no | tab=-
+                                                                None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="1 journal · 1 rejection" | help="" | id="RouteText" | tabstop=no | tab=-
+                                                          Hyperlink | name="View route for Synthetic 059: working memory training and transfer, a field experiment" | help="" | id="Card[Synthetic 059: working memory training and transfer, a field experiment#0].Route" | tabstop=yes | tab=-
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                              Custom | name="" | help="" | id="" | tabstop=no | tab=-
+                                                None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                  None | name="" | help="" | id="CardHost" | tabstop=no | tab=-
+                                                    None | name="Synthetic 063: feedback timing in classroom learning, a null result" | help="" | id="Card[Synthetic 063: feedback timing in classroom learning, a null result#0]" | tabstop=no | tab=-
+                                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        Hyperlink | name="Synthetic 063: feedback timing in classroom learning, a null result" | help="Submitted, Waiting 96 days, no target journal, 1st journal" | id="Card[Synthetic 063: feedback timing in classroom learning, a null result#0].Title" | tabstop=yes | tab=-
+                                                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                            Text | name="Synthetic 063: feedback timing in classroom learning, a null result" | help="" | id="TitleText" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          None | name="" | help="" | id="StagePill" | tabstop=no | tab=-
+                                                            Text | name="SUBMITTED" | help="" | id="StageText" | tabstop=no | tab=-
+                                                          Text | name="Waiting 96 days" | help="Waiting 96 days" | id="Status" | tabstop=no | tab=-
+                                                          Button | name="More actions for Synthetic 063: feedback timing in classroom learning, a null result" | help="" | id="Card[Synthetic 063: feedback timing in classroom learning, a null result#0].More" | tabstop=yes | tab=-
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="No target journal yet" | help="" | id="Journal" | tabstop=no | tab=-
+                                                          Text | name="" | help="" | id="TagStrip" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="+0" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          List | name="" | help="" | id="RouteDots" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="PART_ItemsPresenter" | tabstop=no | tab=-
+                                                                None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="1st journal" | help="" | id="RouteText" | tabstop=no | tab=-
+                                                          Hyperlink | name="View route for Synthetic 063: feedback timing in classroom learning, a null result" | help="" | id="Card[Synthetic 063: feedback timing in classroom learning, a null result#0].Route" | tabstop=yes | tab=-
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                              Custom | name="" | help="" | id="" | tabstop=no | tab=-
+                                                None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                  None | name="" | help="" | id="CardHost" | tabstop=no | tab=-
+                                                    None | name="Synthetic 064: open materials in developmental science, a preregistered replication" | help="" | id="Card[Synthetic 064: open materials in developmental science, a preregistered replication#0]" | tabstop=no | tab=-
+                                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        Hyperlink | name="Synthetic 064: open materials in developmental science, a preregistered replication" | help="Revision, 330 days, Fictional Journal 08, 2nd journal · major revision" | id="Card[Synthetic 064: open materials in developmental science, a preregistered replication#0].Title" | tabstop=yes | tab=-
+                                                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                            Text | name="Synthetic 064: open materials in developmental science, a preregistered replication" | help="" | id="TitleText" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          None | name="" | help="" | id="StagePill" | tabstop=no | tab=-
+                                                            Text | name="REVISION" | help="" | id="StageText" | tabstop=no | tab=-
+                                                          Text | name="330 days" | help="330 days" | id="Status" | tabstop=no | tab=-
+                                                          Button | name="More actions for Synthetic 064: open materials in developmental science, a preregistered replication" | help="" | id="Card[Synthetic 064: open materials in developmental science, a preregistered replication#0].More" | tabstop=yes | tab=-
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="Fictional Journal 08" | help="Fictional Journal 08" | id="Journal" | tabstop=no | tab=-
+                                                          Text | name="Tags: methods, longitudinal" | help="methods, longitudinal (click to search the board)" | id="TagStrip" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="methods" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="longitudinal" | help="" | id="" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              Text | name="+0" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          List | name="" | help="" | id="RouteDots" | tabstop=no | tab=-
+                                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="PART_ItemsPresenter" | tabstop=no | tab=-
+                                                                None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                          Text | name="2nd journal · major revision" | help="" | id="RouteText" | tabstop=no | tab=-
+                                                          Hyperlink | name="View route for Synthetic 064: open materials in developmental science, a preregistered replication" | help="" | id="Card[Synthetic 064: open materials in developmental science, a preregistered replication#0].Route" | tabstop=yes | tab=-
+                                                            None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                ScrollBar | name="" | help="" | id="PART_VerticalScrollBar" | tabstop=no | tab=-
+                                  None | name="" | help="" | id="Root" | tabstop=no | tab=-
+                                    None | name="" | help="" | id="VerticalRoot" | tabstop=no | tab=-
+                                      None | name="" | help="" | id="" | tabstop=no | tab=-
+                                        None | name="" | help="" | id="TrackRect" | tabstop=no | tab=-
+                                        Button | name="Line up" | help="" | id="PART_LineUpButton" | tabstop=no | tab=-
+                                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                        None | name="" | help="" | id="" | tabstop=no | tab=-
+                                          Button | name="Page up" | help="" | id="PART_PageUpButton" | tabstop=no | tab=-
+                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                          Button | name="Page down" | help="" | id="PART_PageDownButton" | tabstop=no | tab=-
+                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                          Thumb | name="Position" | help="" | id="" | tabstop=no | tab=-
+                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                        Button | name="Line down" | help="" | id="PART_LineDownButton" | tabstop=no | tab=-
+                                          None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
+                                            None | name="" | help="" | id="" | tabstop=no | tab=-
+                                              None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                  None | name="" | help="" | id="" | tabstop=no | tab=-
+                                                    None | name="" | help="" | id="" | tabstop=no | tab=-
+                                None | name="" | help="" | id="PART_ScrollBarsSeparator" | tabstop=no | tab=-
+# tab order (up to 40 stops)
+1 | RadioButton | RadioButton | name="Board" | id="Rail.Board"
+2 | TextBox | Edit | name="Search the board (Ctrl+F)" | id="BoardSearch"
+3 | Button | Button | name="5 overdue revisions" | id="Chip.OverdueRevision"
+4 | Button | Button | name="9 revisions due soon" | id="Chip.RevisionDueSoon"
+5 | Button | Button | name="53 waiting 90+ days" | id="Chip.LongReview"
+6 | Button | Button | name="4 no target journal" | id="Chip.MissingTargetJournal"
+7 | Button | Hyperlink | name="View in Deadlines" | id="ViewInDeadlines"
+8 | TabStripItem | ListItem | name="Pipeline (167)" | id="Shelf.Pipeline"
+9 | ComboBox | ComboBox | name="Filter by stage" | id="StageFilter"
+10 | ComboBox | ComboBox | name="Sort the board" | id="BoardSort"
+11 | Button | Hyperlink | name="Synthetic 005: metacognitive judgments of learning, a survey" | id="Card[Synthetic 005: metacognitive judgments of learning, a survey#0].Title"
+12 | Button | Button | name="More actions for Synthetic 005: metacognitive judgments of learning, a survey" | id="Card[Synthetic 005: metacognitive judgments of learning, a survey#0].More"
+13 | Button | Hyperlink | name="View route for Synthetic 005: metacognitive judgments of learning, a survey" | id="Card[Synthetic 005: metacognitive judgments of learning, a survey#0].Route"
+14 | Button | Hyperlink | name="Synthetic 009: test anxiety and performance, a field experiment" | id="Card[Synthetic 009: test anxiety and performance, a field experiment#0].Title"
+15 | Button | Button | name="More actions for Synthetic 009: test anxiety and performance, a field experiment" | id="Card[Synthetic 009: test anxiety and performance, a field experiment#0].More"
+16 | Button | Hyperlink | name="View route for Synthetic 009: test anxiety and performance, a field experiment" | id="Card[Synthetic 009: test anxiety and performance, a field experiment#0].Route"
+17 | Button | Hyperlink | name="Synthetic 010: self-control and course persistence, a multilevel analysis" | id="Card[Synthetic 010: self-control and course persistence, a multilevel analysis#0].Title"
+18 | Button | Button | name="More actions for Synthetic 010: self-control and course persistence, a multilevel analysis" | id="Card[Synthetic 010: self-control and course persistence, a multilevel analysis#0].More"
+19 | Button | Hyperlink | name="View route for Synthetic 010: self-control and course persistence, a multilevel analysis" | id="Card[Synthetic 010: self-control and course persistence, a multilevel analysis#0].Route"
+20 | Button | Hyperlink | name="Synthetic 012: feedback timing in classroom learning, a null result" | id="Card[Synthetic 012: feedback timing in classroom learning, a null result#0].Title"
+21 | Button | Button | name="More actions for Synthetic 012: feedback timing in classroom learning, a null result" | id="Card[Synthetic 012: feedback timing in classroom learning, a null result#0].More"
+22 | Button | Hyperlink | name="View route for Synthetic 012: feedback timing in classroom learning, a null result" | id="Card[Synthetic 012: feedback timing in classroom learning, a null result#0].Route"
+23 | Button | Hyperlink | name="Synthetic 013: working memory training and transfer, a multilevel analysis" | id="Card[Synthetic 013: working memory training and transfer, a multilevel analysis#0].Title"
+24 | Button | Button | name="More actions for Synthetic 013: working memory training and transfer, a multilevel analysis" | id="Card[Synthetic 013: working memory training and transfer, a multilevel analysis#0].More"
+25 | Button | Hyperlink | name="View route for Synthetic 013: working memory training and transfer, a multilevel analysis" | id="Card[Synthetic 013: working memory training and transfer, a multilevel analysis#0].Route"
+26 | Button | Hyperlink | name="Synthetic 014: attention lapses during long lectures, a multilevel analysis" | id="Card[Synthetic 014: attention lapses during long lectures, a multilevel analysis#0].Title"
+27 | Button | Button | name="More actions for Synthetic 014: attention lapses during long lectures, a multilevel analysis" | id="Card[Synthetic 014: attention lapses during long lectures, a multilevel analysis#0].More"
+28 | Button | Hyperlink | name="View route for Synthetic 014: attention lapses during long lectures, a multilevel analysis" | id="Card[Synthetic 014: attention lapses during long lectures, a multilevel analysis#0].Route"
+29 | Button | Hyperlink | name="Synthetic 018: metacognitive judgments of learning, a multilevel analysis" | id="Card[Synthetic 018: metacognitive judgments of learning, a multilevel analysis#0].Title"
+30 | Button | Button | name="More actions for Synthetic 018: metacognitive judgments of learning, a multilevel analysis" | id="Card[Synthetic 018: metacognitive judgments of learning, a multilevel analysis#0].More"
+31 | Button | Hyperlink | name="View route for Synthetic 018: metacognitive judgments of learning, a multilevel analysis" | id="Card[Synthetic 018: metacognitive judgments of learning, a multilevel analysis#0].Route"
+32 | Button | Hyperlink | name="Synthetic 021: attention lapses during long lectures, a null result" | id="Card[Synthetic 021: attention lapses during long lectures, a null result#0].Title"
+33 | Button | Button | name="More actions for Synthetic 021: attention lapses during long lectures, a null result" | id="Card[Synthetic 021: attention lapses during long lectures, a null result#0].More"
+34 | Button | Hyperlink | name="View route for Synthetic 021: attention lapses during long lectures, a null result" | id="Card[Synthetic 021: attention lapses during long lectures, a null result#0].Route"
+35 | Button | Hyperlink | name="Synthetic 023: handwriting and note quality, a null result" | id="Card[Synthetic 023: handwriting and note quality, a null result#0].Title"
+36 | Button | Button | name="More actions for Synthetic 023: handwriting and note quality, a null result" | id="Card[Synthetic 023: handwriting and note quality, a null result#0].More"
+37 | Button | Hyperlink | name="View route for Synthetic 023: handwriting and note quality, a null result" | id="Card[Synthetic 023: handwriting and note quality, a null result#0].Route"
+38 | Button | Hyperlink | name="Synthetic 026: spacing effects in vocabulary learning, a survey" | id="Card[Synthetic 026: spacing effects in vocabulary learning, a survey#0].Title"
+39 | Button | Button | name="More actions for Synthetic 026: spacing effects in vocabulary learning, a survey" | id="Card[Synthetic 026: spacing effects in vocabulary learning, a survey#0].More"
+40 | Button | Hyperlink | name="View route for Synthetic 026: spacing effects in vocabulary learning, a survey" | id="Card[Synthetic 026: spacing effects in vocabulary learning, a survey#0].Route"
