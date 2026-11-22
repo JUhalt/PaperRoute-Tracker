@@ -1,40 +1,56 @@
 # Board trial report
 
-Draft of November 20, 2026, brought up to date on November 21, 2026. Two pieces of work have merged since: the platform check mode and the Linux checklist (step 15, #402), and the first change for a cheaper card (#403). A third piece, a hidden shelf that waits for its rows, is built, tested and measured headless, but not merged. It waits as draft #404, and master does not have it (section 4.7). Five things wait for a person: the look of the Board on a real Windows contrast theme (step 11); the Narrator pass (step 17); the first real run of `--platform-check` on Windows; the Linux checklist on a real Ubuntu machine; and the maintainer's own hours, which the second estimate of k needs (section 2.3). Section 10 lists the decisions that wait for the maintainer.
+First written on November 20, 2026, and brought up to date on November 21 and on November 22, 2026.
+
+What changed with the update of November 22:
+
+- **The maintainer tested the trial by hand** on November 21 (38 checks; 37 marked "works") **and answered every decision of section 10.** That section is now the record of the answers.
+- **The platform check ran for real**, on Windows and on Ubuntu, and **the Linux checklist was followed once**, on an Ubuntu 26.10 desktop (section 7). CI now shows the trial in a real X window on Ubuntu for every pull request (#407).
+- **The measurement records what the PC was doing during a run** (#411, section 4.8). The maintainer asked for this: the timings are taken on a very busy PC.
+
+Three things still wait:
+
+- The hidden shelf that waits for its rows is built and measured headless, but not merged. It waits as draft #404, and master does not have it (section 4.7). Its deciding measurement in a real window is not taken; it needs the development PC to be free of other work (section 4.8).
+- Preparing Published while the Board is idle, the maintainer's choice for the first switch, is designed and not built.
+- The maintainer's own hours, which the second estimate of k needs, are not logged yet (section 2.3).
 
 ## Summary
 
-- **What was built.** The Board of PaperRoute Tracker, ported to Avalonia 12.1.6 in C# over the unchanged Visual Basic core, beside the Windows Forms app. It has shelves and cards, search, the stage and sort boxes, the Needs Attention chips, arrow keys, Light, Dark and high contrast, a read-only copy of a library folder (`--snapshot-from`) and a measuring mode (`--measure`). Since the first draft it also has a platform check mode (`--platform-check`) with a checklist for one person on Ubuntu (#402), and a tag strip that keeps and refills its chips (#403). On master, 236 headless tests pass on Windows and on Ubuntu (CI run 44925677319, #403's head f51b5e2, 2026-11-21); at the first draft it was 181 (CI run 44703237752). The branch of draft #404 has 245 (section 4.7).
+- **What was built.** The Board of PaperRoute Tracker, ported to Avalonia 12.1.6 in C# over the unchanged Visual Basic core, beside the Windows Forms app. It has shelves and cards, search, the stage and sort boxes, the Needs Attention chips, arrow keys, Light, Dark and high contrast, a read-only copy of a library folder (`--snapshot-from`) and a measuring mode (`--measure`). Since the first draft it also has a platform check mode (`--platform-check`) with a checklist for one person on Ubuntu (#402), and a tag strip that keeps and refills its chips (#403). Since November 21 its measurement also records how long the interface thread really ran and how busy the PC was (#411, section 4.8). On master, 254 headless tests pass on Windows and on Ubuntu (CI run 45003699839, #411's head e6f725c, 2026-11-22). It was 236 after #403 (CI run 44925677319, 2026-11-21) and 181 at the first draft (CI run 44703237752). The branch of draft #404, which starts from the earlier master, had 245 (section 4.7).
 - **Finding 1.** The C# interface over the VB core works. Compiled bindings reach VB core types, and no build error that crossed the VB/C# line is recorded in any trial pull request or in the notes.
 - **Finding 2.** A card view is expensive: about 14 ms each for the first cards a process shows, and about 7 ms once warm (section 4.5). Drawing every card misses the budgets by far. Any long list in the full port must be virtualized from the start. The first change aimed at the card, a tag strip that keeps its chips (#403), lowered the search keystroke in every paired run on 2026-11-21. It made no measurable difference to a card's cost: the time saved in giving a reused card view its new manuscript was spent again in laying the view out (section 4.6).
 - **Finding 3.** The hours are small against the plan: 6.3 recorded hours in the push, Board work about 3.5 hours. (The 4.8 hours recorded for #402 and #403 on 2026-11-21, and the 1.0 hour of draft #404 the same day, are listed apart, section 2.4.) But they are wall-clock hours, nearly all of unattended agent sessions, not a person's working hours. So k (0.06 to 0.20; k is the factor that scales the plan's unit sizes, section 2.3) describes this way of working. It is not a forecast of calendar time.
 - **Finding 4.** Avalonia needed help in places the design did not expect: the open-list keys of the boxes, Tab between cards under rows of N, and reuse of virtualized rows. As the design foresaw, Fluent's menus, scroll bars and tooltips also need control themes for contrast.
 - **Choice made.** Rows of N is the default. (Rows of N: the shelf makes only the rows of cards on screen and reuses them as you scroll.) It was chosen at step 13 from the headless numbers. The real-window run, taken afterwards, confirms it: drawing every card went over the budget on all four rows that the design's rule uses to decide (section 4.3).
 - **Finding 5.** Timings taken on a busy PC can mislead. The first gain reported for the tag strip change was taken while other work loaded the PC, with the two builds measured at different times. A reviewer could not reproduce it. Only runs of the two builds in turn, on a quiet PC, separated the code from the load (section 8).
-- **What waits.** Two budget rows are still over in a real window (first switch to Published, search keystroke); the report-only row, process start to Board (2,055 ms on 2026-11-20), is also over 1,500. On 2026-11-21, with the tag strip change and the PC in use, the search keystroke was 93 ms against 50 and the first switch 305 ms against 100 (section 4.6). These are rows of the measured sequence. It has no row for a key typed right after another shelf was shown. In a reviewer's scratch test of that case (headless, not repeated, not in the repository) a key cost 183.5 ms at the median on master's code, timed by a stopwatch, a different measure from the budget rows' (section 4.7). The next change for the keystroke, a hidden shelf that waits for its rows, is built and waits as draft #404, not merged. In the measured sequence it did not lower the keystroke by more than the noise. In that scratch test it did (decision 4a). The contrast look, the Narrator pass, the maintainer's hours, the Linux checklist on a real machine and the first real runs of `--platform-check` all need a person.
+- **Tested by hand (2026-11-21).** The maintainer worked through a sheet of 38 checks on master's build (e3cfae6) on the development PC: how the Board feels (4), keyboard and mouse (11), high contrast on real Windows themes (7), Narrator (13) and the platform check (3). 37 are marked "works". The one marked "problem" was the trial's wording, not a fault: the platform check's second copy has no window by design, and the notice on screen did not say so (fixed, #406). The sheet records one verdict for each check and when it was entered, not how the check was made (section 5.3).
+- **Decided (2026-11-21).** The maintainer answered every decision of section 10. In short: rows of N stays the default, and the every-card build goes. The real window decides the budget verdicts, and the headless test guards in CI. The search keystroke's change (draft #404) is to be measured in a real window and merged if a key gains. Published is to be prepared while the Board is idle, as today's app does. On the last two the maintainer added: "Remember that these tests are on a very, very busy PC. Perhaps we can account or correct for that?"
+- **Linux (2026-11-21).** The trial starts on Linux. The checklist was followed once on an Ubuntu 26.10 desktop: the window, the self-check, the read-only copy of the 500 library and the platform check all worked, and an AppImage of the trial started without `libfuse2`. CI shows the trial's window on Ubuntu for every pull request (#407). Not shown: Ubuntu 24.04, an installed system, anything clicked with a pointer (section 7).
+- **What waits.** Two budget rows are still over in a real window (first switch to Published, search keystroke); the report-only row, process start to Board (2,055 ms on 2026-11-20), is also over 1,500. On 2026-11-21, with the tag strip change and the PC in use, the search keystroke was 93 ms against 50 and the first switch 305 ms against 100 (section 4.6). These are rows of the measured sequence. It has no row for a key typed right after another shelf was shown. In a reviewer's scratch test of that case (headless, not repeated, not in the repository) a key cost 183.5 ms at the median on master's code, timed by a stopwatch, a different measure from the budget rows' (section 4.7). The next change for the keystroke, a hidden shelf that waits for its rows, is built and waits as draft #404, not merged. In the measured sequence it did not lower the keystroke by more than the noise. In that scratch test it did. By decision 4a its measurement is to be finished in a real window: its timed row and the deciding sitting are not done (section 4.8). For the first switch, preparing Published while the Board is idle is designed and not built. Also not done: removing the every-card build; the lighter card; the validation runs of the new measurement; a second look by Claude at the contrast themes and at a screen reader's words in the Windows guest; and the maintainer's hours, which are not logged yet.
 
 ## 1. What the trial built
 
-Steps are those of design section 8. Every pull request named here is merged, except two drafts: this report's own (#400) and the hidden shelf that waits for its rows (#404, section 4.7). #399 (steps 11 to 13) merged on November 20, 2026, after this report's numbers were taken from its head, 44d62e0. On November 21, 2026, #402 (step 15) merged as 294a120, and #403 (the first change for a cheaper card, work after step 13 that design section 8 did not list) merged after it as e3cfae6.
+Steps are those of design section 8. Every pull request named here is merged, except draft #404, the hidden shelf that waits for its rows (section 4.7). This report itself is #400. #399 (steps 11 to 13) merged on November 20, 2026, after this report's numbers were taken from its head, 44d62e0. On November 21, 2026, #402 (step 15) merged as 294a120, and #403 (the first change for a cheaper card, work after step 13 that design section 8 did not list) merged after it as e3cfae6. After the test by hand of that afternoon, four more of the trial's pull requests merged, on November 21 and 22: #406 (the platform check's notice), #407 (the trial's window on Ubuntu in CI), #411 (the measurement on a busy PC) and #412 (the Linux checklist's results).
 
 | Step | What | State | Pull request |
 |---:|---|---|---|
-| 0 | Maintainer's answers; tracker issue | Tracker #160 exists. The maintainer decided three things on 2026-11-15, recorded on #160: C# over the VB core, on master, two tracks. The design's other step 0 items (the names, two solution files, no developer tools, the checklist weights, H = 6) were taken at the design's defaults when work began on 2026-11-19 and reported to the maintainer, who has not yet confirmed them. `--snapshot` of the real library was held back. | none |
+| 0 | Maintainer's answers; tracker issue | Tracker #160 exists. The maintainer decided three things on 2026-11-15, recorded on #160: C# over the VB core, on master, two tracks. The design's other step 0 items (the names, two solution files, no developer tools, the checklist weights, H = 6) were taken at the design's defaults when work began on 2026-11-19 and reported to the maintainer, who has not confirmed them one by one. On 2026-11-21 the maintainer signed off the plan and the surface map as they are and answered the decisions of section 10; H is still not stated. `--snapshot` of the real library was held back. | none |
 | 1 | PR A: fixture project | Done | #378 |
 | 2 | PR B: empty trial solution | Done | #384 |
 | 3 to 5 | Session and startup; Board rules; #338 and debounce | Done | #383 |
 | 6 to 8 | Styles; shell; Board without cards | Done (core-reference guard and sort pins added) | #390 |
 | 9, 10 | Cards and shelves (every card); arrow keys | Done | #396 |
-| 11 | High contrast | Built and tested headless. The look on a real contrast theme waits for the maintainer. | #399 |
+| 11 | High contrast | Built and tested headless. On 2026-11-21 the maintainer checked it on real Windows contrast themes: 7 of 7 checks marked "works" (section 5.3). | #399 |
 | 11b | `--snapshot-from` | Built; Linux path fix in 44d62e0 | #399 |
 | 12 | Pictures, budgets, `--measure` | Built. Four budget rows wait under rows of N. | #399 |
 | 13 | Rows of N behind a constant | Built; it is the default (`ShelfLayout.Option = "b"`; `-p:ShelfOption=a` builds every card) | #399 |
 | after 13 | A cheaper card: change 1 of section 4.5, and tests that hold the accessibility tree, the Tab order and each reused card's tags | Built: the tag strip keeps and refills its chips. One more attempt was tried and dropped (section 4.6). Change 2, a hidden shelf that waits for its rows, is built, tested and measured headless, and waits, not merged and not in master, as draft #404 (section 4.7). Changes 3 and 4 are not started. | #403; #404 (draft) |
-| 14 | `--snapshot` of the real library | Not built. The argument is refused with exit code 2. Waits for the maintainer's word. | none |
-| 15 | `--platform-check` and the `trial-linux` CI job | CI job done (#398). `--platform-check` and `docs/design/Board-Trial-Linux-Checklist.md` built (#402). The mode has never run with a real dialog and launcher, on Windows or on Linux; the checklist has never been worked through (section 7). | #398, #402 |
+| after 13 | A measurement that accounts for a busy PC (the maintainer's request of 2026-11-21) | Built. Every new figure is report-only: no budget, verdict or rule changed. Its validation runs are not done (section 4.8). | #411 |
+| 14 | `--snapshot` of the real library | Not built, and by the maintainer's decision of 2026-11-21 it will not be (decision 6). The argument is refused with exit code 2. | none |
+| 15 | `--platform-check` and the `trial-linux` CI job | CI job done (#398). `--platform-check` and `docs/design/Board-Trial-Linux-Checklist.md` built (#402). On 2026-11-21 the mode ran for real on Windows (the maintainer) and on Ubuntu 26.10 (Claude, in a virtual machine), and the checklist was followed once, parts A to F (section 7). A second CI job shows the trial's window on Ubuntu under a virtual display (#407). | #398, #402, #406, #407, #412 |
 | 16 | Spikes | Working copy done. VB `.axaml` done as a throwaway folder outside the repository, never committed. | #393 |
-| 17 | Narrator pass | Not done; it is the maintainer's | none |
-| 18 | PR C: this report | This draft, brought up to date on 2026-11-21 | #400 (draft) |
+| 17 | Narrator pass | Done by the maintainer on 2026-11-21: 13 of 13 checks marked "works" (section 6). What Narrator said, word for word, is not written down. | none |
+| 18 | PR C: this report | This report, brought up to date on 2026-11-21 and on 2026-11-22 | #400 |
 
 ## 2. Hours and calibration (design 7.1)
 
@@ -120,7 +136,7 @@ Paired with B = 3.5 h, which leaves out the hours for contrast and the budgets, 
 
 **Arithmetic.** H = 6, the design's default; the maintainer has not stated H. Every d and k scales as 6 / H.
 
-For the maintainer: state H (your working day in hours).
+For the maintainer: state H (your working day in hours). This is still open after 2026-11-21: the sheet of that day asked for H and for the hours so far in a note, and the note was left empty (decision 5b).
 
 d = B / H (days). Board size = (d / 5) / f weeks. k = size / 3 (3 weeks is the plan's midpoint for unit 2). Rescaled estimate = k × 42.25 + 29.25 weeks.
 
@@ -137,7 +153,7 @@ The plan as written (k = 1) gives 42.25 + 29.25 = 71.5 weeks. Even every subagen
 
 **k given twice, as the design asks.**
 1. From the total hours: k = 0.058 to 0.083 (Board hours, each B paired with its own f), 0.165 to 0.197 (every subagent hour). This calibrates the remaining units only if they are built the same way.
-2. From the maintainer's own hours: **cannot be given**. Zero hours are logged.
+2. From the maintainer's own hours: **cannot be given**. Zero hours are logged. On 2026-11-21 the maintainer chose to read k both ways, "the agents' hours now, and my own once I log them on issue #160" (decision 5), so this figure waits for those hours.
 
 For the maintainer: please log your hours in comments on #160, per part and per pull request. Log them for: step 0's decisions; reviewing #378, #383, #384, #390, #393, #396, #398 and #399; merging and CI fixes; the contrast look (step 11); step 14, if kept; the Narrator pass (step 17); and reviewing this report. Mark hours already spent, which you can only give from memory, as estimates.
 
@@ -203,13 +219,15 @@ Like #403's, these hours went to the "500 library within budget" item of 2.3, wh
 
 This report's update for #404 (the commit that adds section 4.7) carries its own trailer, marked docs, like the report's earlier commits. It is in none of these tables.
 
-For the maintainer: when you log hours on #160, include reviewing #402, #403, draft #404 and this report (#400).
+For the maintainer: when you log hours on #160, include reviewing #402, #403, draft #404 and this report (#400), and the test by hand of 2026-11-21.
+
+**Decided on 2026-11-21 (decision 5c): the hours of November 21 stay out of B**, as this section has them. The trial's work after the test by hand (#406, #407, #411 and #412, 2026-11-21 and 2026-11-22) carries `Trial-Hours` trailers in its commits too: 0.2, 1.5, 17.7 and 0.6 hours by those trailers. They are not tabled here and, by the same decision, are not in B.
 
 ## 3. The plan's six questions (design 7.2)
 
 ### 3.1 How long the Board takes
 
-See section 2: B = 3.5 h (wide 5.0 h) of agent wall-clock time, f = 0.67 to 0.80 (0.63 to 0.67 against B = 3.5 h), k = 0.058 to 0.083. What is unfinished: the Narrator pass, the contrast look on a real theme, two budget rows in a real window, and the card menu and File Drawer panel (outside the trial).
+See section 2: B = 3.5 h (wide 5.0 h) of agent wall-clock time, f = 0.67 to 0.80 (0.63 to 0.67 against B = 3.5 h), k = 0.058 to 0.083. What was unfinished when f was taken (2026-11-20): the Narrator pass, the contrast look on a real theme, two budget rows in a real window, and the card menu and File Drawer panel (outside the trial). The maintainer did the first two on 2026-11-21 (sections 5.3 and 6); f is not recomputed (section 2.4).
 
 ### 3.2 Does C# build over the VB core with compiled bindings? Does a VB `.axaml` build?
 
@@ -240,6 +258,8 @@ Pass mark of design 6.1: met. The Release run and CI pass; all four checks of ru
 
 The same was seen on 2026-11-21. #402's local run failed one enforced row (back to All stages, 290 ms against 250) while another build and test run was using the PC (#402's description). During the #403 work a reviewer saw the two enforced rows fail at 265 to 379 ms under heavy load, and every run of them on a quiet PC passed, ten for each build (the fixer agent's record). The full local suite then passed 236 of 236 in Release, timing rows included, once master had been merged into #403's branch (the development PC, 2026-11-21 11:27 to 11:30, the tree committed as f51b5e2). The every-card build (`-p:ShelfOption=a`) also passed 236 of 236, in Debug (11:37 to 11:41). These are master's tests. The branch of draft #404, not merged, adds 9 and passed 245 of 245 the same afternoon on the development PC, and 245 of 245 on each system in CI run 44935982620 (section 4.7).
 
+Since #411 (2026-11-22) a failure of an enforced row says what was measured in that run, how busy the PC was, and that timing tests need a quiet PC (section 4.8, decision 12). It happened again during #411's own work, on a PC where other programs kept about 10.5 to 11.4 of 12 processors busy: the last whole-project run failed one enforced row (the open list, 259 ms against 250), and the budget tests passed when run alone afterwards. Master then has 254 tests, and they pass 254 of 254 on each system in CI run 45003699839.
+
 ### 3.4 The working-copy spike
 
 **It fits.** Today's way of editing a record (original, working clone from `ManuscriptCloneService`, baseline JSON snapshot, as `EditManuscriptForm` does) works under a bound view model with no core change. Three tests pass (#393).
@@ -253,7 +273,9 @@ Limits: only Title was tried. Not tried: the other fields, saving, a recovery dr
 
 ### 3.5 Does it start on Linux
 
-**It builds and its headless tests pass on Ubuntu. Nothing has started a window on a real Linux desktop.** Since 2026-11-21 the tools for that start exist: `--platform-check` and a checklist for one person on Ubuntu 24.04 (#402). Neither has been used on a real Linux machine. The mode has not run with a real dialog and launcher on Windows either; only the checklist's publish step (A1) was tried, on the development PC. See section 7.
+**It starts.** On 2026-11-21 the trial, published for `linux-x64`, opened its window on an Ubuntu 26.10 desktop (Wayland, GNOME) in a virtual machine. There it passed `--self-check`, showed a read-only copy of the 500 test library, and ran `--platform-check` to its end with exit code 0. Packed as an AppImage, it started on that machine, which has no `libfuse2`. CI also starts it in a real X window on Ubuntu for every pull request (#407). As before, it builds and its headless tests pass on Ubuntu.
+
+Not shown: Ubuntu 24.04, which the checklist names; an installed system; anything clicked with a pointer; speed. See section 7.
 
 ### 3.6 Large library against today's budget
 
@@ -263,7 +285,7 @@ See section 4.
 
 ### 4.1 The comparison
 
-The tables of sections 4.1 to 4.4 are the record of 2026-11-20 (the Windows Forms column excepted, which is of 2026-11-14). The figures of 2026-11-21, before and after the tag strip change, are in section 4.6; the headless figures of the hidden-shelf change (draft #404, not merged) are in section 4.7. Section 4.6's real-window figures were taken with the PC in use. Neither of its tables is compared with these.
+The tables of sections 4.1 to 4.4 are the record of 2026-11-20 (the Windows Forms column excepted, which is of 2026-11-14). The figures of 2026-11-21, before and after the tag strip change, are in section 4.6; the headless figures of the hidden-shelf change (draft #404, not merged) are in section 4.7. What the maintainer decided about these rows on 2026-11-21, and how the measurement now accounts for a busy PC, is in section 4.8. Section 4.6's real-window figures were taken with the PC in use. Neither of its tables is compared with these.
 
 UI ms: the longest stall of the interface thread during the action. Medians for the headless (5 runs) and real-window (3 runs) columns; the Windows Forms column and the CI table are single runs. Budgets from design 6.3.
 
@@ -351,7 +373,7 @@ The cause is the cost of a card view: about 3 ms to make and about 12 ms to atta
 
 What could bring them in (from #399 and the workflow records). None was built when this list was first written; the state on 2026-11-21 is in brackets, and sections 4.6 and 4.7 have the details:
 - make a card view cheaper: a flatter tree, fewer bindings, menus built later [one part built: the tag strip keeps its chips (#403); the lighter buttons and the route dots as one control are not started];
-- prepare the hidden Published shelf while idle, as today's app does [not built];
+- prepare the hidden Published shelf while idle, as today's app does [the maintainer's choice for the first switch on 2026-11-21; designed, not built (section 4.8)];
 - draw only the first screen at startup, as today's app does [not built];
 - defer the hidden shelf's card updates until it is shown (today a shelf shown once rebinds its 21 views on every search or stage change) [built and measured headless; not merged and not in master: it waits as draft #404 (section 4.7)];
 - for the scroll, cheaper reuse of card views (inferred; no source names a fix) [not built; the tag strip change did not make reuse cheaper per card].
@@ -360,7 +382,7 @@ One more was tried on 2026-11-21 and dropped: making fewer rows at a shelf's fir
 
 The second and third items are how today's app fills the Board while it is idle, which design 4.4 and plan :428 said would not be ported. Section 4.5 measures where a card's cost sits and which of these changes the numbers support.
 
-For the maintainer: say whether the budget verdicts rest on the real window (the design's rule for the switch) or on headless (the stricter guard in CI).
+Decided on 2026-11-21 (decision 3): the real window decides the budget verdicts, and the headless test guards in CI. The maintainer's choices for the two rows still over are in section 4.8.
 
 ### 4.5 Where a card's cost sits
 
@@ -389,7 +411,7 @@ Not separable from noise (about 0.3 ms either way on a median): the tooltips, th
 1. Rework the tag strip's update: keep and refill its chips, or skip the rebuild when the tags are the same. Up to about 1 ms per reused view. [Built (#403). Per card it saved nothing measurable.]
 2. Do not give a hidden shelf's views new cards until the shelf is shown. [Built, tested and measured headless (section 4.7); not merged, it waits as draft #404. In the measured sequence the search keystroke did not gain by more than the noise.]
 3. One lighter control for the title, ⋯ and View route, in place of three Fluent buttons. Up to 2.2 ms per first show; 1.1 to 1.3 measured for a plain swap. [Not started.]
-4. Draw the route dots as one small control. Up to about 1 ms per first show. [Not started. It would take unnamed elements out of the accessibility tree; decision 13.]
+4. Draw the route dots as one small control. Up to about 1 ms per first show. [Not started. It would take unnamed elements out of the accessibility tree. Decision 13 allowed that on 2026-11-21, with a Narrator check afterwards.]
 5. Pay the first-use costs before the first switch, for example by compiling ahead of time (ReadyToRun) or by making one hidden card at startup. The first cards cost about twice the warm ones. A warm-up moves that cost earlier; it does not remove it. [Not started.]
 
 Not measured: drawing, and a real window; the card inside the real shelf; each part's share of the cold cost; any real replacement; how many cards it takes to get from the cold figure to the warm one (the probes warmed up on several hundred).
@@ -508,7 +530,35 @@ This scratch test is also the only figure for that case on master's code: 183.5 
 - Reviewer notes not acted on: the arrow keys between cards, Tab and the ⋯ menu right after Published comes back from waiting rows are covered by one record and by one test's Right and Down only. A hidden shelf's waiting rows keep earlier card view models alive until it is shown again, at most as many as the rows the shelf had made (15 rows in the scratch test); memory was not measured.
 - The same as at f51b5e2, not changed: keyboard focus on a card's title is lost when its shelf is hidden, and does not come back (section 6).
 
-**What comes next** (decision 4a). Time a search keystroke typed while Published is hidden after it was shown, as a row of its own. Then take alternating pairs, headless and in a real window, with f51b5e2's product code under the same measurement. Merge #404 only if that row gains by more than the noise.
+**What comes next** (decision 4a). Time a search keystroke typed while Published is hidden after it was shown, as a row of its own. Then take alternating pairs, headless and in a real window, with f51b5e2's product code under the same measurement. Merge #404 only if that row gains by more than the noise. The maintainer chose this on 2026-11-21; section 4.8 says where it stands.
+
+### 4.8 What was decided on 2026-11-21, and measuring on a busy PC
+
+**The decisions.** After the test by hand the maintainer chose (section 10 has every decision):
+- **Rows of N** stays the default, to be confirmed after the Narrator checks. All 13 Narrator checks are marked "works" (section 6), so by that condition it is confirmed. The every-card build is to be removed. That is not done yet.
+- **The verdicts:** "The real window decides; the headless test guards in CI".
+- **The search keystroke:** "Finish its measurement in a real window, and merge it if a key gains" (draft #404).
+- **The first switch to Published:** "Prepare Published while the Board is idle, as today's app does (the design said not to port this)".
+- On each of the last two the maintainer wrote the same note: "Remember that these tests are on a very, very busy PC. Perhaps we can account or correct for that?"
+
+**How busy the PC is.** The development PC has 12 logical processors. At about 16:10 on 2026-11-21, with nothing of the trial's running, the programs whose processor time could be read used about 2.7 of them over ten seconds. Three one-second samples of the whole machine just before read 84, 70 and 64 percent busy; the coordinating session's own commands were part of those three. That was an ordinary working afternoon on that PC. During the night of 2026-11-21 to 22 it was busier: in the whole-project test runs of the measurement work, other programs kept about 10.5 to 11.4 of the 12 processors busy (#411's description). The real-window figures of 2026-11-21 were taken with the PC in use (section 4.6), and the load during the real-window run of 2026-11-20 was not recorded. So no real-window figure in this report is known to come from a quiet PC. None of this names a cause for any figure.
+
+**What the measurement records now (#411, merged 2026-11-22).** The answer to the maintainer's note was designed first, by three designers, two judges, a writer who made one design of the three, a critic and a revision; that design stays outside the repository. Then it was built by two implementers in turn, checked by three reviewers and a verifier. The method is written down for readers of the repository in `docs/design/Board-Trial-Measurement-Method.md`. In short:
+- **Nothing a verdict uses has changed.** Wall and UI are measured as before, and UI is still the figure a verdict uses. No budget, multiplier, verdict or rule changed. The new reads add a few microseconds inside each row.
+- **Each row has new figures beside Wall and UI, all report-only.** How long the interface thread really ran on a processor during the action, from the thread's own clock (`runMs`). The rest of the Wall (`notRunMs`). The longest stall counting only the time the thread was running (`runUiMs`, called Run UI). The share of readings taken on the PC's faster kind of core. The garbage-collection pause and the compilation time during the action.
+- **Each run records its conditions:** how many processors were busy, how many of them by other programs, and whether the run was "disturbed", which means that other programs left fewer than two processors free on average. An ordinary run on the development PC on a busy day is past that line.
+- **Run UI is a diagnosis, not a corrected verdict.** It leaves out the time when other programs had the processor. It cannot remove slower running, for example on a slower core or beside a busy twin, and it also leaves out real waits that belong to the action. Whether it can be trusted on this PC is what the method's validation runs are for: the same build with and without a known extra load. They are not done.
+- **A failed timing test says what was measured in that run** and ends with "Timing tests need a quiet PC. Close other programs and run the test again before reading this as a slower Board." This is decision 12. The Windows Forms timing tests end their failures with the same sentence.
+- **Two builds are compared by a script in the repository** (`ManualCertification/Measure-BoardPairs.ps1`), by alternating pairs, each run its own process. It makes "by more than the noise" exact before any run is taken: after must be lower on UI in at least 9 of 10 pairs, or 15 of 20, with ties counting against; the median difference must be at least the larger of 2 ms and 3% of the before median; a disturbed pair is replaced, and a sitting with more than five replacements is void. A sitting stopped short of its planned pairs does not decide. How several sittings of one change may be counted together is an open point for the maintainer (the method's sections 5 and 12).
+- **A rule for a real-window verdict on this PC is proposed, not in force:** the median UI of five undisturbed runs out of at most ten, and "too busy to judge" when there are fewer than five. The script prints its lines as report-only (the method's section 7).
+
+**What CI showed (run 45003699839, #411's head e6f725c).** The thread clock works on both runners: `thread-cputime` on Ubuntu, headless and in the real window under the virtual display, and `cycles` on Windows, where the two rate checks read 0.9981 and 0.9980 of the nominal rate. The load was read on both. The fast-core share is absent on both, as expected on virtual machines. 254 of 254 tests pass on each system.
+
+**One real run on the busy PC**, from #411's verification (2026-11-22, headless, Release, the 500 library): the open list read UI 259 ms against 250 and so failed today's rule. Its Wall was 336 ms, of which the interface thread ran for 284 ms; Run UI was 223 ms; a garbage-collection pause of 59 ms fell inside it; other programs kept 10.6 of the 12 processors busy. The budget tests passed when run alone afterwards. This is one run and not a finding.
+
+**Where the search keystroke stands (decision 4a).** The method and the pairs script are built. #404's own row, a keystroke typed while Published is hidden after it was shown (`search-keystroke-published-hidden`), is not built, and its deciding sitting in a real window is not taken. A sitting needs the PC to be free of other heavy work. On the night of 2026-11-21 it was not, and under the method's own line every run would have been disturbed.
+
+**Where the first switch stands (decision 4b).** Preparing Published while the Board is idle is designed; the design stays outside the repository. A helper would lay out a never-shown Published shelf in a few short slices once the Board has been quiet for a moment. It needs #404's waiting rows, so it would be built on #404's branch. The design has three questions for the maintainer, among them whether to skip the preparation while a screen reader or another accessibility client is present. Nothing of it is built or measured.
 
 ## 5. High contrast
 
@@ -544,7 +594,17 @@ Not confirmed: that Avalonia's Win32 platform reports `ContrastPreference.High` 
 
 ### 5.3 Checklist for a person
 
-For the maintainer: run the trial (master's build, `PaperRoute.Desktop`) on Windows and work through these. Note what you see after each item.
+**Done on 2026-11-21 by the maintainer**, on master's build (e3cfae6) on the development PC, as part of the test by hand. The sheet for that test had seven checks for this part, and all seven are marked "works", with no notes: Night sky turns on without a restart; Desert replaces Night sky; the colours are the theme's; outlines in place of fills; the parts the trial could not restyle; the title bar; turning contrast off.
+
+**What the sheet records, here and in sections 6 and 7.** One verdict for each check, an optional note, and the time the verdict was entered. It does not record how a check was made or for how long. 26 of the 38 verdicts of the whole test were entered within 33 seconds, all seven of this part among them. So the times say when the boxes were ticked, not when the checks were made.
+
+Several decisions lean on these checks and on Narrator's, so Claude will take a second look at the contrast themes in the Windows guest. That is not done yet.
+
+Two things follow from the verdicts, taken at their word:
+- The first check also answers item 6 below: the Board switched when the theme was turned on, so Avalonia reported the contrast theme and its change. No test could show this (section 5.2).
+- "The parts the trial could not restyle" (item 4) is marked "works" with no note. The maintainer decided to plan their restyling in the first unit of the full port (decision 10).
+
+The checklist as it was written for that test:
 
 1. Turn on Night sky, then Desert (Aquatic and Dusk if there is time). The Board should switch at once, with no restart. Switching back should restore Light or Dark.
 2. Compare with the real theme: window background, text, gray text, the selection colour (link text, selected tab underline, card focus ring, route dots) and the HotTrack colour on the focus rings of buttons, links and tabs.
@@ -555,9 +615,11 @@ For the maintainer: run the trial (master's build, `PaperRoute.Desktop`) on Wind
 
 ## 6. Narrator
 
-For the maintainer: run Narrator on Windows with the trial and fill in the "Heard?" column.
+**Done on 2026-11-21 by the maintainer**, with Narrator on master's build (e3cfae6), as part of the test by hand. The sheet had 13 checks for this part, and all 13 are marked "works", with no notes: the Needs Attention chips; the shelf tabs; the stage box; the sort box; a card's title; a card's ⋯ button; View route; tags and route dots; the notice strip; the rest of the page; the card count; reading order after scrolling; into a row that was not made yet. The last three are the checks rows of N needed before it is chosen for good (below). So by the maintainer's own condition rows of N is confirmed (decision 1).
 
-Checklist for the maintainer's pass (design step 17). The middle column is what the code sets (`PaperRoute.Desktop/*.axaml` and the view models). What Narrator actually says has never been observed. Avalonia issue #22341 (ListBox type-ahead) does not apply: the trial uses no `ListBox`.
+The sheet records a verdict for each check, not the words Narrator said (section 5.3 says what the sheet records). So the "Heard?" column below stays empty. One check asked for words: the card count's said "Write down what Narrator says about the count", and its note is empty. What Narrator says, word for word, is still written down nowhere. Claude will take a second look in the Windows guest, with a screen reader that can write its speech to a text file. That is not done yet.
+
+Checklist for the maintainer's pass (design step 17). The middle column is what the code sets (`PaperRoute.Desktop/*.axaml` and the view models). Avalonia issue #22341 (ListBox type-ahead) does not apply: the trial uses no `ListBox`.
 
 | Element | Narrator should say | Heard? |
 |---|---|---|
@@ -584,7 +646,10 @@ Seen headless by #403's keyboard reviewer on 2026-11-21, the same before and aft
 - **The ⋯ menu.** Opened with Enter or Space, the menu puts the focus on the rail's Board item, and Esc leaves the menu open. This is probably a limit of headless popups; only a real window can tell.
 - **Off screen.** The automation tree reports every element as on screen (`IsOffscreen` is false), the rows made below the visible part of the shelf included. What Narrator does with those rows is part of the card-count check above.
 
-For the maintainer: during the Narrator pass, also try these three in the real window and note what happens.
+The sheet of 2026-11-21 asked about the first two in a real window, among its keyboard and mouse checks. Both are marked "works", with no notes:
+- **Focus on a hidden shelf.** The check asked the maintainer to write down where the focus is after the shelf comes back and what Right does. The note is empty, so what happens in a real window is still not recorded.
+- **The ⋯ menu.** The check said what should happen: the menu opens, Esc closes it, and the focus is back on the ⋯ button. It is marked "works". Taken at its word, the menu behaves as it should in a real window, and what the headless tests saw was a limit of those tests.
+- **Off screen** was not asked on its own. It is part of the card-count check above.
 
 Unproven: Avalonia's list accessibility across virtualization. Avalonia pull request #20733 (item count, focus across virtualization) was closed without merging (r2 5.1).
 
@@ -599,6 +664,7 @@ Unproven: Avalonia's list accessibility across virtualization. Avalonia pull req
 | 44915194505 | #402, head 1146a42 | 231 of 231 (from the uploaded results file) | 31 |
 | 44925677319 | #403, head f51b5e2 | 236 of 236 (from the uploaded results file) | 31 |
 | 44935982620 | draft #404, head b89f432 (not merged) | 245 of 245 (from the uploaded results file) | 31 |
+| 45003699839 | #411, head e6f725c | 254 of 254 (from the uploaded results file) | 31 |
 
 In run 44925677319 the two accessibility tree tests, whose expected texts were made on Windows, pass on Ubuntu too. "Core on Linux" passed. In run 44915194505 the three tests that start a real second program (a second copy run to its exit code, a program stopped at its limit, a missing program file) passed on both systems.
 
@@ -606,7 +672,7 @@ Found on the way:
 - The first path fix accepted only drive-letter paths, so `--snapshot-from` and `--measure` refused every folder on Linux. 44d62e0 accepts a path from the root off Windows.
 - Refusal messages show a Windows example path on every system.
 
-Related, found by core stage 2 (#388): issue #395 (open): with no `~/Documents`, as on a CI runner, `ManagedLibraryService` throws. Three options wait for the maintainer (decision 14).
+Related, found by core stage 2 (#388): issue #395 (open): with no `~/Documents`, as on a CI runner, `ManagedLibraryService` threw. Decided on 2026-11-21 (decision 14): create the folder on first use. #408 does that off Windows: the core names its folders there without checking that they exist, and makes them with the first managed copy. Windows is unchanged.
 
 **The platform check mode (#402, merged 2026-11-21).** `--platform-check <file>.json` opens the trial's window on the example library and tries three things in turn:
 1. the system's file dialog, once (nothing chosen is opened or read);
@@ -617,16 +683,42 @@ Each outcome goes to the JSON with the facts needed to judge it (the trial's ver
 
 **The checklist (#402).** `docs/design/Board-Trial-Linux-Checklist.md` is for one person on Ubuntu 24.04, in parts A to G with a result sheet: A, get the trial onto the machine (publish for `linux-x64` on the Windows PC, copy it, check that `libfuse2` is not installed); B, start it from the folder and look at the Board; C, `--self-check`; D, `--snapshot-from` on a copy of a test library; E, `--platform-check` and what every result means; F, the same from an AppImage; G, what to send back. Every command that could not be tried on the development PC is marked "not tried here". The `linux-x64` publish was tried there (2026-11-21, commit f9fb22e) and its result is recorded.
 
-**What has never been run.**
-- The mode itself, for real, on Windows or on Linux. The real dialog and the real launcher open things on a person's screen, so no test and no agent ran them; the tests use stand-ins. The restart's start of a second program opens nothing, so three tests run it for real (above).
-- The app's own branch for the mode in `App.axaml.cs` (the check starting when the window opens, the exit code passed on, the early close): read, not run.
-- Every checklist command marked "not tried here", and all of part F (the AppImage).
+Until 2026-11-21 none of this had run for real: the tests use stand-ins for the dialog and the launcher, because the real ones open things on a person's screen. The restart's start of a second program opens nothing, so three tests run it for real (above).
 
-Known and left (#402's description): stopping a second copy at its limit waits up to five seconds on the interface thread, and a stopped copy leaves its own example folder in the temporary folder; whether the AppImage runtime sets `APPDIR` under `--appimage-extract-and-run` was not checked (the checklist's F5 asks the person to note what the restart reports); the JSON says `milliseconds` where `--measure` says `Ms`.
+**The first real run, on Windows (2026-11-21, 15:48, the maintainer, during the test by hand).** From the result file the trial wrote (master's build e3cfae6, Release, scaling 1.25, Light):
+- file dialog: tried and ok; it opened and came back cancelled, after 23.9 s (the time a person took);
+- launcher: tried and ok; the system accepted the request for `https://example.org` in 5.1 s, and the maintainer marked the browser step "works";
+- restart: tried and ok; the second copy started from `PaperRoute.Desktop.exe` with `--self-check` and exited with code 0 after 15.8 s.
 
-**What a real machine must still show** is now the checklist's parts A to G. The published trial must start from its folder, and from an AppImage on a machine without `libfuse2`. The example library must open, and `--snapshot-from` must work over a copied library. `--platform-check` must write its three outcomes to JSON.
+The maintainer marked the last step "problem", with the note "No second window opened". That was the trial's wording, not a fault of the step: the second copy has no window by design, and the notice on screen did not say so. #406 changed the notice to "The trial starts a second copy of itself now and waits for it to finish. No second window opens.", and a test holds the sentence.
 
-For the maintainer: a real Linux start needs a person at a Linux machine or the VirtualBox guest, working through the checklist and sending back its result sheet (decision 7). Agents do not touch the virtual machine. The first real run of `--platform-check` on Windows is also a person's (decision 15).
+**The trial's window on Ubuntu in CI (#407, merged 2026-11-21).** A job, "Avalonia Board trial (Linux window under Xvfb)", publishes the trial for `linux-x64` and starts it on the runner under a virtual display with a window manager. It runs the self-check, opens the example library in a real X window and takes a picture, times the 500 test library in that window, and runs the platform check, answering its file dialog with Escape. The job fails when the display does not come up, the self-check does not pass, the window does not open or does not close with exit code 0, or the timed run does not end with its rows. The timings and the platform check's outcomes are recorded and never judged. It is not a required check. Its first run (44973812425, Ubuntu 26.04.1): the window opened after 4.2 s and closed with exit code 0; the picture shows the title, the banner, the rail with its icons, five Pipeline cards and clear text; the timed run wrote its 16 rows; the platform check ended with exit code 0, with a GTK file dialog that came back cancelled, a launcher request the system accepted, and a second copy whose self-check passed.
+
+**The checklist, followed once (2026-11-21, 22:18 to 23:19, by Claude's coordinating session).** After the test by hand the maintainer said that it had felt like something Claude could have done itself, on the desktop or in a virtual machine (section 8). So this one was done that way: in a VirtualBox guest on the development PC that booted the Ubuntu 26.10 desktop image into its try session, with nothing installed on a disk and no sign-in. The guest was driven by key presses sent through VirtualBox and read from pictures of its screen. That channel has no pointer, so nothing was clicked. The trial was the `linux-x64` publish of the trial's code as of master 9d4f104.
+
+| Part | Result |
+|---|---|
+| A: the system | Ubuntu 26.10, Wayland session, GNOME; `libfuse2` **not** installed (FUSE 3 is) |
+| B: the example window | **Opened.** Title "PaperRoute Board Trial - Example Library", the banner, Pipeline 5, Published 1, File Drawer 1, the notice "Loaded 7 manuscripts from local storage."; clear text, no missing letters; light, like the desktop's own apps. Closed with exit code 0 |
+| C: `--self-check` | Exit code 0, "self-check passed" |
+| D: `--snapshot-from` on a copy of the 500 test library | **Opened**: Pipeline 167, Published 272, File Drawer 61. A timed run in that window ended with exit code 0 and 16 rows; its figures, from a guest on a saturated host, are no verdict |
+| E: `--platform-check` | Exit code 0. GNOME's own file chooser opened and came back cancelled; the system accepted the launcher's request (121 ms); the second copy passed its self-check (8.8 s) |
+| E4: did a page with example.org appear? | **Yes, but late:** not there 85 s after the request, there 5 minutes after it. It was the browser's first start in that session |
+| F: an AppImage | Packed with `appimagetool` (its continuous build). **It started without `libfuse2` and without any extra option**: `--self-check` exit code 0, its window opened, and its platform check ended with exit code 0, with `appImageSet` true and the restart's `startedFrom` "APPIMAGE" |
+
+The full table, and one way of packing the AppImage that worked, are in the checklist itself, under "Results of November 21, 2026" and Part F (#412).
+
+**What is still not shown.**
+- **Ubuntu 24.04**, which the checklist names, and **an installed system**. A try session keeps everything in memory.
+- **Anything clicked with a pointer** (the checklist's step B5). The timed run did a shelf switch, the stage filter, a search and a scroll in the real window, without a hand.
+- **The rail's icons on that desktop.** The window was as wide as the guest's screen, and the left part of the rail lay under the desktop's dock in the pictures. CI's picture of the same code shows them.
+- **Why the browser's page came late.** The launcher's answer came at once, so the trial cannot tell a slow first start of the browser from a page that never comes.
+- The early close of the platform check, and a second copy stopped at its limit, in a real window.
+- Speed, a second monitor, scaling other than 100 percent, other Linux systems, macOS.
+
+Known and left (#402's description): stopping a second copy at its limit waits up to five seconds on the interface thread, and a stopped copy leaves its own example folder in the temporary folder; whether the AppImage runtime sets `APPDIR` under `--appimage-extract-and-run` was not checked, and did not come up, since the AppImage started without that option; the JSON says `milliseconds` where `--measure` says `Ms`.
+
+The maintainer had chosen a VirtualBox guest with Ubuntu 24.04 for this (decision 7). Whether a run on 24.04 or on an installed system is still wanted is the maintainer's to say.
 
 ## 8. What was harder than the plan thought
 
@@ -652,6 +744,13 @@ For the maintainer: a real Linux start needs a person at a Linux machine or the 
 - Numbers taken on a loaded PC overstated a gain (the #403 work, 2026-11-21). The implementers' first figures for the tag strip change were taken while other work loaded the PC, with the two builds measured at different times: the search keystroke "511 to 288 ms, with ranges that do not overlap", and a gain per card. A reviewer could not reproduce them. Only runs of the two builds in turn, on a quiet PC, separated the code from the load: 146 to 85 ms, lower in 10 of 10 pairs, with the ranges overlapping, and no gain per card. 7f44e0b's commit message still quotes the withdrawn figures; 09f561a's message corrects them. Every before-and-after timing should be taken this way: both builds, in turn, in one sitting, on a quiet PC.
 - A timed sequence answers only for its own order. The hidden-shelf change lowered the search keystroke in a reviewer's scratch test, where Published was shown just before each key. In the measured sequence it did not lower it by more than the noise (section 4.7). Why the two differ was not measured. A change aimed at one case needs a timed row for that case before its gain can be shown.
 - The real-window runs of the two days gave different figures for the same Board code. The PC was in use on 2026-11-21; its load on 2026-11-20 was not recorded, and the runs differ in build and in number. Only figures of one sitting can be compared.
+- "Quiet" was never recorded, only remembered. Until #411 no measurement file said how busy the PC was, so a figure could not be checked against its conditions afterwards. Each run now records them (section 4.8).
+- The development PC is rarely free, and a night is not free by default. On the night of 2026-11-21 other work kept about 10.5 to 11.4 of its 12 processors busy. The measurement work's build and review took eight hours on the clock, with every build and test run taking its turn on that PC, and no deciding real-window sitting could be taken. Timing work needs a time that the maintainer names as free.
+
+**Hands-on checks**
+- A test by hand of 38 checks was handed to the maintainer, although most of it could have been done by Claude with real input on the desktop or in a virtual machine: the keyboard and mouse checks, the platform check, the contrast themes in the Windows guest, and a screen reader's words as text. Only how the Board feels, and the decisions, needed the maintainer. The maintainer said so afterwards: the test "really felt like something you could have done on your own using my desktop or a VM". From then on Claude does hands-on checks itself first, in a virtual machine where it can, and asks the maintainer only for judgement. The Linux checklist was the first done that way, the same evening (section 7).
+- A sheet of verdicts records that a box was ticked, not what was seen. Where a check needs words, such as what Narrator said or where the focus went, a "works" with an empty note leaves the question open (sections 5.3 and 6).
+- A notice must say what will not happen as well as what will. The platform check's only "problem" was a person waiting for a second window that the design never opens (section 7).
 
 **Snapshot safety**
 - The first folder refusal could be passed with `\\?\` or `\\.\` prefixes, a loopback admin share or a stream name. Both refusals now share one rule with a test per spelling. Two cases still cannot be refused: a library moved out of the default folders, and a default folder reached through `subst` or a mapped drive.
@@ -709,62 +808,81 @@ The port follows today's code in each case below.
 - Extra rows: "switch back to Pipeline", and in a real window, process start to Board.
 - The probe runs at Input priority; `CardView.MadeCount` counts card views made per row.
 
-## 10. Open decisions for the maintainer
+## 10. The maintainer's decisions of 2026-11-21
 
-For the maintainer: please choose an option for each item below.
+The maintainer answered these on 2026-11-21, on the sheet of the test by hand. Each item keeps its number from the earlier drafts, because other sections cite it. "Chose" gives the maintainer's choice in the sheet's words, and a note of theirs is quoted in full. Then comes where the work stands.
 
-1. **Rows of N as the default.** Options: keep it; go back to every card; decide after the Narrator pass. Recommendation: keep it now and confirm after the Narrator checks of section 6. Every card went over all four switch rows in the real window, measured after the choice was made (section 4.3).
-2. **The every-card build (`-p:ShelfOption=a`).** Options: keep it selectable; remove it. Recommendation: remove it once rows of N is confirmed. CI no longer builds or tests it, so it will drift. Since #403 it also has its own expected accessibility trees to keep up to date; it passed 236 of 236 locally on 2026-11-21.
-3. **Which reading the budget verdicts rest on.** Options: the real window (the design's switch rule; two rows over); headless (four rows waiting); CI × 3. Recommendation: verdicts on the real window, headless as the guard in CI. This also settles the "500 library" item of f (0 or 5).
-4. **The two rows over in a real window.** Where things stand (sections 4.6 and 4.7): the tag strip keeps its chips (#403, merged); fewer rows at a first show (tried and dropped); a hidden shelf that waits for its rows (built and measured headless; not merged, it waits as draft #404); a lighter title and buttons, and the route dots as one control (not started). The two rows now need different answers, so they are asked as 4a and 4b.
-   - *4a. Search keystroke.* It is still over: on 2026-11-21, 93 ms against 50 in a real window in the measured sequence, after the tag strip change lowered it in every pair (section 4.6). The hidden-shelf change is built and waits, not merged, as draft #404 (section 4.7). In the measured sequence it did not make a key faster by more than the noise (lower in 6 of 10 headless pairs, 90 ms before and 94.5 after). In a reviewer's scratch test of typing right after Published was shown, it did: about 184 ms a key before and about 100 after. That test was headless, timed by a stopwatch, not repeated and not in the repository. The cost moves to the next switch to Published, which was about 37 ms slower in that test. In the measured sequence that switch is over its 100 ms budget with or without the change (142 ms before, 162 after, in 3 headless pairs: not separable). Options: (a) after your test by hand, finish its measurement: a timed row for a keystroke typed after another shelf was shown, taken in alternating pairs, headless and in a real window, and merge #404 if that row gains by more than the noise; (b) leave #404 out and set this budget from the measured figure (which figure, the real window's or the headless one, is part of that choice; see decision 3); (c) decide after the feel check by hand alone, without that row: the checkpoint sheet (the form you fill in during your test of the trial by hand; its decision on typing is named `dec-typing`) asks you to type before and after Published was first shown and to say whether it feels different. (A lighter card, with plain buttons and the route dots as one control, is not offered for this row: section 4.5 found that the buttons and dots add nothing measurable when a view is reused, which is what a keystroke pays for.) Recommendation: (a). Whether any change brings the row under 50 is not known. The checkpoint sheet's `dec-typing` has the same three options and the same recommendation.
-   - *4b. First switch to Published* (on 2026-11-21, 305 ms against 100 in a real window; nothing built has changed it, and the one attempt was dropped). Options: make the card lighter (a cheaper card alone will probably not be enough, section 4.5); make fewer views at the switch by another way than the dropped one; prepare the Published shelf while the app is idle, as today's app does (design 4.4 and plan :428 said not to port this); pay the first-use costs earlier (section 4.5, change 5); accept and change the budget. No recommendation: no change tried so far has moved this row, and the choice between porting today's fill strategy and a new budget is the maintainer's.
-5. **How k is read.** Options: k from agent wall-clock hours only; k from the maintainer's hours once logged; both. Recommendation: both, as the design says. Do not use the agent-hour k as a calendar forecast. The checklist weights of section 2.3 stay as the design fixed them before work started; changing them now would let them follow the result.
+1. **Rows of N as the default.** Chose: "Keep it, and confirm after the Narrator checks above". All 13 Narrator checks are marked "works" (section 6), so by that condition rows of N is confirmed. Every card had gone over all four switch rows in the real window (section 4.3).
+2. **The every-card build (`-p:ShelfOption=a`).** Chose: "Remove it once rows of N is confirmed". Not removed yet. Until then it keeps its own expected accessibility trees, and CI does not build or test it.
+3. **Which reading the budget verdicts rest on.** Chose: "The real window decides; the headless test guards in CI". How a real-window verdict is taken on a busy PC is proposed in the measurement method (the median UI of five undisturbed runs) and is not in force until the maintainer accepts it (section 4.8). f is not recomputed (section 2.4).
+4. **The two rows over in a real window.**
+   - *4a. Search keystroke.* Chose: "Finish its measurement in a real window, and merge it if a key gains". Note: "Remember that these tests are on a very, very busy PC. Perhaps we can account or correct for that?" Where it stands: the measurement that accounts for a busy PC and the script that compares two builds are built (#411). #404's own timed row and its deciding sitting in a real window are not done (section 4.8). The figures the choice was made on are in sections 4.6 and 4.7.
+   - *4b. First switch to Published.* Chose: "Prepare Published while the Board is idle, as today's app does (the design said not to port this)", with the same note. Where it stands: designed, not built (section 4.8).
+5. **How k is read.** Chose: "Both: the agents' hours now, and my own once I log them on issue #160". No hours are logged yet, so the second k still cannot be given (section 2.3).
 
-   5b. **H, your working day in hours.** Please state it; the report uses 6, the design's default. When you log hours on #160, include reviewing #402, #403, draft #404 and this report (#400).
+   5b. **H, the maintainer's working day in hours.** Not stated. The sheet asked for it in a note, and the note is empty. The report still uses 6, the design's default.
 
-   5c. **Do the hours of 2026-11-21 (section 2.4) belong in B?** These are the 4.8 hours of #402 and #403, and the 1.0 hour of draft #404. Options: leave them out, as this report does, because they were spent after the calibration's figures were taken; add #403's 1.6 board hours (and #404's 1.0, if it is merged: 0.9 board by the changed files, 1.0 by its trailers) to B, so that B grows, f stays the same and k rises. No recommendation: section 2.3 does not settle it.
-6. **`--snapshot` of the real library (step 14).** Options: build it; drop it from the trial. The evidence supports neither strongly. `--snapshot-from` was enough for the real-window run.
-7. **A real Linux start.** The mode and the checklist exist (#402). What is missing is a person at a Linux desktop. Options: (a) the maintainer works through `docs/design/Board-Trial-Linux-Checklist.md` on a real Ubuntu 24.04 machine; (b) the maintainer works through it on the VirtualBox guest; (c) wait until a later unit. Either way, the person sends back the checklist's result sheet. No recommendation: the report has no evidence that favours one machine over the other.
-8. **Dark mode's primary text `#F0F0F0`, and the system accent for search selection.** Options: accept; pick other values.
-9. **The two #383 rule departures** (zero-count chip, missing target journal). Recommendation: accept. They match today's app, which the port is meant to keep.
-10. **Contrast for Fluent's menus, scroll bars, tooltips and focus visuals.** Options: size control themes in unit 0; accept Fluent's palette there. Recommendation: size them in unit 0, as design section 9 foresaw; the real-theme look (section 5.3) will show how bad they are.
-11. **The VB spike's place.** It is a folder outside the repository, not a scratch branch. Options: leave it; put it on a scratch branch for the record.
-12. **The budget rows on a busy PC.** The MSTest pass mark itself is met (ten local runs in a row and a Debug run, section 3.3). But two full local runs failed one enforced budget row each while the PC was busy. Options: accept it, as today's Windows Forms budget tests behave the same way; or hold the enforced rows locally at a multiple of the budget, as CI does at three times. Recommendation: accept it, and say in the test's failure message that the PC must be quiet. The same was seen again on 2026-11-21, and every quiet run passed (section 3.3).
-13. **May a cheaper card change the accessibility tree where only unnamed elements go?** The #403 work kept the tree unchanged as a rule. So the route dots as one control (section 4.5, change 4) were not started: they would take five unnamed elements a card out of the tree. Options: allow such a change, with the expected tree texts made again and the difference reviewed; keep the tree unchanged for every cheaper-card change. No recommendation. The saving is small: up to about 1 ms per first show, by removal, and not separable from noise on one of two sets of cards. And what Narrator says about the dots today has never been heard (section 6).
-14. **Issue #395: no Documents folder** (found by core stage 2, section 7). Options: do not check the folder, and create it on first use; fall back to the home folder; ask at first run.
-15. **The first real run of `--platform-check`.** No test and no agent has run it with a real file dialog and a real launcher, and the app's own code for the mode (`App.axaml.cs`) has only been read (section 7). Options: (a) the maintainer runs it once on Windows first, then on Linux as part E of the checklist (decision 7); (b) run it on Linux only, as part of the checklist; (c) wait. Recommendation: (a). A fault in the mode itself then shows up on the familiar system, apart from any Linux fault.
+   5c. **Do the hours of 2026-11-21 (section 2.4) belong in B?** Chose: "Leave them out, as the report does".
+6. **`--snapshot` of the real library (step 14).** Chose: "Do not build it". The trial has never opened the maintainer's library, and now it will not.
+7. **A real Linux start.** Chose: "A VirtualBox guest with Ubuntu 24.04 on this PC (needs my yes for the download)". What happened: later that day the maintainer set up an Ubuntu guest themselves, from an Ubuntu 26.10 image, and Claude followed the checklist the same evening in a guest of its own that booted that image's try session (section 7). Claude downloaded no Ubuntu image. Ubuntu 24.04 and an installed system are not tried.
+8. **Dark mode's primary text `#F0F0F0`, and the system accent for search selection.** Chose: "Accept both".
+9. **The two #383 rule departures** (zero-count chip, missing target journal). Chose: "Accept: the port keeps today's behaviour".
+10. **Contrast for Fluent's menus, scroll bars, tooltips and focus visuals.** Chose: "Plan their restyling in the first unit of the full port". In the test by hand the check of these parts is marked "works" with no note (section 5.3).
+11. **The VB spike's place.** Chose: "Leave it where it is". It stays a folder outside the repository.
+12. **The budget rows on a busy PC.** Chose: "Accept it, and have the failure message say the PC must be quiet". Done in #411: a failed timing test says what was measured and ends with the quiet-PC sentence, in the trial's tests and in the Windows Forms timing tests (section 4.8).
+13. **May a cheaper card change the accessibility tree where only unnamed elements go?** Chose: "Allow it where only unnamed elements go, and check with Narrator afterwards". Not started: the route dots as one control (section 4.5, change 4) and the lighter buttons (change 3).
+14. **Issue #395: no Documents folder.** Chose: "Create the folder on first use". Done off Windows in #408 (section 7). #395 stays open for what is left: the folder's name on macOS is not decided; the trial's own guard still works out the default folders the old way off Windows; and the restore path that makes a missing Documents folder has no test under the new rule.
+15. **The first real run of `--platform-check`.** The sheet had no separate decision for this, because the run was part of the test by hand. It ran on Windows on 2026-11-21 (the maintainer), and then on Ubuntu, in CI and in the checklist (section 7). That is option (a) of the earlier drafts, done.
+
+**The sheet's other decisions.** The sheet also held seven decisions about core stage 2 and the repository, which are not the trial's. They are recorded on #160. In short:
+- Claude merged the three stage 2 pull requests in order (#389, #392, #394).
+- "Core on Linux" is a required check on master.
+- Master's version is 1.1.0-alpha.0 (#409).
+- The release workflow accepts a 1.0 patch tag on `release/v1.0.x` (#410).
+- The code signing policy names four program files, and CONTRIBUTING covers Avalonia's build telemetry, which is turned off for the maintainer's Windows user (#405).
+- The plan and the surface map are signed off as they are (#370, #372).
 
 ## 11. Not done, and not checked
 
 Not done:
-- the contrast look on a real Windows theme (step 11);
-- the Narrator pass (step 17);
-- `--snapshot` (step 14);
-- any real Linux start or AppImage (the `linux-x64` publish was made only on the development PC, for the checklist's part A);
+- `--snapshot` (step 14): it will not be built (decision 6);
 - the card menu actions and the File Drawer panel (outside the trial);
-- a cheaper card view beyond the tag strip, in master. The hidden shelf that waits for its rows is built and measured headless, but not merged: it waits as draft #404 (section 4.7). The lighter buttons, the route dots as one control and paying the first-use costs earlier are not started. Idle preparation of Published and drawing only the first screen at startup are not built.
+- removing the every-card build (decision 2);
+- a cheaper card view beyond the tag strip, in master. The hidden shelf that waits for its rows is built and measured headless, but not merged: it waits as draft #404, and its own timed row and its deciding sitting in a real window are not done (sections 4.7 and 4.8). The lighter buttons, the route dots as one control (allowed by decision 13) and paying the first-use costs earlier are not started. Preparing Published while the Board is idle is designed and not built (decision 4b). Drawing only the first screen at startup is not built;
+- the validation runs of the new measurement (#411). Until they are run, Run UI is not validated on any PC, and the proposed verdict rule is not in force (section 4.8);
+- Claude's second look at the contrast themes and at a screen reader's words in the Windows guest (sections 5.3 and 6);
+- the Linux checklist on Ubuntu 24.04 or on an installed system, and its step B5, which needs a pointer (section 7).
 
-Built on 2026-11-21 and so moved out of this list: `--platform-check` and the Linux checklist (step 15, #402); the tag strip that keeps its chips (#403).
+Done on 2026-11-21 and 2026-11-22, and so moved out of this list:
+- by the maintainer, as verdicts on a sheet: the contrast look on real Windows themes (step 11) and the Narrator pass (step 17);
+- the first real runs of `--platform-check`, on Windows and on Ubuntu;
+- a real Linux start, from the folder and from an AppImage, and the checklist followed once (#412);
+- the trial's window on Ubuntu in CI (#407);
+- the measurement that records how busy the PC was, the failure message that asks for a quiet PC, and the script that compares two builds (#411).
+
+Built on 2026-11-21 before the test by hand: `--platform-check` and the Linux checklist (step 15, #402); the tag strip that keeps its chips (#403).
 
 Never run for real:
-- `--platform-check` with a real file dialog and a real launcher, on Windows or on Linux;
-- the app's own branch for the mode in `App.axaml.cs` (read, not run);
-- every checklist command marked "not tried here", and all of the checklist's part F (the AppImage);
-- the hidden-shelf change of draft #404 in a real window (it was built, tested and measured only headless, section 4.7).
+- the hidden-shelf change of draft #404 in a real window (it was built, tested and measured only headless, section 4.7);
+- the comparison script in a real window (`Measure-BoardPairs.ps1 -Mode window`), and its `-Load` switch with a measurement (#411's description);
+- the new measurement in a real window on Windows. It has run headless on Windows and on Ubuntu, and in a real window only on Ubuntu, in CI (run 45003699839);
+- in a real window: the platform check's early close, and a second copy stopped at its limit.
 
 Not checked or not measured:
-- the maintainer's hours (none logged), the orchestrating session's hours beyond its trailers, CI time, and the hours of 17c56e4;
-- the Windows Forms app in a real window, or on 2026-11-20 or 2026-11-21;
-- whether Avalonia reports a Windows contrast theme, and whether Input-priority probe ticks match `WM_TIMER`;
+- the maintainer's hours (none logged) and H (not stated), the orchestrating session's hours beyond its trailers, CI time, and the hours of 17c56e4;
+- the Windows Forms app in a real window, or on 2026-11-20, 2026-11-21 or 2026-11-22;
+- what Narrator says, word for word; where the keyboard focus goes after a hidden shelf comes back, in a real window; and what Narrator says about the card count (section 6);
+- whether Avalonia reports a Windows contrast theme: answered only by a verdict on the sheet (section 5.3), and no test runs that code;
+- whether Input-priority probe ticks match `WM_TIMER`;
 - the Ubuntu count of 132 for run 44681774261, taken from the notes;
 - why the rows fall with the tag strip change when the per-card cost does not;
 - the first-switch gain of the dropped first-show attempt (not shown);
 - the every-card build in a real window on 2026-11-21 (only rows of N was measured that day);
 - the per-row timings of CI runs 44915194505, 44925677319 and 44935982620 (only their test and picture counts were read);
-- in a real window, the three keyboard observations of section 6;
 - a timed row for a search keystroke typed right after another shelf was shown. The measured sequence has none. The only figure for it is a reviewer's scratch test (headless, timed by a stopwatch, not repeated, not in the repository): 183.5 ms a key on master's code, 100.5 on the branch of draft #404 (section 4.7). It has no real-window figure;
 - why the measured sequence's search row does not gain with the hidden-shelf change while the scratch test's does, and a key typed before any other shelf was ever shown, as a row of its own;
-- two reviewer notes on #404 not acted on: the arrow keys, Tab and the ⋯ menu right after Published comes back from waiting rows are covered by one record and one test's Right and Down only; and a hidden shelf's waiting rows keep earlier card view models alive until it is shown again (at most as many as the rows the shelf had made; memory not measured).
+- two reviewer notes on #404 not acted on: the arrow keys, Tab and the ⋯ menu right after Published comes back from waiting rows are covered by one record and one test's Right and Down only; and a hidden shelf's waiting rows keep earlier card view models alive until it is shown again (at most as many as the rows the shelf had made; memory not measured);
+- on Linux: why the browser's page came minutes after the launcher's request; the rail's icons on the Ubuntu desktop; whether the trial's window there runs through the desktop's X server for older programs or as a Wayland program (both display variables were set);
+- how a garbage-collection pause shows in the thread's own clock on each system. In CI's first run of the new measurement, the first switch to Published ran for 395 of its 402 ms on Ubuntu, with a pause of 80 ms counted inside the running time, and for 91 of its 126 ms on Windows (one run each; #411).
 
-The real-window JSON files of both days stay on the development PC and are not committed, because they hold the computer's name.
+The real-window JSON files of 2026-11-20 and 2026-11-21, and the files and pictures of the Linux run, stay on the development PC and are not committed. The JSON files hold the computer's name.
