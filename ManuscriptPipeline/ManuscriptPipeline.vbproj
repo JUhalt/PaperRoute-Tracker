@@ -1,9 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <Version>1.0.1</Version>
-    <AssemblyVersion>1.0.1.0</AssemblyVersion>
-    <FileVersion>1.0.1.0</FileVersion>
+    <!-- 1.1.0-alpha.0: master's number before v1.1's first Preview. It orders above every 1.0.x and below 1.1.0-alpha.1, -beta, -preview, -rc and 1.1.0, so a 1.0.x install on the Preview channel could update to a packaged build of master. Nothing packages it yet: Build-ReleaseCandidate.ps1 takes only X.Y.Z or X.Y.Z-rc.N, and release.yml needs docs/releases/1.1.0-alpha.0.md, which must never be committed. A release sets its own number. -->
+    <Version>1.1.0-alpha.0</Version>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+    <FileVersion>1.1.0.0</FileVersion>
     <AssemblyName>PaperRouteTracker</AssemblyName>
     <RootNamespace>ManuscriptPipeline</RootNamespace>
     <Product>PaperRoute Tracker</Product>

@@ -2,9 +2,9 @@
 
   <PropertyGroup>
     <!-- The app's version, written here too: the manifests and the User-Agent read it from this assembly once the services move (v1.1). Keep these three equal to ManuscriptPipeline.vbproj, where the release workflow reads them. -->
-    <Version>1.0.1</Version>
-    <AssemblyVersion>1.0.1.0</AssemblyVersion>
-    <FileVersion>1.0.1.0</FileVersion>
+    <Version>1.1.0-alpha.0</Version>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+    <FileVersion>1.1.0.0</FileVersion>
     <AssemblyName>PaperRoute.Core</AssemblyName>
     <!-- The app's root namespace, so every moved type keeps its full name. -->
     <RootNamespace>ManuscriptPipeline</RootNamespace>

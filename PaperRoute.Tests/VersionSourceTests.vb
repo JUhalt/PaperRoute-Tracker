@@ -5,6 +5,7 @@ Imports System.Reflection
 Imports System.Xml.Linq
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
 Imports ManuscriptPipeline.Services
+Imports Velopack
 
 ' The version a backup or packet manifest records, and the one the
 ' User-Agent sends, is PaperRoute's own: the app project's Version. The
@@ -85,15 +86,71 @@ Public Class VersionSourceTests
     End Sub
 
 
-    ' The app project's own property, where the release workflow reads it.
-    Private Shared Function ProjectProperty(name As String) As String
+    ' Master carries a 1.1 pre-release number (the maintainer's decision of
+    ' November 21, 2026), so an installed 1.0.x can update to a build of
+    ' master. Velopack compares versions with its own SemanticVersion, the
+    ' type of a release's Version, so the order is checked with it. v1.0.1
+    ' was the newest release when master moved; a 1.0.x patch is made on
+    ' release/v1.0.x and must never outrank master.
+    <TestMethod>
+    Public Sub TheVersionOrdersAboveEvery1_0ReleaseForTheUpdater()
+
+        Dim text As String =
+            ProjectProperty("Version")
+
+        Dim version As SemanticVersion =
+            SemanticVersion.Parse(text)
+
+        Assert.IsTrue(
+            version > SemanticVersion.Parse("1.0.1"),
+            text & " must order above v1.0.1 for the updater."
+        )
+
+        Assert.IsTrue(
+            version.Major > 1 OrElse version.Minor >= 1,
+            text & " must order above every 1.0.x patch."
+        )
+
+        ' release.yml and Build-ReleaseCandidate.ps1 require AssemblyVersion
+        ' and FileVersion to be the Version without its label, plus ".0";
+        ' System.Version cannot read a label, so these carry none.
+        Dim numeric As String =
+            version.Major & "." & version.Minor & "." & version.Patch & ".0"
+
+        Assert.AreEqual(numeric, ProjectProperty("AssemblyVersion"))
+        Assert.AreEqual(numeric, ProjectProperty("FileVersion"))
+
+        ' The core and platform projects write the same three nodes; the
+        ' release workflow checks the core's, and nothing else checks the
+        ' platform's Version.
+        For Each library As String In {"PaperRoute.Core", "PaperRoute.Platform"}
+            For Each name As String In {"Version", "AssemblyVersion", "FileVersion"}
+
+                Assert.AreEqual(
+                    ProjectProperty(name),
+                    ProjectProperty(name, library),
+                    library & ".vbproj has the app's " & name & "."
+                )
+
+            Next
+        Next
+
+    End Sub
+
+
+    ' The app project's own property, where the release workflow reads it,
+    ' or the same property of another project in the repository.
+    Private Shared Function ProjectProperty(
+        name As String,
+        Optional projectName As String = "ManuscriptPipeline"
+    ) As String
 
         Dim project As XDocument =
             XDocument.Load(
                 Path.Combine(
                     TestRepository.Root(),
-                    "ManuscriptPipeline",
-                    "ManuscriptPipeline.vbproj"
+                    projectName,
+                    projectName & ".vbproj"
                 )
             )
 
@@ -102,7 +159,7 @@ Public Class VersionSourceTests
 
         Assert.IsFalse(
             String.IsNullOrWhiteSpace(value),
-            "The app project sets " & name & "."
+            projectName & ".vbproj sets " & name & "."
         )
 
         Return value
