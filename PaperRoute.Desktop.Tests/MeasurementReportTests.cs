@@ -165,6 +165,27 @@ public sealed class MeasurementReportTests
                 BoardMeasurementReport.QuietPcLine),
             Canned([backToAll, openList], s_busy).FailureMessage());
 
+        // The scroll row: its figures come from its longest-UI step (Wall 400
+        // ms), while its wallMs is the longest Wall of any step (484 ms). The
+        // second line speaks of that one step.
+        MeasuredRow scroll = new("500", "scroll-published-longest-step", "Scroll the Published shelf", 484, 400, 250, "UI thread",
+            RunMs: 300, NotRunMs: 100, RunUiMs: 290, GcPauseMs: 5, JitMs: 0);
+        Assert.AreEqual(400.0, scroll.OwnWallMs);
+        Assert.AreEqual(
+            Lines(
+                "500: Scroll the Published shelf took 400 ms against 250 ms.",
+                "  The interface thread ran for 300 ms of it and was not running for 100 ms (25%); garbage collection paused 5 ms, compilation 0 ms.",
+                "During this run other programs kept 9.8 of 12 processors busy on average.",
+                BoardMeasurementReport.QuietPcLine),
+            Canned([scroll], s_busy).FailureMessage());
+        Assert.AreEqual(
+            Lines(
+                "500: Scroll the Published shelf took 400 ms against 250 ms.",
+                "  The interface thread was running for 380 of the 400 ms. A busy PC can still slow running code.",
+                "During this run other programs kept 9.8 of 12 processors busy on average.",
+                BoardMeasurementReport.QuietPcLine),
+            Canned([scroll with { RunMs = 380, NotRunMs = 20 }], s_busy).FailureMessage());
+
         // Nothing failed, nothing to say; a waiting or informational row over
         // its budget is not a failure.
         Assert.AreEqual(string.Empty, Canned([backToAll with { UiMs = 200, WallMs = 200 }], s_busy).FailureMessage());

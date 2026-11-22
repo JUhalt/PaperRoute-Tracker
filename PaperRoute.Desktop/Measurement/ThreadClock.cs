@@ -12,11 +12,17 @@ namespace PaperRoute.Desktop.Measurement;
 //
 // Windows: QueryThreadCycleTime, divided by the nominal rate (the registry's
 // ~MHz x 1000). Microsoft warns against turning these cycles into time in
-// general, so the rate is checked: spins of 2 ms, untimed, until one spin's
-// cycles per stopwatch millisecond come within 2% of nominal, at most 200
-// spins. Time off the processor can only lower a spin's ratio, so one close
-// spin is enough. The check runs when the clock opens and again at Close; if
-// either fails, the clock is absent for the whole run. Ubuntu:
+// general, so the rate is checked: spins of 2 ms, untimed, at least 25 and
+// at most 200, until one spin's cycles per stopwatch millisecond come within
+// 2% of nominal. Time off the processor can only lower a spin's ratio, so one
+// close spin shows the counter is not slower than nominal; and a spin that
+// reads more than 2% above nominal fails the check at once, since no time off
+// the processor explains it: the counter is faster than nominal. Without that
+// second rule a faster counter passes on a spin preempted into the window.
+// Under load about one spin in five ran whole on the development PC, so 25
+// spins leave a faster counter unseen in under 1% of checks (0.8^25). The
+// check runs when the clock opens and again at Close; if either fails, the
+// clock is absent for the whole run. Ubuntu:
 // clock_gettime(CLOCK_THREAD_CPUTIME_ID) from libc.so.6, already in time, so no
 // check. GetThreadTimes is not used: it moves in 15.6 ms steps.
 //
@@ -35,6 +41,7 @@ public sealed class ThreadClock
     // A spin's ratio must come this close to nominal; the tests' relative
     // margin (1.02 x wall + 1 ms) matches it.
     public const double RateTolerance = 0.02;
+    public const int MinSpins = 25;
     public const int MaxSpins = 200;
     public const double SpinMs = 2;
 
@@ -42,13 +49,19 @@ public sealed class ThreadClock
 
     private readonly bool _windows;
 
-    private ThreadClock(string kind, double? cyclesPerMs, string? reason, RateCheck? before)
+    // A canned clock's readings and second check (Canned); null otherwise.
+    private readonly Func<double?>? _cannedRead;
+    private readonly Func<RateCheck>? _cannedCheck;
+
+    private ThreadClock(string kind, double? cyclesPerMs, string? reason, RateCheck? before, Func<double?>? cannedRead = null, Func<RateCheck>? cannedCheck = null)
     {
         Kind = kind;
         CyclesPerMs = cyclesPerMs;
         Reason = reason;
         Before = before;
         _windows = string.Equals(kind, CyclesKind, StringComparison.Ordinal);
+        _cannedRead = cannedRead;
+        _cannedCheck = cannedCheck;
     }
 
     // "cycles", "thread-cputime", or empty when no clock was found.
@@ -71,7 +84,7 @@ public sealed class ThreadClock
     public string Describe() => Reason is null ? Kind : "absent: " + Reason;
 
     // A clock for the calling thread, present or absent with its reason. On
-    // Windows the first rate check runs here (a few ms, at most about 400).
+    // Windows the first rate check runs here (about 50 ms, at most about 400).
     public static ThreadClock Open()
     {
         if (OperatingSystem.IsWindows())
@@ -90,12 +103,29 @@ public sealed class ThreadClock
     // A clock that is absent for reason, for runs and tests with no clock.
     public static ThreadClock Absent(string reason) => new(string.Empty, null, reason, null);
 
+    // For tests: a present clock that reads read, and whose second check
+    // (Close) gives secondCheck, so a run whose second check fails can be
+    // made on any system.
+    public const string CannedKind = "canned";
+
+    public static ThreadClock Canned(Func<double?> read, RateCheck secondCheck)
+    {
+        ArgumentNullException.ThrowIfNull(read);
+        ArgumentNullException.ThrowIfNull(secondCheck);
+        return new ThreadClock(CannedKind, null, null, null, read, () => secondCheck);
+    }
+
     // The calling thread's running time in ms, or null when the clock is absent.
     public double? Read()
     {
         if (Reason is not null)
         {
             return null;
+        }
+
+        if (_cannedRead is not null)
+        {
+            return _cannedRead();
         }
 
         if (_windows && OperatingSystem.IsWindows())
@@ -116,6 +146,17 @@ public sealed class ThreadClock
     // are dropped by the caller.
     public void Close()
     {
+        if (Reason is null && _cannedCheck is not null)
+        {
+            After = _cannedCheck();
+            if (!After.Passed)
+            {
+                Reason = RateCheckFailedReason;
+            }
+
+            return;
+        }
+
         if (Reason is not null || !_windows || !OperatingSystem.IsWindows() || CyclesPerMs is not { } rate)
         {
             return;
@@ -161,19 +202,55 @@ public sealed class ThreadClock
             : Absent(NoClockReason);
     }
 
-    // Spins of SpinMs until one comes within RateTolerance of nominal. The
-    // share reported is the closest spin's ratio to nominal, not the largest
-    // ratio: that sits at or just below the true rate and so would overstate
-    // running time.
     [SupportedOSPlatform("windows")]
-    private static RateCheck CheckRate(double cyclesPerMs)
+    private static RateCheck CheckRate(double cyclesPerMs) => JudgeRate(Spins(cyclesPerMs));
+
+    // The rule of the rate check over spins' ratios to nominal, read one at a
+    // time: a ratio above 1 + RateTolerance fails at once (that ratio is
+    // reported); otherwise it passes once MinSpins are read and the closest
+    // ratio is within RateTolerance of 1, and fails after MaxSpins. The share
+    // reported on a pass is the closest spin's ratio, not the largest: that
+    // sits at or just below the true rate and so would overstate running time.
+    public static RateCheck JudgeRate(IEnumerable<double> shares)
     {
+        ArgumentNullException.ThrowIfNull(shares);
         double closest = double.NaN;
         int spins = 0;
-        long spinTicks = (long)(SpinMs * Stopwatch.Frequency / 1000);
-        while (spins < MaxSpins)
+        foreach (double share in shares)
         {
             spins++;
+            if (share > 1 + RateTolerance)
+            {
+                return new RateCheck(share, spins, Passed: false);
+            }
+
+            if (double.IsNaN(closest) || Math.Abs(share - 1) < Math.Abs(closest - 1))
+            {
+                closest = share;
+            }
+
+            if (spins >= MinSpins && Math.Abs(closest - 1) <= RateTolerance)
+            {
+                return new RateCheck(closest, spins, Passed: true);
+            }
+
+            if (spins >= MaxSpins)
+            {
+                break;
+            }
+        }
+
+        return new RateCheck(double.IsNaN(closest) ? null : closest, spins, Passed: false);
+    }
+
+    // Spins of SpinMs, each one's cycles per stopwatch millisecond as a share
+    // of nominal; ends when the counter cannot be read.
+    [SupportedOSPlatform("windows")]
+    private static IEnumerable<double> Spins(double cyclesPerMs)
+    {
+        long spinTicks = (long)(SpinMs * Stopwatch.Frequency / 1000);
+        while (true)
+        {
             long start = Stopwatch.GetTimestamp();
             ulong? first = Cycles();
             long now;
@@ -185,23 +262,12 @@ public sealed class ThreadClock
             ulong? last = Cycles();
             if (first is not { } from || last is not { } to)
             {
-                break;
+                yield break;
             }
 
             double ms = (now - start) * 1000.0 / Stopwatch.Frequency;
-            double share = (to - from) / ms / cyclesPerMs;
-            if (double.IsNaN(closest) || Math.Abs(share - 1) < Math.Abs(closest - 1))
-            {
-                closest = share;
-            }
-
-            if (Math.Abs(share - 1) <= RateTolerance)
-            {
-                return new RateCheck(share, spins, Passed: true);
-            }
+            yield return (to - from) / ms / cyclesPerMs;
         }
-
-        return new RateCheck(double.IsNaN(closest) ? null : closest, spins, Passed: false);
     }
 
     [SupportedOSPlatform("windows")]

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using PaperRoute.Desktop.Measurement;
+using PaperRoute.ViewModels.Measurement;
 
 namespace PaperRoute.Desktop.Tests;
 
@@ -75,6 +76,43 @@ public sealed class ThreadClockTests
             clock.Close();
             Assert.IsNull(clock.After, "An absent clock runs no second check.");
         }
+    }
+
+    // The rate check's rule on canned spins (section 4): time off the
+    // processor only lowers a spin's ratio, so a ratio more than 2% above
+    // nominal fails at once (the counter is faster than nominal), and a pass
+    // needs 25 spins at least and one within 2% of nominal.
+    [TestMethod]
+    public void TheRateCheckFailsACounterFasterThanNominal()
+    {
+        static IEnumerable<double> Repeat(double share, int count) => Enumerable.Repeat(share, count);
+
+        // At nominal, preempted spins read low, one reads within 2%: passes after 25.
+        RateCheck nominal = ThreadClock.JudgeRate(Repeat(0.8, 10).Append(0.995).Concat(Repeat(0.7, 100)));
+        Assert.IsTrue(nominal.Passed);
+        Assert.AreEqual(ThreadClock.MinSpins, nominal.Spins);
+        Assert.AreEqual(0.995, nominal.Share);
+
+        // A counter 7.5% faster: a preempted spin lands within 2%, then a
+        // whole spin reads 1.075. It fails on that spin, not before.
+        RateCheck faster = ThreadClock.JudgeRate(Repeat(0.9, 3).Append(1.01).Concat(Repeat(0.95, 5)).Append(1.075).Concat(Repeat(1.0, 50)));
+        Assert.IsFalse(faster.Passed, "A spin above 1.02 of nominal fails the check.");
+        Assert.AreEqual(1.075, faster.Share, "The failing spin's ratio is reported.");
+        Assert.AreEqual(10, faster.Spins);
+
+        // Slower than nominal: no spin within 2% in 200: fails with the closest.
+        RateCheck slower = ThreadClock.JudgeRate(Repeat(0.95, 300));
+        Assert.IsFalse(slower.Passed);
+        Assert.AreEqual(ThreadClock.MaxSpins, slower.Spins);
+        Assert.AreEqual(0.95, slower.Share);
+
+        // No spin read at all (the counter could not be read).
+        RateCheck none = ThreadClock.JudgeRate([]);
+        Assert.IsFalse(none.Passed);
+        Assert.IsNull(none.Share);
+
+        // Just under 1.02 is within the window.
+        Assert.IsTrue(ThreadClock.JudgeRate(Repeat(1.019, ThreadClock.MinSpins)).Passed);
     }
 
     // What this system gives: on Windows a cycle clock with both rate checks

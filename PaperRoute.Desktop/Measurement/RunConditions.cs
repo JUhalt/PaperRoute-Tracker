@@ -12,7 +12,7 @@ namespace PaperRoute.Desktop.Measurement;
 // not running, and whether the run counts as disturbed.
 //
 // The machine's load is read twice, before the first row and after the last,
-// each time on a thread-pool thread: GetSystemTimes was seen to block for up
+// each time on a thread of its own: GetSystemTimes was seen to block for up
 // to 727 ms on the development PC under full load, so it is never called on
 // the interface thread or between timed rows. The stopwatch is read before
 // and after each reading; the midpoint is the reading's time and the
@@ -42,7 +42,10 @@ public sealed class RunConditions
     // this process's own processor time, never below 0; it is not exact (the
     // window manager's and the test runner's work for this process count as
     // other programs). A run is disturbed when other programs left fewer than
-    // two processors free on average: the design's starting value.
+    // two processors free on average: the design's starting value. The
+    // machine's load counts every processor, while processors (from
+    // Environment.ProcessorCount) follows an affinity or container limit, so
+    // the line assumes the process runs with neither.
     public static MeasurementConditions Compute(ThreadClock clock, LoadReading before, LoadReading after, IReadOnlyList<MeasuredRow> rows, int processors)
     {
         ArgumentNullException.ThrowIfNull(clock);
@@ -71,17 +74,29 @@ public sealed class RunConditions
     }
 
     // Time not running over Wall, summed over the rows that do not wait and
-    // have both; null when no row has them.
+    // have both; null when no row has them. Each row's Wall is the one its
+    // figures were taken against (MeasuredRow.OwnWallMs: for the scroll row,
+    // its longest-UI step's).
     public static double? NotRunShare(IReadOnlyList<MeasuredRow> rows)
     {
         ArgumentNullException.ThrowIfNull(rows);
         List<MeasuredRow> counted = rows.Where(row => !row.Waits && row.NotRunMs is not null).ToList();
-        double wall = counted.Sum(row => row.WallMs);
+        double wall = counted.Sum(row => row.OwnWallMs);
         return counted.Count == 0 || wall <= 0 ? null : counted.Sum(row => row.NotRunMs!.Value) / wall;
     }
 
-    // One reading of the machine's load, on a thread-pool thread.
-    public static LoadReading ReadOffThread() => Task.Run(Read).GetAwaiter().GetResult();
+    // One reading of the machine's load, on a thread of its own; the caller
+    // waits for it. Not a thread-pool task: a blocking wait may run a queued
+    // task inline on the waiting thread, and the headless interface thread
+    // is itself a thread-pool thread.
+    public static LoadReading ReadOffThread()
+    {
+        LoadReading? reading = null;
+        var reader = new Thread(() => reading = Read()) { IsBackground = true, Name = "Load reading" };
+        reader.Start();
+        reader.Join();
+        return reading ?? throw new InvalidOperationException("The load reading ended without a result.");
+    }
 
     private static LoadReading Read()
     {
@@ -91,7 +106,7 @@ public sealed class RunConditions
         double end = s_clock.Elapsed.TotalMilliseconds;
         double? processAfter = ProcessSeconds();
         double? process = processBefore is { } first && processAfter is { } last ? (first + last) / 2 : null;
-        return new LoadReading((start + end) / 2, busy is null ? null : end - start, busy, steal, process);
+        return new LoadReading((start + end) / 2, busy is null ? null : end - start, busy, steal, process, Environment.CurrentManagedThreadId);
     }
 
     private static double? Rate(double? before, double? after, double seconds) =>
@@ -199,8 +214,10 @@ public sealed class RunConditions
 // One reading of the machine's load: its time by the run's stopwatch (the
 // midpoint of the reading), how long it took (null when the load could not be
 // read), all processors' busy seconds and the steal (Linux) since boot, and
-// this process's processor seconds. Absent figures are null.
-public sealed record LoadReading(double MidpointMs, double? ReadMs, double? BusySeconds, double? StealSeconds, double? ProcessSeconds);
+// this process's processor seconds. Absent figures are null. ReadOnThread is
+// the managed id of the thread that read it, so a test can hold that it was
+// not the interface thread.
+public sealed record LoadReading(double MidpointMs, double? ReadMs, double? BusySeconds, double? StealSeconds, double? ProcessSeconds, int ReadOnThread = 0);
 
 // Which kind of core the calling thread is on (busy-PC design, section 2,
 // perfCoreShare): a map of each logical processor to its efficiency class,

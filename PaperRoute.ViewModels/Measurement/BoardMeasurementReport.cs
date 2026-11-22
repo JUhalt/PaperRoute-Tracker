@@ -40,6 +40,12 @@ public sealed record MeasuredRow(
     bool Waits = false)
 {
     public bool Within(double multiplier) => UiMs <= BudgetMs * multiplier;
+
+    // The Wall the busy-PC figures were taken against: RunMs + NotRunMs when
+    // both are present, else WallMs. The two differ only for the scroll row,
+    // whose figures come from its longest-UI step while its WallMs is the
+    // longest Wall of any step.
+    public double OwnWallMs => RunMs is { } ran && NotRunMs is { } notRun ? ran + notRun : WallMs;
 }
 
 // One rate check of the Windows thread clock (busy-PC design, section 4): the
@@ -211,7 +217,9 @@ public sealed class BoardMeasurementReport
         return string.Join(Environment.NewLine, lines);
     }
 
-    // The second line of a failure: how long the interface thread ran.
+    // The second line of a failure: how long the interface thread ran, of the
+    // Wall its figures were taken against (OwnWallMs, so the scroll row's line
+    // speaks of one step).
     private static string RunLine(MeasuredRow row)
     {
         if (row.RunMs is not { } ran || row.NotRunMs is not { } notRun)
@@ -219,13 +227,14 @@ public sealed class BoardMeasurementReport
             return RunUnreadableLine;
         }
 
-        if (row.WallMs > 0 && ran >= 0.9 * row.WallMs)
+        double wall = row.OwnWallMs;
+        if (wall > 0 && ran >= 0.9 * wall)
         {
-            return string.Create(CultureInfo.InvariantCulture, $"  The interface thread was running for {ran:0} of the {row.WallMs:0} ms. A busy PC can still slow running code.");
+            return string.Create(CultureInfo.InvariantCulture, $"  The interface thread was running for {ran:0} of the {wall:0} ms. A busy PC can still slow running code.");
         }
 
         string line = string.Create(CultureInfo.InvariantCulture,
-            $"  The interface thread ran for {ran:0} ms of it and was not running for {notRun:0} ms ({(row.WallMs > 0 ? notRun / row.WallMs : 0):0%})");
+            $"  The interface thread ran for {ran:0} ms of it and was not running for {notRun:0} ms ({(wall > 0 ? notRun / wall : 0):0%})");
         return row.GcPauseMs is { } gc && row.JitMs is { } jit
             ? line + string.Create(CultureInfo.InvariantCulture, $"; garbage collection paused {gc:0} ms, compilation {jit:0} ms.")
             : line + ".";

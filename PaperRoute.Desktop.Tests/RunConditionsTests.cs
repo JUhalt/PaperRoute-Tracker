@@ -91,6 +91,11 @@ public sealed class RunConditionsTests
         Assert.AreEqual(60.0 / 400, RunConditions.NotRunShare(rows)!.Value, 1e-9);
         Assert.IsNull(RunConditions.NotRunShare([rows[2], rows[3]]), "No row that does not wait has the figure.");
 
+        // The scroll row's figures are its longest-UI step's (Wall 200 ms),
+        // not its longest Wall (500 ms): the share counts that step's Wall.
+        MeasuredRow scroll = new("500", "scroll-published-longest-step", "Scroll", 500, 180, 250, "UI thread", RunMs: 150, NotRunMs: 50);
+        Assert.AreEqual(50.0 / 200, RunConditions.NotRunShare([scroll])!.Value, 1e-9);
+
         MeasurementConditions conditions = RunConditions.Compute(ThreadClock.Absent(ThreadClock.RateCheckFailedReason),
             new(0, null, null, null, null), new(1_000, null, null, null, null), rows, 12);
         Assert.AreEqual(0.15, conditions.NotRunShare!.Value, 1e-9);

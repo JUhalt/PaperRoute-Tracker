@@ -137,6 +137,7 @@ public sealed class BoardBudgetTests : StorageCheckedTests
 
         List<string> outOfBounds = CheckThreadClockBounds(rows.Where(row => row.Library == "500"));
         Assert.IsEmpty(outOfBounds, "Thread-clock figures past their bounds:" + Environment.NewLine + string.Join(Environment.NewLine, outOfBounds));
+        CheckWaitsAndScroll(rows);
 
         // Today's rule, unchanged; the message adds what was measured in this
         // run (busy-PC design, section 8).
@@ -306,12 +307,55 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         return (measurement.Rows.ToList(), measurement.Clock);
     }
 
+    // Which headless rows wait by design (busy-PC design, section 2): warm
+    // startup and every paint row, and no other (the scroll row waits only in
+    // a real window). The scroll row's figures come from its longest-UI step:
+    // with no step (the example's shelf may not scroll) every figure is null,
+    // never 0; with steps, RunMs + NotRunMs is the Wall its note gives for
+    // that step (rounded there to a whole ms).
+    private void CheckWaitsAndScroll(IReadOnlyList<MeasuredRow> rows)
+    {
+        foreach (MeasuredRow row in rows)
+        {
+            bool waits = row.Id == BoardMeasurement.WarmStartup || row.Id.EndsWith("-paint", StringComparison.Ordinal);
+            Assert.AreEqual(waits, row.Waits, $"{row.Library} {row.Id}: waits by design is {waits}.");
+        }
+
+        foreach (MeasuredRow scroll in rows.Where(row => row.Id == BoardMeasurement.ScrollPublished))
+        {
+            if (scroll.Note.StartsWith("0 steps", StringComparison.Ordinal))
+            {
+                TestContext.WriteLine($"{scroll.Library} scroll: no step, so no busy-PC figure.");
+                Assert.IsTrue(scroll.RunMs is null && scroll.NotRunMs is null && scroll.RunUiMs is null && scroll.PerfCoreShare is null && scroll.GcPauseMs is null && scroll.JitMs is null,
+                    $"{scroll.Library}: a scroll row with no step has every busy-PC figure null, never 0.");
+                continue;
+            }
+
+            if (scroll.RunMs is not { } ran || scroll.NotRunMs is not { } notRun)
+            {
+                continue;
+            }
+
+            const string marker = "the longest-UI step's Wall ";
+            int at = scroll.Note.IndexOf(marker, StringComparison.Ordinal);
+            Assert.IsGreaterThanOrEqualTo(0, at, $"{scroll.Library}: the scroll row's note gives its longest-UI step's Wall: {scroll.Note}");
+            string text = scroll.Note[(at + marker.Length)..].Split(' ')[0];
+            double stepWall = double.Parse(text, CultureInfo.InvariantCulture);
+            TestContext.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{scroll.Library} scroll: runMs + notRunMs {ran + notRun:0.0} against the step's Wall {stepWall:0} ms in the note (row wallMs {scroll.WallMs:0.0})."));
+            Assert.AreEqual(stepWall, ran + notRun, 0.51, $"{scroll.Library}: the scroll row's figures come from the step its note names.");
+        }
+    }
+
     // The thread clock's figures against Wall and UI (busy-PC design, section
     // 4): a gap's running time is at most the gap, so runMs <= wallMs and
     // runUiMs <= uiMs hold up to the clock's error, checked with the rate
     // check's 2% and 1 ms. Load only takes time away from the thread, so a
-    // busy PC cannot push a figure past them. Each comparison goes to the
-    // log; a row without the figures is skipped, never failed.
+    // busy PC cannot push a figure past them. runMs is held to the Wall it was
+    // taken against (OwnWallMs: for the scroll row its longest-UI step's
+    // Wall, not the row's longest Wall). Each comparison goes to the log; a
+    // row without the figures is skipped, never failed. That the clock is
+    // read inside the stopwatch is held by reading BoardMeasurement.TimeStep,
+    // not by a test.
     private List<string> CheckThreadClockBounds(IEnumerable<MeasuredRow> rows)
     {
         var outOfBounds = new List<string>();
@@ -319,7 +363,7 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         {
             if (row.RunMs is { } ran)
             {
-                Compare(row.Id, "runMs", ran, "wallMs", row.WallMs, outOfBounds);
+                Compare(row.Id, "runMs", ran, row.Id == BoardMeasurement.ScrollPublished ? "its step's Wall" : "wallMs", row.OwnWallMs, outOfBounds);
             }
 
             if (row.RunUiMs is { } runUi)
