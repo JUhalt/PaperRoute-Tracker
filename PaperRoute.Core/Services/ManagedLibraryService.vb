@@ -46,7 +46,7 @@ Namespace Services
             End If
 
             ' Empty on Windows for a redirected Documents folder that is
-            ' missing right now; elsewhere only if the system names none.
+            ' missing right now. Elsewhere UserFolder refuses an empty answer.
             Dim documentsDirectory As String =
                 StorageEnvironment.UserFolder(
                     Environment.SpecialFolder.MyDocuments

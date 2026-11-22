@@ -46,14 +46,26 @@ Namespace Services
         ' PaperRoute's own folder inside it. Windows answers as before: a
         ' redirected folder that is missing right now (OneDrive, a network
         ' share) still answers empty, and the callers still refuse it.
+        ' Off Windows an empty answer means the system names no home at
+        ' all; it is refused here, so no root ever becomes a relative path
+        ' inside whatever folder the app was started from.
         Friend Shared Function UserFolder(folder As Environment.SpecialFolder) As String
 
-            Dim answer As Environment.SpecialFolderOption =
-                If(RunsOnWindows.Invoke(),
-                   Environment.SpecialFolderOption.None,
-                   Environment.SpecialFolderOption.DoNotVerify)
+            If RunsOnWindows.Invoke() Then
+                Return AskSystemFolder.Invoke(folder, Environment.SpecialFolderOption.None)
+            End If
 
-            Return AskSystemFolder.Invoke(folder, answer)
+            Dim named As String =
+                AskSystemFolder.Invoke(folder, Environment.SpecialFolderOption.DoNotVerify)
+
+            If String.IsNullOrWhiteSpace(named) Then
+                Throw New InvalidOperationException(
+                    If(folder = Environment.SpecialFolder.MyDocuments,
+                       "The user's Documents folder could not be located.",
+                       $"The user's {folder} folder could not be located."))
+            End If
+
+            Return named
 
         End Function
 

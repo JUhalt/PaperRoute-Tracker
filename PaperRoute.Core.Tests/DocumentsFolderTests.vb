@@ -122,6 +122,49 @@ Public Class DocumentsFolderTests
     End Sub
 
 
+    ' The app's first start (Program.Run's storage step) makes a missing
+    ' ~/.local/share with the data folder inside it, and still no
+    ' Documents folder: that waits for the first managed copy.
+    <TestMethod>
+    Public Sub OffWindowsTheFirstStartMakesTheDataFolderButNoDocuments()
+
+        StorageEnvironment.RunsOnWindows = Function() False
+
+        StorageMigrationService.EnsureCurrentStorage()
+
+        Dim schema As String = Path.Combine(
+            _home, ".local", "share", StorageEnvironment.DataFolderName(), "data", "schema.json")
+        Assert.IsTrue(File.Exists(schema), schema)
+        Assert.IsFalse(Directory.Exists(Path.Combine(_home, "Documents")))
+
+    End Sub
+
+
+    ' Where the system names no home at all, every default root is
+    ' refused, so none becomes a relative path in the start folder.
+    <TestMethod>
+    Public Sub OffWindowsASystemWithNoHomeIsRefused()
+
+        StorageEnvironment.RunsOnWindows = Function() False
+        StorageEnvironment.AskSystemFolder = Function(folder, answer) String.Empty
+
+        Dim documents As InvalidOperationException =
+            Assert.ThrowsExactly(Of InvalidOperationException)(
+                Sub() StorageMigrationService.CurrentManagedLibraryRoot())
+        Assert.AreEqual("The user's Documents folder could not be located.", documents.Message)
+
+        Assert.ThrowsExactly(Of InvalidOperationException)(
+            Sub() StorageMigrationService.CurrentDataRoot())
+        Assert.ThrowsExactly(Of InvalidOperationException)(
+            Sub() StorageMigrationService.EnsureCurrentStorage())
+        Assert.ThrowsExactly(Of InvalidOperationException)(
+            Sub()
+                Dim neverMade As New ManagedLibraryService()
+            End Sub)
+
+    End Sub
+
+
     ' A redirected Documents folder (OneDrive, a network share) that is
     ' missing right now answers empty on Windows, and the library still
     ' refuses to start there, as in v1.0. Nothing is made.
