@@ -188,3 +188,8 @@ $results | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath (Join-Path $runRoo
 Write-Host $summary
 if ($env:GITHUB_STEP_SUMMARY) { $summary >> $env:GITHUB_STEP_SUMMARY }
 if ($failed.Count -gt 0) { throw $summary }
+
+# The cases run git, whose last answer may be 1 ("not an ancestor", an expected
+# outcome). A GitHub Actions step ends with whatever $LASTEXITCODE holds, so
+# without this line a run that passed every case failed its step.
+exit 0
