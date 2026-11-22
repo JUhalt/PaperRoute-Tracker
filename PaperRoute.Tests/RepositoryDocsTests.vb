@@ -299,8 +299,8 @@ Public Class RepositoryDocsTests
     ' #44, the maintainer's decision 5 of November 2, 2026: release.yml
     ' refuses a tag whose commit is not on master, before it sets up,
     ' builds, packs, uploads or publishes anything. Their decision of
-    ' November 21 lets a patch come from its own line's release branch,
-    ' such as release/v1.0.x. Pull requests never run release.yml, and a
+    ' November 21 lets a 1.0 patch come from release/v1.0.x, and no other
+    ' branch is named. Pull requests never run release.yml, and a
     ' release tag can be neither moved nor deleted, so a check dropped or
     ' moved later would otherwise show only on a real tag. CI runs the
     ' script's own tests (Test-ReleaseTagChecks.ps1).
@@ -363,10 +363,10 @@ Public Class RepositoryDocsTests
             )
 
         For Each expected As String In {
-            "$lineBranch = ""release/v$($Matches.major).$($Matches.minor).x""",
-            "foreach ($branch in 'master', $lineBranch)",
+            "$releaseBranches = @{ '1.0' = 'release/v1.0.x' }",
+            "foreach ($branch in $branches)",
             "git merge-base --is-ancestor $sha ""refs/remotes/$Remote/$branch""",
-            "Release tag '$Tag' is at $sha, which is on neither master nor $lineBranch."
+            "Release tag '$Tag' is at $sha, which is not on $($branches -join ' or ')."
         }
 
             StringAssert.Contains(

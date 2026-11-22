@@ -1,17 +1,19 @@
 name: CI
 run-name: "CI • ${{ github.event_name == 'pull_request' && format('PR #{0}', github.event.pull_request.number) || github.ref_name }}"
 
-# A release branch such as release/v1.0.x gets its patches through pull
-# requests too, and release.yml may tag it, so CI runs there as on master.
+# release/v1.0.x gets its patches through pull requests too, and
+# release.yml may build a 1.0 tag from it, so CI runs there as on master.
+# A branch's pushes and pull requests use that branch's copy of this file,
+# so this takes effect there once the branch carries it.
 on:
   push:
     branches:
       - master
-      - 'release/v*.x'
+      - release/v1.0.x
   pull_request:
     branches:
       - master
-      - 'release/v*.x'
+      - release/v1.0.x
   workflow_dispatch:
 
 permissions:

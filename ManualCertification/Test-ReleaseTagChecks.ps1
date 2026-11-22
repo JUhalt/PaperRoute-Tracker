@@ -44,6 +44,7 @@ function New-Commit([string] $Directory, [string] $Name) {
     Invoke-Git $Directory commit -q -m $Name | Out-Null
     return ([string] (Invoke-Git $Directory rev-parse HEAD)).Trim()
 }
+function ConvertTo-Literal([string] $Text) { "'" + $Text.Replace("'", "''") + "'" }
 function Add-Result([string] $Name, [bool] $Passed, [string] $Detail) {
     $results.Add([pscustomobject] @{ Case = $Name; Passed = $Passed; Detail = $Detail })
     Write-Host ('{0}  {1}{2}' -f $(if ($Passed) { 'PASS' } else { 'FAIL' }), $Name, $(if ($Passed) { '' } else { " ($Detail)" }))
@@ -53,6 +54,7 @@ function Add-Result([string] $Name, [bool] $Passed, [string] $Detail) {
 #   master:          m1 - m2 - m3
 #   release/v1.0.x:         m2 - r1 - r2
 #   feature/x:              m2 - f1
+#   release/v1.1.x:         m2 - s1   (a line branch the script does not name)
 #   tag only:                         r2 - r3   (r3 is on no branch)
 #   tag only:        n1                         (a root on no branch)
 $work = Join-Path $runRoot 'work'
@@ -69,6 +71,8 @@ $sha.r1 = New-Commit $work 'r1'
 $sha.r2 = New-Commit $work 'r2'
 Invoke-Git $work checkout -q -b feature/x $sha.m2 | Out-Null
 $sha.f1 = New-Commit $work 'f1'
+Invoke-Git $work checkout -q -b release/v1.1.x $sha.m2 | Out-Null
+$sha.s1 = New-Commit $work 's1'
 Invoke-Git $work checkout -q --detach $sha.r2 | Out-Null
 $sha.r3 = New-Commit $work 'r3'
 Invoke-Git $work checkout -q --orphan lonely | Out-Null
@@ -82,6 +86,7 @@ $tags = [ordered] @{
     'v1.0.2-rc.1'  = @{ At = 'r1'; Annotated = $false }
     'v1.0.3'       = @{ At = 'f1'; Annotated = $true }
     'v1.1.1'       = @{ At = 'r2'; Annotated = $true }
+    'v1.1.2'       = @{ At = 's1'; Annotated = $true }
     'v1.0.4'       = @{ At = 'n1'; Annotated = $false }
     'v1.0.5'       = @{ At = 'r3'; Annotated = $true }
     'v1.2.0'       = @{ At = 'f1'; Annotated = $false }
@@ -93,7 +98,7 @@ foreach ($tag in $tags.Keys) {
     if ($tags[$tag].Annotated) { Invoke-Git $work tag -a -m "Tag $tag" $tag $target | Out-Null }
     else { Invoke-Git $work tag $tag $target | Out-Null }
 }
-Invoke-Git $work push -q $origin master release/v1.0.x feature/x --tags | Out-Null
+Invoke-Git $work push -q $origin master release/v1.0.x release/v1.1.x feature/x --tags | Out-Null
 $originUrl = ([Uri] $origin).AbsoluteUri
 
 # One case: a fresh clone of the tag, one commit deep, as actions/checkout
@@ -111,16 +116,20 @@ function Test-Tag([string] $Tag, [string] $ExpectBranch, [string] $ExpectRefusal
             (Invoke-Git $clone for-each-ref refs/heads refs/remotes).Length -ne 0) { throw 'The clone is not shallow and branch-less.' }
         $commit = if ($PassTagObject) { (Invoke-Git $clone rev-parse "refs/tags/$Tag").Trim() }
             else { (Invoke-Git $clone rev-parse 'HEAD').Trim() }
-        $output = @(& pwsh -NoProfile -NonInteractive -WorkingDirectory $clone -File $tagScript -Tag $Tag -Commit $commit -Remote $Remote 2>&1 | ForEach-Object { "$_" })
+        # pwsh's error view wraps a thrown message to a console width that
+        # differs between machines, so the child prints a refusal itself, on
+        # one line. It ends as release.yml's pwsh steps do, with the last
+        # exit code.
+        $command = "try { & $(ConvertTo-Literal $tagScript) -Tag $(ConvertTo-Literal $Tag) -Commit $(ConvertTo-Literal $commit) -Remote $(ConvertTo-Literal $Remote); exit `$LASTEXITCODE } " +
+            "catch { 'REFUSED: ' + `$_.Exception.Message; exit 1 }"
+        $output = @(& pwsh -NoProfile -NonInteractive -WorkingDirectory $clone -Command $command 2>&1 | ForEach-Object { "$_" })
         $exit = $LASTEXITCODE
         $text = $output -join ' | '
         if ($ExpectBranch) {
             Add-Result $name ($exit -eq 0 -and $output.Count -gt 0 -and $output[-1] -ceq $ExpectBranch) "exit $exit; $text"
         } else {
-            # pwsh wraps a thrown message to the console's width, with "|"
-            # at each line's start, so both sides are compared flattened.
-            $flat = $text -replace '[\s|]+', ' '
-            Add-Result $name ($exit -ne 0 -and $flat.Contains(($ExpectRefusal -replace '[\s|]+', ' '), [StringComparison]::Ordinal)) "exit $exit; $text"
+            $refusals = @($output | Where-Object { $_.StartsWith('REFUSED: ', [StringComparison]::Ordinal) })
+            Add-Result $name ($exit -eq 1 -and $refusals.Count -eq 1 -and $refusals[0].Contains($ExpectRefusal, [StringComparison]::Ordinal)) "exit $exit; $text"
         }
     } catch {
         Add-Result $name $false $_.Exception.Message
@@ -134,12 +143,13 @@ Test-Tag 'v1.0.1' -ExpectBranch 'master'
 Test-Tag 'v1.0.2' -ExpectBranch 'release/v1.0.x'
 Test-Tag 'v1.0.2' -ExpectBranch 'release/v1.0.x' -PassTagObject
 Test-Tag 'v1.0.2-rc.1' -ExpectBranch 'release/v1.0.x'
-Test-Tag 'v1.0.3' -ExpectRefusal 'which is on neither master nor release/v1.0.x'
-Test-Tag 'v1.1.1' -ExpectRefusal 'which is on neither master nor release/v1.1.x'
-Test-Tag 'v1.0.4' -ExpectRefusal 'which is on neither master nor release/v1.0.x'
-Test-Tag 'v1.0.5' -ExpectRefusal 'which is on neither master nor release/v1.0.x'
-Test-Tag 'v1.2.0' -ExpectRefusal 'which is on neither master nor release/v1.2.x'
-Test-Tag 'v2.0.0' -ExpectRefusal 'which is on neither master nor release/v2.0.x'
+Test-Tag 'v1.0.3' -ExpectRefusal 'which is not on master or release/v1.0.x.'
+Test-Tag 'v1.1.1' -ExpectRefusal 'which is not on master.'
+Test-Tag 'v1.1.2' -ExpectRefusal 'which is not on master.'
+Test-Tag 'v1.0.4' -ExpectRefusal 'which is not on master or release/v1.0.x.'
+Test-Tag 'v1.0.5' -ExpectRefusal 'which is not on master or release/v1.0.x.'
+Test-Tag 'v1.2.0' -ExpectRefusal 'which is not on master.'
+Test-Tag 'v2.0.0' -ExpectRefusal 'which is not on master.'
 Test-Tag 'v1.0' -ExpectRefusal 'is not a supported PaperRoute version tag'
 Test-Tag 'v1.0.2' -ExpectRefusal 'Cannot list branch master' -Remote 'nosuchremote'
 

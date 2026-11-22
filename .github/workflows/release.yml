@@ -22,13 +22,13 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Releases are built only from master or from the release branch of
-      # the tag's own line, as CODE_SIGNING.md says: v1.0.2 may come from
-      # release/v1.0.x, and a 1.1 tag may not (#44, the maintainer's
+      # Releases are built only from master, or a 1.0 tag from
+      # release/v1.0.x, as CODE_SIGNING.md says (#44, the maintainer's
       # decision of November 2, 2026; patch releases from release/v1.0.x,
-      # their decision of November 21). This runs before anything is
-      # built, for Preview and Stable tags alike. The script fetches the
-      # two branches, since the checkout holds only the tagged commit.
+      # their decision of November 21). No other branch counts, not even
+      # another release/vA.B.x. This runs before anything is built, for
+      # Preview and Stable tags alike. The script fetches the branches,
+      # since the checkout holds only the tagged commit.
       # GitHub runs this file as it is at the tagged commit, so the check
       # guards only commits that carry it, and a refused tag stays pushed:
       # certification's D1 still checks before tagging. Do not re-run a
