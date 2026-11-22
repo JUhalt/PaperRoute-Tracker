@@ -125,6 +125,9 @@ public sealed class BoardBudgetTests : StorageCheckedTests
             Assert.Contains(id, BudgetRows, $"WaitingForRowsOfN names {id}, which is not a row of d1 6.3.");
         }
 
+        List<string> outOfBounds = CheckThreadClockBounds(rows.Where(row => row.Library == "500"));
+        Assert.IsEmpty(outOfBounds, "Thread-clock figures past their bounds:" + Environment.NewLine + string.Join(Environment.NewLine, outOfBounds));
+
         IReadOnlyList<MeasuredRow> failures = report.Failures();
         Assert.IsEmpty(failures, string.Join(Environment.NewLine, failures.Select(row =>
             $"{row.Library}: {row.Action} took {row.UiMs:0} ms against {row.BudgetMs * report.Multiplier:0} ms")));
@@ -178,6 +181,7 @@ public sealed class BoardBudgetTests : StorageCheckedTests
                 board.ResetThreshold = threshold + 1;
                 Change(measurement, window, board, threshold + 1, threshold + 1, comparison: true);
                 board.ResetThreshold = threshold;
+                measurement.Finish();
             }
             finally
             {
@@ -254,6 +258,7 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         try
         {
             measurement.MeasureBoard(library, window, shell, session, requireChanges);
+            measurement.Finish();
         }
         finally
         {
@@ -261,6 +266,48 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         }
 
         return measurement.Rows.ToList();
+    }
+
+    // The thread clock's figures against Wall and UI (busy-PC design, section
+    // 4): a gap's running time is at most the gap, so runMs <= wallMs and
+    // runUiMs <= uiMs hold up to the clock's error, checked with the rate
+    // check's 2% and 1 ms. Load only takes time away from the thread, so a
+    // busy PC cannot push a figure past them. Each comparison goes to the
+    // log; a row without the figures is skipped, never failed.
+    private List<string> CheckThreadClockBounds(IEnumerable<MeasuredRow> rows)
+    {
+        var outOfBounds = new List<string>();
+        foreach (MeasuredRow row in rows)
+        {
+            if (row.RunMs is { } ran)
+            {
+                Compare(row.Id, "runMs", ran, "wallMs", row.WallMs, outOfBounds);
+            }
+
+            if (row.RunUiMs is { } runUi)
+            {
+                Compare(row.Id, "runUiMs", runUi, "uiMs", row.UiMs, outOfBounds);
+            }
+
+            if (row.RunMs is null && row.RunUiMs is null)
+            {
+                TestContext.WriteLine($"{row.Id}: no thread-clock figures.");
+            }
+        }
+
+        return outOfBounds;
+    }
+
+    private void Compare(string id, string name, double value, string againstName, double against, List<string> outOfBounds)
+    {
+        double bound = (1.02 * against) + 1;
+        string line = string.Create(CultureInfo.InvariantCulture, $"{id}: {name} {value:0.0} <= 1.02 x {againstName} {against:0.0} + 1 = {bound:0.0}");
+        bool within = value <= bound;
+        TestContext.WriteLine(line + (within ? " (holds)" : " (does not hold)"));
+        if (!within)
+        {
+            outOfBounds.Add(line);
+        }
     }
 
     // A search that hides size of the Pipeline's cards, then the search
