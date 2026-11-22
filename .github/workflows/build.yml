@@ -361,11 +361,15 @@ jobs:
   # trial is published for linux-x64 and started under a virtual display
   # (Xvfb) with a window manager; pictures of the screen, the trial's result
   # files and a summary are kept in the artifact. The job fails when the
-  # trial cannot be published, when its self-check does not pass, or when
-  # the example window does not open. The timed rows and the platform check
-  # are recorded, never judged: a shared runner without a desktop session
-  # says nothing firm about speed, a desktop's file dialog or its browser.
-  # A person on a real Ubuntu desktop answers those (the Linux checklist).
+  # tools cannot be installed, when the trial cannot be published, when the
+  # test library cannot be written, when the display does not come up, when
+  # the self-check does not pass, when the example window does not open or
+  # does not end cleanly on its close request, or when the timed run in the
+  # window does not end by itself with its rows. The timings themselves and
+  # the platform check are recorded, never judged: a shared runner without a
+  # desktop session says nothing firm about speed, a desktop's file dialog
+  # or its browser. A person on a real Ubuntu desktop answers those (the
+  # Linux checklist).
   trial-linux-window:
     name: Avalonia Board trial (Linux window under Xvfb)
     runs-on: ubuntu-latest
@@ -393,11 +397,18 @@ jobs:
 
       # The 500-manuscript TEST library, written by the manual test that
       # exists for the real-window run. It lands in TestResults/v11-trial.
+      # A filter that matches no test still ends with exit code 0, so the
+      # folder is looked for: a renamed test must not pass unseen.
       - name: Write the 500 test library
         env:
           TZ: Etc/UTC
           LANG: en_US.UTF-8
-        run: dotnet test PaperRoute.Desktop.Tests/PaperRoute.Desktop.Tests.csproj --configuration Release --filter "FullyQualifiedName~WriteLargeLibraryForMeasurement"
+        run: |
+          dotnet test PaperRoute.Desktop.Tests/PaperRoute.Desktop.Tests.csproj --configuration Release --filter "FullyQualifiedName~WriteLargeLibraryForMeasurement"
+          if [ ! -d TestResults/v11-trial/large-500/data ]; then
+            echo "::error title=Board trial on Linux::The manual test wrote no library in TestResults/v11-trial/large-500. Was it renamed?"
+            exit 1
+          fi
 
       - name: Show the trial's window
         shell: pwsh
