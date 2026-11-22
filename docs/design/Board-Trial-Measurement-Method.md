@@ -21,7 +21,7 @@ Not built yet:
 - The timed row for #404's search with Published hidden (`search-keystroke-published-hidden`) and its pairs.
 - The rows for preparing Published while the Board is idle.
 
-On Linux the thread clock and the load readings first ran in CI, and they work (section 11, "Shown by CI").
+On Linux the thread clock and the load readings first ran in CI, and they gave readings (section 11, "Shown by CI").
 
 ## 1 What the figures mean, in plain words
 
@@ -241,7 +241,7 @@ One observation from two headless runs of the same build, not a finding: Stage f
 - **Ubuntu:** `threadClock` is `thread-cputime`, in the headless test and in the real window under a virtual display. The load was read: other programs kept 0.04 (headless) and 0.23 (window) of the 4 processors busy, and `stealProcessors` read 0. So `clock_gettime` through `libc.so.6`, `/proc/stat` and `sysconf` work on the runner.
 - **Windows:** `threadClock` is `cycles` at 2,596,000 cycles per ms, so the registry's `~MHz` value exists on the runner. The two rate checks read 0.9981 and 0.9980 of nominal, each after 25 spins, and passed.
 - `perfCoreShare` is `null` on both runners.
-- One observation from one run on each system, not a finding: headless, the first switch to Published ran for 395.1 of its 401.9 ms on Ubuntu, with a garbage-collection pause of 80.2 ms inside the running time, and for 91.4 of its 125.6 ms on Windows, with a pause of 34.4 ms. How a pause shows in the thread's own clock on each system has not been looked into.
+- One observation from one run on each system, not a finding: headless, on the 500 library, the first switch to Published ran for 395.1 of its 401.9 ms on Ubuntu, with a garbage-collection pause of 80.2 ms inside the running time, and for 91.4 of its 125.6 ms on Windows, with a pause of 34.4 ms. How a pause shows in the thread's own clock on each system has not been looked into.
 
 **Assumed:**
 
