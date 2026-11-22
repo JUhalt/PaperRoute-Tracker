@@ -19,6 +19,9 @@ namespace PaperRoute.Desktop.Measurement;
 // difference goes into loadReadMs. Windows: GetSystemTimes (kernel + user -
 // idle). Linux: the first line of /proc/stat, busy = user + nice + system +
 // irq + softirq, and steal apart. Every failure gives null; nothing throws.
+// The counters move in steps (15.6 ms a processor on Windows, a clock tick
+// on Linux), so the figures are coarse over a short run and can read a
+// little above the processor count; they are not clamped.
 public sealed class RunConditions
 {
     private static readonly Stopwatch s_clock = Stopwatch.StartNew();

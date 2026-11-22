@@ -33,6 +33,10 @@ public sealed class RunConditionsTests
             }
         }
 
+        // The counters move in steps (15.6 ms a processor on Windows), so two
+        // readings a millisecond apart give a meaningless rate; a run is
+        // seconds long. Half a second apart keeps the logged figure readable.
+        Thread.Sleep(500);
         MeasurementConditions conditions = run.End(ThreadClock.Absent(ThreadClock.NoClockReason), []);
         TestContext.WriteLine(BoardMeasurementReport.DescribeConditions(conditions, Environment.ProcessorCount));
         Assert.AreEqual("absent: " + ThreadClock.NoClockReason, conditions.ThreadClock);

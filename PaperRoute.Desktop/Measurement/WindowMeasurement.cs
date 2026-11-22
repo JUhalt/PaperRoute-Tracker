@@ -34,7 +34,12 @@ public static class WindowMeasurement
         ArgumentNullException.ThrowIfNull(session);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
-        var measurement = new BoardMeasurement(WaitForFrame);
+        // The thread clock opens here, on the interface thread; the machine's
+        // load is read off it, before the first row and after the last
+        // (RunConditions), all untimed. In a real window a frame waits for
+        // the screen, so the scroll row waits by design.
+        var measurement = new BoardMeasurement(WaitForFrame) { FrameWaits = true };
+        RunConditions conditions = RunConditions.Begin();
         string library = session.Kind == LibraryKind.Snapshot ? "snapshot" : "example";
         MainWindow? window = null;
         ShellViewModel? shell = null;
@@ -47,13 +52,16 @@ public static class WindowMeasurement
             double sinceStart = (DateTime.Now - Process.GetCurrentProcess().StartTime).TotalMilliseconds;
             measurement.Add(new MeasuredRow(library, BoardMeasurement.ProcessStartToBoard,
                 "From the process start to an interactive Board (.NET and Avalonia start-up included, cold)",
-                sinceStart, sinceStart, BoardMeasurement.StartupBudget, "warm startup", Informational: true));
+                sinceStart, sinceStart, BoardMeasurement.StartupBudget, "warm startup", Informational: true, Waits: true));
             measurement.MeasureBoard(library, window, shell, session, requireChanges: session.Kind == LibraryKind.Snapshot);
         }
         catch (Exception ex)
         {
             error = ex.GetType().Name + ": " + ex.Message;
         }
+
+        measurement.Finish();
+        MeasurementConditions measured = conditions.End(measurement.Clock, measurement.Rows);
 
         var report = new BoardMeasurementReport
         {
@@ -71,6 +79,7 @@ public static class WindowMeasurement
             HeldLibrary = session.Kind == LibraryKind.Snapshot ? library : string.Empty,
             Error = error,
             Rows = measurement.Rows,
+            Conditions = measured,
         };
 
         try

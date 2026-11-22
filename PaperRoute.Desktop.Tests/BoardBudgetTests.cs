@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Media.Imaging;
@@ -29,7 +30,10 @@ namespace PaperRoute.Desktop.Tests;
 // A row of the 500 library fails the test when it is over its budget, unless
 // it is informational or waits for rows of N (BoardMeasurement.WaitingForRowsOfN):
 // those are measured and reported. Every row goes to the test log, and the
-// run's JSON to budget-headless.json beside the pictures.
+// run's JSON to budget-headless.json beside the pictures. The busy-PC
+// figures (busy-PC design) are report-only: how busy the PC was is read
+// around the 500 library's run, and a failure's message says what the
+// interface thread did and how busy the PC was, measured in that run.
 //
 // Then both sides of SyncInto's reset threshold (64): a change of 64 cards
 // against one of 65, reported only. And the manual writer of the 500 library
@@ -104,9 +108,14 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         using DiskLibrarySession example = Unloaded("example", today, root => LargeLibraryFixture.WriteExample(root));
         using DiskLibrarySession large = Unloaded("five-hundred", today, root => LargeLibraryFixture.Create(root, 500));
 
+        // How busy the PC was is read around the 500 library's measurement
+        // only, from this test thread, never the interface thread.
         var rows = new List<MeasuredRow>();
-        rows.AddRange(Headless.Run(() => MeasureLibrary("example", example, requireChanges: false), s_runLimit));
-        rows.AddRange(Headless.Run(() => MeasureLibrary("500", large, requireChanges: true), s_runLimit));
+        rows.AddRange(Headless.Run(() => MeasureLibrary("example", example, requireChanges: false), s_runLimit).Rows);
+        RunConditions around = RunConditions.Begin();
+        (IReadOnlyList<MeasuredRow> largeRows, ThreadClock clock) = Headless.Run(() => MeasureLibrary("500", large, requireChanges: true), s_runLimit);
+        MeasurementConditions conditions = around.End(clock, largeRows);
+        rows.AddRange(largeRows);
 
         Assert.HasCount(500, large.Manuscripts);
         CollectionAssert.AreEqual(
@@ -115,8 +124,9 @@ public sealed class BoardBudgetTests : StorageCheckedTests
                 .Select(location => large.Manuscripts.Count(manuscript => manuscript.Location == location)).ToArray(),
             "The 500 library's shelves.");
 
-        BoardMeasurementReport report = Report(rows, today, "the computer's date", "500");
+        BoardMeasurementReport report = Report(rows, today, "the computer's date", "500", conditions);
         Save(report, "budget-headless");
+        CheckNewFieldsInJson(report);
 
         List<string> missing = BudgetRows.Where(id => rows.Count(row => row.Library == "500" && row.Id == id) != 1).ToList();
         Assert.IsEmpty(missing, "Rows of d1 6.3 not timed exactly once on the 500 library: " + string.Join(", ", missing));
@@ -128,9 +138,34 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         List<string> outOfBounds = CheckThreadClockBounds(rows.Where(row => row.Library == "500"));
         Assert.IsEmpty(outOfBounds, "Thread-clock figures past their bounds:" + Environment.NewLine + string.Join(Environment.NewLine, outOfBounds));
 
+        // Today's rule, unchanged; the message adds what was measured in this
+        // run (busy-PC design, section 8).
         IReadOnlyList<MeasuredRow> failures = report.Failures();
-        Assert.IsEmpty(failures, string.Join(Environment.NewLine, failures.Select(row =>
-            $"{row.Library}: {row.Action} took {row.UiMs:0} ms against {row.BudgetMs * report.Multiplier:0} ms")));
+        Assert.IsEmpty(failures, report.FailureMessage());
+    }
+
+    // The JSON holds every busy-PC figure on every row, as a number or as
+    // null, and the run's conditions; which are present depends on the
+    // system, so presence is logged, not held. Nothing new names the PC.
+    private void CheckNewFieldsInJson(BoardMeasurementReport report)
+    {
+        using JsonDocument document = JsonDocument.Parse(report.ToJson());
+        string[] names = ["runMs", "notRunMs", "runUiMs", "perfCoreShare", "gcPauseMs", "jitMs"];
+        foreach (JsonElement row in document.RootElement.GetProperty("rows").EnumerateArray())
+        {
+            foreach (string name in names)
+            {
+                Assert.IsTrue(row.TryGetProperty(name, out JsonElement value) && value.ValueKind is JsonValueKind.Number or JsonValueKind.Null,
+                    $"Row {row.GetProperty("id").GetString()} has {name}, a number or null.");
+            }
+        }
+
+        JsonElement conditions = document.RootElement.GetProperty("conditions");
+        Assert.AreEqual(JsonValueKind.Object, conditions.ValueKind, "The run has its conditions.");
+        string[] present = conditions.EnumerateObject().Where(item => item.Value.ValueKind != JsonValueKind.Null).Select(item => item.Name).ToArray();
+        string[] absent = conditions.EnumerateObject().Where(item => item.Value.ValueKind == JsonValueKind.Null).Select(item => item.Name).ToArray();
+        TestContext.WriteLine($"Conditions present: {string.Join(", ", present)}; absent: {(absent.Length == 0 ? "none" : string.Join(", ", absent))}.");
+        Assert.IsFalse(conditions.TryGetProperty("machineName", out _), "The conditions name no PC.");
     }
 
     // Both sides of SyncInto's reset threshold (d1 3.2 item 8, d1 9): on the
@@ -234,7 +269,7 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         }
     }
 
-    internal static BoardMeasurementReport Report(IReadOnlyList<MeasuredRow> rows, DateTime day, string daySource, string heldLibrary) => new()
+    internal static BoardMeasurementReport Report(IReadOnlyList<MeasuredRow> rows, DateTime day, string daySource, string heldLibrary, MeasurementConditions? conditions = null) => new()
     {
         Mode = "headless",
         MachineName = Environment.MachineName,
@@ -249,9 +284,12 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         WaitingForRowsOfN = BoardMeasurement.WaitingForRowsOfN,
         HeldLibrary = heldLibrary,
         Rows = rows,
+        Conditions = conditions,
     };
 
-    private static IReadOnlyList<MeasuredRow> MeasureLibrary(string library, ILibrarySession session, bool requireChanges)
+    // The library's rows, and the interface thread's clock they were timed
+    // with, closed after the last row.
+    private static (IReadOnlyList<MeasuredRow> Rows, ThreadClock Clock) MeasureLibrary(string library, ILibrarySession session, bool requireChanges)
     {
         var measurement = new BoardMeasurement(Frame);
         (MainWindow window, ShellViewModel shell) = measurement.Start(library, session, ThemeVariant.Light, 1280, 800);
@@ -265,7 +303,7 @@ public sealed class BoardBudgetTests : StorageCheckedTests
             window.Close();
         }
 
-        return measurement.Rows.ToList();
+        return (measurement.Rows.ToList(), measurement.Clock);
     }
 
     // The thread clock's figures against Wall and UI (busy-PC design, section
