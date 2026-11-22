@@ -7,7 +7,8 @@ Imports System.Text
 Namespace Services
 
     ' Keys the user chooses to add, such as a free OpenAlex key (#86),
-    ' encrypted for the current Windows account (DPAPI). They are kept beside
+    ' encrypted for this user by the platform's key protection (DPAPI on
+    ' Windows, PlatformServices.Secrets). They are kept beside
     ' the library's data but never in its records, backups, or exports, and
     ' PaperRoute never ships a key of its own.
     Public NotInheritable Class ProtectedKeyStore
@@ -18,9 +19,11 @@ Namespace Services
         Public Const Anthropic As String = "anthropic"
         Public Const AssistantEndpoint As String = "assistant-endpoint"
 
-        Private Shared ReadOnly Entropy As Byte() = Encoding.UTF8.GetBytes("PaperRoute.ProtectedKeyStore.v1")
-
         Private ReadOnly _directory As String
+
+        ' The protector a test handed in, or Nothing for the one the host
+        ' registered, read at each use.
+        Private ReadOnly _protector As ISecretProtector
 
 
         Public Sub New()
@@ -28,10 +31,21 @@ Namespace Services
         End Sub
 
 
-        Friend Sub New(directory As String)
+        Friend Sub New(directory As String, Optional protector As ISecretProtector = Nothing)
             If String.IsNullOrWhiteSpace(directory) Then Throw New ArgumentException("A key directory is required.", NameOf(directory))
             _directory = directory
+            _protector = protector
         End Sub
+
+
+        ' DPAPI for the current Windows account once the Windows app has
+        ' registered it (WindowsPlatform.Register); until a host registers
+        ' one, no key can be kept and none reads.
+        Private ReadOnly Property Protector As ISecretProtector
+            Get
+                Return If(_protector, PlatformServices.Secrets)
+            End Get
+        End Property
 
 
         Public Function HasKey(name As String) As Boolean
@@ -85,7 +99,7 @@ Namespace Services
             Dim file As String = PathFor(name)
             Dim temporary As String = file & ".tmp"
             Dim text As String = If(origin.Length > 0, origin & vbLf & value, value)
-            IO.File.WriteAllBytes(temporary, ProtectedData.Protect(Encoding.UTF8.GetBytes(text), Entropy, DataProtectionScope.CurrentUser))
+            IO.File.WriteAllBytes(temporary, Protector.Protect(Encoding.UTF8.GetBytes(text)))
             IO.File.Move(temporary, file, overwrite:=True)
         End Sub
 
@@ -97,7 +111,7 @@ Namespace Services
             Dim file As String = PathFor(name)
             If Not IO.File.Exists(file) Then Return (String.Empty, Nothing)
             Try
-                Dim clear As Byte() = ProtectedData.Unprotect(IO.File.ReadAllBytes(file), Entropy, DataProtectionScope.CurrentUser)
+                Dim clear As Byte() = Protector.Unprotect(IO.File.ReadAllBytes(file))
                 Dim text As String = Encoding.UTF8.GetString(clear)
                 Dim origin As String = String.Empty
                 Dim split As Integer = text.IndexOf(vbLf, StringComparison.Ordinal)
@@ -106,7 +120,7 @@ Namespace Services
                     text = text.Substring(split + 1)
                 End If
                 Return If(IsPlausibleKey(text), (origin, text), (String.Empty, Nothing))
-            Catch ex As Exception When TypeOf ex Is CryptographicException OrElse TypeOf ex Is IOException OrElse TypeOf ex Is UnauthorizedAccessException
+            Catch ex As Exception When TypeOf ex Is CryptographicException OrElse TypeOf ex Is IOException OrElse TypeOf ex Is UnauthorizedAccessException OrElse TypeOf ex Is PlatformNotSupportedException
                 Return (String.Empty, Nothing)
             End Try
         End Function

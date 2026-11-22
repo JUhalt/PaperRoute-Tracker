@@ -1,5 +1,6 @@
 Imports System
 Imports System.Runtime.InteropServices
+Imports System.Runtime.Versioning
 Imports System.Security.Cryptography
 Imports System.Text
 Imports System.Threading
@@ -12,7 +13,14 @@ Namespace Services
     ' come forward and exits before touching storage. The key is the
     ' library's folder, so the development profile and isolated test
     ' sessions never collide with an installed PaperRoute.
-    Friend NotInheritable Class SingleInstanceService
+    '
+    ' Moved whole from PaperRoute.Core (core stage 2, step 9): named Windows
+    ' kernel objects and user32. KeyFor is unchanged, upper-casing included,
+    ' so PaperRoute 1.0.x and this build still see each other's window on one
+    ' library (SingleInstanceKeyPinTest). Never change the key or the object
+    ' names.
+    <SupportedOSPlatform("windows")>
+    Public NotInheritable Class SingleInstanceService
         Implements IDisposable
 
         Private Const AnyProcess As Integer = -1

@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- The same three version nodes as PaperRoute.Core.vbproj; keep them equal to ManuscriptPipeline.vbproj. The release workflow passes only -p:Version, so AssemblyVersion and FileVersion come from here; VersionSourceTests checks them. -->
+    <Version>1.1.0-alpha.0</Version>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+    <FileVersion>1.1.0.0</FileVersion>
+    <AssemblyName>PaperRoute.Platform</AssemblyName>
+    <!-- The app's root namespace, so every Windows type keeps its full name. -->
+    <RootNamespace>ManuscriptPipeline</RootNamespace>
+    <Product>PaperRoute Tracker</Product>
+    <!-- As in PaperRoute.Core.vbproj, so the shipped DLL's file properties read the same as the core's. -->
+    <Authors>Joshua Uhalt</Authors>
+    <Company>PaperRoute</Company>
+    <Copyright>Copyright © Joshua Uhalt 2026</Copyright>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- DpapiSecretProtector's DPAPI calls: part of the Windows Desktop runtime the app targets, but not of plain net10.0. 10.0.0 is the .NET 10 release; in the app and its self-contained publish the runtime's own newer copy still wins. Moved from PaperRoute.Core.vbproj (core stage 2, step 8). -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PaperRoute.Core\PaperRoute.Core.vbproj" />
+  </ItemGroup>
+
+</Project>

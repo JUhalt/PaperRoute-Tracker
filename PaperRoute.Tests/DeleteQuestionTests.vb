@@ -121,7 +121,11 @@ Public Class DeleteQuestionTests
         Dim core As String =
             Path.Combine(TestRepository.Root(), "PaperRoute.Core")
 
-        Return {app, core}.SelectMany(Function(folder) Directory.GetFiles(folder, "*.vb", SearchOption.AllDirectories)).
+        ' And the Windows implementations the core asks for (core stage 2).
+        Dim platform As String =
+            Path.Combine(TestRepository.Root(), "PaperRoute.Platform")
+
+        Return {app, core, platform}.SelectMany(Function(folder) Directory.GetFiles(folder, "*.vb", SearchOption.AllDirectories)).
             Where(Function(source) Not source.Contains("\obj\", StringComparison.OrdinalIgnoreCase) AndAlso Not source.Contains("\bin\", StringComparison.OrdinalIgnoreCase)).
             ToList()
 

@@ -1,13 +1,19 @@
 name: CI
 run-name: "CI • ${{ github.event_name == 'pull_request' && format('PR #{0}', github.event.pull_request.number) || github.ref_name }}"
 
+# release/v1.0.x gets its patches through pull requests too, and
+# release.yml may build a 1.0 tag from it, so CI runs there as on master.
+# A branch's pushes and pull requests use that branch's copy of this file,
+# so this takes effect there once the branch carries it.
 on:
   push:
     branches:
       - master
+      - release/v1.0.x
   pull_request:
     branches:
       - master
+      - release/v1.0.x
   workflow_dispatch:
 
 permissions:
@@ -58,17 +64,30 @@ jobs:
           }
           Write-Host 'No known vulnerabilities in the restored package graph.'
 
+      # release.yml's tag check and its newer-release check, run against
+      # throwaway git repositories, since only a real tag runs release.yml.
+      - name: Test the release tag checks
+        shell: pwsh
+        run: ./ManualCertification/Test-ReleaseTagChecks.ps1 -RunName ci
+
       - name: Verify release asset checks with synthetic fixtures
         shell: pwsh
         run: ./ManualCertification/Test-ReleaseAssetVerifier.ps1 -RunName ci
 
-      # Report only until core stage 2 makes it strict with -FailOnWindowsOnly.
+      # The core must call no Windows-only API (core stage 2). The script prints
+      # its report and, with -FailOnWindowsOnly, ends with exit code 1 on any
+      # windows-only row; it throws if it scanned fewer than 160 files. Its exit
+      # code is kept, the report and its two summary lines are written, and only
+      # then does the step fail, so a failure still leaves the rows to read.
       - name: Inventory Windows-only APIs in the core
         shell: pwsh
         run: |
-          $report = @(./.github/scripts/Get-WindowsOnlyApiInventory.ps1 -Root .)
+          $global:LASTEXITCODE = 0
+          $report = @(./.github/scripts/Get-WindowsOnlyApiInventory.ps1 -Root . -FailOnWindowsOnly)
+          $exitCode = $LASTEXITCODE
           $report | Write-Host
           $report | Where-Object { $_ -like 'Files scanned:*' -or $_ -like 'Windows-only rows:*' } | ForEach-Object { "Core inventory: $_" } >> $env:GITHUB_STEP_SUMMARY
+          if ($exitCode -ne 0) { throw "The core uses a Windows-only API (inventory exit code $exitCode); the rows are listed above." }
 
       - name: Build Release
         id: build-release
@@ -237,6 +256,12 @@ jobs:
           }
           Write-Host 'No known vulnerabilities in the restored package graph.'
 
+      # The merge rule for Board timing comparisons (Measure-BoardPairs.ps1),
+      # checked on canned measurements: no build and no run of the trial.
+      - name: Check the Board pairs rule on canned measurements
+        shell: pwsh
+        run: ./ManualCertification/Test-BoardPairs.ps1
+
       - name: Build Release
         run: dotnet build PaperRoute.Desktop.slnx --configuration Release --no-restore
 
@@ -349,20 +374,27 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-  # The core and its own tests on Linux (core stage 2). Report-only until
-  # step 13 of the stage removes continue-on-error: its failures are the
-  # stage's remaining work, seen by a machine. The solution cannot build
-  # here (it holds the net10.0-windows app), so the job builds the core
-  # test project, which builds the core through its reference.
-  core-linux:
-    name: Core on Linux
+  # The trial in a real X window on Linux: the question "does the Board trial
+  # start on Linux?", as far as a runner without a desktop can answer it. The
+  # trial is published for linux-x64 and started under a virtual display
+  # (Xvfb) with a window manager; pictures of the screen, the trial's result
+  # files and a summary are kept in the artifact. The job fails when the
+  # tools cannot be installed, when the trial cannot be published, when the
+  # test library cannot be written, when the display does not come up, when
+  # the self-check does not pass, when the example window does not open or
+  # does not end cleanly on its close request, or when the timed run in the
+  # window does not end by itself with its rows. The timings themselves and
+  # the platform check are recorded, never judged: a shared runner without a
+  # desktop session says nothing firm about speed, a desktop's file dialog
+  # or its browser. A person on a real Ubuntu desktop answers those (the
+  # Linux checklist).
+  trial-linux-window:
+    name: Avalonia Board trial (Linux window under Xvfb)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
-      # Report-only until core stage 2's step 13 sets this to 'false': tests that do
-      # not pass on Linux yet are listed in the step summary and raise a warning, and
-      # the job still fails if the tests could not be run or produced no results.
-      CORE_LINUX_REPORT_ONLY: 'true'
+      # Avalonia.BuildServices reports build telemetry unless this is set.
+      AVALONIA_TELEMETRY_OPTOUT: "1"
 
     steps:
       - name: Check out repository
@@ -373,12 +405,82 @@ jobs:
         with:
           global-json-file: global.json
 
-      # Report only; -FailOnWindowsOnly from core stage 2's step 13. Until
-      # then a failure here must not keep the tests below from running.
+      - name: Install a virtual display, a window manager and their tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb openbox xdotool wmctrl x11-utils imagemagick
+
+      - name: Publish the trial for Linux
+        run: dotnet publish PaperRoute.Desktop/PaperRoute.Desktop.csproj --configuration Release --runtime linux-x64 --self-contained --output "$RUNNER_TEMP/board-trial"
+
+      # The 500-manuscript TEST library, written by the manual test that
+      # exists for the real-window run. It lands in TestResults/v11-trial.
+      # A filter that matches no test still ends with exit code 0, so the
+      # folder is looked for: a renamed test must not pass unseen.
+      - name: Write the 500 test library
+        env:
+          TZ: Etc/UTC
+          LANG: en_US.UTF-8
+        run: |
+          dotnet test PaperRoute.Desktop.Tests/PaperRoute.Desktop.Tests.csproj --configuration Release --filter "FullyQualifiedName~WriteLargeLibraryForMeasurement"
+          if [ ! -d TestResults/v11-trial/large-500/data ]; then
+            echo "::error title=Board trial on Linux::The manual test wrote no library in TestResults/v11-trial/large-500. Was it renamed?"
+            exit 1
+          fi
+
+      - name: Show the trial's window
+        shell: pwsh
+        env:
+          TZ: Etc/UTC
+          LANG: en_US.UTF-8
+        run: |
+          ./.github/scripts/Show-TrialWindowOnLinux.ps1 `
+              -Program "$env:RUNNER_TEMP/board-trial/PaperRoute.Desktop" `
+              -Out "$env:GITHUB_WORKSPACE/TestResults/linux-window" `
+              -Library "$env:GITHUB_WORKSPACE/TestResults/v11-trial/large-500" `
+              -RequireWindow
+
+      - name: Upload the pictures and results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: PaperRoute-trial-linux-window
+          path: TestResults/linux-window/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # The core and its own tests on Linux (core stage 2). Strict since the
+  # stage's step 13: a windows-only row in the core's inventory, or a core
+  # test that does not pass here, fails the job. The solution cannot build
+  # here (it holds the net10.0-windows app), so the job builds the core
+  # test project, which builds the core through its reference.
+  core-linux:
+    name: Core on Linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # 'false' since core stage 2's step 13: a core test that does not pass on Linux
+      # is listed in the step summary and fails the job. 'true' would turn those
+      # failures into a warning again; the job would still fail if the tests could
+      # not be run or produced no results.
+      CORE_LINUX_REPORT_ONLY: 'false'
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      # The same inventory as the Windows job's, as Markdown in the log. With
+      # -FailOnWindowsOnly the script ends with exit code 1 on any windows-only
+      # row, and as the step's only command that code ends the step: the job
+      # fails, and the steps below do not run.
       - name: Inventory (no Windows-only API in the core)
         shell: pwsh
-        continue-on-error: true
-        run: ./.github/scripts/Get-WindowsOnlyApiInventory.ps1 -Root . -AsMarkdown
+        run: ./.github/scripts/Get-WindowsOnlyApiInventory.ps1 -Root . -AsMarkdown -FailOnWindowsOnly
 
       - name: Restore the core tests
         run: dotnet restore PaperRoute.Core.Tests/PaperRoute.Core.Tests.vbproj

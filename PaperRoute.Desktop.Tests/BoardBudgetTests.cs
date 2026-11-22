@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Media.Imaging;
@@ -29,7 +30,10 @@ namespace PaperRoute.Desktop.Tests;
 // A row of the 500 library fails the test when it is over its budget, unless
 // it is informational or waits for rows of N (BoardMeasurement.WaitingForRowsOfN):
 // those are measured and reported. Every row goes to the test log, and the
-// run's JSON to budget-headless.json beside the pictures.
+// run's JSON to budget-headless.json beside the pictures. The busy-PC
+// figures (busy-PC design) are report-only: how busy the PC was is read
+// around the 500 library's run, and a failure's message says what the
+// interface thread did and how busy the PC was, measured in that run.
 //
 // Then both sides of SyncInto's reset threshold (64): a change of 64 cards
 // against one of 65, reported only. And the manual writer of the 500 library
@@ -104,9 +108,14 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         using DiskLibrarySession example = Unloaded("example", today, root => LargeLibraryFixture.WriteExample(root));
         using DiskLibrarySession large = Unloaded("five-hundred", today, root => LargeLibraryFixture.Create(root, 500));
 
+        // How busy the PC was is read around the 500 library's measurement
+        // only, from this test thread, never the interface thread.
         var rows = new List<MeasuredRow>();
-        rows.AddRange(Headless.Run(() => MeasureLibrary("example", example, requireChanges: false), s_runLimit));
-        rows.AddRange(Headless.Run(() => MeasureLibrary("500", large, requireChanges: true), s_runLimit));
+        rows.AddRange(Headless.Run(() => MeasureLibrary("example", example, requireChanges: false), s_runLimit).Rows);
+        RunConditions around = RunConditions.Begin();
+        (IReadOnlyList<MeasuredRow> largeRows, ThreadClock clock) = Headless.Run(() => MeasureLibrary("500", large, requireChanges: true), s_runLimit);
+        MeasurementConditions conditions = around.End(clock, largeRows);
+        rows.AddRange(largeRows);
 
         Assert.HasCount(500, large.Manuscripts);
         CollectionAssert.AreEqual(
@@ -115,8 +124,9 @@ public sealed class BoardBudgetTests : StorageCheckedTests
                 .Select(location => large.Manuscripts.Count(manuscript => manuscript.Location == location)).ToArray(),
             "The 500 library's shelves.");
 
-        BoardMeasurementReport report = Report(rows, today, "the computer's date", "500");
+        BoardMeasurementReport report = Report(rows, today, "the computer's date", "500", conditions);
         Save(report, "budget-headless");
+        CheckNewFieldsInJson(report);
 
         List<string> missing = BudgetRows.Where(id => rows.Count(row => row.Library == "500" && row.Id == id) != 1).ToList();
         Assert.IsEmpty(missing, "Rows of d1 6.3 not timed exactly once on the 500 library: " + string.Join(", ", missing));
@@ -125,9 +135,38 @@ public sealed class BoardBudgetTests : StorageCheckedTests
             Assert.Contains(id, BudgetRows, $"WaitingForRowsOfN names {id}, which is not a row of d1 6.3.");
         }
 
+        List<string> outOfBounds = CheckThreadClockBounds(rows.Where(row => row.Library == "500"));
+        Assert.IsEmpty(outOfBounds, "Thread-clock figures past their bounds:" + Environment.NewLine + string.Join(Environment.NewLine, outOfBounds));
+        CheckWaitsAndScroll(rows);
+
+        // Today's rule, unchanged; the message adds what was measured in this
+        // run (busy-PC design, section 8).
         IReadOnlyList<MeasuredRow> failures = report.Failures();
-        Assert.IsEmpty(failures, string.Join(Environment.NewLine, failures.Select(row =>
-            $"{row.Library}: {row.Action} took {row.UiMs:0} ms against {row.BudgetMs * report.Multiplier:0} ms")));
+        Assert.IsEmpty(failures, report.FailureMessage());
+    }
+
+    // The JSON holds every busy-PC figure on every row, as a number or as
+    // null, and the run's conditions; which are present depends on the
+    // system, so presence is logged, not held. Nothing new names the PC.
+    private void CheckNewFieldsInJson(BoardMeasurementReport report)
+    {
+        using JsonDocument document = JsonDocument.Parse(report.ToJson());
+        string[] names = ["runMs", "notRunMs", "runUiMs", "perfCoreShare", "gcPauseMs", "jitMs"];
+        foreach (JsonElement row in document.RootElement.GetProperty("rows").EnumerateArray())
+        {
+            foreach (string name in names)
+            {
+                Assert.IsTrue(row.TryGetProperty(name, out JsonElement value) && value.ValueKind is JsonValueKind.Number or JsonValueKind.Null,
+                    $"Row {row.GetProperty("id").GetString()} has {name}, a number or null.");
+            }
+        }
+
+        JsonElement conditions = document.RootElement.GetProperty("conditions");
+        Assert.AreEqual(JsonValueKind.Object, conditions.ValueKind, "The run has its conditions.");
+        string[] present = conditions.EnumerateObject().Where(item => item.Value.ValueKind != JsonValueKind.Null).Select(item => item.Name).ToArray();
+        string[] absent = conditions.EnumerateObject().Where(item => item.Value.ValueKind == JsonValueKind.Null).Select(item => item.Name).ToArray();
+        TestContext.WriteLine($"Conditions present: {string.Join(", ", present)}; absent: {(absent.Length == 0 ? "none" : string.Join(", ", absent))}.");
+        Assert.IsFalse(conditions.TryGetProperty("machineName", out _), "The conditions name no PC.");
     }
 
     // Both sides of SyncInto's reset threshold (d1 3.2 item 8, d1 9): on the
@@ -178,6 +217,7 @@ public sealed class BoardBudgetTests : StorageCheckedTests
                 board.ResetThreshold = threshold + 1;
                 Change(measurement, window, board, threshold + 1, threshold + 1, comparison: true);
                 board.ResetThreshold = threshold;
+                measurement.Finish();
             }
             finally
             {
@@ -230,7 +270,7 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         }
     }
 
-    internal static BoardMeasurementReport Report(IReadOnlyList<MeasuredRow> rows, DateTime day, string daySource, string heldLibrary) => new()
+    internal static BoardMeasurementReport Report(IReadOnlyList<MeasuredRow> rows, DateTime day, string daySource, string heldLibrary, MeasurementConditions? conditions = null) => new()
     {
         Mode = "headless",
         MachineName = Environment.MachineName,
@@ -245,22 +285,111 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         WaitingForRowsOfN = BoardMeasurement.WaitingForRowsOfN,
         HeldLibrary = heldLibrary,
         Rows = rows,
+        Conditions = conditions,
     };
 
-    private static IReadOnlyList<MeasuredRow> MeasureLibrary(string library, ILibrarySession session, bool requireChanges)
+    // The library's rows, and the interface thread's clock they were timed
+    // with, closed after the last row.
+    private static (IReadOnlyList<MeasuredRow> Rows, ThreadClock Clock) MeasureLibrary(string library, ILibrarySession session, bool requireChanges)
     {
         var measurement = new BoardMeasurement(Frame);
         (MainWindow window, ShellViewModel shell) = measurement.Start(library, session, ThemeVariant.Light, 1280, 800);
         try
         {
             measurement.MeasureBoard(library, window, shell, session, requireChanges);
+            measurement.Finish();
         }
         finally
         {
             window.Close();
         }
 
-        return measurement.Rows.ToList();
+        return (measurement.Rows.ToList(), measurement.Clock);
+    }
+
+    // Which headless rows wait by design (busy-PC design, section 2): warm
+    // startup and every paint row, and no other (the scroll row waits only in
+    // a real window). The scroll row's figures come from its longest-UI step:
+    // with no step (the example's shelf may not scroll) every figure is null,
+    // never 0; with steps, RunMs + NotRunMs is the Wall its note gives for
+    // that step (rounded there to a whole ms).
+    private void CheckWaitsAndScroll(IReadOnlyList<MeasuredRow> rows)
+    {
+        foreach (MeasuredRow row in rows)
+        {
+            bool waits = row.Id == BoardMeasurement.WarmStartup || row.Id.EndsWith("-paint", StringComparison.Ordinal);
+            Assert.AreEqual(waits, row.Waits, $"{row.Library} {row.Id}: waits by design is {waits}.");
+        }
+
+        foreach (MeasuredRow scroll in rows.Where(row => row.Id == BoardMeasurement.ScrollPublished))
+        {
+            if (scroll.Note.StartsWith("0 steps", StringComparison.Ordinal))
+            {
+                TestContext.WriteLine($"{scroll.Library} scroll: no step, so no busy-PC figure.");
+                Assert.IsTrue(scroll.RunMs is null && scroll.NotRunMs is null && scroll.RunUiMs is null && scroll.PerfCoreShare is null && scroll.GcPauseMs is null && scroll.JitMs is null,
+                    $"{scroll.Library}: a scroll row with no step has every busy-PC figure null, never 0.");
+                continue;
+            }
+
+            if (scroll.RunMs is not { } ran || scroll.NotRunMs is not { } notRun)
+            {
+                continue;
+            }
+
+            const string marker = "the longest-UI step's Wall ";
+            int at = scroll.Note.IndexOf(marker, StringComparison.Ordinal);
+            Assert.IsGreaterThanOrEqualTo(0, at, $"{scroll.Library}: the scroll row's note gives its longest-UI step's Wall: {scroll.Note}");
+            string text = scroll.Note[(at + marker.Length)..].Split(' ')[0];
+            double stepWall = double.Parse(text, CultureInfo.InvariantCulture);
+            TestContext.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{scroll.Library} scroll: runMs + notRunMs {ran + notRun:0.0} against the step's Wall {stepWall:0} ms in the note (row wallMs {scroll.WallMs:0.0})."));
+            Assert.AreEqual(stepWall, ran + notRun, 0.51, $"{scroll.Library}: the scroll row's figures come from the step its note names.");
+        }
+    }
+
+    // The thread clock's figures against Wall and UI (busy-PC design, section
+    // 4): a gap's running time is at most the gap, so runMs <= wallMs and
+    // runUiMs <= uiMs hold up to the clock's error, checked with the rate
+    // check's 2% and 1 ms. Load only takes time away from the thread, so a
+    // busy PC cannot push a figure past them. runMs is held to the Wall it was
+    // taken against (OwnWallMs: for the scroll row its longest-UI step's
+    // Wall, not the row's longest Wall). Each comparison goes to the log; a
+    // row without the figures is skipped, never failed. That the clock is
+    // read inside the stopwatch is held by reading BoardMeasurement.TimeStep,
+    // not by a test.
+    private List<string> CheckThreadClockBounds(IEnumerable<MeasuredRow> rows)
+    {
+        var outOfBounds = new List<string>();
+        foreach (MeasuredRow row in rows)
+        {
+            if (row.RunMs is { } ran)
+            {
+                Compare(row.Id, "runMs", ran, row.Id == BoardMeasurement.ScrollPublished ? "its step's Wall" : "wallMs", row.OwnWallMs, outOfBounds);
+            }
+
+            if (row.RunUiMs is { } runUi)
+            {
+                Compare(row.Id, "runUiMs", runUi, "uiMs", row.UiMs, outOfBounds);
+            }
+
+            if (row.RunMs is null && row.RunUiMs is null)
+            {
+                TestContext.WriteLine($"{row.Id}: no thread-clock figures.");
+            }
+        }
+
+        return outOfBounds;
+    }
+
+    private void Compare(string id, string name, double value, string againstName, double against, List<string> outOfBounds)
+    {
+        double bound = (1.02 * against) + 1;
+        string line = string.Create(CultureInfo.InvariantCulture, $"{id}: {name} {value:0.0} <= 1.02 x {againstName} {against:0.0} + 1 = {bound:0.0}");
+        bool within = value <= bound;
+        TestContext.WriteLine(line + (within ? " (holds)" : " (does not hold)"));
+        if (!within)
+        {
+            outOfBounds.Add(line);
+        }
     }
 
     // A search that hides size of the Pipeline's cards, then the search

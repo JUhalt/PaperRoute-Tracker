@@ -61,11 +61,12 @@ Public Class StorageLocationsTests
         '
         ' The repository's default constructor also makes the default
         ' managed-library service, which refuses to start when the system
-        ' reports no Documents folder. Windows always reports one. Linux and
-        ' macOS report none when the folder does not exist, as on a CI
-        ' runner. What PaperRoute should do there is not decided, so the
-        ' rule is recorded here as it stands, not worked around.
-        If String.IsNullOrWhiteSpace(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)) Then
+        ' names no Documents folder. Since #395 Linux and macOS name
+        ' ~/Documents whether or not it exists yet (it is made on first
+        ' use), so there, as on a CI runner, the repository is made. Only
+        ' Windows, with a redirected Documents folder missing right now,
+        ' still refuses (DocumentsFolderTests holds both rules).
+        If String.IsNullOrWhiteSpace(StorageEnvironment.UserFolder(Environment.SpecialFolder.MyDocuments)) Then
 
             Dim refused As InvalidOperationException =
                 Assert.ThrowsExactly(Of InvalidOperationException)(

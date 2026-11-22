@@ -58,6 +58,11 @@ Friend Module Program
     <STAThread>
     Public Function Main(args As String()) As Integer
 
+        ' As the app's Main (core stage 2): the Windows parts the core asks
+        ' for, stored keys through DPAPI. The tests' assembly set-up does the
+        ' same, but it runs only under MSTest, never here.
+        WindowsPlatform.Register()
+
         ' Before any window, the mode the app pins (ApplicationEvents.vb),
         ' so each window opens at the DPI the installed build opens it at.
         Application.SetHighDpiMode(HighDpiMode.SystemAware)
