@@ -87,6 +87,10 @@ function New-Sitting([string] $name, [int] $planned, [object[]] $pairs) {
             $conditions = if ($p.ContainsKey("${key}Cond")) { $p["${key}Cond"] } else { New-Conditions }
             if ($conditions -eq 'none') { $conditions = $null }
             $file = 'pair{0:00}-{1}.json' -f $pair, $side
+            if ($p.ContainsKey('SkipSecond') -and $side -eq $sides[1]) {
+                $runs.Add([ordered]@{ pair = $pair; order = $order; name = $side; file = $file; exit = $null; seconds = 0; loadOutlasted = $false; skipped = $true })
+                continue
+            }
             New-RunJson $ui $runUi $watchUi 90 $conditions | Set-Content -LiteralPath (Join-Path $folder $file) -Encoding utf8NoBOM
             $runs.Add([ordered]@{ pair = $pair; order = $order; name = $side; file = $file; exit = 1; seconds = 30; loadOutlasted = $false })
         }
@@ -147,6 +151,15 @@ $pairs[3]['ACond'] = New-Conditions -disturbed $true -others 11.2
 $r = Invoke-Check 'a disturbed pair, replaced' @(New-Sitting 'disturbed-replaced' 10 $pairs)
 Assert-That ($r.Verdict -eq 'not shown' -and $r.Lower -eq 8 -and $r.Pairs -eq 10 -and $r.Replaced -eq 1) "not shown, 8 of 10 kept, 1 replaced (got $($r.Verdict), $($r.Lower) of $($r.Pairs), $($r.Replaced) replaced)"
 Assert-That (@($r.Lines | Where-Object { $_ -like '*dropped: pair 4 after: disturbed*' }).Count -eq 1) 'the dropped run is listed with its reason'
+
+# 4b. The same, as the script runs it: pair 4's first run (after) is
+# disturbed, so its second run (before) is not spent.
+$pairs = New-Pairs 11 -higher 7, 9
+$pairs[3]['ACond'] = New-Conditions -disturbed $true -others 11.2
+$pairs[3]['SkipSecond'] = $true
+$r = Invoke-Check 'a disturbed first run, its second not run' @(New-Sitting 'disturbed-skipped' 10 $pairs)
+Assert-That ($r.Verdict -eq 'not shown' -and $r.Lower -eq 8 -and $r.Pairs -eq 10 -and $r.Replaced -eq 1) "not shown, 8 of 10 kept, 1 replaced (got $($r.Verdict), $($r.Lower) of $($r.Pairs), $($r.Replaced) replaced)"
+Assert-That (@($r.Lines | Where-Object { $_ -like '*dropped: pair 4 before: not run*' }).Count -eq 1) 'the run not spent is listed'
 
 # 5. Ties count against: 8 lower, 1 tied, 1 higher is 8 of 10, not shown.
 # Had the tie counted for, 9 of 10 would have passed.

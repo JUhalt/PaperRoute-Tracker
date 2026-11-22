@@ -176,6 +176,7 @@ function Get-RowIds($rows) {
 # run, or a disturbed PC. Null when the run is usable. A disturbed of null
 # (load unknown) counts as not disturbed.
 function Get-DropReason($run, [string] $mode) {
+    if ($run.Skipped) { return 'not run: its pair was already to be replaced' }
     if (-not $run.Written) { return 'wrote no JSON' }
     if ($null -eq $run.Json) { return 'JSON unreadable' }
     if ($mode -eq 'window' -and $run.Exit -ne 0) { return "ended in error (exit $($run.Exit))" }
@@ -215,7 +216,7 @@ function Read-Run($entry, [string] $folder, [string] $mode) {
     }
     $run = [pscustomobject]@{
         Pair = [int] $entry.pair; Order = [int] $entry.order; Name = [string] $entry.name
-        Exit = Get-Field $entry 'exit'; LoadOutlasted = [bool] (Get-Field $entry 'loadOutlasted')
+        Exit = Get-Field $entry 'exit'; LoadOutlasted = [bool] (Get-Field $entry 'loadOutlasted'); Skipped = [bool] (Get-Field $entry 'skipped')
         Written = $written; Json = $json; Rows = $rows; Drop = $null
     }
     $run.Drop = Get-DropReason $run $mode
@@ -256,15 +257,15 @@ function Read-Sitting([string] $folder) {
 # sitting, report-only: 5 runs that are not disturbed, from at most 10 tries.
 function Get-ProposedLines($sitting, [string] $name, [string] $primary) {
     $lines = [Collections.Generic.List[string]]::new()
-    $tries = @($sitting.Runs | Where-Object Name -eq $name | Select-Object -First 10)
+    $tries = @($sitting.Runs | Where-Object { $_.Name -eq $name -and -not $_.Skipped } | Select-Object -First 10)
     $usable = @($tries | Where-Object { $null -eq $_.Drop } | Select-Object -First 5)
     $unknown = @($usable | Where-Object { $null -eq (Get-Field (Get-Field $_.Json 'conditions') 'disturbed') }).Count
     if ($usable.Count -lt 5) {
-        $lines.Add("  ${name}: too busy to judge: $($usable.Count) usable runs that are not disturbed in $($tries.Count) tries; 5 are needed.")
-        foreach ($run in $tries) { $lines.Add("    pair $($run.Pair): $(Get-LoadText $run)$(if ($null -ne $run.Drop) { "; $($run.Drop)" })") }
+        $lines.Add("  ${name}: too busy to judge: $($usable.Count) usable runs not disturbed, of $($tries.Count) tried; 5 are needed.")
+        foreach ($run in $tries) { $lines.Add("    pair $($run.Pair): $(if ($null -ne $run.Json) { Get-LoadText $run } else { 'no figures' })$(if ($null -ne $run.Drop -and $run.Drop -ne 'disturbed') { "; $($run.Drop)" })") }
         return $lines
     }
-    $lines.Add("  ${name}: the first 5 runs not disturbed, of $($tries.Count) tries ($unknown with load unknown). Median UI against the budget:")
+    $lines.Add("  ${name}: the first 5 runs not disturbed, of $($tries.Count) tried ($unknown with load unknown). Median UI against the budget:")
     $first = $usable[0]
     $multiplier = [double] (Get-Field $first.Json 'budgetMultiplier')
     if ($multiplier -le 0) { $multiplier = 1 }
@@ -532,6 +533,13 @@ if ($PSCmdlet.ParameterSetName -eq 'Run') {
         foreach ($side in $sides) {
             $order++
             $file = Join-Path $Out ('pair{0:00}-{1}.json' -f $pair, $side[0])
+            if (-not $usable) {
+                # The pair is replaced whatever its second run gives, so that run is not spent.
+                $record.runs += [pscustomobject] [ordered]@{ pair = $pair; order = $order; name = $side[0]; file = [IO.Path]::GetFileName($file); exit = $null; seconds = 0; loadOutlasted = $false; skipped = $true }
+                Save-Record $Out $record
+                Write-Host "pair $pair $($side[0]): not run, the pair is already to be replaced"
+                continue
+            }
             $watch = [Diagnostics.Stopwatch]::StartNew()
             $ran = Invoke-Run $side[1] $file ($Load -ne 'None' -and $side[0] -eq $AfterName) $Out
             $watch.Stop()
