@@ -1,8 +1,8 @@
 using System.Diagnostics;
-using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Microsoft.Win32;
+using PaperRoute.ViewModels.Measurement;
 
 namespace PaperRoute.Desktop.Measurement;
 
@@ -273,14 +273,4 @@ public sealed class ThreadClock
         public nint Seconds;
         public nint Nanoseconds;
     }
-}
-
-// One rate check (Windows): the closest spin's cycles per ms as a share of
-// nominal (null when no spin could be read), the spins it took, and whether
-// a spin came within ThreadClock.RateTolerance.
-public sealed record RateCheck(double? Share, int Spins, bool Passed)
-{
-    public override string ToString() => Share is { } share
-        ? string.Create(CultureInfo.InvariantCulture, $"{share:0.0000} of nominal after {Spins} spins ({(Passed ? "passed" : "failed")})")
-        : string.Create(CultureInfo.InvariantCulture, $"no spin read after {Spins} spins (failed)");
 }

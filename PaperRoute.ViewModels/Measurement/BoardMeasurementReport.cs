@@ -10,6 +10,17 @@ namespace PaperRoute.ViewModels.Measurement;
 // ticks of a 1 ms probe on the interface thread, never more than Wall), and
 // the budget it is held to. An informational row has a budget for scale only
 // and is never held to it; a note says what the row cannot show by itself.
+//
+// The busy-PC figures (busy-PC design, section 2) are report-only: no verdict
+// reads them. Each is null when it could not be read, never 0. RunMs is how
+// long the interface thread ran on a processor during the action (its thread
+// clock), NotRunMs is WallMs - RunMs as computed (a small negative value shows
+// the clock's error), RunUiMs the largest running time inside one gap of the
+// UI probe, PerfCoreShare the share of the probe's ticks on the PC's faster
+// kind of core, GcPauseMs and JitMs the process's garbage-collection pauses
+// and the thread's compilation time during the action. Waits marks a row that
+// waits by design (a frame, a load off the thread), so its time not running
+// is not all load.
 public sealed record MeasuredRow(
     string Library,
     string Id,
@@ -19,9 +30,64 @@ public sealed record MeasuredRow(
     double BudgetMs,
     string BudgetName,
     bool Informational = false,
-    string Note = "")
+    string Note = "",
+    double? RunMs = null,
+    double? NotRunMs = null,
+    double? RunUiMs = null,
+    double? PerfCoreShare = null,
+    double? GcPauseMs = null,
+    double? JitMs = null,
+    bool Waits = false)
 {
     public bool Within(double multiplier) => UiMs <= BudgetMs * multiplier;
+}
+
+// One rate check of the Windows thread clock (busy-PC design, section 4): the
+// closest spin's cycles per ms as a share of the nominal rate (null when no
+// spin could be read), the spins it took, and whether a spin came within 2%.
+public sealed record RateCheck(double? Share, int Spins, bool Passed)
+{
+    public override string ToString() => Share is { } share
+        ? string.Create(CultureInfo.InvariantCulture, $"{share:0.0000} of nominal after {Spins} spins ({(Passed ? "passed" : "failed")})")
+        : string.Create(CultureInfo.InvariantCulture, $"no spin read after {Spins} spins (failed)");
+}
+
+// What the PC was doing during one run (busy-PC design, section 2), all
+// report-only. Each figure is null when it could not be read; an absent
+// figure never fails a test or voids a run.
+public sealed record MeasurementConditions
+{
+    // "cycles", "thread-cputime", or "absent: <reason>" from a fixed list.
+    public required string ThreadClock { get; init; }
+
+    // Windows only: the nominal rate the cycles were divided by.
+    public double? CyclesPerMs { get; init; }
+
+    // Windows only: the rate checks before the first row and after the last.
+    public RateCheck? RateCheckBefore { get; init; }
+
+    public RateCheck? RateCheckAfter { get; init; }
+
+    // How many of the PC's processors were busy on average, all programs.
+    public double? MachineBusyProcessors { get; init; }
+
+    // How long each of the two machine-load readings took.
+    public double? LoadReadBeforeMs { get; init; }
+
+    public double? LoadReadAfterMs { get; init; }
+
+    // Linux only: processors' worth of time the host gave to other guests.
+    public double? StealProcessors { get; init; }
+
+    // MachineBusyProcessors less this process's own processor time.
+    public double? OthersBusyProcessors { get; init; }
+
+    // Time not running over Wall, summed over the rows that do not wait.
+    public double? NotRunShare { get; init; }
+
+    // Other programs left fewer than two processors free on average; null
+    // when the load could not be read, which counts as not disturbed.
+    public bool? Disturbed { get; init; }
 }
 
 // The numbers of one measurement run, headless (the budget tests) or in a
@@ -29,7 +95,9 @@ public sealed record MeasuredRow(
 // row the library, the action, Wall, UI, the budget, the verdict and the
 // headless test's rule for it; for the run the machine, the DPI, the option
 // (a: every card of a shown shelf made at once; b: rows of N), the
-// SyncInto threshold, the day the session used and the build.
+// SyncInto threshold, the day the session used and the build. The busy-PC
+// figures, per row and in "conditions" for the run, are report-only: the
+// verdicts, rules and Failures() do not read them.
 public sealed class BoardMeasurementReport
 {
     // What a row's "rule" says in the JSON, as the headless budget test holds it.
@@ -79,6 +147,18 @@ public sealed class BoardMeasurementReport
 
     public IReadOnlyList<MeasuredRow> Rows { get; init; } = [];
 
+    // What the PC was doing during the run; null when it was not recorded
+    // (the JSON then says null).
+    public MeasurementConditions? Conditions { get; init; }
+
+    // The last line of every timing failure: always there, so the message
+    // also reads correctly on a quiet PC (busy-PC design, section 8).
+    public const string QuietPcLine = "Timing tests need a quiet PC. Close other programs and run the test again before reading this as a slower Board.";
+
+    public const string RunUnreadableLine = "  How long the interface thread ran could not be read on this system.";
+
+    public const string LoadUnreadableLine = "How busy the PC was could not be read on this system.";
+
     public string RuleFor(MeasuredRow row)
     {
         ArgumentNullException.ThrowIfNull(row);
@@ -104,6 +184,52 @@ public sealed class BoardMeasurementReport
     // The rows the headless test fails on: enforced and over their budget.
     public IReadOnlyList<MeasuredRow> Failures() =>
         Rows.Where(row => RuleFor(row) == EnforcedRule && !row.Within(Multiplier)).ToList();
+
+    // The headless test's failure message (busy-PC design, section 8): for
+    // each failed row today's line and what its thread did, then how busy the
+    // PC was and the quiet-PC line, once. Empty when nothing failed. It states
+    // what was measured in this run and never names a cause.
+    public string FailureMessage()
+    {
+        IReadOnlyList<MeasuredRow> failures = Failures();
+        if (failures.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var lines = new List<string>();
+        foreach (MeasuredRow row in failures)
+        {
+            lines.Add(string.Create(CultureInfo.InvariantCulture, $"{row.Library}: {row.Action} took {row.UiMs:0} ms against {row.BudgetMs * Multiplier:0} ms."));
+            lines.Add(RunLine(row));
+        }
+
+        lines.Add(Conditions?.OthersBusyProcessors is { } others
+            ? string.Create(CultureInfo.InvariantCulture, $"During this run other programs kept {others:0.0} of {Processors} processors busy on average.")
+            : LoadUnreadableLine);
+        lines.Add(QuietPcLine);
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    // The second line of a failure: how long the interface thread ran.
+    private static string RunLine(MeasuredRow row)
+    {
+        if (row.RunMs is not { } ran || row.NotRunMs is not { } notRun)
+        {
+            return RunUnreadableLine;
+        }
+
+        if (row.WallMs > 0 && ran >= 0.9 * row.WallMs)
+        {
+            return string.Create(CultureInfo.InvariantCulture, $"  The interface thread was running for {ran:0} of the {row.WallMs:0} ms. A busy PC can still slow running code.");
+        }
+
+        string line = string.Create(CultureInfo.InvariantCulture,
+            $"  The interface thread ran for {ran:0} ms of it and was not running for {notRun:0} ms ({(row.WallMs > 0 ? notRun / row.WallMs : 0):0%})");
+        return row.GcPauseMs is { } gc && row.JitMs is { } jit
+            ? line + string.Create(CultureInfo.InvariantCulture, $"; garbage collection paused {gc:0} ms, compilation {jit:0} ms.")
+            : line + ".";
+    }
 
     public string ToJson()
     {
@@ -154,14 +280,105 @@ public sealed class BoardMeasurementReport
                     json.WriteString("note", row.Note);
                 }
 
+                // The busy-PC figures, report-only: null when absent, never 0.
+                WriteNumberOrNull(json, "runMs", row.RunMs, 1);
+                WriteNumberOrNull(json, "notRunMs", row.NotRunMs, 1);
+                WriteNumberOrNull(json, "runUiMs", row.RunUiMs, 1);
+                WriteNumberOrNull(json, "perfCoreShare", row.PerfCoreShare, 3);
+                WriteNumberOrNull(json, "gcPauseMs", row.GcPauseMs, 1);
+                WriteNumberOrNull(json, "jitMs", row.JitMs, 1);
+                if (row.Waits)
+                {
+                    json.WriteBoolean("waits", true);
+                }
+
                 json.WriteEndObject();
             }
 
             json.WriteEndArray();
+            WriteConditions(json, Conditions);
             json.WriteEndObject();
         }
 
         return Encoding.UTF8.GetString(buffer.ToArray());
+    }
+
+    private static void WriteConditions(Utf8JsonWriter json, MeasurementConditions? conditions)
+    {
+        if (conditions is null)
+        {
+            json.WriteNull("conditions");
+            return;
+        }
+
+        json.WriteStartObject("conditions");
+        json.WriteString("threadClock", conditions.ThreadClock);
+        WriteNumberOrNull(json, "cyclesPerMs", conditions.CyclesPerMs, 0);
+        if (conditions.RateCheckBefore is null && conditions.RateCheckAfter is null)
+        {
+            json.WriteNull("rateCheck");
+        }
+        else
+        {
+            json.WriteStartArray("rateCheck");
+            foreach (RateCheck? check in new[] { conditions.RateCheckBefore, conditions.RateCheckAfter })
+            {
+                if (check is null)
+                {
+                    json.WriteNullValue();
+                    continue;
+                }
+
+                json.WriteStartObject();
+                WriteNumberOrNull(json, "share", check.Share, 4);
+                json.WriteNumber("spins", check.Spins);
+                json.WriteBoolean("passed", check.Passed);
+                json.WriteEndObject();
+            }
+
+            json.WriteEndArray();
+        }
+
+        WriteNumberOrNull(json, "machineBusyProcessors", conditions.MachineBusyProcessors, 2);
+        json.WriteStartArray("loadReadMs");
+        foreach (double? read in new[] { conditions.LoadReadBeforeMs, conditions.LoadReadAfterMs })
+        {
+            if (read is { } ms)
+            {
+                json.WriteNumberValue(Math.Round(ms, 1));
+            }
+            else
+            {
+                json.WriteNullValue();
+            }
+        }
+
+        json.WriteEndArray();
+        WriteNumberOrNull(json, "stealProcessors", conditions.StealProcessors, 2);
+        WriteNumberOrNull(json, "othersBusyProcessors", conditions.OthersBusyProcessors, 2);
+        WriteNumberOrNull(json, "notRunShare", conditions.NotRunShare, 3);
+        if (conditions.Disturbed is { } disturbed)
+        {
+            json.WriteBoolean("disturbed", disturbed);
+        }
+        else
+        {
+            json.WriteNull("disturbed");
+        }
+
+        json.WriteEndObject();
+    }
+
+    private static void WriteNumberOrNull(Utf8JsonWriter json, string name, double? value, int digits)
+    {
+        if (value is { } number && double.IsFinite(number))
+        {
+            json.WriteNumber(name, Math.Round(number, digits));
+        }
+        else
+        {
+            json.WriteNull(name);
+        }
     }
 
     // Writes the JSON to path, which RefusalFor has accepted.
@@ -178,14 +395,43 @@ public sealed class BoardMeasurementReport
         text.AppendLine(CultureInfo.InvariantCulture,
             $"Board trial budgets ({Mode}, option {Option}, SyncInto threshold {ResetThreshold}). Verdict: UI against the budget x {Multiplier:0.#}. " +
             $"{Build} build, {Processors} processors, DPI {Dpi:0}, day {Day:yyyy-MM-dd} ({DaySource}), {MachineName}.");
-        text.AppendLine("| Library | Id | Action | Wall ms | UI ms | Budget ms | Verdict | Rule |");
-        text.AppendLine("|---|---|---|---:|---:|---:|---|---|");
-        foreach (MeasuredRow row in Rows)
+        if (Conditions is not null)
         {
-            text.AppendLine(CultureInfo.InvariantCulture,
-                $"| {row.Library} | {row.Id} | {row.Action}{(string.IsNullOrEmpty(row.Note) ? string.Empty : " (" + row.Note + ")")} | {row.WallMs:0} | {row.UiMs:0} | {row.BudgetMs:0} ({row.BudgetName}) | {VerdictFor(row)} | {RuleFor(row)} |");
+            text.AppendLine(DescribeConditions(Conditions, Processors));
         }
 
+        text.AppendLine("| Library | Id | Action | Wall ms | UI ms | Run UI ms | Budget ms | Verdict | Rule |");
+        text.AppendLine("|---|---|---|---:|---:|---:|---:|---|---|");
+        foreach (MeasuredRow row in Rows)
+        {
+            string runUi = row.RunUiMs is { } ms ? ms.ToString("0", CultureInfo.InvariantCulture) : "absent";
+            text.AppendLine(CultureInfo.InvariantCulture,
+                $"| {row.Library} | {row.Id} | {row.Action}{(string.IsNullOrEmpty(row.Note) ? string.Empty : " (" + row.Note + ")")} | {row.WallMs:0} | {row.UiMs:0} | {runUi} | {row.BudgetMs:0} ({row.BudgetName}) | {VerdictFor(row)} | {RuleFor(row)} |");
+        }
+
+        return text.ToString();
+    }
+
+    // One line on what the PC was doing, report-only, above the table.
+    public static string DescribeConditions(MeasurementConditions conditions, int processors)
+    {
+        ArgumentNullException.ThrowIfNull(conditions);
+        var text = new StringBuilder();
+        text.Append(CultureInfo.InvariantCulture, $"Report-only: thread clock {conditions.ThreadClock}. ");
+        text.Append(conditions.OthersBusyProcessors is { } others && conditions.MachineBusyProcessors is { } machine
+            ? string.Create(CultureInfo.InvariantCulture, $"Other programs kept {others:0.0} of {processors} processors busy on average ({machine:0.0} with this one). ")
+            : LoadUnreadableLine + " ");
+        if (conditions.NotRunShare is { } share)
+        {
+            text.Append(CultureInfo.InvariantCulture, $"The interface thread was not running for {share:0%} of the Wall of the rows that do not wait. ");
+        }
+
+        text.Append(conditions.Disturbed switch
+        {
+            true => "Disturbed: other programs left fewer than two processors free.",
+            false => "Not disturbed.",
+            null => "Load unknown.",
+        });
         return text.ToString();
     }
 
