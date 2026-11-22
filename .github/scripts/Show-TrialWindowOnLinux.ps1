@@ -131,7 +131,8 @@ try {
     $trial = Start-Trial 'example' @()
     $ids = @()
     while ($watch.Elapsed.TotalSeconds -lt 90 -and -not $trial.HasExited) {
-        $ids = Find-Windows $WindowTitle
+        # @(...) keeps a single id a list: a function that returns one item hands back the item itself.
+        $ids = @(Find-Windows $WindowTitle)
         if ($ids.Count -gt 0) { break }
         Start-Sleep -Milliseconds 500
     }
@@ -139,8 +140,9 @@ try {
     Note 'example window opened' $(if ($windowOpened) { "yes, after $([Math]::Round($watch.Elapsed.TotalSeconds, 1)) s" } elseif ($trial.HasExited) { "no: the trial ended with exit code $($trial.ExitCode)" } else { 'no: no window after 90 s' })
     if ($windowOpened) {
         Start-Sleep -Seconds 5      # the library loads and the first frames are drawn
-        Note 'example window title' ((Invoke-Tool 'xdotool' @('getwindowname', $ids[0])) -join ' ')
-        $geometry = @(Invoke-Tool 'xdotool' @('getwindowgeometry', $ids[0]) | Where-Object { $_ -match 'Geometry' })
+        $titles = @($ids | ForEach-Object { (Invoke-Tool 'xdotool' @('getwindowname', "$_")) -join ' ' } | Where-Object { $_ } | Select-Object -Unique)
+        Note 'example window title' ($titles -join '; ')
+        $geometry = @($ids | ForEach-Object { Invoke-Tool 'xdotool' @('getwindowgeometry', "$_") } | Where-Object { $_ -match 'Geometry' } | Select-Object -First 1)
         if ($geometry.Count -gt 0) { Note 'example window size' ($geometry[0].Trim() -replace '^Geometry:\s*', '') }
         Note 'picture of the example window' $(if (Save-Screen 'example-window.png') { 'example-window.png' } else { 'not taken' })
         Close-Window $WindowTitle
@@ -156,7 +158,7 @@ try {
         $pictured = $false
         $watch.Restart()
         while ($watch.Elapsed.TotalSeconds -lt 240 -and -not $trial.HasExited) {
-            if (-not $pictured -and (Find-Windows $WindowTitle).Count -gt 0) { Start-Sleep -Seconds 2; $pictured = Save-Screen 'measure-window.png' }
+            if (-not $pictured -and @(Find-Windows $WindowTitle).Count -gt 0) { Start-Sleep -Seconds 2; $pictured = Save-Screen 'measure-window.png' }
             Start-Sleep -Milliseconds 500
         }
         $ended = $trial.HasExited

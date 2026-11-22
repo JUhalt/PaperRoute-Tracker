@@ -408,7 +408,8 @@ jobs:
           ./.github/scripts/Show-TrialWindowOnLinux.ps1 `
               -Program "$env:RUNNER_TEMP/board-trial/PaperRoute.Desktop" `
               -Out "$env:GITHUB_WORKSPACE/TestResults/linux-window" `
-              -Library "$env:GITHUB_WORKSPACE/TestResults/v11-trial/large-500"
+              -Library "$env:GITHUB_WORKSPACE/TestResults/v11-trial/large-500" `
+              -RequireWindow
 
       - name: Upload the pictures and results
         if: always()
