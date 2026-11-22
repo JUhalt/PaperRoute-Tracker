@@ -489,6 +489,17 @@ public sealed class PlatformCheckTests : StorageCheckedTests
         Assert.DoesNotContain(JsonEncodedText.Encode(_root).ToString(), json);
     }
 
+    // The second copy has no window (RestartArguments: the self-check), and
+    // the notice must say so: on 2026-11-21 a person running the check by hand
+    // reported "No second window opened" as a problem although the step passed.
+    [TestMethod]
+    public void TheRestartNoticeSaysThatNoSecondWindowOpens()
+    {
+        StringAssert.Contains(PlatformCheck.RestartNotice, "No second window opens");
+        CollectionAssert.AreEqual(new[] { "--self-check" }, PlatformCheck.RestartArguments.ToArray(),
+            "The notice is true only while the second copy runs a mode without a window.");
+    }
+
     [TestMethod]
     public void ARestartThroughTheDotnetHostIsNotTriedAndSaysSo()
     {

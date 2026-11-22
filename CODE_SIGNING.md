@@ -6,13 +6,13 @@ When signing begins, this section will read: "Free code signing provided by [Sig
 
 ## What is signed
 
-- Only files built from this repository's source code by the release workflow: PaperRoute's own program files (`PaperRouteTracker.exe` and `PaperRouteTracker.dll`) and, if SignPath's terms allow it, the Setup program that installs them.
+- Only files built from this repository's source code by the release workflow: PaperRoute's own program files (`PaperRouteTracker.exe` and `PaperRouteTracker.dll`, and from v1.1 also `PaperRoute.Core.dll` and `PaperRoute.Platform.dll`) and, if SignPath's terms allow it, the Setup program that installs them.
 - Third-party libraries and the bundled .NET runtime are shipped as their publishers released them and are never signed with PaperRoute's certificate. Their names, versions and licenses are in [`THIRD-PARTY-NOTICES.txt`](THIRD-PARTY-NOTICES.txt).
 - Every signed file carries the product name "PaperRoute Tracker" and the version of the release it belongs to.
 
 ## How a release is built and signed
 
-- Releases are built only by [`.github/workflows/release.yml`](.github/workflows/release.yml), on GitHub-hosted runners, from a clean checkout of a `v*` tag on `master`, with no files carried over from earlier builds. Before it builds anything, the workflow refuses a tag whose commit is not on `master`, and the maintainer checks the same before making the tag.
+- Releases are built only by [`.github/workflows/release.yml`](.github/workflows/release.yml), on GitHub-hosted runners, from a clean checkout of a `v*` tag on `master`, or of a `v1.0.*` patch tag on `release/v1.0.x`, with no files carried over from earlier builds. Before it builds anything, the workflow refuses a tag whose commit is not on `master`, unless it is a 1.0 tag whose commit is on `release/v1.0.x`; no other branch counts. The maintainer checks the same before making the tag.
 - The workflow uploads the unsigned files as a workflow artifact and submits them to SignPath, which verifies where they came from: the repository, the branch, the commit and the build job.
 - Every signing request is approved by hand by an approver listed below before anything is signed.
 - Signing happens before `SHA256SUMS.txt` is written and before the release is published, so the published checksums are those of the signed files.

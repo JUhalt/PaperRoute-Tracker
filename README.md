@@ -198,7 +198,7 @@ dotnet restore ManuscriptPipeline.slnx
 dotnet build ManuscriptPipeline.slnx --configuration Release
 ```
 
-The internal project/folder name remains `ManuscriptPipeline` for compatibility and to avoid unnecessary namespace churn. The built assembly is `PaperRouteTracker.exe`. The data model and the services that do not draw the interface are in a library beside it, `PaperRoute.Core` (folder `PaperRoute.Core`, built as `PaperRoute.Core.dll`), which the app references; the solution builds both.
+The internal project/folder name remains `ManuscriptPipeline` for compatibility and to avoid unnecessary namespace churn. The built assembly is `PaperRouteTracker.exe`. The data model and the services that do not draw the interface are in a library beside it, `PaperRoute.Core` (folder `PaperRoute.Core`, built as `PaperRoute.Core.dll`), which the app references; the Windows implementations the core asks for, such as the DPAPI key protection, are in a second library, `PaperRoute.Platform` (built as `PaperRoute.Platform.dll`), which the app references and the core does not. The solution builds all of them.
 
 ## Technology
 
@@ -207,7 +207,7 @@ The internal project/folder name remains `ManuscriptPipeline` for compatibility 
 - ClosedXML for Excel workbook support
 - The Anthropic .NET SDK for the optional AI assistant's Claude requests
 - System.Text.Json for local persistence
-- GitHub Actions for Windows CI and release builds
+- GitHub Actions for Windows CI and release builds, and for building and testing the core library on Ubuntu
 - Velopack for Windows installation and automatic updates
 
 ## Independence

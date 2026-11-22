@@ -22,28 +22,22 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Releases are built only from master, as CODE_SIGNING.md says (#44;
-      # the maintainer's decision of November 2, 2026). This runs before
-      # anything is built, for Preview and Stable tags alike. The checkout
-      # holds only the tagged commit, so master is fetched first.
+      # Releases are built only from master, or a 1.0 tag from
+      # release/v1.0.x, as CODE_SIGNING.md says (#44, the maintainer's
+      # decision of November 2, 2026; patch releases from release/v1.0.x,
+      # their decision of November 21). No other branch counts, not even
+      # another release/vA.B.x. This runs before anything is built, for
+      # Preview and Stable tags alike. The script fetches the branches,
+      # since the checkout holds only the tagged commit.
       # GitHub runs this file as it is at the tagged commit, so the check
       # guards only commits that carry it, and a refused tag stays pushed:
       # certification's D1 still checks before tagging. Do not re-run a
-      # refused run. A merge commit can later put the tagged commit on
-      # master, and a re-run would then publish it, not the merge commit.
-      # Tag the merge commit under a new name instead.
-      - name: Reject a tag whose commit is not on master
+      # refused run. A merge commit can later put the tagged commit on an
+      # accepted branch, and a re-run would then publish it, not the merge
+      # commit. Tag the merge commit under a new name instead.
+      - name: Reject a tag whose commit is not on master or its release branch
         shell: pwsh
-        run: |
-          git fetch --no-tags origin '+refs/heads/master:refs/remotes/origin/master'
-          if ($LASTEXITCODE -ne 0) { throw 'Cannot fetch master to check the release tag.' }
-          git merge-base --is-ancestor $env:GITHUB_SHA origin/master
-          $onMaster = $LASTEXITCODE
-          if ($onMaster -eq 1) {
-              throw "Release tag '$env:GITHUB_REF_NAME' is at $env:GITHUB_SHA, which is not on master. A release tag must be on master."
-          }
-          if ($onMaster -ne 0) { throw "Cannot check whether release tag '$env:GITHUB_REF_NAME' is on master." }
-          Write-Host "Release tag $env:GITHUB_REF_NAME is at $env:GITHUB_SHA, which is on master."
+        run: ./.github/scripts/Assert-ReleaseTagBranch.ps1 -Tag $env:GITHUB_REF_NAME -Commit $env:GITHUB_SHA
 
       # global.json pins the SDK, and so the runtime a self-contained
       # publish bundles; it moves only with THIRD-PARTY-NOTICES.txt (#269).
@@ -133,6 +127,23 @@ jobs:
           if ($existing.Count -gt 0) {
               throw 'A matching release already exists. Published releases are never overwritten; inspect any failed draft before a new attempt.'
           }
+
+      # A patch on an older line, such as v1.0.3 after v1.1.0, is not the
+      # newest release on its channel: its delta must not start from the
+      # newer line's package, and it must not become Latest.
+      - name: Find a newer release on this channel
+        id: newer
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $newer = @(./.github/scripts/Get-NewerRelease.ps1 -Version '${{ steps.meta.outputs.version }}' -Repository $env:GITHUB_REPOSITORY)
+          if ($newer.Count -gt 0) {
+              Write-Host "Newer releases on this channel: $($newer -join ', '). No delta, and not Latest."
+          } else {
+              Write-Host 'No newer release on this channel.'
+          }
+          "newest=$(($newer.Count -eq 0).ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
 
       - name: Restore dependencies
         run: dotnet restore ManuscriptPipeline.slnx
@@ -280,6 +291,13 @@ jobs:
               $coreAssemblyVersion -cne $numeric -or $coreInfo.FileVersion -cne $numeric) {
               throw "PaperRoute.Core.dll must report '$expected' and Assembly/FileVersion '$numeric'."
           }
+          # The Windows implementations the core asks for (stored keys) are in
+          # PaperRoute.Platform.dll from v1.1. Nothing reads its version, so
+          # it is checked for presence only.
+          $publishedPlatform = Join-Path "$env:GITHUB_WORKSPACE/publish/win-x64" 'PaperRoute.Platform.dll'
+          if (-not (Test-Path -LiteralPath $publishedPlatform -PathType Leaf)) {
+              throw "Published PaperRoute.Platform.dll was not found at '$publishedPlatform'."
+          }
           foreach ($relativePath in @('docs/USER_GUIDE.md', 'LICENSE.txt', 'NOTICE.md', 'THIRD-PARTY-NOTICES.txt')) {
               $source = Join-Path $env:GITHUB_WORKSPACE $relativePath
               $payload = Join-Path "$env:GITHUB_WORKSPACE/publish/win-x64" $relativePath
@@ -294,7 +312,7 @@ jobs:
           Write-Host "Binary/package version verification passed."
 
       - name: Download previous Preview Velopack release
-        if: steps.meta.outputs.is_prerelease == 'true'
+        if: steps.meta.outputs.is_prerelease == 'true' && steps.newer.outputs.newest == 'true'
         continue-on-error: true
         shell: pwsh
         run: >
@@ -306,7 +324,7 @@ jobs:
           --outputDir "${{ github.workspace }}/Releases"
 
       - name: Download previous Stable Velopack release
-        if: steps.meta.outputs.is_prerelease != 'true'
+        if: steps.meta.outputs.is_prerelease != 'true' && steps.newer.outputs.newest == 'true'
         continue-on-error: true
         shell: pwsh
         run: >
@@ -421,7 +439,8 @@ jobs:
               -Repository $env:GITHUB_REPOSITORY -Version '${{ steps.meta.outputs.version }}' `
               -Channel '${{ steps.meta.outputs.channel }}' -ExpectedReleaseId '${{ steps.assets.outputs.release_id }}'
           if (-not $?) { throw 'Final release verification failed.' }
-          $latest = if ('${{ steps.meta.outputs.is_prerelease }}' -eq 'true') { 'false' } else { 'true' }
+          $latest = if ('${{ steps.meta.outputs.is_prerelease }}' -eq 'true' -or
+              '${{ steps.newer.outputs.newest }}' -ne 'true') { 'false' } else { 'true' }
           $releaseId = [long] '${{ steps.assets.outputs.release_id }}'
           $json = gh api --method PATCH "repos/$env:GITHUB_REPOSITORY/releases/$releaseId" `
               -F draft=false -f "make_latest=$latest"

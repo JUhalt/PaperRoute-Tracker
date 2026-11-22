@@ -59,6 +59,12 @@ Public Class ResponsivenessBudgetTests
     ' page left included (#268).
     Friend Shared ReadOnly PageSwitchWithFade As New Budget("page switch + fade", PageSwitch.Milliseconds + UiMotion.DefaultFadeMilliseconds)
 
+    ' The last line of every timing failure, the same as the Board trial's
+    ' (docs/design/Board-Trial-Measurement-Method.md, section 8). These tests read no thread clock and no
+    ' machine load, so the line is all they add: always there, it also reads
+    ' correctly on a quiet PC.
+    Friend Const QuietPcLine As String = "Timing tests need a quiet PC. Close other programs and run the test again before reading this as a slower Board."
+
     Private _root As String = String.Empty
     Private ReadOnly _paintObserved As New Dictionary(Of String, Boolean)()
 
@@ -115,7 +121,7 @@ Public Class ResponsivenessBudgetTests
                  Select(Function(row) row.Library & ": " & row.Action & " took " & Ms(row.Ui) & " ms against " & Ms(row.Budget.Milliseconds * multiplier) & " ms").
                  ToList()
 
-        Assert.AreEqual(0, failures.Count, String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(0, failures.Count, String.Join(Environment.NewLine, failures) & Environment.NewLine & QuietPcLine)
 
     End Sub
 
@@ -640,7 +646,7 @@ Public Class ResponsivenessBudgetTests
         TestContext.WriteLine(summary)
         Console.WriteLine(summary)
 
-        Assert.AreEqual(0, failures.Count, String.Join(Environment.NewLine, failures))
+        Assert.AreEqual(0, failures.Count, String.Join(Environment.NewLine, failures) & Environment.NewLine & QuietPcLine)
 
     End Sub
 

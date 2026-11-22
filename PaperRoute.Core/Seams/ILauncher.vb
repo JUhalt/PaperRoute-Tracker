@@ -11,7 +11,7 @@ Public Interface ILauncher
     Sub OpenLink(address As String)
 
     ' Opens a document with its usual program. The caller has asked first
-    ' when the file is a program or script.
+    ' when the file is a program or script (ProgramFileRule).
     Sub OpenFile(filePath As String)
 
 End Interface

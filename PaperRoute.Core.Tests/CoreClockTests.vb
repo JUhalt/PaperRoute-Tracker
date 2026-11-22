@@ -1,10 +1,12 @@
 Imports System
 Imports System.Collections.Generic
+Imports System.Globalization
 Imports System.IO
 Imports System.Linq
 Imports System.Reflection
 Imports System.Reflection.Emit
 Imports System.Runtime.CompilerServices
+Imports System.Text.Json
 Imports Microsoft.VisualStudio.TestTools.UnitTesting
 Imports ManuscriptPipeline
 Imports ManuscriptPipeline.Models
@@ -136,6 +138,52 @@ Public Class CoreClockTests
 
         Assert.AreEqual(instant.UtcDateTime.ToLocalTime(), manuscript.StageEnteredDate)
         Assert.AreEqual(DateTimeKind.Local, manuscript.StageEnteredDate.Kind)
+
+    End Sub
+
+
+    ' A writer with plain options keeps the machine's offset (design R8):
+    ' the settings file stores the reminder date, a Local value, with the
+    ' offset this machine's zone gives it, as 1.0 did; only the library file
+    ' drops offsets (CalendarDateJson). The settings writer keeps the date
+    ' part (AppSettingsService.Normalize), so the stored value is that
+    ' midnight, and its offset is the "zzz" of that value, which is
+    ' DateTime.Now's "zzz" on every day but one on which the clocks change.
+    ' It holds in any zone: under UTC the offset is "+00:00", never "Z".
+    <TestMethod>
+    Public Sub TheSettingsWriterStoresALocalTimeWithTheMachinesOffset()
+
+        Dim root As String = CreateTemporaryRoot()
+
+        Try
+
+            Dim written As DateTime = CoreClock.Now
+            Assert.AreEqual(DateTimeKind.Local, written.Kind)
+
+            Dim service As New AppSettingsService(root)
+            service.Save(New AppSettings With {.LastReminderNotificationDate = written})
+
+            Dim stored As String
+            Using document As JsonDocument = JsonDocument.Parse(IO.File.ReadAllText(Path.Combine(root, "settings.json")))
+                stored = document.RootElement.GetProperty("LastReminderNotificationDate").GetString()
+            End Using
+
+            Dim kept As DateTime = written.Date
+            Dim offset As String = kept.ToString("zzz", CultureInfo.InvariantCulture)
+            Assert.AreEqual(kept.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture) & offset, stored)
+
+            Dim current As DateTime = DateTime.Now
+            If TimeZoneInfo.Local.GetUtcOffset(current) = TimeZoneInfo.Local.GetUtcOffset(kept) Then
+                StringAssert.EndsWith(stored, current.ToString("zzz", CultureInfo.InvariantCulture))
+            End If
+
+            Assert.AreEqual(kept, service.Load().LastReminderNotificationDate)
+
+        Finally
+
+            DeleteTemporaryRoot(root)
+
+        End Try
 
     End Sub
 

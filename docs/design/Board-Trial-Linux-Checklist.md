@@ -12,6 +12,11 @@ Some commands were not tried by the person who wrote this checklist. They are ma
 **not tried here**, with the reason. If such a command does not work, write down what
 happened and go on.
 
+**The checklist was followed once, on November 21, 2026**, on an Ubuntu 26.10 desktop (not
+24.04). Its results are at the end, under "Results of November 21, 2026". The marks below
+stay as they were written. Where that run showed something the next person should know, the
+step says so under "When it was tried".
+
 ## What this checklist answers
 
 - Whether the trial, published for Linux, starts from a folder on Ubuntu 24.04.
@@ -105,6 +110,11 @@ How to read the lines: `libfuse2` is installed if a line starts with `ii` and na
 FUSE 3, a different library. If `libfuse2` is installed, **do not remove it**. Write that
 down, go on, and treat the result of F4 as "with libfuse2".
 
+When it was tried (Ubuntu 26.10): the command printed five lines, for `fuse3`, `gvfs-fuse`,
+`libfuse3-4`, `libntfs-3g90` and `ntfs-3g`, and none for `libfuse2`. The FUSE 3 library's
+name ends in a number that differs between Ubuntu versions (`libfuse3-3`, `libfuse3-4`). No
+name that starts with `libfuse3` counts.
+
 Note: every line the command printed, or "nothing printed", and whether `libfuse2` is
 installed by the rule above.
 
@@ -152,8 +162,10 @@ Note: whether a window opened. If it did not, copy every line the terminal print
 
 If the trial stops with an error that names `ManagedLibraryService` or a Documents folder,
 check whether your home folder has a `Documents` folder (`ls ~`). Issue #395 found that the
-core throws when there is no `~/Documents`, as on a CI runner. A normal Ubuntu desktop has
-one. Write down what you found.
+core threw when there was no `~/Documents`, as on a CI runner. Since #395 was decided, the
+core uses `~/Documents` anyway and makes it with the first managed copy, so a build from
+before that decision may still stop. A normal Ubuntu desktop has the folder. Write down what
+you found.
 
 ### B4. Look at the window
 
@@ -262,7 +274,8 @@ terminal, say what happens next:
 
 1. "A file dialog opens now. Choose any file, or cancel. Nothing you choose is opened."
 2. "The trial asks the system to open example.org in your browser now."
-3. "The trial starts a second copy of itself now and waits for it."
+3. "The trial starts a second copy of itself now and waits for it to finish. No second window
+   opens."
 
 Then it writes the results to a JSON file, closes the window and ends.
 
@@ -312,6 +325,11 @@ A browser window or tab with example.org should open. You may close it.
 
 If nothing happens after a minute and the trial's window does not move on, close the
 trial's window, note that it was on the browser, and keep the terminal lines.
+
+When it was tried (Ubuntu 26.10, the browser's first start in that session): the trial moved
+on at once, but the page came late. It was not there 85 seconds after the request and was
+there 5 minutes after it. So when the trial has moved on and no page has appeared, wait five
+minutes before you note "no page".
 
 Note: whether the notice strip showed the second sentence; whether a page with example.org
 appeared, and in which browser. Only this note tells whether a page appeared: the JSON can
@@ -404,6 +422,52 @@ and from where.
 machine of their choice, before handing it over. They are not exact commands, only what has
 to happen. **A tester starts at F4** with the AppImage file the maintainer gave. If no
 AppImage was given, skip Part F and go to Part G.
+
+**When it was tried** (November 21, 2026, Ubuntu 26.10 without `libfuse2`), F1 to F5 went as
+follows. This is one way that worked, not the only one.
+
+- **F1.** The tool was `appimagetool-x86_64.AppImage`, the "continuous" build from
+  `github.com/AppImage/appimagetool`: 15,133,176 bytes, SHA-256
+  `e8c1169c4af66c3184d7ee110713d4be04befe671fa358e2c1591ee840553b03`. A continuous build is
+  replaced over time, so a later download will not match these figures.
+- **F2.** The AppDir held the published folder under `usr/bin`, and three files at its top
+  level: `AppRun`, `paperroute-board-trial.desktop` and `paperroute-board-trial.png` (the
+  repository's `ManuscriptPipeline/Assets/PaperRoute.png` under the name the `.desktop` file
+  gives as its icon). 239 files, 126 MB.
+
+  `AppRun` (made executable with `chmod +x`):
+
+  ```sh
+  #!/bin/sh
+  HERE="$(dirname "$(readlink -f "$0")")"
+  exec "$HERE/usr/bin/PaperRoute.Desktop" "$@"
+  ```
+
+  `paperroute-board-trial.desktop`:
+
+  ```ini
+  [Desktop Entry]
+  Type=Application
+  Name=PaperRoute Board Trial
+  Exec=PaperRoute.Desktop
+  Icon=paperroute-board-trial
+  Categories=Office;
+  ```
+
+- **F3.** The tool is an AppImage itself. It was run unpacked from the start, so that a
+  missing `libfuse2` could not stop it; whether it starts without that option on such a
+  machine was not tried:
+
+  ```bash
+  ARCH=x86_64 ./appimagetool --appimage-extract-and-run AppDir PaperRoute-Board-Trial-x86_64.AppImage
+  ```
+
+  It ended with exit code 0 and the line "Success". The AppImage was 48,318,968 bytes.
+- **F4.** The AppImage **started without `libfuse2`, and without any extra option.** With
+  `--self-check` it ended with "self-check passed" and exit code 0, and started plainly it
+  opened its window. The machine had FUSE 3 (`fuse3`, `libfuse3-4`).
+- **F5.** Exit code 0. `appImageSet` was `true`. The file dialog, the launcher and the
+  restart each had `tried: true, ok: true`, and the restart's `startedFrom` was `APPIMAGE`.
 
 ### F1. Get the AppImage tool (maintainer)
 
@@ -502,3 +566,52 @@ the terminal lines may hold them; remove them if you wish.
 | E restart tried / ok | |
 | F4 AppImage started without libfuse2? | |
 | F5 platform check from the AppImage | |
+
+## Results of November 21, 2026
+
+**Where.** A VirtualBox guest on the development PC that booted the Ubuntu 26.10 desktop
+image into its try session: nothing was installed on a disk and nobody signed in. It had 6 GB
+of memory, 4 processors and a 1280 x 800 screen. The host was very busy throughout, so every
+time below is long and none is a verdict on speed.
+
+**Who.** Claude's coordinating session, which sent key presses through VirtualBox and read
+pictures of the guest's screen. That channel has no pointer, so nothing was clicked.
+
+**What ran.** The trial published for linux-x64, self-contained, with the trial's code as of
+master `9d4f104` (`trialVersion` `0.1.0-trial+9baf6db...`, `build` `Release`).
+
+**Not Ubuntu 24.04.** The checklist names 24.04. The image at hand was 26.10, whose desktop
+session is Wayland.
+
+| Step | Result |
+|---|---|
+| A1 publish | Exit code 0 after 132 s on the development PC; 236 files, 124.5 MB; the program file is `PaperRoute.Desktop`, 78,192 bytes |
+| A2 copy | Fetched from the host over VirtualBox's own network as a `.tar.gz` (52.2 MB) and unpacked to `~/board-trial` |
+| A3 libfuse2 present? | **No.** Listed: `fuse3`, `gvfs-fuse`, `libfuse3-4`, `libntfs-3g90`, `ntfs-3g` |
+| A4 Ubuntu version, session type | Ubuntu 26.10, kernel 7.3.0-9, `XDG_SESSION_TYPE=wayland`, desktop `ubuntu:GNOME`; `WAYLAND_DISPLAY` and `DISPLAY` both set; `~/Documents` exists |
+| B2 chmod | Exit code 0. The copy had lost the execute permission, as expected |
+| B3 window opened? | **Yes** |
+| B4 title, banner, 7 manuscripts, text, icons, theme | Title "PaperRoute Board Trial - Example Library"; the example banner; Pipeline 5, Published 1, File Drawer 1; notice "Loaded 7 manuscripts from local storage."; text clear, no missing letters and no boxes; light, like the desktop's own apps. **The rail's icons were not judged:** the window was as wide as the screen, and the left part of the rail lay under the desktop's dock in the picture. CI's picture of the same code under Xvfb shows them. The dock showed a generic gear for the trial: an unpacked program has no icon of its own there |
+| B5 Board responds? | **Not tried by hand** (no pointer). The timed run below did a shelf switch, the stage filter, a search and a scroll in the real window |
+| B6 close | Closed with Alt+F4, not its close button; the terminal came back with exit code 0 and no lines |
+| C1 self-check exit code | 0; last line "self-check passed" |
+| D2 snapshot opened, 500 manuscripts? | **Yes.** The title and the banner name the folder, the banner with the time; Pipeline 167, Published 272, File Drawer 61; notice "Loaded 500 manuscripts from local storage." Scrolling was not tried |
+| D3 close | Ended by a 100 s timer (exit code 124), not by its close button |
+| A timed run (not in the checklist) | `--snapshot-from` with `--measure` in the real window: exit code 0, 16 rows written. The figures come from a guest on a saturated host and are no verdict |
+| E exit code (window closed early? on which step?) | 0; the window closed by itself at the end |
+| E3 Board showed 7 manuscripts behind the dialog? | Yes; the notice strip showed the first sentence. The desktop's own file chooser (GNOME's) opened and was cancelled with Escape |
+| E4 a page with example.org appeared? | **Yes, but late:** a Firefox window with example.org was not there 85 s after the request and was there 5 minutes after it. It was the browser's first start in the try session |
+| E fileDialog tried / ok | true / true; `itemsChosen` 0 |
+| E launcher tried / ok | true / true (121 ms) |
+| E restart tried / ok | true / true; exit code 0 after 8.8 s; `startedFrom` "process path" |
+| F1 to F3 | As written under "When it was tried" in Part F |
+| F4 AppImage started without libfuse2? | **Yes**, with no extra option: `--self-check` ended with exit code 0, and the window opened |
+| F5 platform check from the AppImage | Exit code 0; `appImageSet` true; fileDialog true / true (cancelled); launcher true / true; restart true / true with exit code 0 and `startedFrom` "APPIMAGE". Again the browser's page came late: not there after 40 s, there ten minutes after the request |
+
+**What this run does not show:** Ubuntu 24.04; an installed system (a try session keeps
+everything in memory); anything clicked with a pointer; speed; a second monitor, or scaling
+other than 100 percent; other Linux systems; macOS.
+
+The result files and the pictures of that run stay on the development PC. CI repeats the
+window, the timed run and the platform check on Ubuntu for every pull request, under a
+virtual display (the job "Avalonia Board trial (Linux window under Xvfb)").

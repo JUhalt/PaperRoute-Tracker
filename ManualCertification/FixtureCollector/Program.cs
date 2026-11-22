@@ -241,7 +241,7 @@ internal static class Program
             .Select(root => new
             {
                 InstallRoot = root,
-                Binaries = new[] { @"current\PaperRouteTracker.dll", @"current\PaperRouteTracker.exe", @"current\PaperRoute.Core.dll", "Update.exe" }.Select(relative =>
+                Binaries = new[] { @"current\PaperRouteTracker.dll", @"current\PaperRouteTracker.exe", @"current\PaperRoute.Core.dll", @"current\PaperRoute.Platform.dll", "Update.exe" }.Select(relative =>
                 {
                     var path = Path.Combine(root, relative);
                     var exists = File.Exists(path) && OrdinaryPath(path);
