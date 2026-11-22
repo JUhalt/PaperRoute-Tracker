@@ -256,6 +256,12 @@ jobs:
           }
           Write-Host 'No known vulnerabilities in the restored package graph.'
 
+      # The merge rule for Board timing comparisons (Measure-BoardPairs.ps1),
+      # checked on canned measurements: no build and no run of the trial.
+      - name: Check the Board pairs rule on canned measurements
+        shell: pwsh
+        run: ./ManualCertification/Test-BoardPairs.ps1
+
       - name: Build Release
         run: dotnet build PaperRoute.Desktop.slnx --configuration Release --no-restore
 

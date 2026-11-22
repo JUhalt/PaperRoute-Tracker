@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Styling;
@@ -34,6 +35,14 @@ namespace PaperRoute.Desktop.Measurement;
 // screen made. Rows the 500 library cannot meet under the option built stay
 // measured and reported, and are listed in WaitingForRowsOfN, one list per
 // option; every other row is held.
+//
+// Beside Wall and UI, each row records the busy-PC figures (busy-PC design,
+// sections 2 to 4), report-only: no verdict reads them. The interface
+// thread's clock (ThreadClock), the process's garbage-collection pauses and
+// the thread's compilation time are read just after the stopwatch starts and
+// just before it stops; the probe reads the clock at each tick, so Run UI is
+// the longest running time inside one gap. Nothing is read between rows but
+// these; the machine's load is read around the run (RunConditions), never here.
 public sealed class BoardMeasurement
 {
     // Today's budgets, in milliseconds (ResponsivenessBudgetTests.vb:45-53).
@@ -127,16 +136,50 @@ public sealed class BoardMeasurement
     private static readonly TimeSpan s_loadLimit = TimeSpan.FromMinutes(2);
 
     private readonly Action<Window> _frame;
+    private readonly ThreadClock _clock;
+    private readonly ProcessorClasses? _cores = ProcessorClasses.Current;
     private readonly List<MeasuredRow> _rows = [];
 
-    // frame draws one frame of the window and returns once it is drawn.
+    // frame draws one frame of the window and returns once it is drawn. Made
+    // on the interface thread before the first row: the thread clock opens
+    // here, with its first rate check (untimed).
     public BoardMeasurement(Action<Window> frame)
+        : this(frame, ThreadClock.Open())
+    {
+    }
+
+    // clock must be the interface thread's own.
+    public BoardMeasurement(Action<Window> frame, ThreadClock clock)
     {
         ArgumentNullException.ThrowIfNull(frame);
+        ArgumentNullException.ThrowIfNull(clock);
         _frame = frame;
+        _clock = clock;
     }
 
     public IReadOnlyList<MeasuredRow> Rows => _rows;
+
+    public ThreadClock Clock => _clock;
+
+    // The frame action waits for the screen (a real window), so the scroll
+    // row, which draws a frame in each step, waits by design.
+    public bool FrameWaits { get; init; }
+
+    // After the last row, on the interface thread: the clock's second rate
+    // check. If it fails, every thread-clock figure of the run is dropped.
+    public void Finish()
+    {
+        _clock.Close();
+        if (_clock.IsPresent)
+        {
+            return;
+        }
+
+        for (int index = 0; index < _rows.Count; index++)
+        {
+            _rows[index] = _rows[index] with { RunMs = null, NotRunMs = null, RunUiMs = null };
+        }
+    }
 
     public static string Build =>
 #if DEBUG
@@ -192,7 +235,7 @@ public sealed class BoardMeasurement
 
             load.GetAwaiter().GetResult();
             Settle(window);
-        });
+        }, waits: true);
 
         MainWindow shown = window ?? throw new InvalidOperationException("No window was made.");
         ShellViewModel made = shell ?? throw new InvalidOperationException("No shell was made.");
@@ -326,52 +369,90 @@ public sealed class BoardMeasurement
         scroller.Offset = default;
         Settle(window);
         double longestWall = 0;
-        double longestUi = 0;
         double total = 0;
         int steps = 0;
         int madeBefore = CardView.MadeCount;
+        Step? slowest = null;
         while (scroller.Offset.Y + scroller.Viewport.Height < scroller.Extent.Height - 0.5 && steps < 2000)
         {
             double next = Math.Min(scroller.Offset.Y + scroller.Viewport.Height, scroller.Extent.Height - scroller.Viewport.Height);
-            using var probe = new UiProbe();
-            var watch = Stopwatch.StartNew();
-            scroller.Offset = new Vector(0, next);
-            Settle(window);
-            _frame(window);
-            watch.Stop();
-            double wall = watch.Elapsed.TotalMilliseconds;
-            longestWall = Math.Max(longestWall, wall);
-            longestUi = Math.Max(longestUi, Math.Min(wall, probe.Finish()));
-            total += wall;
+            Step step = TimeStep(() =>
+            {
+                scroller.Offset = new Vector(0, next);
+                Settle(window);
+                _frame(window);
+            });
+            longestWall = Math.Max(longestWall, step.WallMs);
+            if (slowest is null || step.UiMs > slowest.UiMs)
+            {
+                slowest = step;
+            }
+
+            total += step.WallMs;
             steps++;
         }
 
+        // Wall is the longest step's and UI the longest-UI step's, as before;
+        // every busy-PC figure comes from the longest-UI step, and its time
+        // not running from that step's own Wall.
         Require(!requireChanges || steps > 1, $"The Published shelf scrolled ({steps} steps).");
+        string slowestNote = slowest is null ? string.Empty : $"; the longest-UI step's Wall {slowest.WallMs:0} ms";
         Add(new MeasuredRow(library, ScrollPublished, "Scroll the Published shelf top to bottom, a page at a time: its longest step (offset, layout, frame)",
-            longestWall, longestUi, UiThreadBudget, "UI thread", Note: $"{steps} steps, {total:0} ms in all; {CardView.MadeCount - madeBefore} card views made"));
+            longestWall, slowest?.UiMs ?? 0, UiThreadBudget, "UI thread", Note: $"{steps} steps, {total:0} ms in all; {CardView.MadeCount - madeBefore} card views made{slowestNote}",
+            RunMs: slowest?.RunMs, NotRunMs: slowest?.NotRunMs, RunUiMs: slowest?.RunUiMs, PerfCoreShare: slowest?.PerfCoreShare,
+            GcPauseMs: slowest?.GcPauseMs, JitMs: slowest?.JitMs, Waits: FrameWaits));
         board.SelectedShelfIndex = 0;
         Settle(window);
     }
 
-    public MeasuredRow Time(string library, string id, string action, double budget, string budgetName, Action work, bool informational = false, string note = "")
+    // waits marks a row that waits by design (a frame, a load off the
+    // interface thread), so its time not running is not all load.
+    public MeasuredRow Time(string library, string id, string action, double budget, string budgetName, Action work, bool informational = false, string note = "", bool waits = false)
     {
         ArgumentNullException.ThrowIfNull(work);
         int madeBefore = CardView.MadeCount;
-        using var probe = new UiProbe();
-        var watch = Stopwatch.StartNew();
-        work();
-        watch.Stop();
-        double wall = watch.Elapsed.TotalMilliseconds;
-        double ui = Math.Min(wall, probe.Finish());
+        Step step = TimeStep(work);
         int made = CardView.MadeCount - madeBefore;
         if (made > 0)
         {
             note = string.IsNullOrEmpty(note) ? $"{made} card views made" : $"{note}; {made} card views made";
         }
 
-        var row = new MeasuredRow(library, id, action, wall, ui, budget, budgetName, informational, note);
+        var row = new MeasuredRow(library, id, action, step.WallMs, step.UiMs, budget, budgetName, informational, note,
+            step.RunMs, step.NotRunMs, step.RunUiMs, step.PerfCoreShare, step.GcPauseMs, step.JitMs, waits);
         _rows.Add(row);
         return row;
+    }
+
+    // The figures of one timed step. RunMs and RunUiMs are null when the
+    // thread clock is absent; NotRunMs is WallMs - RunMs, not clamped.
+    private sealed record Step(double WallMs, double UiMs, double? RunMs, double? RunUiMs, double? PerfCoreShare, double GcPauseMs, double JitMs)
+    {
+        public double? NotRunMs => RunMs is { } ran ? WallMs - ran : null;
+    }
+
+    // Times work as every row is timed: Wall by the stopwatch, UI by the
+    // probe (never more than Wall), and inside the stopwatch the thread
+    // clock, the GC pause total and the compilation time, read just after it
+    // starts and just before it stops.
+    private Step TimeStep(Action work)
+    {
+        using var probe = new UiProbe(_clock, _cores);
+        var watch = Stopwatch.StartNew();
+        double? runStart = _clock.Read();
+        TimeSpan gcStart = GC.GetTotalPauseDuration();
+        TimeSpan jitStart = JitInfo.GetCompilationTime(currentThread: true);
+        probe.Begin(runStart);
+        work();
+        TimeSpan jitEnd = JitInfo.GetCompilationTime(currentThread: true);
+        TimeSpan gcEnd = GC.GetTotalPauseDuration();
+        double? runEnd = _clock.Read();
+        watch.Stop();
+        double wall = watch.Elapsed.TotalMilliseconds;
+        double ui = Math.Min(wall, probe.Finish(runEnd));
+        double? ran = runStart is { } from && runEnd is { } to ? to - from : null;
+        return new Step(wall, ui, ran, ran is null ? null : probe.LongestRun, probe.PerfCoreShare,
+            (gcEnd - gcStart).TotalMilliseconds, (jitEnd - jitStart).TotalMilliseconds);
     }
 
     // Runs the interface thread's queued work and lays the window out.
@@ -414,7 +495,7 @@ public sealed class BoardMeasurement
     }
 
     private void Paint(string library, string id, string action, Window window) =>
-        Time(library, id, action, UiThreadBudget, "UI thread", () => _frame(window));
+        Time(library, id, action, UiThreadBudget, "UI thread", () => _frame(window), waits: true);
 
     // The card views a shelf has made.
     private static int Views(BoardView view, string shelf) =>
@@ -474,30 +555,92 @@ public sealed class BoardMeasurement
     // halve the stall a person feels.
     public static readonly DispatcherPriority ProbePriority = DispatcherPriority.Input;
 
+    //
+    // Each tick also reads the thread clock once, so the probe knows the
+    // longest running time inside one gap, the tail to the row's end
+    // included: Run UI, which leaves out the time other programs had the
+    // processor. It also notes which kind of core the thread is on at each
+    // tick, and at the row's start and end, so a row with no tick inside it
+    // still has a share.
     private sealed class UiProbe : IDisposable
     {
         private readonly DispatcherTimer _timer;
+        private readonly ThreadClock _clock;
+        private readonly ProcessorClasses? _cores;
         private readonly Stopwatch _watch = Stopwatch.StartNew();
         private double _lastTick;
         private double _longestGap;
+        private double? _lastRun;
+        private double _longestRun;
+        private bool _runLost;
+        private int _coreReadings;
+        private int _fastReadings;
 
-        public UiProbe()
+        public UiProbe(ThreadClock clock, ProcessorClasses? cores)
         {
+            _clock = clock;
+            _cores = cores;
             _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(1), ProbePriority, Dispatcher.UIThread, (_, _) =>
             {
                 double now = _watch.Elapsed.TotalMilliseconds;
                 _longestGap = Math.Max(_longestGap, now - _lastTick);
                 _lastTick = now;
+                NextRun(_clock.Read());
+                NoteCore();
             });
             _timer.Start();
         }
 
-        public double Finish()
+        // The longest running time inside one gap; meaningful once Finish ran
+        // with the clock present.
+        public double? LongestRun => _runLost ? null : _longestRun;
+
+        // The share of readings on the fastest kind of core; null with no
+        // core-class map (one kind of core, or not readable) or no reading.
+        public double? PerfCoreShare => _coreReadings == 0 ? null : (double)_fastReadings / _coreReadings;
+
+        // The clock's reading as the row's stopwatch starts: the first gap's start.
+        public void Begin(double? run)
+        {
+            _lastRun = run;
+            NoteCore();
+        }
+
+        // run is the clock's reading as the row's stopwatch stops: the tail's end.
+        public double Finish(double? run)
         {
             _timer.Stop();
+            NextRun(run);
+            NoteCore();
             return Math.Max(_longestGap, _watch.Elapsed.TotalMilliseconds - _lastTick);
         }
 
+        private void NoteCore()
+        {
+            if (_cores?.OnFastCore() is { } fast)
+            {
+                _coreReadings++;
+                if (fast)
+                {
+                    _fastReadings++;
+                }
+            }
+        }
+
         public void Dispose() => _timer.Stop();
+
+        private void NextRun(double? run)
+        {
+            if (run is { } now && _lastRun is { } last)
+            {
+                _longestRun = Math.Max(_longestRun, now - last);
+            }
+            else
+            {
+                _runLost = true;
+            }
+
+            _lastRun = run;
+        }
     }
 }
