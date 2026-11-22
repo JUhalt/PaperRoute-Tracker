@@ -19,8 +19,12 @@ its own process and writes one JSON file:
 There is no quiet gate: the script never waits for the PC to calm down. It
 records the load of every run and replaces a pair afterwards when a run was
 disturbed (other programs left fewer than two processors free), wrote no
-JSON or ended in error. That is decided from those facts alone, before any
-timing is read. At most 5 pairs are replaced; past that the sitting is void.
+JSON, ended in error, timed out (-RunLimitMinutes), lacks a row or a UI
+figure its partner has, or outlasted its load. That is decided from those
+facts alone, before any timing is read; only "outlasted its load" depends
+on how long the run took, so the summary lists it apart. At most 5 pairs are
+replaced; past that the sitting is void. A sitting is judged only at the
+pairs it planned: one stopped short is "not decided".
 
 Then the rule, on UI (the verdict figure): the pairs where after is lower,
 ties counting against, against the exact one-sided 5% count of a fair coin;
@@ -30,9 +34,13 @@ report-only, the verdict rule proposed in the method's section 7.
 -Analyze reads a sitting's folder again without running anything, so the
 rule can be checked on saved or canned files. -Pool adds earlier sittings of
 the same change and mode: their pairs are counted together with this one's.
+A sitting given twice is refused. Each pooled look is another chance of a
+false pass: three sittings of 10 pairs, or two of 20, go above 5% (method,
+section 5).
 
-The JSON files name the computer, so they stay on the PC that ran them. The
-summary (summary.md beside them) names no computer and no folder.
+The JSON files name the computer and each run's log may hold folder paths,
+so the sitting's folder stays on the PC that ran it. Only the summary
+(summary.md) is shared; it names no computer and no folder.
 .EXAMPLE
 pwsh -NoProfile -File ./ManualCertification/Measure-BoardPairs.ps1 -Mode headless -Before <tree> -After <tree> -Out <folder> -Pairs 10 -PrimaryRow stage-back-to-all
 .EXAMPLE
@@ -62,6 +70,9 @@ param(
     # only: with the same build on both sides, the pairs are the validation's
     # R and S (or M) runs.
     [Parameter(ParameterSetName = 'Run')] [ValidateSet('None', 'Spin', 'Memory')] [string] $Load = 'None',
+    # A run still going after this many minutes is stopped and its pair
+    # replaced. 0 takes the mode's default: 15 headless, 3 in a window.
+    [Parameter(ParameterSetName = 'Run')] [ValidateRange(0, 120)] [int] $RunLimitMinutes = 0,
     # A sitting's folder to read again; nothing is run.
     [Parameter(Mandatory, ParameterSetName = 'Analyze')] [string] $Analyze,
     # Earlier sittings of the same change and mode, pooled into one count.
@@ -87,6 +98,10 @@ function Get-Field($object, [string] $name) {
     $property = $object.PSObject.Properties[$name]
     if ($null -eq $property) { return $null }
     return $property.Value
+}
+
+function Test-Number($value) {
+    return $value -is [double] -or $value -is [long] -or $value -is [int] -or $value -is [decimal] -or $value -is [Numerics.BigInteger]
 }
 
 function Get-Median([double[]] $values) {
@@ -171,19 +186,35 @@ function Get-RowIds($rows) {
     $rows.PSObject.Properties | ForEach-Object Name
 }
 
-# What makes a run unusable, decided from facts that are not timings: no
-# JSON, an error, no rows of the library held, a load that ended before the
-# run, or a disturbed PC. Null when the run is usable. A disturbed of null
-# (load unknown) counts as not disturbed.
+# What makes a run unusable, decided from facts that are not timings: not
+# run, timed out, no JSON, an error, no rows of the library held, a row with
+# no UI figure, a load that ended before the run, or a disturbed PC. Null
+# when the run is usable. A disturbed of null (load unknown) counts as not
+# disturbed. Only "outlasted its load" depends on how long the run took.
+$OutlastedReason = 'outlasted its load'
 function Get-DropReason($run, [string] $mode) {
     if ($run.Skipped) { return 'not run: its pair was already to be replaced' }
+    if ($run.TimedOut) { return 'timed out' }
     if (-not $run.Written) { return 'wrote no JSON' }
     if ($null -eq $run.Json) { return 'JSON unreadable' }
     if ($mode -eq 'window' -and $run.Exit -ne 0) { return "ended in error (exit $($run.Exit))" }
     if ($null -ne (Get-Field $run.Json 'error')) { return 'ended in error' }
     if (@(Get-RowIds $run.Rows).Count -eq 0) { return 'no rows of the library held' }
-    if ($run.LoadOutlasted) { return 'outlasted its load' }
+    foreach ($id in Get-RowIds $run.Rows) {
+        if (-not (Test-Number (Get-Field $run.Rows.$id 'uiMs'))) { return "row $id has no UI figure" }
+    }
+    if ($run.LoadOutlasted) { return $OutlastedReason }
     if ((Get-Field (Get-Field $run.Json 'conditions') 'disturbed') -eq $true) { return 'disturbed' }
+    return $null
+}
+
+# A pair of usable runs is still replaced when one run lacks a row of the
+# library held that the other has: the run did not time every row. Null
+# when both hold the same rows.
+function Get-PairDropReason($b, $a) {
+    $bIds = @(Get-RowIds $b.Rows); $aIds = @(Get-RowIds $a.Rows)
+    foreach ($id in $bIds) { if ($aIds -notcontains $id) { return "row $id missing from $($a.Name)" } }
+    foreach ($id in $aIds) { if ($bIds -notcontains $id) { return "row $id missing from $($b.Name)" } }
     return $null
 }
 
@@ -217,6 +248,7 @@ function Read-Run($entry, [string] $folder, [string] $mode) {
     $run = [pscustomobject]@{
         Pair = [int] $entry.pair; Order = [int] $entry.order; Name = [string] $entry.name
         Exit = Get-Field $entry 'exit'; LoadOutlasted = [bool] (Get-Field $entry 'loadOutlasted'); Skipped = [bool] (Get-Field $entry 'skipped')
+        TimedOut = [bool] (Get-Field $entry 'timedOut')
         Written = $written; Json = $json; Rows = $rows; Drop = $null
     }
     $run.Drop = Get-DropReason $run $mode
@@ -232,19 +264,31 @@ function Read-Sitting([string] $folder) {
     $runs = @(foreach ($entry in @($record.runs)) { Read-Run $entry $folder $record.mode })
     $runs = @($runs | Sort-Object Order)
     $sitting = [pscustomobject]@{
-        Record = $record; Runs = $runs; Kept = @(); Dropped = @(); Replaced = 0; Void = $false; Incomplete = $false
+        Folder = [IO.Path]::GetFullPath($folder).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+        RecordText = Get-Content -LiteralPath $recordPath -Raw
+        Record = $record; Runs = $runs; Kept = @(); Dropped = @(); Replaced = 0; NotFinished = 0; Void = $false; Incomplete = $false
     }
-    foreach ($number in @($runs | ForEach-Object Pair | Sort-Object -Unique)) {
+    $numbers = @($runs | ForEach-Object Pair | Sort-Object -Unique)
+    foreach ($number in $numbers) {
         $b = @($runs | Where-Object { $_.Pair -eq $number -and $_.Name -eq $record.beforeName })
         $a = @($runs | Where-Object { $_.Pair -eq $number -and $_.Name -eq $record.afterName })
-        if ($b.Count -eq 1 -and $a.Count -eq 1 -and $null -eq $b[0].Drop -and $null -eq $a[0].Drop) {
+        $both = $b.Count -eq 1 -and $a.Count -eq 1 -and $null -eq $b[0].Drop -and $null -eq $a[0].Drop
+        $pairReason = if ($both) { Get-PairDropReason $b[0] $a[0] } else { $null }
+        $only = @(@($b) + @($a))
+        if ($both -and $null -eq $pairReason) {
             $sitting.Kept += [pscustomobject]@{ Pair = $number; Before = $b[0]; After = $a[0] }
+        } elseif ($number -eq $numbers[-1] -and $only.Count -eq 1 -and $null -eq $only[0].Drop) {
+            # The sitting stopped between the two runs of its last pair: the
+            # pair is not finished, which is not a replacement.
+            $sitting.NotFinished++
+            $sitting.Dropped += "pair $number`: not finished (the sitting stopped before its second run)"
         } else {
             $sitting.Replaced++
-            foreach ($run in @($b) + @($a)) {
+            foreach ($run in $only) {
                 $reason = if ($null -ne $run.Drop) { $run.Drop } else { 'its pair was replaced' }
                 $sitting.Dropped += "pair $number $($run.Name): $reason"
             }
+            if ($null -ne $pairReason) { $sitting.Dropped += "pair $number`: $pairReason" }
             if ($b.Count -eq 0 -or $a.Count -eq 0) { $sitting.Dropped += "pair $number`: a run is missing from the record" }
         }
     }
@@ -285,6 +329,19 @@ function Get-Facts($run) {
     "build $(Get-Field $json 'build'), option $(Get-Field $json 'option'), dpi $(Get-Field $json 'dpi'), $(Get-Field $json 'processors') processors, day $(Get-Field $json 'day')"
 }
 
+# The same folder twice, or a copy of one (the same sitting.json), would
+# count its pairs twice.
+function Assert-DistinctSittings($sittings) {
+    $all = @($sittings)
+    for ($i = 0; $i -lt $all.Count; $i++) {
+        for ($j = $i + 1; $j -lt $all.Count; $j++) {
+            if ([string]::Equals($all[$i].Folder, $all[$j].Folder, [StringComparison]::OrdinalIgnoreCase) -or $all[$i].RecordText -ceq $all[$j].RecordText) {
+                throw 'A sitting is given twice; its pairs would be counted twice.'
+            }
+        }
+    }
+}
+
 # The summary of a sitting, with earlier sittings pooled. Names no computer and no folder.
 function Get-Summary($sittings) {
     $current = $sittings[0]
@@ -297,6 +354,7 @@ function Get-Summary($sittings) {
             if ([string] (Get-Field $earlier.Record $field) -ne [string] (Get-Field $record $field)) { throw "A pooled sitting differs in $field; only sittings of the same change, mode and primary row are pooled." }
         }
     }
+    Assert-DistinctSittings $sittings
     $counted = @($sittings | Where-Object { -not $_.Void })
     $pairs = @($counted | ForEach-Object { $_.Kept })
     $lines = [Collections.Generic.List[string]]::new()
@@ -308,10 +366,15 @@ function Get-Summary($sittings) {
     $index = 0
     foreach ($sitting in $sittings) {
         $index++
-        $state = if ($sitting.Void) { "void: $($sitting.Replaced) pairs to replace, more than $MostReplacements; not counted" } elseif ($sitting.Incomplete) { "incomplete: $($sitting.Kept.Count) of $($sitting.Record.pairs) pairs kept" } else { "$($sitting.Kept.Count) pairs kept" }
+        $state = if ($sitting.Void) { "void: $($sitting.Replaced) pairs to replace, more than $MostReplacements; not counted" } elseif ($sitting.Incomplete) { "incomplete: stopped at $($sitting.Kept.Count) of $($sitting.Record.pairs) planned pairs kept" } else { "$($sitting.Kept.Count) pairs kept" }
         $label = if ($index -eq 1) { 'this sitting' } else { "earlier sitting $($index - 1)" }
         $lines.Add("Sitting $index ($label, started $($sitting.Record.startedAt)): $state, $($sitting.Replaced) replaced.")
         foreach ($drop in $sitting.Dropped) { $lines.Add("  dropped: $drop") }
+        $outlasted = @($sitting.Runs | Where-Object { $_.Drop -eq $OutlastedReason }).Count
+        if ($outlasted) { $lines.Add("  $outlasted runs outlasted their load. This drop depends on how long a run took, which is a timing: slower runs are dropped more often.") }
+    }
+    if ($counted.Count -gt 1) {
+        $lines.Add("$($counted.Count) sittings are pooled. Each pooled look is another chance of a false pass: with sittings of 10 pairs about 2.7% at two, 6.1% at three and 7.4% at four; with sittings of 20 pairs 5.1% at two. Three sittings of 10 pairs, or two of 20, go past the 5% of one sitting.")
     }
     $firstB = @($current.Runs | Where-Object { $_.Name -eq $bName -and $null -ne $_.Json } | Select-Object -First 1)
     $firstA = @($current.Runs | Where-Object { $_.Name -eq $aName -and $null -ne $_.Json } | Select-Object -First 1)
@@ -338,22 +401,28 @@ function Get-Summary($sittings) {
     $result = [ordered]@{
         Verdict = ''; Lower = 0; Pairs = $pairs.Count; Need = $null; MedianDifferenceMs = $null; FloorMs = $null
         RunUiHigher = 0; RunUiPairs = 0; RunUiStop = $false; Replaced = ($sittings | Measure-Object -Property Replaced -Sum).Sum
+        NotFinished = ($sittings | Measure-Object -Property NotFinished -Sum).Sum
         WatchHigher = @(); WatchBlocking = @(); Void = ($counted.Count -eq 0)
     }
     $lines.Add("Rule on $primary (UI; ties count against; one-sided 5%, exact binomial):")
-    $known = @($pairs | Where-Object { $null -ne (Get-Field $_.Before.Rows $primary) -and $null -ne (Get-Field $_.After.Rows $primary) })
+    # Pairs whose primary row has a UI figure in both runs (a run without it
+    # is dropped before this, so this is a guard).
+    $uiOf = { param($rows) Get-Field (Get-Field $rows $primary) 'uiMs' }
+    $known = @($pairs | Where-Object { (Test-Number (& $uiOf $_.Before.Rows)) -and (Test-Number (& $uiOf $_.After.Rows)) })
     $count = Get-Count $pairs $primary 'uiMs' 'lower'
     $result.Lower = $count.Count; $result.Pairs = $count.Pairs; $result.Need = $count.Need
-    $differences = [double[]] @($known | ForEach-Object { [double] $_.Before.Rows.$primary.uiMs - [double] $_.After.Rows.$primary.uiMs })
-    $ratios = [double[]] @($known | Where-Object { [double] $_.Before.Rows.$primary.uiMs -gt 0 } | ForEach-Object { [double] $_.After.Rows.$primary.uiMs / [double] $_.Before.Rows.$primary.uiMs } | Sort-Object)
-    $beforeMedian = Get-Median ([double[]] @($known | ForEach-Object { [double] $_.Before.Rows.$primary.uiMs }))
-    $afterMedian = Get-Median ([double[]] @($known | ForEach-Object { [double] $_.After.Rows.$primary.uiMs }))
+    $differences = [double[]] @($known | ForEach-Object { [double] (& $uiOf $_.Before.Rows) - [double] (& $uiOf $_.After.Rows) })
+    $ratios = [double[]] @($known | Where-Object { [double] (& $uiOf $_.Before.Rows) -gt 0 } | ForEach-Object { [double] (& $uiOf $_.After.Rows) / [double] (& $uiOf $_.Before.Rows) } | Sort-Object)
+    $beforeMedian = Get-Median ([double[]] @($known | ForEach-Object { [double] (& $uiOf $_.Before.Rows) }))
+    $afterMedian = Get-Median ([double[]] @($known | ForEach-Object { [double] (& $uiOf $_.After.Rows) }))
     $difference = Get-Median $differences
-    $floor = if ($null -ne $beforeMedian) { [Math]::Max(2, 0.03 * $beforeMedian) } else { $null }
+    # 2.0, not 2: [Math]::Max(2, x) takes the whole-number overload and rounds x.
+    $floor = if ($null -ne $beforeMedian) { [Math]::Max(2.0, 0.03 * $beforeMedian) } else { $null }
     $result.MedianDifferenceMs = $difference; $result.FloorMs = $floor
     $lines.Add("  medians: $bName $(Format-MsUnit $beforeMedian), $aName $(Format-MsUnit $afterMedian).")
-    $needText = if ($null -ne $count.Need) { "needs $($count.Need) (P = $(Format-Number (Get-UpperTail $count.Pairs $count.Need) '0.000'))" } else { "a decision needs at least $MinimumPairs pairs" }
-    $lines.Add("  $aName lower in $($count.Count) of $($count.Pairs) pairs; $needText.")
+    $seenText = if ($count.Pairs -gt 0) { " (P of at least $($count.Count) = $(Format-Number (Get-UpperTail $count.Pairs $count.Count) '0.000'))" } else { '' }
+    $needText = if ($null -ne $count.Need) { "a gain needs $($count.Need) of $($count.Pairs) (P = $(Format-Number (Get-UpperTail $count.Pairs $count.Need) '0.000'))" } else { "a decision needs at least $MinimumPairs pairs" }
+    $lines.Add("  $aName lower in $($count.Count) of $($count.Pairs) pairs$seenText; $needText.")
     $lines.Add("  median difference ($bName - $aName) $(Format-MsUnit $difference); size floor $(Format-MsUnit $floor) (the larger of 2 ms and 3% of $bName's median).")
     if ($ratios.Count -ge 4) {
         $n = $ratios.Count
@@ -365,9 +434,15 @@ function Get-Summary($sittings) {
     $runUiNeed = if ($null -ne $runUi.Need) { "needs $($runUi.Need) to stop" } else { "too few pairs carry it to test" }
     $lines.Add("  Run UI (report-only): $aName higher in $($runUi.Count) of $($runUi.Pairs) pairs that carry it; $runUiNeed.")
 
+    $short = @($counted | Where-Object { $_.Incomplete })
     if ($result.Void) {
         $result.Verdict = 'void'
         $lines.Add('Verdict: void. Every sitting needed more than 5 replacements.')
+    } elseif ($short.Count) {
+        # Judging a sitting before its planned count would let it be read
+        # after each pair and stopped at the first count that passes.
+        $result.Verdict = 'not decided'
+        $lines.Add("Verdict: not decided. A sitting stopped at $($short[0].Kept.Count) of $($short[0].Record.pairs) planned pairs; a sitting is judged only at its planned count. The counts above are for reading only.")
     } elseif ($null -eq $count.Need) {
         $result.Verdict = 'not decided'
         $lines.Add("Verdict: not decided. $($count.Pairs) pairs; a decision needs at least $MinimumPairs.")
@@ -432,9 +507,10 @@ function Save-Record([string] $folder, $record) {
     $record | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $folder $SittingFile) -Encoding utf8NoBOM
 }
 
-# One measured run, its own process. Returns the exit code and whether the
-# load (if any) ended before the run did.
-function Invoke-Run([string] $exeOrTree, [string] $file, [bool] $withLoad, [string] $folder) {
+# One measured run, its own process. Returns the exit code, whether the
+# load (if any) ended before the run did, and whether the run was stopped at
+# the run limit (a fixed limit far above any budget, so not a timing).
+function Invoke-Run([string] $exeOrTree, [string] $file, [bool] $withLoad, [string] $folder, [int] $limitMinutes) {
     if ($Mode -eq 'window') {
         $start = [Diagnostics.ProcessStartInfo]::new($exeOrTree)
         foreach ($argument in '--snapshot-from', $Library, '--measure', $file) { $start.ArgumentList.Add($argument) }
@@ -453,8 +529,10 @@ function Invoke-Run([string] $exeOrTree, [string] $file, [bool] $withLoad, [stri
     $start.RedirectStandardError = $true
     $loadProcess = $null
     $outlasted = $false
+    $timedOut = $false
     try {
         if ($withLoad) {
+            # Returns once the load's threads are running (it waits for them).
             $loadProcess = & (Join-Path $PSScriptRoot 'Start-BoardTrialLoad.ps1') -Kind $Load -Seconds 60
             # The load starts 2 s before the measured process.
             [Threading.Thread]::Sleep(2000)
@@ -462,11 +540,15 @@ function Invoke-Run([string] $exeOrTree, [string] $file, [bool] $withLoad, [stri
         $process = [Diagnostics.Process]::Start($start)
         $output = $process.StandardOutput.ReadToEndAsync()
         $errors = $process.StandardError.ReadToEndAsync()
-        $process.WaitForExit()
+        if (-not $process.WaitForExit([int] [TimeSpan]::FromMinutes($limitMinutes).TotalMilliseconds)) {
+            $timedOut = $true
+            $process.Kill($true)
+            $process.WaitForExit()
+        }
         $outlasted = $null -ne $loadProcess -and $loadProcess.HasExited
         $logName = [IO.Path]::GetFileNameWithoutExtension($file) + '.log'
         Set-Content -LiteralPath (Join-Path $folder $logName) -Value ($output.Result + $errors.Result) -Encoding utf8NoBOM
-        $exit = $process.ExitCode
+        $exit = if ($timedOut) { $null } else { $process.ExitCode }
         $process.Dispose()
     } finally {
         if ($null -ne $loadProcess) {
@@ -478,7 +560,7 @@ function Invoke-Run([string] $exeOrTree, [string] $file, [bool] $withLoad, [stri
         $written = Join-Path $results 'budget-headless.json'
         if (Test-Path -LiteralPath $written -PathType Leaf) { Move-Item -LiteralPath $written -Destination $file -Force }
     }
-    return [pscustomobject]@{ Exit = $exit; LoadOutlasted = $outlasted }
+    return [pscustomobject]@{ Exit = $exit; LoadOutlasted = $outlasted; TimedOut = $timedOut }
 }
 
 if ($SignTable) {
@@ -508,12 +590,17 @@ if ($PSCmdlet.ParameterSetName -eq 'Run') {
             if (-not (Test-Path -LiteralPath (Join-Path $tree 'PaperRoute.Desktop.Tests/bin/Release/net10.0/PaperRoute.Desktop.Tests.dll') -PathType Leaf)) { throw "The tree at the -$pathName path has no Release build of the trial's tests; build it first." }
         }
     }
+    if ($RunLimitMinutes -eq 0) { $RunLimitMinutes = if ($Mode -eq 'window') { 3 } else { 15 } }
+    if ($Load -ne 'None' -and $Mode -eq 'headless') {
+        Write-Warning 'The load lasts at most 60 s, and a headless run often takes longer (7 to 8 min on a busy day). A run that outlasts its load is dropped, so most loaded runs may be dropped and the sitting may be void.'
+    }
     foreach ($id in @($PrimaryRow) + @($ExpectedToRise)) { if ($id -notmatch '^[a-z0-9-]+$') { throw 'Row ids are written like stage-back-to-all.' } }
     if ($ExpectedToRise -contains $PrimaryRow) { throw 'The primary row cannot also be expected to rise.' }
     New-Item -ItemType Directory -Force -Path $Out | Out-Null
     $Out = [IO.Path]::GetFullPath($Out)
     if (@(Get-ChildItem -LiteralPath $Out -Force).Count -ne 0) { throw 'The -Out folder must be new or empty: one sitting per folder.' }
     $poolSittings = @($Pool | ForEach-Object { Read-Sitting $_ })
+    Assert-DistinctSittings $poolSittings
     foreach ($earlier in $poolSittings) {
         if ($earlier.Record.mode -ne $Mode -or $earlier.Record.primaryRow -ne $PrimaryRow -or $earlier.Record.beforeName -ne $BeforeName -or $earlier.Record.afterName -ne $AfterName -or $earlier.Record.load -ne $Load) {
             throw 'A pooled sitting differs in mode, primary row, names or load; only sittings of the same change, mode and primary row are pooled.'
@@ -530,6 +617,7 @@ if ($PSCmdlet.ParameterSetName -eq 'Run') {
         $pair++
         $sides = if ($pair % 2 -eq 1) { @(@($BeforeName, $Before), @($AfterName, $After)) } else { @(@($AfterName, $After), @($BeforeName, $Before)) }
         $usable = $true
+        $ranOfPair = @()
         foreach ($side in $sides) {
             $order++
             $file = Join-Path $Out ('pair{0:00}-{1}.json' -f $pair, $side[0])
@@ -541,16 +629,21 @@ if ($PSCmdlet.ParameterSetName -eq 'Run') {
                 continue
             }
             $watch = [Diagnostics.Stopwatch]::StartNew()
-            $ran = Invoke-Run $side[1] $file ($Load -ne 'None' -and $side[0] -eq $AfterName) $Out
+            $ran = Invoke-Run $side[1] $file ($Load -ne 'None' -and $side[0] -eq $AfterName) $Out $RunLimitMinutes
             $watch.Stop()
-            $entry = [ordered]@{ pair = $pair; order = $order; name = $side[0]; file = [IO.Path]::GetFileName($file); exit = $ran.Exit; seconds = [Math]::Round($watch.Elapsed.TotalSeconds, 1); loadOutlasted = $ran.LoadOutlasted }
+            $entry = [ordered]@{ pair = $pair; order = $order; name = $side[0]; file = [IO.Path]::GetFileName($file); exit = $ran.Exit; seconds = [Math]::Round($watch.Elapsed.TotalSeconds, 1); loadOutlasted = $ran.LoadOutlasted; timedOut = $ran.TimedOut }
             $record.runs += [pscustomobject] $entry
             Save-Record $Out $record
             # Only the facts that are not timings decide whether the pair is
             # kept (Get-DropReason), the same as when the sitting is read again.
             $run = Read-Run ([pscustomobject] $entry) $Out $Mode
+            $ranOfPair += $run
             if ($null -ne $run.Drop) { $usable = $false }
             Write-Host "pair $pair $($side[0]): exit $($ran.Exit), $($entry.seconds) s, $(if ($null -ne $run.Json) { Get-LoadText $run } else { 'no figures' })$(if ($null -ne $run.Drop) { "; $($run.Drop), pair to be replaced" })"
+        }
+        if ($usable -and $ranOfPair.Count -eq 2) {
+            $pairReason = Get-PairDropReason $ranOfPair[0] $ranOfPair[1]
+            if ($null -ne $pairReason) { $usable = $false; Write-Host "pair $pair`: $pairReason, pair to be replaced" }
         }
         if ($usable) { $kept++ } else { $replaced++ }
     }

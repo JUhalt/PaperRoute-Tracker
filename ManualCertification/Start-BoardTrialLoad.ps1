@@ -12,12 +12,19 @@ The load runs in its own process because load threads inside the measured
 process would stretch its garbage-collection pauses and mix two effects. It
 changes no setting: no priority, no affinity, no power setting.
 
-The script returns the load's process at once. The caller stops it in a
+Starting pwsh and compiling the load take several seconds on a busy PC, so
+the script returns the load's process only once its threads are running (it
+prints "ready"), and -Seconds counts from that moment. A load not running
+within 60 s is stopped and the script throws. The caller stops it in a
 finally block as well, in case the caller ends first:
 
     $load = & ./ManualCertification/Start-BoardTrialLoad.ps1 -Kind Spin -Seconds 60
     try { <the measured run> }
     finally { if (-not $load.HasExited) { $load.Kill($true) }; $load.Dispose() }
+
+The load runs in its own hidden console, so Ctrl+C reaches it only through
+the caller's finally block. If the caller is killed without it, the load
+still ends by itself -Seconds after it became ready.
 .EXAMPLE
 pwsh -NoProfile -File ./ManualCertification/Start-BoardTrialLoad.ps1 -Kind Memory -Seconds 10
 #>
@@ -34,15 +41,25 @@ $ErrorActionPreference = 'Stop'
 # The method fixes the number of threads; a sitting that is not disturbed is
 # repeated at another time of day, never run with more threads.
 $threads = 6
+$readyLine = 'ready'
+$readyLimit = [TimeSpan]::FromSeconds(60)
 
 if (-not $RunHere) {
     $start = [Diagnostics.ProcessStartInfo]::new((Get-Process -Id $PID).Path)
     $start.UseShellExecute = $false
     $start.CreateNoWindow = $true
+    $start.RedirectStandardOutput = $true
     foreach ($argument in '-NoProfile', '-NonInteractive', '-File', $PSCommandPath, '-Kind', $Kind, '-Seconds', [string] $Seconds, '-RunHere') {
         $start.ArgumentList.Add($argument)
     }
-    return [Diagnostics.Process]::Start($start)
+    $process = [Diagnostics.Process]::Start($start)
+    $line = $process.StandardOutput.ReadLineAsync()
+    if (-not $line.Wait($readyLimit) -or $line.Result -ne $readyLine) {
+        if (-not $process.HasExited) { $process.Kill($true) }
+        $process.Dispose()
+        throw "The load was not running within $($readyLimit.TotalSeconds) s."
+    }
+    return $process
 }
 
 Add-Type -TypeDefinition @'
@@ -52,8 +69,9 @@ using System.Threading;
 
 public static class BoardTrialLoad
 {
-    // Runs the threads until the deadline and returns when all have ended.
-    public static void Run(bool memory, int threads, double milliseconds)
+    // Starts the threads, which run for milliseconds from now; Join waits
+    // for them to end.
+    public static Thread[] Start(bool memory, int threads, double milliseconds)
     {
         long deadline = Stopwatch.GetTimestamp() + (long)(milliseconds * Stopwatch.Frequency / 1000);
         var workers = new Thread[threads];
@@ -64,6 +82,11 @@ public static class BoardTrialLoad
             workers[i].Start();
         }
 
+        return workers;
+    }
+
+    public static void Join(Thread[] workers)
+    {
         foreach (Thread worker in workers)
         {
             worker.Join();
@@ -106,6 +129,9 @@ public static class BoardTrialLoad
 }
 '@
 
-# -Seconds counts from the start of this process, compiling included.
-$left = $Seconds * 1000 - ([DateTime]::Now - (Get-Process -Id $PID).StartTime).TotalMilliseconds
-if ($left -gt 0) { [BoardTrialLoad]::Run($Kind -eq 'Memory', $threads, $left) }
+# -Seconds counts from the moment the threads run, not from this process's
+# start: pwsh's start and the compile above take several seconds.
+$workers = [BoardTrialLoad]::Start($Kind -eq 'Memory', $threads, $Seconds * 1000)
+[Console]::Out.WriteLine($readyLine)
+[Console]::Out.Flush()
+[BoardTrialLoad]::Join($workers)

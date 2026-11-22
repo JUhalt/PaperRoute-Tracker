@@ -38,7 +38,7 @@ function Assert-That([bool] $condition, [string] $what) {
 
 # One run's JSON, shaped like the trial's report: the example library's rows
 # (never held) and the 500 library's.
-function New-RunJson([double] $ui, $runUi, [double] $watchUi, [double] $riseUi, $conditions) {
+function New-RunJson($ui, $runUi, [double] $watchUi, [double] $riseUi, $conditions, [bool] $noPrimary = $false) {
     $row = {
         param($library, $id, $budget, $rule, $uiMs, $runUiMs)
         [ordered]@{
@@ -48,16 +48,16 @@ function New-RunJson([double] $ui, $runUi, [double] $watchUi, [double] $riseUi, 
             perfCoreShare = 0; gcPauseMs = 1.5; jitMs = 0
         }
     }
+    $rows = [Collections.Generic.List[object]]::new()
+    $rows.Add((& $row 'example' $primary 250 'report-only' 999 900))
+    $rows.Add((& $row '500' $rise 100 'waiting for rows of N' $riseUi $null))
+    if (-not $noPrimary) { $rows.Add((& $row '500' $primary 250 'enforced' $ui $runUi)) }
+    $rows.Add((& $row '500' $watch 250 'enforced' $watchUi $watchUi))
     [ordered]@{
         mode = 'headless'; machineName = $machine; dpi = 96; option = 'b'; syncIntoResetThreshold = 64; day = '2026-11-21'
         daySource = "the computer's date"; build = 'Release'; budgetMultiplier = 1; takenAt = '2026-11-21T22:00:00'; processors = 12
         operatingSystem = 'canned'; heldLibrary = '500'; waitingForRowsOfN = @($rise)
-        rows = @(
-            (& $row 'example' $primary 250 'report-only' 999 900),
-            (& $row '500' $rise 100 'waiting for rows of N' $riseUi $null),
-            (& $row '500' $primary 250 'enforced' $ui $runUi),
-            (& $row '500' $watch 250 'enforced' $watchUi $watchUi)
-        )
+        rows = $rows.ToArray()
         conditions = $conditions
     } | ConvertTo-Json -Depth 6
 }
@@ -69,7 +69,13 @@ function New-Conditions($disturbed = $false, $others = 6.0) {
 
 # A sitting of canned pairs. Each pair is a hashtable: B and A (UI of the
 # primary row before and after), optional BRun/ARun (Run UI; default UI less
-# 50), BWatch/AWatch, BCond/ACond (conditions, or 'none' for null).
+# 50), BWatch/AWatch, BCond/ACond (conditions, or 'none' for null),
+# BNoPrimary/ANoPrimary (the primary row left out), BUiNull/AUiNull (its UI
+# null), BOutlasted/AOutlasted and BTimedOut/ATimedOut (the record's facts),
+# SkipSecond (the second run not run) and OmitSecond (the sitting stopped
+# before the second run). Each sitting starts a minute after the last, as
+# real ones do, so no two canned sittings have the same record.
+$script:sittingMinute = 0
 function New-Sitting([string] $name, [int] $planned, [object[]] $pairs) {
     $folder = Join-Path $WorkFolder $name
     New-Item -ItemType Directory -Force -Path $folder | Out-Null
@@ -83,20 +89,24 @@ function New-Sitting([string] $name, [int] $planned, [object[]] $pairs) {
             $key = if ($side -eq 'before') { 'B' } else { 'A' }
             $ui = [double] $p[$key]
             $runUi = if ($p.ContainsKey("${key}Run")) { $p["${key}Run"] } else { $ui - 50 }
+            if ($p.ContainsKey("${key}UiNull")) { $ui = $null }
             $watchUi = if ($p.ContainsKey("${key}Watch")) { [double] $p["${key}Watch"] } else { 150 }
             $conditions = if ($p.ContainsKey("${key}Cond")) { $p["${key}Cond"] } else { New-Conditions }
             if ($conditions -eq 'none') { $conditions = $null }
             $file = 'pair{0:00}-{1}.json' -f $pair, $side
+            if ($p.ContainsKey('OmitSecond') -and $side -eq $sides[1]) { continue }
             if ($p.ContainsKey('SkipSecond') -and $side -eq $sides[1]) {
                 $runs.Add([ordered]@{ pair = $pair; order = $order; name = $side; file = $file; exit = $null; seconds = 0; loadOutlasted = $false; skipped = $true })
                 continue
             }
-            New-RunJson $ui $runUi $watchUi 90 $conditions | Set-Content -LiteralPath (Join-Path $folder $file) -Encoding utf8NoBOM
-            $runs.Add([ordered]@{ pair = $pair; order = $order; name = $side; file = $file; exit = 1; seconds = 30; loadOutlasted = $false })
+            New-RunJson $ui $runUi $watchUi 90 $conditions ($p.ContainsKey("${key}NoPrimary")) | Set-Content -LiteralPath (Join-Path $folder $file) -Encoding utf8NoBOM
+            $runs.Add([ordered]@{ pair = $pair; order = $order; name = $side; file = $file; exit = 1; seconds = 30
+                loadOutlasted = $p.ContainsKey("${key}Outlasted"); timedOut = $p.ContainsKey("${key}TimedOut") })
         }
     }
+    $script:sittingMinute++
     [ordered]@{ mode = 'headless'; beforeName = 'before'; afterName = 'after'; pairs = $planned; primaryRow = $primary
-        expectedToRise = @($rise); load = 'None'; startedAt = '2026-11-21 22:00'; runs = $runs.ToArray() } |
+        expectedToRise = @($rise); load = 'None'; startedAt = ([DateTime]::new(2026, 11, 21, 22, 0, 0).AddMinutes($script:sittingMinute).ToString('yyyy-MM-dd HH:mm')); runs = $runs.ToArray() } |
         ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $folder 'sitting.json') -Encoding utf8NoBOM
     return $folder
 }
@@ -140,8 +150,11 @@ Assert-That ($r.MedianDifferenceMs -eq 30) "median difference 30 ms (got $($r.Me
 Assert-That (@($r.Lines | Where-Object { $_ -like '*proposed verdict (report-only)*' }).Count -eq 1) 'the proposed-verdict heading is printed'
 
 # 3. 8 of 10 lower: one short of 9.
-$r = Invoke-Check '8 of 10 lower' @(New-Sitting 'eight-of-ten' 10 (New-Pairs 10 -higher 3, 7))
+$eight = New-Sitting 'eight-of-ten' 10 (New-Pairs 10 -higher 3, 7)
+$r = Invoke-Check '8 of 10 lower' @($eight)
 Assert-That ($r.Verdict -eq 'not shown' -and $r.Lower -eq 8 -and $r.Need -eq 9) "not shown, 8 of 10 (got $($r.Verdict), $($r.Lower))"
+# The P printed beside the count seen is that count's, apart from the P of the count needed.
+Assert-That (@($r.Lines | Where-Object { $_ -like '*after lower in 8 of 10 pairs (P of at least 8 = 0.055); a gain needs 9 of 10 (P = 0.011).*' }).Count -eq 1) 'the P of the count seen and the P of the count needed are printed apart'
 
 # 4. A disturbed pair is replaced. Pair 4 (after lower) is disturbed; pairs 7
 # and 9 are higher; pair 11 is the replacement. Kept: 10 pairs, 8 lower: not
@@ -214,6 +227,58 @@ Assert-That ($r.Verdict -eq 'gain shown' -and $r.Lower -eq 15 -and $r.Pairs -eq 
 # 12. Five pairs never decide.
 $r = Invoke-Check 'five pairs' @(New-Sitting 'five' 5 (New-Pairs 5))
 Assert-That ($r.Verdict -eq 'not decided' -and $r.Lower -eq 5) "not decided (got $($r.Verdict), $($r.Lower))"
+
+# 13. The size floor is not rounded: before's median 150 ms gives a floor of
+# 4.5 ms, and a median difference of 4.2 ms is under it (rounded to 4 ms, it
+# would pass).
+$r = Invoke-Check 'the floor, not rounded' @(New-Sitting 'floor-rounding' 10 @(for ($p = 1; $p -le 10; $p++) { @{ B = 150; A = 145.8 } }))
+Assert-That ($r.Verdict -eq 'not shown' -and $r.Lower -eq 10 -and [Math]::Abs($r.FloorMs - 4.5) -lt 1e-9) "not shown under a floor of 4.5 ms (got $($r.Verdict), floor $($r.FloorMs))"
+
+# 14. A sitting given twice, or a copy of it, is refused: its pairs would
+# count twice (two 8 of 10 would read 16 of 20).
+foreach ($case in @(@{ Title = 'the same folder twice'; Folders = @($eight, $eight) }, @{ Title = 'a copy of a sitting'; Folders = @($eight, (Join-Path $WorkFolder 'eight-of-ten-copy')) })) {
+    if ($case.Folders[1] -ne $eight) { Copy-Item -LiteralPath $eight -Destination $case.Folders[1] -Recurse }
+    $refused = $false
+    try { & $pairsScript -Analyze $case.Folders[0] -Pool $case.Folders[1] -PassThru | Out-Null } catch { $refused = $_.Exception.Message -like '*given twice*' }
+    Assert-That $refused "$($case.Title) is refused"
+}
+
+# 15. A sitting stopped short is not decided, even at 9 of 10: 20 planned.
+$r = Invoke-Check 'stopped at 10 of 20 planned' @(New-Sitting 'incomplete' 20 (New-Pairs 10 -higher 7))
+Assert-That ($r.Verdict -eq 'not decided' -and $r.Lower -eq 9) "not decided at 9 of 10 of 20 planned (got $($r.Verdict), $($r.Lower))"
+
+# 16. Stopped between the two runs of the last pair: not finished, not a
+# replacement, and not decided.
+$pairs = New-Pairs 10 -higher 7
+$pairs[9]['OmitSecond'] = $true
+$r = Invoke-Check 'the last pair not finished' @(New-Sitting 'not-finished' 10 $pairs)
+Assert-That ($r.Verdict -eq 'not decided' -and $r.Replaced -eq 0 -and $r.NotFinished -eq 1) "not decided, 0 replaced, 1 not finished (got $($r.Verdict), $($r.Replaced), $($r.NotFinished))"
+
+# 17. A run without the primary row, or with its UI null, is dropped before
+# any timing is read and its pair replaced and listed; so is a run that timed
+# out. Pairs 3, 5 and 8 are replaced by 11 to 13; pair 7 is higher: 9 of 10.
+$pairs = New-Pairs 13 -higher 7
+$pairs[2]['ANoPrimary'] = $true
+$pairs[4]['BUiNull'] = $true
+$pairs[7]['ATimedOut'] = $true
+$r = Invoke-Check 'a row missing, a UI null, a run timed out' @(New-Sitting 'row-missing' 10 $pairs)
+Assert-That ($r.Verdict -eq 'gain shown' -and $r.Pairs -eq 10 -and $r.Lower -eq 9 -and $r.Replaced -eq 3) "gain shown, 9 of 10, 3 replaced (got $($r.Verdict), $($r.Lower) of $($r.Pairs), $($r.Replaced) replaced)"
+Assert-That (@($r.Lines | Where-Object { $_ -like "*pair 3: row $primary missing from after*" }).Count -eq 1) 'the missing row is listed'
+Assert-That (@($r.Lines | Where-Object { $_ -like "*pair 5 before: row $primary has no UI figure*" }).Count -eq 1) 'the null UI figure is listed'
+Assert-That (@($r.Lines | Where-Object { $_ -like '*pair 8 after: timed out*' }).Count -eq 1) 'the run that timed out is listed'
+
+# 18. A run that outlasted its load is dropped, and listed apart as a drop
+# that depends on how long the run took.
+$pairs = New-Pairs 11 -higher 7
+$pairs[1]['AOutlasted'] = $true
+$r = Invoke-Check 'a run outlasted its load' @(New-Sitting 'outlasted' 10 $pairs)
+Assert-That ($r.Replaced -eq 1 -and @($r.Lines | Where-Object { $_ -like '*1 runs outlasted their load*depends on how long*' }).Count -eq 1) "1 replaced, listed apart (got $($r.Replaced))"
+
+# 19. Three sittings pooled: the summary says the chance of a false pass
+# is past 5%.
+$three = New-Sitting 'pool-3' 10 (New-Pairs 10 -higher 1, 4)
+$r = Invoke-Check 'three sittings pooled' @($three, $two, $one)
+Assert-That (@($r.Lines | Where-Object { $_ -like '*3 sittings are pooled*6.1% at three*past the 5%*' }).Count -eq 1) 'pooled sittings carry the chance of a false pass'
 
 if ($failures.Count) {
     Write-Host "Board pairs check: $($failures.Count) failed."
