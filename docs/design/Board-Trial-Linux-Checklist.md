@@ -152,8 +152,10 @@ Note: whether a window opened. If it did not, copy every line the terminal print
 
 If the trial stops with an error that names `ManagedLibraryService` or a Documents folder,
 check whether your home folder has a `Documents` folder (`ls ~`). Issue #395 found that the
-core throws when there is no `~/Documents`, as on a CI runner. A normal Ubuntu desktop has
-one. Write down what you found.
+core threw when there was no `~/Documents`, as on a CI runner. Since #395 was decided, the
+core uses `~/Documents` anyway and makes it with the first managed copy, so a build from
+before that decision may still stop. A normal Ubuntu desktop has the folder. Write down what
+you found.
 
 ### B4. Look at the window
 
