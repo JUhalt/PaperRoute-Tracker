@@ -137,6 +137,7 @@ public sealed class BoardMeasurement
 
     private readonly Action<Window> _frame;
     private readonly ThreadClock _clock;
+    private readonly ProcessorClasses? _cores = ProcessorClasses.Current;
     private readonly List<MeasuredRow> _rows = [];
 
     // frame draws one frame of the window and returns once it is drawn. Made
@@ -436,7 +437,7 @@ public sealed class BoardMeasurement
     // starts and just before it stops.
     private Step TimeStep(Action work)
     {
-        using var probe = new UiProbe(_clock);
+        using var probe = new UiProbe(_clock, _cores);
         var watch = Stopwatch.StartNew();
         double? runStart = _clock.Read();
         TimeSpan gcStart = GC.GetTotalPauseDuration();
@@ -558,27 +559,34 @@ public sealed class BoardMeasurement
     // Each tick also reads the thread clock once, so the probe knows the
     // longest running time inside one gap, the tail to the row's end
     // included: Run UI, which leaves out the time other programs had the
-    // processor.
+    // processor. It also notes which kind of core the thread is on at each
+    // tick, and at the row's start and end, so a row with no tick inside it
+    // still has a share.
     private sealed class UiProbe : IDisposable
     {
         private readonly DispatcherTimer _timer;
         private readonly ThreadClock _clock;
+        private readonly ProcessorClasses? _cores;
         private readonly Stopwatch _watch = Stopwatch.StartNew();
         private double _lastTick;
         private double _longestGap;
         private double? _lastRun;
         private double _longestRun;
         private bool _runLost;
+        private int _coreReadings;
+        private int _fastReadings;
 
-        public UiProbe(ThreadClock clock)
+        public UiProbe(ThreadClock clock, ProcessorClasses? cores)
         {
             _clock = clock;
+            _cores = cores;
             _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(1), ProbePriority, Dispatcher.UIThread, (_, _) =>
             {
                 double now = _watch.Elapsed.TotalMilliseconds;
                 _longestGap = Math.Max(_longestGap, now - _lastTick);
                 _lastTick = now;
                 NextRun(_clock.Read());
+                NoteCore();
             });
             _timer.Start();
         }
@@ -587,17 +595,36 @@ public sealed class BoardMeasurement
         // with the clock present.
         public double? LongestRun => _runLost ? null : _longestRun;
 
-        public double? PerfCoreShare => null;
+        // The share of readings on the fastest kind of core; null with no
+        // core-class map (one kind of core, or not readable) or no reading.
+        public double? PerfCoreShare => _coreReadings == 0 ? null : (double)_fastReadings / _coreReadings;
 
         // The clock's reading as the row's stopwatch starts: the first gap's start.
-        public void Begin(double? run) => _lastRun = run;
+        public void Begin(double? run)
+        {
+            _lastRun = run;
+            NoteCore();
+        }
 
         // run is the clock's reading as the row's stopwatch stops: the tail's end.
         public double Finish(double? run)
         {
             _timer.Stop();
             NextRun(run);
+            NoteCore();
             return Math.Max(_longestGap, _watch.Elapsed.TotalMilliseconds - _lastTick);
+        }
+
+        private void NoteCore()
+        {
+            if (_cores?.OnFastCore() is { } fast)
+            {
+                _coreReadings++;
+                if (fast)
+                {
+                    _fastReadings++;
+                }
+            }
         }
 
         public void Dispose() => _timer.Stop();
