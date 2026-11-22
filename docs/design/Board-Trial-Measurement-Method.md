@@ -173,15 +173,16 @@ The test still fails on today's rule. The message is built from the failed rows 
 
 ```
 500: Stage filter back to All stages took 404 ms against 250 ms.
-  The interface thread ran for 151 ms of it and was not running for 253 ms (63%); garbage collection paused 12 ms, compilation 0 ms.
+  Of the 404 ms from its start to its end, the interface thread ran for 151 ms and was not running for 253 ms (63%); garbage collection paused 12 ms, compilation 0 ms.
 During this run other programs kept 9.8 of 12 processors busy on average.
 Timing tests need a quiet PC. Close other programs and run the test again before reading this as a slower Board.
 ```
 
+- The first line gives UI, as before. The second line names the row's Wall, "from its start to its end", because its figures are shares of the Wall, and on some rows UI is shorter than the Wall (for example `took 259 ms against 250 ms.` and then `Of the 336 ms from its start to its end, the interface thread ran for 284 ms ...`).
 - With several failed rows, each row's two lines come first, then the load line and the last line once.
 - When the running time could not be read, the second line reads `How long the interface thread ran could not be read on this system.`
 - When the load could not be read, the third line reads `How busy the PC was could not be read on this system.`
-- When the thread ran for at least 90% of the row, the second line reads, for example, `The interface thread was running for 240 of the 257 ms. A busy PC can still slow running code.`
+- When the thread ran for at least 90% of the row, the second line reads, for example, `Of the 257 ms from its start to its end, the interface thread was running for 240 ms. A busy PC can still slow running code.`
 - The budget shown is the run's own (x2 Debug, x3 on GitHub Actions), as before.
 - The last line is always there, so the message also reads correctly on a quiet PC.
 

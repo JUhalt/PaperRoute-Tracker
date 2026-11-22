@@ -104,8 +104,8 @@ public sealed class MeasurementReportTests
             "The interface thread was not running for 41% of the Wall of the rows that do not wait. Not disturbed.");
     }
 
-    // The message of section 8, word for word, from the failed row and the
-    // run's conditions.
+    // The message of the method's section 8, word for word, from the failed
+    // row and the run's conditions.
     [TestMethod]
     public void TheFailureMessageStatesWhatWasMeasured()
     {
@@ -114,7 +114,7 @@ public sealed class MeasurementReportTests
         Assert.AreEqual(
             Lines(
                 "500: Stage filter back to All stages took 404 ms against 250 ms.",
-                "  The interface thread ran for 151 ms of it and was not running for 253 ms (63%); garbage collection paused 12 ms, compilation 0 ms.",
+                "  Of the 404 ms from its start to its end, the interface thread ran for 151 ms and was not running for 253 ms (63%); garbage collection paused 12 ms, compilation 0 ms.",
                 "During this run other programs kept 9.8 of 12 processors busy on average.",
                 "Timing tests need a quiet PC. Close other programs and run the test again before reading this as a slower Board."),
             Canned([backToAll], s_busy).FailureMessage());
@@ -131,7 +131,7 @@ public sealed class MeasurementReportTests
         // No load reading, and no conditions at all.
         string noLoad = Lines(
             "500: Stage filter back to All stages took 404 ms against 250 ms.",
-            "  The interface thread ran for 151 ms of it and was not running for 253 ms (63%); garbage collection paused 12 ms, compilation 0 ms.",
+            "  Of the 404 ms from its start to its end, the interface thread ran for 151 ms and was not running for 253 ms (63%); garbage collection paused 12 ms, compilation 0 ms.",
             "How busy the PC was could not be read on this system.",
             BoardMeasurementReport.QuietPcLine);
         Assert.AreEqual(noLoad, Canned([backToAll], s_busy with { MachineBusyProcessors = null, OthersBusyProcessors = null, Disturbed = null }).FailureMessage());
@@ -143,10 +143,22 @@ public sealed class MeasurementReportTests
         Assert.AreEqual(
             Lines(
                 "500: Stage filter back to All stages took 257 ms against 250 ms.",
-                "  The interface thread was running for 240 of the 257 ms. A busy PC can still slow running code.",
+                "  Of the 257 ms from its start to its end, the interface thread was running for 240 ms. A busy PC can still slow running code.",
                 "During this run other programs kept 9.8 of 12 processors busy on average.",
                 BoardMeasurementReport.QuietPcLine),
             Canned([ran], s_busy).FailureMessage());
+
+        // A row whose UI is shorter than its Wall: the second line names the
+        // Wall its figures are a share of (figures of a real run on a busy PC).
+        MeasuredRow stepped = new("500", "open-list-stepped-closed", "The open stage list stepped Idea, Draft, Submitted, then closed", 336, 259, 250, "UI thread",
+            RunMs: 284, NotRunMs: 52, RunUiMs: 223, GcPauseMs: 59, JitMs: 1);
+        Assert.AreEqual(
+            Lines(
+                "500: The open stage list stepped Idea, Draft, Submitted, then closed took 259 ms against 250 ms.",
+                "  Of the 336 ms from its start to its end, the interface thread ran for 284 ms and was not running for 52 ms (15%); garbage collection paused 59 ms, compilation 1 ms.",
+                "During this run other programs kept 9.8 of 12 processors busy on average.",
+                BoardMeasurementReport.QuietPcLine),
+            Canned([stepped], s_busy).FailureMessage());
 
         // The budget shown is the run's own: a Debug build doubles it.
         StringAssert.StartsWith(
@@ -158,7 +170,7 @@ public sealed class MeasurementReportTests
         Assert.AreEqual(
             Lines(
                 "500: Stage filter back to All stages took 404 ms against 250 ms.",
-                "  The interface thread ran for 151 ms of it and was not running for 253 ms (63%); garbage collection paused 12 ms, compilation 0 ms.",
+                "  Of the 404 ms from its start to its end, the interface thread ran for 151 ms and was not running for 253 ms (63%); garbage collection paused 12 ms, compilation 0 ms.",
                 "500: The open stage list stepped Idea, Draft, Submitted, then closed took 318 ms against 250 ms.",
                 BoardMeasurementReport.RunUnreadableLine,
                 "During this run other programs kept 9.8 of 12 processors busy on average.",
@@ -174,14 +186,14 @@ public sealed class MeasurementReportTests
         Assert.AreEqual(
             Lines(
                 "500: Scroll the Published shelf took 400 ms against 250 ms.",
-                "  The interface thread ran for 300 ms of it and was not running for 100 ms (25%); garbage collection paused 5 ms, compilation 0 ms.",
+                "  Of the 400 ms from its start to its end, the interface thread ran for 300 ms and was not running for 100 ms (25%); garbage collection paused 5 ms, compilation 0 ms.",
                 "During this run other programs kept 9.8 of 12 processors busy on average.",
                 BoardMeasurementReport.QuietPcLine),
             Canned([scroll], s_busy).FailureMessage());
         Assert.AreEqual(
             Lines(
                 "500: Scroll the Published shelf took 400 ms against 250 ms.",
-                "  The interface thread was running for 380 of the 400 ms. A busy PC can still slow running code.",
+                "  Of the 400 ms from its start to its end, the interface thread was running for 380 ms. A busy PC can still slow running code.",
                 "During this run other programs kept 9.8 of 12 processors busy on average.",
                 BoardMeasurementReport.QuietPcLine),
             Canned([scroll with { RunMs = 380, NotRunMs = 20 }], s_busy).FailureMessage());

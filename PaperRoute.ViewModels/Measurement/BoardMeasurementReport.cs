@@ -219,7 +219,9 @@ public sealed class BoardMeasurementReport
 
     // The second line of a failure: how long the interface thread ran, of the
     // Wall its figures were taken against (OwnWallMs, so the scroll row's line
-    // speaks of one step).
+    // speaks of one step). The line names that Wall: the first line gives UI,
+    // which is shorter than the Wall on some rows, so "ran for 284 ms of it"
+    // after "took 259 ms" read as more than the whole.
     private static string RunLine(MeasuredRow row)
     {
         if (row.RunMs is not { } ran || row.NotRunMs is not { } notRun)
@@ -230,11 +232,11 @@ public sealed class BoardMeasurementReport
         double wall = row.OwnWallMs;
         if (wall > 0 && ran >= 0.9 * wall)
         {
-            return string.Create(CultureInfo.InvariantCulture, $"  The interface thread was running for {ran:0} of the {wall:0} ms. A busy PC can still slow running code.");
+            return string.Create(CultureInfo.InvariantCulture, $"  Of the {wall:0} ms from its start to its end, the interface thread was running for {ran:0} ms. A busy PC can still slow running code.");
         }
 
         string line = string.Create(CultureInfo.InvariantCulture,
-            $"  The interface thread ran for {ran:0} ms of it and was not running for {notRun:0} ms ({(wall > 0 ? notRun / wall : 0):0%})");
+            $"  Of the {wall:0} ms from its start to its end, the interface thread ran for {ran:0} ms and was not running for {notRun:0} ms ({(wall > 0 ? notRun / wall : 0):0%})");
         return row.GcPauseMs is { } gc && row.JitMs is { } jit
             ? line + string.Create(CultureInfo.InvariantCulture, $"; garbage collection paused {gc:0} ms, compilation {jit:0} ms.")
             : line + ".";
