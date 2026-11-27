@@ -891,12 +891,11 @@ public sealed class CardViewTests : StorageCheckedTests
         Assert.IsTrue(File.Exists(path), $"No picture at {path}.");
     }
 
-    // The 500 library's Pipeline at 1280 x 800 in the build's shelf option
-    // (design step 13 asks for option (b)): at the top, scrolled to the middle
-    // and to the end in Light, and in the middle in Dark. At each place the
-    // card views drawn are the cards of the rows the scroller shows, in shelf
-    // order, every one inside the shelf's width and one height; under (b) the
-    // shelf made fewer views than cards.
+    // The 500 library's Pipeline at 1280 x 800 under rows of N (design step
+    // 13): at the top, scrolled to the middle and to the end in Light, and in
+    // the middle in Dark. At each place the card views drawn are the cards of
+    // the rows the scroller shows, in shelf order, every one inside the
+    // shelf's width and one height; the shelf made fewer views than cards.
     [TestMethod]
     public void TheFiveHundredPipelineIsSavedAtTheTopTheMiddleAndTheEnd()
     {
@@ -979,9 +978,9 @@ public sealed class CardViewTests : StorageCheckedTests
     // K8, d1 4.5: Down into a row that is not made yet. On the 58-card
     // shelf, from the first card, Down to the last row and Up back to the
     // first, one row at a time: each lands on the card a row below (above),
-    // its focus ring shows and it is in view. Under option (b) some of those
-    // rows were not made before the key (the row is scrolled into view, made,
-    // then focused); the test says how many.
+    // its focus ring shows and it is in view. Some of those rows were not
+    // made before the key (the row is scrolled into view, made, then
+    // focused); the test says how many.
     [TestMethod]
     public void K8_DownIntoARowThatIsNotMadeYetScrollsItIntoViewAndFocusesIt()
     {
@@ -1066,8 +1065,8 @@ public sealed class CardViewTests : StorageCheckedTests
         Assert.IsGreaterThan(0, notMade, "Rows of N: some steps went into a row that was not made yet.");
     }
 
-    // A focused card keeps the keyboard when its row scrolls far away (under
-    // option (b), when the list would recycle it), and the arrows go on from
+    // A focused card keeps the keyboard when its row scrolls far away (when
+    // the list would recycle it), and the arrows go on from
     // it; and a render that moves the focused card (a manuscript before it
     // leaves the library, so every later card moves up one place) leaves the
     // keyboard on the same card, with no other card's focus ring shown.
@@ -1137,7 +1136,7 @@ public sealed class CardViewTests : StorageCheckedTests
         Assert.AreEqual("ok", facts["DrawsAfterRender"], "After the render, the focused view draws the card now at place 9.");
     }
 
-    // Tab order across the shelf's edges, the same under both options: from
+    // Tab order across the shelf's edges: from
     // the sort box with the shelf scrolled to its end, Tab lands on the first
     // card's title; Shift+Tab from there goes back to the sort box; from the
     // last card's View route, Shift+Tab walks back card by card (View route,
