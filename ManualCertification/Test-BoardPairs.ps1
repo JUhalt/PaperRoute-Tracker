@@ -38,7 +38,7 @@ function Assert-That([bool] $condition, [string] $what) {
 
 # One run's JSON, shaped like the trial's report: the example library's rows
 # (never held) and the 500 library's.
-function New-RunJson($ui, $runUi, [double] $watchUi, [double] $riseUi, $conditions, [bool] $noPrimary = $false) {
+function New-RunJson($ui, $runUi, [double] $watchUi, [double] $riseUi, $conditions, [bool] $noPrimary = $false, $idle = $null) {
     $row = {
         param($library, $id, $budget, $rule, $uiMs, $runUiMs)
         [ordered]@{
@@ -53,13 +53,16 @@ function New-RunJson($ui, $runUi, [double] $watchUi, [double] $riseUi, $conditio
     $rows.Add((& $row '500' $rise 100 'waiting: over under rows of N too' $riseUi $null))
     if (-not $noPrimary) { $rows.Add((& $row '500' $primary 250 'enforced' $ui $runUi)) }
     $rows.Add((& $row '500' $watch 250 'enforced' $watchUi $watchUi))
-    [ordered]@{
+    $json = [ordered]@{
         mode = 'headless'; machineName = $machine; dpi = 96; option = 'b'; syncIntoResetThreshold = 64; day = '2026-11-21'
         daySource = "the computer's date"; build = 'Release'; budgetMultiplier = 1; takenAt = '2026-11-21T22:00:00'; processors = 12
         operatingSystem = 'canned'; heldLibrary = '500'; waitingForRowsOfN = @($rise)
         rows = $rows.ToArray()
         conditions = $conditions
-    } | ConvertTo-Json -Depth 6
+    }
+    # A run told an idle side records what preparation did before the switch.
+    if ($null -ne $idle) { $json['idlePreparation'] = @([ordered]@{ library = '500'; side = $idle.Side; stepsRun = 5; viewsMade = 21; prepared = ($null -eq $idle.Skipped); skippedReason = $idle.Skipped; firstSwitchTaken = ($null -eq $idle.Skipped); viewsMadeAtSwitch = $(if ($null -eq $idle.Skipped) { 0 } else { $null }) }) }
+    $json | ConvertTo-Json -Depth 6
 }
 
 function New-Conditions($disturbed = $false, $others = 6.0) {
@@ -72,11 +75,12 @@ function New-Conditions($disturbed = $false, $others = 6.0) {
 # 50), BWatch/AWatch, BCond/ACond (conditions, or 'none' for null),
 # BNoPrimary/ANoPrimary (the primary row left out), BUiNull/AUiNull (its UI
 # null), BOutlasted/AOutlasted and BTimedOut/ATimedOut (the record's facts),
-# SkipSecond (the second run not run) and OmitSecond (the sitting stopped
-# before the second run). Each sitting starts a minute after the last, as
+# SkipSecond (the second run not run), OmitSecond (the sitting stopped
+# before the second run) and BIdle/AIdle (the run's idle record: a hashtable
+# with Side and Skipped, the reason preparation stopped or null). Each sitting starts a minute after the last, as
 # real ones do, so no two canned sittings have the same record.
 $script:sittingMinute = 0
-function New-Sitting([string] $name, [int] $planned, [object[]] $pairs) {
+function New-Sitting([string] $name, [int] $planned, [object[]] $pairs, [string] $beforeIdle = '', [string] $afterIdle = '') {
     $folder = Join-Path $WorkFolder $name
     New-Item -ItemType Directory -Force -Path $folder | Out-Null
     $runs = [Collections.Generic.List[object]]::new()
@@ -99,14 +103,15 @@ function New-Sitting([string] $name, [int] $planned, [object[]] $pairs) {
                 $runs.Add([ordered]@{ pair = $pair; order = $order; name = $side; file = $file; exit = $null; seconds = 0; loadOutlasted = $false; skipped = $true })
                 continue
             }
-            New-RunJson $ui $runUi $watchUi 90 $conditions ($p.ContainsKey("${key}NoPrimary")) | Set-Content -LiteralPath (Join-Path $folder $file) -Encoding utf8NoBOM
+            $idle = if ($p.ContainsKey("${key}Idle")) { $p["${key}Idle"] } else { $null }
+            New-RunJson $ui $runUi $watchUi 90 $conditions ($p.ContainsKey("${key}NoPrimary")) $idle | Set-Content -LiteralPath (Join-Path $folder $file) -Encoding utf8NoBOM
             $runs.Add([ordered]@{ pair = $pair; order = $order; name = $side; file = $file; exit = 1; seconds = 30
                 loadOutlasted = $p.ContainsKey("${key}Outlasted"); timedOut = $p.ContainsKey("${key}TimedOut") })
         }
     }
     $script:sittingMinute++
     [ordered]@{ mode = 'headless'; beforeName = 'before'; afterName = 'after'; pairs = $planned; primaryRow = $primary
-        expectedToRise = @($rise); load = 'None'; startedAt = ([DateTime]::new(2026, 11, 21, 22, 0, 0).AddMinutes($script:sittingMinute).ToString('yyyy-MM-dd HH:mm')); runs = $runs.ToArray() } |
+        expectedToRise = @($rise); load = 'None'; beforeIdle = $beforeIdle; afterIdle = $afterIdle; startedAt = ([DateTime]::new(2026, 11, 21, 22, 0, 0).AddMinutes($script:sittingMinute).ToString('yyyy-MM-dd HH:mm')); runs = $runs.ToArray() } |
         ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $folder 'sitting.json') -Encoding utf8NoBOM
     return $folder
 }
@@ -280,8 +285,29 @@ $three = New-Sitting 'pool-3' 10 (New-Pairs 10 -higher 1, 4)
 $r = Invoke-Check 'three sittings pooled' @($three, $two, $one)
 Assert-That (@($r.Lines | Where-Object { $_ -like '*3 sittings are pooled*6.1% at three*past the 5%*' }).Count -eq 1) 'pooled sittings carry the chance of a false pass'
 
-if ($failures.Count) {
-    Write-Host "Board pairs check: $($failures.Count) failed."
+# 20. Idle sides: the same build with --after-idle none before and prepared
+# after. Pair 2's after run stopped its preparation (a slow step), so its
+# first switch after idle was not timed: dropped, its pair replaced, and
+# listed apart as a drop that depends on a timing. Kept: 10 pairs, 9 lower.
+$pairs = New-Pairs 11 -higher 7
+foreach ($p in $pairs) { $p['BIdle'] = @{ Side = 'none'; Skipped = $null }; $p['AIdle'] = @{ Side = 'prepared'; Skipped = $null } }
+$pairs[1]['AIdle'] = @{ Side = 'prepared'; Skipped = 'slow slice' }
+$pairs[1]['ANoPrimary'] = $true
+$sided = New-Sitting 'idle-sides' 10 $pairs 'none' 'prepared'
+$r = Invoke-Check 'idle sides, a preparation stopped' @($sided)
+Assert-That ($r.Verdict -eq 'gain shown' -and $r.Lower -eq 9 -and $r.Pairs -eq 10 -and $r.Replaced -eq 1) "gain shown, 9 of 10, 1 replaced (got $($r.Verdict), $($r.Lower) of $($r.Pairs), $($r.Replaced) replaced)"
+Assert-That (@($r.Lines | Where-Object { $_ -like '*dropped: pair 2 after: idle preparation stopped (slow slice), so its first switch after idle was not timed*' }).Count -eq 1) 'the stopped preparation is listed with its reason'
+Assert-That (@($r.Lines | Where-Object { $_ -like '*1 runs stopped their idle preparation*whether a step is slow is a timing*' }).Count -eq 1) 'the stopped preparation is listed apart as a drop that depends on a timing'
+Assert-That (@($r.Lines | Where-Object { $_ -like 'Idle sides: before runs with --after-idle none, after with --after-idle prepared.*' }).Count -eq 1) 'the summary names the idle sides'
+Assert-That (@($r.Lines | Where-Object { $_ -like 'after: *idle side prepared' }).Count -eq 1) "the after build's facts name its idle side"
+
+# 21. A sitting of other idle sides is not pooled with it.
+$other = New-Sitting 'idle-sides-half' 10 (New-Pairs 10) 'none' 'half'
+$refused = $false
+try { & $pairsScript -Analyze $sided -Pool $other -PassThru | Out-Null } catch { $refused = $_.Exception.Message -like '*differs in afterIdle*' }
+Assert-That $refused 'a sitting of other idle sides is not pooled'
+
+if ($failures.Count) {    Write-Host "Board pairs check: $($failures.Count) failed."
     exit 1
 }
 Write-Host 'Board pairs check: every case gave the verdict the rule gives by hand.'
