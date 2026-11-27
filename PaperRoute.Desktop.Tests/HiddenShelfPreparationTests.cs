@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
@@ -17,17 +18,20 @@ using PaperRoute.ViewModels.Session;
 namespace PaperRoute.Desktop.Tests;
 
 // The hidden Published shelf prepared before its first switch
-// (HiddenShelfPreparer; the idle-preparation design's build step 2, the
-// spike: the width step W and one full-size layout step L, run by RunToEnd).
+// (HiddenShelfPreparer; the idle-preparation design: the width step W, the
+// ladder of layout steps L, run by RunStep or RunToEnd).
 // Each test compares a prepared Board with a twin Board over the same library
 // that was not prepared, which switches as today. Preparation runs only where
 // a test calls it.
 // - T1: after preparation Published holds the card views the twin's first
 //   switch makes, for the same cards, and its own first switch makes none
 //   (CardView.MadeCount, a count that does not depend on the PC's load).
+// - T2: the views each step makes follow the ladder, and a slow step stops
+//   preparation for the session.
 // - T3: before and after the switch the window draws the same picture, byte
 //   for byte, light and dark; after it, with the same scroll extent and thumb.
 // - T4: the shelf tab still decides which shelf is shown.
+// - T5: a switch after any number of steps shows the whole first screen.
 // - T6: with preparation done the Board's accessibility tree and Tab order
 //   are the checked-in ones, and after the switch they are the twin's.
 // - T11: an empty Published, a short one, and the first cards arriving on a
@@ -38,6 +42,9 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
     private const string PublishedName = "PublishedShelf";
     private const int ExampleTabLimit = 120;
     private const int FiveHundredTabLimit = 40;
+
+    // W, then the ladder's capped L steps and the full-size one.
+    private const int FirstPreparationSteps = 1 + HiddenShelfPreparer.LadderSteps + 1;
 
     private static readonly string[] s_shelfNames = ["PipelineShelf", PublishedName, "FileDrawerShelf"];
 
@@ -88,7 +95,7 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
             }
 
             using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
-            HiddenShelfPreparer preparer = board.View.Preparer;
+            HiddenShelfPreparer preparer = Still(board);
             Assert.AreEqual(0, preparer.StepsRun, "Nothing ran before the test called it.");
             Assert.IsEmpty(board.Cards(PublishedName), "Published made no card before preparation.");
             int start = CardView.MadeCount;
@@ -96,7 +103,7 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
             int prepared = CardView.MadeCount - start;
             List<string> preparedTitles = Titles(board);
             Assert.IsTrue(preparer.IsPrepared, "Published is prepared.");
-            Assert.AreEqual(2, steps, "Two steps ran: the width and the layout.");
+            Assert.AreEqual(FirstPreparationSteps, steps, "The width step and the ladder's layout steps ran.");
             Assert.IsFalse(preparer.RunStep(), "Prepared, no step is due.");
             AssertOnlyShown(board, 0, "after preparation");
             List<CardView> preparedViews = board.Cards(PublishedName).ToList();
@@ -136,6 +143,108 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
         }));
     }
 
+    // The views each step makes follow the ladder: the layout steps together
+    // make the twin's first screen, none makes more than about half of it,
+    // each makes no more than the ladder predicts from the steps before it,
+    // and the last is the largest.
+    [TestMethod]
+    public void T2_EachSliceStaysSmall()
+    {
+        using DiskLibrarySession session = OpenFiveHundred("five-hundred");
+        Write(Headless.Run(() =>
+        {
+            var facts = new List<string>();
+            int twinMade = TwinFirstSwitchViews(session);
+            using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
+            HiddenShelfPreparer preparer = Still(board);
+            preparer.RunToEnd();
+            IReadOnlyList<HiddenShelfPreparer.Step> steps = preparer.Steps;
+            Assert.IsTrue(preparer.IsPrepared, "Published is prepared.");
+            Assert.IsNull(preparer.SkippedReason, "No step was slow enough to stop preparation.");
+            int columns = board.Board.Shelves[1].Columns;
+            facts.Add($"twin's first switch: {twinMade} card views; columns {columns}; steps: " +
+                string.Join(", ", steps.Select(step => $"{step.Kind}{(step.Cap is { } cap ? $"(cap {cap:0})" : string.Empty)} {step.ViewsMade}")));
+
+            Assert.AreEqual("W,L,L,L,L", string.Join(",", steps.Select(step => step.Kind)), "W, three capped layout steps, one at full height.");
+            Assert.AreEqual(0, steps[0].ViewsMade, "W makes no view.");
+            Assert.IsNull(steps[^1].Cap, "The last layout step is at full height.");
+            List<int> made = steps.Skip(1).Select(step => step.ViewsMade).ToList();
+            Assert.AreEqual(twinMade, made.Sum(), "The layout steps together make the twin's first screen.");
+
+            // About half: half the first screen, rounded up to whole rows.
+            int half = (int)Math.Ceiling(twinMade / 2.0 / columns) * columns;
+            int soFar = 0;
+            for (int at = 0; at < made.Count; at++)
+            {
+                Assert.IsLessThanOrEqualTo(half, made[at], $"Layout step {at + 1} made {made[at]} views, more than about half the first screen ({half}).");
+                if (at > 0)
+                {
+                    int predicted = (int)Math.Ceiling(soFar * (HiddenShelfPreparer.LadderRatio - 1)) + columns;
+                    Assert.IsLessThanOrEqualTo(predicted, made[at], $"Layout step {at + 1} made {made[at]} views, more than the ladder predicts with a row to spare ({predicted}).");
+                }
+
+                soFar += made[at];
+            }
+
+            Assert.AreEqual(made.Max(), made[^1], "The last layout step is the largest.");
+            return facts;
+        }));
+    }
+
+    // The slow-slice stop, with a test clock: a step longer than the
+    // threshold stops preparation at once; a step under it whose time per
+    // view predicts the next one over it stops it too (the first capped
+    // layout step of 110 ms predicts 1.2 x 110 = 132 ms); steps of 40 ms run
+    // to the end (the ladder's steps make about twice the views of the step
+    // before, so each predicts at most 2.4 x 40 = 96 ms). A stopped Board
+    // switches as the twin does, making the rest of the first screen.
+    [TestMethod]
+    [DataRow(130, 1)]
+    [DataRow(110, 2)]
+    [DataRow(40, FirstPreparationSteps)]
+    public void T2_ASlowSliceStopsPreparation(int stepMilliseconds, int stepsBeforeStop)
+    {
+        using DiskLibrarySession session = OpenFiveHundred("five-hundred");
+        Write(Headless.Run(() =>
+        {
+            int twinMade = TwinFirstSwitchViews(session);
+            using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
+            HiddenShelfPreparer preparer = Still(board);
+            TimeSpan now = TimeSpan.Zero;
+            TimeSpan step = TimeSpan.FromMilliseconds(stepMilliseconds);
+
+            // Called once as a step starts and once as it ends: each step takes step.
+            preparer.Clock = () => now += step;
+            int start = CardView.MadeCount;
+            int ran = preparer.RunToEnd();
+            int prepared = CardView.MadeCount - start;
+            int beforeSwitch = CardView.MadeCount;
+            bool stopped = preparer.SkippedReason is not null;
+            bool wasPrepared = preparer.IsPrepared;
+            Switch(board, 1);
+            int atSwitch = CardView.MadeCount - beforeSwitch;
+            string fact = $"steps of {stepMilliseconds} ms: {ran} ran, skipped reason {preparer.SkippedReason ?? "none"}, longest {preparer.Longest.TotalMilliseconds} ms; preparation made {prepared}, the switch {atSwitch} (twin {twinMade})";
+
+            Assert.AreEqual(stepsBeforeStop, ran, "The steps that ran before the stop.");
+            Assert.AreEqual(step, preparer.Longest, "The longest step is the test clock's step.");
+            if (stepsBeforeStop < FirstPreparationSteps)
+            {
+                Assert.IsTrue(stopped, "Preparation stopped.");
+                Assert.AreEqual(HiddenShelfPreparer.SlowSliceReason, preparer.SkippedReason, "Stopped as a slow slice.");
+                Assert.IsFalse(wasPrepared, "Stopped early, Published is not prepared.");
+            }
+            else
+            {
+                Assert.IsFalse(stopped, "No step was slow.");
+                Assert.IsTrue(wasPrepared, "Published is prepared.");
+            }
+
+            Assert.AreEqual(twinMade, prepared + atSwitch, "Preparation and the switch together made the twin's views, no more.");
+            AssertDrawnRight(board, $"after steps of {stepMilliseconds} ms");
+            return new List<string> { fact };
+        }));
+    }
+
     [TestMethod]
     [DataRow("light")]
     [DataRow("dark")]
@@ -156,7 +265,7 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
             }
 
             using BoardWindow board = BoardWindow.Show(session, variant);
-            board.View.Preparer.RunToEnd();
+            Still(board).RunToEnd();
             Assert.IsTrue(board.View.Preparer.IsPrepared, "Published is prepared.");
 
             // Before the switch nothing of the preparation is drawn.
@@ -193,7 +302,7 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
         {
             var facts = new List<string>();
             using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
-            board.View.Preparer.RunToEnd();
+            Still(board).RunToEnd();
             Assert.IsTrue(board.View.Preparer.IsPrepared, "Published is prepared.");
             AssertOnlyShown(board, 0, "after preparation");
             foreach (int index in new[] { 1, 0, 2, 1 })
@@ -203,7 +312,7 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
                 facts.Add($"switched to {index}: only {s_shelfNames[index]} shown");
             }
 
-            Assert.AreEqual(2, board.View.Preparer.StepsRun, "Once shown, Published is not prepared again.");
+            Assert.AreEqual(FirstPreparationSteps, board.View.Preparer.StepsRun, "Once shown, Published is not prepared again.");
             Switch(board, 0);
             Assert.IsFalse(board.View.Preparer.RunStep(), "Published shown once: no step.");
             return facts;
@@ -219,7 +328,7 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
         Write(Headless.Run(() =>
         {
             using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
-            HiddenShelfPreparer preparer = board.View.Preparer;
+            HiddenShelfPreparer preparer = Still(board);
             Assert.IsTrue(preparer.RunStep(), "The width step ran.");
             Switch(board, 1);
             Switch(board, 0);
@@ -267,7 +376,7 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
             using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
             Assert.HasCount(0, board.Board.Shelves[1].Cards, "Published has no card.");
             int start = CardView.MadeCount;
-            board.View.Preparer.RunToEnd();
+            Still(board).RunToEnd();
             int prepared = CardView.MadeCount - start;
             Assert.IsTrue(board.View.Preparer.IsPrepared, "An empty Published is prepared.");
             int beforeSwitch = CardView.MadeCount;
@@ -302,7 +411,7 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
 
             using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
             int start = CardView.MadeCount;
-            board.View.Preparer.RunToEnd();
+            Still(board).RunToEnd();
             int prepared = CardView.MadeCount - start;
             Assert.IsTrue(board.View.Preparer.IsPrepared, "A short Published is prepared.");
             int beforeSwitch = CardView.MadeCount;
@@ -347,7 +456,7 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
 
             MemorySession session = WithoutPublished(disk);
             using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
-            board.View.Preparer.RunToEnd();
+            Still(board).RunToEnd();
             Assert.IsTrue(board.View.Preparer.IsPrepared, "The empty Published is prepared.");
             session.Library.AddRange(arriving);
             session.RaiseChanged();
@@ -381,7 +490,7 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
         Write(Headless.Run(() =>
         {
             using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
-            HiddenShelfPreparer preparer = board.View.Preparer;
+            HiddenShelfPreparer preparer = Still(board);
             preparer.RunToEnd();
             Assert.IsTrue(preparer.IsPrepared, "Published is prepared.");
             ShelfViewModel published = board.Board.Shelves[1];
@@ -397,6 +506,55 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
         }));
     }
 
+    // A switch after k steps (none; W only; W and one, two or three capped
+    // layout steps): as Published becomes visible its rows and row views
+    // hold its cards, in the shown shelf's columns once W has run; at the end
+    // it holds the twin's cards, drawn right, and preparation and the switch
+    // together made no more views than the twin's switch.
+    [TestMethod]
+    public void T5_ASwitchAfterKStepsShowsTheWholeFirstScreen()
+    {
+        using DiskLibrarySession session = OpenFiveHundred("five-hundred");
+        Write(Headless.Run(() =>
+        {
+            var facts = new List<string>();
+            int twinMade;
+            List<string> twinTitles;
+            using (BoardWindow twin = BoardWindow.Show(session, ThemeVariant.Light))
+            {
+                int before = CardView.MadeCount;
+                Switch(twin, 1);
+                twinMade = CardView.MadeCount - before;
+                twinTitles = Titles(twin);
+            }
+
+            for (int k = 0; k < FirstPreparationSteps; k++)
+            {
+                using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
+                HiddenShelfPreparer preparer = Still(board);
+                int start = CardView.MadeCount;
+                for (int step = 0; step < k; step++)
+                {
+                    Assert.IsTrue(preparer.RunStep(), $"k = {k}: step {step + 1} ran.");
+                }
+
+                int prepared = CardView.MadeCount - start;
+                Assert.IsFalse(preparer.IsPrepared, $"k = {k}: not yet prepared.");
+                using var watch = new PublishedWatch(board, checkColumns: k > 0);
+                int beforeSwitch = CardView.MadeCount;
+                Switch(board, 1);
+                int atSwitch = CardView.MadeCount - beforeSwitch;
+                facts.Add($"k = {k}: preparation made {prepared}, the switch {atSwitch} (twin {twinMade})");
+                watch.AssertCurrent($"k = {k}");
+                Assert.AreEqual(twinMade, prepared + atSwitch, $"k = {k}: preparation and the switch made the twin's views, no more.");
+                CollectionAssert.AreEqual(twinTitles, Titles(board), $"k = {k}: the twin's cards.");
+                AssertDrawnRight(board, $"k = {k}");
+            }
+
+            return facts;
+        }));
+    }
+
     // T6: the window's tree and Tab walk with preparation done, against the
     // checked-in text; then, on fresh Boards, the walk after the first switch,
     // prepared and not.
@@ -405,7 +563,7 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
         string prepared = Headless.Run(() =>
         {
             using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
-            board.View.Preparer.RunToEnd();
+            Still(board).RunToEnd();
             Assert.IsTrue(board.View.Preparer.IsPrepared, "Published is prepared.");
             return AccessibilityTreeTests.AccessibilityTree.Describe(board, limit);
         });
@@ -421,7 +579,7 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
             }
 
             using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
-            board.View.Preparer.RunToEnd();
+            Still(board).RunToEnd();
             Assert.IsTrue(board.View.Preparer.IsPrepared, "Published is prepared.");
             Switch(board, 1);
             return (twinTree, AccessibilityTreeTests.AccessibilityTree.Describe(board, limit));
@@ -495,6 +653,26 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
         Assert.IsNotNull(shelf.FindCardView(0), $"{step}: the first card is drawn.");
     }
 
+    // The card views a twin Board over the same library, not prepared,
+    // makes at its first switch to Published.
+    private static int TwinFirstSwitchViews(ILibrarySession session)
+    {
+        using BoardWindow twin = BoardWindow.Show(session, ThemeVariant.Light);
+        int before = CardView.MadeCount;
+        Switch(twin, 1);
+        return CardView.MadeCount - before;
+    }
+
+    // The Board's preparer with a clock that stands still, so no step counts
+    // as slow however busy the PC is: the tests that count views are not
+    // about time. The slow-slice stop has its own test with a test clock.
+    private static HiddenShelfPreparer Still(BoardWindow board)
+    {
+        HiddenShelfPreparer preparer = board.View.Preparer;
+        preparer.Clock = static () => TimeSpan.Zero;
+        return preparer;
+    }
+
     private static List<string> Titles(BoardWindow board) =>
         board.Cards(PublishedName).Select(view => ((CardViewModel)view.DataContext!).Title).ToList();
 
@@ -547,6 +725,87 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
         foreach (string fact in facts)
         {
             TestContext.WriteLine(fact);
+        }
+    }
+
+    // Watches Published's Border become visible, by the switch or by a
+    // preparation step, and checks at that moment, before any layout or
+    // frame, that its rows are current, in the shown Pipeline's columns and
+    // card width (unless told not to: before W they are not), and that every
+    // row view holds its row's cards (as HiddenShelfTests' ShownWatch).
+    private sealed class PublishedWatch : IDisposable
+    {
+        private readonly BoardWindow _board;
+        private readonly bool _checkColumns;
+        private readonly Control _host;
+        private readonly List<string> _seen = [];
+
+        public PublishedWatch(BoardWindow board, bool checkColumns = true)
+        {
+            _board = board;
+            _checkColumns = checkColumns;
+            _host = (Control)(board.Shelf(PublishedName).GetVisualParent() ?? throw new AssertFailedException("Published has no host."));
+            _host.PropertyChanged += OnHostChanged;
+        }
+
+        public int Seen { get; private set; }
+
+        public void AssertCurrent(string step)
+        {
+            Assert.IsNotEmpty(_seen, $"{step}: Published was made visible.");
+            Assert.AreEqual(string.Empty, string.Join(", ", _seen.Where(seen => seen != "current").Distinct()), $"{step}: as Published became visible, its rows and row views held its cards.");
+            _seen.Clear();
+        }
+
+        public void Dispose() => _host.PropertyChanged -= OnHostChanged;
+
+        private void OnHostChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+        {
+            if (e.Property != Visual.IsVisibleProperty || e.NewValue is not true)
+            {
+                return;
+            }
+
+            Seen++;
+            ShelfViewModel model = _board.Board.Shelves[1];
+            ShelfViewModel shown = _board.Board.Shelves[0];
+            if (!model.IsRealized)
+            {
+                _seen.Add("current");
+                return;
+            }
+
+            bool columns = !_checkColumns || (model.Columns == shown.Columns && model.ItemWidth == shown.ItemWidth);
+            bool rows = !model.RowsAreStale && RowsHoldCards(model);
+            bool views = (_board.Shelf(PublishedName).FindControl<CardRowList>("Rows")?.ItemsPanelRoot?.Children ?? [])
+                .OfType<CardRowView>()
+                .Where(view => view.IsVisible && view.Row is not null)
+                .All(view => view.Row!.Cards.Select((card, slot) => view.CardAt(slot) is { } made && ReferenceEquals(made.DataContext, card)).All(same => same));
+            _seen.Add(columns && rows && views ? "current" : $"stale (columns {columns}, rows {rows}, views {views})");
+        }
+
+        // Row i holds cards i x N to i x N + N - 1 of the shelf's cards.
+        private static bool RowsHoldCards(ShelfViewModel model)
+        {
+            int columns = Math.Max(1, model.Columns);
+            if (model.Rows.Count != (model.Cards.Count + columns - 1) / columns)
+            {
+                return false;
+            }
+
+            for (int index = 0; index < model.Rows.Count; index++)
+            {
+                IReadOnlyList<CardViewModel> cards = model.Rows[index].Cards;
+                for (int slot = 0; slot < cards.Count; slot++)
+                {
+                    if (!ReferenceEquals(cards[slot], model.Cards[(index * columns) + slot]))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
         }
     }
 
