@@ -317,7 +317,7 @@ Each sitting's folder holds `sitting.json` (the runs, in order, with their exit 
 
 One observation from two headless runs of the same build, not a finding: Stage filter back to All stages read Run UI 185 ms with a fast-core share of 1, and 338 ms with a share of 0. Run UI does not remove the kind of core a run lands on (section 1).
 
-**Measured on the development PC on November 27, 2026** (section 6): the validation, in which Run UI failed, and the load series. Under the spin load the time not running stayed small (`notRunShare` 4 to 8% per run) while the interface thread's own running time grew; what made it slower is not measured.
+**Measured on the development PC on November 27, 2026** (section 6): the validation, in which Run UI failed, and the load series. Under the spin load the time not running stayed small (`notRunShare` 4 to 7% per run, against 4 to 8% without it) while the interface thread's own running time grew; what made it slower is not measured.
 
 **Shown by CI** (run 45003699839 of 2026-11-22, on the pull request that added this document; each runner has 4 processors):
 
