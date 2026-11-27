@@ -10,6 +10,9 @@ namespace PaperRoute.ViewModels.Session;
 //   --self-check               no window: load, check, exit 0 or 1
 //   --measure <file>.json      a real window: time the rows of d1 6.3 on the
 //                              library, write them as JSON, exit (d1 7.3)
+//   --after-idle <side>        with --measure only: the run is one side of a
+//                              with-and-without comparison of idle preparation
+//                              (none, width, half or prepared; IdleSides)
 //   --platform-check <file>.json  a real window on the example: try the file
 //                              dialog, the launcher and a restart once each,
 //                              write the outcomes as JSON, exit (step 15)
@@ -28,6 +31,7 @@ public sealed class TrialOptions
     public const string SnapshotArgument = "--snapshot";
     public const string MeasureArgument = "--measure";
     public const string PlatformCheckArgument = "--platform-check";
+    public const string AfterIdleArgument = "--after-idle";
     public const string TodayFormat = "yyyy-MM-dd";
 
     private TrialOptions()
@@ -44,6 +48,9 @@ public sealed class TrialOptions
 
     // The JSON file named after --measure, or null when not measuring.
     public string? MeasureFile { get; private set; }
+
+    // The idle side named after --after-idle (IdleSides), or null.
+    public string? AfterIdle { get; private set; }
 
     // The JSON file named after --platform-check, or null.
     public string? PlatformCheckFile { get; private set; }
@@ -120,6 +127,22 @@ public sealed class TrialOptions
 
                 parsed.MeasureFile = args[++index];
             }
+            else if (Is(argument, AfterIdleArgument))
+            {
+                if (parsed.AfterIdle is not null)
+                {
+                    error = "\"--after-idle\" is given twice.";
+                    return false;
+                }
+
+                if (index + 1 >= args.Count || !Measurement.IdleSides.IsKnown(args[index + 1]))
+                {
+                    error = "\"--after-idle\" needs one of " + string.Join(", ", Measurement.IdleSides.All) + " after it.";
+                    return false;
+                }
+
+                parsed.AfterIdle = args[++index];
+            }
             else if (Is(argument, PlatformCheckArgument))
             {
                 if (parsed.PlatformCheckFile is not null)
@@ -141,6 +164,12 @@ public sealed class TrialOptions
         if (parsed.Today is not null && parsed.SnapshotFrom is null)
         {
             error = "\"--today\" is accepted only with \"--snapshot-from\".";
+            return false;
+        }
+
+        if (parsed.AfterIdle is not null && parsed.MeasureFile is null)
+        {
+            error = "\"--after-idle\" is accepted only with \"--measure\".";
             return false;
         }
 

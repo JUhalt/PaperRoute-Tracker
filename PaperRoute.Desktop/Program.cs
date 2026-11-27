@@ -26,7 +26,10 @@ internal static class Program
     // d1 6.3 on the library, writes them as JSON and exits 0, or 1 if a row
     // could not be measured. The file is refused, before anything is opened,
     // unless its path is full, ends in .json and lies in an existing folder
-    // outside the real profile's storage folders.
+    // outside the real profile's storage folders. With "--after-idle <side>"
+    // the run is one side of a with-and-without comparison of idle preparation
+    // (IdleSides): it drives the preparation, waits, and times the first switch
+    // as first-switch-published-after-idle.
     //
     // "--platform-check <file>.json" (d1 1.3 Modes, step 15) opens a real
     // window on the example, tries the system's file dialog, its launcher and
@@ -81,7 +84,7 @@ internal static class Program
             if (options.MeasureFile is { } file)
             {
                 string daySource = options.Today is null ? "the computer's date" : TrialOptions.TodayArgument;
-                return Configure(AppBuilder.Configure(() => new App(session, file, daySource))).StartWithClassicDesktopLifetime(args);
+                return Configure(AppBuilder.Configure(() => new App(session, file, daySource, options.AfterIdle))).StartWithClassicDesktopLifetime(args);
             }
 
             if (options.PlatformCheckFile is { } platformFile)

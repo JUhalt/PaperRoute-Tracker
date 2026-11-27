@@ -84,6 +84,12 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         BoardMeasurement.SwitchToPublishedAfterHiddenChange,
     ];
 
+    // The variable that tells the headless budget run its side of a
+    // with-and-without comparison of idle preparation (IdleSides), as
+    // "--after-idle" tells a real-window run; Measure-BoardPairs.ps1 sets it
+    // for each side. Unset or empty: today's run, whose rows are those above.
+    public const string AfterIdleVariable = "PAPERROUTE_TRIAL_AFTER_IDLE";
+
     // The folder the manual writer fills and "--measure" opens (d1 7.3),
     // under the repository's ignored TestResults folder.
     public static readonly string MeasurementFolder = Path.Combine("TestResults", "v11-trial", "large-500");
@@ -125,14 +131,22 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         using DiskLibrarySession example = Unloaded("example", today, root => LargeLibraryFixture.WriteExample(root));
         using DiskLibrarySession large = Unloaded("five-hundred", today, root => LargeLibraryFixture.Create(root, 500));
 
+        // A run told an idle side measures the idle rows on both libraries in
+        // place of the first switch and its paint (BoardMeasurement.IdleRows).
+        string? side = AfterIdleSide();
+
         // How busy the PC was is read around the 500 library's measurement
         // only, from this test thread, never the interface thread.
         var rows = new List<MeasuredRow>();
-        rows.AddRange(Headless.Run(() => MeasureLibrary("example", example, requireChanges: false), s_runLimit).Rows);
+        var idle = new List<IdlePreparationRecord>();
+        (IReadOnlyList<MeasuredRow> exampleRows, _, IReadOnlyList<IdlePreparationRecord> exampleIdle) = Headless.Run(() => MeasureLibrary("example", example, requireChanges: false, side), s_runLimit);
+        rows.AddRange(exampleRows);
+        idle.AddRange(exampleIdle);
         RunConditions around = RunConditions.Begin();
-        (IReadOnlyList<MeasuredRow> largeRows, ThreadClock clock) = Headless.Run(() => MeasureLibrary("500", large, requireChanges: true), s_runLimit);
+        (IReadOnlyList<MeasuredRow> largeRows, ThreadClock clock, IReadOnlyList<IdlePreparationRecord> largeIdle) = Headless.Run(() => MeasureLibrary("500", large, requireChanges: true, side), s_runLimit);
         MeasurementConditions conditions = around.End(clock, largeRows);
         rows.AddRange(largeRows);
+        idle.AddRange(largeIdle);
 
         Assert.HasCount(500, large.Manuscripts);
         CollectionAssert.AreEqual(
@@ -141,12 +155,21 @@ public sealed class BoardBudgetTests : StorageCheckedTests
                 .Select(location => large.Manuscripts.Count(manuscript => manuscript.Location == location)).ToArray(),
             "The 500 library's shelves.");
 
-        BoardMeasurementReport report = Report(rows, today, "the computer's date", "500", conditions);
+        BoardMeasurementReport report = Report(rows, today, "the computer's date", "500", conditions, idle);
         Save(report, "budget-headless");
         CheckNewFieldsInJson(report);
 
-        List<string> missing = BudgetRows.Where(id => rows.Count(row => row.Library == "500" && row.Id == id) != 1).ToList();
+        // In a run told a side, today's first switch and its paint give way
+        // to the idle rows; every other row of d1 6.3 is timed as always.
+        List<string> missing = BudgetRows
+            .Where(id => side is null || (id != BoardMeasurement.FirstSwitchToPublished && id != BoardMeasurement.FirstSwitchToPublishedPaint))
+            .Where(id => rows.Count(row => row.Library == "500" && row.Id == id) != 1).ToList();
         Assert.IsEmpty(missing, "Rows of d1 6.3 not timed exactly once on the 500 library: " + string.Join(", ", missing));
+        Assert.HasCount(side is null ? 0 : 2, idle, "One idle record per library in a run told a side, none otherwise.");
+        foreach (string library in new[] { "example", "500" })
+        {
+            CheckIdleRows(rows.Where(row => row.Library == library).ToList(), side, idle.FirstOrDefault(record => record.Library == library)?.FirstSwitchTaken ?? true);
+        }
         List<string> reported = ReportOnlyRows.Where(id => rows.Count(row => row.Library == "500" && row.Id == id && row.Informational) != 1).ToList();
         Assert.IsEmpty(reported, "Report-only rows not timed exactly once, report-only, on the 500 library: " + string.Join(", ", reported));
         Assert.AreEqual(BoardMeasurement.SwitchToPublishedAfterHiddenChange, rows.Last(row => row.Library == "500").Id, "The switch after a hidden change is the last row, so no row before it changes.");
@@ -214,6 +237,163 @@ public sealed class BoardBudgetTests : StorageCheckedTests
             Assert.IsFalse(row.Waits, $"{row.Id} does not wait by design.");
             Assert.Contains("compared only between builds", row.Note, $"{row.Id}'s note says it is compared only between builds.");
         }
+    }
+
+    // Where the idle rows (BoardMeasurement.IdleRows) sit in one library's
+    // rows. In a run told no side: none of them, and today's first switch and
+    // its paint right after the startup rows and before the switch back to
+    // Pipeline. In a run told a side: the idle rows there instead, in their
+    // order (without the switch and its paint when preparation stopped and
+    // the switch was not timed), each report-only, shown against its budget
+    // for scale, waiting by design only where a frame is part of it, with
+    // the note that it is compared only between the two sides of a sitting;
+    // and today's first switch nowhere. A row removed, moved, doubled or not
+    // report-only fails.
+    public static void CheckIdleRows(IReadOnlyList<MeasuredRow> rows, string? side, bool switchTaken = true)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        string[] ids = rows.Select(row => row.Id).ToArray();
+        string[] expected = side is null
+            ? [BoardMeasurement.FirstSwitchToPublished, BoardMeasurement.FirstSwitchToPublishedPaint]
+            : BoardMeasurement.IdleRows.Take(switchTaken ? BoardMeasurement.IdleRows.Count : 2).ToArray();
+        string[] watched = [BoardMeasurement.FirstSwitchToPublished, BoardMeasurement.FirstSwitchToPublishedPaint, .. BoardMeasurement.IdleRows];
+        foreach (string id in watched)
+        {
+            Assert.AreEqual(expected.Contains(id) ? 1 : 0, ids.Count(item => item == id), $"{id} is timed {(expected.Contains(id) ? "once" : "not at all")} in a run told {side ?? "no idle side"}.");
+        }
+
+        int back = Array.IndexOf(ids, BoardMeasurement.SwitchBackToPipeline);
+        int start = back - expected.Length;
+        Assert.IsGreaterThanOrEqualTo(1, start, "The first switch's rows come after the startup rows and before the switch back to Pipeline.");
+        CollectionAssert.AreEqual(expected, ids[start..back], $"The rows before the switch back to Pipeline in a run told {side ?? "no idle side"}.");
+        Assert.IsTrue(ids[start - 1] is BoardMeasurement.StartupPaint or BoardMeasurement.ProcessStartToBoard, $"The startup rows come right before {expected[0]}, not {ids[start - 1]}.");
+        if (side is null)
+        {
+            return;
+        }
+
+        foreach (MeasuredRow row in rows.Skip(start).Take(expected.Length))
+        {
+            Assert.IsTrue(row.Informational, $"{row.Id} is report-only.");
+            Assert.Contains(BoardMeasurement.BetweenSides, row.Note, $"{row.Id}'s note says it is compared only between the two sides of a sitting.");
+            (double budget, string name, bool waits) = row.Id switch
+            {
+                BoardMeasurement.PreparePublishedIdle => (BoardMeasurement.FilterKeystrokeBudget, "filter keystroke", true),
+                BoardMeasurement.PreparePublishedLongestStep => (BoardMeasurement.UiThreadBudget, "UI thread", false),
+                BoardMeasurement.FirstSwitchToPublishedAfterIdle => (BoardMeasurement.PageSwitchBudget, "page switch", false),
+                _ => (BoardMeasurement.UiThreadBudget, "UI thread", true),
+            };
+            Assert.AreEqual(budget, row.BudgetMs, $"{row.Id} is shown against the {name} budget.");
+            Assert.AreEqual(name, row.BudgetName, row.Id);
+            Assert.AreEqual(waits, row.Waits, $"{row.Id} waits by design: {waits}.");
+        }
+    }
+
+    // CheckIdleRows, on canned rows: it passes on the orders the measurement
+    // writes and fails when an idle row is removed, moved, doubled or not
+    // report-only, or when today's first switch and the idle rows are mixed.
+    [TestMethod]
+    public void TheIdleRowsCheckFailsWhenARowIsRemovedMovedOrNotReportOnly()
+    {
+        static MeasuredRow Row(string id, double budget, string name, bool informational = false, bool waits = false) =>
+            new("500", id, id, 10, 10, budget, name, informational, informational ? BoardMeasurement.BetweenSides : string.Empty, Waits: waits);
+        MeasuredRow startup = Row(BoardMeasurement.WarmStartup, BoardMeasurement.StartupBudget, "warm startup", waits: true);
+        MeasuredRow startupPaint = Row(BoardMeasurement.StartupPaint, BoardMeasurement.UiThreadBudget, "UI thread", waits: true);
+        MeasuredRow first = Row(BoardMeasurement.FirstSwitchToPublished, BoardMeasurement.PageSwitchBudget, "page switch");
+        MeasuredRow firstPaint = Row(BoardMeasurement.FirstSwitchToPublishedPaint, BoardMeasurement.UiThreadBudget, "UI thread", waits: true);
+        MeasuredRow prepare = Row(BoardMeasurement.PreparePublishedIdle, BoardMeasurement.FilterKeystrokeBudget, "filter keystroke", informational: true, waits: true);
+        MeasuredRow longest = Row(BoardMeasurement.PreparePublishedLongestStep, BoardMeasurement.UiThreadBudget, "UI thread", informational: true);
+        MeasuredRow after = Row(BoardMeasurement.FirstSwitchToPublishedAfterIdle, BoardMeasurement.PageSwitchBudget, "page switch", informational: true);
+        MeasuredRow afterPaint = Row(BoardMeasurement.FirstSwitchToPublishedAfterIdlePaint, BoardMeasurement.UiThreadBudget, "UI thread", informational: true, waits: true);
+        MeasuredRow back = Row(BoardMeasurement.SwitchBackToPipeline, BoardMeasurement.PageSwitchBudget, "page switch", informational: true);
+        MeasuredRow render = Row(BoardMeasurement.RenderWithNoChange, BoardMeasurement.UiThreadBudget, "UI thread");
+        MeasuredRow[] idle = [prepare, longest, after, afterPaint];
+        const string sided = IdleSides.Prepared;
+
+        CheckIdleRows([startup, startupPaint, first, firstPaint, back, render], side: null);
+        CheckIdleRows([startup, startupPaint, prepare, longest, after, afterPaint, back, render], sided);
+        CheckIdleRows([startup, startupPaint, prepare, longest, back, render], sided, switchTaken: false);
+
+        // Today's run with an idle row, or without its first switch.
+        Assert.ThrowsExactly<AssertFailedException>(() => CheckIdleRows([startup, startupPaint, prepare, longest, after, afterPaint, back, render], side: null));
+        Assert.ThrowsExactly<AssertFailedException>(() => CheckIdleRows([startup, startupPaint, first, firstPaint, prepare, back, render], side: null));
+        Assert.ThrowsExactly<AssertFailedException>(() => CheckIdleRows([startup, startupPaint, firstPaint, back, render], side: null));
+
+        // A run told a side with today's first switch in place of, or beside, the idle rows.
+        Assert.ThrowsExactly<AssertFailedException>(() => CheckIdleRows([startup, startupPaint, first, firstPaint, back, render], sided));
+        Assert.ThrowsExactly<AssertFailedException>(() => CheckIdleRows([startup, startupPaint, first, firstPaint, prepare, longest, after, afterPaint, back, render], sided));
+
+        // Each idle row removed, doubled, or not report-only.
+        for (int index = 0; index < idle.Length; index++)
+        {
+            MeasuredRow[] removed = [startup, startupPaint, .. idle.Where((_, at) => at != index), back, render];
+            Assert.ThrowsExactly<AssertFailedException>(() => CheckIdleRows(removed, sided), $"{idle[index].Id} removed.");
+            MeasuredRow[] doubled = [startup, startupPaint, .. idle, idle[index], back, render];
+            Assert.ThrowsExactly<AssertFailedException>(() => CheckIdleRows(doubled, sided), $"{idle[index].Id} doubled.");
+            MeasuredRow[] held = [startup, startupPaint, .. idle.Select((row, at) => at == index ? row with { Informational = false } : row), back, render];
+            Assert.ThrowsExactly<AssertFailedException>(() => CheckIdleRows(held, sided), $"{idle[index].Id} not report-only.");
+        }
+
+        // Moved: two idle rows swapped, the idle rows before the startup
+        // paint or after the switch back, and the switch kept when it was
+        // not taken.
+        Assert.ThrowsExactly<AssertFailedException>(() => CheckIdleRows([startup, startupPaint, longest, prepare, after, afterPaint, back, render], sided));
+        Assert.ThrowsExactly<AssertFailedException>(() => CheckIdleRows([startup, startupPaint, prepare, longest, afterPaint, after, back, render], sided));
+        Assert.ThrowsExactly<AssertFailedException>(() => CheckIdleRows([startup, prepare, longest, after, afterPaint, startupPaint, back, render], sided));
+        Assert.ThrowsExactly<AssertFailedException>(() => CheckIdleRows([startup, startupPaint, back, prepare, longest, after, afterPaint, render], sided));
+        Assert.ThrowsExactly<AssertFailedException>(() => CheckIdleRows([startup, startupPaint, prepare, longest, after, afterPaint, back, render], sided, switchTaken: false));
+    }
+
+    // The idle rows measured on the example library for each side, with the
+    // preparer's clock standing still so that no step reads as slow and a
+    // busy PC cannot stop the preparation here (the headless budget run and
+    // "--measure" keep the real clock). Counts only, which are load-free;
+    // the times are reported, never read. The rows sit where CheckIdleRows
+    // says and the two last rows stay last; the side ran its steps, none
+    // inside warm startup; the width step makes no card view; after full
+    // preparation Published is prepared and its first switch makes none.
+    [TestMethod]
+    [DataRow(IdleSides.None, 0)]
+    [DataRow(IdleSides.Width, 1)]
+    [DataRow(IdleSides.Half, 3)]
+    [DataRow(IdleSides.Prepared, 1 + HiddenShelfPreparer.LadderSteps + 1)]
+    public void TheIdleRowsAreMeasuredForEachSide(string side, int steps)
+    {
+        DateTime today = DateTime.Today;
+        using DiskLibrarySession example = Unloaded("example", today, root => LargeLibraryFixture.WriteExample(root));
+        (IReadOnlyList<MeasuredRow> rows, _, IReadOnlyList<IdlePreparationRecord> idle) =
+            Headless.Run(() => MeasureLibrary("example", example, requireChanges: false, side, stillPreparer: true), s_runLimit);
+        BoardMeasurementReport report = Report(rows, today, "the computer's date", heldLibrary: string.Empty, idle: idle);
+        TestContext.WriteLine(report.ToTable());
+        Assert.IsEmpty(report.Failures(), "Nothing is held on the example.");
+
+        CheckIdleRows(rows, side);
+        CheckLastRows(rows);
+        IdlePreparationRecord record = idle.Single();
+        Assert.AreEqual("example", record.Library);
+        Assert.AreEqual(side, record.Side);
+        Assert.AreEqual(steps, record.StepsRun, "The side ran its steps.");
+        Assert.IsNull(record.SkippedReason, "Preparation did not stop.");
+        Assert.IsTrue(record.FirstSwitchTaken, "The first switch after idle was timed.");
+        Assert.AreEqual(side == IdleSides.Prepared, record.Prepared, "Published is prepared after full preparation only.");
+        Assert.Contains("0 idle preparation steps inside", rows.Single(row => row.Id == BoardMeasurement.WarmStartup).Note, "No step ran inside warm startup.");
+        StringAssert.StartsWith(rows.Single(row => row.Id == BoardMeasurement.PreparePublishedLongestStep).Note, $"{BoardMeasurement.BetweenSides}; {steps} steps: ");
+
+        int published = example.Manuscripts.Count(manuscript => manuscript.Location == ManuscriptLocation.Published);
+        Assert.IsGreaterThan(0, published, "The example has a Published shelf.");
+        if (side is IdleSides.None or IdleSides.Width)
+        {
+            Assert.AreEqual(0, record.ViewsMade, "No card view is made before the switch without a layout step.");
+            Assert.IsGreaterThan(0, record.ViewsMadeAtSwitch ?? 0, "The switch made the shelf's card views.");
+        }
+
+        if (side == IdleSides.Prepared)
+        {
+            Assert.IsGreaterThan(0, record.ViewsMade, "Preparation made the shelf's card views.");
+            Assert.AreEqual(0, record.ViewsMadeAtSwitch, "The first switch after full preparation made no card view.");
+        }
+
+        StringAssert.EndsWith(rows.Single(row => row.Id == BoardMeasurement.FirstSwitchToPublishedAfterIdle).Note, $"; {record.ViewsMadeAtSwitch} card views made at the switch");
     }
 
     // CheckLastRows, on canned rows: it passes on the order the measurement
@@ -337,7 +517,7 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         }
     }
 
-    internal static BoardMeasurementReport Report(IReadOnlyList<MeasuredRow> rows, DateTime day, string daySource, string heldLibrary, MeasurementConditions? conditions = null) => new()
+    internal static BoardMeasurementReport Report(IReadOnlyList<MeasuredRow> rows, DateTime day, string daySource, string heldLibrary, MeasurementConditions? conditions = null, IReadOnlyList<IdlePreparationRecord>? idle = null) => new()
     {
         Mode = "headless",
         MachineName = Environment.MachineName,
@@ -353,16 +533,24 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         HeldLibrary = heldLibrary,
         Rows = rows,
         Conditions = conditions,
+        IdlePreparation = idle ?? [],
     };
 
-    // The library's rows, and the interface thread's clock they were timed
-    // with, closed after the last row.
-    private static (IReadOnlyList<MeasuredRow> Rows, ThreadClock Clock) MeasureLibrary(string library, ILibrarySession session, bool requireChanges)
+    // The library's rows, the interface thread's clock they were timed with,
+    // closed after the last row, and in a run told an idle side what idle
+    // preparation did. stillPreparer stops the preparer's own clock, so no
+    // step reads as slow and preparation cannot stop for the PC's load.
+    private static (IReadOnlyList<MeasuredRow> Rows, ThreadClock Clock, IReadOnlyList<IdlePreparationRecord> Idle) MeasureLibrary(string library, ILibrarySession session, bool requireChanges, string? side, bool stillPreparer = false)
     {
-        var measurement = new BoardMeasurement(Frame);
+        var measurement = new BoardMeasurement(Frame) { AfterIdle = side };
         (MainWindow window, ShellViewModel shell) = measurement.Start(library, session, ThemeVariant.Light, 1280, 800);
         try
         {
+            if (stillPreparer)
+            {
+                window.FindControl<BoardView>("BoardView")!.Preparer.Clock = static () => TimeSpan.Zero;
+            }
+
             measurement.MeasureBoard(library, window, shell, session, requireChanges);
             measurement.Finish();
         }
@@ -371,11 +559,26 @@ public sealed class BoardBudgetTests : StorageCheckedTests
             window.Close();
         }
 
-        return (measurement.Rows.ToList(), measurement.Clock);
+        return (measurement.Rows.ToList(), measurement.Clock, measurement.IdlePreparation.ToList());
+    }
+
+    // The run's idle side from AfterIdleVariable, or null. An unknown side
+    // fails the test before anything is measured.
+    private static string? AfterIdleSide()
+    {
+        string? side = Environment.GetEnvironmentVariable(AfterIdleVariable);
+        if (string.IsNullOrEmpty(side))
+        {
+            return null;
+        }
+
+        Assert.IsTrue(IdleSides.IsKnown(side), $"{AfterIdleVariable} names {side}; the sides are {string.Join(", ", IdleSides.All)}.");
+        return side;
     }
 
     // Which headless rows wait by design (busy-PC design, section 2): warm
-    // startup and every paint row, and no other (the scroll row waits only in
+    // startup, every paint row and the idle preparation (a frame follows each
+    // of its steps), and no other (the scroll row waits only in
     // a real window). The scroll row's figures come from its longest-UI step:
     // with no step (the example's shelf may not scroll) every figure is null,
     // never 0; with steps, RunMs + NotRunMs is the Wall its note gives for
@@ -384,7 +587,7 @@ public sealed class BoardBudgetTests : StorageCheckedTests
     {
         foreach (MeasuredRow row in rows)
         {
-            bool waits = row.Id == BoardMeasurement.WarmStartup || row.Id.EndsWith("-paint", StringComparison.Ordinal);
+            bool waits = row.Id is BoardMeasurement.WarmStartup or BoardMeasurement.PreparePublishedIdle || row.Id.EndsWith("-paint", StringComparison.Ordinal);
             Assert.AreEqual(waits, row.Waits, $"{row.Library} {row.Id}: waits by design is {waits}.");
         }
 

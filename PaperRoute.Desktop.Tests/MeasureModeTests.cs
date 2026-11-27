@@ -65,6 +65,16 @@ public sealed class MeasureModeTests : StorageCheckedTests
 
         Assert.IsTrue(TrialOptions.TryParse(["--MEASURE", @"C:\m.json"], out TrialOptions? upper, out error), error);
         Assert.AreEqual(@"C:\m.json", upper.MeasureFile, "Arguments are read without regard to case, as the others are.");
+        Assert.IsNull(upper.AfterIdle, "A run told no idle side is today's run.");
+
+        foreach (string side in IdleSides.All)
+        {
+            Assert.IsTrue(TrialOptions.TryParse(["--measure", @"C:\m.json", "--after-idle", side], out TrialOptions? sided, out error), error);
+            Assert.AreEqual(side, sided.AfterIdle);
+        }
+
+        Assert.IsTrue(TrialOptions.TryParse(["--after-idle", "prepared", "--snapshot-from", @"C:\Libraries\Large", "--measure", @"C:\m.json"], out TrialOptions? first, out error), error);
+        Assert.AreEqual("prepared", first.AfterIdle, "The side may come before --measure.");
     }
 
     [TestMethod]
@@ -75,6 +85,12 @@ public sealed class MeasureModeTests : StorageCheckedTests
     [DataRow(new[] { "--measure", @"C:\a.json", "--self-check" }, "\"--measure\" opens a window and \"--self-check\" opens none: give one or the other.")]
     [DataRow(new[] { "--self-check", "--measure", @"C:\a.json" }, "\"--measure\" opens a window and \"--self-check\" opens none: give one or the other.")]
     [DataRow(new[] { "--measure", @"C:\a.json", "--today", "2026-10-16" }, "\"--today\" is accepted only with \"--snapshot-from\".")]
+    [DataRow(new[] { "--measure", @"C:\a.json", "--after-idle" }, "\"--after-idle\" needs one of none, width, half, prepared after it.")]
+    [DataRow(new[] { "--measure", @"C:\a.json", "--after-idle", "all" }, "\"--after-idle\" needs one of none, width, half, prepared after it.")]
+    [DataRow(new[] { "--measure", @"C:\a.json", "--after-idle", "Prepared" }, "\"--after-idle\" needs one of none, width, half, prepared after it.")]
+    [DataRow(new[] { "--measure", @"C:\a.json", "--after-idle", "none", "--after-idle", "prepared" }, "\"--after-idle\" is given twice.")]
+    [DataRow(new[] { "--after-idle", "prepared" }, "\"--after-idle\" is accepted only with \"--measure\".")]
+    [DataRow(new[] { "--self-check", "--after-idle", "none" }, "\"--after-idle\" is accepted only with \"--measure\".")]
     public void MeasureRefusesACommandLineItCannotRun(string[] args, string message)
     {
         Assert.IsFalse(TrialOptions.TryParse(args, out TrialOptions? options, out string? error), string.Join(" ", args));

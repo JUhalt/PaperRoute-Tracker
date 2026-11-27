@@ -21,6 +21,7 @@ public partial class App : Application
     private readonly ILibrarySession? _session;
     private readonly string? _measureFile;
     private readonly string _daySource = string.Empty;
+    private readonly string? _afterIdle;
     private readonly string? _platformCheckFile;
 
     public App()
@@ -35,12 +36,15 @@ public partial class App : Application
 
     // "--measure" (d1 7.3): the app measures the Board in its own window,
     // writes the JSON to measureFile and shuts down with the run's exit code.
-    public App(ILibrarySession session, string measureFile, string daySource)
+    // afterIdle is the run's side of a with-and-without comparison of idle
+    // preparation ("--after-idle"), or null for today's run.
+    public App(ILibrarySession session, string measureFile, string daySource, string? afterIdle = null)
         : this(session)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(measureFile);
         _measureFile = measureFile;
         _daySource = daySource ?? string.Empty;
+        _afterIdle = afterIdle;
     }
 
     // "--platform-check" (step 15): the app opens its window on the example,
@@ -106,7 +110,7 @@ public partial class App : Application
                 ILibrarySession session = _session;
                 string file = _measureFile;
                 desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
-                Dispatcher.UIThread.Post(() => desktop.Shutdown(WindowMeasurement.Run(session, file, _daySource)), DispatcherPriority.Background);
+                Dispatcher.UIThread.Post(() => desktop.Shutdown(WindowMeasurement.Run(session, file, _daySource, _afterIdle)), DispatcherPriority.Background);
                 base.OnFrameworkInitializationCompleted();
                 return;
             }
