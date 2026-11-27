@@ -32,6 +32,9 @@ namespace PaperRoute.Desktop.Tests;
 //   for byte, light and dark; after it, with the same scroll extent and thumb.
 // - T4: the shelf tab still decides which shelf is shown.
 // - T5: a switch after any number of steps shows the whole first screen.
+// - T9: a change while Published is prepared or half prepared never shows
+//   an old card, and after the idle refresh the switch makes no view and
+//   refills no row.
 // - T6: with preparation done the Board's accessibility tree and Tab order
 //   are the checked-in ones, and after the switch they are the twin's.
 // - T11: an empty Published, a short one, and the first cards arriving on a
@@ -427,10 +430,10 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
         }));
     }
 
-    // The first cards arrive on a prepared, empty Published: its rows wait
-    // for the switch (this spike has no step that brings them current), the
-    // switch brings them current and makes the views the twin's switch makes,
-    // and every view draws its own card.
+    // The first cards arrive on a prepared, empty Published: its rows wait,
+    // and it is no longer called prepared; the idle refresh (R, then one
+    // full-size L) makes the views the twin's switch makes, the switch then
+    // makes none and refills no row, and every view draws its own card.
     [TestMethod]
     public void T11_TheFirstCardsArrivingOnAPreparedEmptyPublishedAreDrawnRight()
     {
@@ -467,12 +470,25 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
             Assert.IsFalse(board.View.Preparer.IsPrepared, "With its rows stale, Published is no longer called prepared.");
             AssertOnlyShown(board, 0, "after the cards arrived");
 
+            HiddenShelfPreparer preparer = board.View.Preparer;
+            int stepsBefore = preparer.StepsRun;
+            int beforeRefresh = CardView.MadeCount;
+            preparer.RunToEnd();
+            int refreshed = CardView.MadeCount - beforeRefresh;
+            string kinds = string.Join(",", preparer.Steps.Skip(stepsBefore).Select(step => step.Kind));
+            Assert.AreEqual("R,L", kinds, "The refresh: the rows brought current, then one full-size layout.");
+            Assert.IsTrue(preparer.IsPrepared, "Refreshed, Published is prepared again.");
+            AssertOnlyShown(board, 0, "after the refresh");
+
+            using var refills = new RowRefills(published);
             int beforeSwitch = CardView.MadeCount;
             Switch(board, 1);
             int atSwitch = CardView.MadeCount - beforeSwitch;
-            facts.Add($"first cards on a prepared empty Published ({published.Cards.Count}): the twin's switch made {twinMade}, the prepared switch {atSwitch}");
+            facts.Add($"first cards on a prepared empty Published ({published.Cards.Count}): the twin's switch made {twinMade}; the refresh ({kinds}) made {refreshed}; the prepared switch made {atSwitch} and refilled {refills.Count} rows");
             Assert.IsFalse(published.RowsAreStale, "Shown, its rows are current.");
-            Assert.AreEqual(twinMade, atSwitch, "The switch made the twin's card views, no more.");
+            Assert.AreEqual(twinMade, refreshed, "The refresh made the twin's card views.");
+            Assert.AreEqual(0, atSwitch, "The switch made no card view.");
+            Assert.AreEqual(0, refills.Count, "The switch refilled no row.");
             CollectionAssert.AreEqual(twinTitles, Titles(board), "The twin's cards.");
             Assert.IsFalse(board.EmptyMessage(PublishedName).IsEffectivelyVisible, "The empty message went.");
             AssertDrawnRight(board, "the first cards on a prepared Published");
@@ -480,32 +496,162 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
         }));
     }
 
-    // A narrower window after preparation: the hidden Published keeps the
-    // columns it was laid out for, so it is no longer called prepared; the
-    // switch rewraps it and draws every card right.
+    // T9: a change while Published is prepared, and while it is half
+    // prepared (W and two capped layout steps): the change ends IsPrepared
+    // (a refresh is due), the idle refresh brings it back (W after a resize,
+    // R when the rows went stale, then one full-size L, or the rest of the
+    // ladder), and every time Published's Border becomes visible, for a step
+    // or for the switch, its rows and row views hold its cards in the shown
+    // shelf's columns. The switch then makes no card view and refills no row,
+    // and shows every card right. After a theme change the switch draws the
+    // picture of a twin Board that had the same change and was not prepared.
     [TestMethod]
-    public void T9_ANarrowerWindowAfterPreparationIsNoLongerPrepared()
+    [DataRow("search")]
+    [DataRow("stage")]
+    [DataRow("sort")]
+    [DataRow("edit")]
+    [DataRow("delete")]
+    [DataRow("theme")]
+    [DataRow("narrower")]
+    [DataRow("wider")]
+    [DataRow("taller")]
+    [DataRow("scaling")]
+    public void T9_AChangeWhilePreparedNeverShowsAnOldCard(string change)
     {
-        using DiskLibrarySession session = OpenFiveHundred("five-hundred");
+        using DiskLibrarySession disk = OpenFiveHundred("five-hundred");
         Write(Headless.Run(() =>
         {
-            using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
-            HiddenShelfPreparer preparer = Still(board);
-            preparer.RunToEnd();
-            Assert.IsTrue(preparer.IsPrepared, "Published is prepared.");
-            ShelfViewModel published = board.Board.Shelves[1];
-            int columnsPrepared = published.Columns;
-            board.Window.Width = 1000;
-            Settle(board);
-            Assert.IsFalse(preparer.IsPrepared, "After a resize, Published is no longer called prepared.");
-            Switch(board, 1);
-            string fact = $"narrower window: columns {columnsPrepared} at preparation, {published.Columns} at the switch";
-            Assert.AreNotEqual(columnsPrepared, published.Columns, "The narrower window has fewer columns.");
-            AssertDrawnRight(board, "after a resize");
-            return new List<string> { fact };
+            var facts = new List<string>();
+            byte[]? twinPixels = null;
+            if (change == "theme")
+            {
+                using BoardWindow twin = BoardWindow.Show(WholeLibrary(disk), ThemeVariant.Light);
+                Change(twin, null, change);
+                Settle(twin);
+                Switch(twin, 1);
+                twinPixels = Frame(twin).Pixels;
+            }
+
+            foreach (int first in new[] { FirstPreparationSteps, 3 })
+            {
+                string mode = first == FirstPreparationSteps ? "prepared" : "half prepared";
+                MemorySession session = WholeLibrary(disk);
+                using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
+                HiddenShelfPreparer preparer = Still(board);
+                for (int step = 0; step < first; step++)
+                {
+                    Assert.IsTrue(preparer.RunStep(), $"{mode}: step {step + 1} ran.");
+                }
+
+                Assert.AreEqual(first == FirstPreparationSteps, preparer.IsPrepared, $"{mode}: prepared as expected before the change.");
+                ShelfViewModel published = board.Board.Shelves[1];
+                using var watch = new PublishedWatch(board);
+                Change(board, session, change);
+                Settle(board);
+                Assert.IsFalse(preparer.IsPrepared, $"{change}, {mode}: after the change Published is not called prepared.");
+                AssertOnlyShown(board, 0, $"{change}, {mode}: after the change");
+
+                int stepsBefore = preparer.StepsRun;
+                int beforeRefresh = CardView.MadeCount;
+                preparer.RunToEnd();
+                int refreshed = CardView.MadeCount - beforeRefresh;
+                string kinds = string.Join(",", preparer.Steps.Skip(stepsBefore).Select(step => step.Kind + (step.Cap is null ? string.Empty : "c")));
+                Assert.IsTrue(preparer.IsPrepared, $"{change}, {mode}: after the refresh Published is prepared.");
+                Assert.IsNull(preparer.SkippedReason, $"{change}, {mode}: nothing stopped preparation.");
+                AssertOnlyShown(board, 0, $"{change}, {mode}: after the refresh");
+
+                using var refills = new RowRefills(published);
+                int beforeSwitch = CardView.MadeCount;
+                Switch(board, 1);
+                int atSwitch = CardView.MadeCount - beforeSwitch;
+                facts.Add($"{change}, {mode}: refresh steps {kinds} made {refreshed} card views; the switch made {atSwitch} and refilled {refills.Count} rows; {published.Cards.Count} cards, {published.Columns} columns; Published made visible {watch.Seen} times");
+                watch.AssertCurrent($"{change}, {mode}");
+                Assert.AreEqual(0, atSwitch, $"{change}, {mode}: the switch made no card view.");
+                Assert.AreEqual(0, refills.Count, $"{change}, {mode}: the switch refilled no row.");
+                if (published.Cards.Count == 0)
+                {
+                    Assert.IsTrue(board.EmptyMessage(PublishedName).IsEffectivelyVisible, $"{change}, {mode}: the empty message is shown.");
+                }
+                else
+                {
+                    AssertDrawnRight(board, $"{change}, {mode}");
+                }
+
+                if (twinPixels is not null && first == FirstPreparationSteps)
+                {
+                    int differ = DifferingPixels(twinPixels, Frame(board).Pixels);
+                    if (differ != 0)
+                    {
+                        string path = Pictures.Save(board.Window, $"published-theme-changed-prepared", TestContext);
+                        Assert.Fail($"After the theme change, {differ} pixels differ from the twin's picture; the prepared one is at {path}.");
+                    }
+
+                    facts.Add($"{change}, {mode}: the picture after the switch equals the twin's byte for byte");
+                }
+            }
+
+            return facts;
         }));
     }
 
+    // One change made to a Board, as a person would make it. The library's
+    // own changes are made to the Board's session (a twin may pass null for
+    // the ones that do not touch it).
+    private static void Change(BoardWindow board, MemorySession? session, string change)
+    {
+        ShelfViewModel published = board.Board.Shelves[1];
+        switch (change)
+        {
+            case "search":
+                board.Board.SearchText = published.Cards[40].Title;
+                board.Board.Render();
+                break;
+            case "stage":
+                // Submitted: every Published manuscript of the test library is
+                // at the Published stage, so this empties the shelf.
+                board.Board.SelectedStageIndex = 3;
+                break;
+            case "sort":
+                board.Board.SelectedSortIndex = 2;
+                break;
+            case "edit":
+            {
+                MemorySession library = session ?? throw new AssertFailedException("An edit needs the session.");
+                string title = published.Cards[1].Title;
+                Manuscript edited = library.Library.First(manuscript => manuscript.Location == ManuscriptLocation.Published && manuscript.Title == title);
+                edited.Title = title + " (edited)";
+                library.RaiseChanged();
+                break;
+            }
+
+            case "delete":
+            {
+                MemorySession library = session ?? throw new AssertFailedException("A delete needs the session.");
+                string title = published.Cards[0].Title;
+                library.Library.RemoveAll(manuscript => manuscript.Location == ManuscriptLocation.Published && manuscript.Title == title);
+                library.RaiseChanged();
+                break;
+            }
+
+            case "theme":
+                board.Window.RequestedThemeVariant = ThemeVariant.Dark;
+                break;
+            case "narrower":
+                board.Window.Width = 1000;
+                break;
+            case "wider":
+                board.Window.Width = 1600;
+                break;
+            case "taller":
+                board.Window.Height = 1000;
+                break;
+            case "scaling":
+                board.Window.SetRenderScaling(1.25);
+                break;
+            default:
+                throw new AssertFailedException($"No change named {change}.");
+        }
+    }
     // A switch after k steps (none; W only; W and one, two or three capped
     // layout steps): as Published becomes visible its rows and row views
     // hold its cards, in the shown shelf's columns once W has run; at the end
@@ -808,6 +954,52 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
             return true;
         }
     }
+
+    // Counts Published's rows refilled (a row given other cards) and rows
+    // added or removed while it is watched.
+    private sealed class RowRefills : IDisposable
+    {
+        private readonly ShelfViewModel _shelf;
+        private readonly List<CardRowViewModel> _rows;
+
+        public RowRefills(ShelfViewModel shelf)
+        {
+            _shelf = shelf;
+            _rows = [.. shelf.Rows];
+            foreach (CardRowViewModel row in _rows)
+            {
+                row.PropertyChanged += OnRowChanged;
+            }
+
+            shelf.Rows.CollectionChanged += OnRowsChanged;
+        }
+
+        public int Count { get; private set; }
+
+        public void Dispose()
+        {
+            foreach (CardRowViewModel row in _rows)
+            {
+                row.PropertyChanged -= OnRowChanged;
+            }
+
+            _shelf.Rows.CollectionChanged -= OnRowsChanged;
+        }
+
+        private void OnRowChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(CardRowViewModel.Cards))
+            {
+                Count++;
+            }
+        }
+
+        private void OnRowsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e) => Count++;
+    }
+
+    // The whole 500 library, in memory, so a test can change it.
+    private static MemorySession WholeLibrary(DiskLibrarySession disk) =>
+        new(disk.Manuscripts.Where(manuscript => manuscript is not null), LargeLibraryFixture.Today, disk.Settings, disk.AuthorLibrary);
 
     // The 500 library without its Published manuscripts, in memory.
     private static MemorySession WithoutPublished(DiskLibrarySession disk) =>

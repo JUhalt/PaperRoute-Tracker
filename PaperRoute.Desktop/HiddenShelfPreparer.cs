@@ -33,6 +33,14 @@ namespace PaperRoute.Desktop;
 //   viewport reaches past what it last measured, so each step makes the rows
 //   of its own band, about twice the step before, and the last about half the
 //   first screen and its cache.
+// - R, the rows: while Published's rows are stale (a render changed its
+//   cards, or W changed its columns), they are brought to its cards, as
+//   showing the shelf would (ShelfViewModel.SyncStaleRows).
+// Once prepared, any change that may leave the switch work to do ends
+// IsPrepared: a render, a resize, a scaling or a theme change. The refresh
+// is then W again if the shown shelf's width changed, R if the rows went
+// stale, and one full-size L. (Run by the idle timer, a refresh waits for
+// 2 s of quiet after a render; RunStep itself runs whatever is due.)
 // The slow-slice stop: after each step its time is divided by the card views
 // it made; if a step took longer than SlowSlice, or that cost predicts the
 // next step longer than SlowSlice, preparation stops for the session
@@ -60,6 +68,9 @@ public sealed class HiddenShelfPreparer
     private BoardViewModel? _board;
     private bool _widthGiven;
 
+    // The shown shelf's width W last gave Published.
+    private double _widthFor;
+
     // Set for good once the shelf tab has chosen Published, even if it was
     // left again before the next step (the design's rule 5): a shelf shown
     // once is never prepared.
@@ -81,18 +92,19 @@ public sealed class HiddenShelfPreparer
     }
 
     // True while the last full-size layout step stands: it ran with
-    // Published's rows current, and since then the rows have not gone stale
-    // and the shelf host's size, the scaling, the theme and Published's
-    // columns and card width are those it laid out for. Any of those changes
-    // makes the switch lay the shelf out again (a rewrap after a resize), so
-    // the shelf is no longer called prepared. An empty or short shelf makes
-    // fewer views, or none.
+    // Published's rows current, and since then the rows have not gone stale,
+    // the Board has not rendered, and the shelf host's size, the scaling, the
+    // theme and Published's columns and card width are those it laid out
+    // for. Any of those changes may leave the switch work to do (a rewrap
+    // after a resize, a card changed in place to measure again), so the shelf
+    // is no longer called prepared until a refresh lays it out again. An
+    // empty or short shelf makes fewer views, or none.
     public bool IsPrepared =>
         !_shownOnce
         && _laidOutFor is { } laidOut
         && _board is { Shelves.Count: > 1 } board
         && !board.Shelves[1].RowsAreStale
-        && laidOut == CurrentLayout(board.Shelves[1]);
+        && laidOut == CurrentLayout(board, board.Shelves[1]);
 
     // How many steps have run.
     public int StepsRun { get; private set; }
@@ -111,10 +123,15 @@ public sealed class HiddenShelfPreparer
     public Func<TimeSpan> Clock { get; set; } = static () => s_clock.Elapsed;
 
     // Runs the next step if one is due and can run now; returns whether one ran.
+    // The steps due, in this order: W while Published has not been given the
+    // shown shelf's width (first, or again after a resize), R while its rows
+    // are stale (a render changed its cards, or W changed its columns), then
+    // L: the ladder for the first preparation, and one full-size L for a
+    // refresh after any change that ended IsPrepared (a render, a resize, a
+    // scaling or theme change).
     public bool RunStep()
     {
-        if (_laidOutFor is not null
-            || _shownOnce
+        if (_shownOnce
             || SkippedReason is not null
             || _board is not { RenderCount: > 0 } board
             || !ReferenceEquals(_view.DataContext, board)
@@ -137,44 +154,58 @@ public sealed class HiddenShelfPreparer
             return false;
         }
 
-        if (!_widthGiven)
+        if (IsPrepared)
         {
-            double width = _view.SelectedShelfView.Scroller.Bounds.Width;
-            if (double.IsNaN(width) || width <= 0)
-            {
-                return false;
-            }
+            return false;
+        }
 
+        double width = _view.SelectedShelfView.Scroller.Bounds.Width;
+        double full = host.Bounds.Height;
+        if (double.IsNaN(width) || width <= 0 || double.IsNaN(full) || full <= 0)
+        {
+            return false;
+        }
+
+        // W. Given before Published is realized, the rows are wrapped to the
+        // columns at once; given again to a realized hidden shelf after a
+        // resize, a change of columns leaves its rows stale for R.
+        if (!_widthGiven || width != _widthFor)
+        {
             TimeSpan started = Clock();
             published.SetWidth(width);
             published.IsRealized = true;
             _widthGiven = true;
+            _widthFor = width;
             Finish("W", null, 0, started, predicted: null);
             return true;
         }
 
-        // A render after W changed Published's cards: its rows wait. Bringing
-        // them current is a step of its own, not built yet.
+        // R. The body of IsShown's sync: the rows brought to the cards. The
+        // row views of rows refilled show their new cards at once; any card
+        // views made for them are counted.
         if (published.RowsAreStale)
         {
-            return false;
+            TimeSpan started = Clock();
+            int before = CardView.MadeCount;
+            published.SyncStaleRows();
+            Finish("R", null, CardView.MadeCount - before, started, predicted: null);
+            return true;
         }
 
-        double full = host.Bounds.Height;
-        if (double.IsNaN(full) || full <= 0)
-        {
-            return false;
-        }
-
-        double? cap = _ladderRun < LadderSteps ? full / Math.Pow(LadderRatio, LadderSteps - _ladderRun) : null;
+        // L: on the ladder until the first full-size layout, then full-size.
+        double? cap = _laidOutFor is null && _ladderRun < LadderSteps ? full / Math.Pow(LadderRatio, LadderSteps - _ladderRun) : null;
         TimeSpan start = Clock();
-        int before = CardView.MadeCount;
+        int madeBefore = CardView.MadeCount;
         Flip(border, cap);
-        int made = CardView.MadeCount - before;
-        _ladderRun++;
+        int made = CardView.MadeCount - madeBefore;
+        if (_laidOutFor is null)
+        {
+            _ladderRun++;
+        }
+
         if (cap is null)
         {
-            _laidOutFor = CurrentLayout(published);
+            _laidOutFor = CurrentLayout(board, published);
         }
 
         // The next step on the ladder reaches LadderRatio times as far, so it
@@ -243,8 +274,9 @@ public sealed class HiddenShelfPreparer
     }
 
     // What a full-size layout step lays Published out for.
-    private LayoutFor CurrentLayout(ShelfViewModel published) =>
+    private LayoutFor CurrentLayout(BoardViewModel board, ShelfViewModel published) =>
         new(
+            board.RenderCount,
             (_view.PublishedShelf.Parent?.Parent as Control)?.Bounds.Size ?? default,
             TopLevel.GetTopLevel(_view)?.RenderScaling ?? 1,
             _view.ActualThemeVariant,
@@ -266,6 +298,7 @@ public sealed class HiddenShelfPreparer
 
         _board = board;
         _widthGiven = false;
+        _widthFor = 0;
         _shownOnce = false;
         _ladderRun = 0;
         _laidOutFor = null;
@@ -290,5 +323,5 @@ public sealed class HiddenShelfPreparer
     // cap of an L on the ladder, the card views it made, and its time.
     public sealed record Step(string Kind, double? Cap, int ViewsMade, TimeSpan Time);
 
-    private readonly record struct LayoutFor(Size Host, double Scaling, ThemeVariant? Theme, int Columns, double ItemWidth);
+    private readonly record struct LayoutFor(int Renders, Size Host, double Scaling, ThemeVariant? Theme, int Columns, double ItemWidth);
 }
