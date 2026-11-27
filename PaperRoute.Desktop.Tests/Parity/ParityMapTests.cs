@@ -177,12 +177,36 @@ public sealed class ParityMapTests
         FormatException empty = Assert.ThrowsExactly<FormatException>(() => ParityMap.Parse(surfaces, string.Join("\n", emptyCell)));
         Assert.Contains($"{ParityMap.MapFile}:{form1 + 1}: the cell \"destination\" is empty", empty.Message);
 
+        string[] padded = [.. mapLines];
+        padded[form1] += " ";
+        FormatException space = Assert.ThrowsExactly<FormatException>(() => ParityMap.Parse(surfaces, string.Join("\n", padded)));
+        Assert.Contains($"{ParityMap.MapFile}:{form1 + 1}: the cell \"read from\" starts or ends with a space", space.Message);
+
+        List<string> twiceInMap = [.. mapLines];
+        twiceInMap.Insert(form1 + 1, mapLines[form1]);
+        FormatException twiceView = Assert.ThrowsExactly<FormatException>(() => ParityMap.Parse(surfaces, string.Join("\n", twiceInMap)));
+        Assert.Contains($"{ParityMap.MapFile}:{form1 + 2}: the key \"Form1\" is already on line {form1 + 1}", twiceView.Message);
+
         string[] surfaceLines = surfaces.ReplaceLineEndings("\n").Split('\n');
         int board = Array.FindIndex(surfaceLines, line => line.StartsWith("Page/Board\t3,12\t", StringComparison.Ordinal));
         Assert.IsGreaterThanOrEqualTo(0, board, "The catalog has a row for Page/Board with rows 3 and 12.");
-        surfaceLines[board] = surfaceLines[board].Replace("\t3,12\t", "\t3,98\t", StringComparison.Ordinal);
-        FormatException badRows = Assert.ThrowsExactly<FormatException>(() => ParityMap.Parse(string.Join("\n", surfaceLines), map));
+        string[] badRowLines = [.. surfaceLines];
+        badRowLines[board] = surfaceLines[board].Replace("\t3,12\t", "\t3,98\t", StringComparison.Ordinal);
+        FormatException badRows = Assert.ThrowsExactly<FormatException>(() => ParityMap.Parse(string.Join("\n", badRowLines), map));
         Assert.Contains($"{ParityMap.SurfacesFile}:{board + 1}: the cell \"map rows\" is \"3,98\"", badRows.Message);
+
+        List<string> twiceInSurfaces = [.. surfaceLines];
+        twiceInSurfaces.Insert(board + 1, surfaceLines[board]);
+        FormatException twiceSurface = Assert.ThrowsExactly<FormatException>(() => ParityMap.Parse(string.Join("\n", twiceInSurfaces), map));
+        Assert.Contains($"{ParityMap.SurfacesFile}:{board + 2}: the key \"Page/Board\" is already on line {board + 1}", twiceSurface.Message);
+
+        // A header with a column renamed.
+        string[] renamed = [.. surfaceLines];
+        int header = Array.FindIndex(renamed, line => !line.StartsWith('#'));
+        Assert.StartsWith("key\tmap rows\tbuilt by\t", renamed[header], "The catalog's first line that is not a comment is its header.");
+        renamed[header] = renamed[header].Replace("\tbuilt by\t", "\tissue\t", StringComparison.Ordinal);
+        FormatException badHeader = Assert.ThrowsExactly<FormatException>(() => ParityMap.Parse(string.Join("\n", renamed), map));
+        Assert.Contains($"{ParityMap.SurfacesFile}:{header + 1}: the header is not", badHeader.Message);
 
         // A missing row: a part one short of the catalog.
         string[] missing = [.. mapLines.Where((_, index) => index != form1)];
