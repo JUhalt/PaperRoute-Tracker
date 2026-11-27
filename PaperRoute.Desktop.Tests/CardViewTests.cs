@@ -127,11 +127,7 @@ public sealed class CardViewTests : StorageCheckedTests
             using BoardWindow board = BoardWindow.Show(session);
             List<string> expected = board.Board.Shelves[0].Cards.Select(card => card.AutomationKey + ".Title").ToList();
             var results = new List<(string, List<string>, List<string>, string)>();
-            foreach ((string name, Key key, RawInputModifiers held, PhysicalKey physical) in new[]
-            {
-                ("Ctrl", Key.LeftCtrl, RawInputModifiers.Control, PhysicalKey.ControlLeft),
-                ("Alt", Key.LeftAlt, RawInputModifiers.Alt, PhysicalKey.AltLeft),
-            })
+            foreach ((string name, Key key) in new[] { ("Ctrl", Key.LeftCtrl), ("Alt", Key.LeftAlt) })
             {
                 board.Find<TextBox>("SearchBox").Focus(NavigationMethod.Tab);
                 Dispatcher.UIThread.RunJobs();
@@ -139,8 +135,7 @@ public sealed class CardViewTests : StorageCheckedTests
                 var stops = new List<string>();
                 for (int count = 0; count < 80; count++)
                 {
-                    board.Window.KeyPress(key, held, physical, null);
-                    board.Window.KeyRelease(key, RawInputModifiers.None, physical, null);
+                    board.Press(key);
                     board.Press(Key.Tab);
                     string id = CardParts.Id(board.Focused() as Control);
                     stops.Add(id);

@@ -8,6 +8,7 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ManuscriptPipeline.Services;
+using PaperRoute.Desktop.Tests.Input;
 using PaperRoute.TestFixtures;
 using PaperRoute.ViewModels;
 using PaperRoute.ViewModels.Session;
@@ -104,9 +105,9 @@ public sealed class ShellViewTests
             {
                 RadioButton board = RailPages(window)[0];
                 board.Focus();
-                Press(window, Key.D1, RawInputModifiers.Control, PhysicalKey.Digit1);
+                Keyboard.Press(window, Key.D1, RawInputModifiers.Control);
                 int digit = shown;
-                Press(window, Key.NumPad1, RawInputModifiers.Control, PhysicalKey.NumPad1);
+                Keyboard.Press(window, Key.NumPad1, RawInputModifiers.Control);
                 return (digit, shown, board.IsChecked == true, shell.Notice);
             }
             finally
@@ -136,7 +137,7 @@ public sealed class ShellViewTests
             try
             {
                 RailPages(window)[0].Focus();
-                Press(window, Key.F1, RawInputModifiers.None, PhysicalKey.F1);
+                Keyboard.Press(window, Key.F1);
                 TextBlock text = window.FindControl<TextBlock>("NoticeText")
                     ?? throw new AssertFailedException("The window has no notice text.");
                 return (shell.Notice, text.Text ?? string.Empty);
@@ -168,18 +169,13 @@ public sealed class ShellViewTests
             {
                 RadioButton board = RailPages(window)[0];
                 board.Focus();
-                (Key Key, PhysicalKey Physical)[] digits =
-                [
-                    (Key.D2, PhysicalKey.Digit2), (Key.D3, PhysicalKey.Digit3), (Key.D4, PhysicalKey.Digit4),
-                    (Key.D5, PhysicalKey.Digit5), (Key.D6, PhysicalKey.Digit6),
-                ];
-                foreach ((Key key, PhysicalKey physical) in digits)
+                foreach (Key key in new[] { Key.D2, Key.D3, Key.D4, Key.D5, Key.D6 })
                 {
-                    Press(window, key, RawInputModifiers.Control, physical);
+                    Keyboard.Press(window, key, RawInputModifiers.Control);
                 }
 
-                Press(window, Key.Left, RawInputModifiers.Alt, PhysicalKey.ArrowLeft);
-                Press(window, Key.Right, RawInputModifiers.Alt, PhysicalKey.ArrowRight);
+                Keyboard.Press(window, Key.Left, RawInputModifiers.Alt);
+                Keyboard.Press(window, Key.Right, RawInputModifiers.Alt);
                 return board.IsChecked == true;
             }
             finally
@@ -422,13 +418,6 @@ public sealed class ShellViewTests
         ToolTip.GetShowOnDisabled(item),
         item.IsEffectivelyEnabled,
         item is RadioButton radio && radio.IsChecked == true);
-
-    private static void Press(Window window, Key key, RawInputModifiers modifiers, PhysicalKey physical)
-    {
-        window.KeyPress(key, modifiers, physical, null);
-        window.KeyRelease(key, modifiers, physical, null);
-        Dispatcher.UIThread.RunJobs();
-    }
 
     private static void Click(Window window, Control control)
     {
