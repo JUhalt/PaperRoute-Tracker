@@ -1,8 +1,8 @@
 namespace PaperRoute.Desktop.Tests.Legibility;
 
 // The lines the legibility rules judge by, in one place, each with the line
-// of today's WinForms suite or of the plan it comes from (plan :164, which
-// cites them). No rule writes its own number.
+// of today's WinForms suite it comes from (plan :164 cites the first four).
+// No rule compares against its own number.
 // Limits of headless: HeadlessLimits.md
 internal static class Thresholds
 {
