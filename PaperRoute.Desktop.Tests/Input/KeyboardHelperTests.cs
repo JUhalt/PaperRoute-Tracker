@@ -23,7 +23,7 @@ public sealed class KeyboardHelperTests : StorageCheckedTests
     private static readonly string[] s_notKeys =
     [
         "Cancel", "Close", "Fill Blanks from Crossref", "Check for Publications", "Stop",
-        "⋯", "View route", "Done", "Route View", "Find", "Look Up Journal Facts",
+        "⋯", "?", "View route", "Done", "Route View", "Find", "Look Up Journal Facts",
     ];
 
     // Issue 3 proves only the parser (design 2.5); issue 5 reads the guide's
@@ -55,6 +55,9 @@ public sealed class KeyboardHelperTests : StorageCheckedTests
         Assert.AreEqual((Key.D1, RawInputModifiers.Control), Keyboard.Parse("Ctrl+1"));
         Assert.AreEqual((Key.BrowserBack, RawInputModifiers.None), Keyboard.Parse("Browser Back"));
         Assert.AreEqual((Key.Tab, RawInputModifiers.Shift), Keyboard.Parse("Shift+Tab"));
+        // The guide's "?" is a help button's label, listed above beside "⋯";
+        // the design's key map still holds the ? key.
+        Assert.AreEqual((Key.OemQuestion, RawInputModifiers.None), Keyboard.Parse("?"));
     }
 
     [TestMethod]
