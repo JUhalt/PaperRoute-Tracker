@@ -29,6 +29,7 @@ namespace PaperRoute.Desktop.Tests;
 // (<name>.actual.txt) and names the first line that differs. A change that
 // means to alter the tree replaces the expected file with that text, and says
 // why in its commit.
+// Limits of headless: HeadlessLimits.md
 [TestClass]
 public sealed class AccessibilityTreeTests : StorageCheckedTests
 {
