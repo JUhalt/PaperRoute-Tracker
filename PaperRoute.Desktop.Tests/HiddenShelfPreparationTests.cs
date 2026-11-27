@@ -334,6 +334,7 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
             ShelfViewModel published = board.Board.Shelves[1];
             Assert.IsNotEmpty(published.Cards, "The cards arrived on the hidden Published.");
             Assert.IsTrue(published.RowsAreStale, "Its rows wait for the switch.");
+            Assert.IsFalse(board.View.Preparer.IsPrepared, "With its rows stale, Published is no longer called prepared.");
             AssertOnlyShown(board, 0, "after the cards arrived");
 
             int beforeSwitch = CardView.MadeCount;
@@ -346,6 +347,32 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
             Assert.IsFalse(board.EmptyMessage(PublishedName).IsEffectivelyVisible, "The empty message went.");
             AssertDrawnRight(board, "the first cards on a prepared Published");
             return facts;
+        }));
+    }
+
+    // A narrower window after preparation: the hidden Published keeps the
+    // columns it was laid out for, so it is no longer called prepared; the
+    // switch rewraps it and draws every card right.
+    [TestMethod]
+    public void T9_ANarrowerWindowAfterPreparationIsNoLongerPrepared()
+    {
+        using DiskLibrarySession session = OpenFiveHundred("five-hundred");
+        Write(Headless.Run(() =>
+        {
+            using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
+            HiddenShelfPreparer preparer = board.View.Preparer;
+            preparer.RunToEnd();
+            Assert.IsTrue(preparer.IsPrepared, "Published is prepared.");
+            ShelfViewModel published = board.Board.Shelves[1];
+            int columnsPrepared = published.Columns;
+            board.Window.Width = 1000;
+            Settle(board);
+            Assert.IsFalse(preparer.IsPrepared, "After a resize, Published is no longer called prepared.");
+            Switch(board, 1);
+            string fact = $"narrower window: columns {columnsPrepared} at preparation, {published.Columns} at the switch";
+            Assert.AreNotEqual(columnsPrepared, published.Columns, "The narrower window has fewer columns.");
+            AssertDrawnRight(board, "after a resize");
+            return new List<string> { fact };
         }));
     }
 
