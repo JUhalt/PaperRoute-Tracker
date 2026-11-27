@@ -199,6 +199,7 @@ public sealed class MeasureModeTests : StorageCheckedTests
         Assert.AreEqual(Environment.ProcessorCount, root.GetProperty("processors").GetInt32());
         CollectionAssert.AreEqual(new[] { "stage-back-to-all" }, root.GetProperty("waitingForRowsOfN").EnumerateArray().Select(item => item.GetString()).ToArray());
         Assert.IsFalse(root.TryGetProperty("error", out _), "No error when the run finished.");
+        Assert.IsFalse(root.TryGetProperty("idlePreparation", out _), "A run told no idle side writes no idlePreparation.");
 
         List<string> rows = root.GetProperty("rows").EnumerateArray().Select(row =>
             string.Join(" | ",
@@ -244,6 +245,55 @@ public sealed class MeasureModeTests : StorageCheckedTests
         using JsonDocument stoppedDocument = JsonDocument.Parse(stopped.ToJson());
         Assert.AreEqual("TimeoutException: no frame", stoppedDocument.RootElement.GetProperty("error").GetString());
         Assert.AreEqual(0, stoppedDocument.RootElement.GetProperty("rows").GetArrayLength());
+    }
+
+    // A run told an idle side records, per library, what preparation did
+    // before the first switch: the side, the steps and their card views,
+    // whether Published was prepared, why preparation stopped (null, or the
+    // preparer's reason) and whether the switch after idle was timed, with
+    // the card views it made (null when it was not timed).
+    [TestMethod]
+    public void TheJsonOfARunToldAnIdleSideRecordsWhatPreparationDid()
+    {
+        var report = new BoardMeasurementReport
+        {
+            Mode = "headless", MachineName = "TEST-PC", Dpi = 96, Option = "b", ResetThreshold = 64,
+            Day = new DateTime(2026, 11, 27), DaySource = "the computer's date", Build = "Release", Multiplier = 1,
+            TakenAt = new DateTime(2026, 11, 27, 9, 0, 0), HeldLibrary = "500",
+            IdlePreparation =
+            [
+                new IdlePreparationRecord("example", IdleSides.Prepared, 5, 4, true, null, true, 0),
+                new IdlePreparationRecord("500", IdleSides.Prepared, 3, 6, false, HiddenShelfPreparer.SlowSliceReason, false, null),
+            ],
+        };
+
+        using JsonDocument document = JsonDocument.Parse(report.ToJson());
+        JsonElement[] idle = document.RootElement.GetProperty("idlePreparation").EnumerateArray().ToArray();
+        Assert.HasCount(2, idle);
+        string Describe(JsonElement item) => string.Join(" | ",
+            item.GetProperty("library").GetString(),
+            item.GetProperty("side").GetString(),
+            item.GetProperty("stepsRun").GetInt32().ToString(CultureInfo.InvariantCulture),
+            item.GetProperty("viewsMade").GetInt32().ToString(CultureInfo.InvariantCulture),
+            item.GetProperty("prepared").GetBoolean() ? "prepared" : "not prepared",
+            item.GetProperty("skippedReason").ValueKind == JsonValueKind.Null ? "null" : item.GetProperty("skippedReason").GetString(),
+            item.GetProperty("firstSwitchTaken").GetBoolean() ? "taken" : "not taken",
+            item.GetProperty("viewsMadeAtSwitch").ValueKind == JsonValueKind.Null ? "null" : item.GetProperty("viewsMadeAtSwitch").GetInt32().ToString(CultureInfo.InvariantCulture));
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "example | prepared | 5 | 4 | prepared | null | taken | 0",
+                "500 | prepared | 3 | 6 | not prepared | slow slice | not taken | null",
+            },
+            idle.Select(Describe).ToArray());
+
+        string table = report.ToTable();
+        StringAssert.Contains(table, "Idle side prepared (500): 3 preparation steps made 6 card views; Published not prepared at the switch; preparation stopped: slow slice; the first switch after idle was made but not timed.");
+        StringAssert.Contains(table, "Idle side prepared (example): 5 preparation steps made 4 card views; Published prepared at the switch; preparation not stopped; the first switch after idle made 0 card views.");
+
+        CollectionAssert.AreEqual(new[] { "none", "width", "half", "prepared" }, IdleSides.All.ToArray());
+        CollectionAssert.AreEqual(new int?[] { 0, 1, 3, null }, IdleSides.All.Select(IdleSides.StepsFor).ToArray());
+        Assert.IsFalse(IdleSides.IsKnown("Prepared"), "Sides are written in lower case.");
     }
 
     // ---- The UI probe ----

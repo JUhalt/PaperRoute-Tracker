@@ -96,6 +96,59 @@ public sealed record MeasurementConditions
     public bool? Disturbed { get; init; }
 }
 
+// The sides of a with-and-without comparison of preparing Published while the
+// Board is idle (idle-preparation design, section 8; busy-PC design, section
+// 9). A run told a side ("--after-idle" in a real window, the
+// PAPERROUTE_TRIAL_AFTER_IDLE variable headless) drives the preparation
+// itself, then waits alike on every side (a fixed idle period, then one
+// frame) and times the first switch as first-switch-published-after-idle. A
+// run told no side is today's run: its first switch is first-switch-published.
+public static class IdleSides
+{
+    // No preparation: the wait only.
+    public const string None = "none";
+
+    // The width step W only.
+    public const string Width = "width";
+
+    // W and the first two layout steps of the ladder: half its L steps.
+    public const string Half = "half";
+
+    // Every step, until the Board says Published is prepared.
+    public const string Prepared = "prepared";
+
+    public static IReadOnlyList<string> All { get; } = [None, Width, Half, Prepared];
+
+    public static bool IsKnown(string? side) => side is not null && All.Contains(side, StringComparer.Ordinal);
+
+    // How many steps the side runs: null for every step due.
+    public static int? StepsFor(string side) => side switch
+    {
+        None => 0,
+        Width => 1,
+        Half => 3,
+        Prepared => null,
+        _ => throw new ArgumentException($"No idle side is called {side}.", nameof(side)),
+    };
+}
+
+// What idle preparation did before the first switch of one library, in a run
+// told a side: the steps run and the card views they made, whether Published
+// was prepared at the switch, why preparation stopped (null when it did not),
+// and whether the first switch after idle was timed, with the card views it
+// made. When preparation stopped, the switch is made untimed: the row is not
+// taken (idle-preparation design, section 8, row 1), so ViewsMadeAtSwitch is
+// null.
+public sealed record IdlePreparationRecord(
+    string Library,
+    string Side,
+    int StepsRun,
+    int ViewsMade,
+    bool Prepared,
+    string? SkippedReason,
+    bool FirstSwitchTaken,
+    int? ViewsMadeAtSwitch);
+
 // The numbers of one measurement run, headless (the budget tests) or in a
 // real window ("--measure", d1 7.3), and how they are written as JSON: per
 // row the library, the action, Wall, UI, the budget, the verdict and the
@@ -154,6 +207,11 @@ public sealed class BoardMeasurementReport
     // What the PC was doing during the run; null when it was not recorded
     // (the JSON then says null).
     public MeasurementConditions? Conditions { get; init; }
+
+    // What idle preparation did, one record per library, in a run told a side
+    // (IdleSides); empty in a run told none, whose JSON then has no
+    // "idlePreparation".
+    public IReadOnlyList<IdlePreparationRecord> IdlePreparation { get; init; } = [];
 
     // The last line of every timing failure: always there, so the message
     // also reads correctly on a quiet PC (busy-PC design, section 8).
@@ -301,6 +359,7 @@ public sealed class BoardMeasurementReport
 
             json.WriteEndArray();
             WriteConditions(json, Conditions);
+            WriteIdlePreparation(json, IdlePreparation);
             json.WriteEndObject();
         }
 
@@ -373,6 +432,49 @@ public sealed class BoardMeasurementReport
         json.WriteEndObject();
     }
 
+    // Written only in a run told a side, so a run told none writes the JSON
+    // it wrote before.
+    private static void WriteIdlePreparation(Utf8JsonWriter json, IReadOnlyList<IdlePreparationRecord> records)
+    {
+        if (records.Count == 0)
+        {
+            return;
+        }
+
+        json.WriteStartArray("idlePreparation");
+        foreach (IdlePreparationRecord record in records)
+        {
+            json.WriteStartObject();
+            json.WriteString("library", record.Library);
+            json.WriteString("side", record.Side);
+            json.WriteNumber("stepsRun", record.StepsRun);
+            json.WriteNumber("viewsMade", record.ViewsMade);
+            json.WriteBoolean("prepared", record.Prepared);
+            if (record.SkippedReason is { } reason)
+            {
+                json.WriteString("skippedReason", reason);
+            }
+            else
+            {
+                json.WriteNull("skippedReason");
+            }
+
+            json.WriteBoolean("firstSwitchTaken", record.FirstSwitchTaken);
+            if (record.ViewsMadeAtSwitch is { } made)
+            {
+                json.WriteNumber("viewsMadeAtSwitch", made);
+            }
+            else
+            {
+                json.WriteNull("viewsMadeAtSwitch");
+            }
+
+            json.WriteEndObject();
+        }
+
+        json.WriteEndArray();
+    }
+
     private static void WriteNumberOrNull(Utf8JsonWriter json, string name, double? value, int digits)
     {
         if (value is { } number && double.IsFinite(number))
@@ -402,6 +504,11 @@ public sealed class BoardMeasurementReport
         if (Conditions is not null)
         {
             text.AppendLine(DescribeConditions(Conditions, Processors));
+        }
+
+        foreach (IdlePreparationRecord idle in IdlePreparation)
+        {
+            text.AppendLine(DescribeIdlePreparation(idle));
         }
 
         text.AppendLine("| Library | Id | Action | Wall ms | UI ms | Run UI ms | Budget ms | Verdict | Rule |");
@@ -437,6 +544,17 @@ public sealed class BoardMeasurementReport
             null => "Load unknown.",
         });
         return text.ToString();
+    }
+
+    // One line on what idle preparation did before one library's first switch.
+    public static string DescribeIdlePreparation(IdlePreparationRecord idle)
+    {
+        ArgumentNullException.ThrowIfNull(idle);
+        string switched = idle.FirstSwitchTaken
+            ? string.Create(CultureInfo.InvariantCulture, $"the first switch after idle made {idle.ViewsMadeAtSwitch} card views")
+            : "the first switch after idle was made but not timed";
+        return string.Create(CultureInfo.InvariantCulture,
+            $"Idle side {idle.Side} ({idle.Library}): {idle.StepsRun} preparation steps made {idle.ViewsMade} card views; Published {(idle.Prepared ? "prepared" : "not prepared")} at the switch; {(idle.SkippedReason is { } reason ? "preparation stopped: " + reason : "preparation not stopped")}; {switched}.");
     }
 
     public const string LocalFileMessage = "\"--measure\" needs a local file path such as C:\\Measurements\\board.json.";
