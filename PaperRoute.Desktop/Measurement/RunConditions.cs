@@ -41,11 +41,14 @@ public sealed class RunConditions
     // The run's figures from two readings. Others' load is the machine's less
     // this process's own processor time, never below 0; it is not exact (the
     // window manager's and the test runner's work for this process count as
-    // other programs). A run is disturbed when other programs left fewer than
-    // two processors free on average: the design's starting value. The
-    // machine's load counts every processor, while processors (from
-    // Environment.ProcessorCount) follows an affinity or container limit, so
-    // the line assumes the process runs with neither.
+    // other programs). A run is disturbed when other programs kept more than
+    // 3 of the 12 processors busy on average, the line the maintainer set on
+    // November 27, 2026 (MeasurementConditions.DisturbedLine). It is written
+    // as a quarter of the processors, so it reads 1 of 4 on a CI runner; that
+    // scaling is assumed, not part of the decision. The machine's load counts
+    // every processor, while processors (from Environment.ProcessorCount)
+    // follows an affinity or container limit, so the line assumes the process
+    // runs with neither.
     public static MeasurementConditions Compute(ThreadClock clock, LoadReading before, LoadReading after, IReadOnlyList<MeasuredRow> rows, int processors)
     {
         ArgumentNullException.ThrowIfNull(clock);
@@ -69,7 +72,7 @@ public sealed class RunConditions
             StealProcessors = Rate(before.StealSeconds, after.StealSeconds, seconds),
             OthersBusyProcessors = others,
             NotRunShare = NotRunShare(rows),
-            Disturbed = others is { } busy ? busy > processors - 2 : null,
+            Disturbed = others is { } busy ? busy > MeasurementConditions.DisturbedLine(processors) : null,
         };
     }
 
