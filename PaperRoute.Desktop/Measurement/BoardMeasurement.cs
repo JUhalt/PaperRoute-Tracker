@@ -85,6 +85,12 @@ public sealed class BoardMeasurement
     public const string ScrollPublished = "scroll-published-longest-step";
     public const string ProcessStartToBoard = "process-start-to-board";
 
+    // Report-only, not rows of d1 6.3, the last two rows: the search typed on
+    // Pipeline while Published is hidden after the scroll showed it, then the
+    // switch to Published after that search. Compared only between builds.
+    public const string SearchKeystrokePublishedHidden = "search-keystroke-published-hidden";
+    public const string SwitchToPublishedAfterHiddenChange = "switch-published-after-hidden-change";
+
     // The 500 library's rows that do not meet their budget with every card of
     // a shown shelf made at once (option (a)). Their budgets stand; under (a)
     // they are measured and reported, not held. Medians of five headless
@@ -403,6 +409,39 @@ public sealed class BoardMeasurement
             GcPauseMs: slowest?.GcPauseMs, JitMs: slowest?.JitMs, Waits: FrameWaits));
         board.SelectedShelfIndex = 0;
         Settle(window);
+        _frame(window);
+
+        // Report-only, last, so no row above changes (busy-PC design, section
+        // 9). Back on Pipeline, Published hidden after the scroll showed it,
+        // with no stage row between: the search timed with the same work as
+        // the search row, then the switch that shows Published again, then the
+        // search cleared and the Board put back. Each figure is compared only
+        // between builds, never with a budget row.
+        const string betweenBuilds = "not a row of d1 6.3; compared only between builds";
+        Time(library, SearchKeystrokePublishedHidden, $"Search keystroke to rendered Board with Published hidden after it was shown (\"{SearchText}\" typed into an empty search, then the render its wait ends in, and layout)", FilterKeystrokeBudget, "filter keystroke", () =>
+        {
+            board.SearchText = SearchText;
+            board.Render();
+            Settle(window);
+        }, informational: true, note: betweenBuilds);
+        NoteChanges(board);
+        Require(!requireChanges || board.LastSyncChanges[1] != 0, "The search changed the hidden Published shelf's cards.");
+        int foundHidden = board.Shelves[0].Cards.Count;
+        Require(!requireChanges || (foundHidden > 0 && foundHidden < pipeline), $"The search with Published hidden left some of the Pipeline's cards and took others ({foundHidden} of {pipeline}).");
+        RequireShelf(view, "PipelineShelf", foundHidden, "with the search made while Published was hidden");
+        _frame(window);
+        Time(library, SwitchToPublishedAfterHiddenChange, $"Switch to Published after a search made while it was hidden (\"{SearchText}\", option ({Option}))", PageSwitchBudget, "page switch", () =>
+        {
+            board.SelectedShelfIndex = 1;
+            Settle(window);
+        }, informational: true, note: betweenBuilds);
+        RequireShelf(view, "PublishedShelf", -1, "after a search made while it was hidden");
+        _frame(window);
+        board.SearchText = string.Empty;
+        board.Render();
+        board.SelectedShelfIndex = 0;
+        Settle(window);
+        RequireShelf(view, "PipelineShelf", pipeline, "at the end");
     }
 
     // waits marks a row that waits by design (a frame, a load off the
