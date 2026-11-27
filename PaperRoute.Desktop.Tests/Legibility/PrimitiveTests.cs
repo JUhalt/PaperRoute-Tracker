@@ -78,8 +78,9 @@ public sealed class PrimitiveTests
     // under 10 % differing is the same pattern, exactly 10 % is not; a pixel
     // within 2:1 of the commonest colour is no pattern; the colours do not
     // matter; and over 90 % differing, the same pattern inverted, is the
-    // same pattern. Fails if a boundary, the 2:1 line or the inversion
-    // differs from WorkflowThemeKeyboardSmokeTests.vb's SamePattern.
+    // same pattern, exactly 90 % is not. Fails if a boundary, the 2:1 line
+    // or the inversion differs from WorkflowThemeKeyboardSmokeTests.vb's
+    // SamePattern.
     [TestMethod]
     public void SamePatternMatchesTodaysRule()
     {
@@ -106,6 +107,26 @@ public sealed class PrimitiveTests
             .Fill(new PixelRect(0, 8, Side, 2), Color.FromRgb(0x40, 0x00, 0x00))
             .Frame();
         AssertPattern(1.00, true, Swatch(s_white, s_black, 40), inverted, "the same rows, in and out swapped");
+
+        // Each side of the 90 % line: the first swatch paints some of its
+        // white rows 4 to 9 a fourth dark colour, so they join rows 0 to 3
+        // in its pattern and 100 less that many positions differ. White
+        // stays its commonest colour (50 or 51, against black's 40).
+        AssertPattern(0.90, false, InvertedBut(10), inverted, "the swapped rows with ten positions alike");
+        AssertPattern(0.91, true, InvertedBut(9), inverted, "the swapped rows with nine positions alike");
+    }
+
+    // Black rows 0 to 3 and white rows 4 to 9, but the first alike positions
+    // of rows 4 to 9 are dark, as the inverted swatch's rows 4 to 9 are.
+    private static FramePixels InvertedBut(int alike)
+    {
+        CodeBitmap bitmap = new CodeBitmap(Side, Side, s_white).Fill(new PixelRect(0, 0, Side, 4), s_black);
+        for (int index = 0; index < alike; index++)
+        {
+            bitmap.Set(index % Side, 4 + (index / Side), Color.FromRgb(0x40, 0x00, 0x40));
+        }
+
+        return bitmap.Frame();
     }
 
     // At the middle of each side the stronger of the two outermost pixels
