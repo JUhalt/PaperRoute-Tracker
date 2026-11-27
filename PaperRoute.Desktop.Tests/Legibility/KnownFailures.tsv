@@ -1,0 +1,9 @@
+# Known failures of the legibility rules: real faults a rule finds on a subject, each kept here with its issue until it is
+# fixed (the harness design, part 2.4). The subject stays as it is drawn; a listed failure does not fail its rule's run.
+# KnownFailuresTests.KnownFailuresAreCurrent fails when a listed entry now passes (it is stale), when an entry has no issue
+# number, or when the number of entries differs from the constant in KnownFailuresTests.cs, so growth shows in that file's
+# source as well as here. This is not R5's allow-list, which will hold looks that are accepted, not faults.
+#
+# One line per failure, five cells separated by tabs, none empty: rule (R1 today), subject (for R1 "<ink> on <surface>",
+# token keys), theme case (Light, Dark), issue ("#" and its number), and one line of why.
+rule	subject	theme case	issue	why

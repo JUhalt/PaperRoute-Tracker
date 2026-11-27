@@ -7,7 +7,8 @@ namespace PaperRoute.Desktop.Tests.Legibility;
 // Light and Dark (the harness design, part 2.4; the contrast cases join it
 // with R2's theme cases). The trial's T1 and T2 grew into the first two tests
 // here; R1_FailsADeliberatelyLowContrastToken (RuleTeethTests.cs) gives R1
-// its teeth through the same reader and the same rule.
+// its teeth through the same reader and the same rule. A failure listed in
+// KnownFailures.tsv does not fail these runs (KnownFailuresAreCurrent).
 // Limits of headless: HeadlessLimits.md
 [TestClass]
 public sealed partial class R1Tests
@@ -42,11 +43,12 @@ public sealed partial class R1Tests
     [TestMethod]
     public void R1_EveryTextPairHasItsContrast()
     {
+        IReadOnlyList<KnownFailure> known = KnownFailures.Load();
         var findings = new List<Finding>();
         int checkedPairs = 0;
         foreach (string variant in Variants)
         {
-            findings.AddRange(Rules.R1(variant, TokenFile.Colors(variant), TokenPairs.Text));
+            findings.AddRange(Rules.R1(variant, TokenFile.Colors(variant), TokenPairs.Text).Where(finding => !KnownFailures.Lists(known, finding)));
             checkedPairs += TokenPairs.Text.Count;
         }
 
@@ -60,10 +62,11 @@ public sealed partial class R1Tests
     [TestMethod]
     public void R1_EveryStageAndTagPairHasItsContrast()
     {
+        IReadOnlyList<KnownFailure> known = KnownFailures.Load();
         var findings = new List<Finding>();
         foreach (string variant in Variants)
         {
-            findings.AddRange(Rules.R1(variant, TokenFile.Colors(variant), TokenPairs.StagesAndTags));
+            findings.AddRange(Rules.R1(variant, TokenFile.Colors(variant), TokenPairs.StagesAndTags).Where(finding => !KnownFailures.Lists(known, finding)));
         }
 
         Assert.AreEqual(16, TokenPairs.StagesAndTags.Count, "Eight stages and eight tag palettes.");
