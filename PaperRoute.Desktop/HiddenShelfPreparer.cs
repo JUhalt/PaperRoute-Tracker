@@ -88,7 +88,9 @@ namespace PaperRoute.Desktop;
 // at every step and starts again only from the next frame, so a frame is
 // drawn and the message loop runs between any two steps. It stops for good
 // when Published is shown or preparation is skipped, stops when prepared,
-// and starts again on a render, a resize, a scaling or a theme change.
+// and starts again on a render, a resize, a scaling or a theme change. It
+// also stops while the window is minimized, and starts again when the
+// window is restored.
 public sealed class HiddenShelfPreparer
 {
     // The maintainer's threshold (2026-11-27): a step that runs, or is
@@ -563,10 +565,12 @@ public sealed class HiddenShelfPreparer
         return !_view.SelectedShelfView.CardViews().Any(card => card.MoreMenu.IsOpen || card.RightClickMenu.IsOpen);
     }
 
-    // Starts the timer if a step may still be due.
+    // Starts the timer if a step may still be due. Not while the window is
+    // minimized: it starts again when the window is restored.
     private void Arm()
     {
-        if (!_enabled || _topLevel is null || _awaitingFrame || _shownOnce || SkippedReason is not null || IsPrepared)
+        if (!_enabled || _topLevel is null || _awaitingFrame || _shownOnce || SkippedReason is not null || IsPrepared
+            || _topLevel is Window { WindowState: WindowState.Minimized })
         {
             return;
         }
@@ -599,6 +603,7 @@ public sealed class HiddenShelfPreparer
         topLevel.AddHandler(InputElement.PointerReleasedEvent, OnPointerReleased, RoutingStrategies.Tunnel, handledEventsToo: true);
         topLevel.AddHandler(InputElement.PointerCaptureLostEvent, OnPointerReleased, RoutingStrategies.Direct, handledEventsToo: true);
         topLevel.ScalingChanged += OnHostChanged;
+        topLevel.PropertyChanged += OnTopLevelChanged;
         _host = _view.PublishedShelf.Parent?.Parent as Control;
         if (_host is not null)
         {
@@ -630,6 +635,7 @@ public sealed class HiddenShelfPreparer
         _topLevel.RemoveHandler(InputElement.PointerReleasedEvent, OnPointerReleased);
         _topLevel.RemoveHandler(InputElement.PointerCaptureLostEvent, OnPointerReleased);
         _topLevel.ScalingChanged -= OnHostChanged;
+        _topLevel.PropertyChanged -= OnTopLevelChanged;
         if (_host is not null)
         {
             _host.SizeChanged -= OnHostChanged;
@@ -661,6 +667,25 @@ public sealed class HiddenShelfPreparer
     {
         _lastHostChange = Clock();
         Arm();
+    }
+
+    // Minimized, the timer stops, so a window minimized before Published is
+    // prepared does not wake every Interval; restored, it starts again.
+    private void OnTopLevelChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property != Window.WindowStateProperty)
+        {
+            return;
+        }
+
+        if (_topLevel is Window { WindowState: WindowState.Minimized })
+        {
+            _timer?.Stop();
+        }
+        else
+        {
+            Arm();
+        }
     }
 
     // What a full-size layout step lays Published out for.

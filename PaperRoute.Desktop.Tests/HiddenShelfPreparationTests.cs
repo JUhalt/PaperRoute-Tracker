@@ -1177,8 +1177,10 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
             Dispatcher.UIThread.RunJobs();
             now += TimeSpan.FromSeconds(1);
             Assert.IsFalse(preparer.Tick(), "The window minimized: no step.");
+            Assert.IsFalse(preparer.IsTimerRunning, "Minimized, the timer is not started again.");
             board.Window.WindowState = WindowState.Normal;
             Settle(board);
+            Assert.IsTrue(preparer.IsTimerRunning, "Restored, the timer starts again.");
             now += TimeSpan.FromSeconds(1);
             Assert.IsTrue(preparer.Tick(), "Shown again: the last step.");
             DrawFrame();
