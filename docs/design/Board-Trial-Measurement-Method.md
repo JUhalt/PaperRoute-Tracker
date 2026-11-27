@@ -2,7 +2,7 @@
 
 How the Avalonia Board trial times its Board, what it records about how busy the PC was, and how two builds are compared. It answers the maintainer's note of November 21, 2026 on the two rows still over their budget: "Remember that these tests are on a very, very busy PC. Perhaps we can account or correct for that?"
 
-**Every figure this method adds is report-only.** The budgets, the multipliers (Debug x2, GitHub Actions x3), the verdicts and the headless test's rule are what they were before. Wall and UI are computed as before; the new reads add a few microseconds inside each row's stopwatch and at each probe tick (section 3). Run UI is a diagnosis, not a verdict. The verdict rule of section 7 is a proposal and changes nothing until the maintainer accepts it.
+**Every figure this method adds is report-only.** The budgets, the multipliers (Debug x2, GitHub Actions x3) and the headless test's rule are what they were before. Wall and UI are computed as before; the new reads add a few microseconds inside each row's stopwatch and at each probe tick (section 3). Run UI failed the validation of November 27, 2026 (section 6): it is labelled "not validated", it is not trusted even as a diagnosis on the development PC, and it counts toward no verdict. The verdict rule of section 7, on UI, is in force from November 27, 2026, by the maintainer's decision.
 
 Sections 1 to 8 keep the numbers that the code's comments cite as "busy-PC design, section N".
 
@@ -12,17 +12,22 @@ Built (the pull request that adds this document):
 
 - The thread clock, the new per-row figures, the run's `conditions`, the failure message (sections 1 to 4 and 8). `PaperRoute.Desktop/Measurement/ThreadClock.cs`, `RunConditions.cs`, `BoardMeasurement.cs`, `WindowMeasurement.cs`, and `PaperRoute.ViewModels/Measurement/BoardMeasurementReport.cs`.
 - The quiet-PC line at the end of the Windows Forms timing tests' failure messages (`PaperRoute.Tests/ResponsivenessBudgetTests.vb`).
-- `ManualCertification/Measure-BoardPairs.ps1`, the comparison of section 5 and the proposed verdict lines of section 7, with its check on canned measurements, `ManualCertification/Test-BoardPairs.ps1`, which the trial's Windows CI job runs.
+- `ManualCertification/Measure-BoardPairs.ps1`, the comparison of section 5 and the verdict lines of section 7, with its check on canned measurements, `ManualCertification/Test-BoardPairs.ps1`, which the trial's Windows CI job runs.
 - `ManualCertification/Start-BoardTrialLoad.ps1`, the known load of section 6.
 
 Built after it:
 
 - The two report-only rows at the end of the measured sequence, `search-keystroke-published-hidden` and `switch-published-after-hidden-change` (section 3, last bullet), in `BoardMeasurement.cs`, with their checks in `PaperRoute.Desktop.Tests/BoardBudgetTests.cs` and `MeasurementReportTests.cs`. They are compared only between builds.
+- After the validation and the decisions of November 27, 2026: the new disturbed line (section 2), in `MeasurementConditions.DisturbedLine` and `RunConditions.cs`; the label "not validated" on Run UI in the JSON (`runUiMsStatus`), in the report's table and in the pairs summary; the pairs script's verdict lines under the rule in force, with no budget verdict for a report-only row and no verdict read from Run UI (sections 5, 7 and 9); and a load that lasts up to 120 s and takes 1 to 6 threads (section 6).
+
+Run on the development PC:
+
+- The validation of section 6, on November 27, 2026. **Run UI failed it.** On that PC Run UI is not trusted even as a diagnosis; it stays in the JSON, labelled "not validated". It has been validated on no PC.
+- The load series of November 27, 2026 (section 6), from which the maintainer set the disturbed line.
+- A deciding real-window sitting for #404's search with Published hidden, on November 27, 2026, under the disturbed line then in force.
 
 Not built yet:
 
-- The validation of section 6 has **not been run**. Until it has, Run UI is not validated on any PC.
-- The pairs for #404's search with Published hidden. Its row, `search-keystroke-published-hidden`, and the switch after it are built (section 3), but no sitting has been run with them.
 - The rows for preparing Published while the Board is idle.
 
 On Linux the thread clock and the load readings first ran in CI, and they gave readings (section 11, "Shown by CI").
@@ -33,16 +38,16 @@ On Linux the thread clock and the load readings first ran in CI, and they gave r
 - **UI** (the verdict). The longest time during the action when a key press could not have been handled. A 1 ms timer on the interface thread measures it, and it is never more than Wall. UI is what a person would have felt on the PC as it was at that moment.
 - **Ran** (`runMs`). How long the interface thread was actually running on a processor during the action. Windows and Linux keep this count for every thread.
 - **Not running** (`notRunMs` = Wall - Ran). Time the thread was ready but other programs had the processor, or time it was waiting (for a frame, the disk, a garbage collection run by another thread).
-- **Run UI** (`runUiMs`, the corrected figure). The same longest stall as UI, but counting only the time the thread was running. It answers one question: how long was the Board's own work in one stretch, leaving out the time other programs took the processor away?
+- **Run UI** (`runUiMs`, the corrected figure). The same longest stall as UI, but counting only the time the thread was running. It was meant to answer one question: how long was the Board's own work in one stretch, leaving out the time other programs took the processor away? It failed the validation of November 27, 2026 (section 6), so it is labelled "not validated" wherever it is written.
 - **Fast-core share** (`perfCoreShare`). The share of the probe's readings taken on the PC's faster kind of core. The development PC has 12 logical processors of two kinds: 4 faster ones on 2 performance cores, each with a twin, and 8 efficiency cores.
 - **How busy the PC was** (per run). On average, how many of the PC's logical processors other programs kept busy during the run.
 
 What the correction can and cannot do:
 
-- It removes time when the Board **was not running**. In one experiment with a synthetic load, a piece of work kept 23.5 to 25.5 ms of running time while its stopwatch time went from 24 to 148 ms. Whether this holds on a real busy day is what the new figures will show.
+- It removes time when the Board **was not running**. In one experiment with a synthetic load, a piece of work kept 23.5 to 25.5 ms of running time while its stopwatch time went from 24 to 148 ms. In the validation of November 27, 2026 this did not carry over to the Board: under a known spin load the time not running stayed small, and Run UI rose by almost as much as UI (section 6).
 - It cannot remove the Board **running slower** while it runs: two programs sharing one core, an efficiency core instead of a performance core, caches and memory traffic taken by other programs, a lower processor speed, the Board's own garbage collection and its first-use compilation. The same experiment showed a memory-heavy load raising running time by 21 to 41%. So Run UI is **not** "the cost on a quiet PC". It can read high (slower running) and it can read low (real waits by the Board itself are left out).
 - Headless runs started from a console in the background and real-window runs in the foreground may run on different kinds of core. `perfCoreShare` shows this; it does not correct for it.
-- So Run UI is a **diagnosis**. A row whose Run UI is well over its budget is over because of its own work, not because the PC is busy. A row whose UI is over but whose Run UI is under may be over because of the load. The verdict still uses UI.
+- So Run UI was meant as a **diagnosis**: a row whose Run UI is well over its budget would be over because of its own work, and a row whose UI is over but whose Run UI is under might be over because of the load. It failed the validation (section 6), so on the development PC it is not trusted even as that. It stays in the JSON and the summaries, labelled "not validated", and no verdict reads it. The verdict uses UI.
 
 ## 2 What is recorded
 
@@ -52,11 +57,13 @@ Per row, in `rows[]` of the JSON. A figure that could not be read is JSON `null`
 |---|---|---|---|
 | `runMs` | ms | the thread clock (section 4), read just inside the stopwatch | no thread clock on this system, or the run's rate check failed; `process-start-to-board` (not timed on the thread) |
 | `notRunMs` | ms | `wallMs - runMs` as computed, not clamped (a small negative value shows the clock's error) | as `runMs` |
-| `runUiMs` | ms | the largest thread-clock increase inside one probe gap, the tail to the row's end included | as `runMs` |
+| `runUiMs` | ms | the largest thread-clock increase inside one probe gap, the tail to the row's end included. Not validated (section 6): the run's `runUiMsStatus` says so | as `runMs` |
 | `perfCoreShare` | 0 to 1 | share of probe readings on the highest efficiency class. Windows: `GetCurrentProcessorNumberEx`, mapped once per run with `GetSystemCpuSetInformation`. Linux: `sched_getcpu` with `/sys/devices/system/cpu/cpuN/cpu_capacity` | Linux without `cpu_capacity` (usual on x86 virtual machines); all processors of one class |
 | `gcPauseMs` | ms | change in `GC.GetTotalPauseDuration()`, the whole process | not measured for `process-start-to-board` |
 | `jitMs` | ms | change in `JitInfo.GetCompilationTime(currentThread: true)` | as `gcPauseMs` |
 | `waits` | true | written only for a row that waits by design: warm startup (the load runs off the thread), every paint row, the scroll row in a real window, `process-start-to-board` | never written as false |
+
+Per run, beside `rows`: `runUiMsStatus`, the text `"not validated"`, written since November 27, 2026. The report's table heads the column "Run UI ms (not validated)", and the pairs summary writes "Run UI (not validated)".
 
 Per run, in a `conditions` object. Headless, it covers the 500 library's measurement only.
 
@@ -70,9 +77,11 @@ Per run, in a `conditions` object. Headless, it covers the 500 library's measure
 | `stealProcessors` | processors | Linux only: change in `steal` / elapsed time | Windows; the read failed |
 | `othersBusyProcessors` | processors | `machineBusyProcessors` less this process's own processor time / elapsed time, never below 0 | as `machineBusyProcessors` |
 | `notRunShare` | 0 to 1 | the sum of `notRunMs` / the sum of `wallMs`, over the rows without `waits` | as `runMs` |
-| `disturbed` | true/false | `othersBusyProcessors > processors - 2`: other programs left fewer than two processors free, on average over the run | `null` when `othersBusyProcessors` is absent. `null` counts as not disturbed: the run is kept and printed as "load unknown" |
+| `disturbed` | true/false | `othersBusyProcessors > processors / 4`: other programs kept more than a quarter of the processors busy, on average over the run (3 of 12 on the development PC, 1 of 4 on a CI runner). The line of November 27, 2026; before it, `othersBusyProcessors > processors - 2` | `null` when `othersBusyProcessors` is absent. `null` counts as not disturbed: the run is kept and printed as "load unknown" |
 
 `machineBusyProcessors` can read slightly above the number of processors, because the counters move in steps. It is not clamped.
+
+**The disturbed line.** The method started with "other programs leave fewer than two processors free" and allowed one re-set after the validation, for later sittings only. On November 27, 2026 the maintainer made that re-set: a run is disturbed when other programs keep more than 3 of the 12 processors busy. The code writes it as a quarter of the processors, so it reads 1 of 4 on a CI runner. It came after two findings of that day (section 6): under the spin load other programs kept 7.0 to 9.7 processors busy and UI rose by 68 to 149% on the six disturbed rows in the real window, yet no run counted as disturbed under the old line; and the load series showed timings rising from the first extra load thread. The line holds for later sittings only. Sittings already taken keep their verdicts: each run's JSON carries the flag its own build wrote, and the pairs script reads that flag, so reading an earlier sitting again drops the same runs.
 
 **Why `disturbed` uses other programs' load and not `notRunShare`.** A build can change its own share of time not running (a build that waits more, for example). If pairs were replaced on that figure, they would be replaced more often for one build than the other, and the comparison would be biased. Other programs' load depends mostly not on the build, because the process's own processor time is subtracted. It is not exact: in a real window, the window manager's and graphics driver's work for the trial's frames counts as "other programs", and headless the test runner's own processes do too. `notRunShare` is still recorded and printed, so a reader can see a disturbed row or run by eye.
 
@@ -121,26 +130,26 @@ The rule in force: an optimisation is merged only when it helps by more than the
    For example P(at least 9 of 10) = 11/1024 = 0.011 and P(at least 8 of 10) = 0.055; P(at least 15 of 20) = 0.021 and P(at least 14 of 20) = 0.058. One alpha, 0.05 one-sided, everywhere.
 5. **One deciding sitting per change and mode.** Re-running sittings until one passes adds up their chances of a false pass. A second sitting is allowed only after a code change. Otherwise every sitting's pairs are pooled into one count and judged at the same alpha (the table, extended by exact binomial). Every sitting, passed or failed, is listed in the pull request. Pooling slows the adding-up but does not stop it: each pooled look is another chance. For a change that does nothing, the exact chance of a false pass at the first look that passes is, with sittings of 10 pairs, 0.011 at one look, 0.027 at two, 0.061 at three and 0.074 at four; with sittings of 20 pairs, 0.021, 0.051, 0.074 and 0.091. So three sittings of 10 pairs, or two of 20, go past 5%, and the summary gives these figures whenever sittings are pooled. How to hold the line past two sittings is a question for the maintainer (section 12). A sitting given twice, or a copy of one, is refused.
 6. **Size floor.** The median of the paired differences (before - after) of UI is at least the larger of 2 ms and 3% of before's median.
-7. **Run UI must not point the other way.** Run UI, report-only, is tested the same way. If after is higher on Run UI by the step 4 count, stop: a person looks before anything is merged.
+7. **Run UI decides nothing.** Until November 27, 2026 this step read: if after is higher on Run UI by the step 4 count, stop, and a person looks before anything is merged. Run UI failed the validation that day (section 6), so the summary prints its count, labelled "not validated", and no verdict reads it.
 8. **Watch rows.** If after is higher on a watch row by the step 4 count, run a new sitting for that row. Block the merge only if the same row is higher again. A watch row that gains is a finding, not a reason to merge.
 9. **Report** for the primary row: both medians, the count, the median difference, and the median of the after / before ratios with the interval from the 2nd smallest to the 2nd largest ratio (97.9% at 10 pairs).
 10. Figures of two sittings or two days are **never** compared. The same code has read 157 and 305 ms on two days.
 
 The deciding sitting is a real-window sitting. Real-window sittings are run on the development PC by the maintainer or the coordinating session, never by automated agents or CI. A headless sitting is screening only.
 
-## 6 The validation experiment (a protocol, not yet run)
+## 6 The validation experiment (the protocol, and its result of November 27, 2026)
 
 **Question.** Does `runUiMs` stay put when a known extra load is added, where Wall and UI do not? And what load can it not remove?
 
-**The load.** `ManualCertification/Start-BoardTrialLoad.ps1 -Kind Spin|Memory -Seconds 60` starts a **separate** process. Load threads inside the test process would stretch its garbage-collection pauses and mix two effects. The process runs 6 threads at normal priority. Spin threads do integer arithmetic. Memory threads each stream a 64 MB array, one write per 64-byte line. Starting the process and compiling the load took 5 to 25 s on the development PC, so the script returns only once the threads are running (the process prints "ready"; a load not running within 60 s is stopped and the script fails), and `-Seconds` counts from that moment. The process ends by itself `-Seconds` (at most 60) after it is ready, and the caller also stops it in a `finally` block. The load runs in its own hidden console, so Ctrl+C reaches it only through the caller's `finally` block; if the caller is killed without it, the load still ends by itself. It changes no setting. With about 2.7 processors of other work, 6 threads still leave 12 logical processors short of full, so the spin arm tests **modest oversubscription only, not saturation**. Where it does slow the Board, it may be through twin sharing or core kind rather than time off the processor.
+**The load.** `ManualCertification/Start-BoardTrialLoad.ps1 -Kind Spin|Memory -Seconds <n>` starts a **separate** process. Load threads inside the test process would stretch its garbage-collection pauses and mix two effects. The process runs 6 threads at normal priority. Since November 27, 2026 `-Threads` takes 1 to 6, so that the load series below can be repeated; 6 stays the default and the method's number. Spin threads do integer arithmetic. Memory threads each stream a 64 MB array, one write per 64-byte line. Starting the process and compiling the load took 5 to 25 s on the development PC, so the script returns only once the threads are running (the process prints "ready"; a load not running within 60 s is stopped and the script fails), and `-Seconds` counts from that moment. The process ends by itself `-Seconds` (at most 120 since November 27, 2026; at most 60 before) after it is ready, and the caller also stops it in a `finally` block. The pairs script asks for what its mode needs: 60 s under a real-window run, 120 s under a headless run. The load runs in its own hidden console, so Ctrl+C reaches it only through the caller's `finally` block; if the caller is killed without it, the load still ends by itself. It changes no setting. With about 2.7 processors of other work, 6 threads still leave 12 logical processors short of full, so the spin arm tests **modest oversubscription only, not saturation**. Where it does slow the Board, it may be through twin sharing or core kind rather than time off the processor.
 
 **Protocol.** One sitting; a Release build of master with the measurement code; the headless budget test alone, each run its own process.
 
-- Arms: **R** (the PC as it is), **S** (R plus the spin load), **M** (R plus the memory load). Order R S M M S R, twice: 4 runs per arm, 12 runs. The load starts 2 s before the test process and ends when it exits. A run that outlasts its load is dropped and run again. **Open before step 9:** the load lasts at most 60 s, and a headless run of the budget test alone takes 0.5 to 0.75 min on a good day but took 7 to 8 min on November 21. On such a day every loaded headless run outlasts its load, and dropping them favours the fast runs. The headless arms need runs shorter than about 55 s, or another way to time the load; that choice is the maintainer's (section 12). The pairs script warns when `-Load` is used with `-Mode headless`.
+- Arms: **R** (the PC as it is), **S** (R plus the spin load), **M** (R plus the memory load). Order R S M M S R, twice: 4 runs per arm, 12 runs. The load starts 2 s before the test process and ends when it exits. A run that outlasts its load is dropped and run again. **The load's length:** the load lasted at most 60 s, and a headless run of the budget test alone takes 0.5 to 0.75 min on a good day but took 7 to 8 min on November 21. On November 27, 2026, a good day, every headless run under the memory load still outlasted the 60 s load, and that arm was void (below). The load now lasts up to 120 s, and the pairs script asks for 120 s under a headless run. On a day like November 21 every loaded headless run would still outlast it, and dropping them favours the fast runs. The pairs script warns when `-Load` is used with `-Mode headless`.
 - Rows checked: rows without `waits` whose median `runUiMs` under R is at least 20 ms (on the 500 library: the first switch, the stage rows, the open list, the search keystroke).
 - The same in a real window: 6 R and 6 S, alternating, through the pairs script's `-Load` switch, which puts the load under the "after" runs only (run with the same build as before and after). Like every real-window sitting, this is run on the development PC by the maintainer or the coordinating session, never by automated agents or CI.
 
-**Fixed before the first run.** The bounds below are frozen before any data is taken. A revised bound is tested only on a new set of runs, never on the runs that suggested it. The disturbed line may be re-set from the R runs, but only for later comparison sittings.
+**Fixed before the first run.** The bounds below are frozen before any data is taken. A revised bound is tested only on a new set of runs, never on the runs that suggested it. The disturbed line may be re-set from the R runs, but only for later comparison sittings. It was re-set once, on November 27, 2026, by the maintainer's decision after the validation and the load series (section 2).
 
 **Disturbed rows first.** Let B be a row's pass bound: the larger of 10% of R's median `runUiMs` and 3 ms. A checked row counts only if S raised its median UI by at least 3 x B. A row that did not is reported as "not disturbed", not as passed. If no row is disturbed, repeat at another time of day, at most three sittings; then report "S could not disturb this PC". Never add threads.
 
@@ -161,17 +170,84 @@ The rate check must also have passed in every run. Under M the figures are repor
 - S passes, M fails: Run UI removes time off the processor but not memory contention. The report says so beside every Run UI figure.
 - S fails: first compare `perfCoreShare` between R and S. If it differs, the failure may come from core placement (an assumption, not a measured cause); say so, and make no claim. Otherwise Run UI is not trusted even as a diagnosis on that PC: it stays in the JSON, labelled "not validated". Check whether the S runs failed the rate check.
 
-## 7 The verdict rule proposed to the maintainer (a proposal)
+### The result of November 27, 2026
 
-For "the real window decides", once accepted:
+**What was run.** On the development PC, one Release build of master's measurement code (6e7e68c, as #417 records it), on the 500 test library, through the pairs script's `-Load` switch with the same build as before and after. Real window: 6 runs without the load (R) and 6 with the spin load (S), alternating. Headless: 4 R and 4 S, alternating; then R against M. The headless arms ran as two sittings of the pairs script, R against S and then R against M, each in alternating pairs, not in the order R S M M S R above.
+
+**Rows checked:** the rows without `waits` whose median R `runUiMs` was at least 20 ms: 7 in the real window (the scroll row waits there) and 8 headless.
+
+In the tables, figures are medians in ms, rounded to 0.1 ms with a half rounded up. B is the pass bound: the larger of 10% of R's median Run UI and 3 ms. A rise is the median under S less the median under R. A row counts as disturbed when its UI rose by at least 3 B. It passes when its Run UI moved by at most B and by at most a quarter of its UI's rise.
+
+**Real window** (6 R and 6 S runs)
+
+| Row | UI, R | UI, S | Run UI, R | Run UI, S | B | UI rise | Run UI rise | Result |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| `first-switch-published` | 218.2 | 392.9 | 206.4 | 383.7 | 20.6 | 174.7 | 177.3 | fails both bounds |
+| `stage-all-to-submitted` | 106.5 | 197.4 | 105.5 | 196.0 | 10.6 | 90.9 | 90.5 | fails both bounds |
+| `stage-back-to-all` | 86.5 | 103.2 | 73.5 | 97.7 | 7.4 | 16.7 | 24.2 | not disturbed (3 B is 22.1) |
+| `open-list-stepped-closed` | 101.2 | 169.5 | 79.6 | 139.5 | 8.0 | 68.3 | 59.9 | fails both bounds |
+| `search-keystroke` | 77.0 | 135.1 | 75.8 | 133.7 | 7.6 | 58.1 | 58.0 | fails both bounds |
+| `search-keystroke-published-hidden` | 33.6 | 82.0 | 33.3 | 81.4 | 3.3 | 48.4 | 48.1 | fails both bounds |
+| `switch-published-after-hidden-change` | 93.1 | 232.1 | 91.3 | 223.3 | 9.1 | 139.0 | 132.0 | fails both bounds |
+
+**Headless** (4 R and 4 S runs)
+
+| Row | UI, R | UI, S | Run UI, R | Run UI, S | B | UI rise | Run UI rise | Result |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| `first-switch-published` | 376.6 | 642.3 | 367.3 | 625.2 | 36.7 | 265.7 | 258.0 | fails both bounds |
+| `stage-all-to-submitted` | 212.9 | 296.8 | 208.1 | 288.3 | 20.8 | 83.9 | 80.2 | fails both bounds |
+| `stage-back-to-all` | 154.8 | 242.5 | 136.3 | 211.1 | 13.6 | 87.8 | 74.8 | fails both bounds |
+| `open-list-stepped-closed` | 118.5 | 183.9 | 108.0 | 176.0 | 10.8 | 65.5 | 68.1 | fails both bounds |
+| `search-keystroke` | 144.8 | 223.6 | 131.9 | 214.7 | 13.2 | 78.8 | 82.8 | fails both bounds |
+| `scroll-published-longest-step` | 298.5 | 518.8 | 279.6 | 488.7 | 28.0 | 220.3 | 209.2 | fails both bounds |
+| `search-keystroke-published-hidden` | 82.2 | 177.8 | 79.6 | 173.0 | 8.0 | 95.6 | 93.4 | fails both bounds |
+| `switch-published-after-hidden-change` | 200.0 | 329.6 | 194.0 | 317.0 | 19.4 | 129.6 | 123.1 | fails both bounds |
+
+**What the frozen bounds gave.**
+
+- Real window: the load disturbed 6 of the 7 checked rows. All 6 fail both bounds: their Run UI rose by 88 to 102% of their UI's rise, where the removal bound allows 25%. `stage-back-to-all` is reported as not disturbed, not as passed.
+- Headless: the load disturbed all 8 checked rows. All 8 fail both bounds: their Run UI rose by 85 to 105% of their UI's rise.
+- R against R (the R runs split into the first and the second half in time): the median Run UI moved by at most B on every checked row except `search-keystroke-published-hidden` in the real window (4.2 ms against a B of 3.3 ms), and `scroll-published-longest-step` (74.5 against 28.0 ms) and `search-keystroke-published-hidden` (9.0 against 8.0 ms) headless. By the protocol the experiment says nothing about those rows. The other disturbed rows, 5 in the real window and 6 headless, passed R against R and failed under S.
+- The rate check passed in every run: 12 in the real window, 8 headless.
+- The share of the rows' time the interface thread was not running (`notRunShare`) stayed small: per run, 4 to 8% without the load and 4 to 7% with it in the real window, 5 to 7% and 4 to 7% headless. The thread's own running time grew. What made it slower is not measured.
+- The fast-core share, compared first as the protocol says: in the real window the median share was 1.00 with and without the load on every checked row, except `switch-published-after-hidden-change` under the load (0.83). Headless, R and S differed on 7 of the 8 rows.
+- Other programs, the added load included, kept 7.0 to 9.7 of the 12 processors busy under S, and 1.0 to 2.8 under R. No run counted as disturbed under the line then in force.
+
+**Conclusion, in the method's terms: Run UI failed.** S fails. In the real window four disturbed rows that passed R against R had the same fast-core share with and without the load (the first switch, Stage to Submitted, the open list and the search keystroke), and all four fail both bounds. So, by the rule above, Run UI is **not trusted even as a diagnosis on this PC**. It stays in the JSON, labelled "not validated" (section 2), and the report's table and the pairs summary label it so too. Headless the share differed on most rows, so the headless failure alone would support no claim; it points the same way. No S run failed the rate check.
+
+**The memory arm is void.** Headless, all 6 runs under the memory load outlasted the 60 s load (the pairs script recorded 65.8 to 67.7 s from the start of the load to the end of each run), and the protocol does not allow a run that outlasts its load. Its figures are not counted. The load now lasts up to 120 s under a headless run (above), so the arm can be run again on a good day.
+
+**Recorded without explanation.** Headless, the interface thread ran mostly on the slower kind of core: without the load, the median fast-core share of the checked rows was 0.00 to 0.33. In the real window it was 1.00 on every checked row. The two modes also read the same row very differently: without the load, `search-keystroke-published-hidden` had a median UI of 82.2 ms headless and 33.6 ms in the real window, the same build on the same day.
+
+The table by load band over all R runs and recorded pairs, asked for above ("The real load"), has not been made.
+
+### The load series of November 27, 2026
+
+**What it was.** A real window on the development PC, the same build as the validation, the 500 test library: 18 runs between 13:32 and 13:37, with no load threads and with one to five spinning load threads, three runs each, the order of the thread counts reversed between repetitions. The load was a scratch copy of the load script with the number of threads as a setting; the repository's script takes `-Threads` since then.
+
+**By what each run recorded** (how many of the 12 processors other programs kept busy, the load threads included; medians of UI in ms)
+
+| Other programs kept busy | Runs | `first-switch-published` | `stage-all-to-submitted` | `open-list-stepped-closed` | `search-keystroke` |
+|---|---:|---:|---:|---:|---:|
+| under 3 | 1 | 190.3 | 103.2 | 97.0 | 62.7 |
+| 3 to under 5 | 5 | 256.1 | 143.5 | 105.5 | 90.0 |
+| 5 to under 7 | 5 | 388.4 | 215.1 | 187.3 | 130.4 |
+| 7 and more | 7 | 470.2 | 223.5 | 183.9 | 150.4 |
+
+**What it showed.** Timings rose with the load from the first extra thread: there was no range in which extra load cost nothing. Against the runs with no load threads, one load thread raised the medians of these four rows by 13 to 38% (three runs each). No run counted as disturbed under the line then in force. The fast-core share of the first switch was 1.00 in 17 of the 18 runs. Three runs for each thread count is thin, and the PC's own load moved during the series: the runs without load threads recorded 1.7, 3.3 and 4.5 processors kept busy by other programs. So the table by what each run recorded says more than one by thread count. The maintainer set the disturbed line from it (section 2).
+
+## 7 The verdict rule (in force from November 27, 2026)
+
+For "the real window decides". It was proposed to the maintainer with this method, and the maintainer accepted it as proposed on November 27, 2026. It is in force from that day:
 
 - **Figure:** UI, as today. A budget is about what a person feels, busy PC or not.
 - **Runs:** 5 real-window runs that are not `disturbed` (a `null` counts as not disturbed and is printed "load unknown"), from at most 10 tries in one sitting (Release, the 500 test library). Verdict: the median UI of those 5 against the budget.
 - **Too busy to judge:** fewer than 5 undisturbed runs out of 10. The report says so and lists each run's `othersBusyProcessors` and `notRunShare`.
-- **Beside it, report-only:** the median `runUiMs`, `perfCoreShare`, `gcPauseMs` and `jitMs`, and whether the validation passed. Never a lower bound or a low quantile.
+- **A report-only row** gets no budget verdict, the primary row of a comparison included: it is compared only between builds (section 5).
+- **Beside it, report-only:** the median `runUiMs`, labelled "not validated" (it failed the validation, section 6), `perfCoreShare`, `gcPauseMs` and `jitMs`. Never a lower bound or a low quantile. **Run UI never counts toward a verdict.**
 - **Headless in CI** keeps today's single run, multipliers and rule as the guard.
 
-Until it is accepted, the pairs script prints these lines under "proposed verdict (report-only)", and they decide nothing.
+The pairs script prints these lines under "Verdict on the budgets (method, section 7, in force since November 27, 2026)". Before that day it printed them under "proposed verdict (report-only)", and they decided nothing.
 
 ## 8 The failure message of the headless timing tests
 
@@ -202,7 +278,7 @@ The Windows Forms timing tests (`ResponsivenessBudgetTests.vb`) end their two fa
 
 - `-Mode window -Before <exe> -After <exe> -Library <test library>`: each run is the trial's `--measure` mode in a real window. Run only on the development PC by the maintainer or the coordinating session.
 - `-Mode headless -Before <tree> -After <tree>`: each run is the headless budget test alone, `dotnet test --no-build` in a built tree.
-- `-Out <new folder>`, `-Pairs`, `-PrimaryRow <row id>`, `-ExpectedToRise <row ids>`, `-BeforeName`, `-AfterName`, `-Load None|Spin|Memory`.
+- `-Out <new folder>`, `-Pairs`, `-PrimaryRow <row id>`, `-ExpectedToRise <row ids>`, `-BeforeName`, `-AfterName`, `-Load None|Spin|Memory`. The load lasts 60 s under a real-window run and 120 s under a headless run; the sitting's record keeps the length, and `-LoadSecondsFor window|headless` prints it without running anything.
 - `-RunLimitMinutes`: a run still going after this long is stopped and its pair replaced ("timed out"). By default 15 min headless and 3 min in a window, far above any budget, so the limit is not a timing.
 - `-Pool <earlier sittings' folders>` counts earlier sittings of the same change, mode and primary row together with this one. A void sitting is listed but adds no pairs. A sitting given twice, or a copy of one, is refused.
 - `-Analyze <a sitting's folder>` reads a sitting again without running anything, for a later re-analysis or a check.
@@ -211,12 +287,12 @@ The script runs pairs until it has kept `-Pairs` of them. Once a pair's first ru
 
 Each sitting's folder holds `sitting.json` (the runs, in order, with their exit codes), one JSON file per run, each run's output, and `summary.md`. The JSON files name the computer and the runs' output may hold folder paths, so the sitting's folder stays on the PC that ran it; only `summary.md` is shared. The summary names no computer and no folder.
 
-`ManualCertification/Test-BoardPairs.ps1` checks the rule on canned sittings and needs no build: the counts against the table above, 9 of 10 (shown), 8 of 10 (not shown, with the P of the count seen printed apart from the P of the count needed), a disturbed pair that is replaced (with and without its second run), a tie, absent figures, the size floor (also one between the rounded and the true floor), Run UI pointing the other way, a watch row higher once and again, a void sitting, two and three sittings pooled, a sitting given twice or copied (refused), a sitting stopped short and one stopped inside its last pair (not decided), a missing row, a null UI figure and a run that timed out (replaced), a run that outlasted its load (listed apart), and five pairs (never decides). The trial's Windows CI job runs it.
+`ManualCertification/Test-BoardPairs.ps1` checks the rule on canned sittings and needs no build: the counts against the table above, 9 of 10 (shown), 8 of 10 (not shown, with the P of the count seen printed apart from the P of the count needed), a disturbed pair that is replaced (with and without its second run), a tie, absent figures, the size floor (also one between the rounded and the true floor), Run UI pointing the other way (it decides nothing), a watch row higher once and again, a void sitting, two and three sittings pooled, a sitting given twice or copied (refused), a sitting stopped short and one stopped inside its last pair (not decided), a missing row, a null UI figure and a run that timed out (replaced), a run that outlasted its load (listed apart), and five pairs (never decides). Since November 27, 2026 it also checks the verdict heading of section 7 (no line calls the rule proposed), a report-only primary row (no budget verdict), the label "not validated" on every line that names Run UI, the load's length by mode, and the load script's limits (`-Seconds` up to 120, `-Threads` 1 to 6 and 6 unless set), read without starting it. The trial's Windows CI job runs it.
 
 ## 10 What one run and one comparison cost
 
 - One real-window run: about 0.3 min. The new readings add about 0.2 s, and up to about 1.5 s while `GetSystemTimes` is slow under load.
-- One headless run of the budget test alone: about 0.5 to 0.75 min (the test method itself took 15.4 s in one recorded run; process start and discovery are assumed to add 15 to 30 s). On November 21, with other programs keeping 10.7 to 11.4 of 12 processors busy, two such runs through the pairs script took 7.2 and 7.9 min.
+- One headless run of the budget test alone: about 0.5 to 0.75 min (the test method itself took 15.4 s in one recorded run; process start and discovery are assumed to add 15 to 30 s). On November 21, with other programs keeping 10.7 to 11.4 of 12 processors busy, two such runs through the pairs script took 7.2 and 7.9 min. On November 27, in the validation, the pairs script recorded 21.3 to 27.7 s for a headless run without the load and 37.2 to 41.1 s with the spin load, the load's start included; a real-window run took 6.7 to 8.5 s without it and 14.1 to 17.7 s with it.
 - One Release build of the trial and both test projects: assumed 5 to 15 min on a busy PC. A comparison needs two builds; the validation needs one. The before and after trees live in worktrees outside the system's temporary folder.
 - A verdict sitting (section 7): 5 to 10 real-window runs, about 2 to 3 min.
 - A comparison: 10 pairs in a real window about 7 min, headless about 10 to 15 min. 20 pairs double that. Up to 5 replacement pairs add up to half again. Add 10 to 30 min for the two builds.
@@ -241,6 +317,8 @@ Each sitting's folder holds `sitting.json` (the runs, in order, with their exit 
 
 One observation from two headless runs of the same build, not a finding: Stage filter back to All stages read Run UI 185 ms with a fast-core share of 1, and 338 ms with a share of 0. Run UI does not remove the kind of core a run lands on (section 1).
 
+**Measured on the development PC on November 27, 2026** (section 6): the validation, in which Run UI failed, and the load series. Under the spin load the time not running stayed small (`notRunShare` 4 to 8% per run) while the interface thread's own running time grew; what made it slower is not measured.
+
 **Shown by CI** (run 45003699839 of 2026-11-22, on the pull request that added this document; each runner has 4 processors):
 
 - **Ubuntu:** `threadClock` is `thread-cputime`, in the headless test and in the real window under a virtual display. The load was read: other programs kept 0.04 (headless) and 0.23 (window) of the 4 processors busy, and `stealProcessors` read 0. So `clock_gettime` through `libc.so.6`, `/proc/stat` and `sysconf` work on the runner.
@@ -250,12 +328,12 @@ One observation from two headless runs of the same build, not a finding: Stage f
 
 **Assumed:**
 
-- That removing time off the processor is most of what a real busy day adds. One synthetic experiment suggests it; the validation and the new figures will show it.
+- That removing time off the processor is most of what a real busy day adds. One synthetic experiment suggested it. The validation of November 27, 2026 did not bear it out for the spin load: the time not running stayed small and Run UI rose almost as much as UI (section 6). Whether it holds for a real busy day is not known.
 - That `sched_getcpu` and `cpu_capacity` give a core-class map on a Linux machine with two kinds of core. The CI runner gave none, as expected of a virtual machine.
 - That the thread-cycle counter runs at the nominal rate on other Windows PCs. The per-run check catches a slower counter, and a faster one as soon as one spin runs without being taken off the processor (section 4); a PC so busy that no spin of 25 runs whole could still let a faster counter through.
 - That `Environment.ProcessorCount` is the machine's processor count. The load readings count every processor, while `ProcessorCount` follows an affinity or container limit; under such a limit a run is marked disturbed too often. On the development PC and the GitHub runners the two are equal.
-- That the "fewer than two processors free" line is right. It is a starting value.
-- The run and build times of section 10, except the two recorded ones.
+- That a quarter of the processors is a useful disturbed line. It is the maintainer's decision of November 27, 2026, in place of the starting value "fewer than two processors free"; the load series found no load below which timings stop rising (section 6).
+- The run and build times of section 10, except the recorded ones.
 - That the interface thread does not wait on the render thread inside the synchronous rows.
 - That time a CI host takes from its virtual machine may count as running.
 
@@ -273,16 +351,16 @@ One observation from two headless runs of the same build, not a finding: Stage f
 - A quiet gate: it may never open.
 - Automatic retries of a failed test: failures are accepted and explained.
 
-## 12 Defaults the maintainer can change
+## 12 Defaults the maintainer can change, and what was decided
 
-These follow the method's own recommendations and were taken as defaults while the maintainer was away:
+These follow the method's own recommendations and were taken as defaults while the maintainer was away. Three of them were settled on November 27, 2026:
 
-1. **Run UI counts toward no verdict and no merge.** It is a diagnosis: a row whose Run UI is over budget is over on its own work.
-2. **A run is disturbed** when other programs leave fewer than two of the PC's logical processors free on average. A starting value; it may be re-set once from the validation's R runs, for later sittings only.
+1. **Run UI counts toward no verdict and no merge.** It was a default because Run UI was meant as a diagnosis. Since November 27, 2026 it follows from the validation: Run UI failed it and is not trusted even as a diagnosis on the development PC (section 6).
+2. **A run is disturbed** when other programs keep more than a quarter of the PC's logical processors busy on average (3 of 12). Decided by the maintainer on November 27, 2026, as the one re-set the method allowed, for later sittings only. The starting value was "fewer than two processors free" (section 2).
 3. **When Published is prepared while the Board is idle**, the switch after it gets a new id (`first-switch-published-after-idle`), so today's `first-switch-published` keeps its meaning. Nothing is built for it yet.
-4. **The verdict rule of section 7 stays a proposal**, printed under "proposed verdict (report-only)".
+4. **The verdict rule of section 7** was a proposal, printed under "proposed verdict (report-only)". The maintainer accepted it as proposed on November 27, 2026; it is in force from that day.
 
 Open points, left to the maintainer (nothing in the code decides them):
 
 - **Pooling past two sittings.** Three sittings of 10 pairs, or two of 20, take the chance of a false pass past 5% (section 5). Options: cap pooling at two sittings of 10 pairs; decide only at a total number of pairs fixed in advance; or use a stricter count for pooled looks. Until then the summary prints the figures.
-- **The load and long headless runs.** A loaded headless run that outlasts the 60 s load is dropped, and on a busy day every one does (section 6).
+- **The load and long headless runs.** A loaded headless run that outlasts its load is dropped. Since November 27, 2026 the load lasts 120 s under a headless run; every headless run of that day took at most 67.7 s from the start of the load to its own end; on a busy day (7 to 8 min a run) every loaded headless run would still outlast it (section 6).
