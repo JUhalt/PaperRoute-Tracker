@@ -835,22 +835,42 @@ jobs:
           if ($counts.failed -gt 0) { exit 1 }
           exit 0
 
+      # The self-check waits 120 s, as in the Linux window job, well inside the
+      # step's limit, so a hang is stopped and written down here.
       - name: Run the self-check
         id: self_check
         if: steps.publish.outcome == 'success'
         continue-on-error: true
         timeout-minutes: 4
-        shell: bash
+        shell: pwsh
         env:
           TZ: Etc/UTC
           LANG: en_US.UTF-8
         run: |
-          mkdir -p "$OUT"
-          code=0
-          "$RUNNER_TEMP/board-trial/PaperRoute.Desktop" --self-check > "$OUT/self-check-stdout.txt" 2> "$OUT/self-check-stderr.txt" || code=$?
-          last=$(grep -v '^[[:space:]]*$' "$OUT/self-check-stdout.txt" | tail -n 1 || true)
-          echo "Self-check on macOS ($MACHINE): exit code $code. Its last line: ${last:-none}" | tee "$OUT/self-check.md" >> "$GITHUB_STEP_SUMMARY"
-          exit "$code"
+          $ErrorActionPreference = 'Continue'
+          New-Item -ItemType Directory -Force -Path $env:OUT | Out-Null
+          $stdout = Join-Path $env:OUT 'self-check-stdout.txt'
+          $code = $null
+          try {
+              $trial = Start-Process -FilePath (Join-Path $env:RUNNER_TEMP 'board-trial/PaperRoute.Desktop') -ArgumentList '--self-check' -PassThru `
+                  -RedirectStandardOutput $stdout -RedirectStandardError (Join-Path $env:OUT 'self-check-stderr.txt')
+              if ($trial.WaitForExit(120000)) {
+                  $trial.WaitForExit()      # the last of its output reaches the files
+                  $code = $trial.ExitCode
+                  $result = "exit code $code"
+              }
+              else {
+                  try { $trial.Kill($true) } catch { }
+                  $result = 'no exit code: it did not end within 120 s and was stopped'
+              }
+          }
+          catch { $result = "it could not be started: $($_.Exception.Message)" }
+          $last = @(Get-Content -LiteralPath $stdout -ErrorAction SilentlyContinue | Where-Object { $_.Trim() } | Select-Object -Last 1)
+          $line = "Self-check on macOS ($env:MACHINE): $result. Its last line: $(if ($last.Count -gt 0) { $last[0] } else { 'none' })"
+          $line | Set-Content -LiteralPath (Join-Path $env:OUT 'self-check.md') -Encoding utf8
+          $line | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding utf8
+          if ($code -ne 0) { exit 1 }
+          exit 0
 
       # The 500-manuscript TEST library, written by the manual test that
       # exists for the real-window run, as in the Linux window job. It lands
