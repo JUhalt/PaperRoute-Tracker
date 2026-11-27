@@ -796,13 +796,25 @@ jobs:
         run: |
           $ErrorActionPreference = 'Continue'
           New-Item -ItemType Directory -Force -Path $env:OUT | Out-Null
+          # Each file is known as Mach-O by its own first four bytes: thin
+          # (32-bit or 64-bit, either byte order) or universal. The `file` tool
+          # is not used: for a universal file it prints more than one line,
+          # so its lines cannot be paired with the files. Java class files
+          # also start with CAFEBABE; the published trial has none.
+          $machO = 'FEEDFACE', 'FEEDFACF', 'CEFAEDFE', 'CFFAEDFE', 'CAFEBABE', 'BEBAFECA', 'CAFEBABF', 'BFBAFECA'
+          function Get-Magic([string] $path) {
+              try {
+                  $stream = [IO.File]::OpenRead($path)
+                  try { $bytes = [byte[]]::new(4); $count = $stream.Read($bytes, 0, 4) } finally { $stream.Dispose() }
+                  return [BitConverter]::ToString($bytes, 0, $count) -replace '-'
+              }
+              catch { return '' }
+          }
           $files = @(Get-ChildItem -LiteralPath (Join-Path $env:RUNNER_TEMP 'board-trial') -Recurse -File | ForEach-Object FullName)
-          $kinds = @(if ($files.Count -gt 0) { & file -b $files })
           $report = [System.Collections.Generic.List[string]]::new()
           $counts = @{ valid = 0; signed = 0; unsigned = 0; failed = 0 }
-          for ($i = 0; $i -lt $files.Count; $i++) {
-              if ($i -ge $kinds.Count -or $kinds[$i] -notmatch 'Mach-O') { continue }
-              $file = $files[$i]
+          foreach ($file in $files) {
+              if ((Get-Magic $file) -notin $machO) { continue }
               $name = Split-Path -Leaf $file
               & codesign --verify $file 2>$null
               if ($LASTEXITCODE -eq 0) { $counts.valid++; $report.Add("valid: $name"); continue }
