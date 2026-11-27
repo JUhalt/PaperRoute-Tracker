@@ -15,13 +15,17 @@ namespace PaperRoute.Desktop.Tests;
 // The limits of headless, written beside the checks in HeadlessLimits.md
 // (copied to the test output), and the tests that prove its rows (the
 // harness design, part 2.7). A row lands with its proof; the note's own test
-// fails when a named proof is no longer a test method, when the plan's three
-// limits are missing, or when a rule's code file lacks its pointer line.
+// fails when a named proof is no longer a test method, when a row names no
+// test and is not a statement, when the plan's three limits are missing, or
+// when a rule's code file lacks its pointer line.
 [TestClass]
 public sealed partial class HeadlessLimitTests
 {
     // The line every rule's code file carries, pointing a reader here.
     private const string PointerLine = "// Limits of headless: HeadlessLimits.md";
+
+    // How a "Proved by" cell that names no test begins.
+    private const string StatementMark = "A statement";
 
     // The plan's three limits, in the words of build issue 3's acceptance line
     // (Avalonia-Migration-Plan.md:394), looked for without regard to case.
@@ -137,6 +141,12 @@ public sealed partial class HeadlessLimitTests
             string.Join(Environment.NewLine, NoteProblems(renamed, tests, files)),
             "A note naming a proof that does not exist.");
 
+        string bare = note.Replace("`HeadlessReportsLightAndNoContrast`", "HeadlessReportsLightAndNoContrast", StringComparison.Ordinal);
+        Assert.AreEqual(
+            "Row 4 names no test and is not a statement.",
+            string.Join(Environment.NewLine, NoteProblems(bare, tests, files)),
+            "A note naming its proof without a code span.");
+
         List<(string Name, string Text)> unlinked = [.. files, ("Legibility/Unlinked.cs", "namespace PaperRoute.Desktop.Tests.Legibility;" + Environment.NewLine)];
         Assert.AreEqual(
             $"Legibility/Unlinked.cs lacks the line \"{PointerLine}\".",
@@ -163,7 +173,13 @@ public sealed partial class HeadlessLimitTests
 
         foreach ((string row, string proof) in proofs)
         {
-            foreach (string name in TestShapedNames(proof).Where(name => !tests.Contains(name)))
+            List<string> names = TestShapedNames(proof).ToList();
+            if (names.Count == 0 && !proof.StartsWith(StatementMark, StringComparison.Ordinal))
+            {
+                problems.Add($"Row {row} names no test and is not a statement.");
+            }
+
+            foreach (string name in names.Where(name => !tests.Contains(name)))
             {
                 problems.Add($"Row {row} names {name} as its proof, which is not a test method here.");
             }
@@ -213,6 +229,8 @@ public sealed partial class HeadlessLimitTests
 
     // Code spans that look like a test method's name: one identifier, no dot,
     // slash or space (so `KeyboardAccessTests.vb` and `--measure` are not).
+    // A name written bare is not read here; it is caught because a cell must
+    // name a test in a code span or start with StatementMark.
     private static IEnumerable<string> TestShapedNames(string cell) =>
         CodeSpan().Matches(cell).Select(match => match.Groups[1].Value)
             .Where(span => TestShape().IsMatch(span));

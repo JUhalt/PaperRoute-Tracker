@@ -4,7 +4,7 @@ The checks in this project run on Avalonia's headless platform: windows live in 
 
 Each row lands with the pull request that adds its proof, so no row names a test that does not exist yet. The numbers are the design's (harness and style design, part 2.7); the rows it gives to later pull requests (6, 7 and 8) are added by them.
 
-`TheLimitsNoteNamesEveryLimitAndEveryRuleLinksIt` (`HeadlessLimitTests.cs`) keeps this note honest: it fails if the plan's three limits are missing here in its words, if a test named in the "Proved by" column is not a test method of this project, or if a rule's code file (every `.cs` file under `Legibility/` and `Parity/`, and `AccessibilityTreeTests.cs`) lacks the line `// Limits of headless: HeadlessLimits.md`.
+`TheLimitsNoteNamesEveryLimitAndEveryRuleLinksIt` (`HeadlessLimitTests.cs`) keeps this note honest: it fails if the plan's three limits are missing here in its words, if a "Proved by" cell neither names a test in a code span nor starts with "A statement", if a test named in that column is not a test method of this project, or if a rule's code file (every `.cs` file under `Legibility/` and `Parity/`, and `AccessibilityTreeTests.cs`) lacks the line `// Limits of headless: HeadlessLimits.md`.
 
 | # | Limit | Bounds | Proved by |
 |---|---|---|---|
