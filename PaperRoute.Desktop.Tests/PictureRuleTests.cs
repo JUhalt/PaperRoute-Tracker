@@ -10,7 +10,7 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using PaperRoute.Desktop.Tests.Board;
-using PaperRoute.Desktop.Tests.Styles;
+using PaperRoute.Desktop.Tests.Legibility;
 using PaperRoute.TestFixtures;
 using PaperRoute.ViewModels.Board;
 using PaperRoute.ViewModels.Session;
@@ -36,11 +36,6 @@ namespace PaperRoute.Desktop.Tests;
 [TestClass]
 public sealed class PictureRuleTests : StorageCheckedTests
 {
-    // DarkThemeLegibilityTests.vb IsLight: lighter than any surface the Dark tokens fill.
-    public const double LightLine = 0.6;
-
-    public const double TitleContrast = 4.5;
-
     private const int PatchSize = 4;
 
     private string _root = string.Empty;
@@ -164,9 +159,9 @@ public sealed class PictureRuleTests : StorageCheckedTests
         }
 
         Assert.AreEqual(7, titles.Count, "Every card of the example's three shelves was checked.");
-        List<string> faint = titles.Where(item => item.Ratio < TitleContrast)
+        List<string> faint = titles.Where(item => item.Ratio < Thresholds.Text)
             .Select(item => $"{item.Title}: {item.Ratio.ToString("0.00", CultureInfo.InvariantCulture)}:1").ToList();
-        Assert.IsEmpty(faint, $"Titles under {TitleContrast}:1 against their card:" + Environment.NewLine + string.Join(Environment.NewLine, faint));
+        Assert.IsEmpty(faint, $"Titles under {Thresholds.Text}:1 against their card:" + Environment.NewLine + string.Join(Environment.NewLine, faint));
         Assert.IsTrue(File.Exists(path), $"No picture at {path}.");
     }
 
@@ -269,7 +264,7 @@ public sealed class PictureRuleTests : StorageCheckedTests
                 for (int x = patch.X; x < patch.Right; x++)
                 {
                     Color pixel = At(x, y);
-                    double luminance = TokenFile.RelativeLuminance(pixel);
+                    double luminance = Contrast.RelativeLuminance(pixel);
                     if (luminance > brightest)
                     {
                         brightest = luminance;
@@ -279,7 +274,7 @@ public sealed class PictureRuleTests : StorageCheckedTests
             }
 
             return string.Create(CultureInfo.InvariantCulture,
-                $"{name}: luminance {brightest:0.000} (#{colour.R:X2}{colour.G:X2}{colour.B:X2}) in {patch}{(brightest > LightLine ? " LIGHT" : string.Empty)}");
+                $"{name}: luminance {brightest:0.000} (#{colour.R:X2}{colour.G:X2}{colour.B:X2}) in {patch}{(brightest > Thresholds.LightPart ? " LIGHT" : string.Empty)}");
         }
 
         // The highest contrast any pixel of the rectangle has against background.
@@ -290,7 +285,7 @@ public sealed class PictureRuleTests : StorageCheckedTests
             {
                 for (int x = rect.X; x < rect.Right; x++)
                 {
-                    strongest = Math.Max(strongest, TokenFile.ContrastRatio(At(x, y), background));
+                    strongest = Math.Max(strongest, Contrast.ContrastRatio(At(x, y), background));
                 }
             }
 

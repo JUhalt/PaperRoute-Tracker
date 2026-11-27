@@ -16,7 +16,7 @@ namespace PaperRoute.ViewModels.Measurement;
 // long the interface thread ran on a processor during the action (its thread
 // clock), NotRunMs is WallMs - RunMs as computed (a small negative value shows
 // the clock's error), RunUiMs the largest running time inside one gap of the
-// UI probe, PerfCoreShare the share of the probe's ticks on the PC's faster
+// UI probe (not validated: BoardMeasurementReport.RunUiStatus), PerfCoreShare the share of the probe's ticks on the PC's faster
 // kind of core, GcPauseMs and JitMs the process's garbage-collection pauses
 // and the thread's compilation time during the action. Waits marks a row that
 // waits by design (a frame, a load off the thread), so its time not running
@@ -91,9 +91,19 @@ public sealed record MeasurementConditions
     // Time not running over Wall, summed over the rows that do not wait.
     public double? NotRunShare { get; init; }
 
-    // Other programs left fewer than two processors free on average; null
-    // when the load could not be read, which counts as not disturbed.
+    // Other programs kept more processors busy on average than the
+    // disturbed line; null when the load could not be read, which counts as
+    // not disturbed.
     public bool? Disturbed { get; init; }
+
+    // The disturbed line (busy-PC design, section 2): other programs keep
+    // more than 3 of the 12 processors busy, as the maintainer decided on
+    // November 27, 2026, after the validation, for later sittings only. It is
+    // written as a quarter of the processors, so it reads 1 of 4 on a CI
+    // runner; that scaling is assumed, not part of the decision (section 11).
+    // Until then a run was disturbed when other programs left fewer than two
+    // processors free.
+    public static double DisturbedLine(int processors) => processors / 4.0;
 }
 
 // The numbers of one measurement run, headless (the budget tests) or in a
@@ -162,6 +172,13 @@ public sealed class BoardMeasurementReport
     public const string RunUnreadableLine = "  How long the interface thread ran could not be read on this system.";
 
     public const string LoadUnreadableLine = "How busy the PC was could not be read on this system.";
+
+    // Run UI failed the validation of November 27, 2026 (busy-PC design,
+    // section 6), so the figure stays, report-only, under this label: in the
+    // JSON ("runUiMsStatus") and wherever a person reads it.
+    public const string RunUiStatus = "not validated";
+
+    public const string RunUiHeading = "Run UI ms (" + RunUiStatus + ")";
 
     public string RuleFor(MeasuredRow row)
     {
@@ -266,6 +283,8 @@ public sealed class BoardMeasurementReport
                 json.WriteString("error", Error);
             }
 
+            // Every row's runUiMs is read under this label.
+            json.WriteString("runUiMsStatus", RunUiStatus);
             json.WriteStartArray("rows");
             foreach (MeasuredRow row in Rows)
             {
@@ -404,7 +423,7 @@ public sealed class BoardMeasurementReport
             text.AppendLine(DescribeConditions(Conditions, Processors));
         }
 
-        text.AppendLine("| Library | Id | Action | Wall ms | UI ms | Run UI ms | Budget ms | Verdict | Rule |");
+        text.AppendLine($"| Library | Id | Action | Wall ms | UI ms | {RunUiHeading} | Budget ms | Verdict | Rule |");
         text.AppendLine("|---|---|---|---:|---:|---:|---:|---|---|");
         foreach (MeasuredRow row in Rows)
         {
@@ -432,7 +451,7 @@ public sealed class BoardMeasurementReport
 
         text.Append(conditions.Disturbed switch
         {
-            true => "Disturbed: other programs left fewer than two processors free.",
+            true => string.Create(CultureInfo.InvariantCulture, $"Disturbed: other programs kept more than {MeasurementConditions.DisturbedLine(processors):0.##} of {processors} processors busy."),
             false => "Not disturbed.",
             null => "Load unknown.",
         });
