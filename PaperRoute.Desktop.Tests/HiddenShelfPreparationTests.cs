@@ -129,6 +129,7 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
             AssertOnlyShown(board, 0, "after preparation");
             List<CardView> preparedViews = board.Cards(PublishedName).ToList();
             List<object?> preparedCards = preparedViews.Select(view => view.DataContext).ToList();
+            Assert.AreEqual(prepared, AssertCardsLaidOut(board, "prepared, before the switch"), "Every card view preparation made is laid out, ready to show.");
 
             int beforeSwitch = CardView.MadeCount;
             Switch(board, 1);
@@ -620,6 +621,7 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
             Assert.IsTrue(preparer.IsPrepared, "Refreshed, Published is prepared again.");
             AssertOnlyShown(board, 0, "after the refresh");
 
+            Assert.AreEqual(refreshed, AssertCardsLaidOut(board, "refreshed, before the switch"), "Every card view the refresh made is laid out, ready to show.");
             using var refills = new RowRefills(published);
             int beforeSwitch = CardView.MadeCount;
             Switch(board, 1);
@@ -712,6 +714,8 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
                 Assert.IsTrue(preparer.IsPrepared, $"{change}, {mode}: after the refresh Published is prepared.");
                 Assert.IsNull(preparer.SkippedReason, $"{change}, {mode}: nothing stopped preparation.");
                 AssertOnlyShown(board, 0, $"{change}, {mode}: after the refresh");
+                int laidOut = AssertCardsLaidOut(board, $"{change}, {mode}: refreshed, before the switch");
+                Assert.AreEqual(published.Cards.Count > 0, laidOut > 0, $"{change}, {mode}: the refreshed shelf holds laid-out card views when it has cards ({laidOut}).");
 
                 using var refills = new RowRefills(published);
                 int beforeSwitch = CardView.MadeCount;
@@ -1229,6 +1233,27 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
 
         Assert.IsGreaterThan(0, drawn, $"{step}: cards are drawn.");
         Assert.IsNotNull(shelf.FindCardView(0), $"{step}: the first card is drawn.");
+    }
+
+    // Every card view the switch will show (shown, in a row view the list
+    // shows) is measured and arranged before the switch, so the switch has
+    // no layout of a card left to do: CardView.MadeCount alone would not see
+    // prepared views left waiting for a layout. Returns how many were
+    // checked. Public properties only; load-free.
+    private static int AssertCardsLaidOut(BoardWindow board, string step)
+    {
+        int laidOut = 0;
+        foreach (CardRowView row in board.Shelf(PublishedName).GetVisualDescendants().OfType<CardRowView>().Where(row => row.IsVisible && row.Row is not null))
+        {
+            foreach (CardView view in row.Children.OfType<CardView>().Where(view => view.IsVisible))
+            {
+                Assert.IsTrue(view.IsMeasureValid && view.IsArrangeValid,
+                    $"{step}: the card view of \"{(view.DataContext as CardViewModel)?.Title}\" waits for a layout (measure valid {view.IsMeasureValid}, arrange valid {view.IsArrangeValid}).");
+                laidOut++;
+            }
+        }
+
+        return laidOut;
     }
 
     // The card views a twin Board over the same library, not prepared,
