@@ -344,7 +344,8 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         Assert.ThrowsExactly<AssertFailedException>(() => CheckIdleRows([startup, startupPaint, prepare, longest, after, afterPaint, back, render], sided, switchTaken: false));
     }
 
-    // The idle rows measured on the example library for each side, with the
+    // The idle rows measured for each side, on the example library and for
+    // none and prepared on the 500 library, with the
     // preparer's clock standing still so that no step reads as slow and a
     // busy PC cannot stop the preparation here (the headless budget run and
     // "--measure" keep the real clock). Counts only, which are load-free;
@@ -353,24 +354,29 @@ public sealed class BoardBudgetTests : StorageCheckedTests
     // inside warm startup; the width step makes no card view; after full
     // preparation Published is prepared and its first switch makes none.
     [TestMethod]
-    [DataRow(IdleSides.None, 0)]
-    [DataRow(IdleSides.Width, 1)]
-    [DataRow(IdleSides.Half, 3)]
-    [DataRow(IdleSides.Prepared, 1 + HiddenShelfPreparer.LadderSteps + 1)]
-    public void TheIdleRowsAreMeasuredForEachSide(string side, int steps)
+    [DataRow(IdleSides.None, 0, "example")]
+    [DataRow(IdleSides.Width, 1, "example")]
+    [DataRow(IdleSides.Half, 3, "example")]
+    [DataRow(IdleSides.Prepared, 1 + HiddenShelfPreparer.LadderSteps + 1, "example")]
+    [DataRow(IdleSides.None, 0, "500")]
+    [DataRow(IdleSides.Prepared, 1 + HiddenShelfPreparer.LadderSteps + 1, "500")]
+    public void TheIdleRowsAreMeasuredForEachSide(string side, int steps, string library)
     {
         DateTime today = DateTime.Today;
-        using DiskLibrarySession example = Unloaded("example", today, root => LargeLibraryFixture.WriteExample(root));
+        bool large = library == "500";
+        using DiskLibrarySession session = large
+            ? Unloaded("five-hundred", today, root => LargeLibraryFixture.Create(root, 500))
+            : Unloaded("example", today, root => LargeLibraryFixture.WriteExample(root));
         (IReadOnlyList<MeasuredRow> rows, _, IReadOnlyList<IdlePreparationRecord> idle) =
-            Headless.Run(() => MeasureLibrary("example", example, requireChanges: false, side, stillPreparer: true), s_runLimit);
+            Headless.Run(() => MeasureLibrary(library, session, requireChanges: large, side, stillPreparer: true), s_runLimit);
         BoardMeasurementReport report = Report(rows, today, "the computer's date", heldLibrary: string.Empty, idle: idle);
         TestContext.WriteLine(report.ToTable());
-        Assert.IsEmpty(report.Failures(), "Nothing is held on the example.");
+        Assert.IsEmpty(report.Failures(), "Nothing is held here.");
 
         CheckIdleRows(rows, side);
         CheckLastRows(rows);
         IdlePreparationRecord record = idle.Single();
-        Assert.AreEqual("example", record.Library);
+        Assert.AreEqual(library, record.Library);
         Assert.AreEqual(side, record.Side);
         Assert.AreEqual(steps, record.StepsRun, "The side ran its steps.");
         Assert.IsNull(record.SkippedReason, "Preparation did not stop.");
@@ -379,8 +385,9 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         Assert.Contains("0 idle preparation steps inside", rows.Single(row => row.Id == BoardMeasurement.WarmStartup).Note, "No step ran inside warm startup.");
         StringAssert.StartsWith(rows.Single(row => row.Id == BoardMeasurement.PreparePublishedLongestStep).Note, $"{BoardMeasurement.BetweenSides}; {steps} steps: ");
 
-        int published = example.Manuscripts.Count(manuscript => manuscript.Location == ManuscriptLocation.Published);
-        Assert.IsGreaterThan(0, published, "The example has a Published shelf.");
+        int published = session.Manuscripts.Count(manuscript => manuscript.Location == ManuscriptLocation.Published);
+        Assert.IsGreaterThan(0, published, "The library has a Published shelf.");
+        TestContext.WriteLine(BoardMeasurementReport.DescribeIdlePreparation(record));
         if (side is IdleSides.None or IdleSides.Width)
         {
             Assert.AreEqual(0, record.ViewsMade, "No card view is made before the switch without a layout step.");
