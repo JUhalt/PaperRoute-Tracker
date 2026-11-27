@@ -424,8 +424,10 @@ public sealed class HiddenShelfTests : StorageCheckedTests
         }));
     }
 
-    // The measured sequence's last two rows, run the way BoardMeasurement
-    // runs them, with the checks that hold only on this change. The shared
+    // The actions of the measured sequence's last two rows, without the rows
+    // before them (no stage-filter or search rows, no scroll of Published to
+    // its end, a BoardWindow rather than the MainWindow), with the checks
+    // that hold only on this change. The shared
     // measurement code stays the same on a build where hidden rows do not
     // wait (f51b5e2, or master), so those two builds are compared with the
     // same code (busy-PC design, sections 5 and 9), and these checks live
