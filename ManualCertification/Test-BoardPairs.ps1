@@ -37,7 +37,16 @@ function Assert-That([bool] $condition, [string] $what) {
 }
 
 # One run's JSON, shaped like the trial's report: the example library's rows
-# (never held) and the 500 library's.
+# (never held) and the 500 library's. A run told an idle side ($idle, a
+# hashtable: Side, and Skipped, the reason preparation stopped or null) has
+# the real idle rows in place of today's first switch, with the primary row
+# $idlePrimary: the two preparation rows (about 0 on the side none, more on
+# prepared), the first switch after idle and its paint (left out, with the
+# switch, when preparation stopped or noPrimary is set), and an
+# idlePreparation record as the measurement writes it for that side. Its
+# optional keys: JsonSide (the side the JSON names, when it is not Side),
+# NoRecord (no idlePreparation) and TodayRows (today's rows with the record).
+$idlePrimary = 'first-switch-published-after-idle'
 function New-RunJson($ui, $runUi, [double] $watchUi, [double] $riseUi, $conditions, [bool] $noPrimary = $false, $idle = $null) {
     $row = {
         param($library, $id, $budget, $rule, $uiMs, $runUiMs)
@@ -49,9 +58,21 @@ function New-RunJson($ui, $runUi, [double] $watchUi, [double] $riseUi, $conditio
         }
     }
     $rows = [Collections.Generic.List[object]]::new()
-    $rows.Add((& $row 'example' $primary 250 'report-only' 999 900))
-    $rows.Add((& $row '500' $rise 100 'waiting: over under rows of N too' $riseUi $null))
-    if (-not $noPrimary) { $rows.Add((& $row '500' $primary 250 'enforced' $ui $runUi)) }
+    if ($null -ne $idle -and -not $idle.ContainsKey('TodayRows')) {
+        $stopped = $null -ne $idle.Skipped
+        $prepare = if ($idle.Side -eq 'none') { 0.2 } else { 60 }
+        $rows.Add((& $row 'example' $idlePrimary 100 'report-only' 999 900))
+        $rows.Add((& $row '500' 'prepare-published-idle' 50 'report-only' $prepare $prepare))
+        $rows.Add((& $row '500' 'prepare-published-longest-step' 250 'report-only' ($prepare / 3) ($prepare / 3)))
+        if (-not $noPrimary -and -not $stopped) {
+            $rows.Add((& $row '500' $idlePrimary 100 'report-only' $ui $runUi))
+            $rows.Add((& $row '500' 'first-switch-published-after-idle-paint' 250 'report-only' 40 40))
+        }
+    } else {
+        $rows.Add((& $row 'example' $primary 250 'report-only' 999 900))
+        $rows.Add((& $row '500' $rise 100 'waiting: over under rows of N too' $riseUi $null))
+        if (-not $noPrimary) { $rows.Add((& $row '500' $primary 250 'enforced' $ui $runUi)) }
+    }
     $rows.Add((& $row '500' $watch 250 'enforced' $watchUi $watchUi))
     $json = [ordered]@{
         mode = 'headless'; machineName = $machine; dpi = 96; option = 'b'; syncIntoResetThreshold = 64; day = '2026-11-21'
@@ -60,8 +81,24 @@ function New-RunJson($ui, $runUi, [double] $watchUi, [double] $riseUi, $conditio
         rows = $rows.ToArray()
         conditions = $conditions
     }
-    # A run told an idle side records what preparation did before the switch.
-    if ($null -ne $idle) { $json['idlePreparation'] = @([ordered]@{ library = '500'; side = $idle.Side; stepsRun = 5; viewsMade = 21; prepared = ($null -eq $idle.Skipped); skippedReason = $idle.Skipped; firstSwitchTaken = ($null -eq $idle.Skipped); viewsMadeAtSwitch = $(if ($null -eq $idle.Skipped) { 0 } else { $null }) }) }
+    # A run told an idle side records what preparation did before the
+    # switch, as the measurement does for that side: none runs no step and
+    # its switch makes the 21 card views; prepared makes them in 5 steps; a
+    # stopped preparation made 6 in 3 steps and its switch was not timed.
+    if ($null -ne $idle -and -not $idle.ContainsKey('NoRecord')) {
+        $side = if ($idle.ContainsKey('JsonSide')) { $idle.JsonSide } else { $idle.Side }
+        $record = if ($null -ne $idle.Skipped) {
+            [ordered]@{ stepsRun = 3; viewsMade = 6; prepared = $false; skippedReason = $idle.Skipped; firstSwitchTaken = $false; viewsMadeAtSwitch = $null }
+        } elseif ($idle.Side -eq 'none') {
+            [ordered]@{ stepsRun = 0; viewsMade = 0; prepared = $false; skippedReason = $null; firstSwitchTaken = $true; viewsMadeAtSwitch = 21 }
+        } else {
+            [ordered]@{ stepsRun = 5; viewsMade = 21; prepared = $true; skippedReason = $null; firstSwitchTaken = $true; viewsMadeAtSwitch = 0 }
+        }
+        $entry = [ordered]@{ library = '500'; side = $side }
+        foreach ($key in $record.Keys) { $entry[$key] = $record[$key] }
+        $entry['idleWaitMs'] = 1000.4; $entry['framesBeforeSwitch'] = 1
+        $json['idlePreparation'] = @($entry)
+    }
     $json | ConvertTo-Json -Depth 6
 }
 
@@ -76,9 +113,11 @@ function New-Conditions($disturbed = $false, $others = 6.0) {
 # BNoPrimary/ANoPrimary (the primary row left out), BUiNull/AUiNull (its UI
 # null), BOutlasted/AOutlasted and BTimedOut/ATimedOut (the record's facts),
 # SkipSecond (the second run not run), OmitSecond (the sitting stopped
-# before the second run) and BIdle/AIdle (the run's idle record: a hashtable
-# with Side and Skipped, the reason preparation stopped or null). Each sitting starts a minute after the last, as
-# real ones do, so no two canned sittings have the same record.
+# before the second run) and BIdle/AIdle (the run's idle side: New-RunJson's
+# $idle). A sitting given idle sides names first-switch-published-after-idle
+# as its primary row and no row expected to rise, as the method's command
+# line does. Each sitting starts a minute after the last, as real ones do, so
+# no two canned sittings have the same record.
 $script:sittingMinute = 0
 function New-Sitting([string] $name, [int] $planned, [object[]] $pairs, [string] $beforeIdle = '', [string] $afterIdle = '') {
     $folder = Join-Path $WorkFolder $name
@@ -110,8 +149,10 @@ function New-Sitting([string] $name, [int] $planned, [object[]] $pairs, [string]
         }
     }
     $script:sittingMinute++
-    [ordered]@{ mode = 'headless'; beforeName = 'before'; afterName = 'after'; pairs = $planned; primaryRow = $primary
-        expectedToRise = @($rise); load = 'None'; beforeIdle = $beforeIdle; afterIdle = $afterIdle; startedAt = ([DateTime]::new(2026, 11, 21, 22, 0, 0).AddMinutes($script:sittingMinute).ToString('yyyy-MM-dd HH:mm')); runs = $runs.ToArray() } |
+    $sittingPrimary = if ($beforeIdle) { $idlePrimary } else { $primary }
+    $sittingRise = @(if (-not $beforeIdle) { $rise })
+    [ordered]@{ mode = 'headless'; beforeName = 'before'; afterName = 'after'; pairs = $planned; primaryRow = $sittingPrimary
+        expectedToRise = $sittingRise; load = 'None'; beforeIdle = $beforeIdle; afterIdle = $afterIdle; startedAt = ([DateTime]::new(2026, 11, 21, 22, 0, 0).AddMinutes($script:sittingMinute).ToString('yyyy-MM-dd HH:mm')); runs = $runs.ToArray() } |
         ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $folder 'sitting.json') -Encoding utf8NoBOM
     return $folder
 }
@@ -285,14 +326,22 @@ $three = New-Sitting 'pool-3' 10 (New-Pairs 10 -higher 1, 4)
 $r = Invoke-Check 'three sittings pooled' @($three, $two, $one)
 Assert-That (@($r.Lines | Where-Object { $_ -like '*3 sittings are pooled*6.1% at three*past the 5%*' }).Count -eq 1) 'pooled sittings carry the chance of a false pass'
 
+# Pairs of a sitting of idle sides: before told before, after told after.
+function Set-IdleSides([object[]] $pairs, [string] $before, [string] $after) {
+    foreach ($p in $pairs) { $p['BIdle'] = @{ Side = $before; Skipped = $null }; $p['AIdle'] = @{ Side = $after; Skipped = $null } }
+    return , $pairs
+}
+
 # 20. Idle sides: the same build with --after-idle none before and prepared
-# after. Pair 2's after run stopped its preparation (a slow step), so its
-# first switch after idle was not timed: dropped, its pair replaced, and
-# listed apart as a drop that depends on a timing. Kept: 10 pairs, 9 lower.
-$pairs = New-Pairs 11 -higher 7
-foreach ($p in $pairs) { $p['BIdle'] = @{ Side = 'none'; Skipped = $null }; $p['AIdle'] = @{ Side = 'prepared'; Skipped = $null } }
+# after, runs shaped as the measurement writes them (the idle rows in place
+# of today's first switch; the side none's record with no step and 21 card
+# views made at the switch). Pair 2's after run stopped its preparation (a
+# slow step), so its first switch after idle was not timed: dropped, its
+# pair replaced, and listed apart as a drop that depends on a timing. Kept:
+# 10 pairs, 9 lower. The two preparation rows read higher on prepared in
+# every pair, by design: reported, and neither is flagged as a watch row.
+$pairs = Set-IdleSides (New-Pairs 11 -higher 7) 'none' 'prepared'
 $pairs[1]['AIdle'] = @{ Side = 'prepared'; Skipped = 'slow slice' }
-$pairs[1]['ANoPrimary'] = $true
 $sided = New-Sitting 'idle-sides' 10 $pairs 'none' 'prepared'
 $r = Invoke-Check 'idle sides, a preparation stopped' @($sided)
 Assert-That ($r.Verdict -eq 'gain shown' -and $r.Lower -eq 9 -and $r.Pairs -eq 10 -and $r.Replaced -eq 1) "gain shown, 9 of 10, 1 replaced (got $($r.Verdict), $($r.Lower) of $($r.Pairs), $($r.Replaced) replaced)"
@@ -300,14 +349,61 @@ Assert-That (@($r.Lines | Where-Object { $_ -like '*dropped: pair 2 after: idle 
 Assert-That (@($r.Lines | Where-Object { $_ -like '*1 runs stopped their idle preparation*whether a step is slow is a timing*' }).Count -eq 1) 'the stopped preparation is listed apart as a drop that depends on a timing'
 Assert-That (@($r.Lines | Where-Object { $_ -like 'Idle sides: before runs with --after-idle none, after with --after-idle prepared.*' }).Count -eq 1) 'the summary names the idle sides'
 Assert-That (@($r.Lines | Where-Object { $_ -like 'after: *idle side prepared' }).Count -eq 1) "the after build's facts name its idle side"
+Assert-That (@($r.WatchHigher).Count -eq 0 -and @($r.WatchBlocking).Count -eq 0) "no watch row is flagged (got higher: $(@($r.WatchHigher) -join ', '))"
+foreach ($id in 'prepare-published-idle', 'prepare-published-longest-step') {
+    Assert-That (@($r.Lines | Where-Object { $_ -like "  $id (idle preparation, before the switch): after higher in 10 of 10 pairs. Reported; it does not block." }).Count -eq 1) "$id is reported and does not block"
+}
+
+# 20b. A second sitting of the same sides, pooled: the preparation rows are
+# higher again, and still do not block.
+$again = New-Sitting 'idle-sides-again' 10 (Set-IdleSides (New-Pairs 10 -higher 4) 'none' 'prepared') 'none' 'prepared'
+$r = Invoke-Check 'idle sides, two sittings pooled' @($again, $sided)
+Assert-That (@($r.WatchHigher).Count -eq 0 -and @($r.WatchBlocking).Count -eq 0) "pooled, no watch row is flagged or blocks (got blocking: $(@($r.WatchBlocking) -join ', '))"
 
 # 21. A sitting of other idle sides is not pooled with it.
-$other = New-Sitting 'idle-sides-half' 10 (New-Pairs 10) 'none' 'half'
+$other = New-Sitting 'idle-sides-half' 10 (Set-IdleSides (New-Pairs 10) 'none' 'half') 'none' 'half'
 $refused = $false
 try { & $pairsScript -Analyze $sided -Pool $other -PassThru | Out-Null } catch { $refused = $_.Exception.Message -like '*differs in afterIdle*' }
 Assert-That $refused 'a sitting of other idle sides is not pooled'
 
-if ($failures.Count) {    Write-Host "Board pairs check: $($failures.Count) failed."
+# 22. A run whose JSON does not carry the side its build was given: pair 3's
+# after run names the side none (the option did not reach the test host),
+# pair 5's before run has no idlePreparation. Both are dropped with their
+# reason and their pairs replaced; 10 pairs kept, 9 lower.
+$pairs = Set-IdleSides (New-Pairs 12 -higher 7) 'none' 'prepared'
+$pairs[2]['AIdle'] = @{ Side = 'prepared'; Skipped = $null; JsonSide = 'none' }
+$pairs[4]['BIdle'] = @{ Side = 'none'; Skipped = $null; NoRecord = $true }
+$r = Invoke-Check 'idle sides, a run of the wrong side' @(New-Sitting 'idle-wrong-side' 10 $pairs 'none' 'prepared')
+Assert-That ($r.Verdict -eq 'gain shown' -and $r.Lower -eq 9 -and $r.Pairs -eq 10 -and $r.Replaced -eq 2) "gain shown, 9 of 10, 2 replaced (got $($r.Verdict), $($r.Lower) of $($r.Pairs), $($r.Replaced) replaced)"
+Assert-That (@($r.Lines | Where-Object { $_ -like '*dropped: pair 3 after: told the idle side prepared, but its JSON says the side none*' }).Count -eq 1) 'a run naming another side is dropped with its reason'
+Assert-That (@($r.Lines | Where-Object { $_ -like '*dropped: pair 5 before: told the idle side none, but its JSON has no idlePreparation*' }).Count -eq 1) 'a sided run with no idle record is dropped with its reason'
+
+# 23. Every after run names the side none while the record says prepared:
+# each is dropped, so the sitting is void, never judged as none against
+# prepared.
+$pairs = Set-IdleSides (New-Pairs 10) 'none' 'prepared'
+foreach ($p in $pairs) { $p['AIdle'] = @{ Side = 'prepared'; Skipped = $null; JsonSide = 'none' } }
+$r = Invoke-Check 'idle sides, every after run of the side none' @(New-Sitting 'idle-all-none' 10 $pairs 'none' 'prepared')
+Assert-That ($r.Verdict -eq 'void') "void (got $($r.Verdict))"
+
+# 24. A sitting of no idle sides with a run that carries an idle record: it
+# is dropped with its reason; 10 pairs kept, 9 lower.
+$pairs = New-Pairs 11 -higher 7
+$pairs[3]['BIdle'] = @{ Side = 'prepared'; Skipped = $null; TodayRows = $true }
+$r = Invoke-Check 'no idle sides, a run with an idle record' @(New-Sitting 'unsided-with-record' 10 $pairs)
+Assert-That ($r.Verdict -eq 'gain shown' -and $r.Lower -eq 9 -and $r.Pairs -eq 10 -and $r.Replaced -eq 1) "gain shown, 9 of 10, 1 replaced (got $($r.Verdict), $($r.Lower) of $($r.Pairs), $($r.Replaced) replaced)"
+Assert-That (@($r.Lines | Where-Object { $_ -like '*dropped: pair 4 before: told no idle side, but its JSON has idlePreparation (side prepared)*' }).Count -eq 1) 'an unsided run with an idle record is dropped with its reason'
+
+# 25. Run mode refuses two equal idle sides before it runs or checks
+# anything else.
+$refused = $false
+try {
+    & $pairsScript -Mode headless -Before $WorkFolder -After $WorkFolder -Out (Join-Path $WorkFolder 'refused') -PrimaryRow $idlePrimary -BeforeIdle prepared -AfterIdle prepared | Out-Null
+} catch { $refused = $_.Exception.Message -like '*both name the side prepared*' }
+Assert-That ($refused -and -not (Test-Path -LiteralPath (Join-Path $WorkFolder 'refused'))) 'two equal idle sides are refused, and nothing is written'
+
+if ($failures.Count) {
+    Write-Host "Board pairs check: $($failures.Count) failed."
     exit 1
 }
 Write-Host 'Board pairs check: every case gave the verdict the rule gives by hand.'

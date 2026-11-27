@@ -37,10 +37,13 @@ width, half or prepared): "--after-idle <side>" in a window, the
 PAPERROUTE_TRIAL_AFTER_IDLE variable headless. Such a run times
 first-switch-published-after-idle in place of first-switch-published, after
 the same wait on every side. Give the same build as -Before and -After, so
-the pairs compare the sides and nothing else. A run whose preparation
+the pairs compare the sides and nothing else, and two different sides. A
+run whose JSON names another idle side than its build was given (or one
+when none was) is dropped and its pair replaced. A run whose preparation
 stopped (a slow step) did not time that switch: it is dropped and its pair
 replaced, and the summary lists those drops apart, since whether a step is
-slow is a timing.
+slow is a timing. The two preparation rows, which come before the switch,
+are reported and never block: they time the work moved out of the switch.
 
 -Analyze reads a sitting's folder again without running anything, so the
 rule can be checked on saved or canned files. -Pool adds earlier sittings of
@@ -207,9 +210,12 @@ function Get-RowIds($rows) {
 
 # What makes a run unusable, decided from facts that are not timings: not
 # run, timed out, no JSON, an error, no rows of the library held, a row with
-# no UI figure, a load that ended before the run, or a disturbed PC. Null
+# no UI figure, an idle side other than its build's (or one where none was
+# given), its idle preparation stopped, a load that ended before the run, or
+# a disturbed PC. Null
 # when the run is usable. A disturbed of null (load unknown) counts as not
-# disturbed. Only "outlasted its load" depends on how long the run took.
+# disturbed. Two depend on a timing: "outlasted its load" on how long the
+# run took, and a stopped preparation on whether a step was slow.
 $OutlastedReason = 'outlasted its load'
 $StoppedReason = 'idle preparation stopped'
 
@@ -234,9 +240,20 @@ function Get-DropReason($run, [string] $mode) {
     foreach ($id in Get-RowIds $run.Rows) {
         if (-not (Test-Number (Get-Field $run.Rows.$id 'uiMs'))) { return "row $id has no UI figure" }
     }
+    # A run carries the idle side its build was given, or none in a sitting
+    # of no idle sides: otherwise (an option that did not reach the test
+    # host, a mix-up of builds) it would be counted as the other side.
+    $idle = Get-IdleRecord $run.Json
+    if ($run.Sided) {
+        if ($null -eq $idle) { return "told the idle side $($run.Side), but its JSON has no idlePreparation" }
+        $got = [string] (Get-Field $idle 'side')
+        if ($got -ne $run.Side) { return "told the idle side $($run.Side), but its JSON says the side $got" }
+    } elseif ($null -ne $idle) {
+        return "told no idle side, but its JSON has idlePreparation (side $(Get-Field $idle 'side'))"
+    }
     # Its first switch after idle was made untimed. A slow step stops
     # preparation, so this drop, like the one below, depends on a timing.
-    $stopped = Get-Field (Get-IdleRecord $run.Json) 'skippedReason'
+    $stopped = Get-Field $idle 'skippedReason'
     if ($null -ne $stopped) { return "$StoppedReason ($stopped), so its first switch after idle was not timed" }
     if ($run.LoadOutlasted) { return $OutlastedReason }
     if ((Get-Field (Get-Field $run.Json 'conditions') 'disturbed') -eq $true) { return 'disturbed' }
@@ -265,8 +282,9 @@ function Get-LoadText($run) {
 }
 
 # One run of a sitting's record with its JSON file, and why it is dropped
-# (null when it is kept).
-function Read-Run($entry, [string] $folder, [string] $mode) {
+# (null when it is kept). side is the idle side its build was given, and
+# sided whether the sitting gave its builds idle sides at all.
+function Read-Run($entry, [string] $folder, [string] $mode, [string] $side, [bool] $sided) {
     $path = Join-Path $folder $entry.file
     $written = Test-Path -LiteralPath $path -PathType Leaf
     $json = $null
@@ -284,7 +302,7 @@ function Read-Run($entry, [string] $folder, [string] $mode) {
         Pair = [int] $entry.pair; Order = [int] $entry.order; Name = [string] $entry.name
         Exit = Get-Field $entry 'exit'; LoadOutlasted = [bool] (Get-Field $entry 'loadOutlasted'); Skipped = [bool] (Get-Field $entry 'skipped')
         TimedOut = [bool] (Get-Field $entry 'timedOut')
-        Written = $written; Json = $json; Rows = $rows; Drop = $null
+        Written = $written; Json = $json; Rows = $rows; Drop = $null; Side = $side; Sided = $sided
     }
     $run.Drop = Get-DropReason $run $mode
     return $run
@@ -296,7 +314,11 @@ function Read-Sitting([string] $folder) {
     $recordPath = Join-Path $folder $SittingFile
     if (-not (Test-Path -LiteralPath $recordPath -PathType Leaf)) { throw "A sitting's folder holds $SittingFile; one given does not." }
     try { $record = Get-Content -LiteralPath $recordPath -Raw | ConvertFrom-Json } catch { throw "A sitting's $SittingFile could not be read as JSON." }
-    $runs = @(foreach ($entry in @($record.runs)) { Read-Run $entry $folder $record.mode })
+    $bIdle = [string] (Get-Field $record 'beforeIdle'); $aIdle = [string] (Get-Field $record 'afterIdle')
+    $runs = @(foreach ($entry in @($record.runs)) {
+        $side = if ([string] $entry.name -eq [string] $record.beforeName) { $bIdle } else { $aIdle }
+        Read-Run $entry $folder $record.mode $side ([bool] ($bIdle -or $aIdle))
+    })
     $runs = @($runs | Sort-Object Order)
     $sitting = [pscustomobject]@{
         Folder = [IO.Path]::GetFullPath($folder).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
@@ -502,7 +524,13 @@ function Get-Summary($sittings) {
     }
 
     # Watch rows: each sitting on its own. Higher once: a new sitting for that
-    # row. Higher again in another sitting: it blocks the merge.
+    # row. Higher again in another sitting: it blocks the merge. In a sitting
+    # of idle sides the two preparation rows are not watch rows: they time
+    # the work idle preparation moves out of the switch, before it, so they
+    # read about 0 on the side none and more on a side that prepares, by
+    # design; they are reported and never block (the longest step is judged
+    # on its own, in a real window, against the UI thread budget).
+    $preparationRows = if ($bIdle -or $aIdle) { @('prepare-published-idle', 'prepare-published-longest-step') } else { @() }
     $lines.Add('')
     $lines.Add('Watch rows (every row not named; UI higher after, ties count against):')
     $flagged = 0
@@ -512,6 +540,11 @@ function Get-Summary($sittings) {
         if ($rise -contains $id) {
             $c = Get-Count $pairs $id 'uiMs' 'higher'
             $lines.Add("  ${id} (expected to rise): $aName higher in $($c.Count) of $($c.Pairs) pairs. Reported; it does not block.")
+            continue
+        }
+        if ($preparationRows -contains $id) {
+            $c = Get-Count $pairs $id 'uiMs' 'higher'
+            $lines.Add("  ${id} (idle preparation, before the switch): $aName higher in $($c.Count) of $($c.Pairs) pairs. Reported; it does not block.")
             continue
         }
         if ($higherIn.Count -eq 0) { continue }
@@ -551,7 +584,7 @@ function Save-Record([string] $folder, $record) {
 # One measured run, its own process. Returns the exit code, whether the
 # load (if any) ended before the run did, and whether the run was stopped at
 # the run limit (a fixed limit far above any budget, so not a timing). idle
-# is the run's idle side, or empty for a run told none.
+# is the run's idle side, or empty for a run told no side.
 function Invoke-Run([string] $exeOrTree, [string] $file, [bool] $withLoad, [string] $folder, [int] $limitMinutes, [string] $idle) {
     if ($Mode -eq 'window') {
         $start = [Diagnostics.ProcessStartInfo]::new($exeOrTree)
@@ -618,6 +651,7 @@ if ($SignTable) {
 if ($PSCmdlet.ParameterSetName -eq 'Run') {
     if ($BeforeName -eq $AfterName) { throw '-BeforeName and -AfterName must differ.' }
     if ([bool] $BeforeIdle -ne [bool] $AfterIdle) { throw '-BeforeIdle and -AfterIdle are given together: each side of an idle comparison times the first switch after idle.' }
+    if ($BeforeIdle -and $BeforeIdle -eq $AfterIdle) { throw "-BeforeIdle and -AfterIdle both name the side $BeforeIdle, so the pairs would compare a side with itself; give two different sides." }
     foreach ($pathName in 'Before', 'After') {
         if (-not (Test-Path -LiteralPath (Get-Variable $pathName -ValueOnly))) { throw "Nothing at the -$pathName path." }
         Set-Variable $pathName ([IO.Path]::GetFullPath((Get-Variable $pathName -ValueOnly), (Get-Location).ProviderPath))
@@ -684,7 +718,7 @@ if ($PSCmdlet.ParameterSetName -eq 'Run') {
             Save-Record $Out $record
             # Only the facts that are not timings decide whether the pair is
             # kept (Get-DropReason), the same as when the sitting is read again.
-            $run = Read-Run ([pscustomobject] $entry) $Out $Mode
+            $run = Read-Run ([pscustomobject] $entry) $Out $Mode $side[2] ([bool] ($BeforeIdle -or $AfterIdle))
             $ranOfPair += $run
             if ($null -ne $run.Drop) { $usable = $false }
             Write-Host "pair $pair $($side[0]): exit $($ran.Exit), $($entry.seconds) s, $(if ($null -ne $run.Json) { Get-LoadText $run } else { 'no figures' })$(if ($null -ne $run.Drop) { "; $($run.Drop), pair to be replaced" })"
