@@ -291,6 +291,22 @@ public sealed class HiddenShelfPreparer
             return false;
         }
 
+        // A change of the shelf host's size or of the shown width since the
+        // last full-size layout: the refresh climbs the ladder again. A
+        // full-size L at the new size alone would leave the rows and cache
+        // the list made for the old size (it measures again only when its
+        // viewport passes the band it last saw), so the switch would show,
+        // and an accessibility client would list, other cache rows than a
+        // switch at the new size makes. A capped step first makes the list
+        // see a small band, and the full-size step then makes it measure
+        // for the new size.
+        if (!_ladderNeeded && _laidOutFor is { } last && (last.Host != host.Bounds.Size || width != _widthFor))
+        {
+            _ladderNeeded = true;
+            _ladderRun = 0;
+            _ladderMade = 0;
+        }
+
         // W. Given before Published is realized, the rows are wrapped to the
         // columns at once; given again to a realized hidden shelf after a
         // resize, a change of columns leaves its rows stale for R.

@@ -37,8 +37,9 @@ namespace PaperRoute.Desktop.Tests;
 // - T4: the shelf tab still decides which shelf is shown.
 // - T5: a switch after any number of steps shows the whole first screen.
 // - T9: a change while Published is prepared or half prepared never shows
-//   an old card, and after the idle refresh the switch makes no view and
-//   refills no row.
+//   an old card, and after the idle refresh the switch makes no view,
+//   refills no row, and leaves the tree and Tab walk of a twin that had the
+//   same change unprepared.
 // - T7: once an accessibility client has read the shelf host's children, or
 //   walked up from a card, preparation is skipped and raises no event.
 // - T8: the idle rules: nothing runs at startup, while keys come closer than
@@ -642,8 +643,13 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
     // ladder), and every time Published's Border becomes visible, for a step
     // or for the switch, its rows and row views hold its cards in the shown
     // shelf's columns. The switch then makes no card view and refills no row,
-    // and shows every card right. After a theme change the switch draws the
-    // picture of a twin Board that had the same change and was not prepared.
+    // and shows every card right. After the switch the accessibility tree
+    // and Tab walk are those of a twin Board that had the same change and
+    // was not prepared, so a screen reader lists the same cards, cache rows
+    // included (after a resize the refresh climbs the ladder again, so the
+    // list keeps the rows a switch at the new size makes); after a theme
+    // change the switch also draws the twin's picture. The twin and each
+    // mode have their own library: an edit changes a manuscript in place.
     [TestMethod]
     [DataRow("search")]
     [DataRow("stage")]
@@ -658,23 +664,31 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
     public void T9_AChangeWhilePreparedNeverShowsAnOldCard(string change)
     {
         using DiskLibrarySession disk = OpenFiveHundred("five-hundred");
+        using DiskLibrarySession halfDisk = OpenFiveHundred("five-hundred-half");
+        using DiskLibrarySession twinDisk = OpenFiveHundred("five-hundred-twin");
         Write(Headless.Run(() =>
         {
             var facts = new List<string>();
             byte[]? twinPixels = null;
-            if (change == "theme")
+            string twinTree;
+            MemorySession twinSession = WholeLibrary(twinDisk);
+            using (BoardWindow twin = BoardWindow.Show(twinSession, ThemeVariant.Light))
             {
-                using BoardWindow twin = BoardWindow.Show(WholeLibrary(disk), ThemeVariant.Light);
-                Change(twin, null, change);
+                Change(twin, twinSession, change);
                 Settle(twin);
                 Switch(twin, 1);
-                twinPixels = Frame(twin).Pixels;
+                if (change == "theme")
+                {
+                    twinPixels = Frame(twin).Pixels;
+                }
+
+                twinTree = AccessibilityTreeTests.AccessibilityTree.Describe(twin, FiveHundredTabLimit);
             }
 
-            foreach (int first in new[] { FirstPreparationSteps, 3 })
+            foreach ((int first, DiskLibrarySession library) in new[] { (FirstPreparationSteps, disk), (3, halfDisk) })
             {
                 string mode = first == FirstPreparationSteps ? "prepared" : "half prepared";
-                MemorySession session = WholeLibrary(disk);
+                MemorySession session = WholeLibrary(library);
                 using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
                 HiddenShelfPreparer preparer = Still(board);
                 for (int step = 0; step < first; step++)
@@ -727,6 +741,11 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
 
                     facts.Add($"{change}, {mode}: the picture after the switch equals the twin's byte for byte");
                 }
+
+                // Last: the Tab walk moves the keyboard.
+                string preparedTree = AccessibilityTreeTests.AccessibilityTree.Describe(board, FiveHundredTabLimit);
+                AssertSameTree(twinTree, preparedTree, $"{change}, {mode}: after the switch");
+                facts.Add($"{change}, {mode}: after the switch the tree and Tab walk equal the twin's ({preparedTree.Split('\n').Length} lines)");
             }
 
             return facts;
@@ -1136,22 +1155,30 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
             return (twinTree, AccessibilityTreeTests.AccessibilityTree.Describe(board, limit));
         });
 
-        if (twinTree != preparedTree)
-        {
-            string[] want = twinTree.Split('\n');
-            string[] got = preparedTree.Split('\n');
-            int line = 0;
-            while (line < want.Length && line < got.Length && want[line] == got[line])
-            {
-                line++;
-            }
+        AssertSameTree(twinTree, preparedTree, "After the switch");
+        return [$"{expected}: equal with preparation done; after the switch equal to the twin's ({preparedTree.Split('\n').Length} lines)"];
+    }
 
-            Assert.Fail($"After the switch, the prepared Board's tree differs from the twin's at line {line + 1}:\n" +
-                $"  twin:     {(line < want.Length ? want[line] : "(end)")}\n" +
-                $"  prepared: {(line < got.Length ? got[line] : "(end)")}");
+    // A prepared Board's tree and Tab walk (AccessibilityTree.Describe)
+    // equal a twin's, or the first line that differs is named.
+    private static void AssertSameTree(string twinTree, string preparedTree, string step)
+    {
+        if (twinTree == preparedTree)
+        {
+            return;
         }
 
-        return [$"{expected}: equal with preparation done; after the switch equal to the twin's ({preparedTree.Split('\n').Length} lines)"];
+        string[] want = twinTree.Split('\n');
+        string[] got = preparedTree.Split('\n');
+        int line = 0;
+        while (line < want.Length && line < got.Length && want[line] == got[line])
+        {
+            line++;
+        }
+
+        Assert.Fail($"{step}, the prepared Board's tree differs from the twin's at line {line + 1} (twin {want.Length} lines, prepared {got.Length}):\n" +
+            $"  twin:     {(line < want.Length ? want[line] : "(end)")}\n" +
+            $"  prepared: {(line < got.Length ? got[line] : "(end)")}");
     }
 
     private static void Switch(BoardWindow board, int index)
