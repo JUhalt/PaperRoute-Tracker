@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Avalonia.Media;
 using PaperRoute.Desktop.Styles;
+using PaperRoute.Desktop.Tests.Legibility;
 
 namespace PaperRoute.Desktop.Tests.Styles;
 
@@ -32,9 +33,9 @@ public sealed partial class TokenTests
             IReadOnlyDictionary<string, Color> colors = TokenFile.Colors(variant);
             foreach ((string where, string ink, string surface) in BoardPairs())
             {
-                double ratio = TokenFile.ContrastRatio(colors[ink], colors[surface]);
+                double ratio = Contrast.ContrastRatio(colors[ink], colors[surface]);
                 checkedPairs++;
-                if (ratio < 4.5)
+                if (ratio < Thresholds.Text)
                 {
                     failures.Add($"{variant}: {where}: {ink} on {surface} is {ratio:F2}:1");
                 }
@@ -56,8 +57,8 @@ public sealed partial class TokenTests
             IReadOnlyDictionary<string, Color> colors = TokenFile.Colors(variant);
             foreach (string pair in s_stages.Select(stage => "Stage" + stage).Concat(s_tagPalettes.Select(palette => "Tag" + palette)))
             {
-                double ratio = TokenFile.ContrastRatio(colors[pair + "ForegroundBrush"], colors[pair + "BackgroundBrush"]);
-                if (ratio < 4.5)
+                double ratio = Contrast.ContrastRatio(colors[pair + "ForegroundBrush"], colors[pair + "BackgroundBrush"]);
+                if (ratio < Thresholds.Text)
                 {
                     failures.Add($"{variant}: {pair} is {ratio:F2}:1");
                 }

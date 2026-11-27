@@ -78,23 +78,6 @@ internal static class TokenFile
             byte.Parse(text.AsSpan(5, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture));
     }
 
-    // The WCAG contrast ratio, from 1 to 21, as PaperRoute.Tests' TestSupport.ContrastRatio.
-    public static double ContrastRatio(Color foreground, Color background)
-    {
-        double first = RelativeLuminance(foreground);
-        double second = RelativeLuminance(background);
-        return (Math.Max(first, second) + 0.05) / (Math.Min(first, second) + 0.05);
-    }
-
-    public static double RelativeLuminance(Color color) =>
-        (0.2126 * Linear(color.R)) + (0.7152 * Linear(color.G)) + (0.0722 * Linear(color.B));
-
-    private static double Linear(byte channel)
-    {
-        double value = channel / 255.0;
-        return value <= 0.04045 ? value / 12.92 : Math.Pow((value + 0.055) / 1.055, 2.4);
-    }
-
     private static IEnumerable<XElement> ThemeDictionaries()
     {
         XElement root = XDocument.Load(TokensPath).Root!;
