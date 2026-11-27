@@ -1,3 +1,4 @@
+#requires -Version 7.0
 # Lists every picture that differs between two folders of Avalonia trial
 # pictures, with the number of pixels that differ.
 #
