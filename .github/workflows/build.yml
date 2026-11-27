@@ -305,7 +305,8 @@ jobs:
   # and the run's own messages when it fails (a hang or a crash ends it early
   # and leaves later tests with no result), are listed in the step summary
   # before the job fails, so a failure on Ubuntu alone can be read without the
-  # artifact. Until 2026-11-27 this job only reported (the trial's question 5).
+  # artifact. It only reported, as a finding for the trial's question 5,
+  # until the maintainer's decision of 2026-11-27 made it judge.
   trial-linux:
     name: Avalonia Board trial (Linux)
     runs-on: ubuntu-latest
