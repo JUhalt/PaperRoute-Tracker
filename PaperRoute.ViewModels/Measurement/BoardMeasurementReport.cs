@@ -97,10 +97,12 @@ public sealed record MeasurementConditions
     public bool? Disturbed { get; init; }
 
     // The disturbed line (busy-PC design, section 2): other programs keep
-    // more than a quarter of the processors busy, 3 of 12 on the development
-    // PC and 1 of 4 on a CI runner. The maintainer re-set it on November 27,
-    // 2026, after the validation, for later sittings only. Until then a run
-    // was disturbed when other programs left fewer than two processors free.
+    // more than 3 of the 12 processors busy, as the maintainer decided on
+    // November 27, 2026, after the validation, for later sittings only. It is
+    // written as a quarter of the processors, so it reads 1 of 4 on a CI
+    // runner; that scaling is assumed, not part of the decision (section 11).
+    // Until then a run was disturbed when other programs left fewer than two
+    // processors free.
     public static double DisturbedLine(int processors) => processors / 4.0;
 }
 

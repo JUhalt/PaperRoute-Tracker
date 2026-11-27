@@ -19,7 +19,8 @@ its own process and writes one JSON file:
 There is no quiet gate: the script never waits for the PC to calm down. It
 records the load of every run and replaces a pair afterwards when a run was
 disturbed (as its JSON says: since November 27, 2026, other programs kept
-more than a quarter of the processors busy), wrote no JSON, ended in error,
+more than 3 of the 12 processors busy, written as a quarter of the
+processors), wrote no JSON, ended in error,
 timed out (-RunLimitMinutes), lacks a row or a UI figure its partner has, or
 outlasted its load. That is decided from those facts alone, before any
 timing is read; only "outlasted its load" depends on how long the run took,

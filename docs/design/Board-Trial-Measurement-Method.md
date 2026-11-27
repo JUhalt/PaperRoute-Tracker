@@ -332,7 +332,8 @@ One observation from two headless runs of the same build, not a finding: Stage f
 - That `sched_getcpu` and `cpu_capacity` give a core-class map on a Linux machine with two kinds of core. The CI runner gave none, as expected of a virtual machine.
 - That the thread-cycle counter runs at the nominal rate on other Windows PCs. The per-run check catches a slower counter, and a faster one as soon as one spin runs without being taken off the processor (section 4); a PC so busy that no spin of 25 runs whole could still let a faster counter through.
 - That `Environment.ProcessorCount` is the machine's processor count. The load readings count every processor, while `ProcessorCount` follows an affinity or container limit; under such a limit a run is marked disturbed too often. On the development PC and the GitHub runners the two are equal.
-- That a quarter of the processors is a useful disturbed line. It is the maintainer's decision of November 27, 2026, in place of the starting value "fewer than two processors free"; the load series found no load below which timings stop rising (section 6).
+- That more than 3 of the 12 processors busy with other programs is a useful disturbed line. The line is the maintainer's decision of November 27, 2026, in place of the starting value "fewer than two processors free"; the load series found no load below which timings stop rising (section 6).
+- That the same line scales as a quarter of the processors on a PC with another number of them (1 of 4 on a CI runner). The code writes it so; the decision named only 3 of 12, so the scaling is assumed, not decided.
 - The run and build times of section 10, except the recorded ones.
 - That the interface thread does not wait on the render thread inside the synchronous rows.
 - That time a CI host takes from its virtual machine may count as running.
@@ -356,7 +357,7 @@ One observation from two headless runs of the same build, not a finding: Stage f
 These follow the method's own recommendations and were taken as defaults while the maintainer was away. Three of them were settled on November 27, 2026:
 
 1. **Run UI counts toward no verdict and no merge.** It was a default because Run UI was meant as a diagnosis. Since November 27, 2026 it follows from the validation: Run UI failed it and is not trusted even as a diagnosis on the development PC (section 6).
-2. **A run is disturbed** when other programs keep more than a quarter of the PC's logical processors busy on average (3 of 12). Decided by the maintainer on November 27, 2026, as the one re-set the method allowed, for later sittings only. The starting value was "fewer than two processors free" (section 2).
+2. **A run is disturbed** when other programs keep more than 3 of the 12 processors busy on average. Decided by the maintainer on November 27, 2026, as the one re-set the method allowed, for later sittings only. The code writes it as a quarter of the processors, so it reads 1 of 4 on a CI runner; that scaling to other processor counts was not part of the decision (section 11, "Assumed"). The starting value was "fewer than two processors free" (section 2).
 3. **When Published is prepared while the Board is idle**, the switch after it gets a new id (`first-switch-published-after-idle`), so today's `first-switch-published` keeps its meaning. Nothing is built for it yet.
 4. **The verdict rule of section 7** was a proposal, printed under "proposed verdict (report-only)". The maintainer accepted it as proposed on November 27, 2026; it is in force from that day.
 

@@ -79,10 +79,11 @@ public sealed class RunConditionsTests
     }
 
     // The line the maintainer set on November 27, 2026 (busy-PC design,
-    // section 2): a run is disturbed when other programs keep more than a
-    // quarter of the processors busy, 3 of 12 and 1 of 4. Just under the line
-    // and on it is not disturbed; just over it is. An absent reading stays
-    // "not disturbed, load unknown".
+    // section 2): a run is disturbed when other programs keep more than 3 of
+    // the 12 processors busy. The code writes it as a quarter of the
+    // processors, so 1 of 4 on a CI runner (assumed, not decided). Just under
+    // the line and on it is not disturbed; just over it is. An absent reading
+    // stays "not disturbed, load unknown".
     [TestMethod]
     public void TheDisturbedLineIsAQuarterOfTheProcessors()
     {
