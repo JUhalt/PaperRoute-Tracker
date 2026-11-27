@@ -189,6 +189,29 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
         }));
     }
 
+    // Published shown and hidden again between two steps: the shelf was
+    // shown once, so no further step runs and it is not called prepared.
+    [TestMethod]
+    public void T4_AShowAndHideBetweenStepsStopsPreparationForGood()
+    {
+        using DiskLibrarySession session = OpenFiveHundred("five-hundred");
+        Write(Headless.Run(() =>
+        {
+            using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
+            HiddenShelfPreparer preparer = board.View.Preparer;
+            Assert.IsTrue(preparer.RunStep(), "The width step ran.");
+            Switch(board, 1);
+            Switch(board, 0);
+            int stepsBefore = preparer.StepsRun;
+            Assert.IsFalse(preparer.RunStep(), "Shown once between two steps: no step runs.");
+            Assert.AreEqual(0, preparer.RunToEnd(), "Nor later.");
+            Assert.IsFalse(preparer.IsPrepared, "A shelf shown once is not called prepared.");
+            Assert.AreEqual(stepsBefore, preparer.StepsRun, "No step ran after the show.");
+            AssertOnlyShown(board, 0, "back on Pipeline");
+            return new List<string> { $"after the width step, a show and a hide: steps run {preparer.StepsRun}, prepared {preparer.IsPrepared}" };
+        }));
+    }
+
     [TestMethod]
     public void T6_TheTreeAndTabOrderAreTodaysAfterPreparation_Example()
     {

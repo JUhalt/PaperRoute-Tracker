@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
 using PaperRoute.ViewModels.Board;
@@ -30,12 +31,20 @@ namespace PaperRoute.Desktop;
 public sealed class HiddenShelfPreparer
 {
     private readonly BoardView _view;
+    private BoardViewModel? _board;
     private bool _widthGiven;
+
+    // Set for good once the shelf tab has chosen Published, even if it was
+    // left again before the next step (the design's rule 5): a shelf shown
+    // once is never prepared.
+    private bool _shownOnce;
 
     public HiddenShelfPreparer(BoardView view)
     {
         ArgumentNullException.ThrowIfNull(view);
         _view = view;
+        _view.DataContextChanged += (_, _) => Watch(_view.DataContext as BoardViewModel);
+        Watch(_view.DataContext as BoardViewModel);
     }
 
     // True once the full-size layout step has run with Published's rows
@@ -49,7 +58,9 @@ public sealed class HiddenShelfPreparer
     public bool RunStep()
     {
         if (IsPrepared
-            || _view.DataContext is not BoardViewModel { RenderCount: > 0 } board
+            || _shownOnce
+            || _board is not { RenderCount: > 0 } board
+            || !ReferenceEquals(_view.DataContext, board)
             || board.Shelves.Count < 2
             || board.SelectedShelfIndex == 1
             || !_view.IsEffectivelyVisible
@@ -60,10 +71,12 @@ public sealed class HiddenShelfPreparer
 
         ShelfViewModel published = board.Shelves[1];
 
-        // Shown before (only the switch realizes a shelf, besides W): its
-        // views exist already, and IsShown's rule keeps them.
+        // Shown before this preparer watched the Board (only the switch
+        // realizes a shelf, besides W): its views exist already, and
+        // IsShown's rule keeps them.
         if (published.IsShown || (published.IsRealized && !_widthGiven))
         {
+            _shownOnce = true;
             return false;
         }
 
@@ -114,5 +127,39 @@ public sealed class HiddenShelfPreparer
         }
 
         return ran;
+    }
+
+    // Follows the Board the view shows. A different Board starts afresh.
+    private void Watch(BoardViewModel? board)
+    {
+        if (ReferenceEquals(board, _board))
+        {
+            return;
+        }
+
+        if (_board is not null)
+        {
+            _board.PropertyChanged -= OnBoardChanged;
+        }
+
+        _board = board;
+        _widthGiven = false;
+        _shownOnce = false;
+        IsPrepared = false;
+        if (board is null)
+        {
+            return;
+        }
+
+        board.PropertyChanged += OnBoardChanged;
+        _shownOnce = board.SelectedShelfIndex == 1;
+    }
+
+    private void OnBoardChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(BoardViewModel.SelectedShelfIndex) && sender is BoardViewModel { SelectedShelfIndex: 1 })
+        {
+            _shownOnce = true;
+        }
     }
 }
