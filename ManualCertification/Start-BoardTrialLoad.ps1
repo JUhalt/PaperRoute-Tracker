@@ -4,9 +4,15 @@
 Starts a known extra load for the Board trial's timing validation, in a separate process.
 .DESCRIPTION
 The load of the measurement method (docs/design/Board-Trial-Measurement-Method.md,
-section 6): one new process that runs 6 threads at normal priority for -Seconds
-(at most 60), then ends by itself. Spin threads do integer arithmetic. Memory
-threads each stream a 64 MB array, one write per 64-byte line.
+section 6): one new process that runs -Threads threads (6 unless set, the
+method's number) at normal priority for -Seconds (at most 120), then ends by
+itself. Spin threads do integer arithmetic. Memory threads each stream a 64 MB
+array, one write per 64-byte line.
+
+The pairs script asks for what its mode needs: 60 s under a real-window run,
+120 s under a headless run, which outlasted 60 s under the memory load. 1 to
+5 threads are for repeating the load series of November 27, 2026 (method,
+section 6); the validation and the pairs script use 6.
 
 The load runs in its own process because load threads inside the measured
 process would stretch its garbage-collection pauses and mix two effects. It
@@ -27,20 +33,25 @@ the caller's finally block. If the caller is killed without it, the load
 still ends by itself -Seconds after it became ready.
 .EXAMPLE
 pwsh -NoProfile -File ./ManualCertification/Start-BoardTrialLoad.ps1 -Kind Memory -Seconds 10
+.EXAMPLE
+pwsh -NoProfile -File ./ManualCertification/Start-BoardTrialLoad.ps1 -Kind Spin -Seconds 20 -Threads 2
 #>
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)] [ValidateSet('Spin', 'Memory')] [string] $Kind,
-    [Parameter(Mandatory)] [ValidateRange(1, 60)] [int] $Seconds,
+    # At most 120: long enough for a headless run; the load still ends by itself.
+    [Parameter(Mandatory)] [ValidateRange(1, 120)] [int] $Seconds,
+    # 6, the method's number, unless set; 1 to 5 for the load series.
+    [ValidateRange(1, 6)] [int] $Threads = 6,
     # Internal: set only on the load's own process, which runs the threads.
     [switch] $RunHere
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-# The method fixes the number of threads; a sitting that is not disturbed is
-# repeated at another time of day, never run with more threads.
-$threads = 6
+# The method fixes the number of threads at 6, the most -Threads allows: a
+# sitting that is not disturbed is repeated at another time of day, never run
+# with more threads.
 $readyLine = 'ready'
 $readyLimit = [TimeSpan]::FromSeconds(60)
 
@@ -49,7 +60,7 @@ if (-not $RunHere) {
     $start.UseShellExecute = $false
     $start.CreateNoWindow = $true
     $start.RedirectStandardOutput = $true
-    foreach ($argument in '-NoProfile', '-NonInteractive', '-File', $PSCommandPath, '-Kind', $Kind, '-Seconds', [string] $Seconds, '-RunHere') {
+    foreach ($argument in '-NoProfile', '-NonInteractive', '-File', $PSCommandPath, '-Kind', $Kind, '-Seconds', [string] $Seconds, '-Threads', [string] $Threads, '-RunHere') {
         $start.ArgumentList.Add($argument)
     }
     $process = [Diagnostics.Process]::Start($start)
@@ -131,7 +142,7 @@ public static class BoardTrialLoad
 
 # -Seconds counts from the moment the threads run, not from this process's
 # start: pwsh's start and the compile above take several seconds.
-$workers = [BoardTrialLoad]::Start($Kind -eq 'Memory', $threads, $Seconds * 1000)
+$workers = [BoardTrialLoad]::Start($Kind -eq 'Memory', $Threads, $Seconds * 1000)
 [Console]::Out.WriteLine($readyLine)
 [Console]::Out.Flush()
 [BoardTrialLoad]::Join($workers)

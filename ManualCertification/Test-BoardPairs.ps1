@@ -8,7 +8,8 @@ Measure-BoardPairs.ps1 -Analyze (nothing is run or built), and compares its
 verdict with what the rule of the measurement method gives by hand
 (docs/design/Board-Trial-Measurement-Method.md, section 5). It also checks the
 sign test's counts against the method's table, and that a summary never
-copies the machine name or names the folder. Exit code 1 on any mismatch.
+copies the machine name or names the folder, and reads the load script's
+limits without starting it. Exit code 1 on any mismatch.
 .EXAMPLE
 pwsh -NoProfile -File ./ManualCertification/Test-BoardPairs.ps1
 #>
@@ -279,6 +280,19 @@ Assert-That ($r.Replaced -eq 1 -and @($r.Lines | Where-Object { $_ -like '*1 run
 $three = New-Sitting 'pool-3' 10 (New-Pairs 10 -higher 1, 4)
 $r = Invoke-Check 'three sittings pooled' @($three, $two, $one)
 Assert-That (@($r.Lines | Where-Object { $_ -like '*3 sittings are pooled*6.1% at three*past the 5%*' }).Count -eq 1) 'pooled sittings carry the chance of a false pass'
+
+# 20. The load (Start-BoardTrialLoad.ps1), read without starting it: -Seconds
+# goes up to 120, long enough for a headless run under the memory load, and
+# no further, so the load still ends by itself soon; -Threads runs from 1 to
+# 6, and is 6, the method's number, unless set.
+Write-Host 'The load script'
+$loadCommand = Get-Command (Join-Path $PSScriptRoot 'Start-BoardTrialLoad.ps1')
+$rangeOf = { param($name) @($loadCommand.Parameters[$name].Attributes | Where-Object { $_ -is [Management.Automation.ValidateRangeAttribute] }) }
+$secondsRange = @(& $rangeOf 'Seconds'); $threadsRange = @(& $rangeOf 'Threads')
+Assert-That ($secondsRange.Count -eq 1 -and [int] $secondsRange[0].MinRange -eq 1 -and [int] $secondsRange[0].MaxRange -eq 120) "-Seconds runs from 1 to 120 (got $(@($secondsRange | ForEach-Object { "$($_.MinRange) to $($_.MaxRange)" }) -join ', '))"
+Assert-That ($threadsRange.Count -eq 1 -and [int] $threadsRange[0].MinRange -eq 1 -and [int] $threadsRange[0].MaxRange -eq 6) "-Threads runs from 1 to 6 (got $(@($threadsRange | ForEach-Object { "$($_.MinRange) to $($_.MaxRange)" }) -join ', '))"
+$threadsDefault = @($loadCommand.ScriptBlock.Ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'Threads' } | ForEach-Object { if ($null -ne $_.DefaultValue) { $_.DefaultValue.Extent.Text } })
+Assert-That ($threadsDefault.Count -eq 1 -and $threadsDefault[0] -eq '6') "-Threads is 6 unless set (got $($threadsDefault -join ', '))"
 
 if ($failures.Count) {
     Write-Host "Board pairs check: $($failures.Count) failed."
