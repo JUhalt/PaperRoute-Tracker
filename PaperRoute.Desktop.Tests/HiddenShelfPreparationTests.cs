@@ -99,17 +99,38 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
             Assert.AreEqual(2, steps, "Two steps ran: the width and the layout.");
             Assert.IsFalse(preparer.RunStep(), "Prepared, no step is due.");
             AssertOnlyShown(board, 0, "after preparation");
+            List<CardView> preparedViews = board.Cards(PublishedName).ToList();
+            List<object?> preparedCards = preparedViews.Select(view => view.DataContext).ToList();
 
             int beforeSwitch = CardView.MadeCount;
             Switch(board, 1);
             int atSwitch = CardView.MadeCount - beforeSwitch;
-            facts.Add($"card views: the twin's first switch made {twinMade}; preparation made {prepared} ({preparedTitles.Count} on the shelf); the prepared first switch made {atSwitch}");
+
+            // A frame drawn after the switch makes none either: no work of the
+            // first screen waits for the first drawing.
+            Dispatcher.UIThread.RunJobs();
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            Dispatcher.UIThread.RunJobs();
+            board.Window.UpdateLayout();
+            int afterFrame = CardView.MadeCount - beforeSwitch;
+            List<CardView> shownViews = board.Cards(PublishedName).ToList();
+            facts.Add($"card views: the twin's first switch made {twinMade}; preparation made {prepared} ({preparedTitles.Count} on the shelf); the prepared first switch made {atSwitch}, {afterFrame} with the frame after it");
 
             Assert.IsGreaterThan(0, twinMade, "The twin's first switch made the first screen's card views.");
             Assert.AreEqual(twinMade, prepared, "Preparation made the card views the twin's first switch made.");
             CollectionAssert.AreEqual(twinTitles, preparedTitles, "Prepared, Published holds the twin's cards.");
             Assert.AreEqual(0, atSwitch, "The prepared first switch made no card view.");
+            Assert.AreEqual(0, afterFrame, "Nor did the frame drawn after it.");
             CollectionAssert.AreEqual(twinTitles, Titles(board), "After the switch, the twin's cards.");
+
+            // Not refilled and not rebound: the switch shows the very views
+            // preparation made, each with the card it was given then.
+            Assert.HasCount(preparedViews.Count, shownViews, "The switch shows as many card views as preparation made.");
+            for (int at = 0; at < preparedViews.Count; at++)
+            {
+                Assert.AreSame(preparedViews[at], shownViews[at], $"Card view {at} is the one preparation made.");
+                Assert.AreSame(preparedCards[at], shownViews[at].DataContext, $"Card view {at} keeps the card preparation gave it.");
+            }
             AssertDrawnRight(board, "after the prepared switch");
             return facts;
         }));
