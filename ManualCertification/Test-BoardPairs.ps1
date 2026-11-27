@@ -50,7 +50,7 @@ function New-RunJson($ui, $runUi, [double] $watchUi, [double] $riseUi, $conditio
     }
     $rows = [Collections.Generic.List[object]]::new()
     $rows.Add((& $row 'example' $primary 250 'report-only' 999 900))
-    $rows.Add((& $row '500' $rise 100 'waiting for rows of N' $riseUi $null))
+    $rows.Add((& $row '500' $rise 100 'waiting: over under rows of N too' $riseUi $null))
     if (-not $noPrimary) { $rows.Add((& $row '500' $primary 250 'enforced' $ui $runUi)) }
     $rows.Add((& $row '500' $watch 250 'enforced' $watchUi $watchUi))
     [ordered]@{
