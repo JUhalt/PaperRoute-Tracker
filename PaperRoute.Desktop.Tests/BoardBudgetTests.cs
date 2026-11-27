@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Media.Imaging;
@@ -368,7 +369,7 @@ public sealed class BoardBudgetTests : StorageCheckedTests
             ? Unloaded("five-hundred", today, root => LargeLibraryFixture.Create(root, 500))
             : Unloaded("example", today, root => LargeLibraryFixture.WriteExample(root));
         (IReadOnlyList<MeasuredRow> rows, _, IReadOnlyList<IdlePreparationRecord> idle) =
-            Headless.Run(() => MeasureLibrary(library, session, requireChanges: large, side, stillPreparer: true), s_runLimit);
+            Headless.Run(() => MeasureLibrary(library, session, requireChanges: large, side, StillPreparer), s_runLimit);
         BoardMeasurementReport report = Report(rows, today, "the computer's date", heldLibrary: string.Empty, idle: idle);
         TestContext.WriteLine(report.ToTable());
         Assert.IsEmpty(report.Failures(), "Nothing is held here.");
@@ -384,6 +385,7 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         Assert.AreEqual(side == IdleSides.Prepared, record.Prepared, "Published is prepared after full preparation only.");
         Assert.Contains("0 idle preparation steps inside", rows.Single(row => row.Id == BoardMeasurement.WarmStartup).Note, "No step ran inside warm startup.");
         StringAssert.StartsWith(rows.Single(row => row.Id == BoardMeasurement.PreparePublishedLongestStep).Note, $"{BoardMeasurement.BetweenSides}; {steps} steps: ");
+        AssertTheWaitIsTheSame(record);
 
         int published = session.Manuscripts.Count(manuscript => manuscript.Location == ManuscriptLocation.Published);
         Assert.IsGreaterThan(0, published, "The library has a Published shelf.");
@@ -401,6 +403,82 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         }
 
         StringAssert.EndsWith(rows.Single(row => row.Id == BoardMeasurement.FirstSwitchToPublishedAfterIdle).Note, $"; {record.ViewsMadeAtSwitch} card views made at the switch");
+    }
+
+    // Every side waits alike before the first switch after idle: the whole
+    // idle period, then exactly one frame from the end of preparation to the
+    // switch. The wait's length is a lower bound only, never read as a time.
+    private static void AssertTheWaitIsTheSame(IdlePreparationRecord record)
+    {
+        Assert.IsGreaterThanOrEqualTo(BoardMeasurement.IdlePeriod.TotalMilliseconds, record.IdleWaitMs, $"The side {record.Side} waited the whole idle period.");
+        Assert.AreEqual(1, record.FramesBeforeSwitch, $"The side {record.Side} drew one frame between the end of preparation and the switch.");
+    }
+
+    // The path a run takes when preparation stops, which a real window takes
+    // whenever a step is slow or an accessibility client has read the
+    // shelves: the first switch after idle is made untimed and its two rows
+    // are not written, the record says why, FirstSwitchTaken is false and
+    // ViewsMadeAtSwitch null, the wait is the same as on any side, and the
+    // rows from the switch back to Pipeline on are a timed run's. The stops:
+    // the preparer's clock moves 130 ms at each reading, so the width step
+    // takes 130 ms and stops it; it moves 1 ms but 130 ms at its sixth
+    // reading, so the second capped layout step (the third step) takes
+    // 130 ms and stops it after card views were made; or a client reads the
+    // shelf host's children before the rows, so no step runs.
+    [TestMethod]
+    [DataRow("slow width step", 1, HiddenShelfPreparer.SlowSliceReason)]
+    [DataRow("slow layout step", 3, HiddenShelfPreparer.SlowSliceReason)]
+    [DataRow("automation peer", 0, HiddenShelfPreparer.AutomationPeerReason)]
+    public void TheIdleRowsWhenPreparationStops(string stop, int steps, string reason)
+    {
+        DateTime today = DateTime.Today;
+        using DiskLibrarySession session = Unloaded("example", today, root => LargeLibraryFixture.WriteExample(root));
+        (IReadOnlyList<MeasuredRow> taken, _, _) =
+            Headless.Run(() => MeasureLibrary("example", session, requireChanges: false, IdleSides.Prepared, StillPreparer), s_runLimit);
+        (IReadOnlyList<MeasuredRow> rows, _, IReadOnlyList<IdlePreparationRecord> idle) =
+            Headless.Run(() => MeasureLibrary("example", session, requireChanges: false, IdleSides.Prepared, view => Stop(view, stop)), s_runLimit);
+        BoardMeasurementReport report = Report(rows, today, "the computer's date", heldLibrary: string.Empty, idle: idle);
+        TestContext.WriteLine(report.ToTable());
+        Assert.IsEmpty(report.Failures(), "Nothing is held here.");
+
+        CheckIdleRows(rows, IdleSides.Prepared, switchTaken: false);
+        CheckLastRows(rows);
+        IdlePreparationRecord record = idle.Single();
+        TestContext.WriteLine(BoardMeasurementReport.DescribeIdlePreparation(record));
+        Assert.AreEqual(reason, record.SkippedReason, $"{stop}: preparation stopped for its reason.");
+        Assert.AreEqual(steps, record.StepsRun, $"{stop}: the steps that ran before the stop.");
+        Assert.IsFalse(record.Prepared, $"{stop}: Published was not prepared at the switch.");
+        Assert.IsFalse(record.FirstSwitchTaken, $"{stop}: the first switch after idle was not timed.");
+        Assert.IsNull(record.ViewsMadeAtSwitch, $"{stop}: no card views are counted for an untimed switch.");
+        AssertTheWaitIsTheSame(record);
+        Assert.Contains($"preparation stopped: {reason}", rows.Single(row => row.Id == BoardMeasurement.PreparePublishedLongestStep).Note, $"{stop}: the longest step's note says why preparation stopped.");
+        StringAssert.StartsWith(rows.Single(row => row.Id == BoardMeasurement.PreparePublishedLongestStep).Note, $"{BoardMeasurement.BetweenSides}; {steps} steps: ");
+
+        static string[] FromTheSwitchBack(IReadOnlyList<MeasuredRow> run) =>
+            run.SkipWhile(row => row.Id != BoardMeasurement.SwitchBackToPipeline).Select(row => row.Id).ToArray();
+        CollectionAssert.AreEqual(FromTheSwitchBack(taken), FromTheSwitchBack(rows), $"{stop}: from the switch back to Pipeline on, the rows are a timed run's.");
+    }
+
+    // Sets up the Board view so preparation stops as TheIdleRowsWhenPreparationStops names.
+    private static void Stop(BoardView view, string stop)
+    {
+        TimeSpan now = TimeSpan.Zero;
+        int reads = 0;
+        switch (stop)
+        {
+            case "slow width step":
+                view.Preparer.Clock = () => now += TimeSpan.FromMilliseconds(130);
+                break;
+            case "slow layout step":
+                view.Preparer.Clock = () => now += TimeSpan.FromMilliseconds(++reads == 6 ? 130 : 1);
+                break;
+            case "automation peer":
+                StillPreparer(view);
+                ControlAutomationPeer.CreatePeerForElement(view.FindControl<Panel>("ShelfHost") ?? throw new AssertFailedException("The Board has no shelf host.")).GetChildren();
+                break;
+            default:
+                throw new AssertFailedException($"No stop called {stop}.");
+        }
     }
 
     // CheckLastRows, on canned rows: it passes on the order the measurement
@@ -545,19 +623,17 @@ public sealed class BoardBudgetTests : StorageCheckedTests
 
     // The library's rows, the interface thread's clock they were timed with,
     // closed after the last row, and in a run told an idle side what idle
-    // preparation did. stillPreparer stops the preparer's own clock, so no
-    // step reads as slow and preparation cannot stop for the PC's load.
-    private static (IReadOnlyList<MeasuredRow> Rows, ThreadClock Clock, IReadOnlyList<IdlePreparationRecord> Idle) MeasureLibrary(string library, ILibrarySession session, bool requireChanges, string? side, bool stillPreparer = false)
+    // preparation did. prepare, if given, sets up the Board view after
+    // startup and before the other rows: StillPreparer stops the preparer's
+    // own clock, so no step reads as slow and preparation cannot stop for the
+    // PC's load.
+    private static (IReadOnlyList<MeasuredRow> Rows, ThreadClock Clock, IReadOnlyList<IdlePreparationRecord> Idle) MeasureLibrary(string library, ILibrarySession session, bool requireChanges, string? side, Action<BoardView>? prepare = null)
     {
         var measurement = new BoardMeasurement(Frame) { AfterIdle = side };
         (MainWindow window, ShellViewModel shell) = measurement.Start(library, session, ThemeVariant.Light, 1280, 800);
         try
         {
-            if (stillPreparer)
-            {
-                window.FindControl<BoardView>("BoardView")!.Preparer.Clock = static () => TimeSpan.Zero;
-            }
-
+            prepare?.Invoke(window.FindControl<BoardView>("BoardView") ?? throw new AssertFailedException("The window has no Board view."));
             measurement.MeasureBoard(library, window, shell, session, requireChanges);
             measurement.Finish();
         }
@@ -568,6 +644,9 @@ public sealed class BoardBudgetTests : StorageCheckedTests
 
         return (measurement.Rows.ToList(), measurement.Clock, measurement.IdlePreparation.ToList());
     }
+
+    // The preparer's clock stands still: no step reads as slow.
+    private static void StillPreparer(BoardView view) => view.Preparer.Clock = static () => TimeSpan.Zero;
 
     // The run's idle side from AfterIdleVariable, or null. An unknown side
     // fails the test before anything is measured.

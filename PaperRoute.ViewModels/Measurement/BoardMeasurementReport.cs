@@ -138,7 +138,9 @@ public static class IdleSides
 // and whether the first switch after idle was timed, with the card views it
 // made. When preparation stopped, the switch is made untimed: the row is not
 // taken (idle-preparation design, section 8, row 1), so ViewsMadeAtSwitch is
-// null.
+// null. Then what the wait before the switch did, which is the same on every
+// side: the idle period it waited, in ms, and the frames drawn from the end
+// of preparation to the switch.
 public sealed record IdlePreparationRecord(
     string Library,
     string Side,
@@ -147,7 +149,9 @@ public sealed record IdlePreparationRecord(
     bool Prepared,
     string? SkippedReason,
     bool FirstSwitchTaken,
-    int? ViewsMadeAtSwitch);
+    int? ViewsMadeAtSwitch,
+    double IdleWaitMs,
+    int FramesBeforeSwitch);
 
 // The numbers of one measurement run, headless (the budget tests) or in a
 // real window ("--measure", d1 7.3), and how they are written as JSON: per
@@ -209,7 +213,7 @@ public sealed class BoardMeasurementReport
     public MeasurementConditions? Conditions { get; init; }
 
     // What idle preparation did, one record per library, in a run told a side
-    // (IdleSides); empty in a run told none, whose JSON then has no
+    // (IdleSides); empty in a run told no side, whose JSON then has no
     // "idlePreparation".
     public IReadOnlyList<IdlePreparationRecord> IdlePreparation { get; init; } = [];
 
@@ -432,7 +436,7 @@ public sealed class BoardMeasurementReport
         json.WriteEndObject();
     }
 
-    // Written only in a run told a side, so a run told none writes the JSON
+    // Written only in a run told a side, so a run told no side writes the JSON
     // it wrote before.
     private static void WriteIdlePreparation(Utf8JsonWriter json, IReadOnlyList<IdlePreparationRecord> records)
     {
@@ -469,6 +473,8 @@ public sealed class BoardMeasurementReport
                 json.WriteNull("viewsMadeAtSwitch");
             }
 
+            json.WriteNumber("idleWaitMs", Math.Round(record.IdleWaitMs, 1));
+            json.WriteNumber("framesBeforeSwitch", record.FramesBeforeSwitch);
             json.WriteEndObject();
         }
 

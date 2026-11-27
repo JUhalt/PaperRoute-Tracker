@@ -267,7 +267,9 @@ public sealed class MeasureModeTests : StorageCheckedTests
     // before the first switch: the side, the steps and their card views,
     // whether Published was prepared, why preparation stopped (null, or the
     // preparer's reason) and whether the switch after idle was timed, with
-    // the card views it made (null when it was not timed).
+    // the card views it made (null when it was not timed), and what the wait
+    // before the switch did: the idle period waited, to 0.1 ms, and the
+    // frames drawn from the end of preparation to the switch.
     [TestMethod]
     public void TheJsonOfARunToldAnIdleSideRecordsWhatPreparationDid()
     {
@@ -278,8 +280,8 @@ public sealed class MeasureModeTests : StorageCheckedTests
             TakenAt = new DateTime(2026, 11, 27, 9, 0, 0), HeldLibrary = "500",
             IdlePreparation =
             [
-                new IdlePreparationRecord("example", IdleSides.Prepared, 5, 4, true, null, true, 0),
-                new IdlePreparationRecord("500", IdleSides.Prepared, 3, 6, false, HiddenShelfPreparer.SlowSliceReason, false, null),
+                new IdlePreparationRecord("example", IdleSides.Prepared, 5, 4, true, null, true, 0, 1000.44, 1),
+                new IdlePreparationRecord("500", IdleSides.Prepared, 3, 6, false, HiddenShelfPreparer.SlowSliceReason, false, null, 1001.26, 1),
             ],
         };
 
@@ -294,12 +296,14 @@ public sealed class MeasureModeTests : StorageCheckedTests
             item.GetProperty("prepared").GetBoolean() ? "prepared" : "not prepared",
             item.GetProperty("skippedReason").ValueKind == JsonValueKind.Null ? "null" : item.GetProperty("skippedReason").GetString(),
             item.GetProperty("firstSwitchTaken").GetBoolean() ? "taken" : "not taken",
-            item.GetProperty("viewsMadeAtSwitch").ValueKind == JsonValueKind.Null ? "null" : item.GetProperty("viewsMadeAtSwitch").GetInt32().ToString(CultureInfo.InvariantCulture));
+            item.GetProperty("viewsMadeAtSwitch").ValueKind == JsonValueKind.Null ? "null" : item.GetProperty("viewsMadeAtSwitch").GetInt32().ToString(CultureInfo.InvariantCulture),
+            item.GetProperty("idleWaitMs").GetDouble().ToString(CultureInfo.InvariantCulture),
+            item.GetProperty("framesBeforeSwitch").GetInt32().ToString(CultureInfo.InvariantCulture));
         CollectionAssert.AreEqual(
             new[]
             {
-                "example | prepared | 5 | 4 | prepared | null | taken | 0",
-                "500 | prepared | 3 | 6 | not prepared | slow slice | not taken | null",
+                "example | prepared | 5 | 4 | prepared | null | taken | 0 | 1000.4 | 1",
+                "500 | prepared | 3 | 6 | not prepared | slow slice | not taken | null | 1001.3 | 1",
             },
             idle.Select(Describe).ToArray());
 

@@ -151,6 +151,10 @@ public sealed class BoardMeasurement
     private static readonly TimeSpan s_loadLimit = TimeSpan.FromMinutes(2);
 
     private readonly Action<Window> _frame;
+
+    // The frames _frame has drawn, for the idle record's frames before the
+    // switch.
+    private int _framesDrawn;
     private readonly ThreadClock _clock;
     private readonly ProcessorClasses? _cores = ProcessorClasses.Current;
     private readonly List<MeasuredRow> _rows = [];
@@ -170,7 +174,11 @@ public sealed class BoardMeasurement
     {
         ArgumentNullException.ThrowIfNull(frame);
         ArgumentNullException.ThrowIfNull(clock);
-        _frame = frame;
+        _frame = window =>
+        {
+            frame(window);
+            _framesDrawn++;
+        };
         _clock = clock;
     }
 
@@ -305,6 +313,13 @@ public sealed class BoardMeasurement
 
         RequireShelf(view, "PipelineShelf", pipeline, "at the start");
         Require(Views(view, "PublishedShelf") == 0, "The Published shelf made no card before it was first shown.");
+
+        // In every run, told a side or not: the Board's idle timer is off and
+        // no preparation step has run, so no step can land inside today's
+        // first-switch-published (a width step makes no card view, so the
+        // check above would not see one) or before the measurement drives it.
+        Require(!view.Preparer.Enabled, "The Board's idle timer is off in a measured run: the measurement drives any preparation itself.");
+        Require(view.Preparer.StepsRun == 0, $"No idle preparation step ran before the first switch ({view.Preparer.StepsRun}).");
 
         if (AfterIdle is { } side)
         {
@@ -502,14 +517,14 @@ public sealed class BoardMeasurement
     private void FirstSwitchAfterIdle(string library, string side, MainWindow window, BoardView view, BoardViewModel board, int published)
     {
         HiddenShelfPreparer preparer = view.Preparer;
-        Require(!preparer.Enabled, "The Board's idle timer is off: the measurement drives the preparation.");
+
+        // MeasureBoard has required that none ran; the note says so in the
+        // report, beside warm startup.
         int startup = _rows.FindLastIndex(row => row.Library == library && row.Id == WarmStartup);
         if (startup >= 0)
         {
             _rows[startup] = _rows[startup] with { Note = Join(_rows[startup].Note, FormattableString.Invariant($"{preparer.StepsRun} idle preparation steps inside")) };
         }
-
-        Require(preparer.StepsRun == 0, $"No preparation step ran before the measurement drove it ({preparer.StepsRun}).");
 
         int? limit = IdleSides.StepsFor(side);
         var steps = new List<(HiddenShelfPreparer.Step Made, Step Timed)>();
@@ -564,8 +579,14 @@ public sealed class BoardMeasurement
                 limit is null ? "Preparation ran to its end and Published is prepared." : $"The side {side} ran its {limit} steps ({steps.Count}).");
         }
 
-        // Every side alike: the fixed idle period, then one frame.
+        // Every side alike: the fixed idle period, then one frame. What the
+        // wait did is recorded, the idle period it waited and the frames
+        // drawn from the end of preparation to the switch, so a test can
+        // hold that every side waits alike.
+        int framesBefore = _framesDrawn;
+        var waited = Stopwatch.StartNew();
         PumpUntil(static () => false, IdlePeriod);
+        waited.Stop();
         _frame(window);
         bool prepared = preparer.IsPrepared;
         Require(skipped is not null || limit is not null || prepared, "Published was still prepared after the idle period.");
@@ -574,10 +595,11 @@ public sealed class BoardMeasurement
 
         bool taken = skipped is null;
         int? madeAtSwitch = null;
+        int framesBeforeSwitch = _framesDrawn - framesBefore;
         if (taken)
         {
             int madeBeforeSwitch = CardView.MadeCount;
-            Time(library, FirstSwitchToPublishedAfterIdle, FormattableString.Invariant($"First switch to Published after the idle wait (preparation done, at once on the side none; {IdlePeriod.TotalSeconds:0} s idle; one frame)"), PageSwitchBudget, "page switch", () =>
+            Time(library, FirstSwitchToPublishedAfterIdle, FormattableString.Invariant($"First switch to Published after the side's steps (none on the side none, every step due on prepared) and the wait ({IdlePeriod.TotalSeconds:0} s idle; one frame)"), PageSwitchBudget, "page switch", () =>
             {
                 board.SelectedShelfIndex = 1;
                 Settle(window);
@@ -598,7 +620,7 @@ public sealed class BoardMeasurement
             _frame(window);
         }
 
-        _idle.Add(new IdlePreparationRecord(library, side, steps.Count, viewsMade, prepared, skipped, taken, madeAtSwitch));
+        _idle.Add(new IdlePreparationRecord(library, side, steps.Count, viewsMade, prepared, skipped, taken, madeAtSwitch, waited.Elapsed.TotalMilliseconds, framesBeforeSwitch));
     }
 
     // One step of the idle preparation, for the longest step's note: what it
