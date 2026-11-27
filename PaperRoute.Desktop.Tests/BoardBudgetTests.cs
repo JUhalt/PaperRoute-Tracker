@@ -21,8 +21,8 @@ namespace PaperRoute.Desktop.Tests;
 // budgets and multipliers (Debug x2, GitHub Actions x3), the same metric
 // (BoardMeasurement: Wall, and UI from a 1 ms dispatcher probe at Input
 // priority, which ticks only where a key press could be served, as today's
-// WM_TIMER does; headless, UI equals Wall for every synchronous action under
-// either option). The example runs first and is
+// WM_TIMER does; headless, UI equals Wall for every synchronous action).
+// The example runs first and is
 // reported only, as it carries the process's first-time costs; then the 500
 // library, held to the budgets. The actions are BoardMeasurement's, which
 // "--measure" runs in a real window; a frame here is a captured frame.
@@ -492,19 +492,11 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         measurement.Time("500", $"show-{size}{suffix}-paint", "Its frame", BoardMeasurement.UiThreadBudget, "UI thread", () => Frame(window), informational: true);
     }
 
-    // Under option (a) the shelf has a card view for each of its cards; under
-    // (b) for some of them (the rows made), one at least.
+    // The shelf has a card view for some of its cards (the rows made), one at least.
     private static void CardViewsFor(ShelfView shelf, int cards, string context)
     {
         int views = shelf.CardViews().Count;
-        if (ShelfLayout.UsesRows)
-        {
-            Assert.IsTrue(views > 0 && views < cards, $"{context}: rows of N made {views} card views for the Pipeline's {cards} cards.");
-        }
-        else
-        {
-            Assert.AreEqual(cards, views, $"{context}: the Pipeline's card views.");
-        }
+        Assert.IsTrue(views > 0 && views < cards, $"{context}: rows of N made {views} card views for the Pipeline's {cards} cards.");
     }
 
     private static string Tag(int size) => "budget-keep-" + size.ToString(CultureInfo.InvariantCulture);

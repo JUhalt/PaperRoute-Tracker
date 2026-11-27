@@ -160,7 +160,7 @@ public sealed class MeasureModeTests : StorageCheckedTests
             Mode = "window",
             MachineName = "TEST-PC",
             Dpi = 144,
-            Option = "a",
+            Option = "b",
             ResetThreshold = 64,
             Day = new DateTime(2026, 10, 16),
             DaySource = "--today",
@@ -189,7 +189,7 @@ public sealed class MeasureModeTests : StorageCheckedTests
         Assert.AreEqual("window", root.GetProperty("mode").GetString());
         Assert.AreEqual("TEST-PC", root.GetProperty("machineName").GetString());
         Assert.AreEqual(144, root.GetProperty("dpi").GetDouble());
-        Assert.AreEqual("a", root.GetProperty("option").GetString());
+        Assert.AreEqual("b", root.GetProperty("option").GetString());
         Assert.AreEqual(64, root.GetProperty("syncIntoResetThreshold").GetInt32());
         Assert.AreEqual("2026-10-16", root.GetProperty("day").GetString());
         Assert.AreEqual("--today", root.GetProperty("daySource").GetString());
@@ -215,7 +215,7 @@ public sealed class MeasureModeTests : StorageCheckedTests
             {
                 "snapshot | render-no-card-changes | 12.3 | 12.3 | 250 | within | enforced | -",
                 "snapshot | first-switch-published | 140 | 130.1 | 100 | over | enforced | -",
-                "snapshot | stage-back-to-all | 900 | 880 | 250 | over | waiting for rows of N | cards changed: Pipeline reset",
+                "snapshot | stage-back-to-all | 900 | 880 | 250 | over | waiting: over under rows of N too | cards changed: Pipeline reset",
                 "snapshot | switch-back-pipeline | 300 | 300 | 100 | over | report-only | -",
                 "example | first-switch-published | 400 | 400 | 100 | over | report-only | -",
             },

@@ -100,15 +100,14 @@ public sealed record MeasurementConditions
 // real window ("--measure", d1 7.3), and how they are written as JSON: per
 // row the library, the action, Wall, UI, the budget, the verdict and the
 // headless test's rule for it; for the run the machine, the DPI, the option
-// (a: every card of a shown shelf made at once; b: rows of N), the
-// SyncInto threshold, the day the session used and the build. The busy-PC
+// (b: rows of N, the only layout since the every-card one, a, was removed),
+// the SyncInto threshold, the day the session used and the build. The busy-PC
 // figures, per row and in "conditions" for the run, are report-only: the
 // verdicts, rules and Failures() do not read them.
 public sealed class BoardMeasurementReport
 {
     // What a row's "rule" says in the JSON, as the headless budget test holds it.
     public const string EnforcedRule = "enforced";
-    public const string WaitingRule = "waiting for rows of N";
     public const string WaitingUnderRowsRule = "waiting: over under rows of N too";
     public const string ReportOnlyRule = "report-only";
 
@@ -140,8 +139,7 @@ public sealed class BoardMeasurementReport
     public string OperatingSystem { get; init; } = Environment.OSVersion.VersionString;
 
     // The rows of the 500 library the headless test measures but does not yet
-    // hold under the option built: under (a) until rows of N (d1 4.4 option
-    // (b)), under (b) the rows it does not meet either.
+    // hold: the rows it does not meet under rows of N either.
     public IReadOnlyList<string> WaitingForRowsOfN { get; init; } = [];
 
     // The library rows are held on ("500" headless); every other library's
@@ -173,12 +171,7 @@ public sealed class BoardMeasurementReport
             return ReportOnlyRule;
         }
 
-        if (!WaitingForRowsOfN.Contains(row.Id, StringComparer.Ordinal))
-        {
-            return EnforcedRule;
-        }
-
-        return string.Equals(Option, "b", StringComparison.Ordinal) ? WaitingUnderRowsRule : WaitingRule;
+        return WaitingForRowsOfN.Contains(row.Id, StringComparer.Ordinal) ? WaitingUnderRowsRule : EnforcedRule;
     }
 
     public string VerdictFor(MeasuredRow row)

@@ -28,8 +28,6 @@ namespace PaperRoute.Desktop.Tests;
 // - after the switch, every card view laid out on the shelf draws the card
 //   at its place (CardParts.DrawnWrong), found by walking the visual tree,
 //   not by the shelf's own look-ups.
-// Under the every-card build (ShelfLayout option (a)) there are no rows, and
-// no shelf ever has stale rows.
 [TestClass]
 public sealed class HiddenShelfTests : StorageCheckedTests
 {
@@ -83,10 +81,7 @@ public sealed class HiddenShelfTests : StorageCheckedTests
             board.Board.SearchText = word;
             board.Board.Render();
             Settle(board);
-            if (ShelfLayout.UsesRows)
-            {
-                Assert.IsTrue(published.RowsAreStale, "The hidden shelf's rows wait for it to be shown.");
-            }
+            Assert.IsTrue(published.RowsAreStale, "The hidden shelf's rows wait for it to be shown.");
 
             CheckBeforeSwitch(board, session, "a search while hidden");
             ClickTab(board, 1);
@@ -165,10 +160,7 @@ public sealed class HiddenShelfTests : StorageCheckedTests
             List<string> refilled = BoardHarness.Titles(published);
             Assert.IsNotEmpty(refilled, "The Published stage gives the hidden shelf its cards back.");
             Assert.AreNotEqual(shownBefore[0], refilled[0], "The first place holds another manuscript than when the shelf's views were last filled.");
-            if (ShelfLayout.UsesRows)
-            {
-                Assert.IsTrue(published.RowsAreStale, "The stage change leaves the hidden shelf's rows waiting.");
-            }
+            Assert.IsTrue(published.RowsAreStale, "The stage change leaves the hidden shelf's rows waiting.");
 
             CheckBeforeSwitch(board, session, "the stage changed again while hidden");
             ClickTab(board, 1);
@@ -432,8 +424,8 @@ public sealed class HiddenShelfTests : StorageCheckedTests
     // wait (f51b5e2, or master), so those two builds are compared with the
     // same code (busy-PC design, sections 5 and 9), and these checks live
     // here: Published shown and hidden again, the measured search typed on
-    // Pipeline changes its cards and leaves its rows waiting for the switch
-    // under option (b), none under (a); the switch made as the measurement
+    // Pipeline changes its cards and leaves its rows waiting for the switch;
+    // the switch made as the measurement
     // makes it brings its rows to its cards.
     [TestMethod]
     public void TheMeasuredSearchWithPublishedHiddenLeavesItsRowsWaitingUntilTheSwitch()
@@ -455,9 +447,7 @@ public sealed class HiddenShelfTests : StorageCheckedTests
             board.Board.Render();
             Settle(board);
             Assert.AreNotEqual(0, board.Board.LastSyncChanges[1], "The search changed the hidden Published shelf's cards.");
-            Assert.AreEqual(ShelfLayout.UsesRows, published.RowsAreStale, ShelfLayout.UsesRows
-                ? "The hidden Published shelf's rows waited for the switch."
-                : "No rows wait under option (a).");
+            Assert.IsTrue(published.RowsAreStale, "The hidden Published shelf's rows waited for the switch.");
             CheckBeforeSwitch(board, session, "the measured search while hidden");
 
             board.Board.SelectedShelfIndex = 1;
@@ -511,15 +501,9 @@ public sealed class HiddenShelfTests : StorageCheckedTests
         Dispatcher.UIThread.RunJobs();
     }
 
-    // The rows hold the shelf's cards in rows of its columns (option (b));
-    // true under option (a), which has no rows.
+    // The rows hold the shelf's cards in rows of its columns.
     private static bool RowsMatch(ShelfViewModel model)
     {
-        if (!ShelfLayout.UsesRows)
-        {
-            return model.Rows.Count == 0;
-        }
-
         int columns = Math.Max(1, model.Columns);
         int rows = (model.Cards.Count + columns - 1) / columns;
         if (model.Rows.Count != rows)
@@ -542,7 +526,7 @@ public sealed class HiddenShelfTests : StorageCheckedTests
 
     // Before a switch: each shelf's tab text and count, its drawn tab, its
     // cards and its empty message are those of a fresh Board over the same
-    // manuscripts with the same filters; under option (a) no shelf has stale rows.
+    // manuscripts with the same filters.
     private static void CheckBeforeSwitch(BoardWindow board, ILibrarySession session, string step)
     {
         Assert.AreEqual(AttentionFilter.None, board.Board.ActiveFilter, $"{step}: no chip is on.");
@@ -568,11 +552,6 @@ public sealed class HiddenShelfTests : StorageCheckedTests
             {
                 Assert.AreEqual(expected.EmptyMessage, message.Text, $"{step}: the empty message of {live.Name} as set.");
             }
-
-            if (!ShelfLayout.UsesRows)
-            {
-                Assert.IsFalse(live.RowsAreStale, $"{step}: no rows wait under option (a).");
-            }
         }
     }
 
@@ -591,21 +570,11 @@ public sealed class HiddenShelfTests : StorageCheckedTests
         int drawn = 0;
         foreach (CardView view in shelf.GetVisualDescendants().OfType<CardView>().Where(view => view.IsEffectivelyVisible))
         {
-            CardViewModel card;
-            if (ShelfLayout.UsesRows)
-            {
-                CardRowView row = view.FindAncestorOfType<CardRowView>() ?? throw new AssertFailedException($"{step}: a card view outside a row.");
-                Assert.IsNotNull(row.Row, $"{step}: a laid-out card view in a row kept for reuse.");
-                int place = (row.Row.Index * Math.Max(1, model.Columns)) + row.Children.IndexOf(view);
-                Assert.IsLessThan(model.Cards.Count, place, $"{step}: a card view at place {place} past the shelf's cards.");
-                card = model.Cards[place];
-            }
-            else
-            {
-                card = view.DataContext as CardViewModel ?? throw new AssertFailedException($"{step}: a card view with no card.");
-                Assert.Contains(card, model.Cards, $"{step}: a card view shows a card the shelf does not.");
-            }
-
+            CardRowView row = view.FindAncestorOfType<CardRowView>() ?? throw new AssertFailedException($"{step}: a card view outside a row.");
+            Assert.IsNotNull(row.Row, $"{step}: a laid-out card view in a row kept for reuse.");
+            int place = (row.Row.Index * Math.Max(1, model.Columns)) + row.Children.IndexOf(view);
+            Assert.IsLessThan(model.Cards.Count, place, $"{step}: a card view at place {place} past the shelf's cards.");
+            CardViewModel card = model.Cards[place];
             Assert.IsNull(CardParts.DrawnWrong(view, card), $"{step}: the view of \"{card.Title}\" {CardParts.DrawnWrong(view, card)}.");
             drawn++;
         }
@@ -671,7 +640,7 @@ public sealed class HiddenShelfTests : StorageCheckedTests
             }
 
             ShelfViewModel model = _board.Board.Shelves[_index];
-            if (!ShelfLayout.UsesRows || !model.IsRealized)
+            if (!model.IsRealized)
             {
                 _seen.Add("current");
                 return;

@@ -32,7 +32,6 @@ public sealed partial class ShelfViewModel : ObservableObject
     // none of its cards, as today's hidden shelves are built only when first
     // shown (Form1.BoardFill.vb:195). It is never cleared.
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(RealizedCards))]
     [NotifyPropertyChangedFor(nameof(RealizedRows))]
     private bool _isRealized;
 
@@ -70,19 +69,15 @@ public sealed partial class ShelfViewModel : ObservableObject
 
     public SyncedCollection<CardViewModel> Cards { get; } = [];
 
-    // The cards in rows of Columns, under option (b) only (ShelfLayout); empty
-    // under option (a). Row objects are kept and refilled in place (SyncRows).
+    // The cards in rows of Columns (rows of N, d1 4.4 option (b)). Row objects
+    // are kept and refilled in place (SyncRows).
     public ObservableCollection<CardRowViewModel> Rows { get; } = [];
 
     public bool HasEmptyMessage => EmptyMessage is not null;
 
-    // What the view's card list shows under option (a): the cards once the
-    // shelf has been shown, nothing before, and nothing under option (b).
-    public SyncedCollection<CardViewModel>? RealizedCards => IsRealized && !ShelfLayout.UsesRows ? Cards : null;
-
-    // What the view's row list shows under option (b): the rows once the
-    // shelf has been shown, nothing before, and nothing under option (a).
-    public ObservableCollection<CardRowViewModel>? RealizedRows => IsRealized && ShelfLayout.UsesRows ? Rows : null;
+    // What the view's row list shows: the rows once the shelf has been shown,
+    // nothing before.
+    public ObservableCollection<CardRowViewModel>? RealizedRows => IsRealized ? Rows : null;
 
     public override string ToString() => TabText;
 
@@ -105,7 +100,7 @@ public sealed partial class ShelfViewModel : ObservableObject
 
     // Whether this is the shelf the Board shows (BoardViewModel sets it as the
     // shelf tab changes). A shelf shown once and hidden again keeps its row
-    // views, so under option (b) it does not refill its rows while hidden:
+    // views, so it does not refill its rows while hidden:
     // a render only marks them stale, and they are brought to the cards as
     // the shelf is shown again, before the view lays it out and draws it, so
     // nobody sees an old card. Its cards, tab text and empty message change
@@ -161,27 +156,22 @@ public sealed partial class ShelfViewModel : ObservableObject
     {
         if (IsRealized && !IsShown)
         {
-            _rowsStale = ShelfLayout.UsesRows;
+            _rowsStale = true;
             return;
         }
 
         SyncRows();
     }
 
-    // Under option (b), brings Rows to the cards in rows of Columns: row i
-    // holds cards i x N to i x N + N - 1. Rows past the new end are removed
-    // from the end, new ones added at the end, and every other row object is
-    // kept and refilled only if its cards changed, so a render never replaces
-    // the list and the views make no card for it (d1 4.4: rebuilding the rows
-    // only rewraps existing card view models).
+    // Brings Rows to the cards in rows of Columns: row i holds cards i x N to
+    // i x N + N - 1. Rows past the new end are removed from the end, new ones
+    // added at the end, and every other row object is kept and refilled only
+    // if its cards changed, so a render never replaces the list and the views
+    // make no card for it (d1 4.4: rebuilding the rows only rewraps existing
+    // card view models).
     private void SyncRows()
     {
         _rowsStale = false;
-        if (!ShelfLayout.UsesRows)
-        {
-            return;
-        }
-
         int columns = Math.Max(1, Columns);
         int count = (Cards.Count + columns - 1) / columns;
         while (Rows.Count > count)
