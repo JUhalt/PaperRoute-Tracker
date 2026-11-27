@@ -73,19 +73,29 @@ public sealed class ParityMapTests
     // matches the target map ... for the target-map rows it builds"
     // (Avalonia-Migration-Plan.md section 8). MSTest refuses a data-driven
     // test with no row, so issue 3 (#418), which builds no target surface,
-    // holds the first: it checks only that the issue is named as the data
-    // names build issues.
+    // holds the first. Each row checks that its issue is named as the data
+    // names build issues and that no surface it builds is still planned, and
+    // then, on a small map made here rather than the live data (which a later
+    // issue changes), that the check reports a surface of that issue still
+    // planned and leaves a built one out.
     [TestMethod]
     [DataRow("#418")]
     public void TheSurfacesThisIssueBuildsAreBuilt(string issue)
     {
         Assert.IsTrue(ParityMap.IsBuildIssue(issue), $"\"{issue}\" is not a build issue as {ParityMap.SurfacesFile} names them.");
-        ParityMap map = ParityMap.Load();
-        IReadOnlyList<string> findings = map.SurfacesStillPlannedFor(issue);
+        IReadOnlyList<string> findings = ParityMap.Load().SurfacesStillPlannedFor(issue);
         Assert.IsEmpty(findings, Environment.NewLine + string.Join(Environment.NewLine, findings));
 
-        // The check finds a surface still planned: the shell's window waits for #420.
-        Assert.IsNotEmpty(map.SurfacesStillPlannedFor("#420"), "A planned surface of an issue is reported.");
+        ParityMap probe = ParityMap.Parse(
+            "key\tmap rows\tbuilt by\tstate\tread from\tnote\n"
+            + $"Page/StillPlanned\t3\t{issue}\tplanned\there\n"
+            + $"Page/AlreadyBuilt\t4\t{issue}\tbuilt\there\n",
+            "part\tkey\tdestination\tmap row\tread from\treason\n"
+            + "dialog\tStillPlanned\tPage/StillPlanned\t3\there\n"
+            + "dialog\tAlreadyBuilt\tPage/AlreadyBuilt\t4\there\n");
+        IReadOnlyList<string> planned = probe.SurfacesStillPlannedFor(issue);
+        Assert.HasCount(1, planned, "Only the surface still planned is reported: " + string.Join(" | ", planned));
+        Assert.Contains("Page/StillPlanned", planned[0]);
     }
 
     [TestMethod]
