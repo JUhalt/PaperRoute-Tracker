@@ -11,9 +11,8 @@ namespace PaperRoute.Desktop;
 
 // One shelf of the Board (d1 4.1, 4.4). Its data context is a ShelfViewModel.
 // The view reports the shelf's width; the view model works out the columns
-// and the width of a card from it. ShelfLayout.Option says which list draws
-// the cards (ShelfView.axaml): (a) every card at once, or (b) rows of N, only
-// the rows on screen and a margin made.
+// and the width of a card from it. The cards are drawn in rows of N (d1 4.4
+// option (b), ShelfView.axaml): only the rows on screen and a margin are made.
 //
 // The arrow keys move between the shelf's cards (d1 4.5, new: plan item 62;
 // today's Board has no such keys). With the keyboard anywhere in card i (its
@@ -25,11 +24,12 @@ namespace PaperRoute.Desktop;
 // i-columns) the key does nothing and goes no further. Arrows with a modifier,
 // and keys anywhere else (the tabs, the boxes, an open ⋯ menu, which is not
 // in the shelf's visual tree), are left alone. Avalonia's XYFocus is not used:
-// it would move Right from a title to the ⋯ of the same card. Under option
-// (b) the target card's row may not be made yet: it is scrolled into view
-// first (the list makes it), then the title takes the keyboard (d1 4.5).
+// it would move Right from a title to the ⋯ of the same card. The target
+// card's row may not be made yet: it is scrolled into view first (the list
+// makes it), then the title takes the keyboard (d1 4.5).
 //
-// Under option (b) the view also keeps option (a)'s Tab order and focus:
+// The view also keeps the Tab order and focus of a shelf whose every card is
+// made:
 // - Tab between cards goes by the cards' places in the shelf, not by the
 //   order the list happens to hold its recycled rows in: from a card's last
 //   stop (View route) to the next card's title, with Shift from a title to
@@ -59,12 +59,9 @@ public partial class ShelfView : UserControl
 
         // On the way down, so the scroller never takes an arrow a card uses.
         AddHandler(KeyDownEvent, OnCardKeyDown, RoutingStrategies.Tunnel);
-        if (ShelfLayout.UsesRows)
-        {
-            AddHandler(KeyDownEvent, OnCardTabDown, RoutingStrategies.Tunnel);
-            AddHandler(GettingFocusEvent, OnGettingFocus, RoutingStrategies.Bubble);
-            AddHandler(GotFocusEvent, OnGotFocus, RoutingStrategies.Bubble);
-        }
+        AddHandler(KeyDownEvent, OnCardTabDown, RoutingStrategies.Tunnel);
+        AddHandler(GettingFocusEvent, OnGettingFocus, RoutingStrategies.Bubble);
+        AddHandler(GotFocusEvent, OnGotFocus, RoutingStrategies.Bubble);
     }
 
     // Where an arrow key, Home or End goes from the card at index in a shelf
@@ -102,16 +99,10 @@ public partial class ShelfView : UserControl
     public static string FocusedPartOf(CardView card) =>
         s_cardStops.FirstOrDefault(name => card.FindControl<Button>(name)?.IsKeyboardFocusWithin == true) ?? "Title";
 
-    // The card views made so far that show a card, in shelf order. Under
-    // option (a) that is every card of a shown shelf; under (b) the cards of
-    // the rows made (on screen, a margin, and a row kept for the keyboard).
+    // The card views made so far that show a card, in shelf order: the cards
+    // of the rows made (on screen, a margin, and a row kept for the keyboard).
     public IReadOnlyList<CardView> CardViews()
     {
-        if (!ShelfLayout.UsesRows)
-        {
-            return Cards.GetVisualDescendants().OfType<CardView>().ToList();
-        }
-
         if (DataContext is not ShelfViewModel shelf)
         {
             return [];
@@ -138,17 +129,12 @@ public partial class ShelfView : UserControl
             return null;
         }
 
-        if (!ShelfLayout.UsesRows)
-        {
-            return Cards.ContainerFromIndex(index)?.GetVisualDescendants().OfType<CardView>().FirstOrDefault();
-        }
-
         int columns = Math.Max(1, shelf.Columns);
         return RowView(index / columns)?.CardAt(index % columns);
     }
 
     // The card view of the card at index, its row scrolled into view first
-    // and made if it was not (option (b)); null if the shelf has no such card.
+    // and made if it was not; null if the shelf has no such card.
     public CardView? BringCardIntoView(int index)
     {
         if (DataContext is not ShelfViewModel { IsRealized: true } shelf || index < 0 || index >= shelf.Cards.Count)
@@ -156,14 +142,11 @@ public partial class ShelfView : UserControl
             return null;
         }
 
-        if (ShelfLayout.UsesRows)
+        int row = index / Math.Max(1, shelf.Columns);
+        Rows.ScrollIntoView(row);
+        if (RowView(row) is null)
         {
-            int row = index / Math.Max(1, shelf.Columns);
-            Rows.ScrollIntoView(row);
-            if (RowView(row) is null)
-            {
-                Rows.UpdateLayout();
-            }
+            Rows.UpdateLayout();
         }
 
         CardView? view = FindCardView(index);
@@ -173,17 +156,8 @@ public partial class ShelfView : UserControl
 
     // Puts the keyboard on the first card's title, as Tab would. False when
     // the shelf shows no card.
-    public bool FocusFirstCard()
-    {
-        if (!ShelfLayout.UsesRows)
-        {
-            Cards.UpdateLayout();
-            CardView? first = CardViews().FirstOrDefault();
-            return first?.FindControl<Button>("Title")?.Focus(NavigationMethod.Tab) ?? false;
-        }
-
-        return BringCardIntoView(0)?.FindControl<Button>("Title")?.Focus(NavigationMethod.Tab) ?? false;
-    }
+    public bool FocusFirstCard() =>
+        BringCardIntoView(0)?.FindControl<Button>("Title")?.Focus(NavigationMethod.Tab) ?? false;
 
     // A render took the card view holding the keyboard out of its row
     // (CardRowView): once laid out, the keyboard goes back to the same part
@@ -215,7 +189,7 @@ public partial class ShelfView : UserControl
     // A new card width (with the same column count) lays the made rows out again.
     private void OnShelfPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (ShelfLayout.UsesRows && e.PropertyName == nameof(ShelfViewModel.ItemWidth))
+        if (e.PropertyName == nameof(ShelfViewModel.ItemWidth))
         {
             foreach (CardRowView row in RowViews())
             {
@@ -257,20 +231,8 @@ public partial class ShelfView : UserControl
             return;
         }
 
-        if (!ShelfLayout.UsesRows)
-        {
-            if (Cards.ContainerFromIndex(target) is Control container)
-            {
-                container.BringIntoView();
-                container.GetVisualDescendants().OfType<CardView>().FirstOrDefault()?
-                    .FindControl<Button>("Title")?.Focus(NavigationMethod.Directional);
-            }
-
-            return;
-        }
-
-        // Option (b): the row is scrolled into view, and made if it was not;
-        // should the list not have made it yet, once laid out (d1 4.5).
+        // The row is scrolled into view, and made if it was not; should the
+        // list not have made it yet, once laid out (d1 4.5).
         if (BringCardIntoView(target) is CardView view)
         {
             view.FindControl<Button>("Title")?.Focus(NavigationMethod.Directional);
@@ -281,7 +243,7 @@ public partial class ShelfView : UserControl
         }
     }
 
-    // Option (b): Tab and Shift+Tab across a card's edge (see the class notes).
+    // Tab and Shift+Tab across a card's edge (see the class notes).
     private void OnCardTabDown(object? sender, KeyEventArgs e)
     {
         if (e.Handled
@@ -324,11 +286,8 @@ public partial class ShelfView : UserControl
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
-        if (ShelfLayout.UsesRows)
-        {
-            _topLevel = TopLevel.GetTopLevel(this);
-            _topLevel?.AddHandler(KeyDownEvent, OnTabAnywhere, RoutingStrategies.Tunnel);
-        }
+        _topLevel = TopLevel.GetTopLevel(this);
+        _topLevel?.AddHandler(KeyDownEvent, OnTabAnywhere, RoutingStrategies.Tunnel);
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -338,7 +297,7 @@ public partial class ShelfView : UserControl
         base.OnDetachedFromVisualTree(e);
     }
 
-    // Option (b): notes that a Tab key is on its way from outside the shelf,
+    // Notes that a Tab key is on its way from outside the shelf,
     // until the key has been handled (OnGettingFocus).
     private void OnTabAnywhere(object? sender, KeyEventArgs e)
     {
@@ -354,10 +313,10 @@ public partial class ShelfView : UserControl
         Dispatcher.UIThread.Post(() => _tabFromOutside = false, DispatcherPriority.Input);
     }
 
-    // Option (b): a Tab pressed outside the shelf that lands in it lands on
-    // the first card's title (Shift+Tab: the last card's View route), as
-    // option (a)'s tree order gives, whichever recycled row the list holds
-    // first and wherever the shelf is scrolled.
+    // A Tab pressed outside the shelf that lands in it lands on the first
+    // card's title (Shift+Tab: the last card's View route), as the tree order
+    // of a shelf whose every card is made gives, whichever recycled row the
+    // list holds first and wherever the shelf is scrolled.
     private void OnGettingFocus(object? sender, FocusChangingEventArgs e)
     {
         if (!_tabFromOutside
@@ -385,7 +344,7 @@ public partial class ShelfView : UserControl
         }
     }
 
-    // Option (b): the row that holds the keyboard is the list's tab-once
+    // The row that holds the keyboard is the list's tab-once
     // element, which the virtualizing list keeps made while it scrolls away.
     private void OnGotFocus(object? sender, FocusChangedEventArgs e)
     {

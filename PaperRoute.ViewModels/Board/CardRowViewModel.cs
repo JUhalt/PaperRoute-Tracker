@@ -2,7 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace PaperRoute.ViewModels.Board;
 
-// One row of a shelf under option (b) of d1 4.4 (ShelfLayout): the cards
+// One row of a shelf, rows of N (d1 4.4 option (b)): the cards
 // from Index x Columns, at most Columns of them. A shelf keeps its row
 // objects from render to render and refills them in place, so the row at
 // position i is always the same object: the virtualizing list keeps its row

@@ -23,7 +23,7 @@ using PaperRoute.ViewModels.Session;
 namespace PaperRoute.Desktop.Tests;
 
 // The cards and the shelves (d1 8, step 9): the card template, the shelves as
-// option (a) of d1 4.4 (a wrap panel with a computed item width, each shelf's
+// rows of N of d1 4.4 (option (b): a computed item width, each shelf's
 // cards made when the shelf is first shown), the tag strip, the route dots,
 // the ⋯ menu of disabled items, the hover and focus border, and the cards'
 // commands. The tests are the ones step 9 names in d1 6.2: K1, K2, K4, H2, H6,
@@ -108,15 +108,7 @@ public sealed class CardViewTests : StorageCheckedTests
             return (stops, expected, names, expectedNames, board.Cards("PipelineShelf").Count);
         });
 
-        if (ShelfLayout.UsesRows)
-        {
-            Assert.IsLessThan(60, views, "Rows of N: the Pipeline shelf made card views only for the rows made, not for all 60 cards.");
-        }
-        else
-        {
-            Assert.AreEqual(60, views, "The Pipeline shelf made a card view for each of its 60 cards.");
-        }
-
+        Assert.IsLessThan(60, views, "Rows of N: the Pipeline shelf made card views only for the rows made, not for all 60 cards.");
         CollectionAssert.AreEqual(expected, stops, "Tab went to: " + string.Join(" > ", stops.Take(12)) + " ...");
         CollectionAssert.AreEqual(expectedNames, names);
     }
@@ -764,8 +756,7 @@ public sealed class CardViewTests : StorageCheckedTests
     // Rows of N (d1 4.4 option (b)): the shelf's cards in rows of its column
     // count, row i holding cards i x N on, the last row short and marked last;
     // a render that removes a card keeps every row object and refills them in
-    // place; a new column count rewraps the same card objects. Under option
-    // (a) the shelf keeps no rows.
+    // place; a new column count rewraps the same card objects.
     [TestMethod]
     public void RowsOfNRewrapTheShelfsCardsAndKeepTheirRowObjects()
     {
@@ -773,11 +764,6 @@ public sealed class CardViewTests : StorageCheckedTests
         ShelfViewModel shelf = harness.Pipeline;
         shelf.SetWidth(1000);
         Assert.AreEqual(3, shelf.Columns);
-        if (!ShelfLayout.UsesRows)
-        {
-            Assert.IsEmpty(shelf.Rows, "Option (a) keeps no rows.");
-            return;
-        }
 
         string Shape() => string.Join(" | ", shelf.Rows.Select(row =>
             $"{row.Index}:{string.Join(",", row.Cards.Select(card => shelf.Cards.IndexOf(card)))}{(row.IsLast ? " last" : string.Empty)}"));
@@ -901,24 +887,15 @@ public sealed class CardViewTests : StorageCheckedTests
             return (Pictures.Save(board.Window, "board-500-pipeline-light", TestContext), board.Cards("PipelineShelf").Count);
         });
 
-        if (ShelfLayout.UsesRows)
-        {
-            Assert.IsLessThan(167, views, "Rows of N: the Pipeline shelf made only the rows on screen and a margin, not all 167 cards.");
-        }
-        else
-        {
-            Assert.AreEqual(167, views, "The Pipeline shelf made all 167 of its cards.");
-        }
-
+        Assert.IsLessThan(167, views, "Rows of N: the Pipeline shelf made only the rows on screen and a margin, not all 167 cards.");
         Assert.IsTrue(File.Exists(path), $"No picture at {path}.");
     }
 
-    // The 500 library's Pipeline at 1280 x 800 in the build's shelf option
-    // (design step 13 asks for option (b)): at the top, scrolled to the middle
-    // and to the end in Light, and in the middle in Dark. At each place the
-    // card views drawn are the cards of the rows the scroller shows, in shelf
-    // order, every one inside the shelf's width and one height; under (b) the
-    // shelf made fewer views than cards.
+    // The 500 library's Pipeline at 1280 x 800 under rows of N (design step
+    // 13): at the top, scrolled to the middle and to the end in Light, and in
+    // the middle in Dark. At each place the card views drawn are the cards of
+    // the rows the scroller shows, in shelf order, every one inside the
+    // shelf's width and one height; the shelf made fewer views than cards.
     [TestMethod]
     public void TheFiveHundredPipelineIsSavedAtTheTopTheMiddleAndTheEnd()
     {
@@ -950,7 +927,7 @@ public sealed class CardViewTests : StorageCheckedTests
                         board.Window.UpdateLayout();
                     }
 
-                    string path = Pictures.Save(board.Window, $"board-500-pipeline-{ShelfLayout.Option}-{place}-{theme}", TestContext);
+                    string path = Pictures.Save(board.Window, $"board-500-pipeline-b-{place}-{theme}", TestContext);
                     IReadOnlyList<CardView> views = board.Cards("PipelineShelf");
                     List<int> indexes = views.Select(view => model.Cards.IndexOf((CardViewModel)view.DataContext!)).ToList();
                     List<int> onScreen = Enumerable.Range(0, model.Cards.Count).Where(index =>
@@ -985,10 +962,7 @@ public sealed class CardViewTests : StorageCheckedTests
                     Assert.HasCount(1, views.Select(view => view.Bounds.Height).Distinct().ToList(), $"{place}: every card is one height.");
                     double right = shelf.Bounds.Width;
                     Assert.IsTrue(views.All(view => (view.TranslatePoint(new Point(view.Bounds.Width, 0), shelf)?.X ?? double.MaxValue) <= right + 0.5), $"{place}: a card runs past the shelf's edge.");
-                    if (ShelfLayout.UsesRows)
-                    {
-                        Assert.IsLessThan(model.Cards.Count, views.Count, $"{place}: rows of N made fewer card views than the shelf's {model.Cards.Count} cards.");
-                    }
+                    Assert.IsLessThan(model.Cards.Count, views.Count, $"{place}: rows of N made fewer card views than the shelf's {model.Cards.Count} cards.");
                 }
             }
 
@@ -1004,9 +978,9 @@ public sealed class CardViewTests : StorageCheckedTests
     // K8, d1 4.5: Down into a row that is not made yet. On the 58-card
     // shelf, from the first card, Down to the last row and Up back to the
     // first, one row at a time: each lands on the card a row below (above),
-    // its focus ring shows and it is in view. Under option (b) some of those
-    // rows were not made before the key (the row is scrolled into view, made,
-    // then focused); the test says how many.
+    // its focus ring shows and it is in view. Some of those rows were not
+    // made before the key (the row is scrolled into view, made, then
+    // focused); the test says how many.
     [TestMethod]
     public void K8_DownIntoARowThatIsNotMadeYetScrollsItIntoViewAndFocusesIt()
     {
@@ -1078,7 +1052,7 @@ public sealed class CardViewTests : StorageCheckedTests
             Dispatcher.UIThread.RunJobs();
             board.Window.UpdateLayout();
             Go(Key.Down, columns);
-            if (ShelfLayout.UsesRows && notMade == stepsBefore)
+            if (notMade == stepsBefore)
             {
                 problems.Add("Scrolled to the end, the second row was still made: the test did not reach a row that was not made.");
             }
@@ -1086,16 +1060,13 @@ public sealed class CardViewTests : StorageCheckedTests
             return (problems, notMade, columns);
         });
 
-        TestContext.WriteLine($"Option ({ShelfLayout.Option}), {columns} columns: {notMade} of the steps went into a card that had no card view before the key.");
+        TestContext.WriteLine($"Option (b), {columns} columns: {notMade} of the steps went into a card that had no card view before the key.");
         Assert.IsEmpty(problems, string.Join(Environment.NewLine, problems));
-        if (ShelfLayout.UsesRows)
-        {
-            Assert.IsGreaterThan(0, notMade, "Rows of N: some steps went into a row that was not made yet.");
-        }
+        Assert.IsGreaterThan(0, notMade, "Rows of N: some steps went into a row that was not made yet.");
     }
 
-    // A focused card keeps the keyboard when its row scrolls far away (under
-    // option (b), when the list would recycle it), and the arrows go on from
+    // A focused card keeps the keyboard when its row scrolls far away (when
+    // the list would recycle it), and the arrows go on from
     // it; and a render that moves the focused card (a manuscript before it
     // leaves the library, so every later card moves up one place) leaves the
     // keyboard on the same card, with no other card's focus ring shown.
@@ -1165,7 +1136,7 @@ public sealed class CardViewTests : StorageCheckedTests
         Assert.AreEqual("ok", facts["DrawsAfterRender"], "After the render, the focused view draws the card now at place 9.");
     }
 
-    // Tab order across the shelf's edges, the same under both options: from
+    // Tab order across the shelf's edges: from
     // the sort box with the shelf scrolled to its end, Tab lands on the first
     // card's title; Shift+Tab from there goes back to the sort box; from the
     // last card's View route, Shift+Tab walks back card by card (View route,
@@ -1212,10 +1183,9 @@ public sealed class CardViewTests : StorageCheckedTests
         CollectionAssert.AreEqual(expected, stops, "Shift+Tab went to: " + string.Join(" > ", stops.Take(12)) + " ...");
     }
 
-    // d1 4.4: under option (b) a filter, a sort or a shelf change makes no
+    // d1 4.4: under rows of N a filter, a sort or a shelf change makes no
     // more card views than the shelf shows on screen (rows are refilled in
-    // place); under option (a) a change past the reset threshold makes every
-    // card of the shown shelf again, which is only reported.
+    // place).
     [TestMethod]
     public void AFilterSortOrShelfChangeMakesOnlyTheCardsOnScreen()
     {
@@ -1247,19 +1217,16 @@ public sealed class CardViewTests : StorageCheckedTests
 
         foreach ((string change, int made, int views, int cards) in changes)
         {
-            TestContext.WriteLine($"Option ({ShelfLayout.Option}): {change}: {made} card views made; {views} card views for {cards} cards.");
+            TestContext.WriteLine($"Option (b): {change}: {made} card views made; {views} card views for {cards} cards.");
         }
 
-        if (ShelfLayout.UsesRows)
+        // A row of slack (a row the list measures and then keeps for reuse).
+        foreach ((string change, int made, int views, int cards) in changes)
         {
-            // A row of slack (a row the list measures and then keeps for reuse).
-            foreach ((string change, int made, int views, int cards) in changes)
+            Assert.IsLessThanOrEqualTo(views + 8, made, $"{change}: rows of N made {made} card views, more than the {views} the shelf shows.");
+            if (cards > 60)
             {
-                Assert.IsLessThanOrEqualTo(views + 8, made, $"{change}: rows of N made {made} card views, more than the {views} the shelf shows.");
-                if (cards > 60)
-                {
-                    Assert.IsLessThan(cards, views, $"{change}: rows of N made views for fewer cards than the shelf's {cards}.");
-                }
+                Assert.IsLessThan(cards, views, $"{change}: rows of N made views for fewer cards than the shelf's {cards}.");
             }
         }
     }
@@ -1359,10 +1326,7 @@ public sealed class CardViewTests : StorageCheckedTests
         }
 
         Assert.IsEmpty(wrong, string.Join(Environment.NewLine, wrong));
-        if (ShelfLayout.UsesRows)
-        {
-            Assert.IsGreaterThan(0, retagged, "Rows of N: no card view was given a card with other tags, so no strip was refilled.");
-        }
+        Assert.IsGreaterThan(0, retagged, "Rows of N: no card view was given a card with other tags, so no strip was refilled.");
     }
 
     // A close-up of one shelf: cards of the Pipeline's stages from Idea to In

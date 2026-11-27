@@ -4,7 +4,7 @@ using PaperRoute.ViewModels.Board;
 
 namespace PaperRoute.Desktop;
 
-// The list of a shelf's rows under option (b) of d1 4.4 (ShelfLayout): an
+// The list of a shelf's rows, rows of N (d1 4.4 option (b)): an
 // ItemsControl over a virtualizing stack panel, drawn as an ItemsControl.
 //
 // Each row's container is its CardRowView itself, so when the list recycles
