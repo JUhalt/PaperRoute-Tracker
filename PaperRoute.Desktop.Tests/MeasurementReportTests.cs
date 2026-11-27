@@ -70,13 +70,42 @@ public sealed class MeasurementReportTests
         Assert.IsFalse(conditions.TryGetProperty("machineName", out _), "The conditions name no PC.");
 
         string table = report.ToTable();
-        StringAssert.Contains(table, "| Wall ms | UI ms | Run UI ms | Budget ms |");
+        StringAssert.Contains(table, "| Wall ms | UI ms | Run UI ms (not validated) | Budget ms |");
         StringAssert.Contains(table, "| 12 | 12 | absent | 250 (UI thread) | within | enforced |");
         StringAssert.Contains(table, "| 404 | 404 | 148 | 250 (UI thread) | over | enforced |");
         StringAssert.Contains(table, "Load unknown.");
 
         using JsonDocument none = JsonDocument.Parse(Canned([], conditions: null).ToJson());
         Assert.AreEqual(JsonValueKind.Null, none.RootElement.GetProperty("conditions").ValueKind, "A run without conditions writes null.");
+    }
+
+    // Run UI failed the validation of November 27, 2026 (busy-PC design,
+    // section 6): the figure stays, report-only, labelled "not validated" in
+    // the JSON and in the table, with or without conditions.
+    [TestMethod]
+    public void RunUiIsLabelledNotValidated()
+    {
+        Assert.AreEqual("not validated", BoardMeasurementReport.RunUiStatus);
+        MeasuredRow row = new("500", "stage-back-to-all", "Stage filter back to All stages", 404, 404, 250, "UI thread",
+            RunMs: 151, NotRunMs: 253, RunUiMs: 148.26, GcPauseMs: 12, JitMs: 0);
+        foreach (BoardMeasurementReport report in new[] { Canned([row], s_busy), Canned([row], conditions: null) })
+        {
+            using JsonDocument document = JsonDocument.Parse(report.ToJson());
+            Assert.AreEqual("not validated", document.RootElement.GetProperty("runUiMsStatus").GetString());
+            Assert.AreEqual(148.3, document.RootElement.GetProperty("rows")[0].GetProperty("runUiMs").GetDouble(), "The figure itself stays.");
+            Assert.IsFalse(document.RootElement.GetProperty("rows")[0].TryGetProperty("runUiMsStatus", out _), "The label is the run's, once.");
+
+            string table = report.ToTable();
+            StringAssert.Contains(table, "| Run UI ms (not validated) |");
+            Assert.IsFalse(table.Contains("| Run UI ms |", StringComparison.Ordinal), "No heading gives Run UI without its label.");
+            StringAssert.Contains(table, "| 404 | 404 | 148 | 250 (UI thread) | over | enforced |");
+        }
+
+        // Still report-only: the verdict and the failures read UI alone.
+        BoardMeasurementReport low = Canned([row with { RunUiMs = 1 }], s_busy);
+        BoardMeasurementReport high = Canned([row with { RunUiMs = 5000 }], s_busy);
+        Assert.AreEqual(low.VerdictFor(low.Rows[0]), high.VerdictFor(high.Rows[0]));
+        Assert.AreEqual(low.FailureMessage(), high.FailureMessage());
     }
 
     [TestMethod]

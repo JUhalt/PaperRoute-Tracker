@@ -16,7 +16,7 @@ namespace PaperRoute.ViewModels.Measurement;
 // long the interface thread ran on a processor during the action (its thread
 // clock), NotRunMs is WallMs - RunMs as computed (a small negative value shows
 // the clock's error), RunUiMs the largest running time inside one gap of the
-// UI probe, PerfCoreShare the share of the probe's ticks on the PC's faster
+// UI probe (not validated: BoardMeasurementReport.RunUiStatus), PerfCoreShare the share of the probe's ticks on the PC's faster
 // kind of core, GcPauseMs and JitMs the process's garbage-collection pauses
 // and the thread's compilation time during the action. Waits marks a row that
 // waits by design (a frame, a load off the thread), so its time not running
@@ -171,6 +171,13 @@ public sealed class BoardMeasurementReport
 
     public const string LoadUnreadableLine = "How busy the PC was could not be read on this system.";
 
+    // Run UI failed the validation of November 27, 2026 (busy-PC design,
+    // section 6), so the figure stays, report-only, under this label: in the
+    // JSON ("runUiMsStatus") and wherever a person reads it.
+    public const string RunUiStatus = "not validated";
+
+    public const string RunUiHeading = "Run UI ms (" + RunUiStatus + ")";
+
     public string RuleFor(MeasuredRow row)
     {
         ArgumentNullException.ThrowIfNull(row);
@@ -274,6 +281,8 @@ public sealed class BoardMeasurementReport
                 json.WriteString("error", Error);
             }
 
+            // Every row's runUiMs is read under this label.
+            json.WriteString("runUiMsStatus", RunUiStatus);
             json.WriteStartArray("rows");
             foreach (MeasuredRow row in Rows)
             {
@@ -412,7 +421,7 @@ public sealed class BoardMeasurementReport
             text.AppendLine(DescribeConditions(Conditions, Processors));
         }
 
-        text.AppendLine("| Library | Id | Action | Wall ms | UI ms | Run UI ms | Budget ms | Verdict | Rule |");
+        text.AppendLine($"| Library | Id | Action | Wall ms | UI ms | {RunUiHeading} | Budget ms | Verdict | Rule |");
         text.AppendLine("|---|---|---|---:|---:|---:|---:|---|---|");
         foreach (MeasuredRow row in Rows)
         {
