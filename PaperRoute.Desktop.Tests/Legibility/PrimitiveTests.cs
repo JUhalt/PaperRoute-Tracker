@@ -83,10 +83,11 @@ public sealed class PrimitiveTests
     [TestMethod]
     public void SamePatternMatchesTodaysRule()
     {
-        Color faint = Color.FromRgb(0xC0, 0xC0, 0xC0);
-        Color visible = Color.FromRgb(0xA0, 0xA0, 0xA0);
-        Assert.IsLessThan(Thresholds.R3InPattern, Contrast.ContrastRatio(faint, s_white), "#C0C0C0 lies within 2:1 of white.");
-        Assert.IsGreaterThanOrEqualTo(Thresholds.R3InPattern, Contrast.ContrastRatio(visible, s_white), "#A0A0A0 lies beyond 2:1 of white.");
+        // About 1.98:1 and 2.01:1 against white, one on each side of the line.
+        Color faint = Color.FromRgb(0xB8, 0xB8, 0xB8);
+        Color visible = Color.FromRgb(0xB7, 0xB7, 0xB7);
+        Assert.IsLessThan(Thresholds.R3InPattern, Contrast.ContrastRatio(faint, s_white), "#B8B8B8 lies within 2:1 of white.");
+        Assert.IsGreaterThanOrEqualTo(Thresholds.R3InPattern, Contrast.ContrastRatio(visible, s_white), "#B7B7B7 lies beyond 2:1 of white.");
 
         FramePixels plain = Swatch(s_white, s_black, 0);
         AssertPattern(0.09, true, plain, Swatch(s_white, s_black, 9), "nine black pixels of 100");
