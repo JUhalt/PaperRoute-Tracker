@@ -14,6 +14,7 @@ namespace PaperRoute.Desktop.Tests.Parity;
 // malformed line is reported with its file and line number. The checks
 // return one line per finding and assert nothing; ParityMapTests asserts.
 // No Avalonia object is made.
+// Limits of headless: HeadlessLimits.md
 internal sealed class ParityMap
 {
     public const string SurfacesFile = "target-surfaces.tsv";

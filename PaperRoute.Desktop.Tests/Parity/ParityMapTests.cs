@@ -8,6 +8,7 @@ namespace PaperRoute.Desktop.Tests.Parity;
 // the build issue that builds it. They prove the map complete and current,
 // not right: the rows are judgement read from the target map's tables, each
 // with where it was read.
+// Limits of headless: HeadlessLimits.md
 [TestClass]
 public sealed class ParityMapTests
 {
