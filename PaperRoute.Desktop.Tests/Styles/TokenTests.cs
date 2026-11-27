@@ -203,6 +203,12 @@ public sealed partial class TokenTests
         yield return ("an off quiet button on a card", "MutedTextBrush", "CardBackgroundBrush");
     }
 
+    // Every pair T1 and T2 judge, for R2 to map through the contrast roles
+    // (Legibility/R2Tests.cs).
+    internal static IEnumerable<(string Where, string Ink, string Surface)> AllPairs() =>
+        BoardPairs().Concat(s_stages.Select(stage => "Stage" + stage).Concat(s_tagPalettes.Select(palette => "Tag" + palette))
+            .Select(pair => (pair + " pill or tag", pair + "ForegroundBrush", pair + "BackgroundBrush")));
+
     [GeneratedRegex(@"\{StaticResource\s+(?:ResourceKey=)?(?<key>[^\s,}]+)[^}]*\}")]
     private static partial Regex StaticResourcePattern();
 
