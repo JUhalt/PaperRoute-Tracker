@@ -1,0 +1,16 @@
+# What headless cannot show
+
+The checks in this project run on Avalonia's headless platform: windows live in memory, with Skia drawing real pixels, and no screen, no system and no person. This note lists what that leaves out, one row per limit: what the limit bounds, and what proves the limit holds or says where the real check is made. The plan's three limits (`docs/design/Avalonia-Migration-Plan.md:180` and the acceptance line of build issue 3) are rows 1 to 3.
+
+Each row lands with the pull request that adds its proof, so no row names a test that does not exist yet. The numbers are the design's (harness and style design, part 2.7); the rows it gives to later pull requests (6, 7 and 8) are added by them.
+
+`TheLimitsNoteNamesEveryLimitAndEveryRuleLinksIt` (`HeadlessLimitTests.cs`) keeps this note honest: it fails if the plan's three limits are missing here in its words, if a test named in the "Proved by" column is not a test method of this project, or if a rule's code file (every `.cs` file under `Legibility/` and `Parity/`, and `AccessibilityTreeTests.cs`) lacks the line `// Limits of headless: HeadlessLimits.md`.
+
+| # | Limit | Bounds | Proved by |
+|---|---|---|---|
+| 1 | No UI Automation or AT-SPI tree. The tree tests walk Avalonia's own automation peers, not what a screen reader receives through UI Automation (Windows) or AT-SPI (Linux). Narrator and Orca stay the manual check 5 (plan :178, :180). | the tree tests (`AccessibilityTreeTests.cs`) | A statement: the headless platform has no accessibility backend. The keyboard test that asserts focus events Windows raises for UI Automation (`KeyboardAccessTests.vb`) stays a manual check. |
+| 2 | Render scale 1 unless set. Headless draws one pixel per unit unless a test sets another scale; DPI scaling stays in the installed-app gates. | the pixel rules (P-R5, P-R7 and the rules that follow them) | `HeadlessRendersAtScaleOneUnlessSet` |
+| 3 | No native dialogs. No file dialog, browser launch or second window of the system opens; the tests drive stand-ins for every outcome (`PlatformCheckTests.cs`). | the platform tests | A statement: the real dialog and launcher are run by a person. The Linux window job under Xvfb runs the real platform check (`--platform-check`). |
+| 4 | Light, no contrast and no change events. The headless platform reports a Light system with no contrast preference and never raises a colour change, so Windows' system colours (`GetSysColor`) are never read and `ColorValuesChanged` never runs. Each test drives a contrast theme itself, through `ContrastTheme.Follow` with a `ContrastPreference` of its own. | R2, R9 and the theme tests | `HeadlessReportsLightAndNoContrast` |
+| 5 | No pointer. Hover and press are shown by setting the `:pointerover` and `:pressed` pseudo-classes, not by a pointer moving over a control. | the style gallery | A statement: the gallery sets the pseudo-classes (`Styles/StyleGallery.cs`). |
+| 9 | Headless timings are not the window's. A headless run has no compositor, no screen refresh and no system input queue. | the budget tests | A statement: the window's own figures come from the measure mode (`--measure`) on a real desktop. |
