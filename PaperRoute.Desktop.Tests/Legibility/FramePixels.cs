@@ -68,8 +68,8 @@ internal sealed class FramePixels
             : Color.FromRgb(_bytes[offset], _bytes[offset + 1], _bytes[offset + 2]);
     }
 
-    // "<name>: luminance <max> at (x, y), colour #rrggbb", and " LIGHT"
-    // when a pixel of the patch is above the light line.
+    // "<name>: luminance <max> (#rrggbb) in <patch>", the brightest pixel
+    // of the patch, and " LIGHT" when it is above the light line.
     public string Describe(string name, PixelRect patch)
     {
         Assert.IsTrue(Contains(patch), $"The patch {patch} of {name} lies outside the frame.");
