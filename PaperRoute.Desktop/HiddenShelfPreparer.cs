@@ -1,9 +1,13 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using Avalonia;
+using Avalonia.Automation.Peers;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using PaperRoute.ViewModels.Board;
 
 namespace PaperRoute.Desktop;
@@ -47,6 +51,24 @@ namespace PaperRoute.Desktop;
 // (SkippedReason) and the switch makes the rest, as on the base.
 // Only a Published shelf that was never shown is prepared; once shown, the
 // rule of ShelfViewModel.IsShown takes over unchanged.
+// Accessibility: once an automation peer exists for Published's Border (an
+// accessibility client has read the shelf host's children, or walked up
+// from a card), a step would make the host's peer announce a change of its
+// children, so preparation is skipped for the session (the maintainer's
+// answer of 2026-11-27), with SkippedReason and one trace line.
+//
+// When the Board is idle (Enabled; the App does not set it yet): a timer at
+// Background priority ticks every Interval, and a tick runs one step only if
+// the Board has rendered and a frame has been drawn since; nobody has pressed
+// a key, a pointer button or turned the wheel for Quiet, nor has the shelf
+// host's size, the scaling or the theme changed for as long; Quiet has passed
+// since the last render for the first preparation, and RefreshQuiet for a
+// refresh; no pointer button is held, no stage or sort list and no card menu
+// is open; the Board is visible and the window not minimized. The timer stops
+// at every step and starts again only from the next frame, so a frame is
+// drawn and the message loop runs between any two steps. It stops for good
+// when Published is shown or preparation is skipped, stops when prepared,
+// and starts again on a render, a resize, a scaling or a theme change.
 public sealed class HiddenShelfPreparer
 {
     // The maintainer's threshold (2026-11-27): a step that runs, or is
@@ -60,6 +82,17 @@ public sealed class HiddenShelfPreparer
     public const int LadderSteps = 3;
 
     public const double LadderRatio = 2.2;
+
+    public const string AutomationPeerReason = "automation peer";
+
+    // The idle rules: quiet after input, a resize, a scaling or theme change
+    // and a render before a first preparation; longer after a render before a
+    // refresh, so a person typing with pauses meets no step.
+    public static readonly TimeSpan Quiet = TimeSpan.FromMilliseconds(400);
+
+    public static readonly TimeSpan RefreshQuiet = TimeSpan.FromSeconds(2);
+
+    public static readonly TimeSpan DefaultInterval = TimeSpan.FromMilliseconds(50);
 
     private static readonly Stopwatch s_clock = Stopwatch.StartNew();
 
@@ -83,13 +116,61 @@ public sealed class HiddenShelfPreparer
     // before it has run.
     private LayoutFor? _laidOutFor;
 
+    // The idle timer and what its rules watch; used only while Enabled.
+    private DispatcherTimer? _timer;
+    private bool _enabled;
+    private TopLevel? _topLevel;
+    private Control? _host;
+    private bool _awaitingFrame;
+    private bool _frameSinceRender;
+    private bool _pointerHeld;
+    private TimeSpan _lastInput;
+    private TimeSpan _lastHostChange;
+    private TimeSpan _lastRender;
+
     public HiddenShelfPreparer(BoardView view)
     {
         ArgumentNullException.ThrowIfNull(view);
         _view = view;
         _view.DataContextChanged += (_, _) => Watch(_view.DataContext as BoardViewModel);
+        _view.AttachedToVisualTree += (_, _) => Listen();
+        _view.DetachedFromVisualTree += (_, _) => StopListening();
         Watch(_view.DataContext as BoardViewModel);
     }
+
+    // Whether the Board prepares Published by itself while idle. Off by
+    // default: only a test turns it on in this work.
+    public bool Enabled
+    {
+        get => _enabled;
+        set
+        {
+            if (_enabled == value)
+            {
+                return;
+            }
+
+            _enabled = value;
+            if (value)
+            {
+                Listen();
+            }
+            else
+            {
+                StopListening();
+            }
+        }
+    }
+
+    // How often the idle timer ticks; a test may make it longer, to drive
+    // ticks itself with Tick.
+    public TimeSpan Interval { get; set; } = DefaultInterval;
+
+    // The stop threshold: SlowSlice, unless a test sets another.
+    public TimeSpan SlowSliceLimit { get; set; } = SlowSlice;
+
+    // Whether the idle timer is running (waiting for its next tick).
+    public bool IsTimerRunning => _timer?.IsEnabled == true;
 
     // True while the last full-size layout step stands: it ran with
     // Published's rows current, and since then the rows have not gone stale,
@@ -109,7 +190,8 @@ public sealed class HiddenShelfPreparer
     // How many steps have run.
     public int StepsRun { get; private set; }
 
-    // Why preparation stopped for the session, or null: SlowSliceReason.
+    // Why preparation stopped for the session, or null: SlowSliceReason or
+    // AutomationPeerReason.
     public string? SkippedReason { get; private set; }
 
     // The longest step so far.
@@ -119,7 +201,8 @@ public sealed class HiddenShelfPreparer
     // the ladder (null at full height), the card views it made and its time.
     public IReadOnlyList<Step> Steps => _steps;
 
-    // The clock the steps are timed with; a test may replace it.
+    // The clock the steps are timed with and the idle rules read; a test may
+    // replace it.
     public Func<TimeSpan> Clock { get; set; } = static () => s_clock.Elapsed;
 
     // Runs the next step if one is due and can run now; returns whether one ran.
@@ -140,6 +223,14 @@ public sealed class HiddenShelfPreparer
             || !_view.IsEffectivelyVisible
             || _view.PublishedShelf.Parent is not Border { Parent: Control host } border)
         {
+            return false;
+        }
+
+        // An accessibility client has read the Board's structure: a step
+        // would be announced as a change of the shelf host's children.
+        if (ControlAutomationPeer.FromElement(border) is not null)
+        {
+            Skip(AutomationPeerReason);
             return false;
         }
 
@@ -216,6 +307,30 @@ public sealed class HiddenShelfPreparer
         return true;
     }
 
+    // What one tick of the idle timer does: runs the next step if the idle
+    // rules allow one now; returns whether one ran. After a step the next
+    // tick waits for a drawn frame. Tests call it with a longer Interval.
+    public bool Tick()
+    {
+        _timer?.Stop();
+        bool ran = IdleRulesHold() && RunStep();
+        if (ran)
+        {
+            _awaitingFrame = true;
+            RequestFrame(() =>
+            {
+                _awaitingFrame = false;
+                Arm();
+            });
+        }
+        else
+        {
+            Arm();
+        }
+
+        return ran;
+    }
+
     // Runs every step due, one after another; returns how many ran.
     public int RunToEnd()
     {
@@ -265,12 +380,153 @@ public sealed class HiddenShelfPreparer
             Longest = took;
         }
 
-        bool slow = took > SlowSlice
-            || (predicted is { } views && made > 0 && took.TotalMilliseconds / made * views > SlowSlice.TotalMilliseconds);
+        bool slow = took > SlowSliceLimit
+            || (predicted is { } views && made > 0 && took.TotalMilliseconds / made * views > SlowSliceLimit.TotalMilliseconds);
         if (slow)
         {
-            SkippedReason = SlowSliceReason;
+            Skip(SlowSliceReason);
         }
+    }
+
+    // Stops preparation for the session, and says why once.
+    private void Skip(string reason)
+    {
+        if (SkippedReason is not null)
+        {
+            return;
+        }
+
+        SkippedReason = reason;
+        _timer?.Stop();
+        Trace.WriteLine($"PaperRoute Board: idle preparation of Published skipped for this session ({reason}).");
+    }
+
+    // The idle rules of a tick (the class comment); RunStep checks the rest.
+    private bool IdleRulesHold()
+    {
+        if (!_enabled || _awaitingFrame || !_frameSinceRender || _board is not { RenderCount: > 0 } board)
+        {
+            return false;
+        }
+
+        TimeSpan now = Clock();
+        TimeSpan renderQuiet = _laidOutFor is null ? Quiet : RefreshQuiet;
+        if (now - _lastInput < Quiet || now - _lastHostChange < Quiet || now - _lastRender < renderQuiet)
+        {
+            return false;
+        }
+
+        if (_pointerHeld || board.IsStageListOpen || board.IsSortListOpen)
+        {
+            return false;
+        }
+
+        if (!_view.IsEffectivelyVisible || _topLevel is Window { WindowState: WindowState.Minimized })
+        {
+            return false;
+        }
+
+        return !_view.SelectedShelfView.CardViews().Any(card => card.MoreMenu.IsOpen || card.RightClickMenu.IsOpen);
+    }
+
+    // Starts the timer if a step may still be due.
+    private void Arm()
+    {
+        if (!_enabled || _topLevel is null || _awaitingFrame || _shownOnce || SkippedReason is not null || IsPrepared)
+        {
+            return;
+        }
+
+        if (_timer is null)
+        {
+            _timer = new DispatcherTimer(DispatcherPriority.Background);
+            _timer.Tick += (_, _) => Tick();
+        }
+
+        _timer.Interval = Interval;
+        _timer.Start();
+    }
+
+    private void RequestFrame(Action then) => _topLevel?.RequestAnimationFrame(_ => then());
+
+    // While Enabled and in a window: follows input, the shelf host's size,
+    // the scaling and the theme, and arms the timer.
+    private void Listen()
+    {
+        if (!_enabled || _topLevel is not null || TopLevel.GetTopLevel(_view) is not { } topLevel)
+        {
+            return;
+        }
+
+        _topLevel = topLevel;
+        topLevel.AddHandler(InputElement.KeyDownEvent, OnInput, RoutingStrategies.Tunnel, handledEventsToo: true);
+        topLevel.AddHandler(InputElement.PointerWheelChangedEvent, OnInput, RoutingStrategies.Tunnel, handledEventsToo: true);
+        topLevel.AddHandler(InputElement.PointerPressedEvent, OnPointerPressed, RoutingStrategies.Tunnel, handledEventsToo: true);
+        topLevel.AddHandler(InputElement.PointerReleasedEvent, OnPointerReleased, RoutingStrategies.Tunnel, handledEventsToo: true);
+        topLevel.AddHandler(InputElement.PointerCaptureLostEvent, OnPointerReleased, RoutingStrategies.Direct, handledEventsToo: true);
+        topLevel.ScalingChanged += OnHostChanged;
+        _host = _view.PublishedShelf.Parent?.Parent as Control;
+        if (_host is not null)
+        {
+            _host.SizeChanged += OnHostChanged;
+        }
+
+        _view.ActualThemeVariantChanged += OnHostChanged;
+        TimeSpan now = Clock();
+        _lastInput = now;
+        _lastHostChange = now;
+        _lastRender = now;
+        _pointerHeld = false;
+        WaitForFrame();
+        Arm();
+    }
+
+    private void StopListening()
+    {
+        _timer?.Stop();
+        _awaitingFrame = false;
+        if (_topLevel is null)
+        {
+            return;
+        }
+
+        _topLevel.RemoveHandler(InputElement.KeyDownEvent, OnInput);
+        _topLevel.RemoveHandler(InputElement.PointerWheelChangedEvent, OnInput);
+        _topLevel.RemoveHandler(InputElement.PointerPressedEvent, OnPointerPressed);
+        _topLevel.RemoveHandler(InputElement.PointerReleasedEvent, OnPointerReleased);
+        _topLevel.RemoveHandler(InputElement.PointerCaptureLostEvent, OnPointerReleased);
+        _topLevel.ScalingChanged -= OnHostChanged;
+        if (_host is not null)
+        {
+            _host.SizeChanged -= OnHostChanged;
+        }
+
+        _view.ActualThemeVariantChanged -= OnHostChanged;
+        _topLevel = null;
+        _host = null;
+    }
+
+    // A first step waits for a frame drawn after the latest render.
+    private void WaitForFrame()
+    {
+        _frameSinceRender = false;
+        RequestFrame(() => _frameSinceRender = true);
+    }
+
+    private void OnInput(object? sender, RoutedEventArgs e) => _lastInput = Clock();
+
+    private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        _lastInput = Clock();
+        _pointerHeld = true;
+    }
+
+    private void OnPointerReleased(object? sender, RoutedEventArgs e) => _pointerHeld = false;
+
+    private void OnHostChanged(object? sender, EventArgs e)
+    {
+        _lastHostChange = Clock();
+        Arm();
     }
 
     // What a full-size layout step lays Published out for.
@@ -302,6 +558,8 @@ public sealed class HiddenShelfPreparer
         _shownOnce = false;
         _ladderRun = 0;
         _laidOutFor = null;
+        _timer?.Stop();
+        _awaitingFrame = false;
         if (board is null)
         {
             return;
@@ -316,6 +574,13 @@ public sealed class HiddenShelfPreparer
         if (e.PropertyName == nameof(BoardViewModel.SelectedShelfIndex) && sender is BoardViewModel { SelectedShelfIndex: 1 })
         {
             _shownOnce = true;
+            _timer?.Stop();
+        }
+        else if (e.PropertyName == nameof(BoardViewModel.RenderCount) && _topLevel is not null)
+        {
+            _lastRender = Clock();
+            WaitForFrame();
+            Arm();
         }
     }
 

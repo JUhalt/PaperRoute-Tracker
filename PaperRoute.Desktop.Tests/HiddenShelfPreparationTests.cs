@@ -1,8 +1,10 @@
 using System.Runtime.InteropServices;
 using Avalonia;
+using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
@@ -35,6 +37,14 @@ namespace PaperRoute.Desktop.Tests;
 // - T9: a change while Published is prepared or half prepared never shows
 //   an old card, and after the idle refresh the switch makes no view and
 //   refills no row.
+// - T7: once an accessibility client has read the shelf host's children, or
+//   walked up from a card, preparation is skipped and raises no event.
+// - T8: the idle rules: nothing runs at startup, while keys come closer than
+//   0.4 s, while a pointer button is held, a list or a card menu is open, the
+//   Board is hidden or the window minimized, nor twice without a frame; a
+//   refresh waits for 2 s after the last render.
+// - T10: the idle timer itself prepares Published and stops; closing the
+//   window midway is safe; a show and hide between two ticks stops it.
 // - T6: with preparation done the Board's accessibility tree and Tab order
 //   are the checked-in ones, and after the switch they are the twin's.
 // - T11: an empty Published, a short one, and the first cards arriving on a
@@ -701,6 +711,272 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
         }));
     }
 
+    // T7: an automation peer for Published's Border exists once a client has
+    // read the shelf host's children, or asked a Pipeline card's peer for its
+    // parent (which connects every ancestor's peer). Preparation then runs no
+    // step, says why, and raises no ChildrenChanged on the host's peer. A
+    // flip made by hand with the peer present does raise it: the check is
+    // what keeps a step quiet.
+    [TestMethod]
+    [DataRow("host children")]
+    [DataRow("card parent")]
+    public void T7_APeerOnTheShelfHostStopsPreparation(string read)
+    {
+        using DiskLibrarySession session = OpenFiveHundred("five-hundred");
+        Write(Headless.Run(() =>
+        {
+            using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
+            Panel host = board.Find<Panel>("ShelfHost");
+            Border border = (Border)(board.Shelf(PublishedName).Parent ?? throw new AssertFailedException("Published has no Border."));
+            Assert.IsNull(ControlAutomationPeer.FromElement(border), "No peer for Published's Border before a client reads the Board.");
+            if (read == "host children")
+            {
+                ControlAutomationPeer.CreatePeerForElement(host).GetChildren();
+            }
+            else
+            {
+                CardView card = board.Cards("PipelineShelf")[0];
+                Assert.IsNotNull(ControlAutomationPeer.CreatePeerForElement(card).GetParent(), "The card's peer has a parent.");
+            }
+
+            Assert.IsNotNull(ControlAutomationPeer.FromElement(border), $"After the {read} read, Published's Border has a peer.");
+            AutomationPeer hostPeer = ControlAutomationPeer.CreatePeerForElement(host);
+            int changes = 0;
+            hostPeer.ChildrenChanged += (_, _) => changes++;
+
+            HiddenShelfPreparer preparer = Still(board);
+            int start = CardView.MadeCount;
+            int ran = preparer.RunToEnd();
+            int made = CardView.MadeCount - start;
+            Assert.AreEqual(0, ran, "No step ran.");
+            Assert.AreEqual(0, made, "No card view was made.");
+            Assert.AreEqual(HiddenShelfPreparer.AutomationPeerReason, preparer.SkippedReason, "Skipped for an automation peer.");
+            Assert.AreEqual(0, changes, "No ChildrenChanged was raised.");
+            Assert.IsFalse(preparer.IsPrepared, "Not prepared.");
+            Assert.IsFalse(board.Board.Shelves[1].IsRealized, "Published was not touched.");
+
+            // The same Board with the timer's rules: still nothing.
+            preparer.Interval = TimeSpan.FromHours(1);
+            TimeSpan now = TimeSpan.FromSeconds(100);
+            preparer.Clock = () => now;
+            preparer.Enabled = true;
+            DrawFrame();
+            now += TimeSpan.FromSeconds(5);
+            Assert.IsFalse(preparer.Tick(), "A tick runs no step either.");
+            Assert.IsFalse(preparer.IsTimerRunning, "Skipped, the timer is stopped.");
+            preparer.Enabled = false;
+
+            border.SetCurrentValue(Visual.IsVisibleProperty, true);
+            border.SetCurrentValue(Visual.IsVisibleProperty, false);
+            int byHand = changes;
+            Assert.IsGreaterThan(0, byHand, "A flip made by hand with the peer present raises ChildrenChanged.");
+            Switch(board, 1);
+            AssertOnlyShown(board, 1, "switched after the skip");
+            return new List<string> { $"{read}: steps run {ran}, views made {made}, skipped reason {preparer.SkippedReason}, ChildrenChanged during RunToEnd 0; a flip by hand raised {byHand}" };
+        }));
+    }
+
+    // T8: the idle rules, with a test clock and the timer slowed so that
+    // only the test's own Tick calls run steps.
+    [TestMethod]
+    public void T8_NothingRunsInStartupOrWhileBusy()
+    {
+        using DiskLibrarySession disk = OpenFiveHundred("five-hundred");
+        MemorySession session = WholeLibrary(disk);
+        Write(Headless.Run(() =>
+        {
+            var facts = new List<string>();
+            using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
+            HiddenShelfPreparer preparer = board.View.Preparer;
+            TimeSpan now = TimeSpan.FromSeconds(100);
+            preparer.Clock = () => now;
+            preparer.Interval = TimeSpan.FromHours(1);
+            Assert.IsFalse(preparer.IsTimerRunning, "Off: no timer.");
+            preparer.Enabled = true;
+            Assert.IsTrue(preparer.IsTimerRunning, "On: the timer waits for its tick.");
+
+            // Startup: not before 0.4 s of quiet, nor before a frame.
+            Assert.IsFalse(preparer.Tick(), "At once: no step.");
+            now += TimeSpan.FromSeconds(1);
+            Assert.IsFalse(preparer.Tick(), "No frame drawn since the Board rendered: no step.");
+            DrawFrame();
+            Assert.IsTrue(preparer.Tick(), "Quiet and a frame drawn: the first step.");
+            Assert.AreEqual("W", preparer.Steps[^1].Kind, "The first step is W.");
+
+            // Never two steps without a frame between them.
+            Assert.IsFalse(preparer.Tick(), "No frame since the step: no step.");
+            Assert.IsFalse(preparer.IsTimerRunning, "The timer waits for the frame.");
+            DrawFrame();
+            Assert.IsTrue(preparer.IsTimerRunning, "The frame starts the timer again.");
+
+            // Keys closer than 0.4 s.
+            for (int key = 0; key < 5; key++)
+            {
+                PressShift(board);
+                now += TimeSpan.FromMilliseconds(300);
+                Assert.IsFalse(preparer.Tick(), $"Key {key + 1}, 0.3 s ago: no step.");
+            }
+
+            now += TimeSpan.FromMilliseconds(100);
+            Assert.IsTrue(preparer.Tick(), "0.4 s after the last key: a step.");
+            DrawFrame();
+
+            // A pointer button held for 1 s.
+            Control title = board.Find<TextBlock>("PageTitle");
+            Point at = title.TranslatePoint(new Point(4, 4), board.Window) ?? throw new AssertFailedException("The title is not in the window.");
+            board.Window.MouseDown(at, MouseButton.Left, RawInputModifiers.None);
+            now += TimeSpan.FromSeconds(1);
+            Assert.IsFalse(preparer.Tick(), "A pointer button held: no step.");
+            board.Window.MouseUp(at, MouseButton.Left, RawInputModifiers.None);
+            Assert.IsTrue(preparer.Tick(), "Released, 1 s after the press: a step.");
+            DrawFrame();
+
+            // The stage list, the sort list and a card menu open.
+            now += TimeSpan.FromSeconds(1);
+            board.Board.IsStageListOpen = true;
+            Dispatcher.UIThread.RunJobs();
+            Assert.IsFalse(preparer.Tick(), "The stage list open: no step.");
+            board.Board.IsStageListOpen = false;
+            board.Board.IsSortListOpen = true;
+            Dispatcher.UIThread.RunJobs();
+            Assert.IsFalse(preparer.Tick(), "The sort list open: no step.");
+            board.Board.IsSortListOpen = false;
+            Dispatcher.UIThread.RunJobs();
+            CardView card = board.Cards("PipelineShelf")[0];
+            card.MoreMenu.ShowAt(card.FindControl<Button>("More") ?? throw new AssertFailedException("The card has no More button."));
+            Dispatcher.UIThread.RunJobs();
+            Assert.IsTrue(card.MoreMenu.IsOpen, "The card menu is open.");
+            Assert.IsFalse(preparer.Tick(), "A card menu open: no step.");
+            card.MoreMenu.Hide();
+            Dispatcher.UIThread.RunJobs();
+            now += TimeSpan.FromSeconds(1);
+            Assert.IsTrue(preparer.Tick(), "Lists and menu closed: a step.");
+            DrawFrame();
+
+            // The Board hidden; the window minimized.
+            board.View.IsVisible = false;
+            Dispatcher.UIThread.RunJobs();
+            now += TimeSpan.FromSeconds(1);
+            Assert.IsFalse(preparer.Tick(), "The Board hidden: no step.");
+            board.View.IsVisible = true;
+            Settle(board);
+            board.Window.WindowState = WindowState.Minimized;
+            Dispatcher.UIThread.RunJobs();
+            now += TimeSpan.FromSeconds(1);
+            Assert.IsFalse(preparer.Tick(), "The window minimized: no step.");
+            board.Window.WindowState = WindowState.Normal;
+            Settle(board);
+            now += TimeSpan.FromSeconds(1);
+            Assert.IsTrue(preparer.Tick(), "Shown again: the last step.");
+            DrawFrame();
+            Assert.IsTrue(preparer.IsPrepared, "Published is prepared.");
+            Assert.AreEqual(FirstPreparationSteps, preparer.StepsRun, "Five steps in all.");
+            Assert.IsFalse(preparer.IsTimerRunning, "Prepared, the timer has stopped.");
+            facts.Add($"first preparation by ticks: {string.Join(", ", preparer.Steps.Select(step => $"{step.Kind} {step.ViewsMade}"))}");
+
+            // A search typed with pauses of 0.5 s: no refresh until 2 s after
+            // the last render.
+            ShelfViewModel published = board.Board.Shelves[1];
+            List<string> words = published.Cards.Take(10).Select(cardModel => cardModel.Title).ToList();
+            foreach (string word in words)
+            {
+                PressShift(board);
+                board.Board.SearchText = word;
+                board.Board.Render();
+                Assert.IsTrue(preparer.IsTimerRunning, "The render starts the timer again.");
+                now += TimeSpan.FromMilliseconds(500);
+                DrawFrame();
+                Assert.IsFalse(preparer.Tick(), $"0.5 s after the search \"{word}\": no refresh.");
+            }
+
+            Assert.AreEqual(FirstPreparationSteps, preparer.StepsRun, "No step during the search.");
+            now += TimeSpan.FromMilliseconds(1500);
+            int refresh = 0;
+            while (preparer.Tick())
+            {
+                refresh++;
+                DrawFrame();
+            }
+
+            Assert.IsTrue(preparer.IsPrepared, "2 s after the last render, the refresh prepared Published again.");
+            facts.Add($"refresh after the search: {string.Join(", ", preparer.Steps.Skip(FirstPreparationSteps).Select(step => step.Kind))} ({refresh} steps, one per tick and frame)");
+            return facts;
+        }));
+    }
+
+    // T10: the idle timer, with the real clock, prepares Published by itself
+    // and stops; the switch then makes no card view.
+    [TestMethod]
+    public void T10_TheTimerPathFinishesAndStops()
+    {
+        using DiskLibrarySession session = OpenFiveHundred("five-hundred");
+        Write(Headless.Run(() =>
+        {
+            using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
+            HiddenShelfPreparer preparer = Busy(board);
+            preparer.Enabled = true;
+            Assert.IsTrue(Pump(() => preparer.IsPrepared, TimeSpan.FromSeconds(30)), "The timer prepared Published.");
+            Assert.AreEqual(FirstPreparationSteps, preparer.StepsRun, "Five steps.");
+            Assert.IsNull(preparer.SkippedReason, "Nothing stopped it.");
+            Pump(() => false, TimeSpan.FromMilliseconds(500));
+            Assert.AreEqual(FirstPreparationSteps, preparer.StepsRun, "No step after it was prepared.");
+            Assert.IsFalse(preparer.IsTimerRunning, "The timer stopped.");
+            AssertOnlyShown(board, 0, "after the timer's preparation");
+            int before = CardView.MadeCount;
+            Switch(board, 1);
+            int atSwitch = CardView.MadeCount - before;
+            Assert.AreEqual(0, atSwitch, "The switch made no card view.");
+            AssertDrawnRight(board, "after the timer's preparation");
+            return new List<string> { $"timer: {string.Join(", ", preparer.Steps.Select(step => $"{step.Kind} {step.ViewsMade}"))}; the switch made {atSwitch}" };
+        }));
+    }
+
+    // T10: the window closed after two steps: the timer stops, nothing more
+    // runs and nothing throws.
+    [TestMethod]
+    public void T10_ClosingMidwayIsSafe()
+    {
+        using DiskLibrarySession session = OpenFiveHundred("five-hundred");
+        Write(Headless.Run(() =>
+        {
+            BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
+            HiddenShelfPreparer preparer = Busy(board);
+            preparer.Enabled = true;
+            Assert.IsTrue(Pump(() => preparer.StepsRun >= 2, TimeSpan.FromSeconds(30)), "Two steps ran.");
+            board.Window.Close();
+            int steps = preparer.StepsRun;
+            Pump(() => false, TimeSpan.FromMilliseconds(500));
+            Assert.AreEqual(steps, preparer.StepsRun, "No step after the window closed.");
+            Assert.IsFalse(preparer.IsTimerRunning, "The timer stopped.");
+            Assert.IsFalse(preparer.IsPrepared, "Not prepared.");
+            return new List<string> { $"closed after {steps} steps; none after" };
+        }));
+    }
+
+    // T10: Published shown and hidden again between two ticks: the timer
+    // stops for good.
+    [TestMethod]
+    public void T10_AShowAndHideBetweenTwoTicksStopsItForGood()
+    {
+        using DiskLibrarySession session = OpenFiveHundred("five-hundred");
+        Write(Headless.Run(() =>
+        {
+            using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
+            HiddenShelfPreparer preparer = Busy(board);
+            preparer.Enabled = true;
+            Assert.IsTrue(Pump(() => preparer.StepsRun >= 1, TimeSpan.FromSeconds(30)), "A step ran.");
+            int steps = preparer.StepsRun;
+            board.Board.SelectedShelfIndex = 1;
+            board.Board.SelectedShelfIndex = 0;
+            Assert.IsFalse(preparer.IsTimerRunning, "The timer stopped.");
+            Pump(() => false, TimeSpan.FromSeconds(1));
+            Assert.AreEqual(steps, preparer.StepsRun, "No step after the show and hide.");
+            Assert.IsFalse(preparer.IsTimerRunning, "The timer stays stopped.");
+            Assert.IsFalse(preparer.IsPrepared, "Not called prepared.");
+            AssertOnlyShown(board, 0, "after the show and hide");
+            return new List<string> { $"shown and hidden after {steps} steps; none after" };
+        }));
+    }
     // T6: the window's tree and Tab walk with preparation done, against the
     // checked-in text; then, on fresh Boards, the walk after the first switch,
     // prepared and not.
@@ -818,6 +1094,39 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
         preparer.Clock = static () => TimeSpan.Zero;
         return preparer;
     }
+
+    // A frame drawn, as the render timer would draw it.
+    private static void DrawFrame()
+    {
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    // A key that changes nothing on the Board.
+    private static void PressShift(BoardWindow board)
+    {
+        board.Window.KeyPress(Key.LeftShift, RawInputModifiers.None, PhysicalKey.ShiftLeft, null);
+        board.Window.KeyRelease(Key.LeftShift, RawInputModifiers.None, PhysicalKey.ShiftLeft, null);
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    // The Board's preparer on the real clock, with the stop threshold raised
+    // so that a busy PC does not stop the timer tests early.
+    private static HiddenShelfPreparer Busy(BoardWindow board)
+    {
+        HiddenShelfPreparer preparer = board.View.Preparer;
+        preparer.SlowSliceLimit = TimeSpan.FromHours(1);
+        return preparer;
+    }
+
+    // Runs the interface thread, drawing frames, until the condition holds
+    // or the limit passes; returns whether it held.
+    private static bool Pump(Func<bool> condition, TimeSpan limit) =>
+        BoardWindow.WaitFor(() =>
+        {
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            return condition();
+        }, limit);
 
     private static List<string> Titles(BoardWindow board) =>
         board.Cards(PublishedName).Select(view => ((CardViewModel)view.DataContext!).Title).ToList();
