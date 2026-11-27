@@ -418,6 +418,7 @@ public sealed class BoardMeasurement
         // search cleared and the Board put back. Each figure is compared only
         // between builds, never with a budget row.
         const string betweenBuilds = "not a row of d1 6.3; compared only between builds";
+        Require(board.SelectedShelfIndex == 0 && board.Shelves[1].IsRealized, "Published was shown before and is hidden at the search.");
         Time(library, SearchKeystrokePublishedHidden, $"Search keystroke to rendered Board with Published hidden after it was shown (\"{SearchText}\" typed into an empty search, then the render its wait ends in, and layout)", FilterKeystrokeBudget, "filter keystroke", () =>
         {
             board.SearchText = SearchText;
@@ -435,6 +436,7 @@ public sealed class BoardMeasurement
             board.SelectedShelfIndex = 1;
             Settle(window);
         }, informational: true, note: betweenBuilds);
+        Require(board.SelectedShelfIndex == 1, "The switch showed Published.");
         RequireShelf(view, "PublishedShelf", -1, "after a search made while it was hidden");
         _frame(window);
         board.SearchText = string.Empty;
