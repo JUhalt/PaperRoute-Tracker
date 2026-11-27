@@ -196,6 +196,7 @@ public sealed class BoardBudgetTests : StorageCheckedTests
     private void CheckNewFieldsInJson(BoardMeasurementReport report)
     {
         using JsonDocument document = JsonDocument.Parse(report.ToJson());
+        Assert.AreEqual(BoardMeasurementReport.RunUiStatus, document.RootElement.GetProperty("runUiMsStatus").GetString(), "Run UI is labelled not validated (busy-PC design, section 6).");
         string[] names = ["runMs", "notRunMs", "runUiMs", "perfCoreShare", "gcPauseMs", "jitMs"];
         foreach (JsonElement row in document.RootElement.GetProperty("rows").EnumerateArray())
         {

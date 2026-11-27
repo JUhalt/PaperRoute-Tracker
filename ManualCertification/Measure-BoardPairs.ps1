@@ -18,18 +18,23 @@ its own process and writes one JSON file:
 
 There is no quiet gate: the script never waits for the PC to calm down. It
 records the load of every run and replaces a pair afterwards when a run was
-disturbed (other programs left fewer than two processors free), wrote no
-JSON, ended in error, timed out (-RunLimitMinutes), lacks a row or a UI
-figure its partner has, or outlasted its load. That is decided from those
-facts alone, before any timing is read; only "outlasted its load" depends
-on how long the run took, so the summary lists it apart. At most 5 pairs are
-replaced; past that the sitting is void. A sitting is judged only at the
-pairs it planned: one stopped short is "not decided".
+disturbed (as its JSON says: since November 27, 2026, other programs kept
+more than 3 of the 12 processors busy, written as a quarter of the
+processors), wrote no JSON, ended in error,
+timed out (-RunLimitMinutes), lacks a row or a UI figure its partner has, or
+outlasted its load. That is decided from those facts alone, before any
+timing is read; only "outlasted its load" depends on how long the run took,
+so the summary lists it apart. At most 5 pairs are replaced; past that the
+sitting is void. A sitting is judged only at the pairs it planned: one
+stopped short is "not decided".
 
 Then the rule, on UI (the verdict figure): the pairs where after is lower,
 ties counting against, against the exact one-sided 5% count of a fair coin;
-the size floor; Run UI must not point the other way; the watch rows; and,
-report-only, the verdict rule proposed in the method's section 7.
+the size floor; the watch rows; and the verdict rule of the method's section
+7, in force since November 27, 2026. A report-only row is compared only
+between builds and gets no budget verdict. Run UI failed the validation of
+November 27, 2026: it is printed as "Run UI (not validated)", report-only,
+and counts toward no verdict.
 
 -BeforeIdle and -AfterIdle tell each side of a with-and-without comparison
 of preparing Published while the Board is idle which side it is (none,
@@ -84,7 +89,8 @@ param(
     [Parameter(ParameterSetName = 'Run')] [string[]] $ExpectedToRise = @(),
     # A known extra load (Start-BoardTrialLoad.ps1) under every "after" run
     # only: with the same build on both sides, the pairs are the validation's
-    # R and S (or M) runs.
+    # R and S (or M) runs. It lasts what the mode needs: 60 s in a window,
+    # 120 s headless.
     [Parameter(ParameterSetName = 'Run')] [ValidateSet('None', 'Spin', 'Memory')] [string] $Load = 'None',
     # The idle side of each build's runs (given together, or neither): with
     # the same build on both sides, the pairs compare the sides.
@@ -99,6 +105,8 @@ param(
     [Parameter(ParameterSetName = 'Run')] [Parameter(ParameterSetName = 'Analyze')] [string[]] $Pool = @(),
     # Prints the counts the sign test needs for 1 to 40 pairs, and runs nothing.
     [Parameter(Mandatory, ParameterSetName = 'SignTable')] [switch] $SignTable,
+    # Prints how many seconds the load lasts under a run of this mode, and runs nothing.
+    [Parameter(Mandatory, ParameterSetName = 'LoadSeconds')] [ValidateSet('window', 'headless')] [string] $LoadSecondsFor,
     # Return the result as an object (with the summary's lines) instead of printing the lines.
     [switch] $PassThru
 )
@@ -111,6 +119,13 @@ $MinimumPairs = 10
 # At most this many pairs are replaced; one more and the sitting is void.
 $MostReplacements = 5
 $SittingFile = 'sitting.json'
+# How long the load lasts under a run, by mode: a real-window run takes well
+# under a minute; a headless run outlasted 60 s under the memory load on
+# November 27, 2026, so it gets the load script's most, 120 s. The 120 s is
+# a default, not the maintainer's decision; the method lists it as an open
+# point (section 12).
+$LoadSeconds = @{ window = 60; headless = 120 }
+$VerdictHeading = 'Verdict on the budgets (method, section 7, in force since November 27, 2026)'
 $TestName = 'PaperRoute.Desktop.Tests.BoardBudgetTests.EveryRowIsMeasuredOnTheExampleAndTheFiveHundredLibrary'
 # How a headless run is told its idle side (BoardBudgetTests.AfterIdleVariable).
 $AfterIdleVariable = 'PAPERROUTE_TRIAL_AFTER_IDLE'
@@ -354,9 +369,13 @@ function Read-Sitting([string] $folder) {
     return $sitting
 }
 
-# The verdict rule proposed in the method's section 7, for one build of one
-# sitting, report-only: 5 runs that are not disturbed, from at most 10 tries.
-function Get-ProposedLines($sitting, [string] $name, [string] $primary) {
+# The verdict rule of the method's section 7, in force since November 27,
+# 2026, for one build of one sitting: the median UI of 5 runs that are not
+# disturbed, from at most 10 tries, against the budget. A report-only row is
+# compared only between builds: the primary row, when it is one, is printed
+# without a budget verdict, and the other report-only rows are left out. Run
+# UI (not validated) is printed beside, and never read for a verdict.
+function Get-VerdictLines($sitting, [string] $name, [string] $primary) {
     $lines = [Collections.Generic.List[string]]::new()
     $tries = @($sitting.Runs | Where-Object { $_.Name -eq $name -and -not $_.Skipped } | Select-Object -First 10)
     $usable = @($tries | Where-Object { $null -eq $_.Drop } | Select-Object -First 5)
@@ -372,11 +391,17 @@ function Get-ProposedLines($sitting, [string] $name, [string] $primary) {
     if ($multiplier -le 0) { $multiplier = 1 }
     foreach ($id in Get-RowIds $first.Rows) {
         $row = $first.Rows.$id
-        if ((Get-Field $row 'rule') -eq 'report-only' -and $id -ne $primary) { continue }
+        $reportOnly = (Get-Field $row 'rule') -eq 'report-only'
+        if ($reportOnly -and $id -ne $primary) { continue }
         $ui = Get-Median (Get-Values $usable $id 'uiMs')
+        $beside = "Beside it: Run UI (not validated) $(Format-MsUnit (Get-Median (Get-Values $usable $id 'runUiMs'))), fast-core share $(Format-Number (Get-Median (Get-Values $usable $id 'perfCoreShare')) '0.00'), GC $(Format-MsUnit (Get-Median (Get-Values $usable $id 'gcPauseMs'))), compilation $(Format-MsUnit (Get-Median (Get-Values $usable $id 'jitMs')))."
+        if ($reportOnly) {
+            $lines.Add("    ${id}: UI $(Format-MsUnit $ui). Report-only: compared only between builds, never with a budget. $beside")
+            continue
+        }
         $budget = [double] (Get-Field $row 'budgetMs') * $multiplier
         $verdict = if ($null -eq $ui) { 'absent' } elseif ($ui -le $budget) { 'within' } else { 'over' }
-        $lines.Add("    ${id}: UI $(Format-MsUnit $ui) against $(Format-MsUnit $budget), $verdict. Beside it: Run UI $(Format-MsUnit (Get-Median (Get-Values $usable $id 'runUiMs'))), fast-core share $(Format-Number (Get-Median (Get-Values $usable $id 'perfCoreShare')) '0.00'), GC $(Format-MsUnit (Get-Median (Get-Values $usable $id 'gcPauseMs'))), compilation $(Format-MsUnit (Get-Median (Get-Values $usable $id 'jitMs'))).")
+        $lines.Add("    ${id}: UI $(Format-MsUnit $ui) against $(Format-MsUnit $budget), $verdict. $beside")
     }
     return $lines
 }
@@ -419,7 +444,10 @@ function Get-Summary($sittings) {
     $lines = [Collections.Generic.List[string]]::new()
     $lines.Add("Board pairs: $($record.mode) mode, $bName against $aName, order alternating, $($record.pairs) pairs planned per sitting.")
     if ($record.mode -eq 'headless') { $lines.Add('Headless sittings are screening only: the real window decides.') }
-    if ($record.load -ne 'None') { $lines.Add("Load: $($record.load) under every $aName run. The counts compare the PC with and without the added load, not two builds; others busy includes the added load.") }
+    if ($record.load -ne 'None') {
+        $loadFor = Get-Field $record 'loadSeconds'
+        $lines.Add("Load: $($record.load)$(if ($null -ne $loadFor) { " for $loadFor s" }) under every $aName run. The counts compare the PC with and without the added load, not two builds; others busy includes the added load.")
+    }
     $bIdle = [string] (Get-Field $record 'beforeIdle'); $aIdle = [string] (Get-Field $record 'afterIdle')
     if ($bIdle -or $aIdle) { $lines.Add("Idle sides: $bName runs with --after-idle $bIdle, $aName with --after-idle $aIdle. Both wait alike before the first switch (preparation done, a fixed idle period, one frame). With the same build on both sides, the counts compare the sides.") }
     $lines.Add("Primary row (named before the runs): $primary, expected lower. Expected to rise: $(if ($rise.Count) { $rise -join ', ' } else { 'none' }).")
@@ -448,7 +476,7 @@ function Get-Summary($sittings) {
     # Every row of the library held, over the counted pairs.
     $ids = [Collections.Generic.List[string]]::new()
     foreach ($pair in $pairs) { foreach ($id in Get-RowIds $pair.Before.Rows) { if (-not $ids.Contains($id)) { $ids.Add($id) } } }
-    $lines.Add("| row | budget | rule | $bName UI | $aName UI | $aName lower | $bName Run UI | $aName Run UI | $aName Run UI lower |")
+    $lines.Add("| row | budget | rule | $bName UI | $aName UI | $aName lower | $bName Run UI (not validated) | $aName Run UI (not validated) | $aName lower on Run UI (not validated) |")
     $lines.Add('|---|---|---|---|---|---|---|---|---|')
     $befores = @($pairs | ForEach-Object { $_.Before }); $afters = @($pairs | ForEach-Object { $_.After })
     foreach ($id in $ids) {
@@ -463,7 +491,7 @@ function Get-Summary($sittings) {
     # The rule (method, section 5) on the primary row.
     $result = [ordered]@{
         Verdict = ''; Lower = 0; Pairs = $pairs.Count; Need = $null; MedianDifferenceMs = $null; FloorMs = $null
-        RunUiHigher = 0; RunUiPairs = 0; RunUiStop = $false; Replaced = ($sittings | Measure-Object -Property Replaced -Sum).Sum
+        RunUiHigher = 0; RunUiPairs = 0; Replaced =($sittings | Measure-Object -Property Replaced -Sum).Sum
         NotFinished = ($sittings | Measure-Object -Property NotFinished -Sum).Sum
         WatchHigher = @(); WatchBlocking = @(); Void = ($counted.Count -eq 0)
     }
@@ -492,10 +520,11 @@ function Get-Summary($sittings) {
         $coverage = 1 - 2 * ($n + 1) / [Math]::Pow(2, $n)
         $lines.Add("  median ratio $aName / $bName $(Format-Number (Get-Median $ratios) '0.000'), from $(Format-Number $ratios[1] '0.000') to $(Format-Number $ratios[$n - 2] '0.000') (2nd smallest to 2nd largest, $(Format-Number (100 * $coverage) '0.0')%).")
     }
+    # Run UI failed the validation of November 27, 2026 (method, section 6):
+    # its count is printed and decides nothing.
     $runUi = Get-Count $pairs $primary 'runUiMs' 'higher'
-    $result.RunUiHigher = $runUi.Count; $result.RunUiPairs = $runUi.Pairs; $result.RunUiStop = $runUi.Reached
-    $runUiNeed = if ($null -ne $runUi.Need) { "needs $($runUi.Need) to stop" } else { "too few pairs carry it to test" }
-    $lines.Add("  Run UI (report-only): $aName higher in $($runUi.Count) of $($runUi.Pairs) pairs that carry it; $runUiNeed.")
+    $result.RunUiHigher = $runUi.Count; $result.RunUiPairs = $runUi.Pairs
+    $lines.Add("  Run UI (not validated): $aName higher in $($runUi.Count) of $($runUi.Pairs) pairs that carry it. Report-only; it counts toward no verdict.")
 
     $short = @($counted | Where-Object { $_.Incomplete })
     if ($result.Void) {
@@ -509,9 +538,6 @@ function Get-Summary($sittings) {
     } elseif ($null -eq $count.Need) {
         $result.Verdict = 'not decided'
         $lines.Add("Verdict: not decided. $($count.Pairs) pairs; a decision needs at least $MinimumPairs.")
-    } elseif ($runUi.Reached) {
-        $result.Verdict = 'stop'
-        $lines.Add("Verdict: stop. Run UI points the other way ($aName higher in $($runUi.Count) of $($runUi.Pairs)); a person looks before anything is merged.")
     } elseif (-not $count.Reached) {
         $result.Verdict = 'not shown'
         $lines.Add("Verdict: gain not shown. $aName lower in $($count.Count) of $($count.Pairs); $($count.Need) needed.")
@@ -560,12 +586,12 @@ function Get-Summary($sittings) {
     if ($flagged -eq 0) { $lines.Add('  none higher by the count.') }
     $lines.Add('Figures of two sittings or two days are never compared; only the pairs inside a sitting are.')
 
-    # Section 7, report-only, on this sitting.
+    # Section 7, in force since November 27, 2026, on this sitting.
     $lines.Add('')
-    $lines.Add('proposed verdict (report-only)')
-    if ($record.mode -ne 'window') { $lines.Add('  The proposed rule is for real-window runs; these headless lines are for reading only.') }
-    foreach ($name in $bName, $aName) { foreach ($line in Get-ProposedLines $current $name $primary) { $lines.Add($line) } }
-    $lines.Add('  Whether the validation of Run UI passed is not recorded here (method, section 6).')
+    $lines.Add($VerdictHeading)
+    if ($record.mode -ne 'window') { $lines.Add('  The rule is for real-window runs; these headless lines are for reading only.') }
+    foreach ($name in $bName, $aName) { foreach ($line in Get-VerdictLines $current $name $primary) { $lines.Add($line) } }
+    $lines.Add('  Run UI failed the validation of November 27, 2026 (method, section 6): it is not validated and counts toward no verdict.')
 
     $lines.Add('')
     $lines.Add('Runs of this sitting:')
@@ -611,7 +637,7 @@ function Invoke-Run([string] $exeOrTree, [string] $file, [bool] $withLoad, [stri
     try {
         if ($withLoad) {
             # Returns once the load's threads are running (it waits for them).
-            $loadProcess = & (Join-Path $PSScriptRoot 'Start-BoardTrialLoad.ps1') -Kind $Load -Seconds 60
+            $loadProcess = & (Join-Path $PSScriptRoot 'Start-BoardTrialLoad.ps1') -Kind $Load -Seconds $LoadSeconds[$Mode]
             # The load starts 2 s before the measured process.
             [Threading.Thread]::Sleep(2000)
         }
@@ -648,6 +674,10 @@ if ($SignTable) {
     })
 }
 
+if ($PSCmdlet.ParameterSetName -eq 'LoadSeconds') {
+    return $LoadSeconds[$LoadSecondsFor]
+}
+
 if ($PSCmdlet.ParameterSetName -eq 'Run') {
     if ($BeforeName -eq $AfterName) { throw '-BeforeName and -AfterName must differ.' }
     if ([bool] $BeforeIdle -ne [bool] $AfterIdle) { throw '-BeforeIdle and -AfterIdle are given together: each side of an idle comparison times the first switch after idle.' }
@@ -672,7 +702,7 @@ if ($PSCmdlet.ParameterSetName -eq 'Run') {
     }
     if ($RunLimitMinutes -eq 0) { $RunLimitMinutes = if ($Mode -eq 'window') { 3 } else { 15 } }
     if ($Load -ne 'None' -and $Mode -eq 'headless') {
-        Write-Warning 'The load lasts at most 60 s, and a headless run often takes longer (7 to 8 min on a busy day). A run that outlasts its load is dropped, so most loaded runs may be dropped and the sitting may be void.'
+        Write-Warning "The load lasts $($LoadSeconds[$Mode]) s under a headless run. On November 27, 2026 every headless run under the memory load outlasted a 60 s load; on a busy day a headless run took 7 to 8 min. A run that outlasts its load is dropped, so on a busy day most loaded runs may be dropped and the sitting may be void."
     }
     foreach ($id in @($PrimaryRow) + @($ExpectedToRise)) { if ($id -notmatch '^[a-z0-9-]+$') { throw 'Row ids are written like stage-back-to-all.' } }
     if ($ExpectedToRise -contains $PrimaryRow) { throw 'The primary row cannot also be expected to rise.' }
@@ -690,7 +720,8 @@ if ($PSCmdlet.ParameterSetName -eq 'Run') {
 
     $record = [ordered]@{
         mode = $Mode; beforeName = $BeforeName; afterName = $AfterName; pairs = $Pairs; primaryRow = $PrimaryRow
-        expectedToRise = @($ExpectedToRise); load = $Load; beforeIdle = [string] $BeforeIdle; afterIdle = [string] $AfterIdle
+        expectedToRise = @($ExpectedToRise); load = $Load; loadSeconds = $(if ($Load -ne 'None') { $LoadSeconds[$Mode] } else { $null })
+        beforeIdle = [string] $BeforeIdle; afterIdle = [string] $AfterIdle
         startedAt = [DateTime]::Now.ToString('yyyy-MM-dd HH:mm'); runs = @()
     }
     Save-Record $Out $record

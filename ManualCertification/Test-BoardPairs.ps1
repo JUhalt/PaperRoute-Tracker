@@ -8,7 +8,8 @@ Measure-BoardPairs.ps1 -Analyze (nothing is run or built), and compares its
 verdict with what the rule of the measurement method gives by hand
 (docs/design/Board-Trial-Measurement-Method.md, section 5). It also checks the
 sign test's counts against the method's table, and that a summary never
-copies the machine name or names the folder. Exit code 1 on any mismatch.
+copies the machine name or names the folder, and reads the load script's
+limits without starting it. Exit code 1 on any mismatch.
 .EXAMPLE
 pwsh -NoProfile -File ./ManualCertification/Test-BoardPairs.ps1
 #>
@@ -37,7 +38,8 @@ function Assert-That([bool] $condition, [string] $what) {
 }
 
 # One run's JSON, shaped like the trial's report: the example library's rows
-# (never held) and the 500 library's. A run told an idle side ($idle, a
+# (never held) and the 500 library's. $primaryRule is the rule of today's
+# primary row. A run told an idle side ($idle, a
 # hashtable: Side, and Skipped, the reason preparation stopped or null) has
 # the real idle rows in place of today's first switch, with the primary row
 # $idlePrimary: the two preparation rows (about 0 on the side none, more on
@@ -47,7 +49,7 @@ function Assert-That([bool] $condition, [string] $what) {
 # optional keys: JsonSide (the side the JSON names, when it is not Side),
 # NoRecord (no idlePreparation) and TodayRows (today's rows with the record).
 $idlePrimary = 'first-switch-published-after-idle'
-function New-RunJson($ui, $runUi, [double] $watchUi, [double] $riseUi, $conditions, [bool] $noPrimary = $false, $idle = $null) {
+function New-RunJson($ui, $runUi, [double] $watchUi, [double] $riseUi, $conditions, [bool] $noPrimary = $false, $idle = $null, [string] $primaryRule = 'enforced') {
     $row = {
         param($library, $id, $budget, $rule, $uiMs, $runUiMs)
         [ordered]@{
@@ -71,7 +73,7 @@ function New-RunJson($ui, $runUi, [double] $watchUi, [double] $riseUi, $conditio
     } else {
         $rows.Add((& $row 'example' $primary 250 'report-only' 999 900))
         $rows.Add((& $row '500' $rise 100 'waiting: over under rows of N too' $riseUi $null))
-        if (-not $noPrimary) { $rows.Add((& $row '500' $primary 250 'enforced' $ui $runUi)) }
+        if (-not $noPrimary) { $rows.Add((& $row '500' $primary 250 $primaryRule $ui $runUi)) }
     }
     $rows.Add((& $row '500' $watch 250 'enforced' $watchUi $watchUi))
     $json = [ordered]@{
@@ -116,10 +118,11 @@ function New-Conditions($disturbed = $false, $others = 6.0) {
 # before the second run) and BIdle/AIdle (the run's idle side: New-RunJson's
 # $idle). A sitting given idle sides names first-switch-published-after-idle
 # as its primary row and no row expected to rise, as the method's command
-# line does. Each sitting starts a minute after the last, as real ones do, so
-# no two canned sittings have the same record.
+# line does. $primaryRule is today's primary row's rule in every run. Each
+# sitting starts a minute after the last, as real ones do, so no two canned
+# sittings have the same record.
 $script:sittingMinute = 0
-function New-Sitting([string] $name, [int] $planned, [object[]] $pairs, [string] $beforeIdle = '', [string] $afterIdle = '') {
+function New-Sitting([string] $name, [int] $planned, [object[]] $pairs, [string] $beforeIdle = '', [string] $afterIdle = '', [string] $primaryRule = 'enforced') {
     $folder = Join-Path $WorkFolder $name
     New-Item -ItemType Directory -Force -Path $folder | Out-Null
     $runs = [Collections.Generic.List[object]]::new()
@@ -143,7 +146,7 @@ function New-Sitting([string] $name, [int] $planned, [object[]] $pairs, [string]
                 continue
             }
             $idle = if ($p.ContainsKey("${key}Idle")) { $p["${key}Idle"] } else { $null }
-            New-RunJson $ui $runUi $watchUi 90 $conditions ($p.ContainsKey("${key}NoPrimary")) $idle | Set-Content -LiteralPath (Join-Path $folder $file) -Encoding utf8NoBOM
+            New-RunJson $ui $runUi $watchUi 90 $conditions ($p.ContainsKey("${key}NoPrimary")) $idle $primaryRule | Set-Content -LiteralPath (Join-Path $folder $file) -Encoding utf8NoBOM
             $runs.Add([ordered]@{ pair = $pair; order = $order; name = $side; file = $file; exit = 1; seconds = 30
                 loadOutlasted = $p.ContainsKey("${key}Outlasted"); timedOut = $p.ContainsKey("${key}TimedOut") })
         }
@@ -193,7 +196,15 @@ Assert-That ([Math]::Round($twenty.P, 3) -eq 0.021 -and [Math]::Round($twenty.PB
 $r = Invoke-Check '9 of 10 lower' @(New-Sitting 'nine-of-ten' 10 (New-Pairs 10 -higher 7))
 Assert-That ($r.Verdict -eq 'gain shown' -and $r.Lower -eq 9 -and $r.Pairs -eq 10 -and $r.Need -eq 9) "gain shown, 9 of 10, needs 9 (got $($r.Verdict), $($r.Lower) of $($r.Pairs), needs $($r.Need))"
 Assert-That ($r.MedianDifferenceMs -eq 30) "median difference 30 ms (got $($r.MedianDifferenceMs))"
-Assert-That (@($r.Lines | Where-Object { $_ -like '*proposed verdict (report-only)*' }).Count -eq 1) 'the proposed-verdict heading is printed'
+# The verdict rule of section 7 is in force since November 27, 2026: its
+# heading says so, and no line calls it proposed or report-only.
+Assert-That (@($r.Lines | Where-Object { $_ -eq 'Verdict on the budgets (method, section 7, in force since November 27, 2026)' }).Count -eq 1) 'the verdict heading says the rule is in force'
+Assert-That (@($r.Lines | Where-Object { $_ -match '(?i)proposed' }).Count -eq 0) 'no line calls the verdict rule proposed'
+# An enforced primary row gets its budget verdict, for each build.
+Assert-That (@($r.Lines | Where-Object { $_ -like "    ${primary}: UI * ms against 250 ms, *. Beside it: *" }).Count -eq 2) 'an enforced primary row is judged against its budget'
+# Run UI failed the validation: every line that names it says it is not validated.
+$runUiLines = @($r.Lines | Where-Object { $_ -like '*Run UI*' })
+Assert-That ($runUiLines.Count -ge 3 -and @($runUiLines | Where-Object { $_ -notlike '*not validated*' }).Count -eq 0) "every line that names Run UI says it is not validated ($(@($runUiLines | Where-Object { $_ -notlike '*not validated*' }).Count) do not)"
 
 # 3. 8 of 10 lower: one short of 9.
 $eight = New-Sitting 'eight-of-ten' 10 (New-Pairs 10 -higher 3, 7)
@@ -241,10 +252,15 @@ $r = Invoke-Check 'under the size floor' @(New-Sitting 'floor' 10 @(for ($p = 1;
 Assert-That ($r.Verdict -eq 'not shown' -and $r.Lower -eq 10 -and $r.MedianDifferenceMs -eq 1) "not shown under the floor (got $($r.Verdict), $($r.Lower), $($r.MedianDifferenceMs) ms)"
 
 # 8. Run UI the other way: UI lower in 9 of 10, Run UI higher in all 10.
+# Run UI failed the validation of November 27, 2026, so it is never part of
+# a verdict: the gain is shown, and the Run UI count is printed beside it.
 $pairs = New-Pairs 10 -higher 7
 foreach ($p in $pairs) { $p['BRun'] = 100; $p['ARun'] = 120 }
 $r = Invoke-Check 'Run UI the other way' @(New-Sitting 'run-ui-other-way' 10 $pairs)
-Assert-That ($r.Verdict -eq 'stop' -and $r.RunUiHigher -eq 10) "stop (got $($r.Verdict), Run UI higher in $($r.RunUiHigher))"
+Assert-That ($r.Verdict -eq 'gain shown' -and $r.RunUiHigher -eq 10 -and $r.RunUiPairs -eq 10) "gain shown, Run UI higher in 10 of 10 decides nothing (got $($r.Verdict), Run UI higher in $($r.RunUiHigher) of $($r.RunUiPairs))"
+Assert-That (@($r.Lines | Where-Object { $_ -eq '  Run UI (not validated): after higher in 10 of 10 pairs that carry it. Report-only; it counts toward no verdict.' }).Count -eq 1) 'the Run UI count is printed, not validated, counting toward no verdict'
+# Run UI far over the budget, UI within it: the budget verdict reads UI alone.
+Assert-That (@($r.Lines | Where-Object { $_ -like "    ${primary}: UI * against 250 ms, within. Beside it: Run UI (not validated) 120 ms,*" }).Count -eq 1) 'the budget verdict reads UI, not Run UI'
 
 # 9. A watch row higher in 10 of 10: a new sitting for it; higher again in a
 # second sitting: it blocks. The row expected to rise never blocks.
@@ -326,13 +342,45 @@ $three = New-Sitting 'pool-3' 10 (New-Pairs 10 -higher 1, 4)
 $r = Invoke-Check 'three sittings pooled' @($three, $two, $one)
 Assert-That (@($r.Lines | Where-Object { $_ -like '*3 sittings are pooled*6.1% at three*past the 5%*' }).Count -eq 1) 'pooled sittings carry the chance of a false pass'
 
+# 20. A report-only primary row (as for #404's search with Published
+# hidden) is compared only between builds: the pairs rule judges it, and the
+# verdict lines of section 7 give its UI with no budget verdict.
+$r = Invoke-Check 'a report-only primary row' @(New-Sitting 'report-only-primary' 10 (New-Pairs 10 -higher 7) -primaryRule 'report-only')
+Assert-That ($r.Verdict -eq 'gain shown' -and $r.Lower -eq 9) "the pairs rule still judges it: gain shown, 9 of 10 (got $($r.Verdict), $($r.Lower))"
+Assert-That (@($r.Lines | Where-Object { $_ -like "    ${primary}: UI * against *" }).Count -eq 0) 'a report-only primary row gets no budget verdict'
+Assert-That (@($r.Lines | Where-Object { $_ -like "    ${primary}: UI * ms. Report-only: compared only between builds, never with a budget. Beside it: Run UI (not validated) *" }).Count -eq 2) 'its line says it is compared only between builds, for each build'
+Assert-That (@($r.Lines | Where-Object { $_ -like "    ${watch}: UI * ms against 250 ms, *" }).Count -eq 2) 'the enforced rows beside it keep their budget verdicts'
+
+# 21. The load lasts what the mode needs: 60 s under a real-window run, 120 s
+# under a headless run (every headless run under the memory load outlasted
+# 60 s on November 27, 2026). Nothing is run.
+Write-Host 'The load length by mode'
+foreach ($case in @(@{ Mode = 'window'; Seconds = 60 }, @{ Mode = 'headless'; Seconds = 120 })) {
+    $seconds = $null
+    try { $seconds = & $pairsScript -LoadSecondsFor $case.Mode } catch { $seconds = "refused: $($_.Exception.Message)" }
+    Assert-That ($seconds -eq $case.Seconds) "the load lasts $($case.Seconds) s under a $($case.Mode) run (got $seconds)"
+}
+
+# 22. The load (Start-BoardTrialLoad.ps1), read without starting it: -Seconds
+# goes up to 120, long enough for a headless run under the memory load, and
+# no further, so the load still ends by itself soon; -Threads runs from 1 to
+# 6, and is 6, the method's number, unless set.
+Write-Host 'The load script'
+$loadCommand = Get-Command (Join-Path $PSScriptRoot 'Start-BoardTrialLoad.ps1')
+$rangeOf = { param($name) @($loadCommand.Parameters[$name].Attributes | Where-Object { $_ -is [Management.Automation.ValidateRangeAttribute] }) }
+$secondsRange = @(& $rangeOf 'Seconds'); $threadsRange = @(& $rangeOf 'Threads')
+Assert-That ($secondsRange.Count -eq 1 -and [int] $secondsRange[0].MinRange -eq 1 -and [int] $secondsRange[0].MaxRange -eq 120) "-Seconds runs from 1 to 120 (got $(@($secondsRange | ForEach-Object { "$($_.MinRange) to $($_.MaxRange)" }) -join ', '))"
+Assert-That ($threadsRange.Count -eq 1 -and [int] $threadsRange[0].MinRange -eq 1 -and [int] $threadsRange[0].MaxRange -eq 6) "-Threads runs from 1 to 6 (got $(@($threadsRange | ForEach-Object { "$($_.MinRange) to $($_.MaxRange)" }) -join ', '))"
+$threadsDefault = @($loadCommand.ScriptBlock.Ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'Threads' } | ForEach-Object { if ($null -ne $_.DefaultValue) { $_.DefaultValue.Extent.Text } })
+Assert-That ($threadsDefault.Count -eq 1 -and $threadsDefault[0] -eq '6') "-Threads is 6 unless set (got $($threadsDefault -join ', '))"
+
 # Pairs of a sitting of idle sides: before told before, after told after.
 function Set-IdleSides([object[]] $pairs, [string] $before, [string] $after) {
     foreach ($p in $pairs) { $p['BIdle'] = @{ Side = $before; Skipped = $null }; $p['AIdle'] = @{ Side = $after; Skipped = $null } }
     return , $pairs
 }
 
-# 20. Idle sides: the same build with --after-idle none before and prepared
+# 23. Idle sides: the same build with --after-idle none before and prepared
 # after, runs shaped as the measurement writes them (the idle rows in place
 # of today's first switch; the side none's record with no step and 21 card
 # views made at the switch). Pair 2's after run stopped its preparation (a
@@ -354,19 +402,19 @@ foreach ($id in 'prepare-published-idle', 'prepare-published-longest-step') {
     Assert-That (@($r.Lines | Where-Object { $_ -like "  $id (idle preparation, before the switch): after higher in 10 of 10 pairs. Reported; it does not block." }).Count -eq 1) "$id is reported and does not block"
 }
 
-# 20b. A second sitting of the same sides, pooled: the preparation rows are
+# 23b. A second sitting of the same sides, pooled: the preparation rows are
 # higher again, and still do not block.
 $again = New-Sitting 'idle-sides-again' 10 (Set-IdleSides (New-Pairs 10 -higher 4) 'none' 'prepared') 'none' 'prepared'
 $r = Invoke-Check 'idle sides, two sittings pooled' @($again, $sided)
 Assert-That (@($r.WatchHigher).Count -eq 0 -and @($r.WatchBlocking).Count -eq 0) "pooled, no watch row is flagged or blocks (got blocking: $(@($r.WatchBlocking) -join ', '))"
 
-# 21. A sitting of other idle sides is not pooled with it.
+# 24. A sitting of other idle sides is not pooled with it.
 $other = New-Sitting 'idle-sides-half' 10 (Set-IdleSides (New-Pairs 10) 'none' 'half') 'none' 'half'
 $refused = $false
 try { & $pairsScript -Analyze $sided -Pool $other -PassThru | Out-Null } catch { $refused = $_.Exception.Message -like '*differs in afterIdle*' }
 Assert-That $refused 'a sitting of other idle sides is not pooled'
 
-# 22. A run whose JSON does not carry the side its build was given: pair 3's
+# 25. A run whose JSON does not carry the side its build was given: pair 3's
 # after run names the side none (the option did not reach the test host),
 # pair 5's before run has no idlePreparation. Both are dropped with their
 # reason and their pairs replaced; 10 pairs kept, 9 lower.
@@ -378,7 +426,7 @@ Assert-That ($r.Verdict -eq 'gain shown' -and $r.Lower -eq 9 -and $r.Pairs -eq 1
 Assert-That (@($r.Lines | Where-Object { $_ -like '*dropped: pair 3 after: told the idle side prepared, but its JSON says the side none*' }).Count -eq 1) 'a run naming another side is dropped with its reason'
 Assert-That (@($r.Lines | Where-Object { $_ -like '*dropped: pair 5 before: told the idle side none, but its JSON has no idlePreparation*' }).Count -eq 1) 'a sided run with no idle record is dropped with its reason'
 
-# 23. Every after run names the side none while the record says prepared:
+# 26. Every after run names the side none while the record says prepared:
 # each is dropped, so the sitting is void, never judged as none against
 # prepared.
 $pairs = Set-IdleSides (New-Pairs 10) 'none' 'prepared'
@@ -386,7 +434,7 @@ foreach ($p in $pairs) { $p['AIdle'] = @{ Side = 'prepared'; Skipped = $null; Js
 $r = Invoke-Check 'idle sides, every after run of the side none' @(New-Sitting 'idle-all-none' 10 $pairs 'none' 'prepared')
 Assert-That ($r.Verdict -eq 'void') "void (got $($r.Verdict))"
 
-# 24. A sitting of no idle sides with a run that carries an idle record: it
+# 27. A sitting of no idle sides with a run that carries an idle record: it
 # is dropped with its reason; 10 pairs kept, 9 lower.
 $pairs = New-Pairs 11 -higher 7
 $pairs[3]['BIdle'] = @{ Side = 'prepared'; Skipped = $null; TodayRows = $true }
@@ -394,7 +442,7 @@ $r = Invoke-Check 'no idle sides, a run with an idle record' @(New-Sitting 'unsi
 Assert-That ($r.Verdict -eq 'gain shown' -and $r.Lower -eq 9 -and $r.Pairs -eq 10 -and $r.Replaced -eq 1) "gain shown, 9 of 10, 1 replaced (got $($r.Verdict), $($r.Lower) of $($r.Pairs), $($r.Replaced) replaced)"
 Assert-That (@($r.Lines | Where-Object { $_ -like '*dropped: pair 4 before: told no idle side, but its JSON has idlePreparation (side prepared)*' }).Count -eq 1) 'an unsided run with an idle record is dropped with its reason'
 
-# 25. Run mode refuses two equal idle sides before it runs or checks
+# 28. Run mode refuses two equal idle sides before it runs or checks
 # anything else.
 $refused = $false
 try {

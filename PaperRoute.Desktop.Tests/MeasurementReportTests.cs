@@ -23,7 +23,7 @@ public sealed class MeasurementReportTests
         LoadReadAfterMs = 398,
         OthersBusyProcessors = 9.8,
         NotRunShare = 0.4123,
-        Disturbed = false,
+        Disturbed = true,
     };
 
     [TestMethod]
@@ -70,13 +70,42 @@ public sealed class MeasurementReportTests
         Assert.IsFalse(conditions.TryGetProperty("machineName", out _), "The conditions name no PC.");
 
         string table = report.ToTable();
-        StringAssert.Contains(table, "| Wall ms | UI ms | Run UI ms | Budget ms |");
+        StringAssert.Contains(table, "| Wall ms | UI ms | Run UI ms (not validated) | Budget ms |");
         StringAssert.Contains(table, "| 12 | 12 | absent | 250 (UI thread) | within | enforced |");
         StringAssert.Contains(table, "| 404 | 404 | 148 | 250 (UI thread) | over | enforced |");
         StringAssert.Contains(table, "Load unknown.");
 
         using JsonDocument none = JsonDocument.Parse(Canned([], conditions: null).ToJson());
         Assert.AreEqual(JsonValueKind.Null, none.RootElement.GetProperty("conditions").ValueKind, "A run without conditions writes null.");
+    }
+
+    // Run UI failed the validation of November 27, 2026 (busy-PC design,
+    // section 6): the figure stays, report-only, labelled "not validated" in
+    // the JSON and in the table, with or without conditions.
+    [TestMethod]
+    public void RunUiIsLabelledNotValidated()
+    {
+        Assert.AreEqual("not validated", BoardMeasurementReport.RunUiStatus);
+        MeasuredRow row = new("500", "stage-back-to-all", "Stage filter back to All stages", 404, 404, 250, "UI thread",
+            RunMs: 151, NotRunMs: 253, RunUiMs: 148.26, GcPauseMs: 12, JitMs: 0);
+        foreach (BoardMeasurementReport report in new[] { Canned([row], s_busy), Canned([row], conditions: null) })
+        {
+            using JsonDocument document = JsonDocument.Parse(report.ToJson());
+            Assert.AreEqual("not validated", document.RootElement.GetProperty("runUiMsStatus").GetString());
+            Assert.AreEqual(148.3, document.RootElement.GetProperty("rows")[0].GetProperty("runUiMs").GetDouble(), "The figure itself stays.");
+            Assert.IsFalse(document.RootElement.GetProperty("rows")[0].TryGetProperty("runUiMsStatus", out _), "The label is the run's, once.");
+
+            string table = report.ToTable();
+            StringAssert.Contains(table, "| Run UI ms (not validated) |");
+            Assert.IsFalse(table.Contains("| Run UI ms |", StringComparison.Ordinal), "No heading gives Run UI without its label.");
+            StringAssert.Contains(table, "| 404 | 404 | 148 | 250 (UI thread) | over | enforced |");
+        }
+
+        // Still report-only: the verdict and the failures read UI alone.
+        BoardMeasurementReport low = Canned([row with { RunUiMs = 1 }], s_busy);
+        BoardMeasurementReport high = Canned([row with { RunUiMs = 5000 }], s_busy);
+        Assert.AreEqual(low.VerdictFor(low.Rows[0]), high.VerdictFor(high.Rows[0]));
+        Assert.AreEqual(low.FailureMessage(), high.FailureMessage());
     }
 
     [TestMethod]
@@ -98,11 +127,15 @@ public sealed class MeasurementReportTests
         Assert.AreEqual(0.04, conditions.GetProperty("stealProcessors").GetDouble());
         Assert.AreEqual(9.8, conditions.GetProperty("othersBusyProcessors").GetDouble());
         Assert.AreEqual(0.412, conditions.GetProperty("notRunShare").GetDouble());
-        Assert.IsFalse(conditions.GetProperty("disturbed").GetBoolean());
+        Assert.IsTrue(conditions.GetProperty("disturbed").GetBoolean());
 
         StringAssert.Contains(report.ToTable(),
             "Report-only: thread clock cycles. Other programs kept 9.8 of 12 processors busy on average (10.9 with this one). " +
-            "The interface thread was not running for 41% of the Wall of the rows that do not wait. Not disturbed.");
+            "The interface thread was not running for 41% of the Wall of the rows that do not wait. " +
+            "Disturbed: other programs kept more than 3 of 12 processors busy.");
+
+        using JsonDocument quiet = JsonDocument.Parse(Canned([], s_busy with { Disturbed = false }).ToJson());
+        Assert.IsFalse(quiet.RootElement.GetProperty("conditions").GetProperty("disturbed").GetBoolean(), "The flag is written as given.");
     }
 
     // The message of the method's section 8, word for word, from the failed
@@ -225,7 +258,7 @@ public sealed class MeasurementReportTests
         }).ToArray();
 
         BoardMeasurementReport before = Canned(plain, conditions: null, waiting: ["first-switch-published"]);
-        BoardMeasurementReport after = Canned(measured, s_busy with { Disturbed = true }, waiting: ["first-switch-published"]);
+        BoardMeasurementReport after = Canned(measured, s_busy, waiting: ["first-switch-published"]);
         CollectionAssert.AreEqual(plain.Select(before.VerdictFor).ToArray(), measured.Select(after.VerdictFor).ToArray());
         CollectionAssert.AreEqual(plain.Select(before.RuleFor).ToArray(), measured.Select(after.RuleFor).ToArray());
         CollectionAssert.AreEqual(new[] { "stage-back-to-all" }, before.Failures().Select(row => row.Id).ToArray());
@@ -248,7 +281,7 @@ public sealed class MeasurementReportTests
             new MeasuredRow("500", BoardMeasurement.SwitchToPublishedAfterHiddenChange, "Switch after", 5000, 5000, BoardMeasurement.PageSwitchBudget, "page switch", Informational: true),
             new MeasuredRow("example", BoardMeasurement.SearchKeystrokePublishedHidden, "Search, Published hidden", 5000, 5000, BoardMeasurement.FilterKeystrokeBudget, "filter keystroke", Informational: true),
         ];
-        foreach (BoardMeasurementReport report in new[] { Canned(rows, s_busy), Canned(rows, null, multiplier: 2), Canned(rows, s_busy with { Disturbed = true }) })
+        foreach (BoardMeasurementReport report in new[] { Canned(rows, s_busy with { Disturbed = false }), Canned(rows, null, multiplier: 2), Canned(rows, s_busy) })
         {
             Assert.IsEmpty(report.Failures());
             Assert.AreEqual(string.Empty, report.FailureMessage());
