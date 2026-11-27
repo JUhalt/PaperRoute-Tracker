@@ -76,18 +76,21 @@ function Read-Picture([string] $Path) {
     return [pscustomobject] @{ Width = $width; Height = $height; Pixels = $pixels }
 }
 
+# Names are compared with case, as Linux file names are: a picture renamed
+# only in case is one picture gone and one new, and two Linux pictures whose
+# names differ only in case stay two. (A @{} table ignores case.)
 function Get-Pictures([string] $Folder) {
     $root = (Resolve-Path -LiteralPath $Folder).Path
-    $pictures = @{}
+    $pictures = [System.Collections.Generic.Dictionary[string, string]]::new([StringComparer]::Ordinal)
     foreach ($file in Get-ChildItem -LiteralPath $root -Recurse -File -Filter '*.png') {
         $pictures[[IO.Path]::GetRelativePath($root, $file.FullName).Replace('\', '/')] = $file.FullName
     }
-    return $pictures
+    return , $pictures
 }
 
 $old = Get-Pictures $Before
 $new = Get-Pictures $After
-$names = @(@($old.Keys) + @($new.Keys) | Sort-Object -Unique)
+$names = @(@($old.Keys) + @($new.Keys) | Sort-Object -Unique -CaseSensitive)
 $same = 0
 $rows = @(foreach ($name in $names) {
     if (-not $new.ContainsKey($name)) {
