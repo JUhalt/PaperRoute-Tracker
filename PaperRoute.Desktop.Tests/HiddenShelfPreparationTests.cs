@@ -41,15 +41,20 @@ namespace PaperRoute.Desktop.Tests;
 //   refills no row, and leaves the tree and Tab walk of a twin that had the
 //   same change unprepared.
 // - T7: once an accessibility client has read the shelf host's children, or
-//   walked up from a card, preparation is skipped and raises no event.
+//   walked up from a card, preparation is skipped and raises no event, also
+//   when the client reads them only after preparation or between two steps;
+//   a client that read the Board only above the shelf host hears nothing
+//   while preparation runs.
 // - T8: the idle rules: nothing runs at startup, while keys come closer than
 //   0.4 s, while a pointer button is held, a list or a card menu is open, the
 //   Board is hidden or the window minimized, nor twice without a frame; a
 //   refresh waits for 2 s after the last render.
 // - T10: the idle timer itself prepares Published and stops; closing the
 //   window midway is safe; a show and hide between two ticks stops it.
-// - T6: with preparation done the Board's accessibility tree and Tab order
-//   are the checked-in ones, and after the switch they are the twin's.
+// - T6: with preparation done, or half done, the Board's accessibility tree
+//   and Tab order are the checked-in ones, and after the switch they are the
+//   twin's; the keyboard stays where it was through every step, and Tab and
+//   Shift+Tab then reach what they reach on the twin.
 // - T11: an empty Published, a short one, and the first cards arriving on a
 //   prepared empty one.
 [TestClass]
@@ -891,10 +896,12 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
                 Assert.IsNotNull(ControlAutomationPeer.CreatePeerForElement(card).GetParent(), "The card's peer has a parent.");
             }
 
-            Assert.IsNotNull(ControlAutomationPeer.FromElement(border), $"After the {read} read, Published's Border has a peer.");
+            AutomationPeer borderPeer = ControlAutomationPeer.FromElement(border) ?? throw new AssertFailedException($"After the {read} read, Published's Border has a peer.");
             AutomationPeer hostPeer = ControlAutomationPeer.CreatePeerForElement(host);
             int changes = 0;
+            int borderChanges = 0;
             hostPeer.ChildrenChanged += (_, _) => changes++;
+            borderPeer.PropertyChanged += (_, _) => borderChanges++;
 
             HiddenShelfPreparer preparer = Still(board);
             int start = CardView.MadeCount;
@@ -904,6 +911,7 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
             Assert.AreEqual(0, made, "No card view was made.");
             Assert.AreEqual(HiddenShelfPreparer.AutomationPeerReason, preparer.SkippedReason, "Skipped for an automation peer.");
             Assert.AreEqual(0, changes, "No ChildrenChanged was raised.");
+            Assert.AreEqual(0, borderChanges, "No PropertyChanged was raised on the Border's peer.");
             Assert.IsFalse(preparer.IsPrepared, "Not prepared.");
             Assert.IsFalse(board.Board.Shelves[1].IsRealized, "Published was not touched.");
 
@@ -925,6 +933,159 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
             Switch(board, 1);
             AssertOnlyShown(board, 1, "switched after the skip");
             return new List<string> { $"{read}: steps run {ran}, views made {made}, skipped reason {preparer.SkippedReason}, ChildrenChanged during RunToEnd 0; a flip by hand raised {byHand}" };
+        }));
+    }
+
+    // T7: a client reads the shelves only after Published was prepared. The
+    // next change makes a refresh due; it is skipped for the peer, raises
+    // nothing on the host's or the Border's peer, and touches nothing: the
+    // switch then brings the rows current, as on the base.
+    [TestMethod]
+    public void T7_APeerMadeAfterPreparationStopsTheNextRefresh()
+    {
+        using DiskLibrarySession disk = OpenFiveHundred("five-hundred");
+        Write(Headless.Run(() =>
+        {
+            MemorySession session = WholeLibrary(disk);
+            using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
+            HiddenShelfPreparer preparer = Still(board);
+            preparer.RunToEnd();
+            Assert.IsTrue(preparer.IsPrepared, "Published is prepared before any client reads the Board.");
+            Panel host = board.Find<Panel>("ShelfHost");
+            Border border = (Border)(board.Shelf(PublishedName).Parent ?? throw new AssertFailedException("Published has no Border."));
+            Assert.IsNull(ControlAutomationPeer.FromElement(border), "No peer for Published's Border yet.");
+            AutomationPeer hostPeer = ControlAutomationPeer.CreatePeerForElement(host);
+            hostPeer.GetChildren();
+            AutomationPeer borderPeer = ControlAutomationPeer.FromElement(border) ?? throw new AssertFailedException("Read, the shelf host's children include a peer for Published's Border.");
+
+            ShelfViewModel published = board.Board.Shelves[1];
+            board.Board.SearchText = published.Cards[40].Title;
+            board.Board.Render();
+            Settle(board);
+            Assert.IsFalse(preparer.IsPrepared, "The search makes a refresh due.");
+            var events = new List<string>();
+            hostPeer.ChildrenChanged += (_, _) => events.Add("ChildrenChanged on the shelf host");
+            hostPeer.PropertyChanged += (_, e) => events.Add($"PropertyChanged {e.Property} on the shelf host");
+            borderPeer.ChildrenChanged += (_, _) => events.Add("ChildrenChanged on the Border");
+            borderPeer.PropertyChanged += (_, e) => events.Add($"PropertyChanged {e.Property} on the Border");
+            int steps = preparer.StepsRun;
+            int start = CardView.MadeCount;
+            int ran = preparer.RunToEnd();
+            Assert.AreEqual(0, ran, "No refresh step ran.");
+            Assert.AreEqual(steps, preparer.StepsRun, "No step was counted.");
+            Assert.AreEqual(0, CardView.MadeCount - start, "No card view was made.");
+            Assert.AreEqual(HiddenShelfPreparer.AutomationPeerReason, preparer.SkippedReason, "Skipped for the automation peer.");
+            Assert.IsTrue(published.RowsAreStale, "The rows still wait for the switch: the refresh touched nothing.");
+            DrawFrame();
+            Settle(board);
+            Assert.AreEqual(string.Empty, string.Join("; ", events), "No automation event was raised by the skipped refresh.");
+            AssertOnlyShown(board, 0, "after the skipped refresh");
+
+            Switch(board, 1);
+            AssertOnlyShown(board, 1, "switched after the skipped refresh");
+            AssertDrawnRight(board, "switched after the skipped refresh");
+            return new List<string> { $"peer made after preparation: the refresh after a search ran {ran} steps, skipped reason {preparer.SkippedReason}, no event" };
+        }));
+    }
+
+    // T7: a client that has read the Board from the window down to the shelf
+    // host's own peer, but not the host's children, holds no peer for
+    // Published's Border. Preparation runs, and no peer the client holds
+    // raises ChildrenChanged or PropertyChanged during the steps or at the
+    // next frame.
+    [TestMethod]
+    public void T7_AClientAboveTheShelfHostHearsNothing()
+    {
+        using DiskLibrarySession session = OpenFiveHundred("five-hundred");
+        Write(Headless.Run(() =>
+        {
+            using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
+            Panel host = board.Find<Panel>("ShelfHost");
+            Border border = (Border)(board.Shelf(PublishedName).Parent ?? throw new AssertFailedException("Published has no Border."));
+            var peers = new List<AutomationPeer>();
+            void Walk(AutomationPeer peer)
+            {
+                peers.Add(peer);
+                if (peer is ControlAutomationPeer control && ReferenceEquals(control.Owner, host))
+                {
+                    return;
+                }
+
+                foreach (AutomationPeer child in peer.GetChildren())
+                {
+                    Walk(child);
+                }
+            }
+
+            Walk(ControlAutomationPeer.CreatePeerForElement(board.Window));
+            Assert.IsTrue(peers.Any(peer => peer is ControlAutomationPeer control && ReferenceEquals(control.Owner, host)), "The walk reached the shelf host's peer.");
+            Assert.IsNull(ControlAutomationPeer.FromElement(border), "No peer for Published's Border.");
+            var events = new List<string>();
+            foreach (AutomationPeer peer in peers)
+            {
+                string who = ((peer as ControlAutomationPeer)?.Owner.GetType().Name ?? peer.GetType().Name) + "/" + peer.GetAutomationId();
+                peer.ChildrenChanged += (_, _) => events.Add("ChildrenChanged " + who);
+                peer.PropertyChanged += (_, e) => events.Add("PropertyChanged " + e.Property + " " + who);
+            }
+
+            HiddenShelfPreparer preparer = Still(board);
+            int ran = preparer.RunToEnd();
+            string during = string.Join("; ", events);
+            events.Clear();
+            DrawFrame();
+            Settle(board);
+            string after = string.Join("; ", events);
+            Assert.IsNull(preparer.SkippedReason, "Not skipped.");
+            Assert.IsTrue(preparer.IsPrepared, "Prepared.");
+            Assert.IsNull(ControlAutomationPeer.FromElement(border), "Still no peer for Published's Border.");
+            Assert.AreEqual(string.Empty, during, "No automation event while the steps ran.");
+            Assert.AreEqual(string.Empty, after, "No automation event at the next frame.");
+            return new List<string> { $"a client above the shelf host: {ran} steps, {peers.Count} peers watched, no event" };
+        }));
+    }
+
+    // T7: a client reads the whole tree between two ladder steps: it lists
+    // nothing of Published, the next step is skipped for the peer the read
+    // made, and nothing is raised.
+    [TestMethod]
+    public void T7_AClientBetweenTwoStepsSeesNothingAndStopsTheRest()
+    {
+        using DiskLibrarySession session = OpenFiveHundred("five-hundred");
+        Write(Headless.Run(() =>
+        {
+            using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
+            HiddenShelfPreparer preparer = Still(board);
+            Assert.IsTrue(preparer.RunStep(), "W ran.");
+            Assert.IsTrue(preparer.RunStep(), "The first layout step ran.");
+            ShelfView published = board.Shelf(PublishedName);
+            Assert.IsNotEmpty(published.GetVisualDescendants().OfType<CardView>().ToList(), "The first layout step made card views.");
+            var peers = new List<AutomationPeer>();
+            void Walk(AutomationPeer peer)
+            {
+                peers.Add(peer);
+                foreach (AutomationPeer child in peer.GetChildren())
+                {
+                    Walk(child);
+                }
+            }
+
+            Walk(ControlAutomationPeer.CreatePeerForElement(board.Window));
+            int inside = peers.OfType<ControlAutomationPeer>().Count(peer => peer.Owner == published || peer.Owner.FindAncestorOfType<ShelfView>() == published);
+            Assert.AreEqual(0, inside, "Nothing of Published is listed.");
+            var events = new List<string>();
+            foreach (AutomationPeer peer in peers)
+            {
+                peer.ChildrenChanged += (_, _) => events.Add("ChildrenChanged");
+                peer.PropertyChanged += (_, e) => events.Add("PropertyChanged " + e.Property);
+            }
+
+            int ran = preparer.RunToEnd();
+            Assert.AreEqual(0, ran, "No more steps.");
+            Assert.AreEqual(HiddenShelfPreparer.AutomationPeerReason, preparer.SkippedReason, "Skipped for the peer the read made.");
+            DrawFrame();
+            Settle(board);
+            Assert.AreEqual(string.Empty, string.Join("; ", events), "Nothing raised.");
+            return new List<string> { $"a client between two steps: {peers.Count} peers, none of Published; skipped, nothing raised" };
         }));
     }
 
@@ -1143,7 +1304,17 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
         });
         AccessibilityTreeTests.Compare(expected, prepared);
 
-        (string twinTree, string preparedTree) = Headless.Run(() =>
+        // Half prepared (W and two capped layout steps): still the
+        // checked-in tree.
+        string half = Headless.Run(() =>
+        {
+            using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
+            HalfPrepare(board);
+            return AccessibilityTreeTests.AccessibilityTree.Describe(board, limit);
+        });
+        AccessibilityTreeTests.Compare(expected, half);
+
+        (string twinTree, string preparedTree, string halfTree) = Headless.Run(() =>
         {
             string twinTree;
             using (BoardWindow twin = BoardWindow.Show(session, ThemeVariant.Light))
@@ -1152,16 +1323,152 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
                 twinTree = AccessibilityTreeTests.AccessibilityTree.Describe(twin, limit);
             }
 
-            using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
-            Still(board).RunToEnd();
-            Assert.IsTrue(board.View.Preparer.IsPrepared, "Published is prepared.");
-            Switch(board, 1);
-            return (twinTree, AccessibilityTreeTests.AccessibilityTree.Describe(board, limit));
+            string preparedTree;
+            using (BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light))
+            {
+                Still(board).RunToEnd();
+                Assert.IsTrue(board.View.Preparer.IsPrepared, "Published is prepared.");
+                Switch(board, 1);
+                preparedTree = AccessibilityTreeTests.AccessibilityTree.Describe(board, limit);
+            }
+
+            using BoardWindow halfBoard = BoardWindow.Show(session, ThemeVariant.Light);
+            HalfPrepare(halfBoard);
+            Switch(halfBoard, 1);
+            return (twinTree, preparedTree, AccessibilityTreeTests.AccessibilityTree.Describe(halfBoard, limit));
         });
 
         AssertSameTree(twinTree, preparedTree, "After the switch");
-        return [$"{expected}: equal with preparation done; after the switch equal to the twin's ({preparedTree.Split('\n').Length} lines)"];
+        AssertSameTree(twinTree, halfTree, "After the switch from half prepared");
+        return [$"{expected}: equal with preparation done and half done; after the switch, prepared or half prepared, equal to the twin's ({preparedTree.Split('\n').Length} lines)"];
     }
+
+    // W and the first two capped layout steps.
+    private static void HalfPrepare(BoardWindow board)
+    {
+        HiddenShelfPreparer preparer = Still(board);
+        for (int step = 0; step < 3; step++)
+        {
+            Assert.IsTrue(preparer.RunStep(), $"Half prepared: step {step + 1} ran.");
+        }
+
+        Assert.IsFalse(preparer.IsPrepared, "Half prepared: not yet prepared.");
+    }
+
+    // T6: the keyboard on the search box, a shelf tab, a Pipeline card's
+    // title or View route (the first card's, or the last card's), or in the
+    // open stage list, stays there through every step: no step moves it or
+    // raises a focus event, the list stays open, and then six Tab and three
+    // Shift+Tab presses reach what they reach on a twin Board that was not
+    // prepared.
+    [TestMethod]
+    [DataRow("search")]
+    [DataRow("tab")]
+    [DataRow("title")]
+    [DataRow("route")]
+    [DataRow("last card")]
+    [DataRow("stage list")]
+    public void T6_FocusAndTheNextTabAreKeptThroughTheSteps(string where)
+    {
+        using DiskLibrarySession session = OpenExample("example");
+        Write(Headless.Run(() =>
+        {
+            string twin = KeysAfterSteps(session, where, prepare: false);
+            string prepared = KeysAfterSteps(session, where, prepare: true);
+            Assert.AreEqual(twin, prepared, $"{where}: the keys after preparation reach what they reach on the twin.");
+            return new List<string> { $"{where}: {prepared}" };
+        }));
+    }
+
+    // Puts the keyboard where, prepares Published step by step (or not),
+    // checks the keyboard stayed and no focus event was raised, then returns
+    // where Tab and Shift+Tab take it.
+    private static string KeysAfterSteps(ILibrarySession session, string where, bool prepare)
+    {
+        using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
+        Control target;
+        switch (where)
+        {
+            case "search":
+                target = board.Find<TextBox>("SearchBox");
+                break;
+            case "tab":
+                target = board.Tabs()[0];
+                break;
+            case "title":
+                target = board.Cards("PipelineShelf")[0].FindControl<Button>("Title") ?? throw new AssertFailedException("The card has no Title.");
+                break;
+            case "route":
+                target = board.Cards("PipelineShelf")[0].FindControl<Button>("ViewRoute") ?? throw new AssertFailedException("The card has no View route.");
+                break;
+            case "last card":
+                target = board.Cards("PipelineShelf")[^1].FindControl<Button>("ViewRoute") ?? throw new AssertFailedException("The card has no View route.");
+                break;
+            case "stage list":
+                board.Find<ComboBox>("StageFilter").Focus(NavigationMethod.Tab);
+                board.Board.IsStageListOpen = true;
+                Settle(board);
+                target = board.Focused() as Control ?? throw new AssertFailedException("Nothing is focused in the open list.");
+                break;
+            default:
+                throw new AssertFailedException($"No place called {where}.");
+        }
+
+        if (where != "stage list")
+        {
+            Assert.IsTrue(target.Focus(NavigationMethod.Tab), $"{where}: focused.");
+            Settle(board);
+        }
+
+        Assert.AreSame(target, board.Focused(), $"{where}: the target holds the keyboard.");
+        var focusEvents = new List<string>();
+        EventHandler<Avalonia.Interactivity.RoutedEventArgs> onFocus = (_, e) => focusEvents.Add(e.RoutedEvent!.Name + " " + e.Source);
+        board.Window.AddHandler(InputElement.GotFocusEvent, onFocus, Avalonia.Interactivity.RoutingStrategies.Bubble, handledEventsToo: true);
+        board.Window.AddHandler(InputElement.LostFocusEvent, onFocus, Avalonia.Interactivity.RoutingStrategies.Bubble, handledEventsToo: true);
+        if (prepare)
+        {
+            HiddenShelfPreparer preparer = Still(board);
+            int steps = 0;
+            while (preparer.RunStep())
+            {
+                steps++;
+                Assert.AreSame(target, board.Focused(), $"{where}: step {steps} left the keyboard where it was.");
+                Assert.IsTrue(target.IsFocused, $"{where}: step {steps}: the target is still focused.");
+            }
+
+            Assert.IsTrue(preparer.IsPrepared, $"{where}: prepared ({preparer.SkippedReason}).");
+            DrawFrame();
+            Settle(board);
+        }
+
+        Assert.AreSame(target, board.Focused(), $"{where}: the keyboard is where it was.");
+        Assert.AreEqual(string.Empty, string.Join("; ", focusEvents), $"{where}: no focus event.");
+        if (where == "stage list")
+        {
+            Assert.IsTrue(board.Board.IsStageListOpen, "The stage list is still open.");
+            return "stage list kept open and focused";
+        }
+
+        var reached = new List<string>();
+        for (int press = 0; press < 6; press++)
+        {
+            board.Press(Key.Tab);
+            reached.Add(DescribeFocus(board.Focused()));
+        }
+
+        for (int press = 0; press < 3; press++)
+        {
+            board.Press(Key.Tab, RawInputModifiers.Shift);
+            reached.Add("Shift+Tab: " + DescribeFocus(board.Focused()));
+        }
+
+        return string.Join(" > ", reached);
+    }
+
+    private static string DescribeFocus(object? focused) =>
+        focused is Control control
+            ? $"{control.GetType().Name}[{control.Name}|{Avalonia.Automation.AutomationProperties.GetAutomationId(control)}|{(control.DataContext as CardViewModel)?.Title}|{control.FindAncestorOfType<ShelfView>()?.Name}]"
+            : "(none)";
 
     // A prepared Board's tree and Tab walk (AccessibilityTree.Describe)
     // equal a twin's, or the first line that differs is named.
