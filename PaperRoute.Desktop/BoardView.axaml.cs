@@ -28,6 +28,7 @@ public partial class BoardView : UserControl
     public BoardView()
     {
         InitializeComponent();
+        Preparer = new HiddenShelfPreparer(this);
 
         // Esc or a click away keeps the item the arrows reached, as today (ArrowChoiceKeeper).
         ArrowChoiceKeeper.Attach(StageFilter);
@@ -56,6 +57,10 @@ public partial class BoardView : UserControl
         };
 
     public bool IsNarrow => BoardBody.Classes.Contains(NarrowClass);
+
+    // Prepares the hidden Published shelf before its first switch. It runs
+    // only when called: nothing turns it on yet.
+    public HiddenShelfPreparer Preparer { get; }
 
     // Ctrl+F (Form1.vb ProcessCmdKey, :2553-2560): the search box takes the
     // keyboard with its text selected. False while the welcome hides it.
