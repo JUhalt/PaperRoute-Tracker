@@ -77,6 +77,6 @@ Stage/OrcidImport	68	plan 8.7	planned	5c Stage panel: ORCID Public-Profile Impor
 Stage/CrossrefMetadata	69	plan 8.7	planned	5c Stage panel: DOI & Crossref Metadata (69), in the Overview's metadata section
 Stage/ImportReview	40,42	plan 8.7	planned	5c Stage panel: Import BibTeX / RIS (40), Map Spreadsheet Columns (42), one import review panel in Import & Export
 Modal/DeleteManuscript	38	plan 8.8	planned	5d: Delete Manuscript (38) stays modal, a destructive confirmation
-Modal/RestoreConfirmation	60	plan 8.19	planned	5c and 5d: Confirm Restore (60) and the preview box at Form1.vb:4227 become one Restore confirmation that stays modal	Today a Visual Basic InputBox (Form1.vb:4240), not a Form, so the WinForms catalog has no key for it.
+Modal/RestoreConfirmation	60	plan 8.19	planned	5c and 5d: Confirm Restore (60) and the preview box (the map's Form1.vb:4227, today at 4317) become one Restore confirmation that stays modal	Today a Visual Basic InputBox (Form1.vb:4330), not a Form, so the WinForms catalog has no key for it.
 Modal/StartupFailure	57	plan 8.6	planned	5d: PaperRoute could not start (57) stays modal
 Modal/UnexpectedError	56	plan 8.6	planned	5d: PaperRoute ran into a problem (56) stays modal (proposed, question 3)
