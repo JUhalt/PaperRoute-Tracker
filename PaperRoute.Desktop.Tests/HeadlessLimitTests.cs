@@ -137,7 +137,7 @@ public sealed partial class HeadlessLimitTests
 
         string renamed = note.Replace("`HeadlessReportsLightAndNoContrast`", "`HeadlessReportsLightAndNoContrastAtAll`", StringComparison.Ordinal);
         Assert.AreEqual(
-            "Row 4 names HeadlessReportsLightAndNoContrastAtAll as its proof, which is not a test method here.",
+            "Row 4 names HeadlessReportsLightAndNoContrastAtAll as its proof, which is not a test method that CI runs here.",
             string.Join(Environment.NewLine, NoteProblems(renamed, tests, files)),
             "A note naming a proof that does not exist.");
 
@@ -146,6 +146,12 @@ public sealed partial class HeadlessLimitTests
             "Row 4 names no test and is not a statement.",
             string.Join(Environment.NewLine, NoteProblems(bare, tests, files)),
             "A note naming its proof without a code span.");
+
+        string manual = note.Replace("`HeadlessRendersAtScaleOneUnlessSet`", $"`{nameof(BoardBudgetTests.WriteLargeLibraryForMeasurement)}`", StringComparison.Ordinal);
+        Assert.AreEqual(
+            $"Row 2 names {nameof(BoardBudgetTests.WriteLargeLibraryForMeasurement)} as its proof, which is not a test method that CI runs here.",
+            string.Join(Environment.NewLine, NoteProblems(manual, tests, files)),
+            "A note naming as its proof a test in the Manual category, which CI never runs.");
 
         List<(string Name, string Text)> unlinked = [.. files, ("Legibility/Unlinked.cs", "namespace PaperRoute.Desktop.Tests.Legibility;" + Environment.NewLine)];
         Assert.AreEqual(
@@ -181,7 +187,7 @@ public sealed partial class HeadlessLimitTests
 
             foreach (string name in names.Where(name => !tests.Contains(name)))
             {
-                problems.Add($"Row {row} names {name} as its proof, which is not a test method here.");
+                problems.Add($"Row {row} names {name} as its proof, which is not a test method that CI runs here.");
             }
         }
 
@@ -235,10 +241,18 @@ public sealed partial class HeadlessLimitTests
         CodeSpan().Matches(cell).Select(match => match.Groups[1].Value)
             .Where(span => TestShape().IsMatch(span));
 
+    // The test methods CI runs: a method or class marked [Ignore], or in the
+    // Manual category that build.yml's filter leaves out, proves nothing.
     private static IReadOnlySet<string> TestMethodNames() =>
         typeof(HeadlessLimitTests).Assembly.GetTypes()
             .SelectMany(type => type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
             .Where(method => method.GetCustomAttributes<TestMethodAttribute>(inherit: true).Any())
+            .Where(method => !method.IsDefined(typeof(IgnoreAttribute), inherit: true)
+                && !method.DeclaringType!.IsDefined(typeof(IgnoreAttribute), inherit: true))
+            .Where(method => !method.GetCustomAttributes<TestCategoryBaseAttribute>(inherit: true)
+                .Concat(method.DeclaringType!.GetCustomAttributes<TestCategoryBaseAttribute>(inherit: true))
+                .SelectMany(category => category.TestCategories)
+                .Contains(BoardBudgetTests.ManualCategory, StringComparer.Ordinal))
             .Select(method => method.Name)
             .ToHashSet(StringComparer.Ordinal);
 
