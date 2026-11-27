@@ -116,9 +116,9 @@ public sealed partial class ShelfViewModel : ObservableObject
             }
 
             _isShown = value;
-            if (value && _rowsStale)
+            if (value)
             {
-                SyncRows();
+                SyncStaleRows();
             }
         }
     }
@@ -126,6 +126,17 @@ public sealed partial class ShelfViewModel : ObservableObject
     // True while a hidden shelf's rows wait for it to be shown: Rows then
     // hold the cards of an earlier render, and only Cards is current.
     public bool RowsAreStale => _rowsStale;
+
+    // Brings rows that wait for the shelf to be shown to its cards now, as
+    // showing the shelf does; nothing when they are current. The Board's
+    // idle preparation of a hidden shelf calls it too (HiddenShelfPreparer).
+    public void SyncStaleRows()
+    {
+        if (_rowsStale)
+        {
+            SyncRows();
+        }
+    }
 
     private bool _isShown;
     private bool _rowsStale;
