@@ -223,7 +223,7 @@ Each sitting's folder holds `sitting.json` (the runs, in order, with their exit 
 
 - UI is the smaller of Wall and the longest gap of a 1 ms timer at Input priority, the probe's tail included. Each row is timed once, in a fixed order.
 - The scroll row takes its longest Wall and its longest UI as two separate maxima over its steps, and the row's `wallMs` is the longest Wall.
-- Rows of N is the default. The search keystroke, the first switch, Stage to Submitted and the scroll wait for rows of N, and the headless test fails on enforced rows only.
+- Rows of N is the only shelf layout; the every-card build was removed. The search keystroke, the first switch, Stage to Submitted and the scroll wait for rows of N, and the headless test fails on enforced rows only.
 - The Windows Forms tests build the same failure text as the trial's first line, except that the trial's line now ends with a full stop.
 
 **Measured on the development PC while the method was designed** (probes, not part of the tests):
