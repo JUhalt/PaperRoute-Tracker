@@ -101,7 +101,9 @@ $MostReplacements = 5
 $SittingFile = 'sitting.json'
 # How long the load lasts under a run, by mode: a real-window run takes well
 # under a minute; a headless run outlasted 60 s under the memory load on
-# November 27, 2026, so it gets the load script's most, 120 s.
+# November 27, 2026, so it gets the load script's most, 120 s. The 120 s is
+# a default, not the maintainer's decision; the method lists it as an open
+# point (section 12).
 $LoadSeconds = @{ window = 60; headless = 120 }
 $VerdictHeading = 'Verdict on the budgets (method, section 7, in force since November 27, 2026)'
 $TestName = 'PaperRoute.Desktop.Tests.BoardBudgetTests.EveryRowIsMeasuredOnTheExampleAndTheFiveHundredLibrary'
