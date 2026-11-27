@@ -58,7 +58,7 @@ public sealed class RunConditionsTests
         Assert.AreEqual(0.05, busy.StealProcessors!.Value, 1e-9);
         Assert.AreEqual(8.0, busy.LoadReadBeforeMs!.Value);
         Assert.AreEqual(9.0, busy.LoadReadAfterMs!.Value);
-        Assert.IsFalse(busy.Disturbed!.Value, "8 of 12 busy leaves 4 free.");
+        Assert.IsTrue(busy.Disturbed!.Value, "8 of 12 is more than a quarter of the processors.");
 
         // This process counted more than the machine (the two clocks differ):
         // others' load is 0, not negative.
@@ -66,9 +66,9 @@ public sealed class RunConditionsTests
         Assert.AreEqual(0, own.OthersBusyProcessors!.Value);
         Assert.IsNull(own.StealProcessors);
 
-        // The line: more than processors - 2 busy with other programs.
-        Assert.IsTrue(RunConditions.Compute(clock, before, new(3_000, 9, 122.2, null, 12), [], 12).Disturbed!.Value, "10.1 of 12 leaves fewer than two free.");
-        Assert.IsFalse(RunConditions.Compute(clock, before, new(3_000, 9, 122, null, 12), [], 12).Disturbed!.Value, "10 of 12 leaves two free.");
+        // The line itself: TheDisturbedLineIsAQuarterOfTheProcessors.
+        Assert.IsTrue(RunConditions.Compute(clock, before, new(3_000, 9, 122.2, null, 12), [], 12).Disturbed!.Value, "10.1 of 12 is disturbed.");
+        Assert.IsTrue(RunConditions.Compute(clock, before, new(3_000, 9, 122, null, 12), [], 12).Disturbed!.Value, "10 of 12 is disturbed.");
 
         // No load reading: every load figure null, and so is disturbed.
         MeasurementConditions unknown = RunConditions.Compute(clock, before, new(3_000, null, null, null, 12), [], 12);
@@ -76,6 +76,45 @@ public sealed class RunConditionsTests
         Assert.IsNull(unknown.OthersBusyProcessors);
         Assert.IsNull(unknown.Disturbed);
         Assert.IsNull(unknown.LoadReadAfterMs);
+    }
+
+    // The line the maintainer set on November 27, 2026 (busy-PC design,
+    // section 2): a run is disturbed when other programs keep more than a
+    // quarter of the processors busy, 3 of 12 and 1 of 4. Just under the line
+    // and on it is not disturbed; just over it is. An absent reading stays
+    // "not disturbed, load unknown".
+    [TestMethod]
+    public void TheDisturbedLineIsAQuarterOfTheProcessors()
+    {
+        ThreadClock clock = ThreadClock.Absent(ThreadClock.NoClockReason);
+        LoadReading before = new(1_000, 8, BusySeconds: 100, StealSeconds: null, ProcessSeconds: 10);
+
+        // Two seconds, this process 1 processor's worth: the machine's busy
+        // seconds that leave others at the given load.
+        MeasurementConditions WithOthers(double others, int processors) =>
+            RunConditions.Compute(clock, before, new(3_000, 9, 100 + 2 * (others + 1), null, 12), [], processors);
+
+        Assert.AreEqual(3.0, MeasurementConditions.DisturbedLine(12));
+        Assert.AreEqual(1.0, MeasurementConditions.DisturbedLine(4));
+        foreach ((int processors, double line) in new[] { (12, 3.0), (4, 1.0) })
+        {
+            MeasurementConditions under = WithOthers(line - 0.01, processors);
+            MeasurementConditions on = WithOthers(line, processors);
+            MeasurementConditions over = WithOthers(line + 0.01, processors);
+            Assert.AreEqual(line - 0.01, under.OthersBusyProcessors!.Value, 1e-9);
+            Assert.AreEqual(line + 0.01, over.OthersBusyProcessors!.Value, 1e-9);
+            string which = string.Create(CultureInfo.InvariantCulture, $"of {processors} processors, the line at {line:0}");
+            Assert.IsFalse(under.Disturbed!.Value, $"Just under the line is not disturbed ({which}).");
+            Assert.IsFalse(on.Disturbed!.Value, $"On the line is not over it ({which}).");
+            Assert.IsTrue(over.Disturbed!.Value, $"Just over the line is disturbed ({which}).");
+            StringAssert.EndsWith(BoardMeasurementReport.DescribeConditions(under, processors), "Not disturbed.");
+            StringAssert.EndsWith(BoardMeasurementReport.DescribeConditions(over, processors),
+                string.Create(CultureInfo.InvariantCulture, $"Disturbed: other programs kept more than {line:0} of {processors} processors busy."));
+
+            MeasurementConditions unknown = RunConditions.Compute(clock, before, new(3_000, null, null, null, 12), [], processors);
+            Assert.IsNull(unknown.Disturbed, "No load reading, no line to hold it to.");
+            StringAssert.EndsWith(BoardMeasurementReport.DescribeConditions(unknown, processors), "Load unknown.");
+        }
     }
 
     [TestMethod]

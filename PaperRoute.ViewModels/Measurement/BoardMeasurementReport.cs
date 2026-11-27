@@ -91,9 +91,17 @@ public sealed record MeasurementConditions
     // Time not running over Wall, summed over the rows that do not wait.
     public double? NotRunShare { get; init; }
 
-    // Other programs left fewer than two processors free on average; null
-    // when the load could not be read, which counts as not disturbed.
+    // Other programs kept more processors busy on average than the
+    // disturbed line; null when the load could not be read, which counts as
+    // not disturbed.
     public bool? Disturbed { get; init; }
+
+    // The disturbed line (busy-PC design, section 2): other programs keep
+    // more than a quarter of the processors busy, 3 of 12 on the development
+    // PC and 1 of 4 on a CI runner. The maintainer re-set it on November 27,
+    // 2026, after the validation, for later sittings only. Until then a run
+    // was disturbed when other programs left fewer than two processors free.
+    public static double DisturbedLine(int processors) => processors / 4.0;
 }
 
 // The numbers of one measurement run, headless (the budget tests) or in a
@@ -432,7 +440,7 @@ public sealed class BoardMeasurementReport
 
         text.Append(conditions.Disturbed switch
         {
-            true => "Disturbed: other programs left fewer than two processors free.",
+            true => string.Create(CultureInfo.InvariantCulture, $"Disturbed: other programs kept more than {MeasurementConditions.DisturbedLine(processors):0.##} of {processors} processors busy."),
             false => "Not disturbed.",
             null => "Load unknown.",
         });
