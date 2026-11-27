@@ -17,8 +17,9 @@ public sealed class KeyboardHelperTests : StorageCheckedTests
 {
     // The bold names in the guide's "Keyboard shortcuts" section that name a
     // button, a window, a field or a symbol, not a key. Every other bold name
-    // there must parse; a name listed here that the section no longer holds
-    // fails, so the list cannot hide a key.
+    // there must parse. A name listed here that the section no longer holds
+    // fails, so the list cannot go stale; but a name on it is never parsed, so
+    // list only names that are not keys.
     private static readonly string[] s_notKeys =
     [
         "Cancel", "Close", "Fill Blanks from Crossref", "Check for Publications", "Stop",
