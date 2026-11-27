@@ -18,12 +18,13 @@ Built (the pull request that adds this document):
 Built after it:
 
 - The two report-only rows at the end of the measured sequence, `search-keystroke-published-hidden` and `switch-published-after-hidden-change` (section 3, last bullet), in `BoardMeasurement.cs`, with their checks in `PaperRoute.Desktop.Tests/BoardBudgetTests.cs` and `MeasurementReportTests.cs`. They are compared only between builds.
+- The rows for preparing Published while the Board is idle and the way a run is told its side (section 13), in `BoardMeasurement.cs`, `TrialOptions.cs` and the pairs script, with their checks in `BoardBudgetTests.cs`, `MeasureModeTests.cs` and `Test-BoardPairs.ps1`.
 
 Not built yet:
 
 - The validation of section 6 has **not been run**. Until it has, Run UI is not validated on any PC.
 - The pairs for #404's search with Published hidden. Its row, `search-keystroke-published-hidden`, and the switch after it are built (section 3), but no sitting has been run with them.
-- The rows for preparing Published while the Board is idle.
+- For idle preparation: the window that times from the first frame to "prepared" with the idle timer on, and the other rows the idle design lists (a key meeting a step, a switch during a step, after a maximise or a scaling change, a library of several thousand, memory). No sitting has been run (section 13).
 
 On Linux the thread clock and the load readings first ran in CI, and they gave readings (section 11, "Shown by CI").
 
@@ -203,6 +204,7 @@ The Windows Forms timing tests (`ResponsivenessBudgetTests.vb`) end their two fa
 - `-Mode window -Before <exe> -After <exe> -Library <test library>`: each run is the trial's `--measure` mode in a real window. Run only on the development PC by the maintainer or the coordinating session.
 - `-Mode headless -Before <tree> -After <tree>`: each run is the headless budget test alone, `dotnet test --no-build` in a built tree.
 - `-Out <new folder>`, `-Pairs`, `-PrimaryRow <row id>`, `-ExpectedToRise <row ids>`, `-BeforeName`, `-AfterName`, `-Load None|Spin|Memory`.
+- `-BeforeIdle` and `-AfterIdle`, given together: each build's side of an idle-preparation comparison (section 13).
 - `-RunLimitMinutes`: a run still going after this long is stopped and its pair replaced ("timed out"). By default 15 min headless and 3 min in a window, far above any budget, so the limit is not a timing.
 - `-Pool <earlier sittings' folders>` counts earlier sittings of the same change, mode and primary row together with this one. A void sitting is listed but adds no pairs. A sitting given twice, or a copy of one, is refused.
 - `-Analyze <a sitting's folder>` reads a sitting again without running anything, for a later re-analysis or a check.
@@ -279,10 +281,48 @@ These follow the method's own recommendations and were taken as defaults while t
 
 1. **Run UI counts toward no verdict and no merge.** It is a diagnosis: a row whose Run UI is over budget is over on its own work.
 2. **A run is disturbed** when other programs leave fewer than two of the PC's logical processors free on average. A starting value; it may be re-set once from the validation's R runs, for later sittings only.
-3. **When Published is prepared while the Board is idle**, the switch after it gets a new id (`first-switch-published-after-idle`), so today's `first-switch-published` keeps its meaning. Nothing is built for it yet.
+3. **When Published is prepared while the Board is idle**, the switch after it gets a new id (`first-switch-published-after-idle`), so today's `first-switch-published` keeps its meaning. The maintainer chose this on November 27, 2026; it is built (section 13).
 4. **The verdict rule of section 7 stays a proposal**, printed under "proposed verdict (report-only)".
 
 Open points, left to the maintainer (nothing in the code decides them):
 
 - **Pooling past two sittings.** Three sittings of 10 pairs, or two of 20, take the chance of a false pass past 5% (section 5). Options: cap pooling at two sittings of 10 pairs; decide only at a total number of pairs fixed in advance; or use a stricter count for pooled looks. Until then the summary prints the figures.
 - **The load and long headless runs.** A loaded headless run that outlasts the 60 s load is dropped, and on a busy day every one does (section 6).
+- **The slow-step limit in a measurement run.** A measurement run keeps the 120 ms limit of idle preparation, so headless runs on the 500 library stop before Published is prepared and do not time the first switch after idle (section 13). Raising the limit for measurement runs would change what is measured; dropping the runs that stopped favours the faster moments of the PC.
+
+## 13 Preparing Published while the Board is idle
+
+The Board can prepare the hidden Published shelf in a few short steps while nobody touches it, so that its first switch makes no card view (the maintainer's decision of November 21, 2026). Preparation is off unless a test or a run turns it on; the trial app does not turn it on yet. These rows show what it does to the first switch and what each step costs.
+
+**How a run is told its side.** A run is one side of a with-and-without comparison, or neither:
+
+- In a real window: `PaperRoute.Desktop.exe --snapshot-from <library> --measure <file>.json --after-idle <side>`. `--after-idle` is accepted only with `--measure`.
+- Headless: the budget test reads the variable `PAPERROUTE_TRIAL_AFTER_IDLE`.
+- The side is one of `none` (no step), `width` (the width step only), `half` (the width step and the first two layout steps) or `prepared` (every step, until the Board says Published is prepared).
+- With no side, the run is exactly as before: the same rows in the same order, `first-switch-published` among them, and no `idlePreparation` in the JSON.
+
+**The rows of a run told a side.** They take the place of `first-switch-published` and its paint, after the startup rows, so every row after them keeps its work and its order, and the last two rows stay last. A first switch happens once per window, so a run has either these rows or `first-switch-published`, never both. Each is report-only, and none can fail a test by its time.
+
+| Row | What it times | Budget, for scale |
+|---|---|---|
+| `prepare-published-idle` | the preparation from its start to done, a frame after each step; Wall and Ran are its cost, UI the longest wait a key would meet | filter keystroke, 50 |
+| `prepare-published-longest-step` | its longest step: Wall the longest step's, UI and every busy-PC figure the longest-UI step's. Its note lists each step: W (width), R (rows) or L (layout, with its height cap on the ladder), Wall, UI and card views made. This is the row to judge in a real window | UI thread, 250 |
+| `first-switch-published-after-idle` | the first switch after the wait below; its note gives the steps before it, the card views ready in the hidden shelf and the card views made at the switch | page switch, 100 |
+| `first-switch-published-after-idle-paint` | its frame | UI thread, 250 |
+
+The measurement drives the preparation itself, step by step, with the Board's idle timer off, so no step can run inside another row; the warm-startup row's note says how many ran inside it (none). Then every side waits the same way: preparation done (at once on the side `none`), a fixed idle period of 1 s, one frame. Only then is the switch timed. On the side `none` the two preparation rows read about 0, with 0 steps.
+
+When preparation stops (a step that took, or is predicted to take, more than 120 ms, or an accessibility client that has read the Board), the switch is not the one the row is about. It is made untimed, so the rows after it do the same work, and the two switch rows are not written. The JSON's `idlePreparation` gives, per library, the side, the steps run, the card views they made, whether Published was prepared at the switch, why preparation stopped (`skippedReason`, or `null`), whether the switch was timed, and the card views it made.
+
+**Running a comparison.** The same build on both sides, so the pairs compare the preparation and nothing else; the wait before the switch is the same on both sides, so warm-up during the wait falls on both alike:
+
+```
+pwsh -NoProfile -File ./ManualCertification/Measure-BoardPairs.ps1 -Mode window -Before <exe> -After <same exe> -Library <test library> -BeforeIdle none -AfterIdle prepared -BeforeName without -AfterName with -Out <new folder> -Pairs 10 -PrimaryRow first-switch-published-after-idle
+pwsh -NoProfile -File ./ManualCertification/Measure-BoardPairs.ps1 -Mode headless -Before <tree> -After <same tree> -BeforeIdle none -AfterIdle prepared -BeforeName without -AfterName with -Out <new folder> -Pairs 10 -PrimaryRow first-switch-published-after-idle
+```
+
+The primary row is `first-switch-published-after-idle`, expected lower on the side `prepared`. The other rows after it are watch rows. A run whose preparation stopped lacks the primary row: it is dropped and its pair replaced (section 5, step 3), and the summary lists these drops apart, because whether a step is slow is a timing and slower runs are dropped more often. Pooling refuses a sitting of other sides.
+
+**Compared only between the two sides of a sitting.** These rows are never compared with `first-switch-published`, with a budget row, with another sitting or with another day. Only the pairs inside one sitting are.
+
+**Counts, which do not depend on the load** (headless, the development PC, November 27, 2026). With the preparer's clock standing still, so that no step reads as slow, the 500 library's first switch after idle made 21 card views on the side `none` and 0 on the side `prepared`, where the five steps had made those 21. With the real clock, headless, preparation on the 500 library stopped as a slow step after the width step and two layout steps (6 card views made) in every run of one sitting, while other programs kept under 2 of 12 processors busy. Headless card views cost several times what they cost in a real window, so this says nothing yet about a real window; until a real-window sitting has run, the headless sitting on the 500 library is void on the side `prepared`. Whether a measurement run may raise the 120 ms limit is left to the maintainer: it would change what is measured.
