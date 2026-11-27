@@ -63,7 +63,7 @@ Per row, in `rows[]` of the JSON. A figure that could not be read is JSON `null`
 | `jitMs` | ms | change in `JitInfo.GetCompilationTime(currentThread: true)` | as `gcPauseMs` |
 | `waits` | true | written only for a row that waits by design: warm startup (the load runs off the thread), every paint row, the scroll row in a real window, `process-start-to-board` | never written as false |
 
-Per run, beside `rows`: `runUiMsStatus`, the text `"not validated"`, written since November 27, 2026. The report's table heads the column "Run UI ms (not validated)", and the pairs summary writes "Run UI (not validated)".
+Per run, beside `rows`: `runUiMsStatus`, the text `"not validated"`, written by builds from the change that labels Run UI on. Earlier files, those of November 27, 2026 included, do not carry it, and no reader needs it: the pairs script labels Run UI by itself. The report's table heads the column "Run UI ms (not validated)", and the pairs summary writes "Run UI (not validated)".
 
 Per run, in a `conditions` object. Headless, it covers the 500 library's measurement only.
 
