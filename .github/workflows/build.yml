@@ -298,13 +298,15 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-  # The same trial on Ubuntu: the first sign of whether the Avalonia
-  # interface builds and its headless tests pass off Windows (the trial's
-  # question 5). The build must succeed. The tests are report-only: those
-  # that do not pass yet are listed in the step summary and raise a warning,
-  # as findings for the trial's report, and do not fail a pull request.
+  # The same trial on Ubuntu, judged as the Windows job is: the build must
+  # succeed, and every trial test must pass, none skipped or inconclusive;
+  # tests marked Manual are run by hand only. The timing rows are held here
+  # too, with the same GitHub Actions multiplier. The tests that do not pass
+  # are listed in the step summary before the job fails, so a failure on
+  # Ubuntu alone can be read without the artifact. Until 2026-11-27 this job
+  # only reported (the trial's question 5).
   trial-linux:
-    name: Avalonia Board trial (Linux, report-only)
+    name: Avalonia Board trial (Linux)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -358,12 +360,10 @@ jobs:
               "Not passing on Linux ($($names.Count)):" >> $env:GITHUB_STEP_SUMMARY
               '' >> $env:GITHUB_STEP_SUMMARY
               $names | ForEach-Object { "- ``$_``" } >> $env:GITHUB_STEP_SUMMARY
-              "::warning title=Board trial on Linux (report-only)::$notPassed of $total trial tests do not pass on Linux yet. They are listed in this job's summary and in the PaperRoute-trial-linux-results artifact."
+              "::error title=Board trial on Linux::$notPassed of $total trial tests do not pass on Linux. They are listed in this job's summary and in the PaperRoute-trial-linux-results artifact."
+              throw 'Trial tests must all pass, with none skipped or inconclusive.'
           }
-          # Report-only: the result has been judged above. Left as it is, the
-          # runner would end this step with dotnet test's exit code and fail
-          # the job.
-          $global:LASTEXITCODE = 0
+          if ($exitCode -ne 0) { throw "Every trial test passed, but dotnet test ended with exit code $exitCode." }
 
       - name: Upload trial test results
         if: always()
