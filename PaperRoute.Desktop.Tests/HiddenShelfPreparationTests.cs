@@ -29,7 +29,9 @@ namespace PaperRoute.Desktop.Tests;
 //   switch makes, for the same cards, and its own first switch makes none
 //   (CardView.MadeCount, a count that does not depend on the PC's load).
 // - T2: the views each step makes follow the ladder, and a slow step stops
-//   preparation for the session.
+//   preparation for the session; a refresh that gives Published its cards
+//   back climbs the ladder, and a full-size refresh predicted over the limit
+//   is not run.
 // - T3: before and after the switch the window draws the same picture, byte
 //   for byte, light and dark; after it, with the same scroll extent and thumb.
 // - T4: the shelf tab still decides which shelf is shown.
@@ -58,6 +60,11 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
 
     // W, then the ladder's capped L steps and the full-size one.
     private const int FirstPreparationSteps = 1 + HiddenShelfPreparer.LadderSteps + 1;
+
+    // PerViewClock's cost of one card view: about a warm card view's cost
+    // headless (the design's figure), so a step of 18 views is over the
+    // 120 ms limit.
+    private const int PerViewMs = 7;
 
     private static readonly string[] s_shelfNames = ["PipelineShelf", PublishedName, "FileDrawerShelf"];
 
@@ -258,6 +265,113 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
         }));
     }
 
+    // A search with no Published match while the first preparation runs,
+    // then the search cleared: the empty shelf was not laid out, so the
+    // refresh climbs the whole ladder and no step makes a screen at once.
+    // The clock is a load-free model: each step takes 7 ms for each card
+    // view it made (PerViewClock), so a step of 18 views or more would be
+    // over the limit. No step goes over it, Published is prepared, and the
+    // switch makes no card view.
+    [TestMethod]
+    public void T2_ARefreshAfterASearchWithNoMatchClimbsTheLadder()
+    {
+        using DiskLibrarySession disk = OpenFiveHundred("five-hundred");
+        Write(Headless.Run(() =>
+        {
+            int twinMade = TwinFirstSwitchViews(WholeLibrary(disk));
+            using BoardWindow board = BoardWindow.Show(WholeLibrary(disk), ThemeVariant.Light);
+            HiddenShelfPreparer preparer = board.View.Preparer;
+            preparer.Clock = PerViewClock;
+            ShelfViewModel published = board.Board.Shelves[1];
+            board.Board.SearchText = "zzzz no such paper";
+            board.Board.Render();
+            Settle(board);
+            Assert.IsEmpty(published.Cards, "The search leaves Published empty.");
+            int start = CardView.MadeCount;
+            preparer.RunToEnd();
+            Assert.AreEqual("W", string.Join(",", preparer.Steps.Select(step => step.Kind)), "An empty Published is given its width and not laid out.");
+            Assert.IsTrue(preparer.IsPrepared, "An empty Published is prepared.");
+
+            board.Board.SearchText = string.Empty;
+            board.Board.Render();
+            Settle(board);
+            Assert.IsNotEmpty(published.Cards, "The search cleared, Published has its cards.");
+            Assert.IsFalse(preparer.IsPrepared, "Its cards changed: not prepared.");
+            int stepsBefore = preparer.StepsRun;
+            preparer.RunToEnd();
+            int prepared = CardView.MadeCount - start;
+            List<HiddenShelfPreparer.Step> refresh = preparer.Steps.Skip(stepsBefore).ToList();
+            string steps = string.Join(", ", refresh.Select(step => $"{step.Kind}{(step.Cap is null ? string.Empty : "c")} {step.ViewsMade} views {step.Time.TotalMilliseconds:0} ms"));
+            Assert.IsNull(preparer.SkippedReason, $"Nothing stopped the refresh ({steps}).");
+            Assert.IsTrue(preparer.IsPrepared, "Refreshed, Published is prepared.");
+            Assert.AreEqual("R,Lc,Lc,Lc,L", string.Join(",", refresh.Select(step => step.Kind + (step.Cap is null ? string.Empty : "c"))), "The refresh: R, then the whole ladder.");
+            foreach (HiddenShelfPreparer.Step step in preparer.Steps)
+            {
+                Assert.IsLessThanOrEqualTo(preparer.SlowSliceLimit, step.Time, $"No step over the limit ({steps}).");
+            }
+
+            int beforeSwitch = CardView.MadeCount;
+            Switch(board, 1);
+            int atSwitch = CardView.MadeCount - beforeSwitch;
+            Assert.AreEqual(twinMade, prepared, "Preparation made the twin's card views.");
+            Assert.AreEqual(0, atSwitch, "The switch made no card view.");
+            AssertDrawnRight(board, "after the refresh that followed the search");
+            return new List<string> { $"search with no match, then cleared: refresh {steps}; preparation made {prepared} (twin {twinMade}), the switch {atSwitch}" };
+        }));
+    }
+
+    // Published shorter than a screen at its preparation (2 cards), then
+    // given the rest of its cards. The list was laid out for a whole screen
+    // with 2 cards, so a full-size layout would now make the rest of the
+    // screen in one step: at 7 ms a view (PerViewClock) that is over the
+    // limit, so it is predicted before it runs and preparation stops
+    // without running it. No step goes over the limit, and the switch makes
+    // the rest, as on the base.
+    [TestMethod]
+    public void T2_AFullSizeRefreshPredictedOverTheLimitIsNotRun()
+    {
+        using DiskLibrarySession disk = OpenFiveHundred("five-hundred");
+        List<Manuscript> arriving = disk.Manuscripts.Where(manuscript => manuscript is not null && manuscript.Location == ManuscriptLocation.Published).ToList();
+        Write(Headless.Run(() =>
+        {
+            MemorySession twinSession = WithoutPublished(disk);
+            twinSession.Library.AddRange(arriving);
+            int twinMade = TwinFirstSwitchViews(twinSession);
+
+            MemorySession session = WithoutPublished(disk);
+            session.Library.AddRange(arriving.Take(2));
+            using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
+            HiddenShelfPreparer preparer = board.View.Preparer;
+            preparer.Clock = PerViewClock;
+            int start = CardView.MadeCount;
+            preparer.RunToEnd();
+            Assert.IsTrue(preparer.IsPrepared, "The short Published is prepared.");
+            Assert.IsNull(preparer.SkippedReason, "Nothing stopped its preparation.");
+
+            session.Library.AddRange(arriving.Skip(2));
+            session.RaiseChanged();
+            Settle(board);
+            int stepsBefore = preparer.StepsRun;
+            preparer.RunToEnd();
+            int prepared = CardView.MadeCount - start;
+            string steps = string.Join(", ", preparer.Steps.Select(step => $"{step.Kind}{(step.Cap is null ? string.Empty : "c")} {step.ViewsMade} views {step.Time.TotalMilliseconds:0} ms"));
+            Assert.AreEqual(HiddenShelfPreparer.SlowSliceReason, preparer.SkippedReason, $"The full-size refresh was predicted over the limit ({steps}).");
+            Assert.IsFalse(preparer.IsPrepared, "Stopped, Published is not prepared.");
+            Assert.IsFalse(preparer.Steps.Skip(stepsBefore).Any(step => step.Kind == "L"), $"The full-size refresh did not run ({steps}).");
+            foreach (HiddenShelfPreparer.Step step in preparer.Steps)
+            {
+                Assert.IsLessThanOrEqualTo(preparer.SlowSliceLimit, step.Time, $"No step over the limit ({steps}).");
+            }
+
+            int beforeSwitch = CardView.MadeCount;
+            Switch(board, 1);
+            int atSwitch = CardView.MadeCount - beforeSwitch;
+            Assert.AreEqual(twinMade, prepared + atSwitch, "Preparation and the switch together made the twin's views, no more.");
+            AssertDrawnRight(board, "after the stopped refresh");
+            return new List<string> { $"2 cards, then {arriving.Count}: steps {steps}; stopped ({preparer.SkippedReason}); preparation made {prepared}, the switch {atSwitch} (twin {twinMade})" };
+        }));
+    }
+
     [TestMethod]
     [DataRow("light")]
     [DataRow("dark")]
@@ -369,8 +483,9 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
         Write(CompareTrees(session, "board-tree-500", FiveHundredTabLimit));
     }
 
-    // Published with no card: preparation runs and makes nothing, the switch
-    // makes nothing, the empty message shows, and the tree is the twin's.
+    // Published with no card: preparation gives it its width and does not
+    // lay it out (there is nothing to make), the switch makes nothing, the
+    // empty message shows, and the tree is the twin's.
     [TestMethod]
     public void T11_AnEmptyPublishedIsPrepared()
     {
@@ -389,9 +504,11 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
             using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
             Assert.HasCount(0, board.Board.Shelves[1].Cards, "Published has no card.");
             int start = CardView.MadeCount;
-            Still(board).RunToEnd();
+            int steps = Still(board).RunToEnd();
             int prepared = CardView.MadeCount - start;
             Assert.IsTrue(board.View.Preparer.IsPrepared, "An empty Published is prepared.");
+            Assert.AreEqual(1, steps, "Only the width step ran: an empty Published is not laid out.");
+            Assert.AreEqual("W", board.View.Preparer.Steps[0].Kind, "The step was W.");
             int beforeSwitch = CardView.MadeCount;
             Switch(board, 1);
             int atSwitch = CardView.MadeCount - beforeSwitch;
@@ -441,9 +558,13 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
     }
 
     // The first cards arrive on a prepared, empty Published: its rows wait,
-    // and it is no longer called prepared; the idle refresh (R, then one
-    // full-size L) makes the views the twin's switch makes, the switch then
-    // makes none and refills no row, and every view draws its own card.
+    // and it is no longer called prepared. An empty shelf was never laid out
+    // (a layout would leave the list measured for a whole screen, which the
+    // first cards would then fill in one step), so the idle refresh is R and
+    // then the whole ladder, each layout step making no more than about half
+    // the first screen, as in a first preparation (T2). Together they make
+    // the views the twin's switch makes, the switch then makes none and
+    // refills no row, and every view draws its own card.
     [TestMethod]
     public void T11_TheFirstCardsArrivingOnAPreparedEmptyPublishedAreDrawnRight()
     {
@@ -485,8 +606,16 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
             int beforeRefresh = CardView.MadeCount;
             preparer.RunToEnd();
             int refreshed = CardView.MadeCount - beforeRefresh;
-            string kinds = string.Join(",", preparer.Steps.Skip(stepsBefore).Select(step => step.Kind));
-            Assert.AreEqual("R,L", kinds, "The refresh: the rows brought current, then one full-size layout.");
+            List<HiddenShelfPreparer.Step> refresh = preparer.Steps.Skip(stepsBefore).ToList();
+            string kinds = string.Join(",", refresh.Select(step => step.Kind + (step.Cap is null ? string.Empty : "c")));
+            Assert.AreEqual("R,Lc,Lc,Lc,L", kinds, "The refresh: the rows brought current, then the ladder's capped layout steps and the full-size one.");
+            Assert.AreEqual(0, refresh[0].ViewsMade, "R made no card view: the list had made no row.");
+            int half = (int)Math.Ceiling(twinMade / 2.0 / published.Columns) * published.Columns;
+            foreach (HiddenShelfPreparer.Step step in refresh)
+            {
+                Assert.IsLessThanOrEqualTo(half, step.ViewsMade, $"A refresh step ({step.Kind}) made {step.ViewsMade} views, more than about half the first screen ({half}).");
+            }
+
             Assert.IsTrue(preparer.IsPrepared, "Refreshed, Published is prepared again.");
             AssertOnlyShown(board, 0, "after the refresh");
 
@@ -1094,6 +1223,10 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
         preparer.Clock = static () => TimeSpan.Zero;
         return preparer;
     }
+
+    // A load-free model of a step's time: the clock moves PerViewMs for
+    // every card view made, so a step takes PerViewMs for each view it made.
+    private static TimeSpan PerViewClock() => TimeSpan.FromMilliseconds(PerViewMs * (double)CardView.MadeCount);
 
     // A frame drawn, as the render timer would draw it.
     private static void DrawFrame()

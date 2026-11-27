@@ -15,9 +15,11 @@ namespace PaperRoute.Desktop;
 // Prepares the hidden Published shelf before its first switch, as today's
 // app prepares its hidden shelves while the window waits
 // (Form1.BoardFill.vb:341-390; the maintainer's decision of 2026-11-21). This
-// follows the idle-preparation design (kept outside the repository). Nothing
-// calls it on its own: a test (or, later, the Board's idle timer and the
-// measurement) runs it with RunStep or RunToEnd.
+// follows the idle-preparation design (kept outside the repository). Its
+// callers today: its own idle timer (Tick, only while Enabled, which the App
+// does not set yet), a "--measure" run told an idle side
+// (BoardMeasurement.FirstSwitchAfterIdle calls RunStep with the timer off),
+// and the tests, with RunStep or RunToEnd.
 //
 // The steps, each one interface-thread job:
 // - W, the width: the shown shelf's width is given to Published before it is
@@ -43,12 +45,30 @@ namespace PaperRoute.Desktop;
 // Once prepared, any change that may leave the switch work to do ends
 // IsPrepared: a render, a resize, a scaling or a theme change. The refresh
 // is then W again if the shown shelf's width changed, R if the rows went
-// stale, and one full-size L. (Run by the idle timer, a refresh waits for
-// 2 s of quiet after a render; RunStep itself runs whatever is due.)
-// The slow-slice stop: after each step its time is divided by the card views
-// it made; if a step took longer than SlowSlice, or that cost predicts the
-// next step longer than SlowSlice, preparation stops for the session
-// (SkippedReason) and the switch makes the rest, as on the base.
+// stale, and one full-size L; after a change of the shelf host's size or
+// of the shown shelf's width, the ladder instead, so the list measures for
+// the new size from a small band up and keeps exactly the rows and cache a
+// switch at that size would make. (Run by the idle timer, a refresh waits
+// for 2 s of quiet after a render; RunStep itself runs whatever is due.)
+// An empty shelf is not laid out: there is no card view to make, and a
+// layout would leave the list measured for a whole screen, which its first
+// cards would then fill in one step. It is prepared once its rows are
+// current at the shown width; its first cards get the ladder.
+// The slow-slice stop (the maintainer's answer of 2026-11-27: a step that
+// runs or is predicted over SlowSlice): every step that made card views
+// gives the cost of one card view (its time divided by the views it made).
+// After an L on the ladder, the next step is predicted from that cost times
+// the views the ladder's next band adds (about LadderRatio - 1 times those
+// made so far in this ladder). Before an R, from the cost times the card
+// views the rows it refills must add (a row view gains one for each card
+// past those it ever held). Before a full-size L, from the cost times the
+// views a screen and its cache need (the shelf host's height and the list's
+// cache over the shortest row made, times the columns) less the views the
+// list holds already. W is judged only after it runs. A step that took
+// longer than SlowSlice, or a prediction over it, stops preparation for the
+// session (SkippedReason) and the switch makes the rest, as on the base; a
+// step predicted over it is not run. With no cost known yet nothing is
+// predicted.
 // Only a Published shelf that was never shown is prepared; once shown, the
 // rule of ShelfViewModel.IsShown takes over unchanged.
 // Accessibility: once an automation peer exists for Published's Border (an
@@ -109,11 +129,21 @@ public sealed class HiddenShelfPreparer
     // once is never prepared.
     private bool _shownOnce;
 
-    // The ladder's L steps run so far.
+    // The ladder's L steps run so far, and the card views they made.
     private int _ladderRun;
+    private int _ladderMade;
 
-    // What the last full-size layout step laid Published out for; null
-    // before it has run.
+    // Whether the next L steps climb the ladder: until the first full-size
+    // layout with cards, and again after the shelf host's size or the shown
+    // shelf's width changed.
+    private bool _ladderNeeded = true;
+
+    // The time one card view took in the last step that made any, in ms;
+    // null before one has.
+    private double? _costPerView;
+
+    // What the last full-size layout step laid Published out for (or, for
+    // an empty shelf, what it was found empty at); null before either.
     private LayoutFor? _laidOutFor;
 
     // The idle timer and what its rules watch; used only while Enabled.
@@ -179,7 +209,8 @@ public sealed class HiddenShelfPreparer
     // for. Any of those changes may leave the switch work to do (a rewrap
     // after a resize, a card changed in place to measure again), so the shelf
     // is no longer called prepared until a refresh lays it out again. An
-    // empty or short shelf makes fewer views, or none.
+    // empty or short shelf makes fewer views, or none; an empty one is not
+    // laid out at all, and stands as prepared for what it was found empty at.
     public bool IsPrepared =>
         !_shownOnce
         && _laidOutFor is { } laidOut
@@ -209,9 +240,11 @@ public sealed class HiddenShelfPreparer
     // The steps due, in this order: W while Published has not been given the
     // shown shelf's width (first, or again after a resize), R while its rows
     // are stale (a render changed its cards, or W changed its columns), then
-    // L: the ladder for the first preparation, and one full-size L for a
-    // refresh after any change that ended IsPrepared (a render, a resize, a
-    // scaling or theme change).
+    // L: the ladder for the first preparation and after a change of the
+    // shelf host's size or the shown width, and one full-size L for a
+    // refresh after any other change that ended IsPrepared (a render, a
+    // scaling or theme change). The shelf host must be shown: with the
+    // library empty the Board hides it, and a layout under it makes nothing.
     public bool RunStep()
     {
         if (_shownOnce
@@ -221,7 +254,8 @@ public sealed class HiddenShelfPreparer
             || board.Shelves.Count < 2
             || board.SelectedShelfIndex == 1
             || !_view.IsEffectivelyVisible
-            || _view.PublishedShelf.Parent is not Border { Parent: Control host } border)
+            || _view.PublishedShelf.Parent is not Border { Parent: Control host } border
+            || !host.IsEffectivelyVisible)
         {
             return false;
         }
@@ -273,9 +307,17 @@ public sealed class HiddenShelfPreparer
 
         // R. The body of IsShown's sync: the rows brought to the cards. The
         // row views of rows refilled show their new cards at once; any card
-        // views made for them are counted.
+        // views made for them are counted. Not run when the views its row
+        // views must add are predicted over the limit.
+        CardRowList? rows = _view.PublishedShelf.FindControl<CardRowList>("Rows");
         if (published.RowsAreStale)
         {
+            if (PredictedSlow(ViewsTheRowsAdd(published, rows)))
+            {
+                Skip(SlowSliceReason);
+                return false;
+            }
+
             TimeSpan started = Clock();
             int before = CardView.MadeCount;
             published.SyncStaleRows();
@@ -283,29 +325,100 @@ public sealed class HiddenShelfPreparer
             return true;
         }
 
-        // L: on the ladder until the first full-size layout, then full-size.
-        double? cap = _laidOutFor is null && _ladderRun < LadderSteps ? full / Math.Pow(LadderRatio, LadderSteps - _ladderRun) : null;
+        // An empty shelf: nothing to lay out (the class comment). Prepared
+        // as it stands; no step runs.
+        if (published.Cards.Count == 0)
+        {
+            _laidOutFor = CurrentLayout(board, published);
+            return false;
+        }
+
+        // L: on the ladder while one is needed, then full-size. A full-size
+        // L is not run when the views it must add are predicted over the
+        // limit.
+        double? cap = _ladderNeeded && _ladderRun < LadderSteps ? full / Math.Pow(LadderRatio, LadderSteps - _ladderRun) : null;
+        if (cap is null && PredictedSlow(ViewsAScreenAdds(published, rows, full)))
+        {
+            Skip(SlowSliceReason);
+            return false;
+        }
+
         TimeSpan start = Clock();
         int madeBefore = CardView.MadeCount;
         Flip(border, cap);
         int made = CardView.MadeCount - madeBefore;
-        if (_laidOutFor is null)
+        double? predicted = null;
+        if (cap is not null)
         {
+            // The next step on the ladder reaches LadderRatio times as far,
+            // so it makes about (LadderRatio - 1) times the views this
+            // ladder made so far.
             _ladderRun++;
+            _ladderMade += made;
+            predicted = made > 0 ? _ladderMade * (LadderRatio - 1) : null;
         }
-
-        if (cap is null)
+        else
         {
             _laidOutFor = CurrentLayout(board, published);
+            _ladderNeeded = false;
+            _ladderRun = 0;
+            _ladderMade = 0;
         }
 
-        // The next step on the ladder reaches LadderRatio times as far, so it
-        // makes about (LadderRatio - 1) times the views made so far.
-        int madeSoFar = _steps.Where(step => step.Kind == "L").Sum(step => step.ViewsMade) + made;
-        double? predicted = cap is not null && made > 0 ? madeSoFar * (LadderRatio - 1) : null;
         Finish("L", cap, made, start, predicted);
         return true;
     }
+
+    // Whether views card views, at the last cost known, would take longer
+    // than the limit.
+    private bool PredictedSlow(int views) =>
+        _costPerView is { } cost && views > 0 && cost * views > SlowSliceLimit.TotalMilliseconds;
+
+    // The card views R must add: each row view the list shows gains one
+    // card view for every card its row will hold past those it ever held
+    // (CardRowView keeps its card views). Rows past the new end are removed
+    // and add none; row views not yet made add none here (a layout makes
+    // them, and a full-size L is predicted on its own).
+    private static int ViewsTheRowsAdd(ShelfViewModel published, CardRowList? rows)
+    {
+        int columns = Math.Max(1, published.Columns);
+        int adds = 0;
+        foreach (CardRowView view in RowViews(rows))
+        {
+            if (view.Row is not { } row)
+            {
+                continue;
+            }
+
+            int holds = Math.Clamp(published.Cards.Count - (row.Index * columns), 0, columns);
+            adds += Math.Max(0, holds - view.Children.Count);
+        }
+
+        return adds;
+    }
+
+    // The card views a full-size layout must add: the views a screen and
+    // the list's cache need (the list measures, from the top, the shelf
+    // host's height and the cache below it, over the shortest row view made,
+    // times the columns, at most the shelf's cards) less the views the list
+    // holds already, in the row views it shows or keeps for reuse (each
+    // counted up to the columns). With no row view made, every card.
+    private static int ViewsAScreenAdds(ShelfViewModel published, CardRowList? rows, double hostHeight)
+    {
+        int columns = Math.Max(1, published.Columns);
+        List<CardRowView> views = RowViews(rows).ToList();
+        double shortest = views.Where(view => view.Row is not null && view.DesiredSize.Height > 0).Select(view => view.DesiredSize.Height).DefaultIfEmpty(0).Min();
+        double cache = rows?.ItemsPanelRoot is VirtualizingStackPanel panel ? panel.CacheLength : 0.5;
+        int need = shortest > 0
+            ? (int)Math.Min(published.Cards.Count, Math.Ceiling(hostHeight * (1 + (2 * cache)) / shortest) * columns)
+            : published.Cards.Count;
+        int holds = views.Sum(view => Math.Min(columns, view.Children.Count));
+        return Math.Max(0, need - holds);
+    }
+
+    // Every row view of the list, shown or kept for reuse.
+    private static IEnumerable<CardRowView> RowViews(CardRowList? rows) =>
+        rows?.ItemsPanelRoot?.Children.OfType<CardRowView>() ?? [];
 
     // What one tick of the idle timer does: runs the next step if the idle
     // rules allow one now; returns whether one ran. After a step the next
@@ -378,6 +491,11 @@ public sealed class HiddenShelfPreparer
         if (took > Longest)
         {
             Longest = took;
+        }
+
+        if (made > 0)
+        {
+            _costPerView = took.TotalMilliseconds / made;
         }
 
         bool slow = took > SlowSliceLimit
@@ -557,6 +675,9 @@ public sealed class HiddenShelfPreparer
         _widthFor = 0;
         _shownOnce = false;
         _ladderRun = 0;
+        _ladderMade = 0;
+        _ladderNeeded = true;
+        _costPerView = null;
         _laidOutFor = null;
         _timer?.Stop();
         _awaitingFrame = false;
