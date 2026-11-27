@@ -71,6 +71,16 @@ public sealed class BoardBudgetTests : StorageCheckedTests
     public static readonly IReadOnlyList<string> ReportOnlyRows =
     [
         BoardMeasurement.SwitchBackToPipeline,
+        BoardMeasurement.SearchKeystrokePublishedHidden,
+        BoardMeasurement.SwitchToPublishedAfterHiddenChange,
+    ];
+
+    // The 500 library's last rows, in order: the scroll, then the two rows
+    // compared only between builds (busy-PC design, section 9).
+    public static readonly IReadOnlyList<string> LastRows =
+    [
+        BoardMeasurement.ScrollPublished,
+        BoardMeasurement.SearchKeystrokePublishedHidden,
         BoardMeasurement.SwitchToPublishedAfterHiddenChange,
     ];
 
@@ -140,6 +150,7 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         List<string> reported = ReportOnlyRows.Where(id => rows.Count(row => row.Library == "500" && row.Id == id && row.Informational) != 1).ToList();
         Assert.IsEmpty(reported, "Report-only rows not timed exactly once, report-only, on the 500 library: " + string.Join(", ", reported));
         Assert.AreEqual(BoardMeasurement.SwitchToPublishedAfterHiddenChange, rows.Last(row => row.Library == "500").Id, "The switch after a hidden change is the last row, so no row before it changes.");
+        CheckLastRows(rows.Where(row => row.Library == "500").ToList());
         foreach (string id in BoardMeasurement.WaitingForRowsOfN)
         {
             Assert.Contains(id, BudgetRows, $"WaitingForRowsOfN names {id}, which is not a row of d1 6.3.");
@@ -177,6 +188,52 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         string[] absent = conditions.EnumerateObject().Where(item => item.Value.ValueKind == JsonValueKind.Null).Select(item => item.Name).ToArray();
         TestContext.WriteLine($"Conditions present: {string.Join(", ", present)}; absent: {(absent.Length == 0 ? "none" : string.Join(", ", absent))}.");
         Assert.IsFalse(conditions.TryGetProperty("machineName", out _), "The conditions name no PC.");
+    }
+
+    // The library's rows end with LastRows, in that order: the scroll, the
+    // search with Published hidden (report-only, against the filter
+    // keystroke budget for scale) and the switch after it (report-only,
+    // against the page switch budget). A row removed or moved fails.
+    public static void CheckLastRows(IReadOnlyList<MeasuredRow> rows)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        CollectionAssert.AreEqual(
+            LastRows.ToArray(),
+            rows.Skip(Math.Max(0, rows.Count - LastRows.Count)).Select(row => row.Id).ToArray(),
+            "The last rows: the scroll, the search with Published hidden, the switch after it.");
+        MeasuredRow search = rows[^2];
+        MeasuredRow switched = rows[^1];
+        Assert.IsTrue(search.Informational, "The search with Published hidden is report-only.");
+        Assert.AreEqual(BoardMeasurement.FilterKeystrokeBudget, search.BudgetMs, "The search with Published hidden is shown against the filter keystroke budget.");
+        Assert.AreEqual("filter keystroke", search.BudgetName);
+        Assert.IsTrue(switched.Informational, "The switch after a hidden change is report-only.");
+        Assert.AreEqual(BoardMeasurement.PageSwitchBudget, switched.BudgetMs, "The switch after a hidden change is shown against the page switch budget.");
+        Assert.AreEqual("page switch", switched.BudgetName);
+        foreach (MeasuredRow row in new[] { search, switched })
+        {
+            Assert.IsFalse(row.Waits, $"{row.Id} does not wait by design.");
+            Assert.Contains("compared only between builds", row.Note, $"{row.Id}'s note says it is compared only between builds.");
+        }
+    }
+
+    // CheckLastRows, on canned rows: it passes on the order the measurement
+    // writes and fails when either row is removed, moved or not report-only.
+    [TestMethod]
+    public void TheLastRowsCheckFailsWhenEitherRowIsRemovedOrMoved()
+    {
+        const string note = "not a row of d1 6.3; compared only between builds";
+        var stage = new MeasuredRow("500", BoardMeasurement.StageBackToAll, "Back to All", 10, 10, BoardMeasurement.UiThreadBudget, "UI thread");
+        var scroll = new MeasuredRow("500", BoardMeasurement.ScrollPublished, "Scroll", 10, 10, BoardMeasurement.UiThreadBudget, "UI thread");
+        var search = new MeasuredRow("500", BoardMeasurement.SearchKeystrokePublishedHidden, "Search, Published hidden", 900, 900, BoardMeasurement.FilterKeystrokeBudget, "filter keystroke", Informational: true, Note: note);
+        var switched = new MeasuredRow("500", BoardMeasurement.SwitchToPublishedAfterHiddenChange, "Switch after", 900, 900, BoardMeasurement.PageSwitchBudget, "page switch", Informational: true, Note: note);
+
+        CheckLastRows([stage, scroll, search, switched]);
+        Assert.ThrowsExactly<AssertFailedException>(() => CheckLastRows([stage, scroll, switched]));
+        Assert.ThrowsExactly<AssertFailedException>(() => CheckLastRows([stage, scroll, search]));
+        Assert.ThrowsExactly<AssertFailedException>(() => CheckLastRows([stage, scroll, switched, search]));
+        Assert.ThrowsExactly<AssertFailedException>(() => CheckLastRows([stage, search, scroll, switched]));
+        Assert.ThrowsExactly<AssertFailedException>(() => CheckLastRows([stage, scroll, search with { Informational = false }, switched]));
+        Assert.ThrowsExactly<AssertFailedException>(() => CheckLastRows([stage, scroll, search, switched with { Informational = false }]));
     }
 
     // Both sides of SyncInto's reset threshold (d1 3.2 item 8, d1 9): on the

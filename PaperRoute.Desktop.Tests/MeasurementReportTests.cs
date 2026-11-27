@@ -1,4 +1,5 @@
 using System.Text.Json;
+using PaperRoute.Desktop.Measurement;
 using PaperRoute.ViewModels.Measurement;
 
 namespace PaperRoute.Desktop.Tests;
@@ -232,6 +233,27 @@ public sealed class MeasurementReportTests
         CollectionAssert.AreEqual(
             new[] { "within", "over", "over", "over", "over" },
             measured.Select(after.VerdictFor).ToArray());
+    }
+
+    // The two rows compared only between builds are report-only on every
+    // library, in every build: far over their budgets, with the PC disturbed
+    // or not, they never fail the headless test and say nothing in its
+    // failure message.
+    [TestMethod]
+    public void TheRowsComparedBetweenBuildsNeverFail()
+    {
+        MeasuredRow[] rows =
+        [
+            new MeasuredRow("500", BoardMeasurement.SearchKeystrokePublishedHidden, "Search, Published hidden", 5000, 5000, BoardMeasurement.FilterKeystrokeBudget, "filter keystroke", Informational: true),
+            new MeasuredRow("500", BoardMeasurement.SwitchToPublishedAfterHiddenChange, "Switch after", 5000, 5000, BoardMeasurement.PageSwitchBudget, "page switch", Informational: true),
+            new MeasuredRow("example", BoardMeasurement.SearchKeystrokePublishedHidden, "Search, Published hidden", 5000, 5000, BoardMeasurement.FilterKeystrokeBudget, "filter keystroke", Informational: true),
+        ];
+        foreach (BoardMeasurementReport report in new[] { Canned(rows, s_busy), Canned(rows, null, multiplier: 2), Canned(rows, s_busy with { Disturbed = true }) })
+        {
+            Assert.IsEmpty(report.Failures());
+            Assert.AreEqual(string.Empty, report.FailureMessage());
+            CollectionAssert.AreEqual(Enumerable.Repeat(BoardMeasurementReport.ReportOnlyRule, rows.Length).ToArray(), rows.Select(report.RuleFor).ToArray());
+        }
     }
 
     private static string Lines(params string[] lines) => string.Join(Environment.NewLine, lines);

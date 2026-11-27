@@ -6,6 +6,7 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ManuscriptPipeline.Models;
+using PaperRoute.Desktop.Measurement;
 using PaperRoute.Desktop.Tests.Board;
 using PaperRoute.TestFixtures;
 using PaperRoute.ViewModels.Board;
@@ -419,6 +420,49 @@ public sealed class HiddenShelfTests : StorageCheckedTests
             ClickTab(board, 2);
             watch.AssertCurrent("File Drawer first shown");
             Check(board, session, "File Drawer first shown", facts, 2);
+            return facts;
+        }));
+    }
+
+    // The measured sequence's last two rows, run the way BoardMeasurement
+    // runs them, with the checks that hold only on this change. The shared
+    // measurement code stays the same on a build where hidden rows do not
+    // wait (f51b5e2, or master), so those two builds are compared with the
+    // same code (busy-PC design, sections 5 and 9), and these checks live
+    // here: Published shown and hidden again, the measured search typed on
+    // Pipeline changes its cards and leaves its rows waiting for the switch
+    // under option (b), none under (a); the switch made as the measurement
+    // makes it brings its rows to its cards.
+    [TestMethod]
+    public void TheMeasuredSearchWithPublishedHiddenLeavesItsRowsWaitingUntilTheSwitch()
+    {
+        using DiskLibrarySession session = OpenFiveHundred();
+        Write(Headless.Run(() =>
+        {
+            using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
+            using var watch = new ShownWatch(board, 1);
+            var facts = new List<string>();
+            ShelfViewModel published = board.Board.Shelves[1];
+            board.Board.SelectedShelfIndex = 1;
+            Settle(board);
+            watch.AssertCurrent("Published first shown");
+            board.Board.SelectedShelfIndex = 0;
+            Settle(board);
+
+            board.Board.SearchText = BoardMeasurement.SearchText;
+            board.Board.Render();
+            Settle(board);
+            Assert.AreNotEqual(0, board.Board.LastSyncChanges[1], "The search changed the hidden Published shelf's cards.");
+            Assert.AreEqual(ShelfLayout.UsesRows, published.RowsAreStale, ShelfLayout.UsesRows
+                ? "The hidden Published shelf's rows waited for the switch."
+                : "No rows wait under option (a).");
+            CheckBeforeSwitch(board, session, "the measured search while hidden");
+
+            board.Board.SelectedShelfIndex = 1;
+            Settle(board);
+            Assert.IsFalse(published.RowsAreStale, "Published's rows are current once it is shown.");
+            watch.AssertCurrent("the measured switch");
+            Check(board, session, "the measured switch", facts);
             return facts;
         }));
     }

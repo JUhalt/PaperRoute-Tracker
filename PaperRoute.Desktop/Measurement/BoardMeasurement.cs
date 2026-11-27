@@ -85,8 +85,10 @@ public sealed class BoardMeasurement
     public const string ScrollPublished = "scroll-published-longest-step";
     public const string ProcessStartToBoard = "process-start-to-board";
 
-    // Report-only, not a row of d1 6.3: the switch to Published after a
-    // search made while it was hidden (its rows refilled at the switch).
+    // Report-only, not rows of d1 6.3, the last two rows: the search typed on
+    // Pipeline while Published is hidden after the scroll showed it, then the
+    // switch to Published after that search. Compared only between builds.
+    public const string SearchKeystrokePublishedHidden = "search-keystroke-published-hidden";
     public const string SwitchToPublishedAfterHiddenChange = "switch-published-after-hidden-change";
 
     // The 500 library's rows that do not meet their budget with every card of
@@ -409,27 +411,30 @@ public sealed class BoardMeasurement
         Settle(window);
         _frame(window);
 
-        // Report-only, last, so no row above changes: a hidden shelf shown
-        // before does not refill its rows while hidden (ShelfViewModel.IsShown),
-        // so a search made while Published is hidden is paid for at the switch
-        // that shows it. The search set with Pipeline shown, then the switch
-        // timed, then the search cleared and the Board put back.
-        board.SearchText = SearchText;
-        board.Render();
-        Settle(window);
-        List<int> hiddenChanges = board.LastSyncChanges.ToList();
-        Require(!requireChanges || hiddenChanges[1] != 0, "The search changed the hidden Published shelf's cards.");
-        Require(!requireChanges || board.Shelves[1].RowsAreStale == ShelfLayout.UsesRows, ShelfLayout.UsesRows
-            ? "The hidden Published shelf's rows waited for the switch."
-            : "No rows wait under option (a).");
+        // Report-only, last, so no row above changes (busy-PC design, section
+        // 9). Back on Pipeline, Published hidden after the scroll showed it,
+        // with no stage row between: the search timed with the same work as
+        // the search row, then the switch that shows Published again, then the
+        // search cleared and the Board put back. Each figure is compared only
+        // between builds, never with a budget row.
+        const string betweenBuilds = "not a row of d1 6.3; compared only between builds";
+        Time(library, SearchKeystrokePublishedHidden, $"Search keystroke to rendered Board with Published hidden after it was shown (\"{SearchText}\" typed into an empty search, then the render its wait ends in, and layout)", FilterKeystrokeBudget, "filter keystroke", () =>
+        {
+            board.SearchText = SearchText;
+            board.Render();
+            Settle(window);
+        }, informational: true, note: betweenBuilds);
+        NoteChanges(board);
+        Require(!requireChanges || board.LastSyncChanges[1] != 0, "The search changed the hidden Published shelf's cards.");
+        int foundHidden = board.Shelves[0].Cards.Count;
+        Require(!requireChanges || (foundHidden > 0 && foundHidden < pipeline), $"The search with Published hidden left some of the Pipeline's cards and took others ({foundHidden} of {pipeline}).");
+        RequireShelf(view, "PipelineShelf", foundHidden, "with the search made while Published was hidden");
         _frame(window);
-        string atSwitch = ShelfLayout.UsesRows ? "its rows brought to its cards at the switch" : "no rows wait";
-        Time(library, SwitchToPublishedAfterHiddenChange, $"Switch to Published after a search made while it was hidden (\"{SearchText}\"; {atSwitch}, option ({Option}))", PageSwitchBudget, "page switch", () =>
+        Time(library, SwitchToPublishedAfterHiddenChange, $"Switch to Published after a search made while it was hidden (\"{SearchText}\", option ({Option}))", PageSwitchBudget, "page switch", () =>
         {
             board.SelectedShelfIndex = 1;
             Settle(window);
-        }, informational: true, note: "not a row of d1 6.3; compare with the same sequence on a build where hidden rows did not wait (f51b5e2), which is over this budget too");
-        Require(!board.Shelves[1].RowsAreStale, "Published's rows are current once it is shown.");
+        }, informational: true, note: betweenBuilds);
         RequireShelf(view, "PublishedShelf", -1, "after a search made while it was hidden");
         _frame(window);
         board.SearchText = string.Empty;
