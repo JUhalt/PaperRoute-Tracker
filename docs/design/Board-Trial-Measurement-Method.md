@@ -15,10 +15,14 @@ Built (the pull request that adds this document):
 - `ManualCertification/Measure-BoardPairs.ps1`, the comparison of section 5 and the proposed verdict lines of section 7, with its check on canned measurements, `ManualCertification/Test-BoardPairs.ps1`, which the trial's Windows CI job runs.
 - `ManualCertification/Start-BoardTrialLoad.ps1`, the known load of section 6.
 
+Built after it:
+
+- The two report-only rows at the end of the measured sequence, `search-keystroke-published-hidden` and `switch-published-after-hidden-change` (section 3, last bullet), in `BoardMeasurement.cs`, with their checks in `PaperRoute.Desktop.Tests/BoardBudgetTests.cs` and `MeasurementReportTests.cs`. They are compared only between builds.
+
 Not built yet:
 
 - The validation of section 6 has **not been run**. Until it has, Run UI is not validated on any PC.
-- The timed row for #404's search with Published hidden (`search-keystroke-published-hidden`) and its pairs.
+- The pairs for #404's search with Published hidden. Its row, `search-keystroke-published-hidden`, and the switch after it are built (section 3), but no sitting has been run with them.
 - The rows for preparing Published while the Board is idle.
 
 On Linux the thread clock and the load readings first ran in CI, and they gave readings (section 11, "Shown by CI").
@@ -83,6 +87,7 @@ Nothing new names the PC, the user, a folder or another program. The JSON's exis
 - **No repetition inside a process.** The first switch to Published, warm startup and the first keystroke happen once per process. A repeat would run warm and time a cheaper action than the one the budget is about. Rows are repeated only by running more processes: alternating pairs to compare (section 5), five runs for a verdict (section 7).
 - **No quiet gate.** On a very busy PC a gate may never open: one experiment saw the PC 100% busy with 63 to 170 threads waiting. The pairs script does not wait for quiet. It records the load and replaces disturbed pairs afterwards.
 - **Priority, affinity and power settings are never touched**, in measurement or in validation.
+- **The last two rows, report-only.** After the scroll row the Board goes back to Pipeline, so Published is hidden after the scroll showed it, with no stage row between. `search-keystroke-published-hidden` times the search there with the same work as `search-keystroke`: "teaching" typed into an empty search, the render its wait ends in, and layout. It is shown against the filter keystroke budget for scale. It is the second "teaching" of the process, so it runs warm. `switch-published-after-hidden-change` then times the switch that shows Published again, against the page switch budget for scale, and stays the last row of the 500 library; the headless test fails if either row is missing or moved. Neither is a row of d1 6.3 and neither can fail a test. Their figures are compared only between two builds that carry the same measurement code (section 5), never with a budget row: for #404 the search is the primary row and the switch is named in advance as expected to rise. No row above them changed.
 
 ## 4 The corrected figure
 
