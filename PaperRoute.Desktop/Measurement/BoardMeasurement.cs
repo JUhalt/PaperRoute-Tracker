@@ -30,11 +30,9 @@ namespace PaperRoute.Desktop.Measurement;
 // (ResponsivenessBudgetTests.vb:420-446), so no row passes on a change that
 // did nothing; a failed check throws.
 //
-// The shelves draw option (a) or (b) of d1 4.4 (ShelfLayout.Option): every
-// card of a shown shelf made at once, or rows of N with only the rows on
-// screen made. Rows the 500 library cannot meet under the option built stay
-// measured and reported, and are listed in WaitingForRowsOfN, one list per
-// option; every other row is held.
+// The shelves draw rows of N (d1 4.4 option (b)), with only the rows on
+// screen made. Rows the 500 library cannot meet stay measured and reported,
+// and are listed in WaitingForRowsOfN; every other row is held.
 //
 // Beside Wall and UI, each row records the busy-PC figures (busy-PC design,
 // sections 2 to 4), report-only: no verdict reads them. The interface
@@ -56,9 +54,10 @@ public sealed class BoardMeasurement
     public const double DebugMultiplier = 2;
     public const double CiMultiplier = 3;
 
-    // The shelves' option (d1 4.4, ShelfLayout): (a), every card of a shown
-    // shelf made at once, or (b), rows of N, only the rows on screen made.
-    public const string Option = ShelfLayout.Option;
+    // The shelves' layout as the JSON's "option" names it: "b", rows of N
+    // (d1 4.4 option (b)), the only one since the every-card layout ("a")
+    // was removed. Kept so runs before and after the removal read alike.
+    public const string Option = "b";
 
     // The search typed for the keystroke row: a tag of the 500 library's pool
     // (LargeLibraryFixture.vb:59-61) that no title holds.
@@ -85,31 +84,12 @@ public sealed class BoardMeasurement
     public const string ScrollPublished = "scroll-published-longest-step";
     public const string ProcessStartToBoard = "process-start-to-board";
 
-    // The 500 library's rows that do not meet their budget with every card of
-    // a shown shelf made at once (option (a)). Their budgets stand; under (a)
-    // they are measured and reported, not held. Medians of five headless
-    // Release runs on the trial's development PC, 2026-11-20, each in its own
-    // process, with the probe at Input priority (UI ms against the budget):
-    // warm startup 3,032 / 1,500 (167 cards made); first switch to Published
-    // 3,970 / 100 (272 cards made); stage filter to Submitted 1,107 / 250 and
-    // back to All stages 1,406 / 250 (each a Reset of the Pipeline and of the
-    // Published shelf, shown before); the open list stepped and closed 553 /
-    // 250; the search keystroke 669 / 50 (a Reset of both shelves).
-    private static readonly IReadOnlyList<string> s_waitingUnderEveryCard =
-    [
-        WarmStartup,
-        FirstSwitchToPublished,
-        StageToSubmitted,
-        StageBackToAll,
-        OpenListStepped,
-        SearchKeystroke,
-    ];
-
-    // Under option (b), rows of N (design step 13), the rows the 500 library
-    // still does not meet; every other row is held. Medians of five headless
-    // Release runs on the same PC, 2026-11-20, each in its own process, with
-    // the probe at Input priority, as today's WM_TIMER (UI ms against the
-    // budget, option (a) the same day in brackets): warm startup 481 / 1,500
+    // Under rows of N (design step 13), the rows the 500 library still does
+    // not meet; every other row is held. Medians of five headless Release
+    // runs on the trial's development PC, 2026-11-20, each in its own process,
+    // with the probe at Input priority, as today's WM_TIMER (UI ms against the
+    // budget, the every-card layout of option (a), since removed, the same
+    // day in brackets): warm startup 481 / 1,500
     // (3,032), held; first switch to Published 383 / 100 (3,970), waiting:
     // the card views on screen cost about 16 ms each to make; stage filter to
     // Submitted 240 / 250 (1,107), waiting: within its budget at the median
@@ -122,16 +102,13 @@ public sealed class BoardMeasurement
     // cards, then their layout. (A probe at Normal priority, used before
     // 2026-11-20, ticked between the layout and render jobs and gave about
     // half these numbers under (b).)
-    private static readonly IReadOnlyList<string> s_waitingUnderRows =
+    public static IReadOnlyList<string> WaitingForRowsOfN { get; } =
     [
         FirstSwitchToPublished,
         StageToSubmitted,
         SearchKeystroke,
         ScrollPublished,
     ];
-
-    // The rows that wait under the option this build draws (ShelfLayout).
-    public static IReadOnlyList<string> WaitingForRowsOfN => ShelfLayout.UsesRows ? s_waitingUnderRows : s_waitingUnderEveryCard;
 
     private static readonly TimeSpan s_loadLimit = TimeSpan.FromMinutes(2);
 
@@ -502,9 +479,8 @@ public sealed class BoardMeasurement
         (view.FindControl<ShelfView>(shelf) ?? throw new InvalidOperationException($"The Board has no shelf {shelf}.")).CardViews().Count;
 
     // The shelf shows expected cards (any number when expected is negative).
-    // Under option (a) it has made a view for each card it shows; under (b)
-    // a view for some of them (the rows made), for one at least when it shows
-    // any, and each view shows a card of the shelf.
+    // It has made a view for some of them (the rows made), for one at least
+    // when it shows any, and each view shows a card of the shelf.
     private static void RequireShelf(BoardView view, string shelf, int expected, string context)
     {
         ShelfView shelfView = view.FindControl<ShelfView>(shelf) ?? throw new InvalidOperationException($"The Board has no shelf {shelf}.");
@@ -513,12 +489,6 @@ public sealed class BoardMeasurement
         IReadOnlyList<CardView> made = shelfView.CardViews();
         int views = made.Count;
         Require(expected < 0 || model.Cards.Count == expected, $"The {model.Name} shelf shows {model.Cards.Count} cards {context}, not {expected}.");
-        if (!ShelfLayout.UsesRows)
-        {
-            Require(views == model.Cards.Count, $"The {model.Name} shelf made {views} card views for its {model.Cards.Count} cards {context}.");
-            return;
-        }
-
         var shown = new HashSet<CardViewModel>(model.Cards, ReferenceEqualityComparer.Instance);
         Require(views <= model.Cards.Count && (views > 0) == (model.Cards.Count > 0),
             $"The {model.Name} shelf made {views} card views for its {model.Cards.Count} cards {context}.");

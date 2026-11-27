@@ -6,10 +6,10 @@ using PaperRoute.ViewModels.Board;
 
 namespace PaperRoute.Desktop;
 
-// One row of N cards under option (b) of d1 4.4 (ShelfLayout), and the row
+// One row of N cards (d1 4.4 option (b)), and the row
 // list's container for it (CardRowList), which gives it its CardRowViewModel
-// (Show). It lays its cards out as the wrap panel of
-// option (a) does: each the shelf's card width (ShelfViewModel.ItemWidth),
+// (Show). It lays its cards out as a wrap panel
+// would: each the shelf's card width (ShelfViewModel.ItemWidth),
 // 12 px apart, from the left, a short last row left as it is; 12 px below
 // every row but the last.
 //
@@ -23,7 +23,7 @@ namespace PaperRoute.Desktop;
 // the keyboard inside it is never given another card (its focus ring and its
 // focused title would then belong to the wrong manuscript): it is taken out
 // and a new card view takes its place, so the keyboard leaves it exactly as
-// it leaves a card view option (a) removes. On a render, the shelf then puts
+// it leaves a card view that is removed. On a render, the shelf then puts
 // the keyboard back on that card if the card is still shown
 // (ShelfView.FocusedCardWasTakenOut).
 public sealed class CardRowView : Panel

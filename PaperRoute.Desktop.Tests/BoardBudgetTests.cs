@@ -425,19 +425,11 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         measurement.Time("500", $"show-{size}{suffix}-paint", "Its frame", BoardMeasurement.UiThreadBudget, "UI thread", () => Frame(window), informational: true);
     }
 
-    // Under option (a) the shelf has a card view for each of its cards; under
-    // (b) for some of them (the rows made), one at least.
+    // The shelf has a card view for some of its cards (the rows made), one at least.
     private static void CardViewsFor(ShelfView shelf, int cards, string context)
     {
         int views = shelf.CardViews().Count;
-        if (ShelfLayout.UsesRows)
-        {
-            Assert.IsTrue(views > 0 && views < cards, $"{context}: rows of N made {views} card views for the Pipeline's {cards} cards.");
-        }
-        else
-        {
-            Assert.AreEqual(cards, views, $"{context}: the Pipeline's card views.");
-        }
+        Assert.IsTrue(views > 0 && views < cards, $"{context}: rows of N made {views} card views for the Pipeline's {cards} cards.");
     }
 
     private static string Tag(int size) => "budget-keep-" + size.ToString(CultureInfo.InvariantCulture);

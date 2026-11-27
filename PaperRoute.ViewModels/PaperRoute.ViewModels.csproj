@@ -14,10 +14,10 @@
     <Version>0.1.0-trial</Version>
   </PropertyGroup>
 
-  <!-- The shelves' layout (d1 4.4, ShelfLayout.Option): option (b), rows of N, unless the build is given ShelfOption=a ("dotnet test -p:ShelfOption=a"), which draws option (a) so both can be measured. -->
-  <PropertyGroup Condition="'$(ShelfOption)' == 'a'">
-    <DefineConstants>$(DefineConstants);SHELF_OPTION_A</DefineConstants>
-  </PropertyGroup>
+  <!-- The shelves draw rows of N only (d1 4.4 option (b)). The every-card build that ShelfOption=a once selected was removed once rows of N was confirmed (2026-11-27), so a build still given the property stops here instead of quietly building rows of N. -->
+  <Target Name="RefuseRemovedShelfOption" BeforeTargets="BeforeBuild" Condition="'$(ShelfOption)' != ''">
+    <Error Text="ShelfOption was removed with the every-card shelf layout: the Board trial always draws rows of N, so build it without -p:ShelfOption." />
+  </Target>
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />

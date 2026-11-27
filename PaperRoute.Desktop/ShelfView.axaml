@@ -10,30 +10,21 @@
     The view model works out the columns and the card width from the shelf's
     width (ShelfViewModel.SetWidth: today's columns, 12 px apart). The cards
     are bound only once the shelf has been shown, so the hidden shelves make
-    no card at start. Which list draws them is ShelfLayout.Option:
-    - option (a), Cards: every card of the shelf in a wrap panel, nothing
-      virtualized (RealizedCards);
-    - option (b), Rows: rows of N cards in a virtualizing stack panel, so only
-      the rows on screen and a margin of half a screen above and below are
-      made (RealizedRows, CardRowView).
-    The list of the other option is bound to nothing and stays empty.
+    no card at start. Rows draws them (d1 4.4 option (b), rows of N): rows
+    of N cards in a virtualizing stack panel, so only the rows on screen and
+    a margin of half a screen above and below are made (RealizedRows,
+    CardRowView).
+    Cards is an empty list left from the every-card layout, which was
+    removed: it draws nothing, but a screen reader meets it as an empty list
+    before Rows, and the checked-in accessibility trees hold it
+    (Expected/board-tree-*.txt). Taking it out changes those trees, so it
+    is for a change of its own that replaces them.
     The empty message, one full-width line, shows when the shelf is empty or
     the filters hide everything (Form1.vb:2806-2878, 3552-3566).
   -->
   <ScrollViewer x:Name="Scroller" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
     <StackPanel x:Name="ShelfPanel" Margin="4">
-      <ItemsControl x:Name="Cards" ItemsSource="{Binding RealizedCards}">
-        <ItemsControl.ItemsPanel>
-          <ItemsPanelTemplate>
-            <WrapPanel x:DataType="board:ShelfViewModel" ItemWidth="{Binding ItemWidth}" ItemSpacing="12" LineSpacing="12" />
-          </ItemsPanelTemplate>
-        </ItemsControl.ItemsPanel>
-        <ItemsControl.ItemTemplate>
-          <DataTemplate x:DataType="board:CardViewModel">
-            <local:CardView />
-          </DataTemplate>
-        </ItemsControl.ItemTemplate>
-      </ItemsControl>
+      <ItemsControl x:Name="Cards" />
       <local:CardRowList x:Name="Rows" ItemsSource="{Binding RealizedRows}">
         <local:CardRowList.ItemsPanel>
           <ItemsPanelTemplate>
