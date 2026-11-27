@@ -39,4 +39,9 @@
     </None>
   </ItemGroup>
 
+  <!-- The Avalonia tests' parity map (v1.1), linked from its one copy: ParityMapKeyTests checks its keys against ViewCatalog. -->
+  <ItemGroup>
+    <None Include="..\PaperRoute.Desktop.Tests\Parity\parity-map.tsv" Link="Parity\parity-map.tsv" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
