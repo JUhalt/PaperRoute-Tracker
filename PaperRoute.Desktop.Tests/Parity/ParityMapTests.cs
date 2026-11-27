@@ -45,6 +45,12 @@ public sealed class ParityMapTests
     {
         IReadOnlyList<string> findings = ParityMap.Load().SurfacesNeitherBuiltNorPlanned();
         Assert.IsEmpty(findings, Environment.NewLine + string.Join(Environment.NewLine, findings));
+
+        // A build issue is one of the opened build issues, written "#NNN";
+        // the plan's own numbering, once the issues are open, is not one.
+        Assert.IsTrue(ParityMap.IsBuildIssue("#418") && ParityMap.IsBuildIssue("#439"), "The first and last build issues are build issues.");
+        string[] notBuildIssues = ["plan 8.5", "#417", "#440", "#0420", "#", "420", "#420 "];
+        Assert.IsEmpty(notBuildIssues.Where(ParityMap.IsBuildIssue), "Not build issues: " + string.Join(", ", notBuildIssues.Where(ParityMap.IsBuildIssue)));
     }
 
     // The state column cannot go stale: built means a factory in
@@ -66,11 +72,11 @@ public sealed class ParityMapTests
     // and quotes this test as its proof of "the Avalonia build's view catalog
     // matches the target map ... for the target-map rows it builds"
     // (Avalonia-Migration-Plan.md section 8). MSTest refuses a data-driven
-    // test with no row, so issue 3, which builds no target surface, holds
-    // the first: it checks only that the issue is named as the data names
-    // build issues.
+    // test with no row, so issue 3 (#418), which builds no target surface,
+    // holds the first: it checks only that the issue is named as the data
+    // names build issues.
     [TestMethod]
-    [DataRow("plan 8.3")]
+    [DataRow("#418")]
     public void TheSurfacesThisIssueBuildsAreBuilt(string issue)
     {
         Assert.IsTrue(ParityMap.IsBuildIssue(issue), $"\"{issue}\" is not a build issue as {ParityMap.SurfacesFile} names them.");
@@ -78,8 +84,8 @@ public sealed class ParityMapTests
         IReadOnlyList<string> findings = map.SurfacesStillPlannedFor(issue);
         Assert.IsEmpty(findings, Environment.NewLine + string.Join(Environment.NewLine, findings));
 
-        // The check finds a surface still planned: the shell's window waits for plan 8.5.
-        Assert.IsNotEmpty(map.SurfacesStillPlannedFor("plan 8.5"), "A planned surface of an issue is reported.");
+        // The check finds a surface still planned: the shell's window waits for #420.
+        Assert.IsNotEmpty(map.SurfacesStillPlannedFor("#420"), "A planned surface of an issue is reported.");
     }
 
     [TestMethod]

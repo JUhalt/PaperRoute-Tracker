@@ -9,74 +9,75 @@
 #   key        Window/..., Page/... (a page, or a section or panel of it), Part/... (one part shown on several pages),
 #              Stage/... (a 5c Stage panel), Modal/... (5d)
 #   map rows   the inventory rows (the map's section 3, 1 to 97) the surface takes over, separated by commas
-#   built by   the build issue that builds it: "plan 8.N" (Avalonia-Migration-Plan.md section 8), "#NNN" once it is opened
+#   built by   the GitHub issue of the plan's build that builds it (Avalonia-Migration-Plan.md section 8): build N is
+#              issue #(415+N), from #418 (build 3) to #439 (build 24); build 5 is #420
 #   state      planned, or built once TargetSurfaceCatalog in this project has its factory (and only then)
 #   read from  where in the target map (or #375) the row was read
 #   note       may be left out; required when no view in parity-map.tsv goes to the surface: why none does
 key	map rows	built by	state	read from	note
-Window/Main	1	plan 8.5	planned	5a: Main window (1) becomes the one Avalonia window: rail, page host, one notice strip	The WinForms catalog keys Form1 by its Board page (ViewCatalog.vb), so no view goes to the window frame itself.
-Window/ExampleLibrary	2	plan 8.20	planned	5a: Example library window (2) stays a separate instance of the main window	A second instance of the main window: the WinForms catalog has no key for it.
-Window/Main/HelpPanel	55	plan 8.20	planned	5b: User Guide (55) becomes a Help side panel docked in the main window
-Window/Main/UpdateNotice	58,59	plan 8.20	planned	5b: Update available (58) becomes an update notice in the notice strip; 5c: Installing update (59) merges into that notice
-Page/Board	3,12	plan 8.8	built	5a: Board (3), welcome (12) become the Board page, the welcome its empty state; the Board trial built it
-Page/Board/MoveToFileDrawer	39	plan 8.8	planned	5b: Move to File Drawer (39) becomes a small panel on the board card
-Page/Library/Manuscripts	4	plan 8.15	planned	5a: Library: Manuscripts (4) becomes the Library page
-Page/Library/AuthorsAffiliations	5,13	plan 8.15	planned	5a: Library: Authors & Affiliations (5), Affiliations (13) become the Library page's Authors & Affiliations view
-Page/Library/AuthorsAffiliations/Detail	66,67	plan 8.15	planned	5b: Add / Edit Author, reusable (66), Add / Edit Affiliation (67) become a detail panel beside each list
-Page/Journals	6	plan 8.16	planned	5a: Journals (6) becomes the Journals page: list and selected-journal detail panel
-Page/Journals/Detail	31,32,33,74	plan 8.16	planned	5b: Edit journal (74) and its tabs (31-33) become the Journals page detail panel
-Page/Journals/Detail/ListRows	75,76	plan 8.16	planned	5b: Add / Edit Requirement (75), Add / Edit Metric (76) become rows of the detail panel's two lists
-Page/Deadlines	7	plan 8.17	planned	5a: Deadlines (7) stays the Deadlines page
-Page/Deadlines/Postpone	49	plan 8.17	planned	5b: Postpone / Set Deadline (49) becomes inline editing in the Deadlines row
-Page/Deadlines/Reminder	50	plan 8.17	planned	5b: Add / Edit Reminder (50) becomes an add row and in-row editing on the Deadlines page
-Page/Insights	8,14	plan 8.18	planned	5a: Insights (8), Your Citations (14) become the Insights page
-Page/ImportExport	9	plan 8.19	planned	5a: Import & Export (9) stays the Import & Export page
-Page/ImportExport/Export	41,43	plan 8.19	planned	5b: Publication & CV Export (43) becomes one Export panel; 5c: Choose manuscripts to export (41) merges into it
-Page/Manuscript	10	plan 8.9	planned	5a: Manuscript page (10), the page's frame
-Page/Manuscript/Missing	11	plan 8.9	planned	5a: Missing manuscript (11) becomes the manuscript page's empty state	Reached only through back and forward: the WinForms catalog has no key for it.
-Page/Manuscript/New	35	plan 8.10	planned	5c: Add Manuscript (35) becomes the manuscript page in a "new manuscript" state, which plan 8.10 builds
-Page/Manuscript/New/TitlePage	36	plan 8.10	planned	5b: Paste a Title Page (36) becomes a panel of the new-manuscript page
-Page/Manuscript/Overview	15,62	plan 8.9	planned	5a: the manuscript page's Overview (15); 5c: Journal, Preprint & Links (62) merges into the Overview
-Page/Manuscript/Overview/Links	63	plan 8.9	planned	5b: Add / Edit Link (63) becomes each related link row edited in place on the Overview's Links card
-Page/Manuscript/Overview/ShortlistEditor	70	plan 8.9	planned	5b: Shortlist journal (70) becomes an editor that expands under the shortlist row
-Page/Manuscript/Authors	16	plan 8.9	planned	5a: the manuscript page's Authors section (16)	The catalog keys this section's editor (ManuscriptAuthorForm, to Page/Manuscript/Authors/AuthorRow), not the section.
-Page/Manuscript/Authors/AuthorRow	64	plan 8.9	planned	5b: Add / Edit Author, manuscript (64) becomes an expanded author row in the Authors section
-Page/Manuscript/Versions	17	plan 8.11	planned	5a: the manuscript page's Versions section (17)	The catalog keys this section's editor (ManuscriptVersionEditForm, to Page/Manuscript/Versions/VersionEditor), not the section.
-Page/Manuscript/Versions/VersionEditor	61	plan 8.11	planned	5b: Add / Edit Version (61) becomes the edit mode of the Versions section's details pane
-Page/Manuscript/Submissions	18,19,20,21,22	plan 8.12	planned	5a: the manuscript page's Submissions section (18); the submission detail pane (19) and its tabs (20-22) become native panels in it
-Page/Manuscript/Submissions/SubmissionEditor	85	plan 8.12	planned	5b: Record / Edit Submission (85) becomes the edit mode of the Submissions section's detail area
-Page/Manuscript/Submissions/DecisionEditor	86	plan 8.12	planned	5b: Add / Edit Decision (86) becomes the Editorial History decision row expanded to its fields
-Page/Manuscript/Submissions/CorrespondenceEditor	88	plan 8.12	planned	5b: Add / Edit Correspondence (88) becomes the Correspondence & Files details box, editable
-Page/Manuscript/Submissions/ReviewerCommentEditor	92	plan 8.12	planned	5b: Reviewer comment (92) becomes the Reviewer Responses details box as the editor
-Page/Manuscript/Submissions/ResponseExport	93	plan 8.12	planned	5b: Export Markdown (93) becomes an export preview in Reviewer Responses
-Page/Manuscript/ReadinessPackets	23,79,81	plan 8.13	planned	5a: the manuscript page's Readiness & Packets section (23); 5c: Submission Readiness (79) and the Submission Packet Vault (81) merge into it
-Page/Manuscript/ReadinessPackets/Notes	80	plan 8.13	planned	5b: Readiness Notes (80) becomes the notes box under the requirement in the Readiness part
-Page/Manuscript/ReadinessPackets/PacketDetail	82,83	plan 8.13	planned	5b: New / Edit Packet (82), Add / Edit Packet File (83) become the packet and file detail panels of the Packets part
-Page/Manuscript/ReadinessPackets/PacketExport	84	plan 8.13	planned	5b: Export Submission Packet (84) becomes an export panel from the selected packet
-Page/Manuscript/Route	37	plan 8.14	planned	5a: the manuscript page's new Route section; 5c: The Route (37) merges into it
-Page/Settings	34,51,54	plan 8.20	planned	5a and 5c: Preferences (51) becomes a Settings page in the rail; 5c: About PaperRoute (34) and Diagnostics (54) become sections of it
-Page/Settings/General	24,28	plan 8.20	planned	#375: the tab General holds Appearance (24) and Updates (28)	The catalog keys the whole Preferences window (SettingsForm, to Page/Settings), not its sections.
-Page/Settings/AttentionReminders	25,26,27	plan 8.20	planned	#375: the tab Attention and reminders holds Needs Attention (25), Reminders & Windows Notifications (26) and File Drawer (27)	The catalog keys the whole Preferences window (SettingsForm, to Page/Settings), not its sections.
-Page/Settings/OnlineServices	29	plan 8.20	planned	#375: the tab Online services holds Online services (29)	The catalog keys the whole Preferences window (SettingsForm, to Page/Settings), not its sections.
-Page/Settings/AiAssistant	30	plan 8.20	planned	#375: the tab AI assistant holds AI assistant (30)	The catalog keys the whole Preferences window (SettingsForm, to Page/Settings), not its sections.
-Page/Settings/KeyEntry	52,53	plan 8.20	planned	5b: Add OpenAlex Key (52), Add Claude / Server Key (53) become a masked key field in the Online services and AI assistant panels
-Part/JournalChooser	72	plan 8.9	planned	5b: Choose from Library (72) becomes a searchable chooser in the journal field itself (target journal, submission editor, readiness)
-Part/MarkPublished	46	plan 8.17	planned	5b: Mark Published (46) becomes the publication result expanded (Check for Publications panel, Deadlines row)
-Part/Report	47	plan 8.18	planned	5b: Pipeline Report / Route Report (47) becomes a panel on the Insights page and in the manuscript page's Route section
-Stage/DecisionLetter	87	plan 8.7	planned	5c Stage panel: Read Decision Letter (87), in Editorial History or Reviewer Responses
-Stage/SuggestStartingPoint	94	plan 8.7	planned	5c Stage panel: Suggest a Starting Point (94), under the reviewer comment editor's response field
-Stage/CoverLetter	89	plan 8.7	planned	5c Stage panel: Draft Cover Letter (89), in Readiness & Packets
-Stage/AuthorInstructions	78	plan 8.7	planned	5c Stage panel: Read Author Instructions (78), in the journal detail panel's Readiness checklist
-Stage/BeforeSending	95	plan 8.7	planned	5c Stage panel: Before Sending (95), the first step of every assistant Stage panel
-Stage/LookUpFacts	77	plan 8.7	planned	5c Stage panel: Look Up Facts (77), in the journal detail panel
-Stage/FindJournals	71	plan 8.7	planned	5c Stage panel: Find Journals (71), beside the Overview shortlist
-Stage/UpdateFromOpenAlex	48	plan 8.7	planned	5c Stage panel: Update from OpenAlex (48), in Insights, Your Citations
-Stage/CheckForPublications	44	plan 8.7	planned	5c Stage panel: Check for Publications (44), in Import & Export and on the manuscript page
-Stage/FillBlanks	45	plan 8.7	planned	5c Stage panel: Fill Blanks from Crossref (45), in Import & Export
-Stage/OrcidImport	68	plan 8.7	planned	5c Stage panel: ORCID Public-Profile Import (68), beside the selected author in Authors & Affiliations
-Stage/CrossrefMetadata	69	plan 8.7	planned	5c Stage panel: DOI & Crossref Metadata (69), in the Overview's metadata section
-Stage/ImportReview	40,42	plan 8.7	planned	5c Stage panel: Import BibTeX / RIS (40), Map Spreadsheet Columns (42), one import review panel in Import & Export
-Modal/DeleteManuscript	38	plan 8.8	planned	5d: Delete Manuscript (38) stays modal, a destructive confirmation
-Modal/RestoreConfirmation	60	plan 8.19	planned	5c and 5d: Confirm Restore (60) and the preview box (the map's Form1.vb:4227, today at 4317) become one Restore confirmation that stays modal	Today a Visual Basic InputBox (Form1.vb:4330), not a Form, so the WinForms catalog has no key for it.
-Modal/StartupFailure	57	plan 8.6	planned	5d: PaperRoute could not start (57) stays modal
-Modal/UnexpectedError	56	plan 8.6	planned	5d: PaperRoute ran into a problem (56) stays modal (proposed, question 3)
+Window/Main	1	#420	planned	5a: Main window (1) becomes the one Avalonia window: rail, page host, one notice strip	The WinForms catalog keys Form1 by its Board page (ViewCatalog.vb), so no view goes to the window frame itself.
+Window/ExampleLibrary	2	#435	planned	5a: Example library window (2) stays a separate instance of the main window	A second instance of the main window: the WinForms catalog has no key for it.
+Window/Main/HelpPanel	55	#435	planned	5b: User Guide (55) becomes a Help side panel docked in the main window
+Window/Main/UpdateNotice	58,59	#435	planned	5b: Update available (58) becomes an update notice in the notice strip; 5c: Installing update (59) merges into that notice
+Page/Board	3,12	#423	built	5a: Board (3), welcome (12) become the Board page, the welcome its empty state; the Board trial built it
+Page/Board/MoveToFileDrawer	39	#423	planned	5b: Move to File Drawer (39) becomes a small panel on the board card
+Page/Library/Manuscripts	4	#430	planned	5a: Library: Manuscripts (4) becomes the Library page
+Page/Library/AuthorsAffiliations	5,13	#430	planned	5a: Library: Authors & Affiliations (5), Affiliations (13) become the Library page's Authors & Affiliations view
+Page/Library/AuthorsAffiliations/Detail	66,67	#430	planned	5b: Add / Edit Author, reusable (66), Add / Edit Affiliation (67) become a detail panel beside each list
+Page/Journals	6	#431	planned	5a: Journals (6) becomes the Journals page: list and selected-journal detail panel
+Page/Journals/Detail	31,32,33,74	#431	planned	5b: Edit journal (74) and its tabs (31-33) become the Journals page detail panel
+Page/Journals/Detail/ListRows	75,76	#431	planned	5b: Add / Edit Requirement (75), Add / Edit Metric (76) become rows of the detail panel's two lists
+Page/Deadlines	7	#432	planned	5a: Deadlines (7) stays the Deadlines page
+Page/Deadlines/Postpone	49	#432	planned	5b: Postpone / Set Deadline (49) becomes inline editing in the Deadlines row
+Page/Deadlines/Reminder	50	#432	planned	5b: Add / Edit Reminder (50) becomes an add row and in-row editing on the Deadlines page
+Page/Insights	8,14	#433	planned	5a: Insights (8), Your Citations (14) become the Insights page
+Page/ImportExport	9	#434	planned	5a: Import & Export (9) stays the Import & Export page
+Page/ImportExport/Export	41,43	#434	planned	5b: Publication & CV Export (43) becomes one Export panel; 5c: Choose manuscripts to export (41) merges into it
+Page/Manuscript	10	#424	planned	5a: Manuscript page (10), the page's frame
+Page/Manuscript/Missing	11	#424	planned	5a: Missing manuscript (11) becomes the manuscript page's empty state	Reached only through back and forward: the WinForms catalog has no key for it.
+Page/Manuscript/New	35	#425	planned	5c: Add Manuscript (35) becomes the manuscript page in a "new manuscript" state, which #425 builds
+Page/Manuscript/New/TitlePage	36	#425	planned	5b: Paste a Title Page (36) becomes a panel of the new-manuscript page
+Page/Manuscript/Overview	15,62	#424	planned	5a: the manuscript page's Overview (15); 5c: Journal, Preprint & Links (62) merges into the Overview
+Page/Manuscript/Overview/Links	63	#424	planned	5b: Add / Edit Link (63) becomes each related link row edited in place on the Overview's Links card
+Page/Manuscript/Overview/ShortlistEditor	70	#424	planned	5b: Shortlist journal (70) becomes an editor that expands under the shortlist row
+Page/Manuscript/Authors	16	#424	planned	5a: the manuscript page's Authors section (16)	The catalog keys this section's editor (ManuscriptAuthorForm, to Page/Manuscript/Authors/AuthorRow), not the section.
+Page/Manuscript/Authors/AuthorRow	64	#424	planned	5b: Add / Edit Author, manuscript (64) becomes an expanded author row in the Authors section
+Page/Manuscript/Versions	17	#426	planned	5a: the manuscript page's Versions section (17)	The catalog keys this section's editor (ManuscriptVersionEditForm, to Page/Manuscript/Versions/VersionEditor), not the section.
+Page/Manuscript/Versions/VersionEditor	61	#426	planned	5b: Add / Edit Version (61) becomes the edit mode of the Versions section's details pane
+Page/Manuscript/Submissions	18,19,20,21,22	#427	planned	5a: the manuscript page's Submissions section (18); the submission detail pane (19) and its tabs (20-22) become native panels in it
+Page/Manuscript/Submissions/SubmissionEditor	85	#427	planned	5b: Record / Edit Submission (85) becomes the edit mode of the Submissions section's detail area
+Page/Manuscript/Submissions/DecisionEditor	86	#427	planned	5b: Add / Edit Decision (86) becomes the Editorial History decision row expanded to its fields
+Page/Manuscript/Submissions/CorrespondenceEditor	88	#427	planned	5b: Add / Edit Correspondence (88) becomes the Correspondence & Files details box, editable
+Page/Manuscript/Submissions/ReviewerCommentEditor	92	#427	planned	5b: Reviewer comment (92) becomes the Reviewer Responses details box as the editor
+Page/Manuscript/Submissions/ResponseExport	93	#427	planned	5b: Export Markdown (93) becomes an export preview in Reviewer Responses
+Page/Manuscript/ReadinessPackets	23,79,81	#428	planned	5a: the manuscript page's Readiness & Packets section (23); 5c: Submission Readiness (79) and the Submission Packet Vault (81) merge into it
+Page/Manuscript/ReadinessPackets/Notes	80	#428	planned	5b: Readiness Notes (80) becomes the notes box under the requirement in the Readiness part
+Page/Manuscript/ReadinessPackets/PacketDetail	82,83	#428	planned	5b: New / Edit Packet (82), Add / Edit Packet File (83) become the packet and file detail panels of the Packets part
+Page/Manuscript/ReadinessPackets/PacketExport	84	#428	planned	5b: Export Submission Packet (84) becomes an export panel from the selected packet
+Page/Manuscript/Route	37	#429	planned	5a: the manuscript page's new Route section; 5c: The Route (37) merges into it
+Page/Settings	34,51,54	#435	planned	5a and 5c: Preferences (51) becomes a Settings page in the rail; 5c: About PaperRoute (34) and Diagnostics (54) become sections of it
+Page/Settings/General	24,28	#435	planned	#375: the tab General holds Appearance (24) and Updates (28)	The catalog keys the whole Preferences window (SettingsForm, to Page/Settings), not its sections.
+Page/Settings/AttentionReminders	25,26,27	#435	planned	#375: the tab Attention and reminders holds Needs Attention (25), Reminders & Windows Notifications (26) and File Drawer (27)	The catalog keys the whole Preferences window (SettingsForm, to Page/Settings), not its sections.
+Page/Settings/OnlineServices	29	#435	planned	#375: the tab Online services holds Online services (29)	The catalog keys the whole Preferences window (SettingsForm, to Page/Settings), not its sections.
+Page/Settings/AiAssistant	30	#435	planned	#375: the tab AI assistant holds AI assistant (30)	The catalog keys the whole Preferences window (SettingsForm, to Page/Settings), not its sections.
+Page/Settings/KeyEntry	52,53	#435	planned	5b: Add OpenAlex Key (52), Add Claude / Server Key (53) become a masked key field in the Online services and AI assistant panels
+Part/JournalChooser	72	#424	planned	5b: Choose from Library (72) becomes a searchable chooser in the journal field itself (target journal, submission editor, readiness)
+Part/MarkPublished	46	#432	planned	5b: Mark Published (46) becomes the publication result expanded (Check for Publications panel, Deadlines row)
+Part/Report	47	#433	planned	5b: Pipeline Report / Route Report (47) becomes a panel on the Insights page and in the manuscript page's Route section
+Stage/DecisionLetter	87	#422	planned	5c Stage panel: Read Decision Letter (87), in Editorial History or Reviewer Responses
+Stage/SuggestStartingPoint	94	#422	planned	5c Stage panel: Suggest a Starting Point (94), under the reviewer comment editor's response field
+Stage/CoverLetter	89	#422	planned	5c Stage panel: Draft Cover Letter (89), in Readiness & Packets
+Stage/AuthorInstructions	78	#422	planned	5c Stage panel: Read Author Instructions (78), in the journal detail panel's Readiness checklist
+Stage/BeforeSending	95	#422	planned	5c Stage panel: Before Sending (95), the first step of every assistant Stage panel
+Stage/LookUpFacts	77	#422	planned	5c Stage panel: Look Up Facts (77), in the journal detail panel
+Stage/FindJournals	71	#422	planned	5c Stage panel: Find Journals (71), beside the Overview shortlist
+Stage/UpdateFromOpenAlex	48	#422	planned	5c Stage panel: Update from OpenAlex (48), in Insights, Your Citations
+Stage/CheckForPublications	44	#422	planned	5c Stage panel: Check for Publications (44), in Import & Export and on the manuscript page
+Stage/FillBlanks	45	#422	planned	5c Stage panel: Fill Blanks from Crossref (45), in Import & Export
+Stage/OrcidImport	68	#422	planned	5c Stage panel: ORCID Public-Profile Import (68), beside the selected author in Authors & Affiliations
+Stage/CrossrefMetadata	69	#422	planned	5c Stage panel: DOI & Crossref Metadata (69), in the Overview's metadata section
+Stage/ImportReview	40,42	#422	planned	5c Stage panel: Import BibTeX / RIS (40), Map Spreadsheet Columns (42), one import review panel in Import & Export
+Modal/DeleteManuscript	38	#423	planned	5d: Delete Manuscript (38) stays modal, a destructive confirmation
+Modal/RestoreConfirmation	60	#434	planned	5c and 5d: Confirm Restore (60) and the preview box (the map's Form1.vb:4227, today at 4317) become one Restore confirmation that stays modal	Today a Visual Basic InputBox (Form1.vb:4330), not a Form, so the WinForms catalog has no key for it.
+Modal/StartupFailure	57	#421	planned	5d: PaperRoute could not start (57) stays modal
+Modal/UnexpectedError	56	#421	planned	5d: PaperRoute ran into a problem (56) stays modal (proposed, question 3)

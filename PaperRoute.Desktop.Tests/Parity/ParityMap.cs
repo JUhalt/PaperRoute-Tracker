@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.RegularExpressions;
 
 namespace PaperRoute.Desktop.Tests.Parity;
 
@@ -15,7 +14,7 @@ namespace PaperRoute.Desktop.Tests.Parity;
 // malformed line is reported with its file and line number. The checks
 // return one line per finding and assert nothing; ParityMapTests asserts.
 // No Avalonia object is made.
-internal sealed partial class ParityMap
+internal sealed class ParityMap
 {
     public const string SurfacesFile = "target-surfaces.tsv";
     public const string MapFile = "parity-map.tsv";
@@ -27,6 +26,11 @@ internal sealed partial class ParityMap
     // The inventory of the target map (Surface-Inventory-and-Target-Map.md,
     // section 3) has rows 1 to 97.
     public const int InventoryRows = 97;
+
+    // The build issues of v1.1 on GitHub: #418 is the plan's build 3 (the
+    // first with an issue) and #439 its build 24.
+    public const int FirstBuildIssue = 418;
+    public const int LastBuildIssue = 439;
 
     // The WinForms catalog's parts and their sizes (ViewCatalog.vb: Dialogs,
     // Hosted, Stages). A new WinForms view fails the VB lock
@@ -136,7 +140,7 @@ internal sealed partial class ParityMap
 
             if (!IsBuildIssue(surface.BuiltBy))
             {
-                findings.Add($"{surface.Where}: {surface.Key} is built by \"{surface.BuiltBy}\", not \"plan 8.N\" (N from 1 to 24) or \"#NNN\".");
+                findings.Add($"{surface.Where}: {surface.Key} is built by \"{surface.BuiltBy}\", not a build issue from #{FirstBuildIssue} to #{LastBuildIssue}.");
             }
         }
 
@@ -237,17 +241,18 @@ internal sealed partial class ParityMap
         return Views.Where(view => built.Contains(view.Destination)).ToList();
     }
 
-    public static bool IsBuildIssue(string text) => BuildIssue().IsMatch(text);
+    // A build issue is "#NNN", the GitHub issue of one of the plan's builds:
+    // build N (Avalonia-Migration-Plan.md section 8) is issue 415 + N.
+    public static bool IsBuildIssue(string text) =>
+        text.Length > 1
+        && text[0] == '#'
+        && text[1] != '0'
+        && int.TryParse(text.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture, out int number)
+        && number is >= FirstBuildIssue and <= LastBuildIssue;
 
-    // Orders build issues as the plan numbers them: plan 8.5 before 8.10,
-    // then opened issues by number.
-    public static (int Kind, int Number) BuildIssueOrder(string issue) =>
-        issue.StartsWith("plan 8.", StringComparison.Ordinal)
-            ? (0, int.Parse(issue["plan 8.".Length..], CultureInfo.InvariantCulture))
-            : (1, int.Parse(issue.TrimStart('#'), CultureInfo.InvariantCulture));
-
-    [GeneratedRegex(@"^(plan 8\.([1-9]|1[0-9]|2[0-4])|#[1-9][0-9]*)$", RegexOptions.CultureInvariant)]
-    private static partial Regex BuildIssue();
+    // Orders build issues as the plan numbers its builds, which is by issue number.
+    public static int BuildIssueOrder(string issue) =>
+        int.Parse(issue.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture);
 
     private static List<TableLine> ReadTable(string file, string text, string[] columns, List<string> problems)
     {
