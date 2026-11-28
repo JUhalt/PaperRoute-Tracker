@@ -29,6 +29,7 @@ public sealed class WorkingCopy
         Working = new Manuscript();
         Baseline = Snapshot();
         Stamps = HeldValues.Of(Working);
+        Loaded = TypedValues.Of(Working);
     }
 
     // The session's own record. Never changed here. Null until a record is
@@ -50,6 +51,11 @@ public sealed class WorkingCopy
     // Target journal text, stage and File Drawer reason as the load left
     // them, and the stage as the last step that changed it left it.
     public HeldValues Stamps { get; private set; }
+
+    // Title, target journal and File Drawer reason as the load left Working,
+    // not trimmed: what text typed back to them writes (TypedText). Taken
+    // with the baseline, after the reconciliation.
+    public TypedValues Loaded { get; private set; }
 
     // The people, affiliations, journals and tag colours made on the page and
     // not saved yet: a recovered draft's own records, and the page's.
@@ -200,6 +206,7 @@ public sealed class WorkingCopy
         Baseline = IsRecovered ? string.Empty : Snapshot();
         HeldStage = null;
         Stamps = HeldValues.Of(Working);
+        Loaded = TypedValues.Of(Working);
         Token++;
         OnChanged();
     }

@@ -128,6 +128,28 @@ public sealed partial class WorkingCopyTests : Board.StorageCheckedTests
         Assert.IsFalse(copy.HasUnsavedChanges(), "A character typed and removed left the stored title unsaved.");
     }
 
+    // W-5: the value typed back is the one the load left, not the original
+    // record's. The load's reconciliation rewrote a journal stored with
+    // spaces at its ends as its submission's name, trimmed.
+    [TestMethod]
+    public void AJournalTheLoadReconciledStaysSavedAfterTypingAndRemovingACharacter()
+    {
+        Manuscript original = Paper();
+        original.TargetJournal = " Journal of Tests ";
+        original.Submissions.Add(SubmissionTo("Journal of Tests", Day.AddDays(20)));
+        WorkingCopy copy = Loaded(original);
+        var box = new TypedText(copy, TypedField.TargetJournal);
+        Assert.AreEqual("Journal of Tests", copy.Working.TargetJournal, "The load's reconciliation set the submission's journal.");
+        Assert.IsFalse(copy.HasUnsavedChanges());
+
+        box.Text = "Journal of Testsx";
+        Assert.IsTrue(copy.HasUnsavedChanges(), "A typed character is unsaved.");
+
+        box.Text = "Journal of Tests";
+        Assert.AreEqual("Journal of Tests", copy.Working.TargetJournal, "The journal typed back is not the one the load left.");
+        Assert.IsFalse(copy.HasUnsavedChanges(), "A character typed and removed left the reconciled journal unsaved.");
+    }
+
     // W-6
     [TestMethod]
     public void AHeldStageIsUnsaved()
@@ -410,6 +432,7 @@ public sealed partial class WorkingCopyTests : Board.StorageCheckedTests
             [nameof(WorkingCopy.Original)] = "the saved record, never changed by the page",
             [nameof(WorkingCopy.Baseline)] = "what Working is compared with",
             [nameof(WorkingCopy.Stamps)] = "what the load and steps left; follows the record, edits nothing",
+            [nameof(WorkingCopy.Loaded)] = "the typed fields as the load left them; what typing back writes, edits nothing",
             [nameof(WorkingCopy.Library)] = "the library on disk with Delta in it; Delta is counted",
             [nameof(WorkingCopy.Token)] = "names the record loaded",
             [nameof(WorkingCopy.IsRecovered)] = "counted through the empty Baseline of a draft",
