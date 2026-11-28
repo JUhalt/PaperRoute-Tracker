@@ -405,8 +405,10 @@ public sealed class LibrarySessionTests
         using var held = new HeldLoad(_root);
         (Task<bool> load, Task<bool> save) = ui.Enter(() => (held.StartLoad(), held.Session.SaveSettingsAsync()));
 
+        // The wait runs on a worker with a time limit: on this thread, a wait
+        // that needed the interface thread would hang the test, not fail it.
         held.Release();
-        held.Session.WaitForWork();
+        Assert.IsTrue(Task.Run(held.Session.WaitForWork).Wait(TimeSpan.FromSeconds(30)), "The load's worker did not end.");
         Assert.IsFalse(File.Exists(settingsFile), "The held save was written before the interface thread ran: it ran on another thread.");
         Assert.IsFalse(save.IsCompleted, "The held save finished before the interface thread ran.");
 
