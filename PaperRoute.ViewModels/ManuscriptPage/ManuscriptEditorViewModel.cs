@@ -161,8 +161,11 @@ public sealed partial class ManuscriptEditorViewModel : ObservableObject
     // Shows a record: a clone of the session's own, with a fresh read of the
     // author file. False, with the page's state saying why, when the record
     // is gone or the author file cannot be read; the header still shows a
-    // record that exists, so the page can be left. Asking about unsaved work
-    // on the record left is the guard's, before this (F1b).
+    // record that exists, so the page can be left. False too, changing
+    // nothing, while a save writes (the shell refuses page changes then), so
+    // a false result with LoadProblem empty is not a load problem. Asking
+    // about unsaved work on the record left is the guard's, before this
+    // (F1b).
     public bool Open(Guid id)
     {
         if (IsSaving)

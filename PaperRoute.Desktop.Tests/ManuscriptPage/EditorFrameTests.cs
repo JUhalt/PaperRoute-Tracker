@@ -364,6 +364,96 @@ public sealed class EditorFrameTests : StorageCheckedTests
         Assert.IsTrue(await save);
     }
 
+    // A second Save while one writes is refused at once by the frame. The
+    // store refuses it too while busy, so the store is made idle here and
+    // only the frame's own check answers.
+    [TestMethod]
+    public async Task ASecondSaveWhileOneWritesIsRefusedAtOnce()
+    {
+        Page page = Page.Open(Paper());
+        page.Title.Text = "A Second Study of Tests";
+        page.Store.HoldNextSave = true;
+        Task<bool> first = page.Frame.SaveAsync();
+        page.Store.SetBusy(false);
+
+        Task<bool> second = page.Frame.SaveAsync();
+
+        Assert.IsTrue(second.IsCompleted, "The second save waited.");
+        Assert.IsFalse(await second, "A second save went on while the first wrote.");
+        Assert.AreEqual(1, page.Store.Saves, "The second save reached the store.");
+        Assert.IsTrue(page.Frame.IsSaving, "The second save ended the first one's state.");
+        Assert.IsTrue(page.Frame.Copy.IsFrozen);
+
+        page.Store.Release();
+        Assert.IsTrue(await first, "The first save did not finish after the second was refused.");
+        Assert.AreEqual("A Second Study of Tests", page.Saved.Title);
+        Assert.IsFalse(page.Frame.ShowsSaveBar);
+    }
+
+    // Open while a save writes returns false and changes nothing: the shell
+    // refuses page changes then, and the page's state shows no problem.
+    [TestMethod]
+    public async Task OpeningWhileASaveWritesChangesNothing()
+    {
+        var section = new StandInSection();
+        Manuscript saved = Paper();
+        Manuscript other = Paper();
+        other.Title = "Another Study of Tests";
+        Page page = Page.Over(new FakeManuscriptStore([saved, other], AuthorFile()), saved, section);
+        Assert.IsTrue(page.Frame.Open(saved.Id));
+        page.Title.Text = "A Second Study of Tests";
+        page.Store.HoldNextSave = true;
+        Task<bool> save = page.Frame.SaveAsync();
+        (int token, ManuscriptHeader? header, int reads, int clears, int attaches) =
+            (page.Frame.Copy.Token, page.Frame.Header, page.Store.Reads, section.Clears, section.Attaches);
+        var changed = new List<string>();
+        page.Frame.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+
+        Assert.IsFalse(page.Frame.Open(other.Id), "Another record was opened while the save wrote.");
+
+        Assert.AreEqual(token, page.Frame.Copy.Token, "The working copy started again.");
+        Assert.AreEqual(header, page.Frame.Header, "The header changed.");
+        Assert.AreEqual(string.Empty, page.Frame.LoadProblem, "A refused open shows a load problem.");
+        Assert.AreEqual((reads, clears, attaches), (page.Store.Reads, section.Clears, section.Attaches), "The open read the author file or told a section something.");
+        Assert.IsEmpty(changed, "Something on the page changed.");
+
+        page.Store.Release();
+        Assert.IsTrue(await save);
+        Assert.AreEqual("A Second Study of Tests", page.Frame.Header!.Title, "The save did not reach the record shown.");
+        Assert.AreEqual("Another Study of Tests", other.Title);
+    }
+
+    // Save's step 9: when the store refuses (Refused), nothing is written,
+    // the edits and the held stage stay, nothing is said, and the bar keeps
+    // its usual hint: it was not a failure.
+    [TestMethod]
+    public async Task ASaveTheStoreRefusesKeepsTheEditsAndSaysNothing()
+    {
+        var section = new StandInSection();
+        Page page = Page.Open(SubmittablePaper(), section);
+        string savedBefore = JsonSerializer.Serialize(page.Saved);
+        page.Title.Text = "A Second Study of Tests";
+        page.Frame.Copy.HoldStage(PaperStage.Submitted);
+        int token = page.Frame.Copy.Token;
+        page.Store.Results.Enqueue(ManuscriptSaveResult.Refused);
+
+        Assert.IsFalse(await page.Frame.SaveAsync(), "A refused save counted as saved.");
+
+        Assert.AreEqual(1, page.Store.Saves, "The store was not asked, so this test shows nothing.");
+        Assert.AreEqual(savedBefore, JsonSerializer.Serialize(page.Saved), "A refused save changed the session's record.");
+        Assert.AreEqual("A Second Study of Tests", page.Frame.Copy.Working.Title, "A refused save lost the edit.");
+        Assert.AreEqual(PaperStage.Submitted, page.Frame.Copy.HeldStage, "A refused save lost the held stage.");
+        Assert.AreEqual(token, page.Frame.Copy.Token, "A refused save started the working copy again.");
+        Assert.AreEqual(1, section.Attaches, "A refused save attached the sections afresh.");
+        Assert.IsTrue(page.Frame.HasUnsavedWork);
+        Assert.IsTrue(page.Frame.ShowsSaveBar);
+        Assert.AreEqual(ManuscriptEditorViewModel.EditedHint, page.Frame.SaveBarHint, "A refused save shows the failure's hint.");
+        Assert.IsEmpty(page.Notices.Notices, "A refused save said something.");
+        Assert.IsFalse(page.Frame.Copy.IsFrozen);
+        Assert.IsFalse(page.Frame.IsSaving);
+        Assert.IsFalse(page.Frame.IsInputBlocked);
+    }
+
     // F-19
     [TestMethod]
     public void DiscardAsksNothingAndSaysSo()
@@ -447,6 +537,23 @@ public sealed class EditorFrameTests : StorageCheckedTests
 
         Assert.IsTrue(await page.Frame.SaveAsync());
         Assert.AreEqual(new ManuscriptHeader(page.Saved.Id, "A Second Study of Tests", PaperStage.Submitted, "Journal of Tests", ManuscriptLocation.Pipeline), page.Frame.Header, "The header was not refreshed after the save.");
+    }
+
+    // The header follows the saved record when the library changes by
+    // another route, not only after this page's own save; the page's edits
+    // stay.
+    [TestMethod]
+    public void TheHeaderFollowsALibraryChangeMadeElsewhere()
+    {
+        Page page = Page.Open(Paper());
+        page.Title.Text = "A Second Study of Tests";
+
+        page.Saved.Title = "Renamed Elsewhere";
+        page.Store.RaiseLibraryChanged();
+
+        Assert.AreEqual("Renamed Elsewhere", page.Frame.Header!.Title, "The header was not refreshed on the library's change.");
+        Assert.AreEqual("A Second Study of Tests", page.Frame.Copy.Working.Title, "The library's change replaced the page's edit.");
+        Assert.IsTrue(page.Frame.ShowsSaveBar);
     }
 
     // F-23 (critique N4): reports the time; fails only above four times the

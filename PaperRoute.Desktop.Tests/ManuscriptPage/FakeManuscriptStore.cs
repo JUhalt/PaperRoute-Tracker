@@ -97,6 +97,10 @@ internal sealed class FakeManuscriptStore : IManuscriptStore
         return AuthorFile;
     }
 
+    // The library changed elsewhere (a Board card's action, a restore), not
+    // through this page's save.
+    public void RaiseLibraryChanged() => LibraryChanged?.Invoke(this, EventArgs.Empty);
+
     // Library work begins or ends elsewhere (a backup, another save).
     public void SetBusy(bool busy)
     {
